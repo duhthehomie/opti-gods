@@ -9,9 +9,48 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  app.get(api.presets.list.path, async (req, res) => {
-    const allPresets = await storage.getPresets();
-    res.json(allPresets);
+  app.get(api.system.stats.path, async (req, res) => {
+    // Simulated system stats
+    res.json({
+      cpu: Math.floor(Math.random() * 30) + 10,
+      gpu: Math.floor(Math.random() * 20) + 5,
+      memory: Math.floor(Math.random() * 40) + 20,
+      os: "Windows 10 Pro (22H2)",
+    });
+  });
+
+  app.get(api.startup.list.path, async (req, res) => {
+    const apps = await storage.getStartupApps();
+    if (apps.length === 0) {
+      // Seed initial startup apps if empty
+      const initialApps = [
+        { name: "Discord", path: "C:\\Users\\leaq\\AppData\\Local\\Discord\\Update.exe", isEnabled: true },
+        { name: "Steam", path: "C:\\Program Files (x86)\\Steam\\steam.exe", isEnabled: true },
+        { name: "Spotify", path: "C:\\Users\\leaq\\AppData\\Roaming\\Spotify\\Spotify.exe", isEnabled: false },
+        { name: "OneDrive", path: "C:\\Windows\\System32\\OneDrive.exe", isEnabled: false },
+        { name: "Opti Gods", path: "C:\\Users\\leaq\\Desktop\\OptiGods.exe", isEnabled: true },
+      ];
+      for (const app of initialApps) {
+        await db.insert(startupApps).values(app);
+      }
+      return res.json(await storage.getStartupApps());
+    }
+    res.json(apps);
+  });
+
+  app.patch(api.startup.toggle.path, async (req, res) => {
+    try {
+      const { isEnabled } = api.startup.toggle.input.parse(req.body);
+      const app = await storage.updateStartupApp(Number(req.params.id), isEnabled);
+      res.json(app);
+    } catch (err) {
+      res.status(404).json({ message: "App not found" });
+    }
+  });
+
+  app.delete(api.presets.delete.path, async (req, res) => {
+    await storage.deletePreset(Number(req.params.id));
+    res.json({ success: true });
   });
 
   app.post(api.presets.create.path, async (req, res) => {

@@ -25,6 +25,46 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/presets/:id" as const,
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  startup: {
+    list: {
+      method: "GET" as const,
+      path: "/api/startup" as const,
+      responses: {
+        200: z.array(z.custom<typeof startupApps.$inferSelect>()),
+      },
+    },
+    toggle: {
+      method: "PATCH" as const,
+      path: "/api/startup/:id" as const,
+      input: z.object({ isEnabled: z.boolean() }),
+      responses: {
+        200: z.custom<typeof startupApps.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  system: {
+    stats: {
+      method: "GET" as const,
+      path: "/api/system/stats" as const,
+      responses: {
+        200: z.object({
+          cpu: z.number(),
+          gpu: z.number(),
+          memory: z.number(),
+          os: z.string(),
+        }),
+      },
+    }
   },
   script: {
     generate: {
