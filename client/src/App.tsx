@@ -5,11 +5,23 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+import Dashboard from "@/pages/dashboard";
+import Registry from "@/pages/registry";
+import Fivem from "@/pages/fivem";
+import Nvidia from "@/pages/nvidia";
+import ProcessLasso from "@/pages/process-lasso";
+import StartupApps from "@/pages/startup-apps";
+
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
+      <Route path="/" component={Dashboard} />
+      <Route path="/registry" component={Registry} />
+      <Route path="/fivem" component={Fivem} />
+      <Route path="/nvidia" component={Nvidia} />
+      <Route path="/process-lasso" component={ProcessLasso} />
+      <Route path="/startup" component={StartupApps} />
+      
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
