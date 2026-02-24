@@ -17,6 +17,15 @@ export const startupApps = pgTable("startup_apps", {
   isEnabled: boolean("is_enabled").default(true),
 });
 
+export const optimizations = pgTable("optimizations", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(), // Registry, FiveM, NVIDIA, etc.
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  command: text("command").notNull(), // PowerShell command to apply
+  isApplied: boolean("is_applied").default(false),
+});
+
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type Preset = typeof presets.$inferSelect;
@@ -24,3 +33,7 @@ export type Preset = typeof presets.$inferSelect;
 export const insertStartupAppSchema = createInsertSchema(startupApps).omit({ id: true });
 export type InsertStartupApp = z.infer<typeof insertStartupAppSchema>;
 export type StartupApp = typeof startupApps.$inferSelect;
+
+export const insertOptimizationSchema = createInsertSchema(optimizations).omit({ id: true });
+export type InsertOptimization = z.infer<typeof insertOptimizationSchema>;
+export type Optimization = typeof optimizations.$inferSelect;
