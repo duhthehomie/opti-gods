@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp } from "@shared/schema";
+import { presets, startupApps, optimizations, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {

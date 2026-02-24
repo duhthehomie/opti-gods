@@ -2,8 +2,14 @@ import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ShieldAlert, Zap, Cpu, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@shared/routes";
 
 export default function Dashboard() {
+  const { data: stats } = useQuery({
+    queryKey: [api.system.stats.path],
+  });
+
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
@@ -38,15 +44,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatCard 
             title="System Active" 
-            value="Windows 11 Pro" 
-            subtitle="Build 22631.3296"
+            value={stats?.os || "Windows 10 Pro"} 
+            subtitle="Build 19045.4170"
             icon={<HardDrive className="w-5 h-5 text-zinc-400" />}
             delay={0.1}
           />
           <StatCard 
             title="Active Processes" 
-            value="142" 
-            subtitle="32 High Impact"
+            value={stats?.processCount?.toString() || "84"} 
+            subtitle={`${stats?.highImpactCount || 12} High Impact`}
             icon={<Cpu className="w-5 h-5 text-red-400" />}
             delay={0.2}
           />

@@ -15,7 +15,9 @@ export async function registerRoutes(
       cpu: Math.floor(Math.random() * 30) + 10,
       gpu: Math.floor(Math.random() * 20) + 5,
       memory: Math.floor(Math.random() * 40) + 20,
-      os: "Windows 10 Pro (22H2)", // Explicitly set to Windows 10
+      os: "Windows 10 Pro (22H2)",
+      processCount: 84,
+      highImpactCount: 12
     });
   });
 

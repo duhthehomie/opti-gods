@@ -26,24 +26,34 @@ export default function ProcessLasso() {
 
         <div className="space-y-8">
           <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Bitsum Core Features</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Active Processes (High Impact)</h2>
             <div className="space-y-3">
-              <TweakRow 
-                id="ProcessLassoProBalance"
-                title="Enable ProBalance"
-                description="Intelligently adjusts priorities of background processes to keep your system responsive."
-                checked={tweaks.ProcessLassoProBalance}
-                onCheckedChange={(v) => setTweak("ProcessLassoProBalance", v)}
-                delay={1}
-              />
-              <TweakRow 
-                id="ProcessLassoSmartTrim"
-                title="Enable SmartTrim"
-                description="Aggressively frees memory from background apps when RAM usage exceeds 80%."
-                checked={tweaks.ProcessLassoSmartTrim}
-                onCheckedChange={(v) => setTweak("ProcessLassoSmartTrim", v)}
-                delay={2}
-              />
+              <div className="p-4 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-medium">System Idle Process</h3>
+                  <p className="text-xs text-zinc-500">Essential for system stability</p>
+                </div>
+                <div className="text-xs font-mono text-zinc-400">0.1% CPU</div>
+              </div>
+              <div className="p-4 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between border-l-2 border-l-red-500">
+                <div>
+                  <h3 className="text-white font-medium">FiveM.exe</h3>
+                  <p className="text-xs text-zinc-500">Priority: High (Pinned)</p>
+                </div>
+                <div className="text-xs font-mono text-red-400">12.4% CPU</div>
+              </div>
+              <div className="p-4 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-medium">Discord.exe</h3>
+                  <p className="text-xs text-zinc-500">Priority: Normal</p>
+                </div>
+                <div className="text-xs font-mono text-zinc-400">1.2% CPU</div>
+              </div>
+            </div>
+            <div className="mt-6">
+              <Button variant="destructive" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-6">
+                Kill Non-Essential Background Tasks
+              </Button>
             </div>
           </section>
         </div>
