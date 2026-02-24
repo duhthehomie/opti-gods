@@ -69,6 +69,34 @@ export async function registerRoutes(
     }
   });
 
+  app.get(api.optimizations.list.path, async (req, res) => {
+    const opts = await storage.getOptimizations();
+    if (opts.length === 0) {
+      const initialOpts = [
+        { category: "Registry", name: "Win32PrioritySeparation", description: "Optimize CPU priority for gaming", command: "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 38" },
+        { category: "Registry", name: "NetworkThrottling", description: "Disable network throttling for lower ping", command: "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xffffffff" },
+        { category: "FiveM", name: "Cache Cleaner", description: "Clear FiveM cache files", command: "Remove-Item -Path '$env:LocalAppData\\FiveM\\FiveM.app\\cache\\*' -Recurse -Force" },
+        { category: "NVIDIA", name: "Power Management", description: "Set NVIDIA Power Management to Prefer Maximum Performance", command: "nvidia-smi -lgc 1000,2000" }, // Mock command
+        { category: "Debloat", name: "Disable Cortana", description: "Remove Cortana background process", command: "Get-AppxPackage *Microsoft.549981C3F5F10* | Remove-AppxPackage" },
+      ];
+      for (const opt of initialOpts) {
+        await db.insert(optimizations).values(opt);
+      }
+      return res.json(await storage.getOptimizations());
+    }
+    res.json(opts);
+  });
+
+  app.patch(api.optimizations.toggle.path, async (req, res) => {
+    try {
+      const { isApplied } = api.optimizations.toggle.input.parse(req.body);
+      const opt = await storage.updateOptimization(Number(req.params.id), isApplied);
+      res.json(opt);
+    } catch (err) {
+      res.status(404).json({ message: "Optimization not found" });
+    }
+  });
+
   app.post(api.script.generate.path, async (req, res) => {
     try {
       const input = api.script.generate.input.parse(req.body);

@@ -19,10 +19,10 @@ export const startupApps = pgTable("startup_apps", {
 
 export const optimizations = pgTable("optimizations", {
   id: serial("id").primaryKey(),
-  category: text("category").notNull(), // Registry, FiveM, NVIDIA, etc.
+  category: text("category").notNull(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  command: text("command").notNull(), // PowerShell command to apply
+  command: text("command").notNull(),
   isApplied: boolean("is_applied").default(false),
 });
 

@@ -66,6 +66,24 @@ export const api = {
       },
     }
   },
+  optimizations: {
+    list: {
+      method: "GET" as const,
+      path: "/api/optimizations" as const,
+      responses: {
+        200: z.array(z.custom<typeof optimizations.$inferSelect>()),
+      },
+    },
+    toggle: {
+      method: "PATCH" as const,
+      path: "/api/optimizations/:id" as const,
+      input: z.object({ isApplied: z.boolean() }),
+      responses: {
+        200: z.custom<typeof optimizations.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
   script: {
     generate: {
       method: "POST" as const,

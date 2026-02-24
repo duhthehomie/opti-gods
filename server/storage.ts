@@ -8,6 +8,8 @@ export interface IStorage {
   deletePreset(id: number): Promise<void>;
   getStartupApps(): Promise<StartupApp[]>;
   updateStartupApp(id: number, isEnabled: boolean): Promise<StartupApp>;
+  getOptimizations(): Promise<Optimization[]>;
+  updateOptimization(id: number, isApplied: boolean): Promise<Optimization>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -34,6 +36,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(startupApps.id, id))
       .returning();
     return app;
+  }
+
+  async getOptimizations(): Promise<Optimization[]> {
+    return await db.select().from(optimizations);
+  }
+
+  async updateOptimization(id: number, isApplied: boolean): Promise<Optimization> {
+    const [opt] = await db.update(optimizations)
+      .set({ isApplied })
+      .where(eq(optimizations.id, id))
+      .returning();
+    return opt;
   }
 }
 
