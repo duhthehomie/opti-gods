@@ -43,7 +43,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-zinc-400 hover:text-white" />
               <div className="h-4 w-px bg-white/10 hidden md:block"></div>
-              <span className="text-xs font-mono text-zinc-500 hidden md:block">SYSTEM: WIN_11 | STATUS: UNOPTIMIZED</span>
+              <span className="text-xs font-mono text-zinc-500 hidden md:block">SYSTEM: WIN_10 PRO (22H2) | STATUS: UNOPTIMIZED</span>
             </div>
             
             <Button 

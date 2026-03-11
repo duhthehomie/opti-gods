@@ -11,6 +11,7 @@ import Fivem from "@/pages/fivem";
 import Nvidia from "@/pages/nvidia";
 import ProcessLasso from "@/pages/process-lasso";
 import StartupApps from "@/pages/startup-apps";
+import Debloat from "@/pages/debloat";
 
 function Router() {
   return (
@@ -21,8 +22,7 @@ function Router() {
       <Route path="/nvidia" component={Nvidia} />
       <Route path="/process-lasso" component={ProcessLasso} />
       <Route path="/startup" component={StartupApps} />
-      
-      {/* Fallback to 404 */}
+      <Route path="/debloat" component={Debloat} />
       <Route component={NotFound} />
     </Switch>
   );
