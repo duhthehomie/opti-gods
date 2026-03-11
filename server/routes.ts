@@ -99,6 +99,20 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null`,
 };
 
+// In-memory session store: id -> { tweaks, nvidiaPreset, created }
+const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number }>();
+
+// Purge sessions older than 1 hour
+function purgeOldSessions() {
+  const hour = 60 * 60 * 1000;
+  const now = Date.now();
+  scriptSessions.forEach((v, k) => { if (now - v.created > hour) scriptSessions.delete(k); });
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
+
 function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   const scriptLines: string[] = [
     `# ============================================`,
@@ -260,14 +274,39 @@ export async function registerRoutes(
       const input = api.script.generate.input.parse(req.body);
       const host = req.get('host') || 'localhost';
       const protocol = req.protocol || 'https';
-      const command = `irm ${protocol}://${host}/api/script/download | iex`;
-      res.json({ scriptUrl: `${protocol}://${host}/api/script/download`, command });
+
+      // Store tweaks in session so the irm | iex URL applies the correct tweaks
+      purgeOldSessions();
+      const sessionId = generateId();
+      scriptSessions.set(sessionId, {
+        tweaks: input.tweaks,
+        nvidiaPreset: input.nvidiaPreset || "Balanced",
+        created: Date.now(),
+      });
+
+      const scriptUrl = `${protocol}://${host}/api/script/session/${sessionId}`;
+      const command = `irm ${scriptUrl} | iex`;
+      res.json({ scriptUrl, command });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
       throw err;
     }
+  });
+
+  // Session-based script endpoint for irm | iex
+  app.get('/api/script/session/:id', (req, res) => {
+    const session = scriptSessions.get(req.params.id);
+    if (!session) {
+      res.status(404).setHeader('Content-Type', 'text/plain');
+      res.send('# Session expired or not found. Please regenerate your script from the Opti Gods dashboard.');
+      return;
+    }
+    const enabledTweaks = Object.entries(session.tweaks).filter(([, v]) => v).map(([k]) => k);
+    const content = buildScript(enabledTweaks, session.nvidiaPreset);
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(content);
   });
 
   // POST version for direct download with tweaks body

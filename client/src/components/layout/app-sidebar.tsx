@@ -22,6 +22,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useOsDetection } from "@/hooks/use-os-detection";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: Activity },
@@ -38,6 +39,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { tweaks } = useOptimizationStore();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const osInfo = useOsDetection();
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#050505]">
@@ -67,7 +69,7 @@ export function AppSidebar() {
           </div>
           <div className="h-8 w-px bg-white/5" />
           <div className="text-center">
-            <div className="w-2 h-2 rounded-full bg-green-500 mx-auto mb-1 animate-pulse" />
+            <div className="w-2 h-2 rounded-full bg-red-500 mx-auto mb-1 animate-pulse" />
             <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Live</p>
           </div>
         </div>
@@ -108,9 +110,13 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4 border-t border-white/5">
         <div className="px-2 py-3 rounded-lg bg-zinc-900/60 border border-white/5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">System</p>
-          <p className="text-xs text-zinc-400 font-mono">Windows 10 Pro (22H2)</p>
-          <p className="text-[10px] text-zinc-600 mt-1">Build 19045.4170</p>
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Detected System</p>
+          <p className="text-xs text-zinc-400 font-mono">
+            {osInfo.loading ? "Detecting..." : osInfo.os}
+          </p>
+          {osInfo.build && (
+            <p className="text-[10px] text-zinc-600 mt-1">Build {osInfo.build}</p>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
