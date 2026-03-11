@@ -3,6 +3,7 @@ import {
   Activity,
   Cpu,
   Gamepad2,
+  MemoryStick,
   MonitorPlay,
   Power,
   Settings2,
@@ -29,6 +30,7 @@ const navItems = [
   { title: "NVIDIA Presets", url: "/nvidia", icon: MonitorPlay },
   { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
   { title: "Startup Apps", url: "/startup", icon: Power },
+  { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
   { title: "Debloat Win10", url: "/debloat", icon: Trash2 },
 ];
 

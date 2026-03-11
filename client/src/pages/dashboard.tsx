@@ -147,24 +147,30 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Real-Time Gauges */}
+        {/* System Gauges — Simulated Notice */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="p-6 rounded-2xl bg-black/40 border border-white/5"
         >
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2 mb-2">
             <Activity className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-300">Real-Time Usage</h2>
-            <span className="ml-auto text-[10px] font-mono text-zinc-600 bg-zinc-900 px-2 py-0.5 rounded-full border border-white/5">
-              LIVE · 3s refresh
+            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-300">System Usage</h2>
+            <span className="ml-auto text-[10px] font-mono text-yellow-600 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
+              SIMULATED — see note below
             </span>
           </div>
+          <p className="text-xs text-zinc-600 mb-6 leading-relaxed">
+            This app runs as a web server and <span className="text-zinc-400">cannot read your actual CPU, GPU, or RAM</span> directly. 
+            The values below are demo data. For real hardware monitoring, use{" "}
+            <span className="text-zinc-300 font-medium">MSI Afterburner + HWiNFO64</span> or the built-in Windows Task Manager.
+            Once you hit <span className="text-red-400 font-medium">APPLY OPTIMIZATIONS</span>, the generated PowerShell script runs locally on your machine where it has full access.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <GaugeBar label="CPU" value={isLoading ? 0 : (stats?.cpu ?? 0)} color="red" />
-            <GaugeBar label="GPU" value={isLoading ? 0 : (stats?.gpu ?? 0)} color="orange" />
-            <GaugeBar label="RAM" value={isLoading ? 0 : (stats?.memory ?? 0)} color="blue" />
+            <GaugeBar label="CPU (demo)" value={isLoading ? 0 : (stats?.cpu ?? 0)} color="red" />
+            <GaugeBar label="GPU (demo)" value={isLoading ? 0 : (stats?.gpu ?? 0)} color="orange" />
+            <GaugeBar label="RAM (demo)" value={isLoading ? 0 : (stats?.memory ?? 0)} color="blue" />
           </div>
         </motion.div>
 

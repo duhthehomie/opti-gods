@@ -12,6 +12,7 @@ import Nvidia from "@/pages/nvidia";
 import ProcessLasso from "@/pages/process-lasso";
 import StartupApps from "@/pages/startup-apps";
 import Debloat from "@/pages/debloat";
+import Memory from "@/pages/memory";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/process-lasso" component={ProcessLasso} />
       <Route path="/startup" component={StartupApps} />
       <Route path="/debloat" component={Debloat} />
+      <Route path="/memory" component={Memory} />
       <Route component={NotFound} />
     </Switch>
   );
