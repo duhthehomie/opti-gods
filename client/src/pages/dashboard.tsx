@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
+import { useOsDetection } from "@/hooks/use-os-detection";
 import { cn } from "@/lib/utils";
 
 function GaugeBar({ label, value, color = "red" }: { label: string; value: number; color?: string }) {
@@ -40,6 +41,7 @@ export default function Dashboard() {
     refetchInterval: 3000,
   });
 
+  const osInfo = useOsDetection();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [], refetch: refetchPresets } = useQuery<any[]>({
     queryKey: [api.presets.list.path],
@@ -99,8 +101,8 @@ export default function Dashboard() {
           <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-red-500/10 to-transparent pointer-events-none" />
           <div className="relative z-10 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono mb-6">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              SYSTEM DETECTED — {stats?.os || "Windows 10 Pro (22H2)"}
+              <span className={cn("w-2 h-2 rounded-full bg-red-500", osInfo.loading ? "animate-pulse" : "")} />
+              {osInfo.loading ? "DETECTING SYSTEM..." : `SYSTEM DETECTED — ${osInfo.displayName}`}
             </div>
             <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-4 leading-tight">
               OPTI GODS <span className="text-red-500">by leaq</span>
@@ -124,7 +126,7 @@ export default function Dashboard() {
         {/* System Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { title: "Operating System", value: stats?.os || "Windows 10 Pro", sub: "Build 19045.4170", icon: <HardDrive className="w-5 h-5 text-zinc-400" /> },
+            { title: "Operating System", value: osInfo.loading ? "Detecting..." : osInfo.os, sub: osInfo.build ? `Build ${osInfo.build}` : "via browser detection", icon: <HardDrive className="w-5 h-5 text-zinc-400" /> },
             { title: "Active Processes", value: String(stats?.processCount || 84), sub: `${stats?.highImpactCount || 12} High Impact`, icon: <Cpu className="w-5 h-5 text-red-400" /> },
             { title: "Tweaks Enabled", value: String(enabledCount), sub: "of 50+ available", icon: <Zap className="w-5 h-5 text-yellow-500" /> },
             { title: "Optimization Level", value: enabledCount > 20 ? "High" : enabledCount > 10 ? "Medium" : "Low", sub: enabledCount > 20 ? "Well tuned" : "Tweaks required", icon: <Activity className="w-5 h-5 text-green-400" /> },

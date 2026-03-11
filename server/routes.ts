@@ -99,17 +99,105 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null`,
 };
 
+function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
+  const scriptLines: string[] = [
+    `# ============================================`,
+    `# OPTI GODS by leaq — PC Optimizer`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# Tweaks enabled: ${enabledTweaks.length}`,
+    `# ============================================`,
+    ``,
+    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `Write-Host "=====================================" -ForegroundColor Red`,
+    `Write-Host "  OPTI GODS by leaq" -ForegroundColor Red`,
+    `Write-Host "  Starting ${enabledTweaks.length} optimizations..." -ForegroundColor White`,
+    `Write-Host "=====================================" -ForegroundColor Red`,
+    ``,
+  ];
+
+  if (nvidiaPreset && nvidiaPreset !== "Balanced") {
+    scriptLines.push(`Write-Host "[NVIDIA] Applying ${nvidiaPreset} preset..." -ForegroundColor DarkRed`);
+    if (nvidiaPreset === "Performance") {
+      scriptLines.push(`# NVIDIA Maximum Performance preset`);
+      scriptLines.push(`Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Video' -Name 'PowerMizerEnable' -Value 1`);
+    }
+    scriptLines.push(``);
+  }
+
+  const categories: Record<string, string[]> = {};
+  for (const key of enabledTweaks) {
+    const cmd = TWEAK_COMMANDS[key];
+    if (!cmd) continue;
+    const cat = key.startsWith("Mem") ? "Memory"
+      : key.startsWith("Debloat") || key.startsWith("Service") || key.startsWith("Privacy") ? "Debloat"
+      : key.startsWith("FiveM") ? "FiveM"
+      : key.startsWith("Process") ? "Process Lasso"
+      : key.startsWith("su_") ? "Startup Apps"
+      : "Registry / System";
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(`# ${key}\n${cmd}`);
+  }
+
+  for (const [cat, cmds] of Object.entries(categories)) {
+    scriptLines.push(`Write-Host "" `);
+    scriptLines.push(`Write-Host "[${cat}] Applying ${cmds.length} tweak(s)..." -ForegroundColor DarkRed`);
+    scriptLines.push(...cmds);
+  }
+
+  scriptLines.push(``);
+  scriptLines.push(`Write-Host "" `);
+  scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "  Done! Restart your PC to apply all changes." -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
+  return scriptLines.join("\n");
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  app.get(api.system.stats.path, async (_req, res) => {
+  app.get(api.system.stats.path, async (req, res) => {
+    const ua = req.get("user-agent") || "";
+    // Check Sec-CH-UA-Platform-Version (Chrome/Edge sends this automatically)
+    const platformVersion = req.get("sec-ch-ua-platform-version") || "";
+    const platform = req.get("sec-ch-ua-platform") || "";
+
+    let detectedOS = "Unknown OS";
+    if (platform === '"Windows"' || platform === "Windows") {
+      // Strip quotes, get major version number
+      const clean = platformVersion.replace(/"/g, "");
+      const major = parseInt(clean.split(".")[0] || "0", 10);
+      if (major >= 13) {
+        detectedOS = "Windows 11 Pro (23H2)";
+      } else if (major > 0) {
+        detectedOS = "Windows 10 Pro (22H2)";
+      } else {
+        // Fall back to UA string
+        if (/Windows NT 10\.0/.test(ua)) detectedOS = "Windows 10 Pro (22H2)";
+        else if (/Windows NT 6\.3/.test(ua)) detectedOS = "Windows 8.1";
+        else if (/Windows NT 6\.1/.test(ua)) detectedOS = "Windows 7";
+        else detectedOS = "Windows";
+      }
+    } else if (platform === '"macOS"' || platform === "macOS" || /Macintosh|Mac OS X/.test(ua)) {
+      detectedOS = "macOS";
+    } else if (platform === '"Linux"' || platform === "Linux" || /Linux/.test(ua)) {
+      detectedOS = "Linux";
+    } else if (/Android/.test(ua)) {
+      detectedOS = "Android";
+    } else if (/iPhone|iPad/.test(ua)) {
+      detectedOS = "iOS";
+    } else if (/Windows NT 10\.0/.test(ua)) {
+      detectedOS = "Windows 10 / 11 Pro";
+    } else if (/Windows/.test(ua)) {
+      detectedOS = "Windows";
+    }
+
     res.json({
       cpu: Math.floor(Math.random() * 35) + 8,
       gpu: Math.floor(Math.random() * 25) + 5,
       memory: Math.floor(Math.random() * 45) + 18,
-      os: "Windows 10 Pro (22H2)",
+      os: detectedOS,
       processCount: 84,
       highImpactCount: 12,
     });
@@ -182,6 +270,17 @@ export async function registerRoutes(
     }
   });
 
+  // POST version for direct download with tweaks body
+  app.post('/api/script/download', (req, res) => {
+    const tweaks: Record<string, boolean> = req.body?.tweaks || {};
+    const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
+    const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
+    res.send(scriptContent);
+  });
+
   app.get('/api/script/download', (req, res) => {
     // Parse tweaks from query if provided
     const rawTweaks = req.query.tweaks;
@@ -191,41 +290,9 @@ export async function registerRoutes(
     }
 
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
-    const scriptLines: string[] = [
-      `# ============================================`,
-      `# OPTI GODS by leaq — Windows 10 Optimizer`,
-      `# Generated: ${new Date().toISOString()}`,
-      `# Tweaks enabled: ${enabledTweaks.length}`,
-      `# ============================================`,
-      ``,
-      `$ErrorActionPreference = 'SilentlyContinue'`,
-      `Write-Host "OPTI GODS by leaq — Starting optimization..." -ForegroundColor Red`,
-      ``,
-    ];
-
-    const categories: Record<string, string[]> = {};
-    for (const key of enabledTweaks) {
-      const cmd = TWEAK_COMMANDS[key];
-      if (!cmd) continue;
-      const cat = key.startsWith('Debloat') || key.startsWith('Service') || key.startsWith('Privacy') ? 'Debloat'
-        : key.startsWith('FiveM') ? 'FiveM'
-        : key.startsWith('Process') ? 'Process Lasso'
-        : key.startsWith('su_') ? 'Startup Apps'
-        : 'Registry / System';
-      if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(`# ${key}\n${cmd}`);
-    }
-
-    for (const [cat, cmds] of Object.entries(categories)) {
-      scriptLines.push(`Write-Host "[${cat}] Applying ${cmds.length} tweak(s)..." -ForegroundColor DarkRed`);
-      scriptLines.push(...cmds);
-      scriptLines.push(``);
-    }
-
-    scriptLines.push(`Write-Host "Done! Restart your PC to apply all changes." -ForegroundColor Green`);
-
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(scriptLines.join('\n'));
+    const content = buildScript(enabledTweaks);
+    res.setHeader("Content-Type", "text/plain");
+    res.send(content);
   });
 
   return httpServer;
