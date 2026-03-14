@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Activity,
   Cpu,
+  Crosshair,
   Gamepad2,
   MemoryStick,
   MonitorPlay,
@@ -32,7 +33,8 @@ const navItems = [
   { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
-  { title: "Debloat Win10", url: "/debloat", icon: Trash2 },
+  { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
+  { title: "Fortnite Optimizer", url: "/fortnite", icon: Crosshair },
 ];
 
 export function AppSidebar() {
@@ -64,7 +66,7 @@ export function AppSidebar() {
           </div>
           <div className="h-8 w-px bg-white/5" />
           <div className="text-center">
-            <p className="text-lg font-bold font-display text-white">50+</p>
+            <p className="text-lg font-bold font-display text-white">130+</p>
             <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Available</p>
           </div>
           <div className="h-8 w-px bg-white/5" />

@@ -128,8 +128,8 @@ export default function Dashboard() {
           {[
             { title: "Operating System", value: osInfo.loading ? "Detecting..." : osInfo.os, sub: osInfo.build ? `Build ${osInfo.build}` : "via browser detection", icon: <HardDrive className="w-5 h-5 text-zinc-400" /> },
             { title: "Active Processes", value: String(stats?.processCount || 84), sub: `${stats?.highImpactCount || 12} High Impact`, icon: <Cpu className="w-5 h-5 text-red-400" /> },
-            { title: "Tweaks Enabled", value: String(enabledCount), sub: "of 50+ available", icon: <Zap className="w-5 h-5 text-yellow-500" /> },
-            { title: "Optimization Level", value: enabledCount > 20 ? "High" : enabledCount > 10 ? "Medium" : "Low", sub: enabledCount > 20 ? "Well tuned" : "Tweaks required", icon: <Activity className="w-5 h-5 text-green-400" /> },
+            { title: "Tweaks Enabled", value: String(enabledCount), sub: "of 130+ available", icon: <Zap className="w-5 h-5 text-yellow-500" /> },
+            { title: "Optimization Level", value: enabledCount > 30 ? "High" : enabledCount > 10 ? "Medium" : "Low", sub: enabledCount > 30 ? "Well tuned" : "Tweaks required", icon: <Activity className="w-5 h-5 text-red-400" /> },
           ].map((card, i) => (
             <motion.div
               key={card.title}

@@ -13,6 +13,7 @@ import ProcessLasso from "@/pages/process-lasso";
 import StartupApps from "@/pages/startup-apps";
 import Debloat from "@/pages/debloat";
 import Memory from "@/pages/memory";
+import Fortnite from "@/pages/fortnite";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/startup" component={StartupApps} />
       <Route path="/debloat" component={Debloat} />
       <Route path="/memory" component={Memory} />
+      <Route path="/fortnite" component={Fortnite} />
       <Route component={NotFound} />
     </Switch>
   );
