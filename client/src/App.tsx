@@ -14,6 +14,7 @@ import StartupApps from "@/pages/startup-apps";
 import Debloat from "@/pages/debloat";
 import Memory from "@/pages/memory";
 import Fortnite from "@/pages/fortnite";
+import GameDetection from "@/pages/game-detection";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/debloat" component={Debloat} />
       <Route path="/memory" component={Memory} />
       <Route path="/fortnite" component={Fortnite} />
+      <Route path="/game-detection" component={GameDetection} />
       <Route component={NotFound} />
     </Switch>
   );
