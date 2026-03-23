@@ -89,7 +89,7 @@ export function AppSidebar() {
           </div>
           <div className="h-6 w-px bg-white/5" />
           <div className="text-center">
-            <p className="text-base font-bold font-display text-white">130+</p>
+            <p className="text-base font-bold font-display text-white">220+</p>
             <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Tweaks</p>
           </div>
           <div className="h-6 w-px bg-white/5" />
