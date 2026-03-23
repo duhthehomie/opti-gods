@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { insertPresetSchema, presets } from "./schema";
+import { insertPresetSchema, presets, startupApps, optimizations } from "./schema";
+export type { InsertPreset } from "./schema";
 
 export const errorSchemas = {
   validation: z.object({ message: z.string(), field: z.string().optional() }),

@@ -20,6 +20,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   // Memory
   DisablePrefetch: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters' -Name 'EnablePrefetcher' -Value 0; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters' -Name 'EnableSuperfetch' -Value 0`,
   DisableMemoryCompression: `Disable-MMAgent -MemoryCompression`,
+  ClearPagefileOnShutdown: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'ClearPageFileAtShutdown' -Value 1; Write-Host "[OK] Pagefile will be cleared on every shutdown — prevents sensitive data persistence" -ForegroundColor Green`,
   // Visual/Gaming
   DisableAnimations: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))`,
   DisableTelemetry: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Name 'AllowTelemetry' -Value 0`,
@@ -39,6 +40,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   FiveMExtendedMemory: `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value 3`,
   FiveMDisableVSync: `$cfg = "$env:LocalAppData\\FiveM\\FiveM.app\\citizen\\common\\data\\VehicleLayouts\\settings.xml"; Write-Host "VSync override queued for FiveM config."`,
   FiveMIOPriority: `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3 -ErrorAction SilentlyContinue`,
+  FiveMDisableP2P: `$cfgPath = "$env:LocalAppData\\FiveM\\FiveM.app\\CitizenFX.ini"; If (!(Test-Path $cfgPath)) { New-Item -ItemType File -Path $cfgPath -Force | Out-Null }; $content = Get-Content $cfgPath -Raw -ErrorAction SilentlyContinue; If ($content -notmatch 'DisablePeerToPeer') { Add-Content $cfgPath "DisablePeerToPeer=1" }; Write-Host "[FiveM] P2P connections disabled — forces direct server connections for lower ping variance" -ForegroundColor Green`,
   // Debloat
   DebloatCortana: `Get-AppxPackage *Microsoft.549981C3F5F10* | Remove-AppxPackage`,
   DebloatOneDrive: `taskkill /F /IM OneDrive.exe; $proc = "$env:SystemRoot\\System32\\OneDriveSetup.exe"; If (Test-Path $proc) { & $proc /uninstall }`,
@@ -697,7 +699,7 @@ Start-Sleep 2
 
     try {
       const { default: Stripe } = await import('stripe');
-      const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
+      const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
 
       const host = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
       const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
@@ -729,7 +731,7 @@ Start-Sleep 2
 
     try {
       const { default: Stripe } = await import('stripe');
-      const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
+      const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
       const session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ['line_items'],
       });
