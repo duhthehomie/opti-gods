@@ -5,7 +5,6 @@ import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Save, Trash2,
   FolderOpen, Plus, CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
   MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio,
-  Activity, Thermometer, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +17,6 @@ import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { ScanImport } from "@/components/scan-import";
-import { useLiveStats } from "@/hooks/use-live-stats";
 
 // Feature categories
 const FEATURES = [
@@ -143,7 +141,6 @@ const PRO_BULLETS = [
 export default function Dashboard() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
-  const live = useLiveStats(hw.ramGB);
   const isPro = useProStatus();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [] } = useQuery<any[]>({
@@ -428,151 +425,6 @@ export default function Dashboard() {
               <span className="text-xs font-semibold text-zinc-200 truncate" title={stat.value}>{stat.value}</span>
             </div>
           ))}
-        </motion.div>
-
-        {/* Live System Monitor */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.29 }}
-          className="rounded-xl bg-black/40 border border-white/5 overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-red-500" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Live Monitor</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] text-zinc-600 font-mono">SIMULATED — real readings require desktop agent</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-white/5">
-            {/* CPU */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Cpu className="w-3 h-3 text-red-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">CPU</span>
-                </div>
-                <span className={cn("text-sm font-bold font-display", live.cpuUsage > 80 ? "text-red-400" : live.cpuUsage > 60 ? "text-orange-400" : "text-white")}>
-                  {live.cpuUsage}%
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                <div
-                  className={cn("h-full rounded-full transition-all duration-700", live.cpuUsage > 80 ? "bg-red-500" : live.cpuUsage > 60 ? "bg-orange-500" : "bg-red-500/60")}
-                  style={{ width: `${live.cpuUsage}%` }}
-                />
-              </div>
-              {/* Mini sparkline */}
-              <div className="flex items-end gap-px h-6">
-                {live.cpuHistory.slice(-20).map((v, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-sm bg-red-500/40 transition-all duration-300"
-                    style={{ height: `${Math.max(4, (v / 100) * 24)}px` }}
-                  />
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <Thermometer className="w-2.5 h-2.5 text-zinc-600" />
-                <span className="text-[10px] text-zinc-600">{live.cpuTemp}°C</span>
-              </div>
-            </div>
-
-            {/* GPU */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Monitor className="w-3 h-3 text-zinc-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">GPU</span>
-                </div>
-                <span className={cn("text-sm font-bold font-display", live.gpuUsage > 85 ? "text-red-400" : live.gpuUsage > 65 ? "text-orange-400" : "text-white")}>
-                  {live.gpuUsage}%
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                <div
-                  className={cn("h-full rounded-full transition-all duration-700", live.gpuUsage > 85 ? "bg-red-500" : live.gpuUsage > 65 ? "bg-orange-500" : "bg-zinc-400/60")}
-                  style={{ width: `${live.gpuUsage}%` }}
-                />
-              </div>
-              <div className="flex items-end gap-px h-6">
-                {live.gpuHistory.slice(-20).map((v, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-sm bg-zinc-500/30 transition-all duration-300"
-                    style={{ height: `${Math.max(4, (v / 100) * 24)}px` }}
-                  />
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <Thermometer className="w-2.5 h-2.5 text-zinc-600" />
-                <span className="text-[10px] text-zinc-600">{live.gpuTemp}°C</span>
-              </div>
-            </div>
-
-            {/* RAM */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <MemoryStick className="w-3 h-3 text-zinc-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">RAM</span>
-                </div>
-                <span className={cn("text-sm font-bold font-display", live.ramPct > 85 ? "text-red-400" : live.ramPct > 70 ? "text-orange-400" : "text-white")}>
-                  {live.ramPct}%
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                <div
-                  className={cn("h-full rounded-full transition-all duration-700", live.ramPct > 85 ? "bg-red-500" : live.ramPct > 70 ? "bg-orange-500" : "bg-zinc-500/50")}
-                  style={{ width: `${live.ramPct}%` }}
-                />
-              </div>
-              <div className="pt-3 space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-zinc-600">Used</span>
-                  <span className="text-zinc-300 font-mono">{live.ramUsedGB} GB</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-zinc-600">Total</span>
-                  <span className="text-zinc-500 font-mono">{live.ramTotalGB} GB</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Summary panel */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="w-3 h-3 text-zinc-400" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">PC Health</span>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: "CPU Load", value: `${live.cpuUsage}%`, warn: live.cpuUsage > 80 },
-                  { label: "GPU Load", value: `${live.gpuUsage}%`, warn: live.gpuUsage > 85 },
-                  { label: "RAM Use", value: `${live.ramPct}%`, warn: live.ramPct > 85 },
-                  { label: "CPU Temp", value: `${live.cpuTemp}°C`, warn: live.cpuTemp > 85 },
-                  { label: "GPU Temp", value: `${live.gpuTemp}°C`, warn: live.gpuTemp > 82 },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-600">{row.label}</span>
-                    <span className={cn("text-[10px] font-bold font-mono", row.warn ? "text-red-400" : "text-zinc-300")}>
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className={cn(
-                "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm text-center",
-                live.cpuUsage > 80 || live.gpuUsage > 85 || live.cpuTemp > 85 ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-500"
-              )}>
-                {live.cpuUsage > 80 || live.gpuUsage > 85 ? "High Load Detected" : live.cpuTemp > 85 || live.gpuTemp > 82 ? "Thermal Warning" : "System Nominal"}
-              </div>
-            </div>
-          </div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
