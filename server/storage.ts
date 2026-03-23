@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   getPresets(): Promise<Preset[]>;
@@ -15,11 +15,13 @@ export interface IStorage {
   createCode(code: string, note?: string): Promise<ProAccessCode>;
   redeemCode(code: string): Promise<boolean>;
   deleteCode(id: number): Promise<void>;
+  deleteUsedCodes(): Promise<number>;
   // Friend tokens
   getAllFriendTokens(): Promise<ProFriendToken[]>;
   createFriendToken(token: string, note?: string): Promise<ProFriendToken>;
   redeemFriendToken(token: string): Promise<boolean>;
   deleteFriendToken(id: number): Promise<void>;
+  deleteUsedFriendTokens(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -85,6 +87,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(proAccessCodes).where(eq(proAccessCodes.id, id));
   }
 
+  async deleteUsedCodes(): Promise<number> {
+    const rows = await db.delete(proAccessCodes).where(isNotNull(proAccessCodes.usedAt)).returning();
+    return rows.length;
+  }
+
   async getAllFriendTokens(): Promise<ProFriendToken[]> {
     return await db.select().from(proFriendTokens).orderBy(proFriendTokens.createdAt);
   }
@@ -108,6 +115,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFriendToken(id: number): Promise<void> {
     await db.delete(proFriendTokens).where(eq(proFriendTokens.id, id));
+  }
+
+  async deleteUsedFriendTokens(): Promise<number> {
+    const rows = await db.delete(proFriendTokens).where(isNotNull(proFriendTokens.usedAt)).returning();
+    return rows.length;
   }
 }
 

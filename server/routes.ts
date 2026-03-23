@@ -627,6 +627,42 @@ Start-Sleep 2
     res.json({ ok: true });
   });
 
+  // Admin — bulk purge all used codes
+  app.delete('/api/admin/codes/used/purge', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const count = await storage.deleteUsedCodes();
+    res.json({ ok: true, deleted: count });
+  });
+
+  // Admin — bulk purge all used friend tokens
+  app.delete('/api/admin/friends/used/purge', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const count = await storage.deleteUsedFriendTokens();
+    res.json({ ok: true, deleted: count });
+  });
+
+  // Admin — aggregate stats
+  app.get('/api/admin/stats', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const [codes, friends] = await Promise.all([
+      storage.getAllCodes(),
+      storage.getAllFriendTokens(),
+    ]);
+    const usedCodes = codes.filter(c => c.usedAt).length;
+    const availableCodes = codes.filter(c => !c.usedAt).length;
+    const usedFriends = friends.filter(f => f.usedAt).length;
+    const availableFriends = friends.filter(f => !f.usedAt).length;
+    res.json({
+      totalCodes: codes.length,
+      usedCodes,
+      availableCodes,
+      totalFriends: friends.length,
+      usedFriends,
+      availableFriends,
+      revenueEstimate: usedCodes * 25,
+    });
+  });
+
   // ── Stripe Checkout (one-time payment) ──────────────────────────────────────
   // Activates only when STRIPE_SECRET_KEY is present in env vars.
   // The user sets STRIPE_SECRET_KEY + STRIPE_PRICE_ID from their Stripe dashboard.
