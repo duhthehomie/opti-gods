@@ -16,6 +16,7 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { cn } from "@/lib/utils";
 import { getProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
+import { ScanImport } from "@/components/scan-import";
 
 // Feature categories
 const FEATURES = [
@@ -321,6 +322,10 @@ export default function Dashboard() {
               <span className="text-xs font-semibold text-zinc-200 truncate" title={stat.value}>{stat.value}</span>
             </div>
           ))}
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <ScanImport />
         </motion.div>
 
         <motion.div

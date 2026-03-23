@@ -1,0 +1,131 @@
+import { useState } from "react";
+import { Download, ScanLine, CheckCircle2, AlertCircle, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+export function ScanImport() {
+  const [paste, setPaste] = useState("");
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [imported, setImported] = useState(0);
+  const { setAllTweaks, tweaks } = useOptimizationStore();
+  const { toast } = useToast();
+
+  const handleDownload = () => {
+    const a = document.createElement("a");
+    a.href = "/api/script/detect";
+    a.download = "OptiGods-Detect.ps1";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleImport = () => {
+    const trimmed = paste.trim();
+    const match = trimmed.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
+    const b64 = match ? match[1] : trimmed;
+
+    try {
+      const json = atob(b64);
+      const detected: Record<string, boolean> = JSON.parse(json);
+
+      const next = { ...tweaks };
+      let count = 0;
+      for (const [key, val] of Object.entries(detected)) {
+        if (key in next && typeof val === "boolean") {
+          next[key] = val;
+          if (val) count++;
+        }
+      }
+
+      setAllTweaks(next);
+      setImported(count);
+      setStatus("success");
+      setPaste("");
+      toast({
+        title: "PC state loaded",
+        description: `${count} optimizations detected as already applied on your system.`,
+      });
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="p-5 rounded-2xl bg-black/40 border border-white/5 space-y-4">
+      <div className="flex items-center gap-2">
+        <ScanLine className="w-4 h-4 text-red-500" />
+        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-300">Detect Already-Applied Optimizations</h2>
+      </div>
+
+      <p className="text-xs text-zinc-500 leading-relaxed">
+        Already had your PC optimized (by me or anyone else)? Run the scan script to auto-detect what's already done —
+        so nothing gets applied twice. Detects Process Lasso, registry tweaks, disabled services, and more.
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Step 1 */}
+        <div className="flex-1 flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+          <span className="w-6 h-6 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center text-[11px] font-bold text-red-400 shrink-0 mt-0.5">1</span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-white mb-1">Download & Run the Scan</p>
+            <p className="text-[11px] text-zinc-500 mb-2">Run as Administrator in PowerShell. Read-only — changes nothing.</p>
+            <Button
+              data-testid="button-download-detect"
+              size="sm"
+              onClick={handleDownload}
+              className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-red-500/40 text-zinc-100 text-xs gap-1.5 h-7"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download Scan Script
+            </Button>
+          </div>
+        </div>
+
+        <ChevronRight className="hidden sm:block w-4 h-4 text-zinc-700 self-center shrink-0" />
+
+        {/* Step 2 */}
+        <div className="flex-1 flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+          <span className="w-6 h-6 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center text-[11px] font-bold text-red-400 shrink-0 mt-0.5">2</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-white mb-1">Paste the Result Here</p>
+            <p className="text-[11px] text-zinc-500 mb-2">Copy the <span className="font-mono text-zinc-400">OPTIGODS_STATE:...</span> line from the output.</p>
+            <div className="flex gap-2">
+              <input
+                data-testid="input-scan-paste"
+                type="text"
+                value={paste}
+                onChange={(e) => { setPaste(e.target.value); setStatus("idle"); }}
+                placeholder="Paste OPTIGODS_STATE:... here"
+                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 focus:border-red-500/40 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono transition-colors"
+              />
+              <Button
+                data-testid="button-import-state"
+                size="sm"
+                onClick={handleImport}
+                disabled={!paste.trim()}
+                className="bg-red-600 hover:bg-red-700 text-white border border-red-500/30 h-7 text-xs shrink-0"
+              >
+                Import
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {status === "success" && (
+        <div className="flex items-center gap-2 text-xs text-red-400 font-medium">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          Done — {imported} optimizations detected as already applied. Toggles updated automatically.
+        </div>
+      )}
+      {status === "error" && (
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          Couldn't read that code. Make sure you copied the full <span className="font-mono ml-1">OPTIGODS_STATE:...</span> line.
+        </div>
+      )}
+    </div>
+  );
+}
