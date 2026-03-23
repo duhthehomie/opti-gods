@@ -9,12 +9,11 @@ import { ScriptDialog } from "../script-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
+import { cn } from "@/lib/utils";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [command, setCommand] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadingBat, setDownloadingBat] = useState(false);
 
   const { tweaks, nvidiaPreset } = useOptimizationStore();
   const generateScript = useGenerateScript();
@@ -33,83 +32,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     });
   };
 
-  const handleDownloadBat = async () => {
-    const enabledCount = Object.values(tweaks).filter(Boolean).length;
-    if (enabledCount === 0) {
-      toast({ title: "No tweaks selected", description: "Enable at least one optimization before downloading.", variant: "destructive" });
-      return;
-    }
-    setDownloadingBat(true);
-    try {
-      const res = await fetch("/api/script/download-bat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks, nvidiaPreset }),
-      });
-      if (!res.ok) throw new Error("Failed to generate .bat");
-      const text = await res.text();
-      const blob = new Blob([text], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods-by-leaq.bat";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({
-        title: `Downloaded OptiGods-by-leaq.bat (${enabledCount} tweaks)`,
-        description: "Double-click the .bat file — no right-click required. Runs as Administrator automatically.",
-      });
-    } catch (e) {
-      toast({ title: "Download failed", description: String(e), variant: "destructive" });
-    } finally {
-      setDownloadingBat(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    const enabledCount = Object.values(tweaks).filter(Boolean).length;
-    if (enabledCount === 0) {
-      toast({ title: "No tweaks selected", description: "Enable at least one optimization before downloading.", variant: "destructive" });
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      const res = await fetch("/api/script/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks, nvidiaPreset }),
-      });
-
-      if (!res.ok) throw new Error("Failed to generate script");
-
-      const text = await res.text();
-      const blob = new Blob([text], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods-by-leaq.ps1";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: `Downloaded OptiGods-by-leaq.ps1 (${enabledCount} tweaks)`,
-        description: "Right-click the file → Run with PowerShell as Administrator.",
-      });
-    } catch (e) {
-      toast({ title: "Download failed", description: String(e), variant: "destructive" });
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   const osLabel = osInfo.loading ? "DETECTING..." : osInfo.os.toUpperCase().replace(/ /g, "_");
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
-  const statusLabel = enabledCount === 0 ? "READY" : `${enabledCount}_TWEAKS_SELECTED`;
 
   return (
     <SidebarProvider>
@@ -123,61 +47,35 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <SidebarTrigger className="text-zinc-400 hover:text-white" />
               <div className="h-4 w-px bg-white/10 hidden md:block" />
               <span className="text-xs font-mono text-zinc-500 hidden md:block">
-                SYSTEM: {osLabel} | STATUS: <span className={enabledCount > 0 ? "text-red-400" : "text-zinc-500"}>{statusLabel}</span>
+                {osLabel} |{" "}
+                {enabledCount > 0 ? (
+                  <span className="text-red-400 font-semibold">{enabledCount} tweaks selected</span>
+                ) : (
+                  <span className="text-zinc-600">no tweaks selected yet</span>
+                )}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* .BAT Download Button — PRO GATED (double-click friendly) */}
-              <ProGate className="hidden sm:block">
-                <Button
-                  data-testid="button-download-bat"
-                  onClick={handleDownloadBat}
-                  disabled={downloadingBat}
-                  variant="outline"
-                  className="border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-400 hover:text-amber-300 font-display tracking-wide px-4"
-                >
-                  {downloadingBat ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  DOWNLOAD .BAT
-                </Button>
-              </ProGate>
-
-              {/* Direct Download Button — PRO GATED */}
-              <ProGate className="hidden sm:block">
-                <Button
-                  data-testid="button-download-script"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  variant="outline"
-                  className="border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-red-400 hover:text-red-300 font-display tracking-wide px-4"
-                >
-                  {downloading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  DOWNLOAD .PS1
-                </Button>
-              </ProGate>
-
-              {/* PowerShell Command Button — PRO GATED */}
+              {/* Single clear download CTA */}
               <ProGate>
                 <Button
                   data-testid="button-apply-optimizations"
                   onClick={handleApply}
                   disabled={generateScript.isPending}
-                  className="bg-red-600 hover:bg-red-500 text-white border border-red-400/50 shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)] transition-all duration-300 px-6 font-display tracking-wide"
+                  className={cn(
+                    "font-display tracking-wide px-6 border transition-all duration-300",
+                    enabledCount > 0
+                      ? "bg-red-600 hover:bg-red-500 text-white border-red-400/50 shadow-[0_0_20px_-3px_rgba(239,68,68,0.5)]"
+                      : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-700"
+                  )}
                 >
                   {generateScript.isPending ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Zap className="w-4 h-4 mr-2" />
+                    <Download className="w-4 h-4 mr-2" />
                   )}
-                  APPLY
+                  {enabledCount > 0 ? `GET MY SCRIPT (${enabledCount})` : "GET MY SCRIPT"}
                 </Button>
               </ProGate>
             </div>

@@ -18,6 +18,8 @@ import {
   Wrench,
   HardDrive,
   Bell,
+  Download,
+  ChevronRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -162,7 +164,29 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-white/5">
+      <SidebarFooter className="p-4 border-t border-white/5 space-y-3">
+        {/* Download nudge — only when tweaks are selected */}
+        {enabledCount > 0 && (
+          <div className="relative rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-3 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
+            <div className="relative flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
+                <Download className="w-4 h-4 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-red-300 leading-tight">
+                  {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected!
+                </p>
+                <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">
+                  Click <span className="text-zinc-300 font-semibold">GET MY SCRIPT</span> above ↑
+                </p>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-red-500/60 shrink-0" />
+            </div>
+          </div>
+        )}
+
+        {/* System info */}
         <div className="px-2 py-2.5 rounded-lg bg-zinc-900/60 border border-white/5">
           <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Detected System</p>
           <p className="text-xs text-zinc-400 font-mono truncate">

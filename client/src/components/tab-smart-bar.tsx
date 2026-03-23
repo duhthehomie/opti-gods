@@ -130,6 +130,26 @@ export function TabSmartBar({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Next step hint — appears when tweaks are active */}
+      <AnimatePresence>
+        {active > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-red-500/10"
+          >
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-500/[0.04]">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+              <p className="text-[11px] text-zinc-500 leading-tight">
+                <span className="text-zinc-300 font-semibold">{active} tweak{active !== 1 ? "s" : ""} selected on this page.</span>
+                {" "}When you're ready, click <span className="text-red-400 font-semibold">GET MY SCRIPT</span> in the top-right corner to download and run everything.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
