@@ -555,8 +555,14 @@ Start-Sleep 2
     try {
       const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-      const paid = session.payment_status === 'paid';
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['line_items'],
+      });
+
+      // Validate this session was created by us (not an arbitrary paid session)
+      const isOurProduct = session.metadata?.product === 'optigods_pro';
+      const paid = session.payment_status === 'paid' && isOurProduct;
+
       res.json({ paid });
     } catch (err: any) {
       console.error('Stripe verify error:', err.message);

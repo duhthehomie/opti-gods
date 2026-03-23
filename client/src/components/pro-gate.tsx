@@ -220,12 +220,22 @@ export function ProGate({ children, className }: ProGateProps) {
                     </div>
 
                     {/* After-payment instruction */}
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
-                      <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-zinc-500 leading-relaxed">
-                        After payment, send your username and payment screenshot — you'll receive your access code within minutes.
-                      </p>
-                    </div>
+                    {!STRIPE_ENABLED && (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                        <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-zinc-500 leading-relaxed">
+                          After payment, send your username and payment screenshot — you'll receive your access code within minutes.
+                        </p>
+                      </div>
+                    )}
+                    {STRIPE_ENABLED && (CASHAPP_TAG || PAYPAL_LINK) && (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                        <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-zinc-500 leading-relaxed">
+                          Card payment unlocks instantly. CashApp/PayPal require a quick DM with your payment screenshot.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
