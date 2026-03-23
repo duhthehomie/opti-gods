@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Zap, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const PRO_KEY = "optigods_pro_v1";
+import { setProStatus } from "@/lib/pro-status";
 
 type Status = "verifying" | "success" | "error";
 
@@ -27,7 +26,7 @@ export default function PaymentSuccess() {
         const data = await res.json();
 
         if (data.paid) {
-          localStorage.setItem(PRO_KEY, "true");
+          setProStatus(true);
           setStatus("success");
         } else {
           setStatus("error");

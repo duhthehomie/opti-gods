@@ -3,7 +3,7 @@ import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard } from "
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { getProStatus } from "@/lib/pro-status";
+import { getProStatus, setProStatus } from "@/lib/pro-status";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -59,7 +59,7 @@ export function ProGate({ children, className }: ProGateProps) {
       });
       const data = await res.json();
       if (data.valid) {
-        localStorage.setItem(PRO_KEY, "true");
+        setProStatus(true);
         setSuccess(true);
         setTimeout(() => {
           setOpen(false);
