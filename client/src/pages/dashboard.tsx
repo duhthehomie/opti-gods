@@ -131,7 +131,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "130+ registry, network, memory, and GPU tweaks",
+  "220+ registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
@@ -230,7 +230,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              130+ tweaks. One script. Zero compromise.
+              220+ tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">
