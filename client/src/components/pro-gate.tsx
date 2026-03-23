@@ -10,7 +10,7 @@ const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
 
-// ── Internal dialog component — holds all payment state and logic ─────────────
+// Internal dialog component — holds all payment state and logic
 function ProPaymentDialog({
   open,
   onOpenChange,
@@ -154,7 +154,7 @@ function ProPaymentDialog({
                         target="_blank"
                         rel="noopener noreferrer"
                         data-testid="link-pay-cashapp"
-                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-[#00D632]/10 border border-[#00D632]/30 hover:border-[#00D632]/60 hover:bg-[#00D632]/15 text-[#00D632] text-sm font-bold transition-all"
+                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
                       >
                         <svg width="16" height="16" viewBox="0 0 40 40" fill="currentColor">
                           <path d="M20 0C8.954 0 0 8.954 0 20s8.954 20 20 20 20-8.954 20-20S31.046 0 20 0zm3.09 29.2c-.38 1.43-1.65 2.43-3.09 2.43-1.44 0-2.71-1-3.09-2.43L15.7 27H13a1 1 0 0 1 0-2h2.23l-1.03-3.89a1 1 0 0 1 .72-1.22 1 1 0 0 1 1.22.72L17.3 25h5.4l1.16-4.39a1 1 0 0 1 1.22-.72 1 1 0 0 1 .72 1.22L24.77 25H27a1 1 0 0 1 0 2h-2.7l-1.21 2.2zM27 17H13a1 1 0 0 1 0-2h2.7l1.21-2.2c.38-1.43 1.65-2.43 3.09-2.43 1.44 0 2.71 1 3.09 2.43L24.3 15H27a1 1 0 0 1 0 2z"/>
@@ -169,7 +169,7 @@ function ProPaymentDialog({
                         target="_blank"
                         rel="noopener noreferrer"
                         data-testid="link-pay-paypal"
-                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-[#003087]/15 border border-[#003087]/40 hover:border-[#0070E0]/60 hover:bg-[#003087]/25 text-[#009CDE] text-sm font-bold transition-all"
+                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/>
@@ -231,7 +231,7 @@ function ProPaymentDialog({
   );
 }
 
-// ── ProGate — dims content + lock overlay, opens payment dialog on click ──────
+// ProGate — dims content + lock overlay, opens payment dialog on click
 interface ProGateProps {
   children: ReactNode;
   className?: string;
@@ -258,7 +258,7 @@ export function ProGate({ children, className }: ProGateProps) {
   );
 }
 
-// ── ProUnlockButton — standalone CTA trigger, no overlay dimming ──────────────
+// ProUnlockButton — standalone CTA trigger, no overlay dimming
 // Use this for hero/pricing CTAs. Returns null when user is already Pro.
 export function ProUnlockButton({ children, className }: { children: ReactNode; className?: string }) {
   const isPro = getProStatus();

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { getProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 
-// ── Feature categories ────────────────────────────────────────────────────────
+// Feature categories
 const FEATURES = [
   { icon: Settings2, title: "Registry Tweaks", desc: "Deep Windows registry optimizations for latency and responsiveness" },
   { icon: Wifi, title: "Network Stack", desc: "TCP/IP tuning, nagle disable, DNS and connection optimizations" },
@@ -30,7 +30,7 @@ const FEATURES = [
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
-// ── How to use steps ──────────────────────────────────────────────────────────
+// How to use steps
 const HOW_TO_STEPS = [
   {
     icon: Terminal,
@@ -54,7 +54,7 @@ const HOW_TO_STEPS = [
   },
 ];
 
-// ── Pro pricing bullet points ─────────────────────────────────────────────────
+// Pro pricing bullet points
 const PRO_BULLETS = [
   "130+ registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
@@ -121,7 +121,7 @@ export default function Dashboard() {
     <AppLayout>
       <div className="space-y-8 pb-10">
 
-        {/* ── HERO ─────────────────────────────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -178,7 +178,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* ── HARDWARE STATUS BAR ───────────────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -226,7 +226,7 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
-        {/* ── FEATURE GRID ─────────────────────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -257,7 +257,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* ── PRICING CARD + TWEAKS COUNTER ────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -349,7 +349,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* ── HOW TO USE ───────────────────────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -392,7 +392,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* ── PRESET MANAGEMENT ────────────────────────────────────────────── */}
+        
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

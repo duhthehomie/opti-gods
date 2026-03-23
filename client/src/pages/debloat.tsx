@@ -200,14 +200,14 @@ export default function Debloat() {
           </Button>
         </motion.div>
 
-        {/* ── WINDOWS 10 SECTION ── */}
+        
         <div className="space-y-8">
           <DebloatSection title="Microsoft UWP Bloatware" items={WIN10_APPS} />
           <DebloatSection title="Background Services" items={SERVICES} />
           <DebloatSection title="Privacy & Tracking" items={PRIVACY} />
         </div>
 
-        {/* ── WINDOWS 11 SECTION ── */}
+        
         <div className="mt-12 pt-8 border-t border-white/5">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
