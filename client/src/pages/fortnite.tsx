@@ -77,7 +77,7 @@ export default function Fortnite() {
             <pre className="text-[11px] font-mono text-zinc-400 leading-relaxed whitespace-pre-wrap">{FPS_CAP_SCRIPT}</pre>
           </div>
           <p className="text-[11px] text-zinc-600 mt-3 flex items-center gap-1.5">
-            <AlertTriangle className="w-3 h-3 text-yellow-500" />
+            <AlertTriangle className="w-3 h-3 text-zinc-500" />
             Run as Administrator. Launch Fortnite once before running so the config file exists.
           </p>
         </motion.div>

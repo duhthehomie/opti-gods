@@ -119,7 +119,7 @@ export default function Registry() {
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800">
-              <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
               <div className="space-y-2">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-red-500">Advanced / Risky — Use with Caution</h3>
                 <p className="text-xs text-zinc-400">The tweaks below have real performance benefits but carry risk. Read descriptions carefully.</p>

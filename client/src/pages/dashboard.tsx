@@ -4,7 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Save, Trash2,
   FolderOpen, Plus, CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
-  MemoryStick, Wifi
+  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,23 @@ import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { cn } from "@/lib/utils";
+import { getProStatus } from "@/lib/pro-status";
+import { ProUnlockButton } from "@/components/pro-gate";
 
+// ── Feature categories ────────────────────────────────────────────────────────
+const FEATURES = [
+  { icon: Settings2, title: "Registry Tweaks", desc: "Deep Windows registry optimizations for latency and responsiveness" },
+  { icon: Wifi, title: "Network Stack", desc: "TCP/IP tuning, nagle disable, DNS and connection optimizations" },
+  { icon: Monitor, title: "GPU / NVIDIA", desc: "HAGS, MSI interrupt mode, driver tweaks, and shader cache control" },
+  { icon: MemoryStick, title: "Memory Optimizer", desc: "RAM priority pinning, pagefile control, and heap management" },
+  { icon: Power, title: "Power Plan", desc: "Processor performance states, C-states, and idle inhibit" },
+  { icon: Gamepad2, title: "FiveM Optimizer", desc: "GTA V and FiveM-specific process tweaks for max FPS" },
+  { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
+  { icon: Search, title: "Game Detection", desc: "Auto-detect 14 games and apply per-game optimization packs" },
+  { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
+];
+
+// ── How to use steps ──────────────────────────────────────────────────────────
 const HOW_TO_STEPS = [
   {
     icon: Terminal,
@@ -38,9 +54,20 @@ const HOW_TO_STEPS = [
   },
 ];
 
+// ── Pro pricing bullet points ─────────────────────────────────────────────────
+const PRO_BULLETS = [
+  "130+ registry, network, memory, and GPU tweaks",
+  "FiveM, Fortnite, CS2, Valorant, and Apex packs",
+  "Download your personalized .PS1 script",
+  "Game auto-detection for 14 titles",
+  "Preset save/load for quick re-apply",
+  "Lifetime access — pay once, no subscription",
+];
+
 export default function Dashboard() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
+  const isPro = getProStatus();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [] } = useQuery<any[]>({
     queryKey: [api.presets.list.path],
@@ -88,71 +115,61 @@ export default function Dashboard() {
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const totalTweaks = Object.keys(tweaks).length;
   const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
-  const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-yellow-400" : enabledCount < 25 ? "text-orange-400" : "text-red-400";
-
-  // Hardware stat cards — all values from real browser APIs
-  const hwCards = [
-    {
-      title: "Operating System",
-      value: osInfo.loading ? "Detecting..." : osInfo.os,
-      sub: osInfo.build ? `Build ${osInfo.build} · via UA Client Hints` : "via browser detection",
-      icon: <HardDrive className="w-5 h-5 text-zinc-400" />,
-      accurate: true,
-    },
-    {
-      title: "CPU Threads",
-      value: hw.loading ? "Detecting..." : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown",
-      sub: hw.cpuCores > 0
-        ? `~${Math.max(1, Math.floor(hw.cpuCores / 2))} physical cores estimated`
-        : "navigator.hardwareConcurrency",
-      icon: <Cpu className="w-5 h-5 text-red-400" />,
-      accurate: true,
-    },
-    {
-      title: "System RAM",
-      value: hw.loading ? "Detecting..." : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown",
-      sub: hw.ramGB > 0 ? "approximate (browser privacy limit)" : "navigator.deviceMemory",
-      icon: <MemoryStick className="w-5 h-5 text-zinc-400" />,
-      accurate: true,
-    },
-    {
-      title: "Graphics Card",
-      value: hw.loading ? "Detecting..." : hw.gpuName.length > 22 ? hw.gpuName.slice(0, 22) + "…" : hw.gpuName,
-      sub: hw.gpuVendor || "via WebGL renderer info",
-      icon: <Monitor className="w-5 h-5 text-zinc-400" />,
-      accurate: true,
-    },
-  ];
+  const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
 
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
 
-        {/* Hero Banner */}
+        {/* ── HERO ─────────────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="relative rounded-2xl overflow-hidden winui-panel p-8 md:p-12 border-l-4 border-l-red-500"
+          className="relative rounded-2xl overflow-hidden bg-black/60 border border-white/5 border-l-4 border-l-red-500 p-8 md:p-12"
         >
-          <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-red-500/10 to-transparent pointer-events-none" />
+          <div className="absolute right-0 top-0 w-2/3 h-full bg-gradient-to-l from-red-500/8 to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+
           <div className="relative z-10 max-w-2xl">
+            {/* OS badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono mb-6">
               <span className={cn("w-2 h-2 rounded-full bg-red-500", osInfo.loading ? "animate-pulse" : "")} />
               {osInfo.loading ? "DETECTING SYSTEM..." : `SYSTEM DETECTED — ${osInfo.displayName}`}
             </div>
-            <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-4 leading-tight">
+
+            <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-3 leading-none tracking-tight">
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
-            <p className="text-lg text-zinc-400 mb-8 leading-relaxed">
-              Deep registry tweaks, process priority pinning, bloatware removal, and one-click PowerShell deployment.
-              Optimized for Windows 10 and 11 competitive gaming.
+            <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
+              130+ tweaks. One script. Zero compromise.
             </p>
-            <div className="flex gap-4">
+
+            <div className="flex flex-wrap gap-3">
+              {isPro ? (
+                <div
+                  data-testid="badge-pro-active"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-bold"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Pro Access Active — All Features Unlocked
+                </div>
+              ) : (
+                <ProUnlockButton>
+                  <Button
+                    data-testid="button-hero-unlock-pro"
+                    className="bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.5)] font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    Unlock Pro — $9.99 Lifetime
+                  </Button>
+                </ProUnlockButton>
+              )}
+
               <Button
                 data-testid="button-restore-point"
                 variant="outline"
-                className="border-white/10 hover:bg-white/5 hover:text-white text-zinc-300 font-medium"
+                className="border-white/10 hover:bg-white/5 hover:text-white text-zinc-400 font-medium text-sm"
               >
                 <ShieldAlert className="w-4 h-4 mr-2" />
                 Create Restore Point First
@@ -161,56 +178,182 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Hardware Stats — REAL data from browser APIs */}
-        <div>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Your System</span>
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-[10px] text-zinc-600 font-mono">detected via browser APIs — no server required</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {hwCards.map((card, i) => (
-              <motion.div
-                key={card.title}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: i * 0.08 }}
-                data-testid={`card-stat-${i}`}
-                className="p-5 rounded-xl bg-black/40 border border-white/5 hover:border-white/10 transition-colors"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{card.title}</p>
-                  {card.icon}
-                </div>
-                <h3 className="text-base font-bold text-white font-display truncate" title={card.value}>{card.value}</h3>
-                <p className="text-[10px] text-zinc-600 mt-1 leading-relaxed">{card.sub}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Tweaks Counter */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* ── HARDWARE STATUS BAR ───────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3"
+        >
           {[
-            { label: "Tweaks Enabled", value: String(enabledCount), sub: `of ${totalTweaks} available` },
-            { label: "Optimization Level", value: optLevel, sub: enabledCount === 0 ? "Enable tweaks to begin" : `${enabledCount} active`, color: optColor },
-            { label: "Screen Resolution", value: hw.loading ? "..." : hw.resolution || "Unknown", sub: "detected" },
-            { label: "GPU Vendor", value: hw.loading ? "..." : hw.isNvidia ? "NVIDIA" : hw.isAMD ? "AMD" : hw.isIntel ? "Intel" : "Unknown", sub: hw.isNvidia ? "HAGS + MSI Mode available" : hw.isAMD ? "HAGS available (RX 6000+)" : "Check GPU settings" },
-          ].map((c, i) => (
-            <motion.div key={c.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }}
-              className="p-4 rounded-xl bg-black/40 border border-white/5">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">{c.label}</p>
-              <p className={cn("text-xl font-bold font-display", c.color || "text-white")}>{c.value}</p>
-              <p className="text-[10px] text-zinc-600 mt-1">{c.sub}</p>
-            </motion.div>
+            {
+              label: "OS",
+              value: osInfo.loading ? "Detecting..." : osInfo.os,
+              sub: osInfo.build ? `Build ${osInfo.build}` : "Browser detection",
+              icon: <HardDrive className="w-4 h-4 text-zinc-500" />,
+            },
+            {
+              label: "CPU Threads",
+              value: hw.loading ? "..." : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown",
+              sub: hw.cpuCores > 0 ? `~${Math.max(1, Math.floor(hw.cpuCores / 2))} physical cores` : "navigator API",
+              icon: <Cpu className="w-4 h-4 text-red-500" />,
+            },
+            {
+              label: "System RAM",
+              value: hw.loading ? "..." : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown",
+              sub: "Approximate (privacy limit)",
+              icon: <MemoryStick className="w-4 h-4 text-zinc-500" />,
+            },
+            {
+              label: "GPU",
+              value: hw.loading ? "..." : hw.gpuName.length > 20 ? hw.gpuName.slice(0, 20) + "…" : hw.gpuName,
+              sub: hw.gpuVendor || "WebGL renderer",
+              icon: <Monitor className="w-4 h-4 text-zinc-500" />,
+            },
+          ].map((card, i) => (
+            <div
+              key={card.label}
+              data-testid={`card-stat-${i}`}
+              className="flex items-center gap-3 p-4 rounded-xl bg-black/40 border border-white/5 min-w-0"
+            >
+              <div className="shrink-0">{card.icon}</div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">{card.label}</p>
+                <p className="text-sm font-bold text-white font-display truncate" title={card.value}>{card.value}</p>
+                <p className="text-[9px] text-zinc-600 truncate">{card.sub}</p>
+              </div>
+            </div>
           ))}
-        </div>
+        </motion.div>
 
-        {/* ── HOW TO USE ── */}
+        {/* ── FEATURE GRID ─────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.15 }}
+        >
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">What's Included</span>
+            <div className="flex-1 h-px bg-white/5" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {FEATURES.map((feat, i) => (
+              <motion.div
+                key={feat.title}
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.18 + i * 0.04 }}
+                className="flex items-start gap-3 p-4 rounded-xl bg-black/40 border border-white/5 hover:border-red-500/15 hover:bg-red-500/3 transition-all group"
+              >
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 shrink-0 group-hover:bg-red-500/15 transition-colors">
+                  <feat.icon className="w-4 h-4 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-1">{feat.title}</h3>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed">{feat.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* ── PRICING CARD + TWEAKS COUNTER ────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+        >
+          {/* Pricing card */}
+          <div className="lg:col-span-2 relative rounded-2xl bg-black/60 border border-red-500/20 overflow-hidden p-7">
+            <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-red-500/5 to-transparent pointer-events-none" />
+            <div className="relative z-10">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm mb-3">
+                    One-Time Lifetime Access
+                  </div>
+                  <h2 className="text-3xl font-display font-bold text-white leading-none">$9.99</h2>
+                  <p className="text-sm text-zinc-400 mt-1">No subscription. No expiry.</p>
+                </div>
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <Zap className="w-6 h-6 text-red-500" />
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-7">
+                {PRO_BULLETS.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="text-sm text-zinc-300">{item}</span>
+                  </div>
+                ))}
+              </div>
+
+              {isPro ? (
+                <div
+                  data-testid="badge-pricing-pro-active"
+                  className="inline-flex items-center gap-2 w-full justify-center px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-bold text-sm"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Pro Access Active
+                </div>
+              ) : (
+                <ProUnlockButton className="w-full">
+                  <Button
+                    data-testid="button-pricing-unlock-pro"
+                    className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)] font-display font-bold py-3 text-sm tracking-wide transition-all"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    Unlock Pro — $9.99
+                  </Button>
+                </ProUnlockButton>
+              )}
+            </div>
+          </div>
+
+          {/* Tweaks counter */}
+          <div className="flex flex-col gap-3">
+            {[
+              {
+                label: "Tweaks Enabled",
+                value: String(enabledCount),
+                sub: `of ${totalTweaks} available`,
+                color: optColor,
+              },
+              {
+                label: "Optimization Level",
+                value: optLevel,
+                sub: enabledCount === 0 ? "Enable tweaks to begin" : `${enabledCount} active`,
+                color: optColor,
+              },
+              {
+                label: "Resolution",
+                value: hw.loading ? "..." : hw.resolution || "Unknown",
+                sub: "detected",
+                color: "text-white",
+              },
+              {
+                label: "GPU Vendor",
+                value: hw.loading ? "..." : hw.isNvidia ? "NVIDIA" : hw.isAMD ? "AMD" : hw.isIntel ? "Intel" : "Unknown",
+                sub: hw.isNvidia ? "HAGS + MSI Mode available" : hw.isAMD ? "HAGS (RX 6000+)" : "Check GPU settings",
+                color: "text-white",
+              },
+            ].map((c, i) => (
+              <div key={c.label} className="flex-1 p-4 rounded-xl bg-black/40 border border-white/5">
+                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1.5">{c.label}</p>
+                <p className={cn("text-xl font-bold font-display", c.color)}>{c.value}</p>
+                <p className="text-[10px] text-zinc-600 mt-1">{c.sub}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* ── HOW TO USE ───────────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
           className="p-6 rounded-2xl bg-black/40 border border-red-500/15"
         >
           <div className="flex items-center gap-2 mb-6">
@@ -223,7 +366,7 @@ export default function Dashboard() {
                 key={i}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45 + i * 0.07 }}
+                transition={{ delay: 0.4 + i * 0.07 }}
                 className="relative p-4 rounded-xl bg-red-500/5 border border-red-500/10 hover:border-red-500/20 transition-colors"
               >
                 <div className="flex items-center gap-3 mb-3">
@@ -243,17 +386,17 @@ export default function Dashboard() {
           <div className="mt-5 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 flex items-start gap-3">
             <CheckCircle2 className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
             <p className="text-xs text-zinc-400 leading-relaxed">
-              <span className="text-white font-medium">Pro tip:</span> Save your configuration as a Preset (below) before applying — you can load it again anytime without re-enabling each tweak manually.
-              All tweaks start <span className="text-white font-medium">OFF</span> for every new visitor — nothing is applied to your PC until you download and run the script.
+              <span className="text-white font-medium">Pro tip:</span> Save your configuration as a Preset (below) before applying — you can reload it anytime.
+              All tweaks start <span className="text-white font-medium">OFF</span> for every new visitor — nothing is applied until you download and run the script.
             </p>
           </div>
         </motion.div>
 
-        {/* Preset Management */}
+        {/* ── PRESET MANAGEMENT ────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.45 }}
           className="p-6 rounded-2xl bg-black/40 border border-white/5"
         >
           <div className="flex items-center gap-2 mb-6">
@@ -264,7 +407,7 @@ export default function Dashboard() {
 
           <div className="flex gap-3 mb-6">
             <AnimatePresence>
-              {saving ? (
+              {saving && (
                 <motion.input
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: "100%", opacity: 1 }}
@@ -278,7 +421,7 @@ export default function Dashboard() {
                   className="flex-1 bg-zinc-900 border border-white/10 rounded-lg px-4 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
                   autoFocus
                 />
-              ) : null}
+              )}
             </AnimatePresence>
             {saving ? (
               <div className="flex gap-2 shrink-0">

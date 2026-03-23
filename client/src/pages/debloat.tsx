@@ -11,9 +11,9 @@ type InstallLikelihood = "preinstalled" | "likely" | "optional";
 
 const LikelihoodBadge = ({ status }: { status: InstallLikelihood }) => {
   const config = {
-    preinstalled: { dot: "bg-green-400", label: "PRE-INSTALLED", text: "text-green-400 border-green-500/30 bg-green-500/10" },
-    likely: { dot: "bg-yellow-400", label: "USUALLY PRESENT", text: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" },
-    optional: { dot: "bg-zinc-500", label: "OPTIONAL", text: "text-zinc-500 border-zinc-600/30 bg-zinc-800/30" },
+    preinstalled: { dot: "bg-red-500", label: "PRE-INSTALLED", text: "text-red-400 border-red-500/30 bg-red-500/10" },
+    likely: { dot: "bg-zinc-400", label: "USUALLY PRESENT", text: "text-zinc-400 border-zinc-600/30 bg-zinc-800/30" },
+    optional: { dot: "bg-zinc-600", label: "OPTIONAL", text: "text-zinc-500 border-zinc-700/30 bg-zinc-900/30" },
   }[status];
 
   return (
@@ -180,8 +180,8 @@ export default function Debloat() {
         {/* Legend */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
           className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-lg bg-zinc-900/60 border border-white/5 text-xs text-zinc-400">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-400" /> Pre-installed on all Windows PCs</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Usually present on most PCs</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Pre-installed on all Windows PCs</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-400" /> Usually present on most PCs</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-500" /> Optional / edition-specific</span>
         </motion.div>
 
@@ -189,7 +189,7 @@ export default function Debloat() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08 }}
           className="flex items-center justify-between p-4 rounded-lg bg-zinc-900/80 border border-zinc-800">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-zinc-500 shrink-0" />
             <p className="text-sm text-zinc-300">
               Removes <strong className="text-white">AppX packages</strong> and disables services permanently. A <strong className="text-white">restore point is recommended</strong> first.
             </p>
@@ -221,7 +221,7 @@ export default function Debloat() {
                     <span className={cn(
                       "px-2 py-0.5 rounded text-[10px] font-bold border",
                       isWin11
-                        ? "bg-green-500/15 text-green-400 border-green-500/30"
+                        ? "bg-red-500/15 text-red-400 border-red-500/30"
                         : "bg-zinc-800 text-zinc-500 border-zinc-700"
                     )}>
                       {isWin11 ? "DETECTED ON YOUR PC" : "NOT DETECTED"}

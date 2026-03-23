@@ -141,7 +141,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                 className="shrink-0 h-10 w-10 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800"
               >
                 {copied
-                  ? <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  ? <CheckCircle2 className="w-4 h-4 text-red-400" />
                   : <Copy className="w-4 h-4" />
                 }
               </Button>

@@ -27,8 +27,8 @@ const ALL_STARTUP_APPS = [
 
 const IMPACT_COLOR: Record<string, string> = {
   High: "text-red-400 bg-red-500/10 border-red-500/30",
-  Medium: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
-  Low: "text-green-400 bg-green-500/10 border-green-500/30",
+  Medium: "text-zinc-300 bg-zinc-500/10 border-zinc-600/30",
+  Low: "text-zinc-500 bg-zinc-700/10 border-zinc-700/30",
 };
 
 export default function StartupApps() {
@@ -76,7 +76,7 @@ export default function StartupApps() {
           className="flex items-center justify-between p-4 rounded-lg bg-zinc-900/80 border border-zinc-800 mb-6"
         >
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-zinc-500 shrink-0" />
             <div>
               <p className="text-sm text-zinc-300 font-medium">
                 {disabledCount} app{disabledCount !== 1 ? "s" : ""} currently disabled from startup

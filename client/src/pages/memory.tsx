@@ -36,7 +36,7 @@ export default function Memory() {
           animate={{ opacity: 1 }}
           className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/80 border border-zinc-800 mb-6"
         >
-          <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
           <p className="text-sm text-zinc-300">
             RAM tweaks are <strong className="text-white">hardware-dependent</strong>. Compression disable is only beneficial if you have <strong className="text-white">16GB+</strong>. Pagefile tweaks require a restart.
           </p>
