@@ -559,9 +559,14 @@ Start-Sleep 2
         expand: ['line_items'],
       });
 
-      // Validate this session was created by us (not an arbitrary paid session)
+      // Validate this session was created by us (correct product + mode + price)
       const isOurProduct = session.metadata?.product === 'optigods_pro';
-      const paid = session.payment_status === 'paid' && isOurProduct;
+      const isPaymentMode = session.mode === 'payment';
+      const expectedPriceId = process.env.STRIPE_PRICE_ID;
+      const lineItems = (session as any).line_items?.data ?? [];
+      const priceMatches = !expectedPriceId ||
+        lineItems.some((item: any) => item.price?.id === expectedPriceId);
+      const paid = session.payment_status === 'paid' && isOurProduct && isPaymentMode && priceMatches;
 
       res.json({ paid });
     } catch (err: any) {
