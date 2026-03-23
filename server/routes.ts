@@ -1014,12 +1014,33 @@ Start-Sleep 2
   app.post('/api/pro/verify', async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
-    // Try DB single-use code
-    const redeemed = await storage.redeemCode(String(code));
+    const normalizedCode = String(code).toUpperCase().trim();
+
+    // Try DB single-use code (marks usedAt on first use)
+    const redeemed = await storage.redeemCode(normalizedCode);
     if (redeemed) return res.json({ valid: true });
+
+    // Backward-compat + safety net: code may have been pre-burned by the old
+    // email send flow (usedAt set when admin clicked Send Code, not by customer).
+    // Also covers edge cases where customer enters a valid email-sent code twice.
+    // Grant access if this code is legitimately linked to an accepted email request.
+    const allCodes = await storage.getAllCodes();
+    const matchingCode = allCodes.find(c => c.code === normalizedCode);
+    if (matchingCode) {
+      const emailReqs = await storage.getEmailRequests();
+      const linkedReq = emailReqs.find(r =>
+        r.sentCodeId === matchingCode.id &&
+        (r.status === "sent" || r.status === "auto-sent")
+      );
+      if (linkedReq) {
+        // Payment was confirmed by admin — customer is entitled to Pro access
+        return res.json({ valid: true });
+      }
+    }
+
     // Fallback: legacy env var codes (unlimited use, for backward compat)
     const legacyCodes = (process.env.PRO_CODES || '').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-    const validLegacy = legacyCodes.includes(String(code).toUpperCase().trim());
+    const validLegacy = legacyCodes.includes(normalizedCode);
     res.json({ valid: validLegacy });
   });
 
