@@ -294,21 +294,24 @@ export default function Admin() {
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [annTag, setAnnTag] = useState("update");
+  const [annTweakIds, setAnnTweakIds] = useState("");
 
-  const announcementsQuery = useQuery<{ id: number; title: string; body: string; tag: string | null; createdAt: string }[]>({
+  const announcementsQuery = useQuery<{ id: number; title: string; body: string; tag: string | null; tweakIds: string[] | null; createdAt: string }[]>({
     queryKey: ["/api/announcements"],
     enabled: authed,
     retry: false,
   });
 
+  const parsedTweakIds = annTweakIds.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+
   const createAnn = useMutation({
     mutationFn: () => fetch("/api/admin/announcements", {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: annTitle, body: annBody, tag: annTag }),
+      body: JSON.stringify({ title: annTitle, body: annBody, tag: annTag, tweakIds: parsedTweakIds }),
     }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
-      setAnnTitle(""); setAnnBody(""); setAnnTag("update");
+      setAnnTitle(""); setAnnBody(""); setAnnTag("update"); setAnnTweakIds("");
       toast({ title: "Announcement posted" });
     },
     onError: () => toast({ title: "Failed to post announcement", variant: "destructive" }),
@@ -1189,6 +1192,29 @@ export default function Admin() {
                 rows={4}
                 className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40 resize-none"
               />
+
+              {/* Tweak IDs — optional, links update to specific tweaks */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-red-500 shrink-0" />
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Linked Tweaks (optional)</span>
+                  {parsedTweakIds.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded text-[9px] font-bold">{parsedTweakIds.length} tweaks</span>
+                  )}
+                </div>
+                <textarea
+                  data-testid="input-ann-tweakids"
+                  value={annTweakIds}
+                  onChange={e => setAnnTweakIds(e.target.value)}
+                  placeholder={"Enter tweak IDs — one per line or comma-separated:\nNvidiaPowerMizer\nNvidiaThreadedOpt\nFiveMHighPriority"}
+                  rows={3}
+                  className="w-full bg-zinc-900/60 border border-white/5 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-700 focus:outline-none focus:border-red-500/30 resize-none"
+                />
+                <p className="text-[10px] text-zinc-700 leading-relaxed">
+                  Pro users on the Updates page will see which of these tweaks they haven't applied yet, with a one-click "Apply New Tweaks" button. Leave blank for general announcements.
+                </p>
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 flex-1">
                   <Tag className="w-3.5 h-3.5 text-zinc-500 shrink-0" />

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface OptimizationState {
   tweaks: Record<string, boolean>;
@@ -274,24 +275,32 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   su_amdradeon: false,
 };
 
-export const useOptimizationStore = create<OptimizationState>((set) => ({
-  tweaks: { ...DEFAULT_TWEAKS },
-  nvidiaPreset: 'Balanced',
-  systemRamGB: null,
+export const useOptimizationStore = create<OptimizationState>()(
+  persist(
+    (set) => ({
+      tweaks: { ...DEFAULT_TWEAKS },
+      nvidiaPreset: 'Balanced',
+      systemRamGB: null,
 
-  setSystemRamGB: (gb) => set({ systemRamGB: gb }),
+      setSystemRamGB: (gb) => set({ systemRamGB: gb }),
 
-  toggleTweak: (key) => set((state) => ({
-    tweaks: { ...state.tweaks, [key]: !state.tweaks[key] }
-  })),
+      toggleTweak: (key) => set((state) => ({
+        tweaks: { ...state.tweaks, [key]: !state.tweaks[key] }
+      })),
 
-  setTweak: (key, value) => set((state) => ({
-    tweaks: { ...state.tweaks, [key]: value }
-  })),
+      setTweak: (key, value) => set((state) => ({
+        tweaks: { ...state.tweaks, [key]: value }
+      })),
 
-  setNvidiaPreset: (preset) => set({ nvidiaPreset: preset }),
+      setNvidiaPreset: (preset) => set({ nvidiaPreset: preset }),
 
-  setAllTweaks: (tweaks) => set({ tweaks }),
+      setAllTweaks: (tweaks) => set({ tweaks }),
 
-  reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: 'Balanced' }),
-}));
+      reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: 'Balanced' }),
+    }),
+    {
+      name: 'optigods-tweaks-v1',
+      partialize: (state: OptimizationState) => ({ tweaks: state.tweaks, nvidiaPreset: state.nvidiaPreset }),
+    }
+  )
+);

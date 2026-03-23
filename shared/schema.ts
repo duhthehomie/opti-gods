@@ -56,6 +56,7 @@ export const announcements = pgTable("announcements", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   tag: text("tag").default("update"),
+  tweakIds: text("tweak_ids").array().default([]),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export type Announcement = typeof announcements.$inferSelect;

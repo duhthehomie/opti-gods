@@ -1465,6 +1465,7 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
       title: z.string().min(1).max(200),
       body: z.string().min(1).max(5000),
       tag: z.string().optional(),
+      tweakIds: z.array(z.string()).optional().default([]),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid data" });
