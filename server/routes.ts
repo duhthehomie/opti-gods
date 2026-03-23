@@ -660,12 +660,24 @@ Start-Sleep 2
     res.json({ ok: true, deleted: count });
   });
 
+  // Public — track a site visit (called once per browser session from frontend)
+  app.post('/api/track-visit', async (req, res) => {
+    try {
+      const referrer = req.body?.referrer as string | undefined;
+      await storage.recordVisit(referrer);
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: false });
+    }
+  });
+
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [codes, friends] = await Promise.all([
+    const [codes, friends, visitStats] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
+      storage.getVisitStats(),
     ]);
     const usedCodes = codes.filter(c => c.usedAt).length;
     const availableCodes = codes.filter(c => !c.usedAt).length;
@@ -679,6 +691,7 @@ Start-Sleep 2
       usedFriends,
       availableFriends,
       revenueEstimate: usedCodes * 25,
+      visits: visitStats,
     });
   });
 

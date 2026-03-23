@@ -23,6 +23,21 @@ import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
 import Help from "@/pages/help";
 
+function VisitTracker() {
+  useEffect(() => {
+    const SESSION_KEY = "optigods_visit_tracked";
+    if (sessionStorage.getItem(SESSION_KEY)) return;
+    sessionStorage.setItem(SESSION_KEY, "1");
+    const referrer = document.referrer || undefined;
+    fetch("/api/track-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ referrer }),
+    }).catch(() => {});
+  }, []);
+  return null;
+}
+
 function FriendUnlockHandler() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -80,6 +95,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <VisitTracker />
         <FriendUnlockHandler />
         <Toaster />
         <Router />

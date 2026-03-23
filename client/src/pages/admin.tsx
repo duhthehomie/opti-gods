@@ -114,6 +114,7 @@ export default function Admin() {
     totalCodes: number; usedCodes: number; availableCodes: number;
     totalFriends: number; usedFriends: number; availableFriends: number;
     revenueEstimate: number;
+    visits: { total: number; today: number; thisWeek: number };
   }>({
     queryKey: ["/api/admin/stats", key],
     queryFn: () => fetch("/api/admin/stats", { headers }).then(r => {
@@ -374,7 +375,7 @@ export default function Admin() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <StatCard
             icon={DollarSign}
             label="Est. Revenue"
@@ -395,6 +396,20 @@ export default function Admin() {
             value={stats?.usedFriends ?? "—"}
             sub={`${stats?.availableFriends ?? 0} pending`}
             color="amber"
+          />
+          <StatCard
+            icon={BarChart3}
+            label="Total Link Clicks"
+            value={stats?.visits?.total ?? "—"}
+            sub="all-time unique sessions"
+            color="zinc"
+          />
+          <StatCard
+            icon={Flame}
+            label="Clicks Today"
+            value={stats?.visits?.today ?? "—"}
+            sub={`${stats?.visits?.thisWeek ?? 0} this week`}
+            color="red"
           />
           <StatCard
             icon={BarChart3}

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, jsonb, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, boolean, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -43,6 +43,12 @@ export const optimizations = pgTable("optimizations", {
   description: text("description").notNull(),
   command: text("command").notNull(),
   isApplied: boolean("is_applied").default(false),
+});
+
+export const siteVisits = pgTable("site_visits", {
+  id: serial("id").primaryKey(),
+  visitedAt: timestamp("visited_at").defaultNow(),
+  referrer: text("referrer"),
 });
 
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });

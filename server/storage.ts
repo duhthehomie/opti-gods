@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken } from "@shared/schema";
-import { eq, isNotNull } from "drizzle-orm";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken } from "@shared/schema";
+import { eq, isNotNull, gte, sql } from "drizzle-orm";
 
 export interface IStorage {
   getPresets(): Promise<Preset[]>;
@@ -22,6 +22,9 @@ export interface IStorage {
   redeemFriendToken(token: string): Promise<boolean>;
   deleteFriendToken(id: number): Promise<void>;
   deleteUsedFriendTokens(): Promise<number>;
+  // Visit tracking
+  recordVisit(referrer?: string): Promise<void>;
+  getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -120,6 +123,27 @@ export class DatabaseStorage implements IStorage {
   async deleteUsedFriendTokens(): Promise<number> {
     const rows = await db.delete(proFriendTokens).where(isNotNull(proFriendTokens.usedAt)).returning();
     return rows.length;
+  }
+
+  async recordVisit(referrer?: string): Promise<void> {
+    await db.insert(siteVisits).values({ referrer: referrer || null });
+  }
+
+  async getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }> {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - 7);
+
+    const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits);
+    const [todayRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, startOfToday));
+    const [weekRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, startOfWeek));
+
+    return {
+      total: totalRow?.count ?? 0,
+      today: todayRow?.count ?? 0,
+      thisWeek: weekRow?.count ?? 0,
+    };
   }
 }
 
