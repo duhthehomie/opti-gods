@@ -4,11 +4,12 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
-  MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp,
+  MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useProStatus, setProStatus, getProStatus } from "@/lib/pro-status";
 import type { ProAccessCode, ProFriendToken } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
@@ -91,6 +92,7 @@ type Tab = "codes" | "friends" | "activity";
 
 export default function Admin() {
   const { toast } = useToast();
+  const isPro = useProStatus();
   const [key, setKey] = useState(() => localStorage.getItem(ADMIN_KEY_STORAGE) || "");
   const [input, setInput] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -324,7 +326,33 @@ export default function Admin() {
               <p className="text-[10px] text-zinc-600 uppercase tracking-widest">leaq control panel</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Pro status indicator + reset — lets you test the paywall */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/5 bg-zinc-900/60">
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full shrink-0",
+                isPro ? "bg-red-500" : "bg-zinc-600"
+              )} />
+              <span className="text-[10px] text-zinc-500 font-mono">
+                {isPro ? "PRO active (your browser)" : "No pro (your browser)"}
+              </span>
+              <button
+                onClick={() => {
+                  setProStatus(!isPro);
+                  toast({
+                    title: isPro ? "Pro Reset" : "Pro Granted (Test)",
+                    description: isPro
+                      ? "Your browser is back to free-user view. Regular users never had Pro."
+                      : "Test mode: Pro set in your browser only. Users still need to pay.",
+                  });
+                }}
+                className="ml-1 text-[10px] text-zinc-600 hover:text-red-400 transition-colors underline underline-offset-2"
+                title={isPro ? "Clear my Pro status for testing" : "Set my Pro status for testing"}
+              >
+                {isPro ? "Reset" : "Grant (test)"}
+              </button>
+            </div>
+
             <button
               onClick={() => {
                 queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
