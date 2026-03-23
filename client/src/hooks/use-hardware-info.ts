@@ -5,6 +5,7 @@ export interface HardwareInfo {
   cpuLabel: string;
   ramGB: number;
   ramLabel: string;
+  ramNote: string;
   gpuName: string;
   gpuVendor: string;
   isNvidia: boolean;
@@ -20,6 +21,7 @@ export function useHardwareInfo(): HardwareInfo {
     cpuLabel: "Detecting...",
     ramGB: 0,
     ramLabel: "Detecting...",
+    ramNote: "",
     gpuName: "Detecting...",
     gpuVendor: "",
     isNvidia: false,
@@ -30,23 +32,39 @@ export function useHardwareInfo(): HardwareInfo {
   });
 
   useEffect(() => {
-    // CPU — navigator.hardwareConcurrency is real logical core count
+    // CPU — navigator.hardwareConcurrency is the real logical thread count
     const cpuCores = navigator.hardwareConcurrency || 0;
+    const physicalCores = cpuCores > 0 ? Math.max(1, Math.ceil(cpuCores / 2)) : 0;
     const cpuLabel = cpuCores > 0
-      ? `${cpuCores} Threads (est. ${Math.max(1, Math.floor(cpuCores / 2))} physical)`
+      ? `${cpuCores} Threads (${physicalCores} cores)`
       : "Unknown";
 
-    // RAM — navigator.deviceMemory is approximate (0.25/0.5/1/2/4/8 GB buckets)
-    const ramGB = (navigator as any).deviceMemory || 0;
-    const ramLabel = ramGB > 0 ? `~${ramGB} GB` : "Unknown";
+    // RAM — navigator.deviceMemory is privacy-capped by browsers at 8 GB max,
+    // rounded to buckets (0.25 / 0.5 / 1 / 2 / 4 / 8). Actual RAM is always
+    // >= the reported value. We display it as a lower bound.
+    const rawRamGB: number = (navigator as any).deviceMemory || 0;
+    let ramGB = rawRamGB;
+    let ramLabel = "Unknown";
+    let ramNote = "Browser API unavailable";
 
-    // Resolution — exact
+    if (rawRamGB > 0) {
+      if (rawRamGB >= 8) {
+        // At the cap — real RAM is very likely 16, 32 or 64 GB
+        ramLabel = "8+ GB";
+        ramNote = "≥8 GB detected (actual may be 16/32/64 GB)";
+        ramGB = 8;
+      } else {
+        ramLabel = `≥${rawRamGB} GB`;
+        ramNote = `Browser reports ≥${rawRamGB} GB (privacy limited)`;
+      }
+    }
+
+    // Resolution — exact from screen object
     const resolution = `${screen.width}×${screen.height}`;
 
     // GPU — WebGL WEBGL_debug_renderer_info gives the real GPU name
-    // Chrome on Windows returns: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)"
-    // Firefox returns: "GeForce RTX 3080/PCIe/SSE2"
-    // We parse both formats correctly.
+    // Chrome on Windows: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    // Firefox:           "GeForce RTX 3080/PCIe/SSE2"
     let gpuName = "Unknown GPU";
     let gpuVendor = "";
     try {
@@ -63,15 +81,14 @@ export function useHardwareInfo(): HardwareInfo {
           gpuVendor = rawVendor;
 
           // ANGLE format: "ANGLE (Vendor, Renderer Name Direct3D... , api)"
-          const angleMatch = rawRenderer.match(/ANGLE\s*\(\s*([^,]+),\s*([^,]+(?:,\s*[^,)]+)*)/i);
+          const angleMatch = rawRenderer.match(/ANGLE\s*\(\s*([^,]+),\s*(.+?)(?:\s+Direct3D|\s+OpenGL|\s+Vulkan|,\s*D3D|$)/i);
           if (angleMatch) {
-            // angleMatch[2] contains the renderer (may include Direct3D/OpenGL suffix)
-            const innerRenderer = angleMatch[2]
+            gpuName = angleMatch[2]
               .replace(/\s*Direct3D\d+.*$/gi, "")
               .replace(/\s*OpenGL\s*\d.*$/gi, "")
-              .replace(/\s*\(0x[0-9a-f]+\)/gi, "")  // remove hex device IDs
+              .replace(/\s*Vulkan.*$/gi, "")
+              .replace(/\s*\(0x[0-9a-f]+\)/gi, "")
               .trim();
-            gpuName = innerRenderer || angleMatch[1].trim();
             if (!gpuVendor) gpuVendor = angleMatch[1].trim();
           } else if (rawRenderer) {
             // Firefox / direct format
@@ -80,6 +97,7 @@ export function useHardwareInfo(): HardwareInfo {
               .replace(/\/SSE\d*/gi, "")
               .replace(/\s*Direct3D\d+.*$/gi, "")
               .replace(/\s*OpenGL\s*\d.*$/gi, "")
+              .replace(/\s*Vulkan.*$/gi, "")
               .trim();
           }
 
@@ -99,6 +117,7 @@ export function useHardwareInfo(): HardwareInfo {
       cpuLabel,
       ramGB,
       ramLabel,
+      ramNote,
       gpuName,
       gpuVendor,
       isNvidia,

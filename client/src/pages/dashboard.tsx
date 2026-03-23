@@ -414,15 +414,15 @@ export default function Dashboard() {
           className="flex items-center divide-x divide-white/5 rounded-xl bg-black/40 border border-white/5 overflow-hidden"
         >
           {[
-            { label: "OS", value: osInfo.loading ? "Detecting…" : osInfo.os, icon: <HardDrive className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-0" },
-            { label: "CPU", value: hw.loading ? "…" : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown", icon: <Cpu className="w-3.5 h-3.5 text-red-500" />, testid: "card-stat-1" },
-            { label: "RAM", value: hw.loading ? "…" : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown", icon: <MemoryStick className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-2" },
-            { label: "GPU", value: hw.loading ? "…" : hw.gpuName.length > 24 ? hw.gpuName.slice(0, 24) + "…" : hw.gpuName || "Unknown", icon: <Monitor className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-3" },
+            { label: "OS", value: osInfo.loading ? "Detecting…" : osInfo.os, title: osInfo.loading ? "" : osInfo.displayName, icon: <HardDrive className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-0" },
+            { label: "CPU", value: hw.loading ? "…" : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown", title: hw.cpuLabel, icon: <Cpu className="w-3.5 h-3.5 text-red-500" />, testid: "card-stat-1" },
+            { label: "RAM", value: hw.loading ? "…" : hw.ramLabel, title: hw.ramNote, icon: <MemoryStick className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-2" },
+            { label: "GPU", value: hw.loading ? "…" : hw.gpuName.length > 26 ? hw.gpuName.slice(0, 26) + "…" : hw.gpuName || "Unknown", title: hw.gpuName, icon: <Monitor className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-3" },
           ].map((stat) => (
             <div key={stat.label} data-testid={stat.testid} className="flex-1 flex items-center gap-2 px-4 py-3 min-w-0">
               {stat.icon}
               <span className="text-[10px] text-zinc-600 uppercase tracking-wider shrink-0">{stat.label}</span>
-              <span className="text-xs font-semibold text-zinc-200 truncate" title={stat.value}>{stat.value}</span>
+              <span className="text-xs font-semibold text-zinc-200 truncate" title={stat.title || stat.value}>{stat.value}</span>
             </div>
           ))}
         </motion.div>

@@ -304,15 +304,12 @@ export default function Memory() {
   const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
+    // navigator.deviceMemory is capped at 8 and bucketed (1/2/4/8) for browser privacy.
+    // It CANNOT reliably detect 16/32/64 GB — we display it as a lower bound only
+    // and do NOT auto-select a RAM profile because the value is almost always wrong.
     const nav = navigator as Navigator & { deviceMemory?: number };
     if (nav.deviceMemory) {
       setDetectedRam(nav.deviceMemory);
-      if (!systemRamGB) {
-        const snapped = RAM_OPTIONS.reduce((a, b) =>
-          Math.abs(b - nav.deviceMemory!) < Math.abs(a - nav.deviceMemory!) ? b : a
-        );
-        setSystemRamGB(snapped);
-      }
     }
   }, []);
 
@@ -433,7 +430,7 @@ export default function Memory() {
             <span className="text-sm font-bold text-white uppercase tracking-wider">RAM Detection</span>
             {detectedRam && (
               <span className="ml-auto text-[10px] text-zinc-500 font-mono">
-                Browser reports ≈ {detectedRam}GB
+                Browser API reports ≥{detectedRam}GB (privacy limited — select your actual RAM below)
               </span>
             )}
           </div>
@@ -458,9 +455,6 @@ export default function Memory() {
                   )}
                 >
                   {gb}GB
-                  {detectedRam && Math.abs(gb - detectedRam) < 4 && gb !== ram && (
-                    <span className="ml-1.5 text-[9px] text-zinc-500 font-normal">detected</span>
-                  )}
                 </button>
               ))}
             </div>
