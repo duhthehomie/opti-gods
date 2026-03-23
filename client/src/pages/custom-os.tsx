@@ -197,11 +197,16 @@ export default function CustomOS() {
   const { toast } = useToast();
 
   const downloadPlaybook = () => {
+    const link = document.createElement("a");
+    link.href = "/OptiGodsOS.apbx";
+    link.download = "OptiGodsOS-by-leaq.apbx";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     toast({
-      title: "Opti Gods OS Playbook",
-      description: "Coming soon — your exclusive .apbx playbook is being finalized. Join Discord for early access.",
+      title: "Downloading Opti Gods OS .apbx",
+      description: "Open AME Wizard, drag this file in, and follow the prompts to apply the playbook.",
     });
-    window.open("https://discord.gg/C8WrQknN9k", "_blank", "noopener noreferrer");
   };
 
   return (
