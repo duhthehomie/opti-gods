@@ -22,6 +22,7 @@ import PaymentSuccess from "@/pages/payment-success";
 import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
 import Help from "@/pages/help";
+import Fixes from "@/pages/fixes";
 
 function VisitTracker() {
   useEffect(() => {
@@ -85,6 +86,7 @@ function Router() {
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/cancel" component={PaymentCancel} />
       <Route path="/admin" component={Admin} />
+      <Route path="/fixes" component={Fixes} />
       <Route path="/help" component={Help} />
       <Route component={NotFound} />
     </Switch>

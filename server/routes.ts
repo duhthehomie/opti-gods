@@ -228,6 +228,161 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   AmdTDRTweak: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 60 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] TDR level=3, delay=60s — prevents false GPU crash/recovery events during heavy load" -ForegroundColor Green`,
 };
 
+// ── RESTORE / UNDO COMMANDS ─────────────────────────────────────────────────
+// Each entry reverses one category of tweaks applied by TWEAK_COMMANDS.
+const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
+  cpu: {
+    label: "CPU Scheduling & Timer",
+    commands: [
+      `Write-Host "[RESTORE] CPU Scheduling & Timer..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 2 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Win32PrioritySeparation reset to 2 (Windows default)" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '5000' -EA SilentlyContinue; Write-Host "[OK] HungAppTimeout restored to 5000ms" -ForegroundColor Green`,
+      `bcdedit /deletevalue useplatformtick 2>$null; bcdedit /deletevalue uselegacyapicmode 2>$null; Write-Host "[OK] Timer resolution boot flags cleared" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 20 -Type DWord -EA SilentlyContinue; Write-Host "[OK] SystemResponsiveness reset to 20 (Windows default)" -ForegroundColor Green`,
+      `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (Test-Path $gamePath) { Set-ItemProperty $gamePath 'Scheduling Category' 'Medium' -Type String -EA SilentlyContinue; Set-ItemProperty $gamePath 'SFIO Priority' 'Normal' -Type String -EA SilentlyContinue; Set-ItemProperty $gamePath 'GPU Priority' 2 -Type DWord -EA SilentlyContinue; Set-ItemProperty $gamePath 'Priority' 2 -Type DWord -EA SilentlyContinue; Remove-ItemProperty $gamePath 'MaximumPreRenderedFrames' -EA SilentlyContinue }; Write-Host "[OK] Game scheduler profile reset to defaults" -ForegroundColor Green`,
+      `$gpu = Get-PnpDevice -Class Display | Select-Object -First 1; If ($gpu) { $path = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; If (Test-Path $path) { Set-ItemProperty $path 'MSISupported' 0 -EA SilentlyContinue } }; Write-Host "[OK] MSI Mode disabled — GPU back to line-based interrupts" -ForegroundColor Green`,
+      `bcdedit /deletevalue disabledynamictick 2>$null; Write-Host "[OK] Dynamic tick restored (Windows default)" -ForegroundColor Green`,
+    ],
+  },
+  network: {
+    label: "Network & TCP Stack",
+    commands: [
+      `Write-Host "[RESTORE] Network & TCP Stack..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord -EA SilentlyContinue; Write-Host "[OK] NetworkThrottlingIndex reset to 10 (Windows default)" -ForegroundColor Green`,
+      `$p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters'; Remove-ItemProperty $p 'TcpAckFrequency' -EA SilentlyContinue; Remove-ItemProperty $p 'TCPNoDelay' -EA SilentlyContinue; Remove-ItemProperty $p 'EnablePMTUBHDetect' -EA SilentlyContinue; $if = "$p\\Interfaces"; Remove-ItemProperty $if 'TcpAckFrequency' -EA SilentlyContinue; Write-Host "[OK] TCP ACK frequency and NoDelay keys removed — Nagle re-enabled" -ForegroundColor Green`,
+      `netsh int tcp set global autotuninglevel=normal 2>$null; netsh int tcp set global chimney=enabled 2>$null; Write-Host "[OK] TCP auto-tuning reset to Normal" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Ndu' -Name 'Start' -Value 2 -Type DWord -EA SilentlyContinue; Write-Host "[OK] NDU service re-enabled" -ForegroundColor Green`,
+      `Enable-NetAdapterBinding -Name '*' -ComponentID ms_tcpip6 -EA SilentlyContinue; Write-Host "[OK] IPv6 re-enabled on all adapters" -ForegroundColor Green`,
+      `$dp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters'; Remove-ItemProperty $dp 'MaxCacheTtl' -EA SilentlyContinue; Remove-ItemProperty $dp 'MaxNegativeCacheTtl' -EA SilentlyContinue; Write-Host "[OK] DNS cache TTL reset to Windows defaults" -ForegroundColor Green`,
+      `$afd = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters'; Remove-ItemProperty $afd 'DefaultReceiveWindow' -EA SilentlyContinue; Remove-ItemProperty $afd 'DefaultSendWindow' -EA SilentlyContinue; Write-Host "[OK] AFD network buffer sizes reset to defaults" -ForegroundColor Green`,
+    ],
+  },
+  memory: {
+    label: "Memory Management",
+    commands: [
+      `Write-Host "[RESTORE] Memory Management..." -ForegroundColor Cyan`,
+      `Enable-MMAgent -MemoryCompression -EA SilentlyContinue; Write-Host "[OK] Memory Compression re-enabled" -ForegroundColor Green`,
+      `$pp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters'; Set-ItemProperty $pp 'EnablePrefetcher' 3 -Type DWord -EA SilentlyContinue; Set-ItemProperty $pp 'EnableSuperfetch' 3 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Prefetch and Superfetch re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'ClearPageFileAtShutdown' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Pagefile-on-shutdown clear disabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'LargeSystemCache' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[OK] LargeSystemCache reset to 0" -ForegroundColor Green`,
+      `fsutil behavior set encryptpagingfile 1 2>$null; Write-Host "[OK] Pagefile encryption re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'DisablePagingExecutive' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Kernel paging to disk re-enabled" -ForegroundColor Green`,
+      `Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name 'HeapDeCommitFreeBlockThreshold' -EA SilentlyContinue; Write-Host "[OK] Heap decommit threshold reset to Windows default" -ForegroundColor Green`,
+      `wmic computersystem where name="%computername%" set AutomaticManagedPagefile=True 2>$null; Write-Host "[OK] Pagefile restored to automatic management" -ForegroundColor Green`,
+    ],
+  },
+  visual: {
+    label: "Visual Effects & Gaming",
+    commands: [
+      `Write-Host "[RESTORE] Visual Effects & Gaming..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name 'AppCaptureEnabled' -Value 1 -EA SilentlyContinue; Write-Host "[OK] Xbox Game DVR capture re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\System\\GameConfigStore' -Name 'GameDVR_Enabled' -Value 1 -EA SilentlyContinue; Write-Host "[OK] GameDVR re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] HAGS disabled (HwSchMode=1)" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value 1 -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value 6 -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value 10 -EA SilentlyContinue; Write-Host "[OK] Mouse pointer precision (enhance pointer precision) re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x9E,0x1E,0x07,0x80,0x12,0x00,0x00,0x00)) -EA SilentlyContinue; Write-Host "[OK] UI animations restored" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Fast Startup re-enabled" -ForegroundColor Green`,
+      `Set-Service 'WerSvc' -StartupType Manual -EA SilentlyContinue; Start-Service 'WerSvc' -EA SilentlyContinue; Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting' -Name 'Disabled' -Value 0 -EA SilentlyContinue; Write-Host "[OK] Windows Error Reporting re-enabled" -ForegroundColor Green`,
+    ],
+  },
+  power: {
+    label: "Power Plan",
+    commands: [
+      `Write-Host "[RESTORE] Power Plan..." -ForegroundColor Cyan`,
+      `powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e 2>$null; Write-Host "[OK] Power plan reset to Balanced" -ForegroundColor Green`,
+      `powercfg -setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 1 2>$null; Write-Host "[OK] USB Selective Suspend re-enabled" -ForegroundColor Green`,
+      `$cpPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583'; Set-ItemProperty $cpPath 'ValueMax' 100 -Type DWord -EA SilentlyContinue; Write-Host "[OK] CPU Core Parking re-enabled" -ForegroundColor Green`,
+      `$ptPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling'; Remove-ItemProperty $ptPath 'PowerThrottlingOff' -EA SilentlyContinue; Write-Host "[OK] Power Throttling re-enabled" -ForegroundColor Green`,
+      `bcdedit /deletevalue disabledynamictick 2>$null; Write-Host "[OK] Dynamic tick restored" -ForegroundColor Green`,
+    ],
+  },
+  services: {
+    label: "Windows Services",
+    commands: [
+      `Write-Host "[RESTORE] Windows Services..." -ForegroundColor Cyan`,
+      `Set-Service 'DiagTrack' -StartupType Automatic -EA SilentlyContinue; Start-Service 'DiagTrack' -EA SilentlyContinue; Write-Host "[OK] DiagTrack (Connected User Experiences) re-enabled" -ForegroundColor Green`,
+      `Set-Service 'WSearch' -StartupType Automatic -EA SilentlyContinue; Start-Service 'WSearch' -EA SilentlyContinue; Write-Host "[OK] Windows Search (WSearch) re-enabled" -ForegroundColor Green`,
+      `Set-Service 'SysMain' -StartupType Automatic -EA SilentlyContinue; Start-Service 'SysMain' -EA SilentlyContinue; Write-Host "[OK] SysMain (Superfetch) re-enabled" -ForegroundColor Green`,
+      `Set-Service 'WMPNetworkSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] WMP Network Sharing Service set to Manual" -ForegroundColor Green`,
+      `Set-Service 'wuauserv' -StartupType Manual -EA SilentlyContinue; Start-Service 'wuauserv' -EA SilentlyContinue; Write-Host "[OK] Windows Update (wuauserv) re-enabled" -ForegroundColor Green`,
+      `Set-MpPreference -DisableRealtimeMonitoring $false -EA SilentlyContinue; Write-Host "[OK] Windows Defender real-time protection re-enabled" -ForegroundColor Green`,
+    ],
+  },
+  nvidia: {
+    label: "NVIDIA",
+    commands: [
+      `Write-Host "[RESTORE] NVIDIA Settings..." -ForegroundColor Cyan`,
+      `@('NvTelemetryContainer','NvDisplayContainerLS','NVDisplay.ContainerLocalSystem') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] NVIDIA telemetry services re-enabled" -ForegroundColor Green`,
+      `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (Test-Path $gamePath) { Remove-ItemProperty $gamePath 'MaximumPreRenderedFrames' -EA SilentlyContinue; Set-ItemProperty $gamePath 'GPU Priority' 2 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] Pre-rendered frames limit removed (back to driver default)" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] HAGS disabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'PlatformSupportMiracast' -EA SilentlyContinue; Write-Host "[OK] GraphicsDrivers registry hints cleared" -ForegroundColor Green`,
+    ],
+  },
+  amd: {
+    label: "AMD",
+    commands: [
+      `Write-Host "[RESTORE] AMD Settings..." -ForegroundColor Cyan`,
+      `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath 'EnableUlps' 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'EnableUlps_NA' 1 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] AMD ULPS re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'UseChill' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Radeon Chill re-enabled" -ForegroundColor Green`,
+      `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath 'PP_PowerProfile' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisableDrmdmaPowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisableGmcPowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisablePowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'PP_DpmForceHighestDpmTable' 0 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] AMD power profile and power gating restored to defaults" -ForegroundColor Green`,
+      `@('AMD External Events Utility','amdfendrsr','AmdCVSDiagService') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] AMD telemetry services re-enabled" -ForegroundColor Green`,
+    ],
+  },
+  process: {
+    label: "Process Priority & IFEO",
+    commands: [
+      `Write-Host "[RESTORE] Process Priority & IFEO..." -ForegroundColor Cyan`,
+      `@('cs2.exe','VALORANT-Win64-Shipping.exe','FortniteClient-Win64-Shipping.exe','r5apex.exe','GTA5.exe','FiveM.exe','cod.exe','RustClient.exe','RainbowSix.exe','TslGame.exe','EscapeFromTarkov.exe','dota2.exe','DeadByDaylight-Win64-Shipping.exe','RobloxPlayerBeta.exe','League of Legends.exe') | ForEach-Object { $p = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\$_\\PerfOptions"; If (Test-Path $p) { Remove-Item $p -Recurse -Force -EA SilentlyContinue }; Write-Host "[OK] IFEO PerfOptions cleared: $_" -ForegroundColor Green }`,
+      `Set-Service 'WerSvc' -StartupType Manual -EA SilentlyContinue; Start-Service 'WerSvc' -EA SilentlyContinue; Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting' 'Disabled' 0 -EA SilentlyContinue; Write-Host "[OK] Windows Error Reporting re-enabled" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'AutoEndTasks' -Value 0 -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '5000' -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'WaitToKillAppTimeout' -Value '20000' -EA SilentlyContinue; Write-Host "[OK] App kill timeout reset to Windows defaults" -ForegroundColor Green`,
+    ],
+  },
+  fivem: {
+    label: "FiveM / GTA V",
+    commands: [
+      `Write-Host "[RESTORE] FiveM / GTA V..." -ForegroundColor Cyan`,
+      `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5.exe\\PerfOptions'; If (Test-Path $key) { Remove-Item $key -Recurse -Force -EA SilentlyContinue }; Write-Host "[OK] GTA5.exe IFEO PerfOptions removed" -ForegroundColor Green`,
+      `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; If (Test-Path $key) { Remove-Item $key -Recurse -Force -EA SilentlyContinue }; Write-Host "[OK] FiveM.exe IFEO PerfOptions removed" -ForegroundColor Green`,
+      `$cfg = "$env:LocalAppData\\FiveM\\FiveM.app\\CitizenFX.ini"; If (Test-Path $cfg) { $c = Get-Content $cfg; ($c -replace 'DisablePeerToPeer=1','') | Set-Content $cfg; ($c -replace 'StreamingDistance=\\d+','') | Set-Content $cfg; Write-Host "[OK] FiveM CitizenFX.ini P2P and StreamingDistance entries removed" -ForegroundColor Green }`,
+      `@('NvTelemetryContainer') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] NvTelemetryContainer re-enabled" -ForegroundColor Green`,
+    ],
+  },
+};
+
+function buildRestoreScript(categories: string[]): string {
+  const lines: string[] = [
+    `# ============================================`,
+    `# OPTI GODS by leaq — Restore / Undo Script`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# Categories: ${categories.join(', ')}`,
+    `# ============================================`,
+    ``,
+    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    `Write-Host "  OPTI GODS — RESTORE TOOL by leaq" -ForegroundColor Cyan`,
+    `Write-Host "  Undoing selected optimizations..." -ForegroundColor White`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    ``,
+  ];
+
+  for (const cat of categories) {
+    const block = RESTORE_BLOCKS[cat];
+    if (!block) continue;
+    lines.push(`# ── ${block.label} ──`);
+    lines.push(...block.commands);
+    lines.push(``);
+  }
+
+  lines.push(
+    `Write-Host ""`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+    `Write-Host "  RESTORE COMPLETE" -ForegroundColor Cyan`,
+    `Write-Host "  Restart your PC to apply all changes." -ForegroundColor White`,
+    `Write-Host "=====================================" -ForegroundColor Cyan`,
+  );
+
+  return lines.join('\n');
+}
+
 // In-memory session store: id -> { tweaks, nvidiaPreset, created }
 const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number }>();
 
@@ -658,6 +813,19 @@ Start-Sleep 2
     if (!checkAdminKey(req, res)) return;
     const count = await storage.deleteUsedFriendTokens();
     res.json({ ok: true, deleted: count });
+  });
+
+  // Public — generate restore/undo script for selected categories
+  app.post('/api/generate-restore', (req, res) => {
+    const { categories } = req.body as { categories?: string[] };
+    const valid = Object.keys(RESTORE_BLOCKS);
+    const selected = Array.isArray(categories)
+      ? categories.filter((c) => valid.includes(c))
+      : valid;
+    const script = buildRestoreScript(selected.length ? selected : valid);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-RESTORE-by-leaq.ps1"');
+    res.send(script);
   });
 
   // Public — track a site visit (called once per browser session from frontend)
