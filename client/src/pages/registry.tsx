@@ -3,7 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Settings2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const ALL_REGISTRY_IDS = [
@@ -93,6 +95,8 @@ function Section({ heading, tweaks, tweakState, onSet, showRecommended = true }:
 
 export default function Registry() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const hw = useHardwareInfo();
+  const osInfo = useOsDetection();
 
   const CPU_TWEAKS: TweakDef[] = [
     { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -199,8 +203,44 @@ export default function Registry() {
         <div className="space-y-8">
           <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} />
           <Section heading="Network & Latency" tweaks={NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} />
-          <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} />
-          <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+
+          {/* Memory section with RAM-aware safety note */}
+          <div className="space-y-3">
+            <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+            {!hw.loading && hw.ramGB <= 4 && hw.ramGB > 0 && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  <span className="text-amber-400 font-semibold">Low RAM detected (≤4 GB).</span>{" "}
+                  Skip <span className="text-white font-medium">Disable Memory Compression</span> — on systems with 4 GB or less, Windows memory compression actively frees physical RAM for games. Disabling it will make your system run out of RAM faster.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Visual section with GPU-aware HAGS note */}
+          <div className="space-y-3">
+            <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+            {!hw.loading && hw.isIntel && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60">
+                <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  <span className="text-zinc-200 font-semibold">Intel GPU detected.</span>{" "}
+                  <span className="text-white font-medium">HAGS</span> (Hardware Accelerated GPU Scheduling) has mixed results on Intel integrated graphics — it's designed primarily for discrete NVIDIA RTX 2000+ and AMD RX 6000+ GPUs. Skip this tweak if you're on Intel UHD/Iris graphics.
+                </p>
+              </div>
+            )}
+            {!hw.loading && osInfo.isWindows11 === false && !osInfo.loading && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  <span className="text-blue-400 font-semibold">Windows 10 detected.</span>{" "}
+                  HAGS requires Win10 build 2004 (May 2020 Update) or newer. If your build is older than 19041, skip the HAGS toggle.
+                </p>
+              </div>
+            )}
+          </div>
+
           <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} />
 
           <section>

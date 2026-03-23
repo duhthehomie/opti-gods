@@ -4,7 +4,9 @@ import {
   Cpu,
   Crosshair,
   Gamepad2,
+  HelpCircle,
   MemoryStick,
+  MessageCircle,
   MonitorPlay,
   Power,
   Settings2,
@@ -41,6 +43,7 @@ const navItems = [
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
   { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
+  { title: "Help & Discord", url: "/help", icon: MessageCircle, accent: true },
 ];
 
 export function AppSidebar() {
@@ -95,10 +98,12 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="px-2 gap-0.5">
-              {navItems.map((item) => {
+              {navItems.map((item, idx) => {
                 const isActive = location === item.url;
+                const isAccent = (item as any).accent;
+                const isLast = idx === navItems.length - 1;
                 return (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.title} className={isLast ? "mt-1 pt-1 border-t border-white/5" : ""}>
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
@@ -106,6 +111,8 @@ export function AppSidebar() {
                         "h-auto rounded-md transition-all",
                         isActive
                           ? "bg-red-500/10 text-red-400 hover:bg-red-500/15 hover:text-red-300 font-medium"
+                          : isAccent
+                          ? "text-[#5865F2] hover:text-[#818cf8] hover:bg-[#5865F2]/10"
                           : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
                       )}
                     >
@@ -116,7 +123,7 @@ export function AppSidebar() {
                         {isActive && (
                           <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[22px] bg-red-500 rounded-r-full" />
                         )}
-                        <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-red-400" : "")} />
+                        <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-red-400" : isAccent ? "text-[#5865F2]" : "")} />
                         <span className="text-sm">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>

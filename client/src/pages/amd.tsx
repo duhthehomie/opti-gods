@@ -3,7 +3,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Cpu, Layers, Zap, Check, Info } from "lucide-react";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { Cpu, Layers, Zap, Check, Info, AlertTriangle, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -180,6 +181,7 @@ const AMD_PRESETS = [
 export default function Amd() {
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const hw = useHardwareInfo();
 
   const applyPreset = (preset: typeof AMD_PRESETS[number]) => {
     const next = { ...tweaks };
@@ -223,6 +225,50 @@ export default function Amd() {
             Enable All Recommended
           </Button>
         </motion.div>
+
+        {/* GPU compatibility banner */}
+        {!hw.loading && (
+          hw.isAMD ? (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-green-500/20 bg-green-500/5"
+            >
+              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+              <p className="text-xs text-zinc-300">
+                <span className="text-green-400 font-semibold">AMD GPU detected</span>
+                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
+                . All tweaks on this page apply to your system.
+              </p>
+            </motion.div>
+          ) : hw.isNvidia ? (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-xs text-zinc-300">
+                <span className="text-amber-400 font-semibold">NVIDIA GPU detected</span>
+                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
+                . These tweaks target AMD Radeon drivers and will have no effect on NVIDIA hardware. Use the <span className="text-white font-medium">NVIDIA Optimizer</span> tab instead.
+              </p>
+            </motion.div>
+          ) : hw.isIntel ? (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60"
+            >
+              <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0" />
+              <p className="text-xs text-zinc-300">
+                <span className="text-zinc-300 font-semibold">Intel GPU detected</span>
+                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
+                . AMD driver tweaks will not apply to Intel graphics. Only <span className="text-white font-medium">HAGS</span> may be relevant on Win10 2004+/Win11.
+              </p>
+            </motion.div>
+          ) : null
+        )}
 
         <TabSmartBar
           tweakIds={ALL_AMD_IDS}
