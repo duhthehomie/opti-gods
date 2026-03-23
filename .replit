@@ -37,3 +37,9 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+VITE_CASHAPP_TAG = "$my1ik"
+VITE_PAYPAL_LINK = "https://www.paypal.me/accountslg"
