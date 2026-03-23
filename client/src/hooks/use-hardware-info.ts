@@ -44,6 +44,9 @@ export function useHardwareInfo(): HardwareInfo {
     const resolution = `${screen.width}×${screen.height}`;
 
     // GPU — WebGL WEBGL_debug_renderer_info gives the real GPU name
+    // Chrome on Windows returns: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    // Firefox returns: "GeForce RTX 3080/PCIe/SSE2"
+    // We parse both formats correctly.
     let gpuName = "Unknown GPU";
     let gpuVendor = "";
     try {
@@ -55,23 +58,41 @@ export function useHardwareInfo(): HardwareInfo {
       if (gl) {
         const ext = gl.getExtension("WEBGL_debug_renderer_info");
         if (ext) {
-          gpuName = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "Unknown GPU";
-          gpuVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || "";
-          // Clean up verbose driver strings
-          gpuName = gpuName
-            .replace(/\s*\/?\s*ANGLE\s*\(.*?\)/gi, "")
-            .replace(/\s*Direct3D\d+.*$/gi, "")
-            .replace(/\s*OpenGL.*$/gi, "")
-            .trim();
+          const rawRenderer: string = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "";
+          const rawVendor: string = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || "";
+          gpuVendor = rawVendor;
+
+          // ANGLE format: "ANGLE (Vendor, Renderer Name Direct3D... , api)"
+          const angleMatch = rawRenderer.match(/ANGLE\s*\(\s*([^,]+),\s*([^,]+(?:,\s*[^,)]+)*)/i);
+          if (angleMatch) {
+            // angleMatch[2] contains the renderer (may include Direct3D/OpenGL suffix)
+            const innerRenderer = angleMatch[2]
+              .replace(/\s*Direct3D\d+.*$/gi, "")
+              .replace(/\s*OpenGL\s*\d.*$/gi, "")
+              .replace(/\s*\(0x[0-9a-f]+\)/gi, "")  // remove hex device IDs
+              .trim();
+            gpuName = innerRenderer || angleMatch[1].trim();
+            if (!gpuVendor) gpuVendor = angleMatch[1].trim();
+          } else if (rawRenderer) {
+            // Firefox / direct format
+            gpuName = rawRenderer
+              .replace(/\/PCIe\/.*$/gi, "")
+              .replace(/\/SSE\d*/gi, "")
+              .replace(/\s*Direct3D\d+.*$/gi, "")
+              .replace(/\s*OpenGL\s*\d.*$/gi, "")
+              .trim();
+          }
+
+          if (!gpuName) gpuName = "Unknown GPU";
         }
       }
     } catch {}
 
     const n = gpuName.toLowerCase();
     const v = gpuVendor.toLowerCase();
-    const isNvidia = n.includes("nvidia") || v.includes("nvidia");
-    const isAMD = n.includes("amd") || n.includes("radeon") || v.includes("amd");
-    const isIntel = n.includes("intel") || v.includes("intel");
+    const isNvidia = n.includes("nvidia") || n.includes("geforce") || n.includes("quadro") || v.includes("nvidia");
+    const isAMD = n.includes("amd") || n.includes("radeon") || n.includes("rx ") || v.includes("amd");
+    const isIntel = n.includes("intel") || n.includes("uhd") || n.includes("iris") || v.includes("intel");
 
     setInfo({
       cpuCores,
