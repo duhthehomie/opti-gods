@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { getProStatus } from "@/lib/pro-status";
+import { useProStatus } from "@/lib/pro-status";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -46,7 +46,7 @@ export function AppSidebar() {
   const { tweaks } = useOptimizationStore();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const osInfo = useOsDetection();
-  const isPro = getProStatus();
+  const isPro = useProStatus();
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#050505]">

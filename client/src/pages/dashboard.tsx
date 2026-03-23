@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { cn } from "@/lib/utils";
-import { getProStatus } from "@/lib/pro-status";
+import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { ScanImport } from "@/components/scan-import";
 
@@ -68,7 +68,7 @@ const PRO_BULLETS = [
 export default function Dashboard() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
-  const isPro = getProStatus();
+  const isPro = useProStatus();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [] } = useQuery<any[]>({
     queryKey: [api.presets.list.path],
@@ -218,41 +218,58 @@ export default function Dashboard() {
           transition={{ delay: 0.25 }}
           className="grid grid-cols-1 lg:grid-cols-3 gap-6"
         >
-          {/* Pricing card */}
-          <div className="lg:col-span-2 relative rounded-2xl bg-black/60 border border-red-500/20 overflow-hidden p-7">
-            <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-red-500/5 to-transparent pointer-events-none" />
-            <div className="relative z-10">
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm mb-3">
-                    One-Time Lifetime Access
-                  </div>
-                  <h2 className="text-3xl font-display font-bold text-white leading-none">$25</h2>
-                  <p className="text-sm text-zinc-400 mt-1">No subscription. No expiry.</p>
+          {/* Pricing / Pro-active card */}
+          {isPro ? (
+            <div
+              data-testid="badge-pricing-pro-active"
+              className="lg:col-span-2 relative rounded-2xl bg-black/60 border border-red-500/25 overflow-hidden p-7 flex flex-col justify-center"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-transparent pointer-events-none" />
+              <div className="relative z-10 flex items-center gap-5">
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 shrink-0">
+                  <ShieldAlert className="w-8 h-8 text-red-500" />
                 </div>
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <Zap className="w-6 h-6 text-red-500" />
+                <div>
+                  <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest bg-red-600/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm mb-2">
+                    <CheckCircle2 className="w-3 h-3" /> Pro Access Active
+                  </div>
+                  <h2 className="text-2xl font-display font-bold text-white leading-none mb-1">All Features Unlocked</h2>
+                  <p className="text-sm text-zinc-400">Lifetime access — configure your tweaks and download your script.</p>
                 </div>
               </div>
-
-              <div className="space-y-2 mb-7">
+              <div className="relative z-10 mt-5 grid grid-cols-2 gap-2">
                 {PRO_BULLETS.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    <span className="text-sm text-zinc-300">{item}</span>
+                  <div key={i} className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3 h-3 text-red-500 shrink-0" />
+                    <span className="text-xs text-zinc-400">{item}</span>
                   </div>
                 ))}
               </div>
-
-              {isPro ? (
-                <div
-                  data-testid="badge-pricing-pro-active"
-                  className="inline-flex items-center gap-2 w-full justify-center px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-bold text-sm"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Pro Access Active
+            </div>
+          ) : (
+            <div className="lg:col-span-2 relative rounded-2xl bg-black/60 border border-red-500/20 overflow-hidden p-7">
+              <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-red-500/5 to-transparent pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm mb-3">
+                      One-Time Lifetime Access
+                    </div>
+                    <h2 className="text-3xl font-display font-bold text-white leading-none">$25</h2>
+                    <p className="text-sm text-zinc-400 mt-1">No subscription. No expiry.</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <Zap className="w-6 h-6 text-red-500" />
+                  </div>
                 </div>
-              ) : (
+                <div className="space-y-2 mb-7">
+                  {PRO_BULLETS.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      <span className="text-sm text-zinc-300">{item}</span>
+                    </div>
+                  ))}
+                </div>
                 <ProUnlockButton className="w-full">
                   <Button
                     data-testid="button-pricing-unlock-pro"
@@ -262,9 +279,9 @@ export default function Dashboard() {
                     Unlock Pro — $25
                   </Button>
                 </ProUnlockButton>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tweaks counter */}
           <div className="flex flex-col gap-3">

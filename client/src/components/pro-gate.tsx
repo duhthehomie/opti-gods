@@ -1,16 +1,15 @@
 import { ReactNode, useState } from "react";
-import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard } from "lucide-react";
+import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { getProStatus, setProStatus } from "@/lib/pro-status";
+import { useProStatus, setProStatus } from "@/lib/pro-status";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
 
-// Internal dialog component — holds all payment state and logic
 function ProPaymentDialog({
   open,
   onOpenChange,
@@ -40,8 +39,9 @@ function ProPaymentDialog({
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
-          window.location.reload();
-        }, 1200);
+          setSuccess(false);
+          setCode("");
+        }, 1400);
       } else {
         setError("Invalid code. Pay via CashApp or PayPal below, then DM for your code.");
       }
@@ -81,7 +81,6 @@ function ProPaymentDialog({
         <DialogTitle className="sr-only">Opti Gods Pro Access</DialogTitle>
         <DialogDescription className="sr-only">Unlock Pro features with an access code</DialogDescription>
 
-        {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-red-500" />
@@ -93,7 +92,6 @@ function ProPaymentDialog({
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {/* What you get */}
           <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 space-y-2">
             <h3 className="text-white font-bold text-sm">What you get:</h3>
             {[
@@ -110,13 +108,15 @@ function ProPaymentDialog({
           </div>
 
           {success ? (
-            <div className="flex items-center gap-2 justify-center py-6 text-red-400 font-bold">
-              <CheckCircle2 className="w-5 h-5" />
-              Access Granted! Reloading...
+            <div className="flex flex-col items-center gap-3 justify-center py-8">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <ShieldCheck className="w-7 h-7 text-red-400" />
+              </div>
+              <p className="text-white font-bold text-base">Pro Access Granted</p>
+              <p className="text-xs text-zinc-500">All features are now unlocked.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Code entry */}
               <p className="text-xs text-zinc-400 font-medium">Have an access code?</p>
               <div className="flex gap-2">
                 <input
@@ -231,14 +231,13 @@ function ProPaymentDialog({
   );
 }
 
-// ProGate — dims content + lock overlay, opens payment dialog on click
 interface ProGateProps {
   children: ReactNode;
   className?: string;
 }
 
 export function ProGate({ children, className }: ProGateProps) {
-  const isPro = getProStatus();
+  const isPro = useProStatus();
   const [open, setOpen] = useState(false);
 
   if (isPro) return <>{children}</>;
@@ -258,10 +257,8 @@ export function ProGate({ children, className }: ProGateProps) {
   );
 }
 
-// ProUnlockButton — standalone CTA trigger, no overlay dimming
-// Use this for hero/pricing CTAs. Returns null when user is already Pro.
 export function ProUnlockButton({ children, className }: { children: ReactNode; className?: string }) {
-  const isPro = getProStatus();
+  const isPro = useProStatus();
   const [open, setOpen] = useState(false);
 
   if (isPro) return null;

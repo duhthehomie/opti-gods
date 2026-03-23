@@ -45,7 +45,7 @@ When `STRIPE_SECRET_KEY` is not set, Stripe endpoints gracefully return 503. The
 | File | Purpose |
 |------|---------|
 | `client/src/components/pro-gate.tsx` | Paywall modal (CashApp/PayPal/Stripe/code) |
-| `client/src/lib/pro-status.ts` | `getProStatus()` utility (localStorage) |
+| `client/src/lib/pro-status.ts` | `useProStatus()` reactive hook + `setProStatus()` (localStorage + event bus) |
 | `client/src/pages/payment-success.tsx` | Stripe return page — verifies + sets Pro |
 | `client/src/pages/payment-cancel.tsx` | Redirects to dashboard |
 | `client/src/pages/game-detection.tsx` | Game card grid filtered by URL params |
