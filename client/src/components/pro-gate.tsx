@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle } from "lucide-react";
+import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-
-const PRO_KEY = "optigods_pro_v1";
-
-export function getProStatus(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(PRO_KEY) === "true";
-}
+import { getProStatus } from "@/lib/pro-status";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
+const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
 
 interface ProGateProps {
   children: React.ReactNode;
@@ -25,10 +20,32 @@ export function ProGate({ children, className }: ProGateProps) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   if (isPro) return <>{children}</>;
+
+  const handleStripeCheckout = async () => {
+    setStripeLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || "Failed to start checkout. Try another payment method.");
+      }
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setStripeLoading(false);
+    }
+  };
 
   const handleVerify = async () => {
     if (!code.trim()) return;
@@ -58,7 +75,7 @@ export function ProGate({ children, className }: ProGateProps) {
     }
   };
 
-  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || LEGACY_LINK;
+  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || STRIPE_ENABLED || LEGACY_LINK;
 
   return (
     <>
@@ -175,7 +192,21 @@ export function ProGate({ children, className }: ProGateProps) {
                         </a>
                       )}
 
-                      {!CASHAPP_TAG && !PAYPAL_LINK && LEGACY_LINK && (
+                      {STRIPE_ENABLED && (
+                        <button
+                          data-testid="button-pay-stripe"
+                          onClick={handleStripeCheckout}
+                          disabled={stripeLoading}
+                          className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-300 hover:text-white text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {stripeLoading
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <CreditCard className="w-4 h-4" />}
+                          {stripeLoading ? "Redirecting..." : "Pay with Card"}
+                        </button>
+                      )}
+
+                      {!CASHAPP_TAG && !PAYPAL_LINK && !STRIPE_ENABLED && LEGACY_LINK && (
                         <a
                           href={LEGACY_LINK}
                           target="_blank"

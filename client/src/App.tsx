@@ -16,6 +16,8 @@ import Debloat from "@/pages/debloat";
 import Memory from "@/pages/memory";
 import Fortnite from "@/pages/fortnite";
 import GameDetection from "@/pages/game-detection";
+import PaymentSuccess from "@/pages/payment-success";
+import PaymentCancel from "@/pages/payment-cancel";
 
 const PRO_KEY = "optigods_pro_v1";
 
@@ -49,6 +51,8 @@ function Router() {
       <Route path="/memory" component={Memory} />
       <Route path="/fortnite" component={Fortnite} />
       <Route path="/game-detection" component={GameDetection} />
+      <Route path="/payment/success" component={PaymentSuccess} />
+      <Route path="/payment/cancel" component={PaymentCancel} />
       <Route component={NotFound} />
     </Switch>
   );

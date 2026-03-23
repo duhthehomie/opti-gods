@@ -505,6 +505,65 @@ Start-Sleep 2
     res.json({ valid });
   });
 
+  // ── Stripe Checkout (one-time payment) ──────────────────────────────────────
+  // Activates only when STRIPE_SECRET_KEY is present in env vars.
+  // The user sets STRIPE_SECRET_KEY + STRIPE_PRICE_ID from their Stripe dashboard.
+
+  app.post('/api/create-checkout', async (req, res) => {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      return res.status(503).json({ error: 'Stripe not configured on this server.' });
+    }
+
+    const priceId = process.env.STRIPE_PRICE_ID;
+    if (!priceId) {
+      return res.status(503).json({ error: 'STRIPE_PRICE_ID not set. Run the seed script first.' });
+    }
+
+    try {
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
+
+      const host = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
+      const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+      const origin = `${protocol}://${host}`;
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/payment/cancel`,
+        metadata: { product: 'optigods_pro' },
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error('Stripe checkout error:', err.message);
+      res.status(500).json({ error: 'Failed to create checkout session.' });
+    }
+  });
+
+  app.get('/api/verify-payment', async (req, res) => {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) return res.status(503).json({ paid: false, error: 'Stripe not configured.' });
+
+    const sessionId = req.query.session_id as string;
+    if (!sessionId || !sessionId.startsWith('cs_')) {
+      return res.status(400).json({ paid: false, error: 'Invalid session ID.' });
+    }
+
+    try {
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const paid = session.payment_status === 'paid';
+      res.json({ paid });
+    } catch (err: any) {
+      console.error('Stripe verify error:', err.message);
+      res.status(500).json({ paid: false, error: 'Could not verify payment.' });
+    }
+  });
+
   app.get('/api/script/download', (req, res) => {
     // Parse tweaks from query if provided
     const rawTweaks = req.query.tweaks;
