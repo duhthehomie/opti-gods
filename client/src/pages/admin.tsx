@@ -7,7 +7,7 @@ import {
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
-  PlayCircle, ChevronRight, Eye,
+  PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -91,7 +91,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email";
+type Tab = "codes" | "friends" | "activity" | "email" | "announcements";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -287,6 +287,38 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/system-status", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       toast({ title: data.sent > 0 ? `Auto-sent ${data.sent} code(s)` : "No stale requests found", description: data.sent > 0 ? "Codes emailed to customers." : "All requests are under 30 min old." });
+    },
+  });
+
+  // Announcements
+  const [annTitle, setAnnTitle] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annTag, setAnnTag] = useState("update");
+
+  const announcementsQuery = useQuery<{ id: number; title: string; body: string; tag: string | null; createdAt: string }[]>({
+    queryKey: ["/api/announcements"],
+    enabled: authed,
+    retry: false,
+  });
+
+  const createAnn = useMutation({
+    mutationFn: () => fetch("/api/admin/announcements", {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: annTitle, body: annBody, tag: annTag }),
+    }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      setAnnTitle(""); setAnnBody(""); setAnnTag("update");
+      toast({ title: "Announcement posted" });
+    },
+    onError: () => toast({ title: "Failed to post announcement", variant: "destructive" }),
+  });
+
+  const deleteAnn = useMutation({
+    mutationFn: (id: number) => fetch(`/api/admin/announcements/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      toast({ title: "Announcement deleted" });
     },
   });
 
@@ -590,7 +622,7 @@ export default function Admin() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-white/5 pb-0 overflow-x-auto">
-          {(["codes", "friends", "activity", "email"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "announcements"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             return (
               <button
@@ -614,6 +646,12 @@ export default function Admin() {
                          {pendingEmails}
                        </span>
                      )}
+                   </>
+                 ) :
+                 t === "announcements" ? (
+                   <>
+                     <Bell className="w-3 h-3" />
+                     Updates ({(announcementsQuery.data || []).length})
                    </>
                  ) :
                  `Activity (${activityItems.length})`}
@@ -1121,6 +1159,105 @@ export default function Admin() {
                   })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
+        {tab === "announcements" && (
+          <div className="space-y-5">
+            <div className="text-[10px] text-zinc-600 leading-relaxed">
+              Post update notes, hotfixes, and announcements that appear on the public <span className="text-zinc-400 font-mono">/updates</span> page. Visible to all users — no Pro required.
+            </div>
+
+            {/* Compose form */}
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <Megaphone className="w-3.5 h-3.5 text-red-500" /> New Announcement
+              </h3>
+              <input
+                data-testid="input-ann-title"
+                value={annTitle}
+                onChange={e => setAnnTitle(e.target.value)}
+                placeholder="Title (e.g. v2.4 — NVIDIA tweak update)"
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
+              />
+              <textarea
+                data-testid="input-ann-body"
+                value={annBody}
+                onChange={e => setAnnBody(e.target.value)}
+                placeholder="Body — describe what changed, what's new, or any warnings..."
+                rows={4}
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40 resize-none"
+              />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-1">
+                  <Tag className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  <select
+                    data-testid="select-ann-tag"
+                    value={annTag}
+                    onChange={e => setAnnTag(e.target.value)}
+                    className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-red-500/40"
+                  >
+                    <option value="update">Update</option>
+                    <option value="hotfix">Hotfix</option>
+                    <option value="new">New</option>
+                    <option value="announcement">Announcement</option>
+                    <option value="warning">Warning</option>
+                  </select>
+                </div>
+                <button
+                  data-testid="button-post-announcement"
+                  disabled={!annTitle.trim() || !annBody.trim() || createAnn.isPending}
+                  onClick={() => createAnn.mutate()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {createAnn.isPending ? "Posting..." : "Post Announcement"}
+                </button>
+              </div>
+            </div>
+
+            {/* Existing announcements */}
+            <div className="space-y-2">
+              {announcementsQuery.isLoading && (
+                <div className="py-8 text-center text-xs text-zinc-600 animate-pulse">Loading announcements...</div>
+              )}
+              {!announcementsQuery.isLoading && !(announcementsQuery.data?.length) && (
+                <div className="py-8 text-center">
+                  <Bell className="w-8 h-8 text-zinc-800 mx-auto mb-3" />
+                  <p className="text-xs text-zinc-600">No announcements yet.</p>
+                </div>
+              )}
+              {(announcementsQuery.data || []).map(ann => (
+                <div
+                  key={ann.id}
+                  data-testid={`card-admin-ann-${ann.id}`}
+                  className="flex items-start gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.01]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-bold text-white truncate">{ann.title}</span>
+                      {ann.tag && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
+                          {ann.tag}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{ann.body}</p>
+                    <p className="text-[10px] text-zinc-700 mt-1">{new Date(ann.createdAt).toLocaleString()}</p>
+                  </div>
+                  <button
+                    data-testid={`button-del-ann-${ann.id}`}
+                    onClick={() => deleteAnn.mutate(ann.id)}
+                    disabled={deleteAnn.isPending}
+                    className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                    title="Delete announcement"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -3,7 +3,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Crosshair, AlertTriangle, Info, FileCode } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Crosshair, AlertTriangle, Info, FileCode, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ALL_FORTNITE_IDS = [
@@ -41,6 +42,42 @@ if ($content -notmatch 'bShowFPS') {
 Write-Host "[OK] FPS display toggle preserved" -ForegroundColor Green
 Write-Host ""
 Write-Host "Restart Fortnite for changes to take effect." -ForegroundColor Cyan`;
+
+const SECTION_RECOMMENDED: Record<string, string[]> = {
+  fps: ["FortniteUncapLobbyFPS", "FortniteUncapGameFPS", "FortniteDisableVSync"],
+  cpu: ["FortniteHighPriority", "FortniteDisableThrottling"],
+  engine: ["FortniteDisableMotionBlur", "FortniteLowShadows"],
+};
+
+function SectionHeader({ title, sectionKey, tweaks, setTweak }: {
+  title: string; sectionKey: string;
+  tweaks: Record<string, boolean>; setTweak: (id: string, v: boolean) => void;
+}) {
+  const ids = SECTION_RECOMMENDED[sectionKey] || [];
+  const allOn = ids.length > 0 && ids.every(id => tweaks[id]);
+  if (ids.length === 0) {
+    return <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">{title}</h2>;
+  }
+  return (
+    <div className="flex items-center justify-between mb-4 px-1">
+      <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">{title}</h2>
+      <Button
+        size="sm"
+        variant={allOn ? "default" : "outline"}
+        onClick={() => ids.forEach(id => setTweak(id, true))}
+        className={cn(
+          "h-6 px-2.5 text-[10px] font-bold uppercase tracking-wide gap-1.5",
+          allOn
+            ? "bg-red-600 hover:bg-red-700 text-white border-0"
+            : "border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 bg-transparent"
+        )}
+      >
+        <Zap className="w-3 h-3" />
+        {allOn ? "Recommended ON" : `Enable Recommended (${ids.length})`}
+      </Button>
+    </div>
+  );
+}
 
 export default function Fortnite() {
   const { tweaks, setTweak } = useOptimizationStore();
@@ -106,7 +143,7 @@ export default function Fortnite() {
         <div className="space-y-8">
 
           <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">FPS & Frame Timing</h2>
+            <SectionHeader title="FPS & Frame Timing" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} />
             <div className="space-y-3">
               {[
                 { id: "FortniteUncapLobbyFPS", title: "Uncap Lobby & Menu FPS (GameUserSettings.ini)", desc: "Patches GameUserSettings.ini to set FrameRateLimit=0.000000 — removes the 120fps menu cap. Handles read-only files automatically.", badge: "MUST HAVE", impact: "HIGH" as const },
@@ -121,7 +158,7 @@ export default function Fortnite() {
           </section>
 
           <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">CPU & Process Priority</h2>
+            <SectionHeader title="CPU & Process Priority" sectionKey="cpu" tweaks={tweaks} setTweak={setTweak} />
             <div className="space-y-3">
               {[
                 { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED", impact: "HIGH" as const },
@@ -135,7 +172,7 @@ export default function Fortnite() {
           </section>
 
           <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Engine.ini Config Patches</h2>
+            <SectionHeader title="Engine.ini Config Patches" sectionKey="engine" tweaks={tweaks} setTweak={setTweak} />
             <div className="space-y-3">
               {[
                 { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches.", impact: "MED" as const },

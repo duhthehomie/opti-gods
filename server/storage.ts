@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest } from "@shared/schema";
-import { eq, isNotNull, gte, sql } from "drizzle-orm";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement } from "@shared/schema";
+import { eq, isNotNull, gte, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   getPresets(): Promise<Preset[]>;
@@ -30,6 +30,10 @@ export interface IStorage {
   getEmailRequests(): Promise<EmailRequest[]>;
   updateEmailRequestStatus(id: number, status: string, sentCodeId?: number, note?: string): Promise<EmailRequest>;
   deleteEmailRequest(id: number): Promise<void>;
+  // Announcements
+  getAnnouncements(): Promise<Announcement[]>;
+  createAnnouncement(data: InsertAnnouncement): Promise<Announcement>;
+  deleteAnnouncement(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -170,6 +174,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEmailRequest(id: number): Promise<void> {
     await db.delete(emailRequests).where(eq(emailRequests.id, id));
+  }
+
+  async getAnnouncements(): Promise<Announcement[]> {
+    return await db.select().from(announcements).orderBy(desc(announcements.createdAt));
+  }
+
+  async createAnnouncement(data: InsertAnnouncement): Promise<Announcement> {
+    const [row] = await db.insert(announcements).values(data).returning();
+    return row;
+  }
+
+  async deleteAnnouncement(id: number): Promise<void> {
+    await db.delete(announcements).where(eq(announcements.id, id));
   }
 }
 

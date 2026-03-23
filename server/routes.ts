@@ -45,7 +45,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   FiveMDisableP2P: `$cfgPath = "$env:LocalAppData\\FiveM\\FiveM.app\\CitizenFX.ini"; If (!(Test-Path $cfgPath)) { New-Item -ItemType File -Path $cfgPath -Force | Out-Null }; $content = Get-Content $cfgPath -Raw -ErrorAction SilentlyContinue; If ($content -notmatch 'DisablePeerToPeer') { Add-Content $cfgPath "DisablePeerToPeer=1" }; Write-Host "[FiveM] P2P connections disabled — forces direct server connections for lower ping variance" -ForegroundColor Green`,
   // Debloat
   DebloatCortana: `Get-AppxPackage *Microsoft.549981C3F5F10* | Remove-AppxPackage`,
-  DebloatOneDrive: `taskkill /F /IM OneDrive.exe; $proc = "$env:SystemRoot\\System32\\OneDriveSetup.exe"; If (Test-Path $proc) { & $proc /uninstall }`,
+  DebloatOneDrive: `taskkill /F /IM OneDrive.exe 2>$null; $setupPaths = @("$env:SystemRoot\\System32\\OneDriveSetup.exe","$env:SystemRoot\\SysWOW64\\OneDriveSetup.exe","$env:LOCALAPPDATA\\Microsoft\\OneDrive\\OneDriveSetup.exe","$env:LOCALAPPDATA\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe"); $found = $setupPaths | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($found) { & $found /uninstall 2>$null; Write-Host "[OK] OneDrive uninstaller ran: $found" -ForegroundColor Green } else { Write-Host "[INFO] OneDrive setup.exe not found — may already be removed" -ForegroundColor Yellow }; Get-AppxPackage -AllUsers *Microsoft.OneDrive* -EA SilentlyContinue | Remove-AppxPackage -AllUsers -EA SilentlyContinue; Remove-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "OneDrive" -EA SilentlyContinue; Write-Host "[OK] OneDrive startup entry removed" -ForegroundColor Green`,
   DebloatXboxApp: `Get-AppxPackage *XboxApp* | Remove-AppxPackage`,
   DebloatXboxGameBar: `Get-AppxPackage *Microsoft.XboxGamingOverlay* | Remove-AppxPackage`,
   DebloatXboxIdentity: `Get-AppxPackage *XboxIdentityProvider* | Remove-AppxPackage`,
@@ -254,7 +254,7 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   WinTitusTeredo: `netsh interface teredo set state disabled 2>$null; $p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (Test-Path $p) { Set-ItemProperty $p 'DisabledComponents' 8 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[OK] Teredo tunneling disabled — reduces network overhead on native IPv4 connections" -ForegroundColor Green`,
   WinTitusEdgeDebloat: `$ep = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge'; If (!(Test-Path $ep)) { New-Item $ep -Force | Out-Null }; @{'BackgroundModeEnabled'=0;'EdgeCollectionsEnabled'=0;'HubsSidebarEnabled'=0;'PromotionalTabsEnabled'=0;'UserFeedbackAllowed'=0;'SpotlightExperiencesAndRecommendationsEnabled'=0;'EdgeShoppingAssistantEnabled'=0;'ShowMicrosoftRewards'=0}.GetEnumerator() | ForEach-Object { Set-ItemProperty $ep $_.Key $_.Value -Type DWord -Force -EA SilentlyContinue }; Write-Host "[OK] Microsoft Edge debloated — background mode, shopping assistant, rewards, and sidebars disabled" -ForegroundColor Green`,
   WinTitusIPv4Prefer: `$p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p 'DisabledComponents' 0x20 -Type DWord -Force; Write-Host "[OK] IPv4 preferred over IPv6 (flag 0x20 — IPv6 still available, IPv4 wins by default)" -ForegroundColor Green`,
-  WinTitusEdgeRemove: `Write-Host "[ACTION REQUIRED] Install Brave browser FIRST: https://brave.com/download" -ForegroundColor Cyan; Write-Host "[INFO] Then run this to force Edge uninstall..." -ForegroundColor Yellow; \$edgeSetup = Get-ChildItem "\${env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application" -Recurse -Filter "setup.exe" -EA SilentlyContinue | Select-Object -First 1; If (\$edgeSetup) { & \$edgeSetup.FullName --uninstall --system-level --verbose-logging --force-uninstall; Write-Host "[OK] Edge uninstall triggered" -ForegroundColor Green } Else { Write-Host "[SKIP] Edge setup.exe not found — may already be removed or path changed" -ForegroundColor Yellow }`,
+  WinTitusEdgeRemove: `Write-Host "[Edge] Searching for Edge setup.exe..." -ForegroundColor Yellow; $edgeSetup = $null; $searchPaths = @("C:\\Program Files (x86)\\Microsoft\\Edge\\Application","C:\\Program Files\\Microsoft\\Edge\\Application","C:\\Program Files (x86)\\Microsoft\\EdgeUpdate","C:\\Program Files\\Microsoft\\EdgeUpdate"); foreach ($sp in $searchPaths) { if (!$edgeSetup -and (Test-Path $sp)) { $found = Get-ChildItem $sp -Recurse -Filter "setup.exe" -EA SilentlyContinue | Select-Object -First 1; if ($found) { $edgeSetup = $found } } }; if ($edgeSetup) { Write-Host "[Edge] Found: $($edgeSetup.FullName)" -ForegroundColor Cyan; & $edgeSetup.FullName --uninstall --system-level --verbose-logging --force-uninstall 2>$null; Write-Host "[OK] Edge uninstall triggered via setup.exe" -ForegroundColor Green } Else { Write-Host "[Edge] setup.exe not found — trying AppxPackage removal..." -ForegroundColor Yellow; Get-AppxPackage -AllUsers *MicrosoftEdge* -EA SilentlyContinue | Remove-AppxPackage -AllUsers -EA SilentlyContinue; Write-Host "[OK] Edge AppxPackage removal attempted" -ForegroundColor Green }; $updateKey = "HKLM:\\SOFTWARE\\Microsoft\\EdgeUpdate"; if (!(Test-Path $updateKey)) { New-Item $updateKey -Force | Out-Null }; Set-ItemProperty $updateKey "DoNotUpdateToEdgeWithChromium" 1 -Type DWord -Force -EA SilentlyContinue; Remove-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "Microsoft Edge" -EA SilentlyContinue; Write-Host "[OK] Edge removal complete — restart to finish" -ForegroundColor Green`,
   WinTitusXboxComponents: `Write-Host "[WARNING] This removes Xbox Gaming Services — skip if you use Xbox app or Game Pass" -ForegroundColor Yellow; @('Microsoft.XboxApp','Microsoft.GamingServices','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI') | ForEach-Object { Get-AppxPackage -AllUsers $_ -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue }; Write-Host "[OK] Xbox and Gaming Services components removed" -ForegroundColor Green`,
   WinTitusClassicMenu: `$p = 'HKCU:\\SOFTWARE\\CLASSES\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p '(Default)' '' -Type String -Force; Stop-Process -Name explorer -Force -EA SilentlyContinue; Start-Sleep 1; Start-Process explorer; Write-Host "[OK] Classic right-click menu restored (Win11) — Explorer restarted" -ForegroundColor Green`,
   WinTitusDisplayPerf: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x10,0x00,0x00,0x00)) -Type Binary -Force; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Display set for best performance — visual effects stripped to minimum" -ForegroundColor Green`,
@@ -497,9 +497,18 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     `# ============================================`,
     ``,
     `$ErrorActionPreference = 'SilentlyContinue'`,
+    ``,
+    `# --- Admin Elevation Check ---`,
+    `$_principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()`,
+    `if (-not \$_principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
+    `    Write-Host "[UAC] Requires Administrator. Relaunching elevated..." -ForegroundColor Yellow`,
+    `    Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \`"\$(\$MyInvocation.MyCommand.Path)\`"" ; exit`,
+    `}`,
+    ``,
     `Write-Host "=====================================" -ForegroundColor Red`,
     `Write-Host "  OPTI GODS by leaq" -ForegroundColor Red`,
     `Write-Host "  Starting ${enabledTweaks.length} optimizations..." -ForegroundColor White`,
+    `Write-Host "  Running as: \$env:USERNAME (Admin)" -ForegroundColor Cyan`,
     `Write-Host "=====================================" -ForegroundColor Red`,
     ``,
     `# --- Smart Hardware Detection ---`,
@@ -571,23 +580,35 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
       : key.startsWith("Process") ? "Process Lasso"
       : key.startsWith("su_") ? "Startup Apps"
       : key.startsWith("game_") ? "Game Detection"
-      : key.startsWith("Win11") ? "Win11 Debloat"
+      : key.startsWith("Win11") || key.startsWith("WinTitus") || key.startsWith("OO") ? "Win Tweaks"
       : "Registry / System";
     if (!categories[cat]) categories[cat] = [];
-    categories[cat].push(`# ${key}\n${cmd}`);
+    // Wrap each tweak in try/catch so failures show [ERR] but don't abort the whole script
+    const wrapped = [
+      `Write-Host "[>>] ${key}..." -ForegroundColor DarkYellow`,
+      `try {`,
+      `    ${cmd}`,
+      `} catch {`,
+      `    Write-Host "[ERR] ${key}: \$_" -ForegroundColor Red`,
+      `}`,
+    ].join("\n");
+    categories[cat].push(wrapped);
   }
 
   for (const [cat, cmds] of Object.entries(categories)) {
     scriptLines.push(`Write-Host "" `);
-    scriptLines.push(`Write-Host "[${cat}] Applying ${cmds.length} tweak(s)..." -ForegroundColor DarkRed`);
+    scriptLines.push(`Write-Host "--- [${cat}] ${cmds.length} tweak(s) ---" -ForegroundColor DarkRed`);
     scriptLines.push(...cmds);
   }
 
   scriptLines.push(``);
   scriptLines.push(`Write-Host "" `);
   scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
-  scriptLines.push(`Write-Host "  Done! Restart your PC to apply all changes." -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "  All ${enabledTweaks.length} tweaks applied!" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "  Restart your PC to activate all changes." -ForegroundColor Green`);
   scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "" `);
+  scriptLines.push(`Read-Host "Press Enter to close this window"`);
   return scriptLines.join("\n");
 }
 
@@ -1429,6 +1450,34 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
     if (!checkAdminKey(req, res)) return;
     const sent = await runAutoSend();
     return res.json({ ok: true, sent });
+  });
+
+  // --- Announcements (public read) ---
+  app.get("/api/announcements", async (req, res) => {
+    const list = await storage.getAnnouncements();
+    return res.json(list);
+  });
+
+  // --- Announcements (admin write) ---
+  app.post("/api/admin/announcements", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const schema = z.object({
+      title: z.string().min(1).max(200),
+      body: z.string().min(1).max(5000),
+      tag: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid data" });
+    const ann = await storage.createAnnouncement(parsed.data);
+    return res.json(ann);
+  });
+
+  app.delete("/api/admin/announcements/:id", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    await storage.deleteAnnouncement(id);
+    return res.json({ ok: true });
   });
 
   // --- Email Code Requests (public) ---

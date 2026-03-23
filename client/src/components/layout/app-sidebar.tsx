@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Wrench,
   HardDrive,
+  Bell,
 } from "lucide-react";
 import {
   Sidebar,
@@ -48,6 +49,7 @@ const navItems = [
   { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
   { title: "WinUtil + OO ShutUp", url: "/wintitus", icon: Wrench, winTitusAccent: true },
   { title: "Custom OS", url: "/custom-os", icon: HardDrive, proAccent: true },
+  { title: "Updates", url: "/updates", icon: Bell },
   { title: "Fixes & Restore", url: "/fixes", icon: RotateCcw, fixAccent: true },
   { title: "Help & Discord", url: "/help", icon: MessageCircle, accent: true },
 ];

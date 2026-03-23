@@ -25,6 +25,7 @@ import Help from "@/pages/help";
 import Fixes from "@/pages/fixes";
 import WinTitus from "@/pages/wintitus";
 import CustomOS from "@/pages/custom-os";
+import Updates from "@/pages/updates";
 
 function VisitTracker() {
   useEffect(() => {
@@ -91,6 +92,7 @@ function Router() {
       <Route path="/fixes" component={Fixes} />
       <Route path="/wintitus" component={WinTitus} />
       <Route path="/custom-os" component={CustomOS} />
+      <Route path="/updates" component={Updates} />
       <Route path="/help" component={Help} />
       <Route component={NotFound} />
     </Switch>

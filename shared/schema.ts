@@ -51,6 +51,17 @@ export const siteVisits = pgTable("site_visits", {
   referrer: text("referrer"),
 });
 
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  tag: text("tag").default("update"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type Announcement = typeof announcements.$inferSelect;
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+
 export const emailRequests = pgTable("email_requests", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
