@@ -1,9 +1,30 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Settings2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const ALL_REGISTRY_IDS = [
+  "Win32PrioritySeparation","DisableHungAppDetection","SetTimerResolution","SetResponsiveness",
+  "GameModeTweaks","EnableMSIMode","DisableCoreParking","DisableDynamicTick",
+  "NetworkThrottling","InputLagTCP","DisableNagle","SetDNSPriority","DisableNDU",
+  "OptimizeTCP","EnableTCPAutoTuning","DisablePowerThrottling","DisableIPv6",
+  "OptimizeRAMUsage","DisableMemoryCompression","DisablePrefetch","EnableLargeSystemCache",
+  "DisablePagefileEncryption","ClearPagefileOnShutdown","MemDisableHeapTermination",
+  "DisableXboxGameBar","DisableGameDVR","EnableHAGS","DisablePointerPrecision",
+  "DisableAnimations","DisableTelemetry","DisableWindowsError","DisableFastStartup",
+  "SetHighPerformancePlan","DisableUSBSuspend","DisableCoreParking","DisablePowerThrottlingAdv",
+  "DisableDefender","DisableAutoUpdate",
+];
+const REGISTRY_RECOMMENDED_IDS = [
+  "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks","EnableMSIMode","DisableCoreParking",
+  "NetworkThrottling","InputLagTCP","DisableNagle","SetDNSPriority",
+  "OptimizeRAMUsage","DisableMemoryCompression",
+  "DisableXboxGameBar","DisableGameDVR","EnableHAGS","DisablePointerPrecision",
+  "SetHighPerformancePlan",
+];
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -162,6 +183,18 @@ export default function Registry() {
           ))}
           <span className="ml-auto text-[10px] text-zinc-600 italic">Click "Enable Recommended" on any section to apply curated safe picks</span>
         </div>
+
+        <TabSmartBar
+          tweakIds={ALL_REGISTRY_IDS}
+          recommendedIds={REGISTRY_RECOMMENDED_IDS}
+          label="Registry"
+          context="These tweaks modify Windows registry keys that control CPU scheduling, network stack behavior, GPU scheduling, and power plan. All changes are reversible — download the script and run it as Administrator."
+          tips={[
+            "Win32PrioritySeparation + Timer Resolution are the two most impactful tweaks for gaming.",
+            "NetworkThrottling + Nagle's Algorithm disable gives the biggest raw ping improvement.",
+            "Disable XboxGameBar and GameDVR — both inject into game processes even when 'off' in settings.",
+          ]}
+        />
 
         <div className="space-y-8">
           <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} />

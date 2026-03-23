@@ -1,9 +1,18 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Crosshair, AlertTriangle, Info, FileCode } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const ALL_FORTNITE_IDS = [
+  "FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableVSync","FortniteGameMode",
+  "FortniteHighPriority","FortniteAffinityPhysical","FortniteDisableThrottling",
+  "FortniteEngineStreaming","FortniteDisableMotionBlur","FortniteLowShadows","FortniteDisableLumen",
+  "FortniteForceDirectX12","FortniteDisableRecording","FortniteNetworkBuffer","FortniteInputLatency",
+];
+const FORTNITE_RECOMMENDED = ["FortniteUncapLobbyFPS","FortniteHighPriority","FortniteDisableThrottling","FortniteDisableVSync"];
 
 const FPS_CAP_SCRIPT = `# --- FORTNITE FPS UNCAP (Run as Admin) ---
 $configPath = "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini"
@@ -81,6 +90,18 @@ export default function Fortnite() {
             Run as Administrator. Launch Fortnite once before running so the config file exists.
           </p>
         </motion.div>
+
+        <TabSmartBar
+          tweakIds={ALL_FORTNITE_IDS}
+          recommendedIds={FORTNITE_RECOMMENDED}
+          label="Fortnite"
+          context="Tweaks patch Engine.ini, GameUserSettings.ini, and Windows registry for Fortnite process. The script runs as Administrator and backs up config files before modifying them."
+          tips={[
+            "Uncap Lobby FPS is the biggest single win — Fortnite's 120fps menu cap causes stutters when transitioning into matches.",
+            "Force disable VSync — any VSync in Fortnite adds 1–2 frames of input latency.",
+            "Physical core affinity helps on Intel Hyper-Threading CPUs where cache thrashing is common.",
+          ]}
+        />
 
         <div className="space-y-8">
 

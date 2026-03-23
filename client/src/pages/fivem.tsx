@@ -1,8 +1,17 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Gamepad2, Info } from "lucide-react";
+
+const ALL_FIVEM_IDS = [
+  "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
+  "FiveMCacheClear","FiveMExtendedMemory","FiveMStreamDistance","FiveMStreamPool","FiveMDisableNvidiaTelemetry",
+  "FiveMDisableVSync","FiveMNetworkBuffer","FiveMDisableFullscreen","FiveMDisableDWM",
+  "FiveMDNSOverride","FiveMDisableP2P","FiveMQueueFix",
+];
+const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix"];
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -85,6 +94,18 @@ export default function Fivem() {
             <p className="text-zinc-500 text-sm">Targeted tweaks for GTA V, FiveM, and RedM — process, network, and config</p>
           </div>
         </motion.div>
+
+        <TabSmartBar
+          tweakIds={ALL_FIVEM_IDS}
+          recommendedIds={FIVEM_RECOMMENDED}
+          label="FiveM"
+          context="These tweaks are applied via PowerShell and target GTA V and FiveM process scheduling, network buffers, and CitizenFX config. Run as Administrator after downloading the script."
+          tips={[
+            "Start with Recommended — High Priority + Cache Clear are the biggest wins.",
+            "Network Buffer tweak reduces packet loss on high-population RP servers.",
+            "Clearing cache resets streaming data — expect a slightly longer first join.",
+          ]}
+        />
 
         <div className="space-y-8">
           {renderSection("FiveM / GTA V Process", PROCESS_TWEAKS)}

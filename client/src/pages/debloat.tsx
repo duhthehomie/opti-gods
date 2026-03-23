@@ -1,11 +1,31 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Trash2, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { cn } from "@/lib/utils";
+
+const ALL_DEBLOAT_IDS = [
+  "DebloatCortana","DebloatOneDrive","DebloatXboxApp","DebloatXboxGameBar","DebloatXboxIdentity",
+  "DebloatBing","DebloatWeather","DebloatNews","DebloatMaps","DebloatSolitaire","DebloatMixedReality",
+  "DebloatSkype","DebloatZune","DebloatGrooveMusic","DebloatOfficeHub","DebloatFeedback",
+  "DebloatGetHelp","DebloatMSPaint3D","DebloatWindowsCamera","DebloatYourPhone","DebloatClipchamp",
+  "DebloatPowerAutomate","DebloatQuickAssist","DebloatTeamsConsumer","DebloatAlarmsAndClock",
+  "ServiceDiagTrack","ServiceWSearch","ServiceSysMain","ServiceRemoteReg","ServiceWMPNetworkSvc",
+  "ServiceFax","ServiceRetailDemo","ServiceTabletInput","ServiceMapsBroker",
+  "PrivacyTelemetry","PrivacyActivityHistory","PrivacyLocationTracking","PrivacyAdvertisingID","PrivacyDiagFeedback",
+  "Win11TeamsChat","Win11Widgets","Win11Copilot","Win11StartRecommended","Win11AdsInStart",
+  "Win11EdgeSidebar","Win11ChatIcon","Win11OneDriveBackup","Win11BingSearch","Win11Snap",
+];
+const DEBLOAT_RECOMMENDED_IDS = [
+  "DebloatCortana","DebloatOneDrive","DebloatXboxGameBar","DebloatBing","DebloatTeamsConsumer",
+  "ServiceDiagTrack","ServiceSysMain","ServiceRemoteReg","ServiceFax","ServiceRetailDemo",
+  "PrivacyTelemetry","PrivacyActivityHistory","PrivacyAdvertisingID",
+  "Win11Copilot","Win11AdsInStart","Win11BingSearch","Win11ChatIcon","Win11Widgets",
+];
 
 type InstallLikelihood = "preinstalled" | "likely" | "optional";
 
@@ -184,6 +204,18 @@ export default function Debloat() {
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-400" /> Usually present on most PCs</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-500" /> Optional / edition-specific</span>
         </motion.div>
+
+        <TabSmartBar
+          tweakIds={ALL_DEBLOAT_IDS}
+          recommendedIds={DEBLOAT_RECOMMENDED_IDS}
+          label="Debloat"
+          context="Debloat removes UWP apps and disables background services via PowerShell. Apps are uninstalled only for the current user — no system files are touched. All services can be re-enabled from Services.msc."
+          tips={[
+            "DiagTrack (Telemetry) is the #1 privacy fix — it constantly uploads usage data to Microsoft servers.",
+            "Win11: Disable Copilot, Widgets, and Bing Search for the biggest UI and RAM improvement.",
+            "SysMain (Superfetch) is fine to disable if you have an NVMe/SSD — it only helps on HDDs.",
+          ]}
+        />
 
         {/* Warning + Enable All */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08 }}

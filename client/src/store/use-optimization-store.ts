@@ -3,6 +3,8 @@ import { create } from 'zustand';
 interface OptimizationState {
   tweaks: Record<string, boolean>;
   nvidiaPreset: string;
+  systemRamGB: number | null;
+  setSystemRamGB: (gb: number) => void;
   toggleTweak: (key: string) => void;
   setTweak: (key: string, value: boolean) => void;
   setNvidiaPreset: (preset: string) => void;
@@ -212,6 +214,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
 export const useOptimizationStore = create<OptimizationState>((set) => ({
   tweaks: { ...DEFAULT_TWEAKS },
   nvidiaPreset: 'Balanced',
+  systemRamGB: null,
+
+  setSystemRamGB: (gb) => set({ systemRamGB: gb }),
 
   toggleTweak: (key) => set((state) => ({
     tweaks: { ...state.tweaks, [key]: !state.tweaks[key] }

@@ -1,11 +1,22 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Power, AlertTriangle, XCircle } from "lucide-react";
+import { Power, AlertTriangle, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
+const STARTUP_SAVINGS: Record<string, number> = {
+  su_discord: 3.2, su_spotify: 2.8, su_steam: 2.1, su_onedrive: 3.5,
+  su_teams: 4.1, su_skype: 1.8, su_zoom: 2.2, su_rtss: 0.4,
+  su_msiab: 0.3, su_nvidia: 1.9, su_ccleaner: 0.9, su_realtek: 0.5,
+  su_logitech: 1.1, su_corsair: 1.2, su_amdradeon: 1.7,
+};
+
+const ALL_STARTUP_IDS = Object.keys(STARTUP_SAVINGS);
+const RECOMMENDED_DISABLE_IDS = ["su_discord","su_spotify","su_onedrive","su_teams","su_skype","su_zoom","su_ccleaner","su_amdradeon"];
 
 const ALL_STARTUP_APPS = [
   { id: "su_discord", name: "Discord", path: "AppData\\Local\\Discord\\Update.exe", impact: "High", essential: false },
@@ -36,6 +47,9 @@ export default function StartupApps() {
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
 
   const disabledCount = ALL_STARTUP_APPS.filter(a => tweaks[a.id]).length;
+  const savedSeconds = ALL_STARTUP_IDS
+    .filter(id => tweaks[id])
+    .reduce((sum, id) => sum + (STARTUP_SAVINGS[id] || 0), 0);
 
   const handleDisableAll = () => {
     const next: Record<string, boolean> = { ...useOptimizationStore.getState().tweaks };
@@ -70,10 +84,41 @@ export default function StartupApps() {
           </div>
         </motion.div>
 
+        <TabSmartBar
+          tweakIds={ALL_STARTUP_IDS}
+          recommendedIds={RECOMMENDED_DISABLE_IDS}
+          label="Startup Apps"
+          applyLabel={`Disable ${RECOMMENDED_DISABLE_IDS.filter(id => !tweaks[id]).length} Recommended`}
+          context="Disabling startup apps prevents them from launching automatically with Windows. Your data and settings are preserved — you can still open apps manually. Essential peripheral apps (Afterburner, RTSS, Logitech) are protected."
+          tips={[
+            "Microsoft Teams and OneDrive are the biggest offenders — each adds 3–4 seconds to boot time.",
+            "Discord, Spotify, and Zoom all start hidden in the tray and use RAM even if you never open them.",
+            "MSI Afterburner and RTSS are marked ESSENTIAL — keep them if you use GPU monitoring or frame caps.",
+          ]}
+        />
+
+        {savedSeconds > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-3 p-3.5 rounded-xl bg-green-500/5 border border-green-500/15"
+          >
+            <Clock className="w-5 h-5 text-green-400 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-green-400">
+                ~{savedSeconds.toFixed(1)}s faster boot
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Estimated time saved per startup with {disabledCount} app{disabledCount !== 1 ? "s" : ""} disabled
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex items-center justify-between p-4 rounded-lg bg-zinc-900/80 border border-zinc-800 mb-6"
+          className="flex items-center justify-between p-4 rounded-lg bg-zinc-900/80 border border-zinc-800"
         >
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-zinc-500 shrink-0" />

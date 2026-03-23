@@ -1,10 +1,14 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { MonitorPlay, Check, Cpu, Layers, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","EnableHAGS","EnableMSIMode"];
+const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","EnableHAGS"];
 
 const PRESETS = [
   {
@@ -127,6 +131,18 @@ export default function Nvidia() {
             Enable All Recommended
           </Button>
         </motion.div>
+
+        <TabSmartBar
+          tweakIds={ALL_NVIDIA_IDS}
+          recommendedIds={NVIDIA_RECOMMENDED_IDS}
+          label="NVIDIA"
+          context="These tweaks modify NVIDIA driver registry keys and GPU interrupt modes. They persist across driver updates. HAGS and MSI Mode require a reboot to take effect."
+          tips={[
+            "Start with Disable Telemetry + Pre-Rendered Frames — both are safe on any NVIDIA GPU.",
+            "HAGS (Hardware Accelerated GPU Scheduling) is a big win on RTX 2000+ series cards.",
+            "MSI Mode reduces DPC latency — especially noticeable in CPU-bound games.",
+          ]}
+        />
 
         {/* Registry Tweaks Section */}
         <section>
