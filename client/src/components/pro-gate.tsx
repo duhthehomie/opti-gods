@@ -177,6 +177,10 @@ function ProPaymentDialog({
                     <span className="text-[10px] text-zinc-600 uppercase tracking-wider">no code? pay below</span>
                     <div className="flex-1 h-px bg-white/5" />
                   </div>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <p className="text-[11px] text-emerald-400 font-medium">Code delivers to your email within <strong>5 minutes or less</strong> after payment</p>
+                  </div>
 
                   <div className="grid gap-2">
                     {CASHAPP_TAG && (
@@ -240,7 +244,7 @@ function ProPaymentDialog({
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
-                        After payment, send your username and payment screenshot — you'll receive your access code within minutes.
+                        After payment, use the <strong className="text-zinc-400">"Get code via email"</strong> form below — your code arrives in <strong className="text-zinc-300">5 minutes or less</strong>.
                       </p>
                     </div>
                   )}
@@ -248,7 +252,7 @@ function ProPaymentDialog({
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
-                        Card payment unlocks instantly. CashApp/PayPal require a quick DM with your payment screenshot.
+                        Card payment unlocks instantly. CashApp/PayPal: fill the email form below — code arrives in <strong className="text-zinc-300">5 minutes or less</strong>.
                       </p>
                     </div>
                   )}
@@ -275,7 +279,7 @@ function ProPaymentDialog({
                             <div>
                               <p className="text-xs font-bold text-emerald-300">Request submitted!</p>
                               <p className="text-[10px] text-emerald-700 mt-0.5">
-                                We'll review your payment and email your code to <strong>{emailAddr}</strong>. Usually within a few hours.
+                                Check your inbox at <strong>{emailAddr}</strong> — your code arrives in 5 minutes or less.
                               </p>
                             </div>
                           </div>

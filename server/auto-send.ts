@@ -8,7 +8,7 @@ export const autoSendState = {
   totalAutoSent: 0,
   nextRunAt: null as Date | null,
   isRunning: false,
-  thresholdMinutes: 30,
+  thresholdMinutes: 5,
   intervalMinutes: 2,
 };
 

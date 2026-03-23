@@ -15,6 +15,8 @@ import {
   Search,
   Flame,
   RotateCcw,
+  Wrench,
+  HardDrive,
 } from "lucide-react";
 import {
   Sidebar,
@@ -44,6 +46,8 @@ const navItems = [
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
   { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
+  { title: "WinUtil + OO ShutUp", url: "/wintitus", icon: Wrench, winTitusAccent: true },
+  { title: "Custom OS", url: "/custom-os", icon: HardDrive, proAccent: true },
   { title: "Fixes & Restore", url: "/fixes", icon: RotateCcw, fixAccent: true },
   { title: "Help & Discord", url: "/help", icon: MessageCircle, accent: true },
 ];
@@ -104,6 +108,8 @@ export function AppSidebar() {
                 const isActive = location === item.url;
                 const isAccent = (item as any).accent;
                 const isFixAccent = (item as any).fixAccent;
+                const isWinTitusAccent = (item as any).winTitusAccent;
+                const isProAccent = (item as any).proAccent;
                 const isLast = idx === navItems.length - 1;
                 return (
                   <SidebarMenuItem key={item.title} className={isLast ? "mt-1 pt-1 border-t border-white/5" : ""}>
@@ -118,6 +124,10 @@ export function AppSidebar() {
                           ? "text-[#5865F2] hover:text-[#818cf8] hover:bg-[#5865F2]/10"
                           : isFixAccent
                           ? "text-cyan-500 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          : isWinTitusAccent
+                          ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
+                          : isProAccent
+                          ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
                           : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
                       )}
                     >
@@ -128,8 +138,18 @@ export function AppSidebar() {
                         {isActive && (
                           <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[22px] bg-red-500 rounded-r-full" />
                         )}
-                        <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-red-400" : isAccent ? "text-[#5865F2]" : isFixAccent ? "text-cyan-500" : "")} />
+                        <item.icon className={cn(
+                          "w-4 h-4 shrink-0",
+                          isActive ? "text-red-400" :
+                          isAccent ? "text-[#5865F2]" :
+                          isFixAccent ? "text-cyan-500" :
+                          isWinTitusAccent ? "text-orange-400" :
+                          isProAccent ? "text-violet-400" : ""
+                        )} />
                         <span className="text-sm">{item.title}</span>
+                        {isProAccent && !isPro && (
+                          <span className="ml-auto text-[8px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 px-1 py-0.5 rounded uppercase tracking-wider">PRO</span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

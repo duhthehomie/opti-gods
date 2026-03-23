@@ -211,6 +211,10 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   NvidiaShaderCache: `If (!(Test-Path 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore')) { New-Item 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak' -Name 'Ordinal' -Value 1 -Type DWord -EA SilentlyContinue; $dxPath = 'HKLM:\\SOFTWARE\\Microsoft\\DirectX'; Set-ItemProperty -Path $dxPath -Name 'ShaderCache' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[NVIDIA] Shader pre-caching enabled via DirectX registry + NGXCore hint" -ForegroundColor Green`,
   NvidiaOptimizeLatency: `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item $gamePath -Force | Out-Null }; Set-ItemProperty $gamePath 'Scheduling Category' 'High' -Type String; Set-ItemProperty $gamePath 'SFIO Priority' 'High' -Type String; Set-ItemProperty $gamePath 'GPU Priority' 8 -Type DWord; Set-ItemProperty $gamePath 'MaximumPreRenderedFrames' 1 -Type DWord; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2; Write-Host "[NVIDIA] Latency optimized: High scheduling, HAGS enabled, PreRendered=1" -ForegroundColor Green`,
   NvidiaDisableOverlay: `Get-AppxPackage *XboxGamingOverlay* | Remove-AppxPackage -EA SilentlyContinue; Stop-Process -Name "nvcontainer" -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NVControlPanel2\\Client' -Name 'OptInOrOutPreference' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[NVIDIA] Overlay and container process hints suppressed" -ForegroundColor Green`,
+  NvidiaLowLatency: `$gamesPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamesPath)) { New-Item -Path $gamesPath -Force | Out-Null }; Set-ItemProperty $gamesPath 'GPU Priority' 8 -Type DWord -Force; Set-ItemProperty $gamesPath 'Priority' 6 -Type DWord -Force; Set-ItemProperty $gamesPath 'Scheduling Category' 'High' -Type String -Force; Set-ItemProperty $gamesPath 'SFIO Priority' 'High' -Type String -Force; Set-ItemProperty $gamesPath 'MaximumPreRenderedFrames' 1 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 10 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Low Latency Mode: GPU priority 8, Scheduling=High, PreRendered=1, TDR extended" -ForegroundColor Green`,
+  NvidiaThreadedOpt: `$nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'Threaded_Optimization_Override' 1 -Type DWord -Force -EA SilentlyContinue; netsh int tcp set global dca=enabled 2>$null; $dxKey = 'HKLM:\\SOFTWARE\\Microsoft\\DirectX'; Set-ItemProperty $dxKey 'ThreadedOptimization' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Threaded Optimization enabled via NvTweak registry and DirectX DCA" -ForegroundColor Green`,
+  NvidiaForceVSyncOff: `$gdrv = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; Remove-ItemProperty $gdrv 'VerticalSyncOverride' -EA SilentlyContinue; Remove-ItemProperty $gdrv 'TripleBufferingOverride' -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak\\Policies' -Name 'VSync' -Value 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] VSync override cleared — force VSync Off in NVCP or in-game for effect. Triple buffering key removed." -ForegroundColor Green`,
+  NvidiaPowerMizer: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $found = $false; 0,1,2,3 | ForEach-Object { $k = "$gpuClass\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') { Set-ItemProperty $k 'PerfLevelSrc' 0x2222 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $k 'PowerMizerEnable' 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $k 'PowerMizerLevel' 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $k 'PowerMizerLevelAC' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] PowerMizer set to Max Performance on $k" -ForegroundColor Green; $found = $true } }; If (-not $found) { Write-Host "[NVIDIA] PowerMizer: NVIDIA GPU class key not found at 0000-0003 — apply via NVCP manually" -ForegroundColor Yellow }`,
   // AMD Specific
   AmdDisableULPS: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -ErrorAction SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'EnableUlps' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'EnableUlps_NA' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] ULPS disabled on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc)" -ForegroundColor Green }; Write-Host "[AMD] Ultra Low Power State disabled — prevents GPU downclocking between frames" -ForegroundColor Green`,
   AmdDisableChill: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'PP_GFXCoreClockIdleOverride' -Value 0 -Type DWord -EA SilentlyContinue }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'UseChill' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Radeon Chill disabled — frame rate will no longer throttle when mouse is idle" -ForegroundColor Green`,
@@ -228,6 +232,29 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   AmdAntiLag: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLag' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Anti-Lag enabled — reduces render queue depth to minimize input lag (similar to NVIDIA ULLS)" -ForegroundColor Green`,
   AmdDisableStartupApps: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null; Stop-Service 'AMDExternalEvents' -Force -EA SilentlyContinue; Stop-Process -Name 'RadeonSoftware' -Force -EA SilentlyContinue; Write-Host "[AMD] Radeon Software removed from startup — relaunch manually when needed for driver updates" -ForegroundColor Green`,
   AmdTDRTweak: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 60 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] TDR level=3, delay=60s — prevents false GPU crash/recovery events during heavy load" -ForegroundColor Green`,
+  // ── WinUtil / ChrisTitus / OO ShutUp10++ ────────────────────────────────────
+  WinTitusConsumerFeatures: `$path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent'; If (!(Test-Path $path)) { New-Item -Path $path -Force | Out-Null }; Set-ItemProperty -Path $path -Name 'DisableWindowsConsumerFeatures' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $path -Name 'DisableSoftLanding' -Value 1 -Type DWord -Force; Write-Host "[OK] Consumer features disabled — no more suggested apps or sponsored content in Start" -ForegroundColor Green`,
+  WinTitusHibernation: `powercfg -h off; Write-Host "[OK] Hibernation disabled — hiberfil.sys removed, frees drive space and speeds up shutdown" -ForegroundColor Green`,
+  WinTitusPosh7Telemetry: `[Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine'); [Environment]::SetEnvironmentVariable('DOTNET_CLI_TELEMETRY_OPTOUT', '1', 'Machine'); Write-Host "[OK] PowerShell 7 and .NET CLI telemetry opt-out set in Machine environment" -ForegroundColor Green`,
+  WinTitusWPBT: `$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager'; Set-ItemProperty -Path $path -Name 'DisableWpbtExecution' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Windows Platform Binary Table (WPBT) execution disabled" -ForegroundColor Green`,
+  WinTitusDiskCleanup: `@('Temporary Files','Recycle Bin','Thumbnail Cache','Windows Error Reporting Files','Downloaded Program Files','Temporary Internet Files') | ForEach-Object { $k = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\$_"; If (Test-Path $k) { Set-ItemProperty $k 'StateFlags0001' 2 -Type DWord -EA SilentlyContinue } }; Start-Process -FilePath cleanmgr.exe -ArgumentList '/sagerun:1' -NoNewWindow; Write-Host "[OK] Disk Cleanup launched — temp files, recycle bin, thumbnails queued" -ForegroundColor Green`,
+  WinTitusServicesManual: `$svcs = @('DiagTrack','DusmSvc','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','WbioSrvc','XblAuthManager','XblGameSave','XboxNetApiSvc','SharedAccess','SSDPSRV','upnphost','W32Time','WinRM','RemoteRegistry','Fax','wercplsupport'); foreach ($s in $svcs) { Set-Service -Name $s -StartupType Manual -EA SilentlyContinue }; Write-Host "[OK] Non-essential services set to Manual startup (19 services)" -ForegroundColor Green`,
+  WinTitusAdobeBlock: `$hosts = "$env:SystemRoot\\System32\\drivers\\etc\\hosts"; $entries = @('0.0.0.0 activate.adobe.com','0.0.0.0 practivate.adobe.com','0.0.0.0 ereg.adobe.com','0.0.0.0 activate.wip3.adobe.com','0.0.0.0 wip3.adobe.com','0.0.0.0 3dns.adobe.com','0.0.0.0 adobe-dns.adobe.com'); $content = Get-Content $hosts -Raw -EA SilentlyContinue; foreach ($e in $entries) { $domain = $e.Split(' ')[1]; if ($content -notmatch [regex]::Escape($domain)) { Add-Content $hosts "\`n$e" } }; Write-Host "[OK] Adobe activation servers blocked in hosts file (prevents phoning home)" -ForegroundColor Green`,
+  WinTitusRazerBlock: `$path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate'; If (!(Test-Path $path)) { New-Item -Path $path -Force | Out-Null }; Set-ItemProperty -Path $path -Name 'ExcludeWUDriversInQualityUpdate' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Driver auto-install via Windows Update blocked (stops Razer injecting its driver)" -ForegroundColor Green`,
+  WinTitusBgApps: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -Name 'GlobalUserDisabled' -Value 1 -Type DWord -Force; Get-ChildItem 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -EA SilentlyContinue | ForEach-Object { Set-ItemProperty -Path $_.PsPath -Name 'Disabled' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy' -Name 'LetAppsRunInBackground' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Background apps globally disabled" -ForegroundColor Green`,
+  WinTitusFullscreenOpt: `$path = 'HKCU:\\System\\GameConfigStore'; Set-ItemProperty $path 'GameDVR_FSEBehavior' 2 -Type DWord -Force; Set-ItemProperty $path 'GameDVR_DSEBehavior' 2 -Type DWord -Force; Set-ItemProperty $path 'GameDVR_HonorUserFSEBehaviorMode' 1 -Type DWord -Force; Write-Host "[OK] Fullscreen Optimizations disabled globally — use borderless window instead for best results" -ForegroundColor Green`,
+  WinTitusNotifTray: `$path = 'HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer'; If (!(Test-Path $path)) { New-Item $path -Force | Out-Null }; Set-ItemProperty $path 'DisableNotificationCenter' 1 -Type DWord -Force; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PushNotifications' -Name 'ToastEnabled' -Value 0 -Type DWord -Force; Write-Host "[OK] Notification tray / Action Center disabled" -ForegroundColor Green`,
+  WinTitusStorageSense: `$p = 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p '01' 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Storage Sense disabled — Windows won't auto-delete files without permission" -ForegroundColor Green`,
+  WinTitusTeredo: `netsh interface teredo set state disabled 2>$null; $p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (Test-Path $p) { Set-ItemProperty $p 'DisabledComponents' 8 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[OK] Teredo tunneling disabled — reduces network overhead on native IPv4 connections" -ForegroundColor Green`,
+  WinTitusEdgeDebloat: `$ep = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge'; If (!(Test-Path $ep)) { New-Item $ep -Force | Out-Null }; @{'BackgroundModeEnabled'=0;'EdgeCollectionsEnabled'=0;'HubsSidebarEnabled'=0;'PromotionalTabsEnabled'=0;'UserFeedbackAllowed'=0;'SpotlightExperiencesAndRecommendationsEnabled'=0;'EdgeShoppingAssistantEnabled'=0;'ShowMicrosoftRewards'=0}.GetEnumerator() | ForEach-Object { Set-ItemProperty $ep $_.Key $_.Value -Type DWord -Force -EA SilentlyContinue }; Write-Host "[OK] Microsoft Edge debloated — background mode, shopping assistant, rewards, and sidebars disabled" -ForegroundColor Green`,
+  WinTitusIPv4Prefer: `$p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p 'DisabledComponents' 0x20 -Type DWord -Force; Write-Host "[OK] IPv4 preferred over IPv6 (flag 0x20 — IPv6 still available, IPv4 wins by default)" -ForegroundColor Green`,
+  WinTitusEdgeRemove: `Write-Host "[ACTION REQUIRED] Install Brave browser FIRST: https://brave.com/download" -ForegroundColor Cyan; Write-Host "[INFO] Then run this to force Edge uninstall..." -ForegroundColor Yellow; \$edgeSetup = Get-ChildItem "\${env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application" -Recurse -Filter "setup.exe" -EA SilentlyContinue | Select-Object -First 1; If (\$edgeSetup) { & \$edgeSetup.FullName --uninstall --system-level --verbose-logging --force-uninstall; Write-Host "[OK] Edge uninstall triggered" -ForegroundColor Green } Else { Write-Host "[SKIP] Edge setup.exe not found — may already be removed or path changed" -ForegroundColor Yellow }`,
+  WinTitusXboxComponents: `Write-Host "[WARNING] This removes Xbox Gaming Services — skip if you use Xbox app or Game Pass" -ForegroundColor Yellow; @('Microsoft.XboxApp','Microsoft.GamingServices','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI') | ForEach-Object { Get-AppxPackage -AllUsers $_ -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue }; Write-Host "[OK] Xbox and Gaming Services components removed" -ForegroundColor Green`,
+  WinTitusClassicMenu: `$p = 'HKCU:\\SOFTWARE\\CLASSES\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p '(Default)' '' -Type String -Force; Stop-Process -Name explorer -Force -EA SilentlyContinue; Start-Sleep 1; Start-Process explorer; Write-Host "[OK] Classic right-click menu restored (Win11) — Explorer restarted" -ForegroundColor Green`,
+  WinTitusDisplayPerf: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x10,0x00,0x00,0x00)) -Type Binary -Force; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Display set for best performance — visual effects stripped to minimum" -ForegroundColor Green`,
+  WinTitusShowExtensions: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'HideFileExt' -Value 0 -Type DWord -Force; Write-Host "[OK] File extensions shown in Explorer" -ForegroundColor Green`,
+  WinTitusShowHidden: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'Hidden' -Value 1 -Type DWord -Force; Write-Host "[OK] Hidden files and folders shown in Explorer" -ForegroundColor Green`,
+  OOShutupPrivacy: `$s = @(@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection','AllowTelemetry',0),@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection','AllowTelemetry',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo','Enabled',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo','DisabledByGroupPolicy',1),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','EnableActivityFeed',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','PublishUserActivities',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search','BingSearchEnabled',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search','CortanaConsent',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy','LetAppsRunInBackground',2),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}','Value','Deny'),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{52079E78-A92B-413F-B213-E8FE35712E72}','Value','Deny'),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{2EEF81BE-33FA-4800-9670-1CD474972C3F}','Value','Deny')); foreach ($r in $s) { $path=$r[0];$name=$r[1];$val=$r[2]; If (!(Test-Path $path)) { New-Item $path -Force | Out-Null }; If ($val -is [string]) { Set-ItemProperty $path $name $val -Type String -Force -EA SilentlyContinue } Else { Set-ItemProperty $path $name $val -Type DWord -Force -EA SilentlyContinue } }; Write-Host "[OK] OO ShutUp10++ recommended privacy settings applied (12 registry changes)" -ForegroundColor Green`,
 };
 
 // ── RESTORE / UNDO COMMANDS ─────────────────────────────────────────────────
@@ -346,6 +373,42 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; If (Test-Path $key) { Remove-Item $key -Recurse -Force -EA SilentlyContinue }; Write-Host "[OK] FiveM.exe IFEO PerfOptions removed" -ForegroundColor Green`,
       `$cfg = "$env:LocalAppData\\FiveM\\FiveM.app\\CitizenFX.ini"; If (Test-Path $cfg) { $c = Get-Content $cfg; ($c -replace 'DisablePeerToPeer=1','') | Set-Content $cfg; ($c -replace 'StreamingDistance=\\d+','') | Set-Content $cfg; Write-Host "[OK] FiveM CitizenFX.ini P2P and StreamingDistance entries removed" -ForegroundColor Green }`,
       `@('NvTelemetryContainer') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] NvTelemetryContainer re-enabled" -ForegroundColor Green`,
+    ],
+  },
+  bcdedit: {
+    label: "BCD Boot Config (bcdedit Fixes)",
+    commands: [
+      `Write-Host "[RESTORE] BCD Boot Config..." -ForegroundColor Cyan`,
+      `bcdedit /deletevalue useplatformtick 2>$null; Write-Host "[OK] useplatformtick removed — back to Windows default timer" -ForegroundColor Green`,
+      `bcdedit /deletevalue uselegacyapicmode 2>$null; Write-Host "[OK] uselegacyapicmode removed" -ForegroundColor Green`,
+      `bcdedit /deletevalue disabledynamictick 2>$null; Write-Host "[OK] disabledynamictick removed — dynamic tick restored" -ForegroundColor Green`,
+      `bcdedit /set hypervisorlaunchtype Auto 2>$null; Write-Host "[OK] hypervisorlaunchtype set to Auto (safe default)" -ForegroundColor Green`,
+      `bcdedit /set nx OptIn 2>$null; Write-Host "[OK] nx=OptIn — Data Execution Prevention re-enabled" -ForegroundColor Green`,
+      `Write-Host "[DONE] BCD boot config restored — restart required" -ForegroundColor Green`,
+    ],
+  },
+  "gpu-usage": {
+    label: "High GPU Usage / Driver Issues",
+    commands: [
+      `Write-Host "[RESTORE] GPU Usage and Driver Settings..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] HAGS (HwSchMode) disabled — set to 1 (Windows default off)" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] TdrLevel reset to 3 (Windows default)" -ForegroundColor Green`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] TdrDelay reset to 2 seconds (default)" -ForegroundColor Green`,
+      `Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'PagingAllocation' -EA SilentlyContinue; Write-Host "[OK] GPU PagingAllocation key removed — default GPU paging restored" -ForegroundColor Green`,
+      `Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'Scheduler' -EA SilentlyContinue; Write-Host "[OK] GraphicsDrivers Scheduler hint cleared" -ForegroundColor Green`,
+      `@('NvTelemetryContainer','NvDisplayContainerLS') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] NVIDIA container services re-enabled" -ForegroundColor Green`,
+      `Write-Host "[TIP] If GPU usage is still high at idle, open Task Manager and check for hardware-accelerated GPU scheduling apps" -ForegroundColor Yellow`,
+    ],
+  },
+  "time-sync": {
+    label: "Windows Time & Clock Sync",
+    commands: [
+      `Write-Host "[RESTORE] Windows Time & Clock Sync..." -ForegroundColor Cyan`,
+      `Set-Service -Name 'W32Time' -StartupType Manual -EA SilentlyContinue; Start-Service -Name 'W32Time' -EA SilentlyContinue; Write-Host "[OK] Windows Time service re-enabled and started" -ForegroundColor Green`,
+      `w32tm /config /manualpeerlist:"time.windows.com" /syncfromflags:manual /reliable:YES /update 2>$null; Write-Host "[OK] NTP server set to time.windows.com" -ForegroundColor Green`,
+      `w32tm /resync /force 2>$null; Write-Host "[OK] Time sync forced — clock should be accurate now" -ForegroundColor Green`,
+      `Net start W32Time 2>$null; Write-Host "[OK] W32Time service confirmed running" -ForegroundColor Green`,
+      `Write-Host "[DONE] If your clock was wrong after WinUtil tweaks, it should now be correct." -ForegroundColor Green`,
     ],
   },
 };
@@ -607,6 +670,49 @@ export async function registerRoutes(
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
     res.send(scriptContent);
+  });
+
+  // .bat download — double-click to run, no right-click needed
+  app.post('/api/script/download-bat', (req, res) => {
+    const tweaks: Record<string, boolean> = req.body?.tweaks || {};
+    const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
+    const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
+    // Escape the PS1 content for embedding in a .bat here-string
+    const escapedPs1 = ps1Content.replace(/%/g, '%%');
+    const batContent = `@echo off
+title Opti Gods by leaq - Running Optimizations
+echo.
+echo  ===============================================
+echo   OPTI GODS by leaq - Applying Optimizations
+echo  ===============================================
+echo.
+echo  Running as: %USERNAME%
+echo  Please wait while your PC is being optimized...
+echo.
+
+:: Write PowerShell script to temp
+set "TMPPS1=%TEMP%\\OptiGods-by-leaq.ps1"
+(
+echo ${escapedPs1.split('\n').join('\necho ')}
+) > "%TMPPS1%"
+
+:: Run with elevated PowerShell — bypasses execution policy
+PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"
+
+:: Clean up
+del "%TMPPS1%" 2>nul
+
+echo.
+echo  ===============================================
+echo   Done! Restart your PC for all changes to apply
+echo  ===============================================
+echo.
+pause
+`;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
+    res.send(batContent);
   });
 
   // Game detection scanner script download

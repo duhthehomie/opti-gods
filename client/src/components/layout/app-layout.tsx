@@ -14,6 +14,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [command, setCommand] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingBat, setDownloadingBat] = useState(false);
 
   const { tweaks, nvidiaPreset } = useOptimizationStore();
   const generateScript = useGenerateScript();
@@ -30,6 +31,41 @@ export function AppLayout({ children }: { children: ReactNode }) {
         toast({ title: "Error Generating Script", description: error.message, variant: "destructive" });
       }
     });
+  };
+
+  const handleDownloadBat = async () => {
+    const enabledCount = Object.values(tweaks).filter(Boolean).length;
+    if (enabledCount === 0) {
+      toast({ title: "No tweaks selected", description: "Enable at least one optimization before downloading.", variant: "destructive" });
+      return;
+    }
+    setDownloadingBat(true);
+    try {
+      const res = await fetch("/api/script/download-bat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweaks, nvidiaPreset }),
+      });
+      if (!res.ok) throw new Error("Failed to generate .bat");
+      const text = await res.text();
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods-by-leaq.bat";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: `Downloaded OptiGods-by-leaq.bat (${enabledCount} tweaks)`,
+        description: "Double-click the .bat file — no right-click required. Runs as Administrator automatically.",
+      });
+    } catch (e) {
+      toast({ title: "Download failed", description: String(e), variant: "destructive" });
+    } finally {
+      setDownloadingBat(false);
+    }
   };
 
   const handleDownload = async () => {
@@ -92,6 +128,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* .BAT Download Button — PRO GATED (double-click friendly) */}
+              <ProGate className="hidden sm:block">
+                <Button
+                  data-testid="button-download-bat"
+                  onClick={handleDownloadBat}
+                  disabled={downloadingBat}
+                  variant="outline"
+                  className="border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-400 hover:text-amber-300 font-display tracking-wide px-4"
+                >
+                  {downloadingBat ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  DOWNLOAD .BAT
+                </Button>
+              </ProGate>
+
               {/* Direct Download Button — PRO GATED */}
               <ProGate className="hidden sm:block">
                 <Button

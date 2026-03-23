@@ -8,8 +8,8 @@ import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, Che
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","EnableHAGS","EnableMSIMode"];
-const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","EnableHAGS"];
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode"];
+const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS"];
 
 const PRESETS = [
   {
@@ -73,6 +73,32 @@ const NVIDIA_TWEAKS = [
     impact: "MED" as const,
   },
   {
+    id: "NvidiaLowLatency",
+    title: "Low Latency Mode (Pipeline Minimizer)",
+    desc: "Sets GPU priority to 8, Scheduling Category to High, SFIO High, and PreRendered frames to 1 — mirrors NVCP 'Ultra Low Latency' mode via registry. Stacks with Pre-Rendered Frames toggle.",
+    badge: "NEW",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaThreadedOpt",
+    title: "Threaded Optimization Override",
+    desc: "Enables NVIDIA Threaded Optimization via NvTweak registry and DirectX DCA — allows the driver to use multiple CPU threads for draw call submission, improving CPU-bound game performance.",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaForceVSyncOff",
+    title: "Force VSync Off (Registry Hint)",
+    desc: "Clears VSync and triple buffering override keys in the GraphicsDrivers registry and writes VSync=0 to NVIDIA NVTweak policy — removes any forced-on VSync that causes input lag.",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaPowerMizer",
+    title: "PowerMizer: Prefer Maximum Performance",
+    desc: "Scans NVIDIA GPU class keys (000x) and sets PowerMizerLevel=1, PowerMizerLevelAC=1, PerfLevelSrc=0x2222 — forces GPU to run at max clock speeds instead of boosting on demand.",
+    badge: "RTX / GTX",
+    impact: "HIGH" as const,
+  },
+  {
     id: "EnableHAGS",
     title: "Enable HAGS (Hardware Accelerated GPU Scheduling)",
     desc: "Offloads GPU VRAM scheduling to dedicated hardware controller — reduces frame-time variance, especially at high FPS. Requires RTX 2000+ or RX 6000+.",
@@ -101,7 +127,7 @@ export default function Nvidia() {
   const hw = useHardwareInfo();
 
   const enableAllNvidia = () => {
-    ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","EnableHAGS","EnableMSIMode","NvidiaShaderCache"].forEach(
+    ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaShaderCache"].forEach(
       (k) => setTweak(k, true)
     );
   };

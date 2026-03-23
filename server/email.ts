@@ -19,39 +19,63 @@ export async function sendProCode(toEmail: string, code: string, siteUrl: string
   if (!transporter) throw new Error("Email not configured — set EMAIL_USER and EMAIL_PASS");
 
   await transporter.sendMail({
-    from: `"Opti Gods by leaq" <${process.env.EMAIL_USER}>`,
+    from: `"leaq | Opti Gods" <${process.env.EMAIL_USER}>`,
     to: toEmail,
-    subject: "🔑 Your Opti Gods Pro Access Code",
+    subject: "your opti gods pro code is here",
     html: `
 <!DOCTYPE html>
 <html>
-<body style="background:#0a0a0a;color:#fff;font-family:monospace;margin:0;padding:40px 20px;">
-  <div style="max-width:500px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;">
-    <div style="background:#dc2626;padding:24px 28px;">
-      <h1 style="margin:0;font-size:20px;font-weight:900;letter-spacing:2px;color:#fff;">OPTI GODS <span style="opacity:0.8">by leaq</span></h1>
-      <p style="margin:4px 0 0;font-size:11px;opacity:0.7;letter-spacing:1px;text-transform:uppercase;">Pro Access Code</p>
+<body style="margin:0;padding:0;background:#0c0c0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:480px;margin:40px auto;padding:20px;">
+
+    <p style="color:#a1a1aa;font-size:14px;line-height:1.7;margin:0 0 24px;">
+      hey, thanks for grabbing opti gods 🙏<br>
+      here's your lifetime pro access code:
+    </p>
+
+    <div style="background:#111;border:1px solid #222;border-left:3px solid #dc2626;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
+      <p style="margin:0 0 4px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:2px;">your code</p>
+      <p style="margin:0;font-size:28px;font-weight:900;color:#ef4444;letter-spacing:6px;font-family:'Courier New',monospace;">${code}</p>
     </div>
-    <div style="padding:28px;">
-      <p style="color:#a1a1aa;font-size:13px;margin:0 0 20px;">Thanks for your purchase! Here is your lifetime Pro access code:</p>
-      <div style="background:#000;border:2px solid #dc2626;border-radius:8px;padding:20px;text-align:center;margin:0 0 24px;">
-        <p style="margin:0 0 6px;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:2px;">Your Code</p>
-        <p style="margin:0;font-size:26px;font-weight:900;color:#ef4444;letter-spacing:4px;">${code}</p>
-      </div>
-      <p style="color:#a1a1aa;font-size:13px;margin:0 0 12px;"><strong style="color:#fff;">How to redeem:</strong></p>
-      <ol style="color:#a1a1aa;font-size:13px;padding-left:20px;margin:0 0 24px;">
-        <li style="margin-bottom:8px;">Open <a href="${siteUrl}" style="color:#ef4444;">${siteUrl}</a></li>
-        <li style="margin-bottom:8px;">Click <strong style="color:#fff;">Unlock Pro — $25 Lifetime</strong></li>
-        <li style="margin-bottom:8px;">Select <strong style="color:#fff;">I Have an Access Code</strong></li>
-        <li>Enter the code above and click <strong style="color:#fff;">Activate</strong></li>
-      </ol>
-      <p style="color:#52525b;font-size:11px;border-top:1px solid #1f1f1f;padding-top:16px;margin:0;">
-        This code grants lifetime Pro access on any device. Keep it safe — each code can only be used once.<br>
-        Need help? Join our Discord: <a href="https://discord.gg/C8WrQknN9k" style="color:#5865f2;">discord.gg/C8WrQknN9k</a>
+
+    <p style="color:#a1a1aa;font-size:14px;line-height:1.7;margin:0 0 8px;"><strong style="color:#e4e4e7;">how to use it:</strong></p>
+    <p style="color:#71717a;font-size:13px;line-height:1.9;margin:0 0 24px;">
+      1. go to <a href="${siteUrl}" style="color:#ef4444;text-decoration:none;">${siteUrl}</a><br>
+      2. click <strong style="color:#e4e4e7;">Unlock Pro — $25 Lifetime</strong><br>
+      3. click <strong style="color:#e4e4e7;">I Have an Access Code</strong><br>
+      4. paste the code above and hit <strong style="color:#e4e4e7;">Activate</strong>
+    </p>
+
+    <p style="color:#71717a;font-size:13px;line-height:1.7;margin:0 0 24px;">
+      need help or have questions? drop in the discord and i'll sort you out:<br>
+      <a href="https://discord.gg/C8WrQknN9k" style="color:#5865f2;text-decoration:none;">discord.gg/C8WrQknN9k</a>
+    </p>
+
+    <div style="border-top:1px solid #1c1c1c;padding-top:16px;margin-top:8px;">
+      <p style="color:#3f3f46;font-size:11px;margin:0;line-height:1.6;">
+        — leaq<br>
+        <span style="color:#27272a;">opti gods · one-time payment · lifetime access · each code is single-use, keep it safe</span>
       </p>
     </div>
+
   </div>
 </body>
 </html>
     `,
+    text: `
+hey, thanks for grabbing opti gods!
+
+your lifetime pro code: ${code}
+
+how to use it:
+1. go to ${siteUrl}
+2. click "Unlock Pro — $25 Lifetime"
+3. click "I Have an Access Code"
+4. paste the code and hit Activate
+
+need help? join the discord: discord.gg/C8WrQknN9k
+
+— leaq
+    `.trim(),
   });
 }

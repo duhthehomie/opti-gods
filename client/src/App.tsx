@@ -23,6 +23,8 @@ import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
 import Help from "@/pages/help";
 import Fixes from "@/pages/fixes";
+import WinTitus from "@/pages/wintitus";
+import CustomOS from "@/pages/custom-os";
 
 function VisitTracker() {
   useEffect(() => {
@@ -87,6 +89,8 @@ function Router() {
       <Route path="/payment/cancel" component={PaymentCancel} />
       <Route path="/admin" component={Admin} />
       <Route path="/fixes" component={Fixes} />
+      <Route path="/wintitus" component={WinTitus} />
+      <Route path="/custom-os" component={CustomOS} />
       <Route path="/help" component={Help} />
       <Route component={NotFound} />
     </Switch>
