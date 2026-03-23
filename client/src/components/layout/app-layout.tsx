@@ -72,6 +72,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const osLabel = osInfo.loading ? "DETECTING..." : osInfo.os.toUpperCase().replace(/ /g, "_");
+  const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const statusLabel = enabledCount === 0 ? "READY" : `${enabledCount}_TWEAKS_SELECTED`;
 
   return (
     <SidebarProvider>
@@ -85,7 +87,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <SidebarTrigger className="text-zinc-400 hover:text-white" />
               <div className="h-4 w-px bg-white/10 hidden md:block" />
               <span className="text-xs font-mono text-zinc-500 hidden md:block">
-                SYSTEM: {osLabel} | STATUS: UNOPTIMIZED
+                SYSTEM: {osLabel} | STATUS: <span className={enabledCount > 0 ? "text-red-400" : "text-zinc-500"}>{statusLabel}</span>
               </span>
             </div>
 

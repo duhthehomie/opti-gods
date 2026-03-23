@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -15,6 +16,25 @@ import Debloat from "@/pages/debloat";
 import Memory from "@/pages/memory";
 import Fortnite from "@/pages/fortnite";
 import GameDetection from "@/pages/game-detection";
+
+const PRO_KEY = "optigods_pro_v1";
+
+function FriendUnlockHandler() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const unlockParam = params.get("unlock");
+    const freeKey = import.meta.env.VITE_FREE_KEY;
+
+    if (unlockParam && freeKey && unlockParam === freeKey) {
+      localStorage.setItem(PRO_KEY, "true");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("unlock");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  return null;
+}
 
 function Router() {
   return (
@@ -38,6 +58,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <FriendUnlockHandler />
         <Toaster />
         <Router />
       </TooltipProvider>
