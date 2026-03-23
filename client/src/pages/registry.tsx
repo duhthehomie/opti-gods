@@ -37,6 +37,7 @@ interface TweakDef {
   badge?: string;
   impact?: Impact;
   recommended?: boolean;
+  warning?: string;
 }
 
 interface SectionProps {
@@ -83,6 +84,7 @@ function Section({ heading, tweaks, tweakState, onSet, showRecommended = true }:
             description={item.desc}
             badge={item.badge}
             impact={item.impact}
+            warning={item.warning}
             checked={tweakState[item.id] || false}
             onCheckedChange={(v) => onSet(item.id, v)}
             delay={i + 1}
@@ -123,11 +125,11 @@ export default function Registry() {
 
   const MEMORY_TWEAKS: TweakDef[] = [
     { id: "OptimizeRAMUsage", title: "Flush RAM Standby List (Aggressive Trim)", desc: "Frees cached standby memory more frequently to give games priority access to physical RAM.", impact: "MED", badge: "RECOMMENDED", recommended: true },
-    { id: "DisableMemoryCompression", title: "Disable Memory Compression", desc: "Stops CPU-heavy RAM compression — beneficial on 16GB+ systems.", badge: "16GB+ RAM", impact: "MED", recommended: true },
-    { id: "DisablePrefetch", title: "Disable Superfetch / Prefetch", desc: "Reduces background disk usage — recommended for NVMe/SSD. Harmful on HDDs.", impact: "MED" },
-    { id: "EnableLargeSystemCache", title: "Enable Large System Cache", desc: "Forces kernel to use large memory pages for file caching — better disk I/O throughput.", impact: "LOW" },
+    { id: "DisableMemoryCompression", title: "Disable Memory Compression", desc: "Stops CPU-heavy RAM compression — beneficial on 16GB+ systems.", badge: "16GB+ RAM", impact: "MED", recommended: true, warning: "Memory compression helps Windows fit more data into limited RAM. On systems with 8 GB or less, disabling it can cause games and apps to run out of physical memory faster, leading to freezes or crashes. Only enable this if your PC has 16 GB or more RAM." },
+    { id: "DisablePrefetch", title: "Disable Superfetch / Prefetch", desc: "Reduces background disk usage — recommended for NVMe/SSD. Harmful on HDDs.", impact: "MED", warning: "On systems with a traditional hard drive (HDD), disabling Prefetch significantly slows down app and game launch times. Only enable this if your OS and games are installed on an SSD or NVMe drive." },
+    { id: "EnableLargeSystemCache", title: "Enable Large System Cache", desc: "Forces kernel to use large memory pages for file caching — better disk I/O throughput.", impact: "LOW", warning: "On systems with 4 GB or less RAM, enabling a large system cache can starve applications and games of memory, causing slowdowns or crashes. Recommended only for systems with 8 GB+ RAM." },
     { id: "DisablePagefileEncryption", title: "Disable Pagefile Encryption", desc: "Removes AES-128 encryption overhead on pagefile.sys reads/writes.", impact: "LOW" },
-    { id: "ClearPagefileOnShutdown", title: "Clear Pagefile on Shutdown", desc: "Wipes pagefile when PC shuts down — minor privacy and fragmentation benefit.", impact: "LOW" },
+    { id: "ClearPagefileOnShutdown", title: "Clear Pagefile on Shutdown", desc: "Wipes pagefile when PC shuts down — minor privacy and fragmentation benefit.", impact: "LOW", warning: "Clearing the pagefile on every shutdown adds 10–60 seconds to your shutdown time depending on pagefile size. This is a minor privacy benefit with a real-time cost. It also requires a pagefile to be present — if you disabled virtual memory, this has no effect." },
     { id: "MemDisableHeapTermination", title: "Tune Heap Decommit Threshold", desc: "Sets HeapDeCommitFreeBlockThreshold=0x40000 — reduces memory fragmentation in long game sessions.", impact: "LOW" },
   ];
 
@@ -151,8 +153,8 @@ export default function Registry() {
   ];
 
   const RISKY_TWEAKS: TweakDef[] = [
-    { id: "DisableAutoUpdate", title: "Disable Windows Update Service", desc: "Stops the wuauserv service permanently. Re-enable manually to get security patches. Prevents forced reboots mid-game.", badge: "RISKY", impact: "MED" },
-    { id: "DisableDefender", title: "Disable Windows Defender Real-Time Protection", desc: "Disables real-time scanning. Can free 5–15% CPU during heavy I/O loads. Only do this if you have an alternative AV.", badge: "RISKY", impact: "MED" },
+    { id: "DisableAutoUpdate", title: "Disable Windows Update Service", desc: "Stops the wuauserv service permanently. Re-enable manually to get security patches. Prevents forced reboots mid-game.", badge: "RISKY", impact: "MED", warning: "This stops Windows from receiving security updates. Your system will not automatically receive patches for newly discovered vulnerabilities. Only enable this if you manually check for updates regularly, or if forced reboots mid-game are a critical issue for you." },
+    { id: "DisableDefender", title: "Disable Windows Defender Real-Time Protection", desc: "Disables real-time scanning. Can free 5–15% CPU during heavy I/O loads. Only do this if you have an alternative AV.", badge: "RISKY", impact: "MED", warning: "This removes your real-time antivirus protection. Your PC will no longer actively block malware, ransomware, or malicious downloads. Only enable this if you have a third-party antivirus (such as Malwarebytes, ESET, or Bitdefender) installed and active." },
   ];
 
   return (

@@ -1,9 +1,10 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Trash2, AlertTriangle, Info } from "lucide-react";
+import { Trash2, AlertTriangle, Info, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ interface DebloatItem {
   title: string;
   desc: string;
   status: InstallLikelihood;
+  warning?: string;
 }
 
 const WIN10_APPS: DebloatItem[] = [
@@ -81,9 +83,9 @@ const WIN10_APPS: DebloatItem[] = [
 
 const SERVICES: DebloatItem[] = [
   { id: "ServiceDiagTrack", title: "Disable DiagTrack (Telemetry Service)", desc: "Stops Connected User Experiences and Telemetry — blocks all data uploads.", status: "preinstalled" },
-  { id: "ServiceWSearch", title: "Disable Windows Search Indexer", desc: "Stops WSearch from consuming CPU/disk during background indexing.", status: "preinstalled" },
-  { id: "ServiceSysMain", title: "Disable SysMain (Superfetch)", desc: "Disables Superfetch — beneficial for NVMe/SSD users.", status: "preinstalled" },
-  { id: "ServiceRemoteReg", title: "Disable Remote Registry", desc: "Prevents remote modification of registry — security win.", status: "likely" },
+  { id: "ServiceWSearch", title: "Disable Windows Search Indexer", desc: "Stops WSearch from consuming CPU/disk during background indexing.", status: "preinstalled", warning: "Disabling Windows Search completely removes the ability to search for files and apps through the Start Menu and File Explorer. You will need to browse manually to find files. Only disable this if you never use Windows Search or use a third-party search tool like Everything." },
+  { id: "ServiceSysMain", title: "Disable SysMain (Superfetch)", desc: "Disables Superfetch — beneficial for NVMe/SSD users.", status: "preinstalled", warning: "On systems with a traditional hard drive (HDD), Superfetch actively pre-loads apps you use regularly into RAM, significantly speeding up launch times. Disabling it on an HDD system can make common apps feel slower to open. Only recommended if your system has an SSD or NVMe drive." },
+  { id: "ServiceRemoteReg", title: "Disable Remote Registry", desc: "Prevents remote modification of registry — security win.", status: "likely", warning: "Some enterprise software, IT management tools, and certain applications rely on the Remote Registry service to function correctly. If you use work-managed software, domain-joined PCs, or remote IT support tools, disabling this may cause them to break or fail silently." },
   { id: "ServiceWMPNetworkSvc", title: "Disable WMP Network Sharing", desc: "Stops Windows Media Player network sharing service.", status: "preinstalled" },
   { id: "ServiceFax", title: "Disable Fax Service", desc: "Disables the Fax service — no one uses this in 2025.", status: "preinstalled" },
   { id: "ServiceRetailDemo", title: "Disable Retail Demo Service", desc: "Removes the demo mode service pre-installed on all Windows.", status: "preinstalled" },
@@ -112,7 +114,7 @@ const WIN11_ITEMS: DebloatItem[] = [
   { id: "Win11NotepadAI", title: "Disable Notepad AI Features", desc: "Disables AI Rewrite and auto-suggest in Windows 11 Notepad.", status: "likely" },
   { id: "Win11Snap", title: "Disable Snap Layout Suggestions", desc: "Removes snap layout hover tooltips and suggestions — keeps snapping, removes nag.", status: "preinstalled" },
   { id: "Win11TPMAlert", title: "Disable TPM / Security Health Alerts", desc: "Stops security health notification center from generating TPM/Secure Boot alerts.", status: "preinstalled" },
-  { id: "Win11DeviceEncryption", title: "Disable Auto BitLocker Encryption", desc: "Prevents Windows from auto-encrypting drives on consumer SKUs — avoids recovery key surprises.", status: "likely" },
+  { id: "Win11DeviceEncryption", title: "Disable Auto BitLocker Encryption", desc: "Prevents Windows from auto-encrypting drives on consumer SKUs — avoids recovery key surprises.", status: "likely", warning: "If BitLocker is currently active on your drive and you disable it without saving your recovery key, you risk being permanently locked out of your data if anything goes wrong (hardware change, motherboard swap, etc.). Before enabling this tweak, make sure you have your BitLocker recovery key saved or that encryption is not currently active on any of your drives." },
   { id: "Win11AutoHDR", title: "Disable Auto HDR (Gaming)", desc: "Turns off Auto HDR which can cause washed-out colors in some games.", status: "likely" },
 ];
 
@@ -120,6 +122,7 @@ export default function Debloat() {
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
   const isWin11 = osInfo.isWindows11;
+  const [pendingWarn, setPendingWarn] = useState<{ id: string; title: string; warning: string } | null>(null);
 
   const allWin10Keys = [...WIN10_APPS, ...SERVICES, ...PRIVACY].map(i => i.id);
   const allWin11Keys = WIN11_ITEMS.map(i => i.id);
@@ -159,6 +162,12 @@ export default function Debloat() {
                   {item.title}
                 </span>
                 <LikelihoodBadge status={item.status} />
+                {item.warning && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25 uppercase tracking-wide">
+                    <AlertTriangle className="w-2.5 h-2.5" />
+                    CAUTION
+                  </span>
+                )}
                 {tweaks[item.id] && (
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 uppercase">ON</span>
                 )}
@@ -167,7 +176,14 @@ export default function Debloat() {
             </div>
             <button
               data-testid={`toggle-debloat-${item.id}`}
-              onClick={() => setTweak(item.id, !tweaks[item.id])}
+              onClick={() => {
+                const enabling = !tweaks[item.id];
+                if (enabling && item.warning) {
+                  setPendingWarn({ id: item.id, title: item.title, warning: item.warning });
+                } else {
+                  setTweak(item.id, !tweaks[item.id]);
+                }
+              }}
               className={cn(
                 "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none",
                 tweaks[item.id] ? "bg-red-600" : "bg-zinc-700"
@@ -285,6 +301,73 @@ export default function Debloat() {
           <DebloatSection title="Windows 11 Bloatware & UI Junk" items={WIN11_ITEMS} />
         </div>
       </div>
+
+      {/* Global warning dialog for debloat items */}
+      <AnimatePresence>
+        {pendingWarn && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
+            onClick={() => setPendingWarn(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 8 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-zinc-950 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-500" />
+              <div className="p-6 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="shrink-0 w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+                    <ShieldAlert className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Caution Required</span>
+                    </div>
+                    <h3 className="text-base font-bold text-white leading-snug">{pendingWarn.title}</h3>
+                  </div>
+                  <button
+                    onClick={() => setPendingWarn(null)}
+                    className="shrink-0 p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="ml-16 px-4 py-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
+                  <p className="text-sm text-zinc-300 leading-relaxed">{pendingWarn.warning}</p>
+                </div>
+                <p className="ml-16 text-xs text-zinc-600 leading-relaxed">
+                  Changes only take effect after you download and run the PowerShell script as Administrator. You can disable this at any time before downloading.
+                </p>
+                <div className="ml-16 flex items-center gap-3 pt-1">
+                  <button
+                    data-testid={`button-enable-anyway-debloat-${pendingWarn.id}`}
+                    onClick={() => { setTweak(pendingWarn.id, true); setPendingWarn(null); }}
+                    className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition-colors"
+                  >
+                    Enable Anyway
+                  </button>
+                  <button
+                    data-testid={`button-cancel-debloat-${pendingWarn.id}`}
+                    onClick={() => setPendingWarn(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-sm font-semibold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AppLayout>
   );
 }
