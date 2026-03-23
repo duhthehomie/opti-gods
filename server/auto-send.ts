@@ -36,15 +36,26 @@ export async function runAutoSend(): Promise<number> {
       now - new Date(r.createdAt).getTime() >= thresholdMs
     );
 
+    // Build the set of codes already reserved by previously sent requests
+    const reservedCodeIds = new Set(
+      requests
+        .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
+        .map(r => r.sentCodeId)
+    );
+
     for (const req of stale) {
       try {
         const allCodes = await storage.getAllCodes();
-        const available = allCodes.find(c => !c.usedAt);
+        // Exclude already-used or already-reserved codes
+        const available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
         if (!available) {
           log("[auto-send] No available codes left — stopping auto-send", "auto-send");
           break;
         }
-        await storage.redeemCode(available.code);
+        // Reserve this code so it won't be picked for the next requester in this loop
+        reservedCodeIds.add(available.id);
+        // Do NOT call redeemCode — customer must enter the code on the site to activate Pro.
+        // Revenue is counted when request status becomes "auto-sent".
         await sendProCode(req.email, available.code, getSiteUrl());
         await storage.updateEmailRequestStatus(req.id, "auto-sent", available.id, `Auto-sent after ${autoSendState.thresholdMinutes} min`);
         log(`[auto-send] Sent code to ${req.email}`, "auto-send");

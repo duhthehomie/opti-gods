@@ -116,7 +116,7 @@ export default function Admin() {
   const statsQuery = useQuery<{
     totalCodes: number; usedCodes: number; availableCodes: number;
     totalFriends: number; usedFriends: number; availableFriends: number;
-    revenueEstimate: number;
+    revenueEstimate: number; emailRevenue: number; directRevenue: number;
     visits: { total: number; today: number; thisWeek: number };
   }>({
     queryKey: ["/api/admin/stats", key],
@@ -541,12 +541,22 @@ export default function Admin() {
           {/* Revenue — big card */}
           <div className="col-span-2 relative rounded-xl overflow-hidden border border-emerald-500/15 bg-gradient-to-br from-emerald-950/30 to-black p-4">
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">Estimated Revenue</p>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">Confirmed Revenue</p>
                 <p className="text-4xl font-black text-emerald-400 font-mono">${stats?.revenueEstimate ?? 0}</p>
-                <p className="text-[11px] text-emerald-800 mt-1">{stats?.usedCodes ?? 0} paid codes × $25</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
+                    {stats?.emailRevenue ?? 0} email payments accepted
+                  </span>
+                  {(stats?.directRevenue ?? 0) > 0 && (
+                    <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
+                      {stats.directRevenue} direct redemptions
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-emerald-900 mt-1">Updates when you click "Send Code" — no waiting for customer</p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
                 <DollarSign className="w-5 h-5 text-emerald-400" />
               </div>
             </div>
@@ -1001,46 +1011,76 @@ export default function Admin() {
               <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
                 {emailRequestsQuery.data
                   .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-                  .map(req => (
+                  .map(req => {
+                    // Cross-reference sentCodeId with the codes list to detect customer redemption
+                    const sentCode = req.sentCodeId
+                      ? (codesQuery.data || []).find(c => c.id === req.sentCodeId)
+                      : null;
+                    const customerRedeemed = !!(sentCode?.usedAt);
+                    const isSentStatus = req.status === "sent" || req.status === "auto-sent";
+
+                    return (
                     <div
                       key={req.id}
                       data-testid={`row-email-req-${req.id}`}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 transition-colors",
-                        req.status === "pending" ? "hover:bg-zinc-900/40" : "opacity-50"
+                        req.status === "pending" ? "hover:bg-zinc-900/40" : "opacity-60 hover:opacity-80"
                       )}
                     >
                       <div className={cn(
                         "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                        req.status === "sent" ? "bg-emerald-500/10 border border-emerald-500/20"
+                        isSentStatus && customerRedeemed ? "bg-blue-500/10 border border-blue-500/20"
+                          : isSentStatus ? "bg-emerald-500/10 border border-emerald-500/20"
                           : req.status === "rejected" ? "bg-zinc-800 border border-zinc-700"
                           : "bg-red-500/10 border border-red-500/20"
                       )}>
                         <Mail className={cn(
                           "w-3.5 h-3.5",
-                          req.status === "sent" ? "text-emerald-400"
+                          isSentStatus && customerRedeemed ? "text-blue-400"
+                            : isSentStatus ? "text-emerald-400"
                             : req.status === "rejected" ? "text-zinc-600"
                             : "text-red-400"
                         )} />
                       </div>
 
                       <div className="flex-1 min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-xs font-medium text-white truncate">{req.email}</p>
                           <span className={cn(
                             "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
-                            req.status === "sent" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                            isSentStatus ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
                               : req.status === "rejected" ? "text-zinc-600 bg-zinc-800 border-zinc-700"
                               : "text-amber-400 bg-amber-500/10 border-amber-500/20"
                           )}>
                             {req.status.toUpperCase()}
                           </span>
+                          {/* Redemption status — only shown for sent requests */}
+                          {isSentStatus && (
+                            customerRedeemed ? (
+                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 bg-blue-500/10 border-blue-500/20 shrink-0">
+                                <Check className="w-2.5 h-2.5" /> Customer Redeemed
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-zinc-500 bg-zinc-800/50 border-zinc-700 shrink-0">
+                                <Clock className="w-2.5 h-2.5" /> Awaiting Redemption
+                              </span>
+                            )
+                          )}
                         </div>
                         <p className="text-[10px] text-zinc-500">
                           <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>
                           {" — "}
                           <span className="font-mono">{req.paymentRef}</span>
                         </p>
+                        {sentCode && (
+                          <p className="text-[10px] text-zinc-700 font-mono">
+                            Code: <span className="text-zinc-500">{sentCode.code}</span>
+                            {customerRedeemed && sentCode.usedAt && (
+                              <span className="text-blue-600 ml-2">· redeemed {timeAgo(sentCode.usedAt)}</span>
+                            )}
+                          </p>
+                        )}
                         <p className="text-[10px] text-zinc-700">{timeAgo(req.createdAt)} · {fmt(req.createdAt)}</p>
                         {req.note && <p className="text-[10px] text-zinc-600 italic">{req.note}</p>}
                       </div>
@@ -1077,7 +1117,8 @@ export default function Admin() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  ))}
+                  );
+                  })}
               </div>
             )}
           </div>

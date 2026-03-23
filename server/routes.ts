@@ -1118,13 +1118,26 @@ Start-Sleep 2
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [codes, friends, visitStats] = await Promise.all([
+    const [codes, friends, visitStats, emailReqs] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
       storage.getVisitStats(),
+      storage.getEmailRequests(),
     ]);
+    // Codes reserved for email requests (sentCodeId set on a sent/auto-sent request)
+    const reservedCodeIds = new Set(
+      emailReqs
+        .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
+        .map(r => r.sentCodeId)
+    );
+    // Available = not used AND not reserved by a sent email request
+    const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
+    // Confirmed email payments (admin accepted = payment confirmed)
+    const emailRevenue = emailReqs.filter(r => r.status === "sent" || r.status === "auto-sent").length;
+    // Directly redeemed codes (customer entered code manually, not via email path)
+    const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length;
+    const revenueEstimate = (emailRevenue + directRevenue) * 25;
     const usedCodes = codes.filter(c => c.usedAt).length;
-    const availableCodes = codes.filter(c => !c.usedAt).length;
     const usedFriends = friends.filter(f => f.usedAt).length;
     const availableFriends = friends.filter(f => !f.usedAt).length;
     res.json({
@@ -1134,7 +1147,9 @@ Start-Sleep 2
       totalFriends: friends.length,
       usedFriends,
       availableFriends,
-      revenueEstimate: usedCodes * 25,
+      revenueEstimate,
+      emailRevenue,
+      directRevenue,
       visits: visitStats,
     });
   });
@@ -1436,10 +1451,17 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
     if (emailReq.status === "sent") return res.status(400).json({ error: "Code already sent" });
 
     const allCodes = await storage.getAllCodes();
-    const available = allCodes.find(c => !c.usedAt);
+    // Exclude codes already reserved by other sent/auto-sent email requests
+    const reservedCodeIds = new Set(
+      allRequests
+        .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
+        .map(r => r.sentCodeId)
+    );
+    const available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
     if (!available) return res.status(503).json({ error: "No available codes — generate more first" });
 
-    await storage.redeemCode(available.code);
+    // Do NOT call redeemCode here — the customer needs to be able to enter the code on the site.
+    // Revenue is counted when the request is accepted (status="sent"), not when customer redeems.
     const siteUrl = `${req.protocol}://${req.get("host")}`;
     await sendProCode(emailReq.email, available.code, siteUrl);
     await storage.updateEmailRequestStatus(id, "sent", available.id);
