@@ -178,53 +178,6 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-3"
-        >
-          {[
-            {
-              label: "OS",
-              value: osInfo.loading ? "Detecting..." : osInfo.os,
-              sub: osInfo.build ? `Build ${osInfo.build}` : "Browser detection",
-              icon: <HardDrive className="w-4 h-4 text-zinc-500" />,
-            },
-            {
-              label: "CPU Threads",
-              value: hw.loading ? "..." : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown",
-              sub: hw.cpuCores > 0 ? `~${Math.max(1, Math.floor(hw.cpuCores / 2))} physical cores` : "navigator API",
-              icon: <Cpu className="w-4 h-4 text-red-500" />,
-            },
-            {
-              label: "System RAM",
-              value: hw.loading ? "..." : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown",
-              sub: "Approximate (privacy limit)",
-              icon: <MemoryStick className="w-4 h-4 text-zinc-500" />,
-            },
-            {
-              label: "GPU",
-              value: hw.loading ? "..." : hw.gpuName.length > 20 ? hw.gpuName.slice(0, 20) + "…" : hw.gpuName,
-              sub: hw.gpuVendor || "WebGL renderer",
-              icon: <Monitor className="w-4 h-4 text-zinc-500" />,
-            },
-          ].map((card, i) => (
-            <div
-              key={card.label}
-              data-testid={`card-stat-${i}`}
-              className="flex items-center gap-3 p-4 rounded-xl bg-black/40 border border-white/5 min-w-0"
-            >
-              <div className="shrink-0">{card.icon}</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">{card.label}</p>
-                <p className="text-sm font-bold text-white font-display truncate" title={card.value}>{card.value}</p>
-                <p className="text-[9px] text-zinc-600 truncate">{card.sub}</p>
-              </div>
-            </div>
-          ))}
-        </motion.div>
 
         
         <motion.div
@@ -349,7 +302,27 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        
+        {/* System Status Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+          className="flex items-center divide-x divide-white/5 rounded-xl bg-black/40 border border-white/5 overflow-hidden"
+        >
+          {[
+            { label: "OS", value: osInfo.loading ? "Detecting…" : osInfo.os, icon: <HardDrive className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-0" },
+            { label: "CPU", value: hw.loading ? "…" : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown", icon: <Cpu className="w-3.5 h-3.5 text-red-500" />, testid: "card-stat-1" },
+            { label: "RAM", value: hw.loading ? "…" : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown", icon: <MemoryStick className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-2" },
+            { label: "GPU", value: hw.loading ? "…" : hw.gpuName.length > 24 ? hw.gpuName.slice(0, 24) + "…" : hw.gpuName || "Unknown", icon: <Monitor className="w-3.5 h-3.5 text-zinc-500" />, testid: "card-stat-3" },
+          ].map((stat) => (
+            <div key={stat.label} data-testid={stat.testid} className="flex-1 flex items-center gap-2 px-4 py-3 min-w-0">
+              {stat.icon}
+              <span className="text-[10px] text-zinc-600 uppercase tracking-wider shrink-0">{stat.label}</span>
+              <span className="text-xs font-semibold text-zinc-200 truncate" title={stat.value}>{stat.value}</span>
+            </div>
+          ))}
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
