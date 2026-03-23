@@ -88,13 +88,13 @@ export default function Fortnite() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">FPS & Frame Timing</h2>
             <div className="space-y-3">
               {[
-                { id: "FortniteUncapLobbyFPS", title: "Uncap Lobby & Menu FPS (GameUserSettings.ini)", desc: "Patches GameUserSettings.ini to set FrameRateLimit=0.000000 — removes the 120fps menu cap. Handles read-only files automatically.", badge: "MUST HAVE" },
-                { id: "FortniteUncapGameFPS", title: "Uncap In-Game FPS via Engine.ini", desc: "Adds t.MaxFPS=0 to Engine.ini — overrides any engine-level frame cap during gameplay.", badge: "RECOMMENDED" },
-                { id: "FortniteDisableVSync", title: "Force VSync Off", desc: "Disables VSync in Engine.ini — removes GPU sync overhead and the added frame latency." },
-                { id: "FortniteGameMode", title: "Enable Windows Game Mode for Fortnite", desc: "Enables GPU priority mode in Windows Game Mode registry for Fortnite process." },
+                { id: "FortniteUncapLobbyFPS", title: "Uncap Lobby & Menu FPS (GameUserSettings.ini)", desc: "Patches GameUserSettings.ini to set FrameRateLimit=0.000000 — removes the 120fps menu cap. Handles read-only files automatically.", badge: "MUST HAVE", impact: "HIGH" as const },
+                { id: "FortniteUncapGameFPS", title: "Uncap In-Game FPS via Engine.ini", desc: "Adds t.MaxFPS=0 to Engine.ini — overrides any engine-level frame cap during gameplay.", badge: "RECOMMENDED", impact: "HIGH" as const },
+                { id: "FortniteDisableVSync", title: "Force VSync Off", desc: "Disables VSync in Engine.ini — removes GPU sync overhead and the added frame latency.", impact: "HIGH" as const },
+                { id: "FortniteGameMode", title: "Enable Windows Game Mode for Fortnite", desc: "Enables GPU priority mode in Windows Game Mode registry for Fortnite process.", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  badge={item.badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  badge={item.badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
               ))}
             </div>
           </section>
@@ -103,12 +103,12 @@ export default function Fortnite() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">CPU & Process Priority</h2>
             <div className="space-y-3">
               {[
-                { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED" },
-                { id: "FortniteAffinityPhysical", title: "Pin Fortnite to Physical Cores Only", desc: "Removes hyperthreaded virtual cores from Fortnite's affinity mask — reduces cache thrashing on Intel HT CPUs." },
-                { id: "FortniteDisableThrottling", title: "Disable CPU Throttling for Fortnite", desc: "Disables power throttling via registry for Fortnite's process — ensures sustained clock speeds." },
+                { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED", impact: "HIGH" as const },
+                { id: "FortniteAffinityPhysical", title: "Pin Fortnite to Physical Cores Only", desc: "Removes hyperthreaded virtual cores from Fortnite's affinity mask — reduces cache thrashing on Intel HT CPUs.", impact: "MED" as const },
+                { id: "FortniteDisableThrottling", title: "Disable CPU Throttling for Fortnite", desc: "Disables power throttling via registry for Fortnite's process — ensures sustained clock speeds.", impact: "HIGH" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  badge={item.badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  badge={item.badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
               ))}
             </div>
           </section>
@@ -117,14 +117,14 @@ export default function Fortnite() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Engine.ini Config Patches</h2>
             <div className="space-y-3">
               {[
-                { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches." },
-                { id: "FortniteDisableMotionBlur", title: "Disable Motion Blur & Lens Flare", desc: "Adds r.MotionBlurQuality=0 and r.LensFlareQuality=0 to Engine.ini — removes blur and gains back ~3–5% GPU performance." },
-                { id: "FortniteLowShadows", title: "Force Minimal Shadow Quality", desc: "Sets r.Shadow.MaxResolution=512 and r.ShadowQuality=0 in Engine.ini — significant GPU savings, especially at high resolutions." },
-                { id: "FortniteDisableLumen", title: "Disable Lumen Global Illumination", desc: "Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI for a significant FPS boost on mid-range GPUs." },
-                { id: "FortniteDisableRecording", title: "Disable Background Video Recording", desc: "Disables Fortnite's built-in replay/recording via Engine.ini — frees GPU encoder bandwidth." },
+                { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches.", impact: "MED" as const },
+                { id: "FortniteDisableMotionBlur", title: "Disable Motion Blur & Lens Flare", desc: "Adds r.MotionBlurQuality=0 and r.LensFlareQuality=0 to Engine.ini — removes blur and gains back ~3–5% GPU performance.", badge: "RECOMMENDED", impact: "HIGH" as const },
+                { id: "FortniteLowShadows", title: "Force Minimal Shadow Quality", desc: "Sets r.Shadow.MaxResolution=512 and r.ShadowQuality=0 in Engine.ini — significant GPU savings, especially at high resolutions.", badge: "RECOMMENDED", impact: "HIGH" as const },
+                { id: "FortniteDisableLumen", title: "Disable Lumen Global Illumination", desc: "Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI for a significant FPS boost on mid-range GPUs.", impact: "HIGH" as const },
+                { id: "FortniteDisableRecording", title: "Disable Background Video Recording", desc: "Disables Fortnite's built-in replay/recording via Engine.ini — frees GPU encoder bandwidth.", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  badge={(item as any).badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
               ))}
             </div>
           </section>
@@ -133,10 +133,10 @@ export default function Fortnite() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Graphics API</h2>
             <div className="space-y-3">
               {[
-                { id: "FortniteForceDirectX12", title: "Force DirectX 12 Mode", desc: "Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute. Recommended for RTX cards.", badge: "RTX USERS" },
+                { id: "FortniteForceDirectX12", title: "Force DirectX 12 Mode", desc: "Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute. Recommended for RTX cards.", badge: "RTX USERS", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  badge={item.badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  badge={item.badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
               ))}
             </div>
           </section>

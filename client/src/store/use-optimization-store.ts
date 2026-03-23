@@ -136,6 +136,13 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   Win11BingSearch: false,
   Win11NotepadAI: false,
   Win11AutoHDR: false,
+  // NVIDIA Specific
+  NvidiaDisableTelemetry: false,
+  NvidiaMaxPerfMode: false,
+  NvidiaPreRenderedFrames: false,
+  NvidiaShaderCache: false,
+  NvidiaOptimizeLatency: false,
+  NvidiaDisableOverlay: false,
   // Memory
   MemFixedPagefile: false,
   MemDisablePagefile: false,

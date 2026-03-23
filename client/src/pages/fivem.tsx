@@ -4,8 +4,70 @@ import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Gamepad2, Info } from "lucide-react";
 
+type Impact = "HIGH" | "MED" | "LOW";
+
+interface Tweak {
+  id: string;
+  title: string;
+  desc: string;
+  badge?: string;
+  impact?: Impact;
+}
+
 export default function Fivem() {
   const { tweaks, setTweak } = useOptimizationStore();
+
+  const PROCESS_TWEAKS: Tweak[] = [
+    { id: "FiveMHighPriority", title: "Force GTA5.exe to High CPU Priority (Persistent)", desc: "Injects IFEO registry keys so Windows always schedules GTA5.exe at High CPU priority — survives restarts.", badge: "RECOMMENDED", impact: "HIGH" },
+    { id: "FiveMDisablePhysX", title: "Disable NVIDIA PhysX GPU Acceleration", desc: "Forces CPU PhysX — reduces VRAM contention on servers with heavy particle effects.", impact: "LOW" },
+    { id: "FiveMAffinityMask", title: "Pin GTA5.exe + FiveM.exe to Above Normal Priority", desc: "Sets Above Normal CPU priority for both GTA5.exe and FiveM.exe via IFEO — consistent scheduler priority across both processes.", impact: "MED" },
+    { id: "FiveMIOPriority", title: "Set FiveM I/O Priority to High", desc: "Forces streaming disk reads to High I/O priority — faster asset loading on crowded servers.", impact: "MED" },
+    { id: "FiveMWorkingSet", title: "Increase GTA5.exe Working Set Limit (4GB)", desc: "Raises the per-process memory ceiling for GTA5.exe to 4GB — reduces streaming model crashes on high-res texture packs.", impact: "MED" },
+  ];
+
+  const CLIENT_TWEAKS: Tweak[] = [
+    { id: "FiveMCacheClear", title: "Auto-Clear FiveM Cache on Startup", desc: "Deletes stale server cache — fixes crashes, texture loss, and connection issues on reboot.", badge: "RECOMMENDED", impact: "HIGH" },
+    { id: "FiveMExtendedMemory", title: "Enable Extended Memory Allocator (FiveM)", desc: "Patches FiveM.exe to Above Normal CPU priority — reducing streaming model crashes on busy servers.", impact: "MED" },
+    { id: "FiveMStreamDistance", title: "Cap Streaming Distance (500 units)", desc: "Sets StreamingDistance=500 in CitizenFX.ini — reduces LOD pop-in and micro-stutter on city servers.", impact: "MED" },
+    { id: "FiveMStreamPool", title: "Set CitizenFX Stream Pool to 128", desc: "Updates CitizenFX.ini StreamPool setting to 128 — improves streaming stability on high-asset servers.", impact: "MED" },
+    { id: "FiveMDisableNvidiaTelemetry", title: "Disable NVIDIA Telemetry Service", desc: "Stops NvTelemetryContainer service — eliminates the background GPU perf overhead it causes.", badge: "NVIDIA ONLY", impact: "MED" },
+  ];
+
+  const WINDOWS_TWEAKS: Tweak[] = [
+    { id: "FiveMDisableVSync", title: "Force Disable VSync in Config", desc: "Forces in-game VSync off via config — removes 60fps frame cap on higher refresh monitors.", impact: "HIGH" },
+    { id: "FiveMNetworkBuffer", title: "Increase Socket Receive Buffer (512KB)", desc: "Bumps socket send/receive buffers to 512KB — handles high player count server traffic without packet loss.", impact: "HIGH" },
+    { id: "FiveMDisableFullscreen", title: "Use Windowed Borderless Mode", desc: "Forces borderless windowed mode via CitizenFX.ini — eliminates exclusive fullscreen delays on Alt+Tab.", impact: "LOW" },
+    { id: "FiveMDisableDWM", title: "Raise GTA5.exe to High Priority (DWM-Aware)", desc: "Sets GTA5.exe CPU+IO to High priority mode to minimize DWM compositor interference during gameplay.", impact: "MED" },
+  ];
+
+  const CFX_TWEAKS: Tweak[] = [
+    { id: "FiveMDNSOverride", title: "Override CFX DNS to Cloudflare 1.1.1.1", desc: "Points active adapter DNS to 1.1.1.1/1.0.0.1 — faster cfx.re resolution and lower DNS lookup latency.", impact: "MED" },
+    { id: "FiveMDisableP2P", title: "Allow Direct P2P Connections", desc: "Enables direct peer connections for lower server ping. Disable on untrusted public servers.", impact: "LOW" },
+    { id: "FiveMQueueFix", title: "Max Game CPU Priority (SystemResponsiveness=0)", desc: "Sets SystemResponsiveness=0 — allocates maximum CPU time to the foreground game process.", impact: "HIGH" },
+  ];
+
+  function renderSection(heading: string, items: Tweak[]) {
+    return (
+      <section>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">{heading}</h2>
+        <div className="space-y-3">
+          {items.map((item, i) => (
+            <TweakRow
+              key={item.id}
+              id={item.id}
+              title={item.title}
+              description={item.desc}
+              badge={item.badge}
+              impact={item.impact}
+              checked={tweaks[item.id] || false}
+              onCheckedChange={(v) => setTweak(item.id, v)}
+              delay={i + 1}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <AppLayout>
@@ -25,67 +87,10 @@ export default function Fivem() {
         </motion.div>
 
         <div className="space-y-8">
-
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">FiveM / GTA V Process</h2>
-            <div className="space-y-3">
-              {[
-                { id: "FiveMHighPriority", title: "Force GTA5.exe to High CPU Priority (Persistent)", desc: "Injects IFEO registry keys so Windows always schedules GTA5.exe at High CPU priority — survives restarts.", badge: "RECOMMENDED" },
-                { id: "FiveMDisablePhysX", title: "Disable NVIDIA PhysX GPU Acceleration", desc: "Forces CPU PhysX — reduces VRAM contention on servers with heavy particle effects." },
-                { id: "FiveMAffinityMask", title: "Pin GTA5.exe to Physical Cores Only", desc: "Removes hyperthreaded siblings from the affinity mask — reduces L1/L2 cache thrashing on Intel HT CPUs." },
-                { id: "FiveMIOPriority", title: "Set FiveM I/O Priority to High", desc: "Forces streaming disk reads to High I/O priority — faster asset loading on crowded servers." },
-                { id: "FiveMWorkingSet", title: "Increase GTA5.exe Working Set Limit (4GB)", desc: "Raises the per-process memory ceiling for GTA5.exe to 4GB — reduces streaming model crashes on high-res texture packs." },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  badge={(item as any).badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">FiveM Client Optimizations</h2>
-            <div className="space-y-3">
-              {[
-                { id: "FiveMCacheClear", title: "Auto-Clear FiveM Cache on Startup", desc: "Deletes stale server cache — fixes crashes, texture loss, and connection issues on reboot.", badge: "RECOMMENDED" },
-                { id: "FiveMExtendedMemory", title: "Enable Extended Memory Allocator (FiveM)", desc: "Patches FiveM to use an extended heap allocator — reducing streaming model crashes on busy servers." },
-                { id: "FiveMStreamDistance", title: "Optimize Stream Distance", desc: "Sets optimal streaming distance for city servers — reduces LOD pop-in and frame stutters." },
-                { id: "FiveMStreamPool", title: "Set CitizenFX Stream Pool to 128", desc: "Updates CitizenFX.ini StreamPool setting to 128 — improves streaming stability on high-asset servers." },
-                { id: "FiveMDisableNvidiaTelemetry", title: "Disable NVIDIA Telemetry Service", desc: "Stops NvTelemetryContainer service — eliminates the background GPU perf overhead it causes.", badge: "NVIDIA ONLY" },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  badge={(item as any).badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Windows Settings for GTA V</h2>
-            <div className="space-y-3">
-              {[
-                { id: "FiveMDisableFullscreen", title: "Use Windowed Borderless Mode", desc: "Borderless runs through DWM — eliminates exclusive fullscreen delays on Alt+Tab." },
-                { id: "FiveMDisableDWM", title: "Disable DWM Frame Time Budgeting", desc: "Removes DWM frame time budgeting so GTA does not lose GPU time to the compositor." },
-                { id: "FiveMDisableVSync", title: "Force Disable VSync in Config", desc: "Forces in-game VSync off via config — removes 60fps frame cap on higher refresh monitors." },
-                { id: "FiveMNetworkBuffer", title: "Increase Socket Receive Buffer (256KB)", desc: "Bumps socket receive buffer to 256KB to handle high player count server traffic without packet loss." },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">CFX / Server Connectivity</h2>
-            <div className="space-y-3">
-              {[
-                { id: "FiveMDNSOverride", title: "Override CFX DNS to Cloudflare 1.1.1.1", desc: "Points cfx.re resolution to 1.1.1.1 for faster server lookups and lower DNS latency." },
-                { id: "FiveMDisableP2P", title: "Allow Direct P2P Connections", desc: "Enables direct peer connections for lower server ping. Disable on untrusted public servers." },
-                { id: "FiveMQueueFix", title: "Queue Timeout Extension (30s → 90s)", desc: "Extends queue timeout to 90 seconds — prevents false disconnects on busy servers." },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
+          {renderSection("FiveM / GTA V Process", PROCESS_TWEAKS)}
+          {renderSection("FiveM Client Optimizations", CLIENT_TWEAKS)}
+          {renderSection("Windows Settings for GTA V", WINDOWS_TWEAKS)}
+          {renderSection("CFX / Server Connectivity", CFX_TWEAKS)}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
@@ -102,7 +107,6 @@ export default function Fivem() {
               </motion.div>
             ))}
           </div>
-
         </div>
       </div>
     </AppLayout>

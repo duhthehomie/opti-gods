@@ -4,7 +4,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Save, Trash2,
   FolderOpen, Plus, CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
-  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock,
+  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio,
+  Activity, Thermometer, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { ScanImport } from "@/components/scan-import";
+import { useLiveStats } from "@/hooks/use-live-stats";
 
 // Feature categories
 const FEATURES = [
@@ -29,6 +31,79 @@ const FEATURES = [
   { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
   { icon: Search, title: "Game Detection", desc: "Auto-detect 14 games and apply per-game optimization packs" },
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
+];
+
+// Quick Boost Presets
+const SAFE_TWEAKS = [
+  "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
+  "NetworkThrottling","DisableNagle","InputLagTCP","SetDNSPriority",
+  "SetHighPerformancePlan","DisableXboxGameBar","DisableGameDVR",
+  "DisablePointerPrecision","DisableCoreParking","EnableHAGS","DisableFastStartup",
+];
+const MAX_FPS_TWEAKS = [
+  ...SAFE_TWEAKS,
+  "DisableDynamicTick","EnableMSIMode","DisablePowerThrottlingAdv","DisableUSBSuspend",
+  "DisableAnimations","DisableNDU","DisablePowerThrottling","MemDisableCompression",
+  "OptimizeRAMUsage","ServiceDiagTrack","ServiceWSearch","PrivacyTelemetry",
+];
+const COMPETITIVE_TWEAKS = [
+  ...MAX_FPS_TWEAKS,
+  "ProcessLassoAffinityGaming","ProcessLassoProBalance","ProcessAutoKillHung",
+  "game_valorant","game_cs2","game_apex","game_warzone","game_siege","game_lol",
+  "FortniteHighPriority","FortniteDisableVSync","FortniteDisableMotionBlur",
+  "FortniteInputLatency","FortniteUncapGameFPS","FiveMHighPriority","FiveMNetworkBuffer",
+];
+const STREAMER_TWEAKS = [
+  "Win32PrioritySeparation","SetResponsiveness","SetTimerResolution",
+  "NetworkThrottling","DisableNagle","SetHighPerformancePlan",
+  "DisablePointerPrecision","DisableCoreParking","EnableHAGS","SetDNSPriority",
+];
+
+const QUICK_BOOST_PRESETS = [
+  {
+    id: "safe",
+    icon: Shield,
+    title: "Safe Boost",
+    desc: "Recommended tweaks only — safe for any PC, no uninstalls, no service stops.",
+    color: "text-emerald-400",
+    border: "border-emerald-500/25 hover:border-emerald-500/50",
+    glow: "shadow-[inset_0_0_20px_-8px_rgba(52,211,153,0.1)]",
+    activeBg: "bg-emerald-500/5",
+    tweaks: SAFE_TWEAKS,
+  },
+  {
+    id: "maxfps",
+    icon: Flame,
+    title: "Max FPS Gaming",
+    desc: "Aggressive CPU, network, and memory tweaks for the highest possible framerate.",
+    color: "text-red-400",
+    border: "border-red-500/25 hover:border-red-500/50",
+    glow: "shadow-[inset_0_0_20px_-8px_rgba(239,68,68,0.1)]",
+    activeBg: "bg-red-500/5",
+    tweaks: MAX_FPS_TWEAKS,
+  },
+  {
+    id: "competitive",
+    icon: Crosshair,
+    title: "Competitive Shooter",
+    desc: "All Max FPS tweaks + per-game priority packs for Valorant, CS2, Apex, Warzone, and more.",
+    color: "text-orange-400",
+    border: "border-orange-500/25 hover:border-orange-500/50",
+    glow: "shadow-[inset_0_0_20px_-8px_rgba(249,115,22,0.1)]",
+    activeBg: "bg-orange-500/5",
+    tweaks: COMPETITIVE_TWEAKS,
+  },
+  {
+    id: "streamer",
+    icon: Radio,
+    title: "Streamer Mode",
+    desc: "Performance boost without killing Game Bar or DVR — keeps OBS and stream capture working.",
+    color: "text-violet-400",
+    border: "border-violet-500/25 hover:border-violet-500/50",
+    glow: "shadow-[inset_0_0_20px_-8px_rgba(139,92,246,0.1)]",
+    activeBg: "bg-violet-500/5",
+    tweaks: STREAMER_TWEAKS,
+  },
 ];
 
 // How to use steps
@@ -68,6 +143,7 @@ const PRO_BULLETS = [
 export default function Dashboard() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
+  const live = useLiveStats(hw.ramGB);
   const isPro = useProStatus();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [] } = useQuery<any[]>({
@@ -111,6 +187,19 @@ export default function Dashboard() {
   const loadPreset = (preset: any) => {
     setAllTweaks({ ...tweaks, ...preset.config.tweaks });
     toast({ title: `Loaded: ${preset.name}`, description: "Tweak states have been applied." });
+  };
+
+  const [activeBoost, setActiveBoost] = useState<string | null>(null);
+
+  const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+    const next = { ...tweaks };
+    preset.tweaks.forEach((key) => { if (key in next) next[key] = true; });
+    setAllTweaks(next);
+    setActiveBoost(preset.id);
+    toast({
+      title: `${preset.title} Applied`,
+      description: `${preset.tweaks.filter(k => k in tweaks).length} tweaks enabled. Download your script to apply them.`,
+    });
   };
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
@@ -341,8 +430,203 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
+        {/* Live System Monitor */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.29 }}
+          className="rounded-xl bg-black/40 border border-white/5 overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-red-500" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Live Monitor</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] text-zinc-600 font-mono">SIMULATED — real readings require desktop agent</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-white/5">
+            {/* CPU */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Cpu className="w-3 h-3 text-red-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">CPU</span>
+                </div>
+                <span className={cn("text-sm font-bold font-display", live.cpuUsage > 80 ? "text-red-400" : live.cpuUsage > 60 ? "text-orange-400" : "text-white")}>
+                  {live.cpuUsage}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-700", live.cpuUsage > 80 ? "bg-red-500" : live.cpuUsage > 60 ? "bg-orange-500" : "bg-red-500/60")}
+                  style={{ width: `${live.cpuUsage}%` }}
+                />
+              </div>
+              {/* Mini sparkline */}
+              <div className="flex items-end gap-px h-6">
+                {live.cpuHistory.slice(-20).map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-sm bg-red-500/40 transition-all duration-300"
+                    style={{ height: `${Math.max(4, (v / 100) * 24)}px` }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <Thermometer className="w-2.5 h-2.5 text-zinc-600" />
+                <span className="text-[10px] text-zinc-600">{live.cpuTemp}°C</span>
+              </div>
+            </div>
+
+            {/* GPU */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Monitor className="w-3 h-3 text-zinc-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">GPU</span>
+                </div>
+                <span className={cn("text-sm font-bold font-display", live.gpuUsage > 85 ? "text-red-400" : live.gpuUsage > 65 ? "text-orange-400" : "text-white")}>
+                  {live.gpuUsage}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-700", live.gpuUsage > 85 ? "bg-red-500" : live.gpuUsage > 65 ? "bg-orange-500" : "bg-zinc-400/60")}
+                  style={{ width: `${live.gpuUsage}%` }}
+                />
+              </div>
+              <div className="flex items-end gap-px h-6">
+                {live.gpuHistory.slice(-20).map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-sm bg-zinc-500/30 transition-all duration-300"
+                    style={{ height: `${Math.max(4, (v / 100) * 24)}px` }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <Thermometer className="w-2.5 h-2.5 text-zinc-600" />
+                <span className="text-[10px] text-zinc-600">{live.gpuTemp}°C</span>
+              </div>
+            </div>
+
+            {/* RAM */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <MemoryStick className="w-3 h-3 text-zinc-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">RAM</span>
+                </div>
+                <span className={cn("text-sm font-bold font-display", live.ramPct > 85 ? "text-red-400" : live.ramPct > 70 ? "text-orange-400" : "text-white")}>
+                  {live.ramPct}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-700", live.ramPct > 85 ? "bg-red-500" : live.ramPct > 70 ? "bg-orange-500" : "bg-zinc-500/50")}
+                  style={{ width: `${live.ramPct}%` }}
+                />
+              </div>
+              <div className="pt-3 space-y-1">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-zinc-600">Used</span>
+                  <span className="text-zinc-300 font-mono">{live.ramUsedGB} GB</span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-zinc-600">Total</span>
+                  <span className="text-zinc-500 font-mono">{live.ramTotalGB} GB</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary panel */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp className="w-3 h-3 text-zinc-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">PC Health</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "CPU Load", value: `${live.cpuUsage}%`, warn: live.cpuUsage > 80 },
+                  { label: "GPU Load", value: `${live.gpuUsage}%`, warn: live.gpuUsage > 85 },
+                  { label: "RAM Use", value: `${live.ramPct}%`, warn: live.ramPct > 85 },
+                  { label: "CPU Temp", value: `${live.cpuTemp}°C`, warn: live.cpuTemp > 85 },
+                  { label: "GPU Temp", value: `${live.gpuTemp}°C`, warn: live.gpuTemp > 82 },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-600">{row.label}</span>
+                    <span className={cn("text-[10px] font-bold font-mono", row.warn ? "text-red-400" : "text-zinc-300")}>
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={cn(
+                "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm text-center",
+                live.cpuUsage > 80 || live.gpuUsage > 85 || live.cpuTemp > 85 ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-500"
+              )}>
+                {live.cpuUsage > 80 || live.gpuUsage > 85 ? "High Load Detected" : live.cpuTemp > 85 || live.gpuTemp > 82 ? "Thermal Warning" : "System Nominal"}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <ScanImport />
+        </motion.div>
+
+        {/* Quick Boost Presets */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.33 }}
+          className="p-6 rounded-2xl bg-black/40 border border-white/5"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Rocket className="w-4 h-4 text-red-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
+            </div>
+            <span className="text-[10px] text-zinc-600 font-mono">one click — all tweaks enabled instantly</span>
+          </div>
+          <p className="text-xs text-zinc-500 mb-5 px-1">Pick a preset to instantly enable a curated set of tweaks, then download your script.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {QUICK_BOOST_PRESETS.map((preset, i) => {
+              const isActive = activeBoost === preset.id;
+              return (
+                <motion.button
+                  key={preset.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 + i * 0.06 }}
+                  onClick={() => applyQuickBoost(preset)}
+                  data-testid={`button-quick-boost-${preset.id}`}
+                  className={cn(
+                    "relative text-left p-4 rounded-xl border transition-all duration-300 group",
+                    isActive
+                      ? `${preset.activeBg} ${preset.border} ${preset.glow}`
+                      : `bg-black/40 ${preset.border}`
+                  )}
+                >
+                  {isActive && (
+                    <span className="absolute top-2 right-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    </span>
+                  )}
+                  <preset.icon className={cn("w-5 h-5 mb-3 transition-transform group-hover:scale-110", preset.color)} />
+                  <h3 className="text-sm font-bold text-white mb-1">{preset.title}</h3>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed mb-3">{preset.desc}</p>
+                  <div className={cn("text-[10px] font-bold uppercase tracking-wider", preset.color)}>
+                    {preset.tweaks.length} tweaks →
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </motion.div>
 
         <motion.div
