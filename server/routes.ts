@@ -398,7 +398,9 @@ export async function registerRoutes(
 
   // Game detection scanner script download
   app.get('/api/detect-games-script', (req, res) => {
-    const host = req.get('host') || 'localhost';
+    const rawHost = req.get('host') || 'localhost';
+    // Sanitize host: allow only hostname-safe chars (alnum, dash, dot, colon for port)
+    const host = rawHost.replace(/[^a-zA-Z0-9\-.:]/g, '');
     const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
     const baseUrl = `${protocol}://${host}/game-detection`;
 
