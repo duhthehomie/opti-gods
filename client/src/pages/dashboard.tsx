@@ -28,7 +28,7 @@ const FEATURES = [
   { icon: Power, title: "Power Plan", desc: "Processor performance states, C-states, and idle inhibit" },
   { icon: Gamepad2, title: "FiveM Optimizer", desc: "GTA V and FiveM-specific process tweaks for max FPS" },
   { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
-  { icon: Search, title: "Game Detection", desc: "Auto-detect 14 games and apply per-game optimization packs" },
+  { icon: Search, title: "Game Detection", desc: "Auto-detect 19 games and apply per-game optimization packs" },
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
@@ -524,6 +524,34 @@ export default function Dashboard() {
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <ScanImport />
+        </motion.div>
+
+        {/* System Health Report */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32 }}
+          className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-black/40 border border-white/5 hover:border-red-500/20 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 group-hover:border-red-500/20 transition-colors">
+              <Radio className="w-4 h-4 text-red-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-zinc-200">System Health Report</p>
+              <p className="text-[11px] text-zinc-500">Download a read-only PS1 that scans 25+ registry keys — shows your optimization score and exactly which tweaks are already applied.</p>
+            </div>
+          </div>
+          <Button
+            data-testid="button-download-health-report"
+            size="sm"
+            onClick={() => { const a = document.createElement('a'); a.href = '/api/scan/script'; a.download = 'OptiGods-ScanSystem.ps1'; a.click(); }}
+            variant="outline"
+            className="shrink-0 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 gap-1.5 font-bold uppercase tracking-wide"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download Scan
+          </Button>
         </motion.div>
 
         {/* Quick Boost Presets */}

@@ -15,12 +15,14 @@ const ALL_AMD_IDS = [
   "AmdDisableTelemetry","AmdDisableCrashDefender","AmdDisableStartupApps",
   "AmdShaderCache","AmdImageSharpening","AmdDisableFreeSyncCompetitive",
   "AmdDisableVariBright","AmdDisableVSR","EnableHAGS",
+  "AmdSmartAccessMemory","AmdAntiLagPlus","AmdFluidMotionFrames",
 ];
 
 const AMD_RECOMMENDED_IDS = [
   "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState",
   "AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag",
   "AmdDisableTelemetry","AmdDisableCrashDefender","AmdShaderCache","EnableHAGS",
+  "AmdSmartAccessMemory","AmdAntiLagPlus",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -151,6 +153,30 @@ const VISUAL_TWEAKS: TweakDef[] = [
     desc: "Offloads VRAM scheduling to dedicated hardware on the GPU — reduces frame-time variance. Required for AMD's AFMF/FSR3 Frame Generation.",
     badge: "RX 6000+",
     impact: "HIGH",
+  },
+];
+
+const NEXTGEN_TWEAKS: TweakDef[] = [
+  {
+    id: "AmdSmartAccessMemory",
+    title: "Enable Smart Access Memory (Resizable BAR)",
+    desc: "Sets KMD_EnableResizableBar=1 and KMD_EnableSmartAccessMemory=1 in the AMD driver registry — allows CPU to access the full VRAM directly. Requires Resizable BAR enabled in BIOS. Improves DX12/Vulkan performance by 5–15%.",
+    badge: "RECOMMENDED",
+    impact: "HIGH",
+  },
+  {
+    id: "AmdAntiLagPlus",
+    title: "Enable Anti-Lag+ (RX 7000 Series)",
+    desc: "Enables Anti-Lag and Anti-Lag+ via HKCU\\SOFTWARE\\AMD\\CN — Anti-Lag works on RX 5000+, Anti-Lag+ requires RX 7000 series and driver 23.11.1+. Reduces click-to-pixel latency by up to 50% in supported games.",
+    badge: "RX 7000+",
+    impact: "HIGH",
+  },
+  {
+    id: "AmdFluidMotionFrames",
+    title: "AMD Fluid Motion Frames (AFMF) Hint",
+    desc: "Sets KMD_EnableFrameGeneration=1 in the AMD KMD driver registry — enables the driver-level frame generation hint. Requires RX 7000 series, driver 23.11.1+, and activation in Radeon Software Global Graphics.",
+    badge: "RX 7000+",
+    impact: "MED",
   },
 ];
 
@@ -404,6 +430,32 @@ export default function Amd() {
           </div>
           <div className="space-y-3">
             {VISUAL_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Next-Gen Features */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Zap className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Next-Gen AMD Features</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">RDNA 3 / RX 7000</span>
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">Driver-level registry hints for Smart Access Memory, Anti-Lag+, and Fluid Motion Frames. Requires compatible hardware and driver version.</p>
+          <div className="space-y-3">
+            {NEXTGEN_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
                 id={item.id}

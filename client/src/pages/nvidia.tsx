@@ -8,8 +8,8 @@ import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, Che
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode"];
-const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS"];
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax"];
+const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering"];
 
 const PRESETS = [
   {
@@ -113,6 +113,49 @@ const NVIDIA_TWEAKS = [
   },
 ];
 
+const NVIDIA_ADVANCED_TWEAKS = [
+  {
+    id: "NvidiaAnisoFiltering",
+    title: "Force 16x Anisotropic Filtering (Driver Registry)",
+    desc: "Writes AnisotropicDegree=16 directly to the NVIDIA GPU class registry key — forces 16x AF on all games regardless of in-game settings, with near-zero performance cost on modern GPUs.",
+    badge: "RECOMMENDED",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaTripleBufferOff",
+    title: "Disable Triple Buffering",
+    desc: "Removes TripleBufferingOverride and sets NVTweak TripleBuffering=0 — reduces the render queue to a double-buffer, lowering frame latency at the cost of very minor smoothness.",
+    badge: "RECOMMENDED",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaReflexEnable",
+    title: "NVIDIA Reflex Registry Hint",
+    desc: "Writes Reflex Enable=1 and BoostEnabled=1 to the NVIDIA Reflex key. Pair with the in-game NVIDIA Reflex setting — this registry hint ensures the driver honors the Reflex pipeline, minimizing render queue depth.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaGSyncOptimize",
+    title: "G-Sync / VRR Optimized Path",
+    desc: "Sets GSyncEnabled=1, VSyncEnabled=0 in NvTweak and clears DisableBlockWrite — configures the NVIDIA driver for clean VRR passthrough. Use when you have a G-Sync or FreeSync monitor with NVIDIA.",
+    badge: "G-Sync",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaOpenGLOpt",
+    title: "OpenGL Threaded Optimization + Frame Queue",
+    desc: "Sets OpenGLThreadedOptimizations=1 and OGLFrameMaxAhead=1 in NvTweak — allows the NVIDIA driver to use multiple CPU threads for OpenGL draw submission and caps the render-ahead to 1 frame.",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaVRAMMax",
+    title: "Remove VRAM Allocation Limit",
+    desc: "Clears DedicatedSegmentSize (removes any VRAM cap) and sets VRAMUsage=1 — allows the driver to allocate full VRAM dynamically without hitting artificial soft caps.",
+    impact: "LOW" as const,
+  },
+];
+
 function NvidiaBadge({ text }: { text: string }) {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 uppercase tracking-wide">
@@ -127,7 +170,7 @@ export default function Nvidia() {
   const hw = useHardwareInfo();
 
   const enableAllNvidia = () => {
-    ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaShaderCache"].forEach(
+    [...NVIDIA_RECOMMENDED_IDS, "EnableMSIMode","NvidiaShaderCache"].forEach(
       (k) => setTweak(k, true)
     );
   };
@@ -233,6 +276,32 @@ export default function Nvidia() {
           </div>
           <div className="space-y-3">
             {NVIDIA_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Advanced Registry Tweaks Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Advanced Driver Registry</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Deep Registry</span>
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">Direct writes to the NVIDIA GPU class key and NvTweak hive — these go deeper than NVCP and persist across driver reinstalls.</p>
+          <div className="space-y-3">
+            {NVIDIA_ADVANCED_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
                 id={item.id}

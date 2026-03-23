@@ -261,6 +261,26 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   WinTitusShowExtensions: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'HideFileExt' -Value 0 -Type DWord -Force; Write-Host "[OK] File extensions shown in Explorer" -ForegroundColor Green`,
   WinTitusShowHidden: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'Hidden' -Value 1 -Type DWord -Force; Write-Host "[OK] Hidden files and folders shown in Explorer" -ForegroundColor Green`,
   OOShutupPrivacy: `$s = @(@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection','AllowTelemetry',0),@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection','AllowTelemetry',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo','Enabled',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo','DisabledByGroupPolicy',1),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','EnableActivityFeed',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','PublishUserActivities',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search','BingSearchEnabled',0),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search','CortanaConsent',0),@('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy','LetAppsRunInBackground',2),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}','Value','Deny'),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{52079E78-A92B-413F-B213-E8FE35712E72}','Value','Deny'),@('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeviceAccess\\Global\\{2EEF81BE-33FA-4800-9670-1CD474972C3F}','Value','Deny')); foreach ($r in $s) { $path=$r[0];$name=$r[1];$val=$r[2]; If (!(Test-Path $path)) { New-Item $path -Force | Out-Null }; If ($val -is [string]) { Set-ItemProperty $path $name $val -Type String -Force -EA SilentlyContinue } Else { Set-ItemProperty $path $name $val -Type DWord -Force -EA SilentlyContinue } }; Write-Host "[OK] OO ShutUp10++ recommended privacy settings applied (12 registry changes)" -ForegroundColor Green`,
+
+  // ── NVIDIA Advanced Registry Tweaks ─────────────────────────────────────────
+  NvidiaAnisoFiltering: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $found=$false; 0,1,2,3 | ForEach-Object { $k = "$gpuClass\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') { Set-ItemProperty $k -Name 'ForcedMipmapsMinLod' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $k -Name 'AnisotropicDegree' -Value 16 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Anisotropic Filtering 16x forced on $k" -ForegroundColor Green; $found=$true } }; If (-not $found) { Write-Host "[NVIDIA] NVIDIA GPU class key not found — apply AF manually in NVCP" -ForegroundColor Yellow }`,
+  NvidiaTripleBufferOff: `$gdrv = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; Remove-ItemProperty $gdrv 'TripleBufferingOverride' -EA SilentlyContinue; $nvPol = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak\\Policies'; If (!(Test-Path $nvPol)) { New-Item $nvPol -Force | Out-Null }; Set-ItemProperty $nvPol 'TripleBuffering' 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Triple Buffering disabled — reduces frame buffer depth for lower input latency" -ForegroundColor Green`,
+  NvidiaReflexEnable: `$reflexPath = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\Reflex'; If (!(Test-Path $reflexPath)) { New-Item $reflexPath -Force | Out-Null }; Set-ItemProperty $reflexPath 'Enable' 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $reflexPath 'BoostEnabled' 1 -Type DWord -Force -EA SilentlyContinue; $gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item $gamePath -Force | Out-Null }; Set-ItemProperty $gamePath 'MaximumPreRenderedFrames' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Reflex hint enabled (Enable=1, BoostEnabled=1) — pair with in-game Reflex for lowest click-to-pixel latency" -ForegroundColor Green`,
+  NvidiaGSyncOptimize: `$nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'GSyncEnabled' 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $nvKey 'VSyncEnabled' 0 -Type DWord -Force -EA SilentlyContinue; $gdrv = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; Set-ItemProperty $gdrv 'DisableBlockWrite' 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] G-Sync: VSync disabled, G-Sync enabled, block write path cleared — optimized VRR pipeline" -ForegroundColor Green`,
+  NvidiaOpenGLOpt: `$nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'OpenGLThreadedOptimizations' 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $nvKey 'OGLFrameMaxAhead' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] OpenGL: threaded optimizations=On, render-ahead=1 frame — reduces CPU submission overhead in OpenGL titles" -ForegroundColor Green`,
+  NvidiaVRAMMax: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'DedicatedSegmentSize' -Value 0 -Type DWord -Force -EA SilentlyContinue; $nvKey = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NVControlPanel2\\Client'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'VRAMUsage' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] VRAM: DedicatedSegmentSize cleared + VRAMUsage=1 — driver auto-manages VRAM without artificial limit" -ForegroundColor Green`,
+
+  // ── AMD Advanced Tweaks ───────────────────────────────────────────────────
+  AmdSmartAccessMemory: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $found=$false; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnableResizableBar' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_EnableSmartAccessMemory' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Smart Access Memory enabled on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc)" -ForegroundColor Green; $found=$true }; If (-not $found) { Write-Host "[AMD] No AMD GPU class key found — verify Resizable BAR is enabled in BIOS first" -ForegroundColor Yellow } Else { Write-Host "[AMD] SAM (Resizable BAR) enabled — CPU has full VRAM access, improves DX12/Vulkan 5-15%" -ForegroundColor Green }`,
+  AmdAntiLagPlus: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLag' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLagPlus' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Anti-Lag + Anti-Lag+ enabled. Anti-Lag works on RX 5000+, Anti-Lag+ requires RX 7000 series + driver 23.11.1+" -ForegroundColor Green`,
+  AmdFluidMotionFrames: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnableFrameGeneration' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] AFMF frame generation hint set on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc)" -ForegroundColor Green }; Write-Host "[AMD] Fluid Motion Frames (AFMF) hint applied. Requires RX 7000 + driver 23.11.1+ + enable in Radeon Software Global Graphics" -ForegroundColor Cyan`,
+
+  // ── Game Detection: Additional Games ────────────────────────────────────────
+  game_warframe: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Warframe","D:\\SteamLibrary\\steamapps\\common\\Warframe","$env:LOCALAPPDATA\\Warframe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Warframe at $found" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Warframe.x64.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Warframe: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Warframe not detected" -ForegroundColor DarkGray }`,
+  game_forza: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\ForzaHorizon5","D:\\SteamLibrary\\steamapps\\common\\ForzaHorizon5","$env:ProgramFiles\\WindowsApps"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Forza Horizon 5" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\ForzaHorizon5.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Forza Horizon 5: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Forza Horizon 5 not detected" -ForegroundColor DarkGray }`,
+  game_readyornot: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Ready Or Not","D:\\SteamLibrary\\steamapps\\common\\Ready Or Not","E:\\SteamLibrary\\steamapps\\common\\Ready Or Not"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Ready or Not" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\ReadyOrNot.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Ready or Not: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Ready or Not not detected" -ForegroundColor DarkGray }`,
+  game_phasmo: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Phasmophobia","D:\\SteamLibrary\\steamapps\\common\\Phasmophobia"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Phasmophobia" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Phasmophobia.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Phasmophobia: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Phasmophobia not detected" -ForegroundColor DarkGray }`,
+  game_battlefield: `$paths = @("C:\\Program Files\\EA Games\\Battlefield 2042","C:\\Program Files (x86)\\Origin Games\\Battlefield 2042","C:\\Program Files (x86)\\Steam\\steamapps\\common\\Battlefield 2042","D:\\SteamLibrary\\steamapps\\common\\Battlefield 2042"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Battlefield 2042" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\BF2042.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Battlefield 2042: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Battlefield 2042 not detected" -ForegroundColor DarkGray }`,
 };
 
 // ── RESTORE / UNDO COMMANDS ─────────────────────────────────────────────────
@@ -643,6 +663,101 @@ export async function registerRoutes(
   app.delete(api.presets.delete.path, async (req, res) => {
     await storage.deletePreset(Number(req.params.id));
     res.json({ success: true });
+  });
+
+  // ── System Scan Script — generates a PS1 that checks which tweaks are applied ──
+  app.get('/api/scan/script', (_req, res) => {
+    const scanLines = [
+      `# =============================================`,
+      `# OPTI GODS by leaq — System Scan Script`,
+      `# Run this as Administrator to check which`,
+      `# Opti Gods tweaks are already applied.`,
+      `# Generated: ${new Date().toISOString()}`,
+      `# =============================================`,
+      ``,
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `$applied = 0`,
+      `$missing = 0`,
+      `$results = @()`,
+      ``,
+      `function Check { param($name, $expr) try { $val = Invoke-Expression $expr; if ($val) { $script:applied++; $script:results += "[OK]   $name" } else { $script:missing++; $script:results += "[---]  $name" } } catch { $script:missing++; $script:results += "[ERR]  $name" } }`,
+      ``,
+      `Write-Host "" `,
+      `Write-Host "=========================================" -ForegroundColor Red`,
+      `Write-Host "  OPTI GODS — System Scan" -ForegroundColor Red`,
+      `Write-Host "=========================================" -ForegroundColor White`,
+      `Write-Host "" `,
+      ``,
+      `# CPU / Scheduling`,
+      `Check "Win32PrioritySeparation = 38" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -EA SilentlyContinue).Win32PrioritySeparation -eq 38"`,
+      `Check "Timer Resolution (bcdedit useplatformclock)" "(bcdedit /enum | Select-String 'useplatformclock') -match 'Yes'"`,
+      `Check "DisableHungAppDetection" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SessionManager' -EA SilentlyContinue).HungAppTimeout -eq 1000"`,
+      `Check "EnableMSIMode (GPU)" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\PCI' -EA SilentlyContinue -Recurse | Where { \$_.DeviceDesc -match 'VGA' } | Select -First 1) -ne \$null"`,
+      ``,
+      `# Network`,
+      `Check "NetworkThrottlingIndex = 4294967295" "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -EA SilentlyContinue).NetworkThrottlingIndex -eq 4294967295"`,
+      `Check "TCPAutoTuning = Disabled" "((netsh int tcp show global) -join '') -match 'disabled'"`,
+      `Check "Nagle Disabled (TcpAckFrequency=1)" "(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -EA SilentlyContinue | ForEach { (Get-ItemProperty \$_.PSPath -EA SilentlyContinue).TcpAckFrequency } | Where { \$_ -eq 1 } | Measure-Object).Count -gt 0"`,
+      `Check "IPv6 Disabled" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters' -EA SilentlyContinue).DisabledComponents -gt 0"`,
+      ``,
+      `# Memory`,
+      `Check "Memory Compression Disabled" "(Get-MMAgent -EA SilentlyContinue).MemoryCompression -eq \$false"`,
+      `Check "Superfetch Disabled" "(Get-Service SysMain -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      ``,
+      `# Gaming`,
+      `Check "GameDVR Disabled" "(Get-ItemProperty 'HKCU:\\System\\GameConfigStore' -EA SilentlyContinue).GameDVR_Enabled -eq 0"`,
+      `Check "HAGS Enabled" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -EA SilentlyContinue).HwSchMode -eq 2"`,
+      `Check "XboxGameBar Disabled" "(Get-AppxPackage Microsoft.XboxGamingOverlay -EA SilentlyContinue) -eq \$null"`,
+      `Check "Mouse Precision Disabled" "(Get-ItemProperty 'HKCU:\\Control Panel\\Mouse' -EA SilentlyContinue).MouseSpeed -eq 0"`,
+      ``,
+      `# Power`,
+      `Check "High Performance Power Plan Active" "(powercfg /getactivescheme) -match '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'"`,
+      `Check "Core Parking Disabled" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583' -EA SilentlyContinue).ValueMax -eq 0"`,
+      `Check "Dynamic Tick Disabled" "(bcdedit /enum | Select-String 'disabledynamictick') -match 'Yes'"`,
+      ``,
+      `# NVIDIA`,
+      `Check "NVIDIA Telemetry Disabled" "(Get-Service NvTelemetryContainer -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      `Check "PreRenderedFrames = 1" "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games' -EA SilentlyContinue).MaximumPreRenderedFrames -eq 1"`,
+      `Check "GPU Priority = 8" "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games' -EA SilentlyContinue).'GPU Priority' -eq 8"`,
+      `Check "NVIDIA PowerMizer Max Perf" "(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' -EA SilentlyContinue | Where { (Get-ItemProperty \$_.PSPath -EA SilentlyContinue).DriverDesc -match 'NVIDIA' } | ForEach { (Get-ItemProperty \$_.PSPath -EA SilentlyContinue).PowerMizerLevel } | Where { \$_ -eq 1 } | Measure-Object).Count -gt 0"`,
+      ``,
+      `# AMD`,
+      `Check "AMD ULPS Disabled" "(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' -EA SilentlyContinue | Where { (Get-ItemProperty \$_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach { (Get-ItemProperty \$_.PSPath -EA SilentlyContinue).EnableUlps } | Where { \$_ -eq 0 } | Measure-Object).Count -gt 0"`,
+      `Check "AMD Telemetry Disabled" "(Get-Service 'AMD External Events Utility' -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      `Check "AMD Anti-Lag Enabled" "(Get-ItemProperty 'HKCU:\\SOFTWARE\\AMD\\CN' -EA SilentlyContinue).AntiLag -eq 1"`,
+      ``,
+      `# Services`,
+      `Check "DiagTrack Disabled" "(Get-Service DiagTrack -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      `Check "Windows Search Disabled" "(Get-Service WSearch -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      `Check "SysMain Disabled" "(Get-Service SysMain -EA SilentlyContinue).StartType -eq 'Disabled'"`,
+      ``,
+      `# Privacy`,
+      `Check "Telemetry Opt-Out (AllowTelemetry=0)" "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -EA SilentlyContinue).AllowTelemetry -eq 0"`,
+      `Check "Advertising ID Disabled" "(Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo' -EA SilentlyContinue).Enabled -eq 0"`,
+      ``,
+      `# Output results`,
+      `Write-Host "" `,
+      `Write-Host "--- SCAN RESULTS ---" -ForegroundColor Cyan`,
+      `$results | ForEach-Object {`,
+      `    if ($_ -match '\\[OK\\]') { Write-Host $_ -ForegroundColor Green }`,
+      `    elseif ($_ -match '\\[ERR\\]') { Write-Host $_ -ForegroundColor Yellow }`,
+      `    else { Write-Host $_ -ForegroundColor DarkGray }`,
+      `}`,
+      `Write-Host "" `,
+      `Write-Host "=========================================" -ForegroundColor Red`,
+      `Write-Host "  Applied: $applied  |  Missing: $missing" -ForegroundColor White`,
+      `$pct = if (($applied + $missing) -gt 0) { [math]::Round($applied / ($applied + $missing) * 100) } else { 0 }`,
+      `Write-Host "  Optimization score: $pct%" -ForegroundColor $(if ($pct -ge 80) { 'Green' } elseif ($pct -ge 50) { 'Yellow' } else { 'Red' })`,
+      `Write-Host "=========================================" -ForegroundColor Red`,
+      `Write-Host "" `,
+      `Write-Host "Run your Opti Gods script to apply missing tweaks." -ForegroundColor Cyan`,
+      `Read-Host "Press ENTER to close"`,
+    ];
+
+    const script = scanLines.join('\n');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-ScanSystem.ps1"');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(script);
   });
 
   app.get(api.startup.list.path, async (_req, res) => {
