@@ -33,9 +33,10 @@ export default function Registry() {
                 { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED" },
                 { id: "DisableHungAppDetection", title: "Disable Hung App Detection Delay", desc: "Removes the 5-second wait for unresponsive app dialogs — kills hung processes instantly." },
                 { id: "SetTimerResolution", title: "Set System Timer to 0.5ms", desc: "Forces Windows timer interrupt to high-resolution — better CPU scheduling precision for games." },
-                { id: "SetResponsiveness", title: "Set Multimedia System Responsiveness to 0", desc: "Sets SystemResponsiveness=0 — gives games 100% of multimedia class scheduler priority instead of sharing 20% with background services.", badge: "RECOMMENDED" },
+                { id: "SetResponsiveness", title: "Set System Responsiveness = 10", desc: "Sets SystemResponsiveness=10 — balances game priority with system stability. 0 can cause audio/UI stutters; 10 is the sweet spot for gaming.", badge: "RECOMMENDED" },
+                { id: "GameModeTweaks", title: "Game Mode Scheduler: High Priority", desc: "Sets Games task profile: Scheduling Category=High, SFIO=High, GPU Priority=8, CPU Priority=6, MaxPreRenderedFrames=1 — Windows treats your game as top-priority process.", badge: "NEW" },
                 { id: "EnableMSIMode", title: "Enable MSI Mode for GPU", desc: "Forces Message Signaled Interrupts on the GPU — eliminates interrupt sharing latency with other PCI-e devices." },
-                { id: "DisableCoreParking", title: "Disable CPU Core Parking", desc: "Forces all cores to stay active — removes the 1–3ms wake-up latency spike when a parked core is needed." },
+                { id: "DisableCoreParking", title: "Disable CPU Core Parking (Advanced)", desc: "Forces all CPU cores active via PowerSettings registry path + powercfg — removes 1–3ms wake latency on parked cores.", badge: "RECOMMENDED" },
                 { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power." },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
@@ -48,7 +49,8 @@ export default function Registry() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Network & Latency</h2>
             <div className="space-y-3">
               {[
-                { id: "NetworkThrottling", title: "Disable Network Throttling Index", desc: "Removes Windows' 10-packet-per-100ms limit on network processing — critical for high-tick servers.", badge: "RECOMMENDED" },
+                { id: "NetworkThrottling", title: "Disable Network Throttling Index (FFFFFFFF)", desc: "Sets NetworkThrottlingIndex=FFFFFFFF — removes Windows' artificial 10-packet-per-100ms limit. Critical for high-tick servers.", badge: "RECOMMENDED" },
+                { id: "InputLagTCP", title: "Reduce Input Lag via TCP (ACK Frequency + NoDelay)", desc: "Sets TcpAckFrequency=1, TCPNoDelay=1, EnablePMTUBHDetect=0 — eliminates ACK batching delay for lower ping response in competitive games.", badge: "NEW" },
                 { id: "OptimizeTCP", title: "Optimize TCP/IP Stack", desc: "Tunes autotuninglevel, DCA, and netDMA for lower-latency packet processing." },
                 { id: "DisableNagle", title: "Disable Nagle's Algorithm", desc: "Forces immediate packet sends — reduces ping variability (jitter) in real-time games.", badge: "RECOMMENDED" },
                 { id: "EnableTCPAutoTuning", title: "Enable TCP Auto-Tuning (Normal)", desc: "Allows Windows to dynamically adjust TCP receive window for maximum bandwidth." },
@@ -106,6 +108,8 @@ export default function Registry() {
                 { id: "SetHighPerformancePlan", title: "Force Ultimate Performance Power Plan", desc: "Unlocks the hidden Ultimate Performance plan and sets it active — eliminates all power-saving throttling.", badge: "RECOMMENDED" },
                 { id: "DisableUSBSuspend", title: "Disable USB Selective Suspend", desc: "Prevents Windows from sleeping USB ports — eliminates controller and headset input stutter." },
                 { id: "DisablePowerThrottling", title: "Disable CPU Power Throttling", desc: "Disables the Windows power throttling policy that reduces background CPU clocks." },
+                { id: "DisablePowerThrottlingAdv", title: "Disable Power Throttling (Advanced Registry Path)", desc: "Targets the specific PowerSettings GUID path (be337238-0d82-4146-a960-4f3749d470c7) and sets Attributes=1 — exposes and disables power throttling in Power Options.", badge: "NEW" },
+                { id: "DisableFastStartup", title: "Disable Fast Startup / Hibernate Boot", desc: "Forces full cold boot instead of resume from hibernate — fixes driver issues, stale states, and some GPU/RAM problems.", badge: "RECOMMENDED" },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   badge={(item as any).badge} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />

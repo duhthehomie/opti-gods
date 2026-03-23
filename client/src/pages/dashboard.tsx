@@ -1,49 +1,48 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
-import { ShieldAlert, Zap, Cpu, HardDrive, Activity, Save, Trash2, FolderOpen, Plus } from "lucide-react";
+import {
+  ShieldAlert, Zap, Cpu, HardDrive, Monitor, Save, Trash2,
+  FolderOpen, Plus, CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
+  MemoryStick, Wifi
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { cn } from "@/lib/utils";
 
-function GaugeBar({ label, value, color = "red" }: { label: string; value: number; color?: string }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">{label}</span>
-        <span className={cn("text-sm font-mono font-bold", color === "red" ? "text-red-400" : color === "orange" ? "text-orange-400" : "text-blue-400")}>
-          {value}%
-        </span>
-      </div>
-      <div className="h-2 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${value}%` }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-          className={cn(
-            "h-full rounded-full",
-            value > 80 ? "bg-red-500" : value > 50 ? "bg-orange-500" : color === "red" ? "bg-red-600" : color === "orange" ? "bg-orange-600" : "bg-blue-600"
-          )}
-          style={{ boxShadow: value > 40 ? `0 0 8px ${value > 80 ? "#ef4444" : "#f97316"}` : undefined }}
-        />
-      </div>
-    </div>
-  );
-}
+const HOW_TO_STEPS = [
+  {
+    icon: Terminal,
+    title: "Browse & Toggle",
+    desc: "Open any tab in the sidebar (Registry, FiveM, Fortnite, etc.) and flip the toggles for every optimization you want. Red = will be applied.",
+  },
+  {
+    icon: Download,
+    title: "Download Your Script",
+    desc: "Click DOWNLOAD .PS1 in the top bar. This generates a personalized PowerShell script containing only the tweaks you enabled — nothing else.",
+  },
+  {
+    icon: ShieldAlert,
+    title: "Run as Administrator",
+    desc: "Open your Downloads folder, right-click OptiGods-by-leaq.ps1, and choose Run with PowerShell. Click Yes on the Administrator prompt.",
+  },
+  {
+    icon: RotateCcw,
+    title: "Restart & Done",
+    desc: "After the script finishes, restart your PC. All changes take effect on the next boot. Create a Windows Restore Point first as a precaution.",
+  },
+];
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useQuery<{ cpu: number; gpu: number; memory: number; os: string; processCount: number; highImpactCount: number }>({
-    queryKey: [api.system.stats.path],
-    refetchInterval: 3000,
-  });
-
   const osInfo = useOsDetection();
+  const hw = useHardwareInfo();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
-  const { data: savedPresets = [], refetch: refetchPresets } = useQuery<any[]>({
+  const { data: savedPresets = [] } = useQuery<any[]>({
     queryKey: [api.presets.list.path],
   });
   const qc = useQueryClient();
@@ -87,10 +86,48 @@ export default function Dashboard() {
   };
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const totalTweaks = Object.keys(tweaks).length;
+  const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
+  const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-yellow-400" : enabledCount < 25 ? "text-orange-400" : "text-red-400";
+
+  // Hardware stat cards — all values from real browser APIs
+  const hwCards = [
+    {
+      title: "Operating System",
+      value: osInfo.loading ? "Detecting..." : osInfo.os,
+      sub: osInfo.build ? `Build ${osInfo.build} · via UA Client Hints` : "via browser detection",
+      icon: <HardDrive className="w-5 h-5 text-zinc-400" />,
+      accurate: true,
+    },
+    {
+      title: "CPU Threads",
+      value: hw.loading ? "Detecting..." : hw.cpuCores > 0 ? `${hw.cpuCores} Threads` : "Unknown",
+      sub: hw.cpuCores > 0
+        ? `~${Math.max(1, Math.floor(hw.cpuCores / 2))} physical cores estimated`
+        : "navigator.hardwareConcurrency",
+      icon: <Cpu className="w-5 h-5 text-red-400" />,
+      accurate: true,
+    },
+    {
+      title: "System RAM",
+      value: hw.loading ? "Detecting..." : hw.ramGB > 0 ? `~${hw.ramGB} GB` : "Unknown",
+      sub: hw.ramGB > 0 ? "approximate (browser privacy limit)" : "navigator.deviceMemory",
+      icon: <MemoryStick className="w-5 h-5 text-zinc-400" />,
+      accurate: true,
+    },
+    {
+      title: "Graphics Card",
+      value: hw.loading ? "Detecting..." : hw.gpuName.length > 22 ? hw.gpuName.slice(0, 22) + "…" : hw.gpuName,
+      sub: hw.gpuVendor || "via WebGL renderer info",
+      icon: <Monitor className="w-5 h-5 text-zinc-400" />,
+      accurate: true,
+    },
+  ];
 
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
+
         {/* Hero Banner */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -108,7 +145,8 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-lg text-zinc-400 mb-8 leading-relaxed">
-              Deep registry surgery, process priority pinning, bloatware removal, and one-click PowerShell deployment. Built for Windows 10 competitive gaming.
+              Deep registry tweaks, process priority pinning, bloatware removal, and one-click PowerShell deployment.
+              Optimized for Windows 10 and 11 competitive gaming.
             </p>
             <div className="flex gap-4">
               <Button
@@ -117,62 +155,97 @@ export default function Dashboard() {
                 className="border-white/10 hover:bg-white/5 hover:text-white text-zinc-300 font-medium"
               >
                 <ShieldAlert className="w-4 h-4 mr-2" />
-                Create Restore Point
+                Create Restore Point First
               </Button>
             </div>
           </div>
         </motion.div>
 
-        {/* System Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Hardware Stats — REAL data from browser APIs */}
+        <div>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Your System</span>
+            <div className="flex-1 h-px bg-white/5" />
+            <span className="text-[10px] text-zinc-600 font-mono">detected via browser APIs — no server required</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {hwCards.map((card, i) => (
+              <motion.div
+                key={card.title}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: i * 0.08 }}
+                data-testid={`card-stat-${i}`}
+                className="p-5 rounded-xl bg-black/40 border border-white/5 hover:border-white/10 transition-colors"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{card.title}</p>
+                  {card.icon}
+                </div>
+                <h3 className="text-base font-bold text-white font-display truncate" title={card.value}>{card.value}</h3>
+                <p className="text-[10px] text-zinc-600 mt-1 leading-relaxed">{card.sub}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tweaks Counter */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { title: "Operating System", value: osInfo.loading ? "Detecting..." : osInfo.os, sub: osInfo.build ? `Build ${osInfo.build}` : "via browser detection", icon: <HardDrive className="w-5 h-5 text-zinc-400" /> },
-            { title: "Active Processes", value: String(stats?.processCount || 84), sub: `${stats?.highImpactCount || 12} High Impact`, icon: <Cpu className="w-5 h-5 text-red-400" /> },
-            { title: "Tweaks Enabled", value: String(enabledCount), sub: "of 130+ available", icon: <Zap className="w-5 h-5 text-yellow-500" /> },
-            { title: "Optimization Level", value: enabledCount > 30 ? "High" : enabledCount > 10 ? "Medium" : "Low", sub: enabledCount > 30 ? "Well tuned" : "Tweaks required", icon: <Activity className="w-5 h-5 text-red-400" /> },
-          ].map((card, i) => (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
-              data-testid={`card-stat-${i}`}
-              className="p-5 rounded-xl bg-black/40 border border-white/5 hover:border-white/10 transition-colors"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{card.title}</p>
-                {card.icon}
-              </div>
-              <h3 className="text-xl font-bold text-white font-display truncate">{card.value}</h3>
-              <p className="text-xs text-zinc-600 mt-1">{card.sub}</p>
+            { label: "Tweaks Enabled", value: String(enabledCount), sub: `of ${totalTweaks} available` },
+            { label: "Optimization Level", value: optLevel, sub: enabledCount === 0 ? "Enable tweaks to begin" : `${enabledCount} active`, color: optColor },
+            { label: "Screen Resolution", value: hw.loading ? "..." : hw.resolution || "Unknown", sub: "detected" },
+            { label: "GPU Vendor", value: hw.loading ? "..." : hw.isNvidia ? "NVIDIA" : hw.isAMD ? "AMD" : hw.isIntel ? "Intel" : "Unknown", sub: hw.isNvidia ? "HAGS + MSI Mode available" : hw.isAMD ? "HAGS available (RX 6000+)" : "Check GPU settings" },
+          ].map((c, i) => (
+            <motion.div key={c.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }}
+              className="p-4 rounded-xl bg-black/40 border border-white/5">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">{c.label}</p>
+              <p className={cn("text-xl font-bold font-display", c.color || "text-white")}>{c.value}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">{c.sub}</p>
             </motion.div>
           ))}
         </div>
 
-        {/* System Gauges — Simulated Notice */}
+        {/* ── HOW TO USE ── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="p-6 rounded-2xl bg-black/40 border border-white/5"
+          transition={{ delay: 0.4 }}
+          className="p-6 rounded-2xl bg-black/40 border border-red-500/15"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-300">System Usage</h2>
-            <span className="ml-auto text-[10px] font-mono text-yellow-600 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
-              SIMULATED — see note below
-            </span>
+          <div className="flex items-center gap-2 mb-6">
+            <Zap className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">How to Use Opti Gods</h2>
           </div>
-          <p className="text-xs text-zinc-600 mb-6 leading-relaxed">
-            This app runs as a web server and <span className="text-zinc-400">cannot read your actual CPU, GPU, or RAM</span> directly. 
-            The values below are demo data. For real hardware monitoring, use{" "}
-            <span className="text-zinc-300 font-medium">MSI Afterburner + HWiNFO64</span> or the built-in Windows Task Manager.
-            Once you hit <span className="text-red-400 font-medium">APPLY OPTIMIZATIONS</span>, the generated PowerShell script runs locally on your machine where it has full access.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <GaugeBar label="CPU (demo)" value={isLoading ? 0 : (stats?.cpu ?? 0)} color="red" />
-            <GaugeBar label="GPU (demo)" value={isLoading ? 0 : (stats?.gpu ?? 0)} color="orange" />
-            <GaugeBar label="RAM (demo)" value={isLoading ? 0 : (stats?.memory ?? 0)} color="blue" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {HOW_TO_STEPS.map((step, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 + i * 0.07 }}
+                className="relative p-4 rounded-xl bg-red-500/5 border border-red-500/10 hover:border-red-500/20 transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-7 h-7 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center shrink-0">
+                    <span className="text-[11px] font-bold text-red-400">{i + 1}</span>
+                  </div>
+                  <step.icon className="w-4 h-4 text-red-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">{step.title}</h3>
+                <p className="text-xs text-zinc-500 leading-relaxed">{step.desc}</p>
+                {i < HOW_TO_STEPS.length - 1 && (
+                  <ChevronRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700 z-10" />
+                )}
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-5 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 flex items-start gap-3">
+            <CheckCircle2 className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <span className="text-white font-medium">Pro tip:</span> Save your configuration as a Preset (below) before applying — you can load it again anytime without re-enabling each tweak manually.
+              All tweaks start <span className="text-white font-medium">OFF</span> for every new visitor — nothing is applied to your PC until you download and run the script.
+            </p>
           </div>
         </motion.div>
 
@@ -180,7 +253,7 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.5 }}
           className="p-6 rounded-2xl bg-black/40 border border-white/5"
         >
           <div className="flex items-center gap-2 mb-6">
@@ -189,7 +262,6 @@ export default function Dashboard() {
             <span className="ml-auto text-xs text-zinc-600">{savedPresets.length} saved</span>
           </div>
 
-          {/* Save New Preset */}
           <div className="flex gap-3 mb-6">
             <AnimatePresence>
               {saving ? (
@@ -244,10 +316,9 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Preset List */}
           {savedPresets.length === 0 ? (
             <div className="text-center py-8 text-zinc-600 text-sm border border-dashed border-zinc-800 rounded-xl">
-              No presets saved yet. Configure your tweaks and save a preset above.
+              No presets saved yet. Configure your tweaks across the tabs, then save here for quick reload.
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">

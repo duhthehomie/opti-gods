@@ -8,6 +8,7 @@ import { useGenerateScript } from "@/hooks/use-script";
 import { ScriptDialog } from "../script-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { ProGate } from "@/components/pro-gate";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,36 +90,40 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Direct Download Button */}
-              <Button
-                data-testid="button-download-script"
-                onClick={handleDownload}
-                disabled={downloading}
-                variant="outline"
-                className="border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-red-400 hover:text-red-300 font-display tracking-wide px-4 hidden sm:flex"
-              >
-                {downloading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                DOWNLOAD .PS1
-              </Button>
+              {/* Direct Download Button — PRO GATED */}
+              <ProGate className="hidden sm:block">
+                <Button
+                  data-testid="button-download-script"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  variant="outline"
+                  className="border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-red-400 hover:text-red-300 font-display tracking-wide px-4"
+                >
+                  {downloading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  DOWNLOAD .PS1
+                </Button>
+              </ProGate>
 
-              {/* PowerShell Command Button */}
-              <Button
-                data-testid="button-apply-optimizations"
-                onClick={handleApply}
-                disabled={generateScript.isPending}
-                className="bg-red-600 hover:bg-red-500 text-white border border-red-400/50 shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)] transition-all duration-300 px-6 font-display tracking-wide"
-              >
-                {generateScript.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4 mr-2" />
-                )}
-                APPLY
-              </Button>
+              {/* PowerShell Command Button — PRO GATED */}
+              <ProGate>
+                <Button
+                  data-testid="button-apply-optimizations"
+                  onClick={handleApply}
+                  disabled={generateScript.isPending}
+                  className="bg-red-600 hover:bg-red-500 text-white border border-red-400/50 shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)] transition-all duration-300 px-6 font-display tracking-wide"
+                >
+                  {generateScript.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Zap className="w-4 h-4 mr-2" />
+                  )}
+                  APPLY
+                </Button>
+              </ProGate>
             </div>
           </header>
 

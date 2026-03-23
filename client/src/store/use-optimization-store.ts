@@ -11,7 +11,7 @@ interface OptimizationState {
 }
 
 const DEFAULT_TWEAKS: Record<string, boolean> = {
-  // Registry - CPU
+  // Registry - CPU Scheduling
   Win32PrioritySeparation: false,
   DisableHungAppDetection: false,
   EnableLargeSystemCache: false,
@@ -19,10 +19,12 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   SetTimerResolution: false,
   SetResponsiveness: false,
   EnableMSIMode: false,
+  GameModeTweaks: false,
   // Registry - Network
   NetworkThrottling: false,
   OptimizeTCP: false,
   DisableNagle: false,
+  InputLagTCP: false,
   EnableTCPAutoTuning: false,
   DisablePowerThrottling: false,
   SetDNSPriority: false,
@@ -34,12 +36,12 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   DisableMemoryCompression: false,
   OptimizeRAMUsage: false,
   // Registry - Visual/Gaming
-  DisableAnimations: true,
-  DisableTelemetry: true,
-  DisableXboxGameBar: true,
-  DisableGameDVR: true,
+  DisableAnimations: false,
+  DisableTelemetry: false,
+  DisableXboxGameBar: false,
+  DisableGameDVR: false,
   EnableHAGS: false,
-  DisablePointerPrecision: true,
+  DisablePointerPrecision: false,
   DisableFastStartup: false,
   DisableWindowsError: false,
   DisableAutoUpdate: false,
@@ -48,6 +50,7 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   SetHighPerformancePlan: false,
   DisableUSBSuspend: false,
   DisableCoreParking: false,
+  DisablePowerThrottlingAdv: false,
   DisableDynamicTick: false,
   // FiveM
   FiveMCacheClear: false,
@@ -90,10 +93,10 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   DebloatMixedReality: false,
   DebloatSkype: false,
   DebloatZune: false,
+  DebloatGrooveMusic: false,
   DebloatOfficeHub: false,
   DebloatFeedback: false,
   DebloatGetHelp: false,
-  DebloatGrooveMusic: false,
   DebloatMSPaint3D: false,
   DebloatWindowsCamera: false,
   DebloatYourPhone: false,
@@ -113,10 +116,10 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   ServiceTabletInput: false,
   ServiceMapsBroker: false,
   // Debloat - Privacy
-  PrivacyTelemetry: true,
+  PrivacyTelemetry: false,
   PrivacyActivityHistory: false,
   PrivacyLocationTracking: false,
-  PrivacyAdvertisingID: true,
+  PrivacyAdvertisingID: false,
   PrivacyDiagFeedback: false,
   // Win11 Debloat
   Win11TeamsChat: false,
@@ -182,11 +185,11 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   FortniteGameMode: false,
   FortniteDisableThrottling: false,
   // Startup Apps
-  su_discord: true,
-  su_spotify: true,
+  su_discord: false,
+  su_spotify: false,
   su_steam: false,
-  su_onedrive: true,
-  su_teams: true,
+  su_onedrive: false,
+  su_teams: false,
   su_skype: false,
   su_zoom: false,
   su_rtss: false,

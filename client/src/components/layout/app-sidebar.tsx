@@ -10,6 +10,7 @@ import {
   Settings2,
   Zap,
   Trash2,
+  Search,
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,12 +30,13 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: Activity },
   { title: "Registry Tweaks", url: "/registry", icon: Settings2 },
   { title: "FiveM Optimizer", url: "/fivem", icon: Gamepad2 },
+  { title: "Fortnite Optimizer", url: "/fortnite", icon: Crosshair },
+  { title: "Game Detection", url: "/game-detection", icon: Search },
   { title: "NVIDIA Presets", url: "/nvidia", icon: MonitorPlay },
   { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
   { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
-  { title: "Fortnite Optimizer", url: "/fortnite", icon: Crosshair },
 ];
 
 export function AppSidebar() {
