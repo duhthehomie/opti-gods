@@ -11,6 +11,7 @@ import {
   Zap,
   Trash2,
   Search,
+  Flame,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ const navItems = [
   { title: "Fortnite Optimizer", url: "/fortnite", icon: Crosshair },
   { title: "Game Detection", url: "/game-detection", icon: Search },
   { title: "NVIDIA Presets", url: "/nvidia", icon: MonitorPlay },
+  { title: "AMD Optimizer", url: "/amd", icon: Flame },
   { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
