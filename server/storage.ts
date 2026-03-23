@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest } from "@shared/schema";
 import { eq, isNotNull, gte, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -25,6 +25,11 @@ export interface IStorage {
   // Visit tracking
   recordVisit(referrer?: string): Promise<void>;
   getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }>;
+  // Email code requests
+  createEmailRequest(email: string, paymentMethod: string, paymentRef: string): Promise<EmailRequest>;
+  getEmailRequests(): Promise<EmailRequest[]>;
+  updateEmailRequestStatus(id: number, status: string, sentCodeId?: number, note?: string): Promise<EmailRequest>;
+  deleteEmailRequest(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -144,6 +149,27 @@ export class DatabaseStorage implements IStorage {
       today: todayRow?.count ?? 0,
       thisWeek: weekRow?.count ?? 0,
     };
+  }
+
+  async createEmailRequest(email: string, paymentMethod: string, paymentRef: string): Promise<EmailRequest> {
+    const [row] = await db.insert(emailRequests).values({ email, paymentMethod, paymentRef }).returning();
+    return row;
+  }
+
+  async getEmailRequests(): Promise<EmailRequest[]> {
+    return await db.select().from(emailRequests).orderBy(emailRequests.createdAt);
+  }
+
+  async updateEmailRequestStatus(id: number, status: string, sentCodeId?: number, note?: string): Promise<EmailRequest> {
+    const [row] = await db.update(emailRequests)
+      .set({ status, ...(sentCodeId !== undefined ? { sentCodeId } : {}), ...(note !== undefined ? { note } : {}) })
+      .where(eq(emailRequests.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteEmailRequest(id: number): Promise<void> {
+    await db.delete(emailRequests).where(eq(emailRequests.id, id));
   }
 }
 

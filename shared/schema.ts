@@ -51,6 +51,21 @@ export const siteVisits = pgTable("site_visits", {
   referrer: text("referrer"),
 });
 
+export const emailRequests = pgTable("email_requests", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  paymentRef: text("payment_ref").notNull(),
+  status: text("status").notNull().default("pending"),
+  sentCodeId: integer("sent_code_id"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type EmailRequest = typeof emailRequests.$inferSelect;
+export const insertEmailRequestSchema = createInsertSchema(emailRequests).omit({ id: true, createdAt: true, status: true, sentCodeId: true, note: true });
+export type InsertEmailRequest = z.infer<typeof insertEmailRequestSchema>;
+
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type Preset = typeof presets.$inferSelect;

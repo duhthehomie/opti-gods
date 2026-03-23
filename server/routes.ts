@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { sendProCode, isEmailConfigured } from "./email";
 
 const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
@@ -1089,6 +1090,75 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Detect.ps1"');
     res.send(script);
+  });
+
+  // --- Email Code Requests (public) ---
+  app.post("/api/request-code", async (req, res) => {
+    const schema = z.object({
+      email: z.string().email(),
+      paymentMethod: z.enum(["cashapp", "paypal"]),
+      paymentRef: z.string().min(2).max(200),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid request" });
+    const { email, paymentMethod, paymentRef } = parsed.data;
+    const req2 = await storage.createEmailRequest(email, paymentMethod, paymentRef);
+    return res.json({ ok: true, id: req2.id });
+  });
+
+  // --- Email Admin Routes ---
+  app.get("/api/admin/email-requests", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const requests = await storage.getEmailRequests();
+    return res.json(requests);
+  });
+
+  app.get("/api/admin/email-configured", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    return res.json({ configured: isEmailConfigured() });
+  });
+
+  app.post("/api/admin/email-requests/:id/send", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: "Email not configured — set EMAIL_USER and EMAIL_PASS environment variables" });
+    }
+
+    const allRequests = await storage.getEmailRequests();
+    const emailReq = allRequests.find(r => r.id === id);
+    if (!emailReq) return res.status(404).json({ error: "Request not found" });
+    if (emailReq.status === "sent") return res.status(400).json({ error: "Code already sent" });
+
+    const allCodes = await storage.getAllCodes();
+    const available = allCodes.find(c => !c.usedAt);
+    if (!available) return res.status(503).json({ error: "No available codes — generate more first" });
+
+    await storage.redeemCode(available.code);
+    const siteUrl = `${req.protocol}://${req.get("host")}`;
+    await sendProCode(emailReq.email, available.code, siteUrl);
+    await storage.updateEmailRequestStatus(id, "sent", available.id);
+
+    return res.json({ ok: true, code: available.code });
+  });
+
+  app.post("/api/admin/email-requests/:id/reject", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const note = (req.body as any)?.note || "Rejected by admin";
+    await storage.updateEmailRequestStatus(id, "rejected", undefined, note);
+    return res.json({ ok: true });
+  });
+
+  app.delete("/api/admin/email-requests/:id", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    await storage.deleteEmailRequest(id);
+    return res.json({ ok: true });
   });
 
   return httpServer;

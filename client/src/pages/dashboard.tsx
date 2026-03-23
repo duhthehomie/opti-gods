@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { ScanImport } from "@/components/scan-import";
+import { FpsEstimate } from "@/components/fps-estimate";
 
 // Feature categories
 const FEATURES = [
@@ -479,6 +480,15 @@ export default function Dashboard() {
               );
             })}
           </div>
+        </motion.div>
+
+        {/* FPS Estimate Panel */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.34 }}
+        >
+          <FpsEstimate />
         </motion.div>
 
         <motion.div

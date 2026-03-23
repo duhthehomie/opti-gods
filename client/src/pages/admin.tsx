@@ -5,12 +5,13 @@ import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
+  Mail, Send, XCircle, Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProStatus, getProStatus } from "@/lib/pro-status";
-import type { ProAccessCode, ProFriendToken } from "@shared/schema";
+import type { ProAccessCode, ProFriendToken, EmailRequest } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -88,7 +89,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity";
+type Tab = "codes" | "friends" | "activity" | "email";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -203,6 +204,62 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
       setConfirmPurgeFriends(false);
       toast({ title: `Purged ${data.deleted} used links`, description: "Used friend links cleared." });
+    },
+  });
+
+  const emailRequestsQuery = useQuery<EmailRequest[]>({
+    queryKey: ["/api/admin/email-requests", key],
+    queryFn: () => fetch("/api/admin/email-requests", { headers }).then(r => {
+      if (!r.ok) throw new Error("Unauthorized");
+      return r.json();
+    }),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 15000,
+  });
+
+  const emailConfiguredQuery = useQuery<{ configured: boolean }>({
+    queryKey: ["/api/admin/email-configured", key],
+    queryFn: () => fetch("/api/admin/email-configured", { headers }).then(r => r.json()),
+    enabled: authed,
+    retry: false,
+  });
+
+  const sendEmailCode = useMutation({
+    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/send`, {
+      method: "POST", headers,
+    }).then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Failed to send");
+      return data;
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+      toast({ title: "Code sent!", description: "The access code was emailed to the customer." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const rejectEmailReq = useMutation({
+    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/reject`, {
+      method: "POST", headers, body: JSON.stringify({ note: "Rejected by admin" }),
+    }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
+      toast({ title: "Request rejected" });
+    },
+  });
+
+  const delEmailReq = useMutation({
+    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}`, {
+      method: "DELETE", headers,
+    }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
     },
   });
 
@@ -441,23 +498,37 @@ export default function Admin() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-white/5 pb-0">
-          {(["codes", "friends", "activity"] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                "px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px",
-                tab === t
-                  ? "text-red-400 border-red-500"
-                  : "text-zinc-600 border-transparent hover:text-zinc-300"
-              )}
-            >
-              {t === "codes" ? `Access Codes (${stats?.totalCodes ?? 0})` :
-               t === "friends" ? `Friend Links (${stats?.totalFriends ?? 0})` :
-               `Activity (${activityItems.length})`}
-            </button>
-          ))}
+        <div className="flex items-center gap-1 border-b border-white/5 pb-0 overflow-x-auto">
+          {(["codes", "friends", "activity", "email"] as Tab[]).map(t => {
+            const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
+            return (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px whitespace-nowrap flex items-center gap-1.5",
+                  tab === t
+                    ? "text-red-400 border-red-500"
+                    : "text-zinc-600 border-transparent hover:text-zinc-300"
+                )}
+              >
+                {t === "codes" ? `Access Codes (${stats?.totalCodes ?? 0})` :
+                 t === "friends" ? `Friend Links (${stats?.totalFriends ?? 0})` :
+                 t === "email" ? (
+                   <>
+                     <Mail className="w-3 h-3" />
+                     Email Requests
+                     {pendingEmails > 0 && (
+                       <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold">
+                         {pendingEmails}
+                       </span>
+                     )}
+                   </>
+                 ) :
+                 `Activity (${activityItems.length})`}
+              </button>
+            );
+          })}
         </div>
 
         {/* ─── ACCESS CODES TAB ─────────────────────────────────────── */}
@@ -801,6 +872,131 @@ export default function Admin() {
                   </p>
                 </div>
                 <Flame className="w-6 h-6 text-red-500 opacity-60" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── EMAIL REQUESTS TAB ───────────────────────────────────── */}
+        {tab === "email" && (
+          <div className="space-y-4">
+            {/* Email config status */}
+            {emailConfiguredQuery.data && !emailConfiguredQuery.data.configured && (
+              <div className="flex items-start gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-300">Email not configured</p>
+                  <p className="text-[11px] text-amber-600 mt-1 leading-relaxed">
+                    Set <span className="font-mono text-amber-400">EMAIL_USER</span> (your Gmail address) and{" "}
+                    <span className="font-mono text-amber-400">EMAIL_PASS</span> (Gmail App Password) in environment secrets to enable auto-sending.
+                    Until then you can still see requests here and send codes manually via Discord.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {emailConfiguredQuery.data?.configured && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <p className="text-[11px] text-emerald-400 font-bold">Email configured — codes will be auto-sent when you click "Send Code"</p>
+              </div>
+            )}
+
+            <div className="text-[10px] text-zinc-600 leading-relaxed">
+              Customers submit their email + payment proof here. Review each request and click{" "}
+              <strong className="text-zinc-400">Send Code</strong> to automatically pick an available code and email it to them.
+              You do not need to be online — click when you check in.
+            </div>
+
+            {emailRequestsQuery.isLoading ? (
+              <div className="p-12 text-center text-xs text-zinc-600 animate-pulse">Loading email requests...</div>
+            ) : !emailRequestsQuery.data?.length ? (
+              <div className="p-12 text-center">
+                <Inbox className="w-8 h-8 text-zinc-800 mx-auto mb-3" />
+                <p className="text-xs text-zinc-600">No email requests yet.</p>
+                <p className="text-[10px] text-zinc-700 mt-1">Customers use the "Get Code via Email" button on the site.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+                {emailRequestsQuery.data
+                  .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+                  .map(req => (
+                    <div
+                      key={req.id}
+                      data-testid={`row-email-req-${req.id}`}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 transition-colors",
+                        req.status === "pending" ? "hover:bg-zinc-900/40" : "opacity-50"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                        req.status === "sent" ? "bg-emerald-500/10 border border-emerald-500/20"
+                          : req.status === "rejected" ? "bg-zinc-800 border border-zinc-700"
+                          : "bg-red-500/10 border border-red-500/20"
+                      )}>
+                        <Mail className={cn(
+                          "w-3.5 h-3.5",
+                          req.status === "sent" ? "text-emerald-400"
+                            : req.status === "rejected" ? "text-zinc-600"
+                            : "text-red-400"
+                        )} />
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-medium text-white truncate">{req.email}</p>
+                          <span className={cn(
+                            "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
+                            req.status === "sent" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                              : req.status === "rejected" ? "text-zinc-600 bg-zinc-800 border-zinc-700"
+                              : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                          )}>
+                            {req.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">
+                          <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>
+                          {" — "}
+                          <span className="font-mono">{req.paymentRef}</span>
+                        </p>
+                        <p className="text-[10px] text-zinc-700">{timeAgo(req.createdAt)} · {fmt(req.createdAt)}</p>
+                        {req.note && <p className="text-[10px] text-zinc-600 italic">{req.note}</p>}
+                      </div>
+
+                      {req.status === "pending" && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            data-testid={`button-send-email-${req.id}`}
+                            onClick={() => sendEmailCode.mutate(req.id)}
+                            disabled={sendEmailCode.isPending}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-[11px] font-bold transition-colors disabled:opacity-50"
+                          >
+                            <Send className="w-3 h-3" />
+                            Send Code
+                          </button>
+                          <button
+                            data-testid={`button-reject-email-${req.id}`}
+                            onClick={() => rejectEmailReq.mutate(req.id)}
+                            disabled={rejectEmailReq.isPending}
+                            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-amber-400 transition-colors"
+                            title="Reject request"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        data-testid={`button-del-email-${req.id}`}
+                        onClick={() => delEmailReq.mutate(req.id)}
+                        className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
               </div>
             )}
           </div>
