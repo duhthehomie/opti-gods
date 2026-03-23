@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
+import { setProStatus } from "@/lib/pro-status";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -18,21 +19,33 @@ import Fortnite from "@/pages/fortnite";
 import GameDetection from "@/pages/game-detection";
 import PaymentSuccess from "@/pages/payment-success";
 import PaymentCancel from "@/pages/payment-cancel";
-
-const PRO_KEY = "optigods_pro_v1";
+import Admin from "@/pages/admin";
 
 function FriendUnlockHandler() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const unlockParam = params.get("unlock");
-    const freeKey = import.meta.env.VITE_FREE_KEY;
+    const token = params.get("friend");
+    if (!token) return;
 
-    if (unlockParam && freeKey && unlockParam === freeKey) {
-      localStorage.setItem(PRO_KEY, "true");
-      const url = new URL(window.location.href);
-      url.searchParams.delete("unlock");
-      window.history.replaceState({}, "", url.toString());
-    }
+    // Remove token from URL immediately
+    const url = new URL(window.location.href);
+    url.searchParams.delete("friend");
+    window.history.replaceState({}, "", url.toString());
+
+    // Verify with server — single-use token
+    fetch("/api/pro/friend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.valid) {
+          setProStatus(true);
+          window.location.reload();
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return null;
@@ -53,6 +66,7 @@ function Router() {
       <Route path="/game-detection" component={GameDetection} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/cancel" component={PaymentCancel} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );

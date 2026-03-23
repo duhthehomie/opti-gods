@@ -497,12 +497,97 @@ Start-Sleep 2
     res.send(script);
   });
 
-  app.post('/api/pro/verify', (req, res) => {
+  // Helpers
+  function generateCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `${seg()}-${seg()}-${seg()}`;
+  }
+
+  function generateToken(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return Array.from({ length: 24 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  function checkAdminKey(req: any, res: any): boolean {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey) {
+      res.status(503).json({ error: 'ADMIN_KEY not configured. Set it in your environment secrets.' });
+      return false;
+    }
+    const provided = req.headers['x-admin-key'] || req.query.key;
+    if (provided !== adminKey) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return false;
+    }
+    return true;
+  }
+
+  // Pro code verify — checks DB first, then legacy env var codes
+  app.post('/api/pro/verify', async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
-    const validCodes = (process.env.PRO_CODES || '').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-    const valid = validCodes.includes(String(code).toUpperCase().trim());
-    res.json({ valid });
+    // Try DB single-use code
+    const redeemed = await storage.redeemCode(String(code));
+    if (redeemed) return res.json({ valid: true });
+    // Fallback: legacy env var codes (unlimited use, for backward compat)
+    const legacyCodes = (process.env.PRO_CODES || '').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+    const validLegacy = legacyCodes.includes(String(code).toUpperCase().trim());
+    res.json({ valid: validLegacy });
+  });
+
+  // Friend token — single-use URL unlock
+  app.post('/api/pro/friend', async (req, res) => {
+    const { token } = req.body || {};
+    if (!token) return res.json({ valid: false });
+    const redeemed = await storage.redeemFriendToken(String(token));
+    res.json({ valid: redeemed });
+  });
+
+  // Admin — list all codes
+  app.get('/api/admin/codes', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const codes = await storage.getAllCodes();
+    res.json(codes);
+  });
+
+  // Admin — generate new code
+  app.post('/api/admin/codes', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const note = req.body?.note || null;
+    const code = generateCode();
+    const row = await storage.createCode(code, note);
+    res.json(row);
+  });
+
+  // Admin — delete/revoke a code
+  app.delete('/api/admin/codes/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    await storage.deleteCode(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Admin — list all friend tokens
+  app.get('/api/admin/friends', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const tokens = await storage.getAllFriendTokens();
+    res.json(tokens);
+  });
+
+  // Admin — generate new friend token
+  app.post('/api/admin/friends', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const note = req.body?.note || null;
+    const token = generateToken();
+    const row = await storage.createFriendToken(token, note);
+    res.json(row);
+  });
+
+  // Admin — delete/revoke a friend token
+  app.delete('/api/admin/friends/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    await storage.deleteFriendToken(Number(req.params.id));
+    res.json({ ok: true });
   });
 
   // ── Stripe Checkout (one-time payment) ──────────────────────────────────────

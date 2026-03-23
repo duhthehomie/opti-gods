@@ -2,6 +2,25 @@ import { pgTable, text, serial, jsonb, boolean, timestamp } from "drizzle-orm/pg
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const proAccessCodes = pgTable("pro_access_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  note: text("note"),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const proFriendTokens = pgTable("pro_friend_tokens", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  note: text("note"),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type ProAccessCode = typeof proAccessCodes.$inferSelect;
+export type ProFriendToken = typeof proFriendTokens.$inferSelect;
+
 export const presets = pgTable("presets", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

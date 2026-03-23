@@ -161,7 +161,7 @@ export default function Dashboard() {
                     className="bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.5)] font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all"
                   >
                     <Lock className="w-4 h-4 mr-2" />
-                    Unlock Pro — $9.99 Lifetime
+                    Unlock Pro — $25 Lifetime
                   </Button>
                 </ProUnlockButton>
               )}
@@ -226,7 +226,7 @@ export default function Dashboard() {
                   <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm mb-3">
                     One-Time Lifetime Access
                   </div>
-                  <h2 className="text-3xl font-display font-bold text-white leading-none">$9.99</h2>
+                  <h2 className="text-3xl font-display font-bold text-white leading-none">$25</h2>
                   <p className="text-sm text-zinc-400 mt-1">No subscription. No expiry.</p>
                 </div>
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -258,7 +258,7 @@ export default function Dashboard() {
                     className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)] font-display font-bold py-3 text-sm tracking-wide transition-all"
                   >
                     <Lock className="w-4 h-4 mr-2" />
-                    Unlock Pro — $9.99
+                    Unlock Pro — $25
                   </Button>
                 </ProUnlockButton>
               )}
