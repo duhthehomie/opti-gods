@@ -19,6 +19,7 @@ interface Tweak {
   desc: string;
   badge?: string;
   impact?: Impact;
+  recommended?: boolean;
   minRamGB?: number;
   maxRamGB?: number;
   warnBelow?: number;
@@ -188,6 +189,7 @@ const PAGEFILE_TWEAKS: Tweak[] = [
     desc: "Sets a fixed min/max pagefile equal to 1.5× your installed RAM — prevents Windows from resizing it and causing disk stutter mid-game.",
     badge: "RECOMMENDED",
     impact: "HIGH",
+    recommended: true,
   },
   {
     id: "MemMovePagefileFast",
@@ -354,14 +356,31 @@ export default function Memory() {
 
   function renderSection(heading: string, items: Tweak[]) {
     const active = getActiveCount(items);
+    const recommended = items.filter(t => t.recommended && !isTweakLocked(t).locked).map(t => t.id);
+    const allRecommendedOn = recommended.length > 0 && recommended.every(id => tweaks[id]);
     return (
       <section>
-        <div className="flex items-center gap-3 mb-4 px-1">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">{heading}</h2>
-          {active > 0 && (
-            <span className="text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded">
-              {active}/{items.length} active
-            </span>
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">{heading}</h2>
+            {active > 0 && (
+              <span className="text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded">
+                {active}/{items.length} active
+              </span>
+            )}
+          </div>
+          {recommended.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => recommended.forEach(id => setTweak(id, true))}
+              disabled={allRecommendedOn}
+              data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
+              className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              {allRecommendedOn ? "Recommended ON" : `Enable Recommended (${recommended.length})`}
+            </Button>
           )}
         </div>
         <div className="space-y-3">

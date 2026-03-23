@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
+import { autoSendState, runAutoSend } from "./auto-send";
 
 const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
@@ -1090,6 +1091,29 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Detect.ps1"');
     res.send(script);
+  });
+
+  // --- Admin System Status ---
+  app.get("/api/admin/system-status", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    return res.json({
+      autoSend: {
+        enabled: isEmailConfigured(),
+        thresholdMinutes: autoSendState.thresholdMinutes,
+        intervalMinutes: autoSendState.intervalMinutes,
+        lastRunAt: autoSendState.lastRunAt,
+        lastSentCount: autoSendState.lastSentCount,
+        totalAutoSent: autoSendState.totalAutoSent,
+        nextRunAt: autoSendState.nextRunAt,
+        isRunning: autoSendState.isRunning,
+      },
+    });
+  });
+
+  app.post("/api/admin/auto-send/trigger", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const sent = await runAutoSend();
+    return res.json({ ok: true, sent });
   });
 
   // --- Email Code Requests (public) ---

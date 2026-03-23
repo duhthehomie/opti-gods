@@ -1,11 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
-  Mail, Send, XCircle, Inbox,
+  Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
+  PlayCircle, ChevronRight, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -263,6 +265,55 @@ export default function Admin() {
     },
   });
 
+  // System status (auto-send)
+  const systemStatusQuery = useQuery<{
+    autoSend: {
+      enabled: boolean; thresholdMinutes: number; intervalMinutes: number;
+      lastRunAt: string | null; lastSentCount: number; totalAutoSent: number;
+      nextRunAt: string | null; isRunning: boolean;
+    };
+  }>({
+    queryKey: ["/api/admin/system-status", key],
+    queryFn: () => fetch("/api/admin/system-status", { headers }).then(r => r.json()),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 10000,
+  });
+
+  const triggerAutoSend = useMutation({
+    mutationFn: () => fetch("/api/admin/auto-send/trigger", { method: "POST", headers }).then(r => r.json()),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-status", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      toast({ title: data.sent > 0 ? `Auto-sent ${data.sent} code(s)` : "No stale requests found", description: data.sent > 0 ? "Codes emailed to customers." : "All requests are under 30 min old." });
+    },
+  });
+
+  // Inactive timer
+  const lastActivityRef = useRef<number>(Date.now());
+  const [inactiveSec, setInactiveSec] = useState(0);
+  const updateActivity = useCallback(() => { lastActivityRef.current = Date.now(); }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach(e => document.addEventListener(e, updateActivity, { passive: true }));
+    const interval = setInterval(() => {
+      setInactiveSec(Math.floor((Date.now() - lastActivityRef.current) / 1000));
+    }, 1000);
+    return () => {
+      events.forEach(e => document.removeEventListener(e, updateActivity));
+      clearInterval(interval);
+    };
+  }, [authed, updateActivity]);
+
+  function formatInactive(sec: number): string {
+    if (sec < 60) return `${sec}s`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+    return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+  }
+
   const handleLogin = async () => {
     setAuthError("");
     const res = await fetch("/api/admin/codes", { headers: { "x-admin-key": input } });
@@ -368,132 +419,162 @@ export default function Admin() {
   }
 
   const stats = statsQuery.data;
+  const sys = systemStatusQuery.data?.autoSend;
+  const pendingEmailCount = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
+  const inactiveMin = Math.floor(inactiveSec / 60);
+  const inactiveColor = inactiveSec < 300 ? "text-emerald-400" : inactiveSec < 1500 ? "text-amber-400" : "text-red-400";
+  const inactiveBg = inactiveSec < 300 ? "bg-emerald-500/10 border-emerald-500/20" : inactiveSec < 1500 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-[#060606] text-white">
+      {/* Top gradient bar */}
+      <div className="h-1 w-full bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-80" />
+
+      <div className="max-w-5xl mx-auto p-6 space-y-5">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-red-600/20 border border-red-500/30 rounded-lg flex items-center justify-center">
-              <Shield className="w-4 h-4 text-red-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold font-display text-white tracking-wide">Opti Gods Admin</h1>
-              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">leaq control panel</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Pro status indicator + reset — lets you test the paywall */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/5 bg-zinc-900/60">
-              <span className={cn(
-                "w-1.5 h-1.5 rounded-full shrink-0",
-                isPro ? "bg-red-500" : "bg-zinc-600"
-              )} />
-              <span className="text-[10px] text-zinc-500 font-mono">
-                {isPro ? "PRO active (your browser)" : "No pro (your browser)"}
-              </span>
-              <button
-                onClick={() => {
-                  setProStatus(!isPro);
-                  toast({
-                    title: isPro ? "Pro Reset" : "Pro Granted (Test)",
-                    description: isPro
-                      ? "Your browser is back to free-user view. Regular users never had Pro."
-                      : "Test mode: Pro set in your browser only. Users still need to pay.",
-                  });
-                }}
-                className="ml-1 text-[10px] text-zinc-600 hover:text-red-400 transition-colors underline underline-offset-2"
-                title={isPro ? "Clear my Pro status for testing" : "Set my Pro status for testing"}
-              >
-                {isPro ? "Reset" : "Grant (test)"}
-              </button>
+        <div className="relative rounded-2xl overflow-hidden border border-red-500/10 bg-gradient-to-br from-zinc-900/80 via-black to-zinc-900/60">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 to-transparent pointer-events-none" />
+          <div className="relative px-6 py-5 flex flex-col md:flex-row md:items-center gap-4">
+
+            {/* Brand */}
+            <div className="flex items-center gap-3 flex-1">
+              <div className="relative">
+                <div className="w-11 h-11 bg-red-600/20 border border-red-500/40 rounded-xl flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-red-400" />
+                </div>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-black font-display text-white tracking-wider uppercase">Opti Gods</h1>
+                  <span className="px-1.5 py-0.5 rounded bg-red-600/80 text-[9px] font-bold tracking-widest text-white uppercase">Admin</span>
+                </div>
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">leaq control panel · server online</p>
+              </div>
             </div>
 
-            <button
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
-                queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
-                queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
-              }}
-              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors"
-              title="Refresh all"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 transition-colors px-2 py-1 rounded hover:bg-zinc-800"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign out
-            </button>
+            {/* Live indicators */}
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* Inactive timer */}
+              <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono font-bold", inactiveBg, inactiveColor)}>
+                <Timer className="w-3 h-3" />
+                <span>Inactive: {formatInactive(inactiveSec)}</span>
+                {inactiveSec >= 1500 && <span className="text-[9px] text-red-400 ml-1">→ auto-send firing soon</span>}
+              </div>
+
+              {/* Auto-send status */}
+              <div className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold",
+                sys?.enabled
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  : "bg-zinc-800/60 border-zinc-700 text-zinc-500"
+              )}>
+                <Bot className="w-3 h-3" />
+                <span>{sys?.enabled ? `Auto-send ON · ${sys.thresholdMinutes}min` : "Auto-send OFF"}</span>
+              </div>
+
+              {/* Pro test toggle */}
+              <button
+                onClick={() => { setProStatus(!isPro); toast({ title: isPro ? "Pro Reset" : "Pro Granted (Test)" }); }}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors",
+                  isPro ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-zinc-800/60 border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                )}
+                title="Toggle Pro for testing"
+              >
+                <Eye className="w-3 h-3" />
+                {isPro ? "PRO mode" : "Free mode"}
+              </button>
+
+              {/* Refresh all */}
+              <button
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/system-status", key] });
+                }}
+                className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-200 transition-colors"
+                title="Refresh all data"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700 hover:bg-zinc-700 text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
+        {/* Auto-send warning if pending requests and admin is away */}
+        {pendingEmailCount > 0 && sys?.enabled && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/5 border border-amber-500/20"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <span className="text-xs text-amber-300 font-bold">{pendingEmailCount} email request{pendingEmailCount > 1 ? "s" : ""} pending</span>
+              <span className="text-[10px] text-amber-700">— auto-sends after {sys.thresholdMinutes} min idle. Next server check in ~{sys.intervalMinutes} min.</span>
+            </div>
+            <button
+              onClick={() => triggerAutoSend.mutate()}
+              disabled={triggerAutoSend.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-[11px] font-bold transition-colors shrink-0"
+            >
+              <PlayCircle className="w-3 h-3" />
+              {triggerAutoSend.isPending ? "Sending..." : "Send Now"}
+            </button>
+          </motion.div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <StatCard
-            icon={DollarSign}
-            label="Est. Revenue"
-            value={`$${stats?.revenueEstimate ?? 0}`}
-            sub={`${stats?.usedCodes ?? 0} paid × $${PRICE_PER_CODE}`}
-            color="green"
-          />
-          <StatCard
-            icon={Key}
-            label="Codes Available"
-            value={stats?.availableCodes ?? "—"}
-            sub={`${stats?.usedCodes ?? 0} redeemed`}
-            color="red"
-          />
-          <StatCard
-            icon={Users}
-            label="Friends Granted"
-            value={stats?.usedFriends ?? "—"}
-            sub={`${stats?.availableFriends ?? 0} pending`}
-            color="amber"
-          />
-          <StatCard
-            icon={BarChart3}
-            label="Total Link Clicks"
-            value={stats?.visits?.total ?? "—"}
-            sub="all-time unique sessions"
-            color="zinc"
-          />
-          <StatCard
-            icon={Flame}
-            label="Clicks Today"
-            value={stats?.visits?.today ?? "—"}
-            sub={`${stats?.visits?.thisWeek ?? 0} this week`}
-            color="red"
-          />
-          <StatCard
-            icon={BarChart3}
-            label="Total Generated"
-            value={(stats?.totalCodes ?? 0) + (stats?.totalFriends ?? 0)}
-            sub={`${stats?.totalCodes ?? 0} codes · ${stats?.totalFriends ?? 0} links`}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Revenue — big card */}
+          <div className="col-span-2 relative rounded-xl overflow-hidden border border-emerald-500/15 bg-gradient-to-br from-emerald-950/30 to-black p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">Estimated Revenue</p>
+                <p className="text-4xl font-black text-emerald-400 font-mono">${stats?.revenueEstimate ?? 0}</p>
+                <p className="text-[11px] text-emerald-800 mt-1">{stats?.usedCodes ?? 0} paid codes × $25</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-emerald-400" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 right-0 opacity-5">
+              <TrendingUp className="w-24 h-24 text-emerald-400" />
+            </div>
+          </div>
+
+          <StatCard icon={Key} label="Codes Ready" value={stats?.availableCodes ?? "—"} sub={`${stats?.usedCodes ?? 0} redeemed`} color="red" />
+          <StatCard icon={Flame} label="Visits Today" value={stats?.visits?.today ?? "—"} sub={`${stats?.visits?.total ?? 0} all-time`} color="red" />
+          <StatCard icon={Users} label="Friend Links" value={stats?.usedFriends ?? "—"} sub={`${stats?.availableFriends ?? 0} available`} color="amber" />
+          <StatCard icon={Bot} label="Auto-Sent" value={sys?.totalAutoSent ?? "—"} sub={sys?.lastRunAt ? `Last: ${timeAgo(sys.lastRunAt)}` : "Never run yet"} color="zinc" />
         </div>
 
         {/* Payment Quick Links */}
-        <div className="flex flex-wrap gap-2 p-3 bg-zinc-900/40 border border-white/5 rounded-xl">
-          <span className="text-[10px] text-zinc-600 uppercase tracking-widest self-center mr-1">Payment Links</span>
-          <a
-            href="https://cash.app/$my1ik"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-400 hover:bg-emerald-600/20 transition-colors font-mono"
-          >
-            <DollarSign className="w-3 h-3" /> CashApp $my1ik
+        <div className="flex flex-wrap gap-2 p-3 bg-zinc-900/30 border border-white/5 rounded-xl">
+          <span className="text-[10px] text-zinc-700 uppercase tracking-widest self-center mr-1 font-bold">Payment</span>
+          <a href="https://cash.app/$my1ik" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-400 hover:bg-emerald-600/20 transition-colors font-mono">
+            <DollarSign className="w-3 h-3" /> $my1ik
           </a>
-          <a
-            href="https://paypal.me/accountslg"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-lg text-xs text-blue-400 hover:bg-blue-600/20 transition-colors font-mono"
-          >
-            <Zap className="w-3 h-3" /> PayPal paypal.me/accountslg
+          <a href="https://paypal.me/accountslg" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-lg text-xs text-blue-400 hover:bg-blue-600/20 transition-colors font-mono">
+            <Zap className="w-3 h-3" /> paypal.me/accountslg
+          </a>
+          <a href="https://discord.gg/C8WrQknN9k" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/20 transition-colors font-mono">
+            <MessageSquare className="w-3 h-3" /> Discord
           </a>
         </div>
 
