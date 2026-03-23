@@ -396,6 +396,105 @@ export async function registerRoutes(
     res.send(scriptContent);
   });
 
+  // Game detection scanner script download
+  app.get('/api/detect-games-script', (req, res) => {
+    const host = req.get('host') || 'localhost';
+    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+    const baseUrl = `${protocol}://${host}/game-detection`;
+
+    const script = `# Opti Gods by leaq - Game Scanner
+# Scans your PC for installed games and opens your personalized dashboard
+# Run this, then check your browser!
+
+$ErrorActionPreference = 'SilentlyContinue'
+
+Write-Host ""
+Write-Host "  ======================================" -ForegroundColor Red
+Write-Host "   OPTI GODS - Game Scanner v1.0" -ForegroundColor Red
+Write-Host "  ======================================" -ForegroundColor Red
+Write-Host ""
+
+$baseUrl = "${baseUrl}"
+$detected = [System.Collections.Generic.List[string]]::new()
+
+function Resolve-GamePath { param([string]$Path); [System.Environment]::ExpandEnvironmentVariables($Path) }
+
+# Discover Steam library roots
+$steamRoots = @()
+$defaultSteam = @('C:\\Program Files (x86)\\Steam', 'C:\\Program Files\\Steam')
+foreach ($s in $defaultSteam) { if (Test-Path $s) { $steamRoots += $s } }
+$vdfPath = 'C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf'
+if (Test-Path $vdfPath) {
+    Get-Content $vdfPath | ForEach-Object {
+        if ($_ -match '"path"\\s+"([^"]+)"') { $steamRoots += $Matches[1] }
+    }
+}
+
+function Find-Game { param([string[]]$Paths)
+    foreach ($p in $Paths) {
+        if (Test-Path (Resolve-GamePath $p)) { return $true }
+        foreach ($root in $steamRoots) {
+            if (Test-Path (Join-Path $root $p)) { return $true }
+        }
+    }
+    return $false
+}
+
+$games = @(
+    @{ id = "game_valorant";   paths = @("%LocalAppData%\\VALORANT", "C:\\Riot Games\\VALORANT") },
+    @{ id = "game_cs2";        paths = @("Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe") },
+    @{ id = "game_apex";       paths = @("C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe","C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe") },
+    @{ id = "game_warzone";    paths = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty") },
+    @{ id = "game_lol";        paths = @("C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe") },
+    @{ id = "game_overwatch";  paths = @("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe","C:\\Program Files\\Overwatch\\_retail_\\Overwatch.exe") },
+    @{ id = "game_siege";      paths = @("C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Tom Clancy's Rainbow Six Siege") },
+    @{ id = "game_rust";       paths = @("Steam\\steamapps\\common\\Rust\\RustClient.exe") },
+    @{ id = "game_minecraft";  paths = @("%AppData%\\.minecraft\\launcher_profiles.json") },
+    @{ id = "game_roblox";     paths = @("%LocalAppData%\\Roblox\\Versions") },
+    @{ id = "game_tarkov";     paths = @("C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe","C:\\Games\\EFT\\EscapeFromTarkov.exe") },
+    @{ id = "game_pubg";       paths = @("Steam\\steamapps\\common\\PUBG\\TslGame\\Binaries\\Win64\\TslGame.exe") },
+    @{ id = "game_dbd";        paths = @("Steam\\steamapps\\common\\Dead by Daylight\\DeadByDaylight\\Binaries\\Win64\\DeadByDaylight-Win64-Shipping.exe") },
+    @{ id = "game_dota2";      paths = @("Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe") }
+)
+
+Write-Host "  Scanning installed games..." -ForegroundColor Gray
+Write-Host ""
+
+foreach ($g in $games) {
+    $found = Find-Game $g.paths
+    $label = $g.id -replace "game_", ""
+    if ($found) {
+        $detected.Add($g.id)
+        Write-Host "  [FOUND]  $label" -ForegroundColor Green
+    } else {
+        Write-Host "  [SKIP]   $label" -ForegroundColor DarkGray
+    }
+}
+
+Write-Host ""
+
+if ($detected.Count -eq 0) {
+    Write-Host "  No games found on known paths." -ForegroundColor Yellow
+    Write-Host "  Opening dashboard (manual selection mode)..." -ForegroundColor Gray
+    Start-Process $baseUrl
+} else {
+    $list = $detected -join ","
+    $url = "$baseUrl" + "?games=" + $list
+    Write-Host "  Found $($detected.Count) game(s). Opening your dashboard..." -ForegroundColor Green
+    Start-Process $url
+}
+
+Write-Host ""
+Write-Host "  Done! Check your browser window." -ForegroundColor Red
+Write-Host ""
+Start-Sleep 2
+`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-DetectGames.ps1"');
+    res.send(script);
+  });
+
   app.post('/api/pro/verify', (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });

@@ -1,7 +1,11 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Shield, Terminal, CheckCircle, XCircle, Info, Gamepad } from "lucide-react";
+import {
+  Shield, Terminal, CheckCircle, XCircle, Info,
+  Gamepad, Download, RefreshCw, Search, AlertCircle
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -187,7 +191,6 @@ function GameCard({ game }: { game: GameEntry }) {
         </button>
       </div>
 
-      {/* Detection paths */}
       <div className="mb-3 space-y-1">
         {game.detectPaths.map((p, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -197,7 +200,6 @@ function GameCard({ game }: { game: GameEntry }) {
         ))}
       </div>
 
-      {/* Tweaks list */}
       <div className="space-y-1.5">
         {game.tweaks.map((tweak, i) => (
           <div key={i} className="flex items-start gap-2">
@@ -210,61 +212,173 @@ function GameCard({ game }: { game: GameEntry }) {
   );
 }
 
+function downloadScannerScript() {
+  window.location.href = "/api/detect-games-script";
+}
+
 export default function GameDetection() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
 
-  const enabledGames = GAMES.filter(g => tweaks[g.id]);
-  const disabledGames = GAMES.filter(g => !tweaks[g.id]);
+  // Read detected game IDs from URL params (set by the scanner PS1 script)
+  const [detectedIds, setDetectedIds] = useState<Set<string> | null>(null);
+  const [isFiltered, setIsFiltered] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gamesParam = params.get("games");
+    if (gamesParam && gamesParam.trim()) {
+      const ids = new Set(gamesParam.split(",").map(id => id.trim()).filter(Boolean));
+      if (ids.size > 0) {
+        setDetectedIds(ids);
+        setIsFiltered(true);
+      }
+    }
+  }, []);
+
+  // Which games to show: filtered list if detection ran, otherwise all
+  const visibleGames = isFiltered && detectedIds
+    ? GAMES.filter(g => detectedIds.has(g.id))
+    : GAMES;
+
+  const enabledGames = visibleGames.filter(g => tweaks[g.id]);
+  const disabledGames = visibleGames.filter(g => !tweaks[g.id]);
 
   const handleEnableAll = () => {
     const next = { ...useOptimizationStore.getState().tweaks };
-    GAMES.forEach(g => { next[g.id] = true; });
+    visibleGames.forEach(g => { next[g.id] = true; });
     setAllTweaks(next);
   };
 
   const handleDisableAll = () => {
     const next = { ...useOptimizationStore.getState().tweaks };
-    GAMES.forEach(g => { next[g.id] = false; });
+    visibleGames.forEach(g => { next[g.id] = false; });
     setAllTweaks(next);
+  };
+
+  const handleShowAll = () => {
+    setIsFiltered(false);
+    setDetectedIds(null);
+    // Clean URL without reloading
+    const url = new URL(window.location.href);
+    url.searchParams.delete("games");
+    window.history.replaceState({}, "", url.toString());
   };
 
   return (
     <AppLayout>
       <div className="space-y-6 max-w-4xl pb-10">
+
+        {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
           <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
             <Gamepad className="w-6 h-6 text-red-500" />
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold">Game Detection & Auto-Optimize</h1>
-            <p className="text-zinc-500 text-sm">Enable packs for any game — the script detects what's installed on your PC and applies only relevant tweaks</p>
+            <p className="text-zinc-500 text-sm">
+              {isFiltered && detectedIds
+                ? `${detectedIds.size} game${detectedIds.size !== 1 ? "s" : ""} detected on your PC`
+                : "Scan your PC to see only games you have installed"}
+            </p>
           </div>
         </motion.div>
 
-        {/* How detection works */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
-          className="rounded-xl border border-red-500/20 bg-red-500/5 p-5">
-          <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <h3 className="text-white font-bold text-sm">How Game Detection Works</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Browsers cannot read your file system — and they shouldn't.
-                Instead, when you click <span className="text-white font-medium">APPLY</span> and run the downloaded PowerShell script
-                as Administrator, it checks your actual drive for each game's installation path. If it finds the game, it applies the
-                optimization pack. If it doesn't find it, it prints <span className="font-mono text-zinc-300">[SKIP]</span> and moves on.
-                This means the same script works correctly on <span className="text-white font-medium">everyone's PC</span> regardless
-                of where they installed their games.
-              </p>
-              <div className="flex items-center gap-4 text-[11px] text-zinc-500 pt-1">
-                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Detects install paths</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Steam library aware</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Anti-cheat safe (no injection)</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Skips missing games</span>
+        {/* Detection banner — shown when no scan has been run yet */}
+        {!isFiltered && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.04 }}
+            className="rounded-xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-red-900/5 p-5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="p-2 bg-red-500/15 rounded-lg shrink-0">
+                  <Search className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm mb-1">Detect Your Installed Games</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">
+                    Download the free scanner script (less than 2KB). Run it as Administrator — it checks your
+                    drives for each game's install path and opens this page showing <span className="text-white font-medium">only the games you have</span>.
+                    No data is sent anywhere. The script runs locally and opens your browser automatically.
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-3 text-[11px] text-zinc-500">
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Checks Steam libraries</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Reads %LocalAppData%</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> No internet calls</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Opens browser automatically</span>
+                  </div>
+                </div>
+              </div>
+              <Button
+                data-testid="button-download-scanner"
+                onClick={downloadScannerScript}
+                className="bg-red-600 hover:bg-red-700 text-white border border-red-500/30 font-bold shrink-0 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download Scanner
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Post-scan banner — shown after scanner ran and detected games */}
+        {isFiltered && detectedIds && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-red-500/20 bg-red-500/5 p-4"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-red-400 shrink-0" />
+                <div>
+                  <p className="text-sm text-white font-bold">
+                    Scanner found {detectedIds.size} game{detectedIds.size !== 1 ? "s" : ""} on your PC
+                  </p>
+                  <p className="text-xs text-zinc-400">Only showing games that are actually installed. Toggle the ones you want to optimize.</p>
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  data-testid="button-rescan-games"
+                  onClick={downloadScannerScript}
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Re-scan
+                </Button>
+                <Button
+                  data-testid="button-show-all-games"
+                  onClick={handleShowAll}
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs"
+                >
+                  Show All Games
+                </Button>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
+
+        {/* How it works info box (shown when NOT filtered, compact version) */}
+        {!isFiltered && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.07 }}
+            className="rounded-xl border border-white/5 bg-zinc-900/50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Showing all {GAMES.length} supported games. Run the scanner above to filter to only your installed games,
+                or manually toggle whichever games you want to include in your script below.
+                The PowerShell script always uses <span className="font-mono text-zinc-400">Test-Path</span> at runtime to skip games not found on your PC.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Action bar */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08 }}
@@ -273,7 +387,10 @@ export default function GameDetection() {
             <Info className="w-4 h-4 text-zinc-500" />
             <p className="text-sm text-zinc-300">
               <span className="text-white font-bold">{enabledGames.length}</span> game{enabledGames.length !== 1 ? "s" : ""} selected
-              — <span className="text-zinc-500">{disabledGames.length} not included</span>
+              {isFiltered
+                ? <span className="text-zinc-500"> — out of {visibleGames.length} detected</span>
+                : <span className="text-zinc-500"> — {disabledGames.length} not included</span>
+              }
             </p>
           </div>
           <div className="flex gap-2">
@@ -283,12 +400,35 @@ export default function GameDetection() {
             </Button>
             <Button data-testid="button-enable-all-games" onClick={handleEnableAll} size="sm"
               className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30">
-              Enable All Games
+              {isFiltered ? "Enable Detected" : "Enable All Games"}
             </Button>
           </div>
         </motion.div>
 
-        {/* Games — included */}
+        {/* No games detected edge case */}
+        {isFiltered && visibleGames.length === 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex flex-col items-center gap-4 py-16 text-center">
+            <div className="p-4 bg-zinc-900 rounded-full border border-zinc-800">
+              <Gamepad className="w-8 h-8 text-zinc-600" />
+            </div>
+            <div>
+              <p className="text-white font-bold mb-1">No supported games found</p>
+              <p className="text-sm text-zinc-500 max-w-sm">
+                The scanner didn't find any of the 14 supported games on your PC.
+                You can still enable any game pack manually below.
+              </p>
+            </div>
+            <Button
+              onClick={handleShowAll}
+              className="bg-red-600 hover:bg-red-700 text-white border border-red-500/30"
+            >
+              Show All Games Manually
+            </Button>
+          </motion.div>
+        )}
+
+        {/* Games — included/enabled */}
         {enabledGames.length > 0 && (
           <section>
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
@@ -302,27 +442,34 @@ export default function GameDetection() {
           </section>
         )}
 
-        {/* Games — all / not included */}
-        <section>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
-            {enabledGames.length > 0 ? `Not Included (${disabledGames.length})` : `All Games (${GAMES.length})`}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(enabledGames.length > 0 ? disabledGames : GAMES).map((game, i) => (
-              <motion.div key={game.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <GameCard game={game} />
-              </motion.div>
-            ))}
-          </div>
-        </section>
+        {/* Games — not included */}
+        {disabledGames.length > 0 && (
+          <section>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
+              {enabledGames.length > 0
+                ? `Not Included (${disabledGames.length})`
+                : isFiltered
+                  ? `Detected on Your PC (${disabledGames.length})`
+                  : `All Games (${GAMES.length})`
+              }
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {disabledGames.map((game, i) => (
+                <motion.div key={game.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                  <GameCard game={game} />
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Footer note */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
           className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/40 border border-zinc-800">
           <XCircle className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />
           <p className="text-xs text-zinc-500 leading-relaxed">
-            All game optimizations use Windows IFEO (Image File Execution Options) registry keys and system-level tweaks. 
-            No DLL injection, no cheat signatures, no in-process modifications. 
+            All game optimizations use Windows IFEO (Image File Execution Options) registry keys and system-level tweaks.
+            No DLL injection, no cheat signatures, no in-process modifications.
             Safe for EAC, BattlEye, FACEIT, Vanguard, VAC, and all other anti-cheat systems.
             Your PC, your script, your performance.
           </p>
