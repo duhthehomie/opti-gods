@@ -44,3 +44,4 @@ waitForPort = 5000
 VITE_CASHAPP_TAG = "$my1ik"
 VITE_PAYPAL_LINK = "https://paypal.me/accountslg"
 ADMIN_KEY = "sKm9FyxuTnQjBsP72Xf6"
+EMAIL_USER = "tastymemes53@gmail.com"
