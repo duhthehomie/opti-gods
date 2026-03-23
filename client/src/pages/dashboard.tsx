@@ -105,6 +105,28 @@ const QUICK_BOOST_PRESETS = [
   },
 ];
 
+// Global recommended tweaks — safe for every PC, biggest impact
+const ALL_RECOMMENDED_TWEAKS = [
+  // Core system responsiveness
+  "Win32PrioritySeparation", "SetTimerResolution", "SetResponsiveness", "GameModeTweaks",
+  "DisablePointerPrecision", "EnableHAGS",
+  // Network
+  "NetworkThrottling", "OptimizeTCP", "DisableNagle", "InputLagTCP", "SetDNSPriority",
+  // Power
+  "SetHighPerformancePlan", "DisableCoreParking", "DisableDynamicTick",
+  // Visual / Game
+  "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
+  // Memory
+  "MemDisableCompression", "OptimizeRAMUsage",
+  // Services (safe)
+  "ServiceDiagTrack", "ServiceSysMain",
+  // Privacy
+  "PrivacyTelemetry", "PrivacyAdvertisingID",
+  // FiveM
+  "FiveMHighPriority", "FiveMCacheClear", "FiveMNetworkBuffer", "FiveMQueueFix",
+  "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions",
+];
+
 // How to use steps
 const HOW_TO_STEPS = [
   {
@@ -188,6 +210,21 @@ export default function Dashboard() {
   };
 
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
+  const [recommendedApplied, setRecommendedApplied] = useState(false);
+
+  const applyAllRecommended = () => {
+    const next = { ...tweaks };
+    let applied = 0;
+    ALL_RECOMMENDED_TWEAKS.forEach((key) => {
+      if (key in next) { next[key] = true; applied++; }
+    });
+    setAllTweaks(next);
+    setRecommendedApplied(true);
+    toast({
+      title: "All Recommended Tweaks Applied!",
+      description: `${applied} tweaks enabled. Now click DOWNLOAD .PS1 in the top bar to get your script.`,
+    });
+  };
 
   const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
     const next = { ...tweaks };
@@ -263,6 +300,63 @@ export default function Dashboard() {
                 Create Restore Point First
               </Button>
             </div>
+          </div>
+        </motion.div>
+
+
+        {/* ─── ONE-CLICK RECOMMENDED BANNER ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className={cn(
+            "relative rounded-2xl overflow-hidden border p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 transition-all",
+            recommendedApplied
+              ? "bg-emerald-950/30 border-emerald-500/30"
+              : "bg-black/70 border-red-500/30 shadow-[0_0_40px_-10px_rgba(220,38,38,0.25)]"
+          )}
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-transparent pointer-events-none" />
+
+          <div className="relative z-10 flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Rocket className={cn("w-5 h-5 shrink-0", recommendedApplied ? "text-emerald-400" : "text-red-400")} />
+              <span className={cn("text-xs font-bold uppercase tracking-widest", recommendedApplied ? "text-emerald-400" : "text-red-400")}>
+                {recommendedApplied ? "Tweaks Applied — Ready to Download" : "New Here? Start Here"}
+              </span>
+            </div>
+            <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
+              {recommendedApplied ? "All Recommended Tweaks Are Enabled" : "Apply All Recommended Tweaks in One Click"}
+            </h2>
+            <p className="text-sm text-zinc-400 leading-relaxed">
+              {recommendedApplied
+                ? "Click DOWNLOAD .PS1 in the top bar to get your personalized script. Restart your PC after running it."
+                : `${ALL_RECOMMENDED_TWEAKS.length} hand-picked tweaks — safe for every PC. Covers CPU priority, network, memory, power, FiveM, and more. No uninstalls, no risks.`}
+            </p>
+          </div>
+
+          <div className="relative z-10 shrink-0 flex flex-col items-center gap-2">
+            {recommendedApplied ? (
+              <div
+                data-testid="badge-recommended-applied"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-sm"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                {ALL_RECOMMENDED_TWEAKS.length} Tweaks Enabled
+              </div>
+            ) : (
+              <Button
+                data-testid="button-apply-all-recommended"
+                onClick={applyAllRecommended}
+                className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
+              >
+                <Rocket className="w-5 h-5 mr-2" />
+                Apply All Recommended ({ALL_RECOMMENDED_TWEAKS.length})
+              </Button>
+            )}
+            <span className="text-[10px] text-zinc-600 text-center">
+              {recommendedApplied ? "You can still customize any tweak below" : "Safe for all PCs · Reversible · No data deleted"}
+            </span>
           </div>
         </motion.div>
 
