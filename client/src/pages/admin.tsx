@@ -68,13 +68,15 @@ function StatCard({
   label: string;
   value: string | number;
   sub?: string;
-  color?: "red" | "zinc" | "green" | "amber";
+  color?: "red" | "zinc" | "green" | "amber" | "blue" | "violet";
 }) {
   const iconColor = {
     red: "text-red-400",
     zinc: "text-zinc-400",
     green: "text-emerald-400",
     amber: "text-amber-400",
+    blue: "text-blue-400",
+    violet: "text-violet-400",
   }[color];
 
   return (
@@ -619,8 +621,10 @@ export default function Admin() {
 
           <StatCard icon={Key} label="Codes Ready" value={stats?.availableCodes ?? "—"} sub={`${stats?.usedCodes ?? 0} redeemed`} color="red" />
           <StatCard icon={Flame} label="Visits (24h)" value={stats?.visits?.today ?? "—"} sub={`${stats?.visits?.total ?? 0} all-time`} color="red" />
-          <StatCard icon={Users} label="Friend Links" value={stats?.usedFriends ?? "—"} sub={`${stats?.availableFriends ?? 0} available`} color="amber" />
+          <StatCard icon={Users} label="Friend Links Active" value={stats?.availableFriends ?? "—"} sub={`${stats?.usedFriends ?? 0} redeemed`} color="amber" />
           <StatCard icon={Bot} label="Auto-Sent" value={sys?.totalAutoSent ?? "—"} sub={sys?.lastRunAt ? `Last: ${timeAgo(sys.lastRunAt)}` : "Never run yet"} color="zinc" />
+          <StatCard icon={BarChart3} label="Scripts Downloaded" value={downloadStatsQuery.data?.totalDownloads ?? "—"} sub={`${downloadStatsQuery.data?.totalTweaksDeployed ?? 0} tweaks deployed`} color="blue" />
+          <StatCard icon={Inbox} label="Pending Emails" value={pendingEmailCount} sub={`${(emailRequestsQuery.data ?? []).length} total requests`} color="violet" />
         </div>
 
         {/* Payment Quick Links */}
