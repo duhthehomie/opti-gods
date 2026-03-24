@@ -82,8 +82,26 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     ].forEach(id => ids.add(id));
     reasons.push(`AMD GPU (${hw.gpuName}) — full AMD optimization suite enabled`);
   } else if (hw.isIntel) {
-    // Intel iGPU — skip HAGS (unreliable), skip NVIDIA/AMD suites
-    reasons.push(`Intel GPU (${hw.gpuName}) — iGPU detected, HAGS skipped`);
+    // Intel iGPU — specific Intel iGPU tweaks, skip HAGS (bad for iGPU)
+    [
+      "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling","IGpu_ForcePerformancePower",
+      "IGpu_DisableTransparency","IGpu_DisableAnimations","IGpu_DisableXboxGameBar",
+      "IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
+      "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_SetTimerResolution",
+      "IGpu_NetworkThrottling","IGpu_DisableSysMain","IGpu_DisableHAGSForIGpu","IGpu_DisableMPO",
+    ].forEach(id => ids.add(id));
+    reasons.push(`Intel iGPU (${hw.gpuName}) — Intel-specific iGPU tweaks enabled, HAGS disabled (bad for iGPU)`);
+  } else if (!hw.isNvidia && !hw.isAMD && hw.gpuName && /vega|radeon.*integrated|apu/i.test(hw.gpuName)) {
+    // AMD APU / Vega iGPU
+    [
+      "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
+      "IGpu_AmdAntiLag","IGpu_SharedMemoryHint","IGpu_DisableMPO",
+      "IGpu_DisableTransparency","IGpu_DisableAnimations","IGpu_DisableXboxGameBar",
+      "IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
+      "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_SetTimerResolution",
+      "IGpu_NetworkThrottling","IGpu_DisableSysMain","IGpu_DisableHAGSForIGpu",
+    ].forEach(id => ids.add(id));
+    reasons.push(`AMD iGPU detected (${hw.gpuName}) — Vega/APU iGPU tweaks enabled`);
   } else {
     // Unknown GPU — safe fallback includes HAGS
     ids.add("EnableHAGS");

@@ -103,16 +103,16 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   DiscordDisableCrashHandler: `$crashpad = Get-ChildItem "$env:LOCALAPPDATA\\Discord" -Filter "crashpad_handler.exe" -Recurse -EA SilentlyContinue | Select-Object -First 1; If ($crashpad) { $aclPath = $crashpad.FullName; $acl = Get-Acl $aclPath; $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone","ExecuteFile","Deny"); $acl.AddAccessRule($rule); Set-Acl $aclPath $acl -EA SilentlyContinue; Write-Host "[Discord] Crash handler execution blocked — eliminates crash report upload overhead" -ForegroundColor Green } Else { Write-Host "[Discord] Crash handler not found — may already be absent or path changed" -ForegroundColor Yellow }`,
   DiscordDisableAnimations: `$settings = "$env:APPDATA\\discord\\settings.json"; If (Test-Path $settings) { $raw = Get-Content $settings -Raw; If ($raw -notmatch '"reduceMotion"') { $raw = $raw.TrimEnd().TrimEnd('}') + ', "reduceMotion": true }'; $raw | Set-Content $settings -Encoding UTF8; Write-Host "[Discord] Reduce Motion enabled — fewer UI animations = lower CPU/GPU overhead while gaming" -ForegroundColor Green } Else { Write-Host "[Discord] Reduce Motion already enabled" -ForegroundColor Yellow } } Else { Write-Host "[Discord] settings.json not found — open Discord first" -ForegroundColor Yellow }`,
   // Startup apps
-  su_discord: `$path = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Discord.lnk"; If (Test-Path $path) { Remove-Item $path }; reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Discord" /f 2>$null`,
-  su_spotify: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Spotify" /f 2>$null`,
-  su_onedrive: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "OneDrive" /f 2>$null`,
-  su_teams: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "com.squirrel.Teams.Teams" /f 2>$null`,
-  su_skype: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Skype" /f 2>$null`,
-  su_zoom: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Zoom" /f 2>$null`,
-  su_nvidia: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "NvBackend" /f 2>$null`,
-  su_ccleaner: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "CCleaner" /f 2>$null`,
-  su_corsair: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "iCUE" /f 2>$null`,
-  su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null`,
+  su_discord: `$discordRegKeys = @("Discord","Update.exe --processStart Discord.exe","com.squirrel.Discord.Discord"); foreach ($v in $discordRegKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $discordLnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Discord.lnk","$env:USERPROFILE\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Discord.lnk"); foreach ($lnk in $discordLnks) { if (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Discord" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Discord*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Discord removed from ALL startup locations (registry, StartupApproved, .lnk, scheduled tasks)" -ForegroundColor Green`,
+  su_spotify: `$spotifyRegKeys = @("Spotify","Spotify.exe","com.squirrel.Spotify.Spotify"); foreach ($v in $spotifyRegKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $spotifyLnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Spotify.lnk","$env:USERPROFILE\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Spotify.lnk"); foreach ($lnk in $spotifyLnks) { if (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Spotify" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Spotify*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Spotify removed from ALL startup locations (registry x3 keys, StartupApproved, .lnk, scheduled tasks)" -ForegroundColor Green`,
+  su_onedrive: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "OneDrive" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "OneDrive" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] OneDrive removed from startup" -ForegroundColor Green`,
+  su_teams: `$teamsKeys = @("com.squirrel.Teams.Teams","Teams"); foreach ($v in $teamsKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Teams" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Teams*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Microsoft Teams removed from startup" -ForegroundColor Green`,
+  su_skype: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Skype" /f 2>$null; reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "SkypeWithCalling" /f 2>$null; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Skype*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Skype removed from startup" -ForegroundColor Green`,
+  su_zoom: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Zoom" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Zoom" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] Zoom removed from startup" -ForegroundColor Green`,
+  su_nvidia: `$nvidiaKeys = @("NvBackend","NVIDIA GeForce Experience","ShadowPlay"); foreach ($v in $nvidiaKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; Write-Host "[OK] NVIDIA background apps removed from startup" -ForegroundColor Green`,
+  su_ccleaner: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "CCleaner" /f 2>$null; reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "CCleaner64" /f 2>$null; Write-Host "[OK] CCleaner removed from startup" -ForegroundColor Green`,
+  su_corsair: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "iCUE" /f 2>$null; reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Corsair iCUE" /f 2>$null; Write-Host "[OK] Corsair iCUE removed from startup" -ForegroundColor Green`,
+  su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "RadeonSoftware" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] Radeon Software removed from startup" -ForegroundColor Green`,
   // Registry - Extra
   SetResponsiveness: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 10`,
   GameModeTweaks: `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item -Path $gamePath -Force | Out-Null }; Set-ItemProperty -Path $gamePath -Name 'Scheduling Category' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'SFIO Priority' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'GPU Priority' -Value 8 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'Priority' -Value 6 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'MaximumPreRenderedFrames' -Value 1 -Type DWord; Write-Host "[OK] Game Mode Scheduler: High Category, High SFIO, GPU Priority 8, CPU Priority 6, MaxPreRendered 1" -ForegroundColor Green`,
@@ -297,6 +297,33 @@ public class MemoryHelper { [DllImport("psapi.dll")] public static extern int Em
   game_readyornot: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Ready Or Not","D:\\SteamLibrary\\steamapps\\common\\Ready Or Not","E:\\SteamLibrary\\steamapps\\common\\Ready Or Not"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Ready or Not" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\ReadyOrNot.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Ready or Not: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Ready or Not not detected" -ForegroundColor DarkGray }`,
   game_phasmo: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Phasmophobia","D:\\SteamLibrary\\steamapps\\common\\Phasmophobia"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Phasmophobia" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Phasmophobia.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Phasmophobia: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Phasmophobia not detected" -ForegroundColor DarkGray }`,
   game_battlefield: `$paths = @("C:\\Program Files\\EA Games\\Battlefield 2042","C:\\Program Files (x86)\\Origin Games\\Battlefield 2042","C:\\Program Files (x86)\\Steam\\steamapps\\common\\Battlefield 2042","D:\\SteamLibrary\\steamapps\\common\\Battlefield 2042"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Battlefield 2042" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\BF2042.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Battlefield 2042: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Battlefield 2042 not detected" -ForegroundColor DarkGray }`,
+
+  // ── Integrated Graphics (AMD Vega / Intel UHD) ─────────────────────────────
+  IGpu_DisableULPS: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|RX|AMD|UHD Graphics|Iris|HD Graphics' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'EnableULPS' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'EnableULPS_NA' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] ULPS disabled on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc) — prevents GPU downclocking between frames" -ForegroundColor Green }`,
+  IGpu_DisableDeepSleep: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|RX|AMD' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'PP_SclkDeepSleepDisable' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PP_ThermalAutoThrottlingEnable' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] AMD deep sleep + thermal throttling disabled — iGPU stays at full clock during gaming" -ForegroundColor Green }`,
+  IGpu_DisableVariBright: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|AMD' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'ACEEnabled' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'VariBrightEnable' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'TrueColorEnable' -Value 0 -Type DWord -EA SilentlyContinue }; Write-Host "[iGPU] AMD Vari-Bright disabled — prevents iGPU from downclocking to dim the screen" -ForegroundColor Green`,
+  IGpu_ForcePerformancePower: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|AMD|UHD|Iris|HD Graphics' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'PP_PowerProfile' -Value 2 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_EnableComputePreemption' -Value 0 -Type DWord -EA SilentlyContinue }; Write-Host "[iGPU] GPU power profile forced to Performance mode — no power throttling during gaming" -ForegroundColor Green`,
+  IGpu_DisableTransparency: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name 'EnableTransparency' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Transparency effects disabled — saves iGPU compositor overhead (big win for Vega 8)" -ForegroundColor Green`,
+  IGpu_DisableAnimations: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 2 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] All desktop animations disabled — frees iGPU bandwidth for gaming frames" -ForegroundColor Green`,
+  IGpu_DisableHDR: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\VideoSettings' -Name 'EnableHDRForPlayback' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] HDR disabled — saves significant iGPU bandwidth on integrated displays" -ForegroundColor Green`,
+  IGpu_DisableNightLight: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\Cache\\DefaultAccount\\$$windows.data.bluelightreduction.bluelightreductionstate\\Current' -Name 'Data' -Value ([byte[]](0x43,0x42,0x01,0x00,0x0A,0x02,0x01,0x00,0xC2,0x0A,0x14,0x01,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[iGPU] Night Light disabled — removes color correction GPU overhead" -ForegroundColor Green`,
+  IGpu_DisableSysMain: `Stop-Service 'SysMain' -Force -EA SilentlyContinue; Set-Service 'SysMain' -StartupType Disabled -EA SilentlyContinue; Write-Host "[iGPU] SysMain disabled — frees RAM for iGPU frame buffer (critical on 8GB RAM systems with shared VRAM)" -ForegroundColor Green`,
+  IGpu_GameModeOn: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\GameBar' -Name 'AllowAutoGameMode' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\GameBar' -Name 'AutoGameModeEnabled' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Windows Game Mode enabled — OS prioritizes game resources on shared CPU+GPU Ryzen systems" -ForegroundColor Green`,
+  IGpu_UltimatePerformancePlan: `powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null; $guid = (powercfg -l | Select-String 'Ultimate Performance') | Select-Object -First 1; if ($guid) { $id = $guid.Line.Split(' ')[3]; powercfg -setactive $id; Write-Host "[iGPU] Ultimate Performance power plan activated — AMD Ryzen iGPU stays at max boost clocks" -ForegroundColor Green } else { powercfg -setactive SCHEME_MIN; Write-Host "[iGPU] High Performance power plan activated" -ForegroundColor Green }`,
+  IGpu_MaxProcessorState: `powercfg -setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 bc5038f7-23e0-4960-96da-33abaf5935ec 100; powercfg -setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 893dee8e-2bef-41e0-89c6-b55d0929964c 5; powercfg -setactive SCHEME_CURRENT; Write-Host "[iGPU] CPU set to 100%% max + 5%% min processor state — AMD Ryzen stays at peak clocks for both CPU and iGPU compute" -ForegroundColor Green`,
+  IGpu_DisableFullscreenOpt: `New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -EA SilentlyContinue | Out-Null; @("$env:SystemRoot\\System32\\notepad.exe") | ForEach-Object { reg add "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers" /v $_ /t REG_SZ /d "DISABLEDXMAXIMIZEDWINDOWEDMODE" /f 2>$null }; Set-ItemProperty -Path 'HKCU:\\System\\GameConfigStore' -Name 'GameDVR_FSEBehaviorMode' -Value 2 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\System\\GameConfigStore' -Name 'GameDVR_HonorUserFSEBehaviorMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Fullscreen Optimizations disabled — forces exclusive fullscreen for lower DWM overhead on iGPU" -ForegroundColor Green`,
+  IGpu_DisableXboxGameBar: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name 'AppCaptureEnabled' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\System\\GameConfigStore' -Name 'GameDVR_Enabled' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Xbox Game Bar + DVR disabled — eliminates background GPU usage from capture overlay" -ForegroundColor Green`,
+  IGpu_AmdAntiLag: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|AMD' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'AntiLagEnabled' -Value 1 -Type DWord -EA SilentlyContinue }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLag' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] AMD Anti-Lag enabled — reduces latency between CPU and iGPU render pipeline on Vega 8" -ForegroundColor Green`,
+  IGpu_SharedMemoryHint: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|AMD' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnableInternalLargePage' -Value 2 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'DisableDrmdmrs' -Value 1 -Type DWord -EA SilentlyContinue }; Write-Host "[iGPU] AMD VRAM large page hints applied — driver allocates larger contiguous memory pages for iGPU frame buffer" -ForegroundColor Green`,
+  IGpu_DisableDWMColorSpace: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'DpiScalingVer' -Value 0x00001000 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] DWM color processing hint reduced — less compositor overhead on iGPU" -ForegroundColor Green`,
+  IGpu_SetTimerResolution: `bcdedit /set useplatformtick yes 2>$null; bcdedit /deletevalue useplatformclock 2>$null; Write-Host "[iGPU] Platform tick enabled — tighter frame timing for iGPU which runs CPU and GPU in same silicon" -ForegroundColor Green`,
+  IGpu_CloseBrowserGPU: `Stop-Process -Name "chrome" -Force -EA SilentlyContinue; Stop-Process -Name "msedge" -Force -EA SilentlyContinue; Stop-Process -Name "firefox" -Force -EA SilentlyContinue; Write-Host "[iGPU] Hardware-accelerated browsers closed — frees iGPU VRAM for gaming. Reopen after gaming session." -ForegroundColor Yellow`,
+  IGpu_DisableCoreParking: `powercfg -setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 0cc5b647-c1df-4637-891a-dec35c318583 100 2>$null; $cpPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583'; Set-ItemProperty -Path $cpPath -Name 'ValueMax' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] CPU core parking disabled — AMD Ryzen 2200G keeps all 4 cores active (shared CPU + Vega 8 compute)" -ForegroundColor Green`,
+  IGpu_Intel_MaxFreq: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Intel.*UHD|Intel.*Iris|Intel.*HD Graphics' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'Disable_OverlayDSRender' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'AdaptiveVsyncEnable' -Value 0 -Type DWord -EA SilentlyContinue }; Write-Host "[Intel iGPU] Overlay render and adaptive vsync disabled — lower latency on Intel UHD/Iris" -ForegroundColor Green`,
+  IGpu_Intel_DisableFreqScaling: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Intel.*UHD|Intel.*Iris|Intel.*HD Graphics' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'DisablePowerWell' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'RC6Enable' -Value 0 -Type DWord -EA SilentlyContinue }; Write-Host "[Intel iGPU] Intel RC6 power state disabled — GPU stays at max frequency instead of scaling down" -ForegroundColor Green`,
+  IGpu_DisableHAGSForIGpu: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] HAGS disabled — Hardware Accelerated GPU Scheduling causes latency on integrated GPUs (designed for discrete NVIDIA RTX 2000+ / AMD RX 6000+)" -ForegroundColor Green`,
+  IGpu_NetworkThrottling: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Network throttling disabled — CPU freed from interrupt throttling (important when CPU and GPU share die)" -ForegroundColor Green`,
+  IGpu_DisableMPO: `New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Force -EA SilentlyContinue | Out-Null; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Name 'OverlayTestMode' -Value 5 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Multi-Plane Overlay (MPO) disabled — eliminates screen tearing and flickering caused by MPO on AMD integrated GPUs" -ForegroundColor Green`,
 };
 
 // ── RESTORE / UNDO COMMANDS ─────────────────────────────────────────────────
@@ -527,6 +554,10 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     `Write-Host "  Running as: \$env:USERNAME (Admin)" -ForegroundColor Cyan`,
     `Write-Host "=====================================" -ForegroundColor Red`,
     ``,
+    `# --- Tweak Tracking (ChrisTitusUtil-style summary) ---`,
+    `$appliedTweaks = [System.Collections.Generic.List[string]]::new()`,
+    `$failedTweaks  = [System.Collections.Generic.List[string]]::new()`,
+    ``,
     `# --- Smart Hardware Detection ---`,
     `$_cpu = Get-CimInstance Win32_Processor | Select-Object -First 1`,
     `$_cpuCores = $_cpu.NumberOfCores`,
@@ -597,14 +628,17 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
       : key.startsWith("su_") ? "Startup Apps"
       : key.startsWith("game_") ? "Game Detection"
       : key.startsWith("Win11") || key.startsWith("WinTitus") || key.startsWith("OO") ? "Win Tweaks"
+      : key.startsWith("IGpu_") ? "Integrated Graphics"
       : "Registry / System";
     if (!categories[cat]) categories[cat] = [];
-    // Wrap each tweak in try/catch so failures show [ERR] but don't abort the whole script
+    // Wrap each tweak in try/catch — track success/failure for ChrisTitusUtil-style summary
     const wrapped = [
       `Write-Host "[>>] ${key}..." -ForegroundColor DarkYellow`,
       `try {`,
       `    ${cmd}`,
+      `    $appliedTweaks.Add("${key}") | Out-Null`,
       `} catch {`,
+      `    $failedTweaks.Add("${key}") | Out-Null`,
       `    Write-Host "[ERR] ${key}: \$_" -ForegroundColor Red`,
       `}`,
     ].join("\n");
@@ -619,12 +653,25 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
 
   scriptLines.push(``);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
-  scriptLines.push(`Write-Host "  All ${enabledTweaks.length} tweaks applied!" -ForegroundColor Green`);
-  scriptLines.push(`Write-Host "  Restart your PC to activate all changes." -ForegroundColor Green`);
-  scriptLines.push(`Write-Host "=====================================" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
+  scriptLines.push(`Write-Host "   OPTI GODS by leaq -- TWEAKS APPLIED" -ForegroundColor Red`);
+  scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Read-Host "Press Enter to close this window"`);
+  scriptLines.push(`Write-Host "  [APPLIED] ($($appliedTweaks.Count) of ${enabledTweaks.length} tweaks succeeded):" -ForegroundColor Green`);
+  scriptLines.push(`foreach ($t in $appliedTweaks) { Write-Host "    [OK] $t" -ForegroundColor Green }`);
+  scriptLines.push(`if ($failedTweaks.Count -gt 0) {`);
+  scriptLines.push(`    Write-Host "" `);
+  scriptLines.push(`    Write-Host "  [FAILED] ($($failedTweaks.Count) tweaks had errors):" -ForegroundColor Red`);
+  scriptLines.push(`    foreach ($t in $failedTweaks) { Write-Host "    [ERR] $t" -ForegroundColor Red }`);
+  scriptLines.push(`    Write-Host "" `);
+  scriptLines.push(`    Write-Host "  Note: Errors are normal for tweaks that don't apply to your hardware." -ForegroundColor DarkGray`);
+  scriptLines.push(`}`);
+  scriptLines.push(`Write-Host "" `);
+  scriptLines.push(`Write-Host "  Restart your PC to activate ALL changes." -ForegroundColor Cyan`);
+  scriptLines.push(`Write-Host "  Thank you for using Opti Gods by leaq!" -ForegroundColor Red`);
+  scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
+  scriptLines.push(`Write-Host "" `);
+  scriptLines.push(`Read-Host "  Press Enter to close this window"`);
   return scriptLines.join("\n");
 }
 
@@ -890,13 +937,21 @@ export async function registerRoutes(
     // Escape the PS1 content for embedding in a .bat here-string
     const escapedPs1 = ps1Content.replace(/%/g, '%%');
     const batContent = `@echo off
+:: Self-elevate to Administrator if not already running as admin
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Requesting Administrator access...
+    PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
 title Opti Gods by leaq - Running Optimizations
 echo.
 echo  ===============================================
 echo   OPTI GODS by leaq - Applying Optimizations
 echo  ===============================================
 echo.
-echo  Running as: %USERNAME%
+echo  Running as: %USERNAME% (Administrator)
 echo  Please wait while your PC is being optimized...
 echo.
 

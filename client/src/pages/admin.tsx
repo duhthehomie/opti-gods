@@ -645,7 +645,7 @@ export default function Admin() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-white/5 pb-0 overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-white/5 pb-0 flex-wrap">
           {(["codes", "friends", "activity", "email", "announcements", "analytics"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             return (

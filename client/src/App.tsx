@@ -27,6 +27,7 @@ import WinTitus from "@/pages/wintitus";
 import CustomOS from "@/pages/custom-os";
 import Updates from "@/pages/updates";
 import DiscordPage from "@/pages/discord";
+import IntegratedGraphics from "@/pages/integrated-graphics";
 
 function VisitTracker() {
   useEffect(() => {
@@ -95,6 +96,7 @@ function Router() {
       <Route path="/custom-os" component={CustomOS} />
       <Route path="/updates" component={Updates} />
       <Route path="/discord" component={DiscordPage} />
+      <Route path="/integrated-graphics" component={IntegratedGraphics} />
       <Route path="/help" component={Help} />
       <Route component={NotFound} />
     </Switch>
