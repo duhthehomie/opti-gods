@@ -24,7 +24,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "The script says 'not recognized' or fails to run",
-    a: "You must run PowerShell as Administrator. Right-click Start → Windows PowerShell (Admin) or search 'PowerShell', right-click → Run as Administrator. Also run: Set-ExecutionPolicy RemoteSigned before pasting the script.",
+    a: "Use the .bat download from the script dialog — just double-click it and click Yes on the admin popup. It handles execution policy automatically. If you're using the .ps1 file, right-click it → Properties → check Unblock → OK, then try again.",
   },
   {
     q: "Can I reverse the tweaks?",

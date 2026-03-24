@@ -144,7 +144,7 @@ const HOW_TO_STEPS = [
   {
     icon: ShieldAlert,
     title: "Run as Administrator",
-    desc: "Open your Downloads folder, right-click OptiGods-by-leaq.ps1, and choose Run with PowerShell. Click Yes on the Administrator prompt.",
+    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. Click Yes on the Administrator popup — it handles everything automatically.",
   },
   {
     icon: RotateCcw,

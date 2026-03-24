@@ -95,7 +95,7 @@ function TweakDiffPanel({
       URL.revokeObjectURL(url);
       toast({
         title: `Downloaded Update Script (${targetIds.length} tweaks)`,
-        description: "Right-click the file → Run with PowerShell as Administrator.",
+        description: "Double-click the .bat file → click Yes on the admin popup → done.",
       });
     } catch {
       toast({ title: "Download failed", variant: "destructive" });

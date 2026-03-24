@@ -30,7 +30,7 @@ export function PageGuide({ pageName, className }: PageGuideProps) {
           <ArrowRight className="w-3 h-3 text-zinc-600 shrink-0 hidden sm:block" />
           <span className="flex items-center gap-1.5 text-xs text-zinc-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            Right-click the file → <span className="text-white font-semibold">Run with PowerShell</span>
+            Double-click the <span className="text-white font-semibold">.bat file</span> → click Yes on the admin popup
           </span>
         </div>
         <p className="text-[10px] text-zinc-600 mt-2">
