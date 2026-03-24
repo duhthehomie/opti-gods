@@ -601,7 +601,7 @@ export default function Admin() {
           </div>
 
           <StatCard icon={Key} label="Codes Ready" value={stats?.availableCodes ?? "—"} sub={`${stats?.usedCodes ?? 0} redeemed`} color="red" />
-          <StatCard icon={Flame} label="Visits Today" value={stats?.visits?.today ?? "—"} sub={`${stats?.visits?.total ?? 0} all-time`} color="red" />
+          <StatCard icon={Flame} label="Visits (24h)" value={stats?.visits?.today ?? "—"} sub={`${stats?.visits?.total ?? 0} all-time`} color="red" />
           <StatCard icon={Users} label="Friend Links" value={stats?.usedFriends ?? "—"} sub={`${stats?.availableFriends ?? 0} available`} color="amber" />
           <StatCard icon={Bot} label="Auto-Sent" value={sys?.totalAutoSent ?? "—"} sub={sys?.lastRunAt ? `Last: ${timeAgo(sys.lastRunAt)}` : "Never run yet"} color="zinc" />
         </div>

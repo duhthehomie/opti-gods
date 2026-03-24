@@ -140,13 +140,12 @@ export class DatabaseStorage implements IStorage {
 
   async getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }> {
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfToday.getDate() - 7);
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits);
-    const [todayRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, startOfToday));
-    const [weekRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, startOfWeek));
+    const [todayRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, last24h));
+    const [weekRow] = await db.select({ count: sql<number>`count(*)::int` }).from(siteVisits).where(gte(siteVisits.visitedAt, last7d));
 
     return {
       total: totalRow?.count ?? 0,
