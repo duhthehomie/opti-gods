@@ -32,7 +32,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     });
   };
 
-  const osLabel = osInfo.loading ? "DETECTING..." : osInfo.os.toUpperCase().replace(/ /g, "_");
+  const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
 
   return (

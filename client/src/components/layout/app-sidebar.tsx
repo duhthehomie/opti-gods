@@ -46,6 +46,7 @@ const navItems = [
   { title: "NVIDIA Presets", url: "/nvidia", icon: MonitorPlay },
   { title: "AMD Optimizer", url: "/amd", icon: Flame },
   { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
+  { title: "Discord Optimizer", url: "/discord", icon: MessageCircle },
   { title: "Startup Apps", url: "/startup", icon: Power },
   { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
   { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },

@@ -257,6 +257,15 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   WinTitusShowExtensions: false,
   WinTitusShowHidden: false,
   OOShutupPrivacy: false,
+  // Discord Optimizer
+  DiscordLowPriority: false,
+  DiscordDisableHWAccel: false,
+  DiscordClearCache: false,
+  DiscordDisableUpdateCheck: false,
+  DiscordReduceGPUPriority: false,
+  DiscordOptimizeCodec: false,
+  DiscordDisableCrashHandler: false,
+  DiscordDisableAnimations: false,
   // Startup Apps
   su_discord: false,
   su_spotify: false,
