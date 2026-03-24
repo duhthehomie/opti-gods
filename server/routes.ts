@@ -950,21 +950,50 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // Polyglot BAT+PS1: CMD reads the batch header (up to exit /b).
-    // PowerShell reads the same file — the batch header is inside <# #> (block comment) so it's ignored.
-    // No temp file, no CMD special-char escaping issues, no execution policy blocks.
-    const batContent = `<# :
-@echo off
+    // Self-contained BAT:
+    //  1. CMD header checks admin, UAC-elevates itself if needed, then exits the non-admin instance.
+    //  2. Elevated CMD uses PowerShell to read the BAT's own bytes, locates the marker, writes
+    //     everything after it to a temp .ps1, then hands off to PowerShell -NoExit.
+    //  3. PowerShell runs the extracted script; -NoExit keeps the window alive after finish.
+    //  4. Temp file is deleted on exit (best-effort).
+    const MARKER = '##OPTIGODS_PS1_START##';
+    const MARKER_LEN = MARKER.length;
+    const batContent = `@echo off
+chcp 65001 >nul 2>&1
+:: Store own path in env var to avoid quoting issues when passing to PowerShell
+set "MYPATH=%~f0"
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  Requesting Administrator access - approve the UAC prompt...
-    PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    echo.
+    echo  [Opti Gods] Requesting Administrator access...
+    echo  Please click YES on the UAC prompt.
+    echo.
+    PowerShell -NoProfile -Command "Start-Process -FilePath $env:MYPATH -Verb RunAs"
     exit /b
 )
-title Opti Gods by leaq - Applying Optimizations
-PowerShell -NoProfile -NoExit -ExecutionPolicy Bypass -File "%~f0"
-exit /b
-#>
+title Opti Gods by leaq  ^-  Applying Optimizations
+echo.
+echo  ============================================
+echo    OPTI GODS by leaq  ^-  Optimizer
+echo  ============================================
+echo.
+echo  [1/2] Extracting script...
+set "BATPATH=%~f0"
+set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"
+PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:BATPATH; $o=$env:TMPPS1; $c=[IO.File]::ReadAllText($b,[Text.Encoding]::UTF8); $i=$c.IndexOf('${MARKER}'); if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+${MARKER_LEN}),[Text.Encoding]::UTF8)}"
+if not exist "%TMPPS1%" (
+    echo.
+    echo  [ERROR] Extraction failed. Please re-download the file from the website.
+    echo.
+    pause
+    exit /b 1
+)
+echo  [2/2] Running optimizer...
+echo.
+PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"
+del "%TMPPS1%" 2>nul
+exit /b 0
+${MARKER}
 ${ps1Content}`;
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
