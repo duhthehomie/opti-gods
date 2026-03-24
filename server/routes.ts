@@ -958,46 +958,49 @@ export async function registerRoutes(
     //  4. Temp file is deleted on exit (best-effort).
     const MARKER = '##OPTIGODS_PS1_START##';
     const MARKER_LEN = MARKER.length;
-    const batContent = `@echo off
-chcp 65001 >nul 2>&1
-:: Store own path in env var to avoid quoting issues when passing to PowerShell
-set "MYPATH=%~f0"
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo.
-    echo  [Opti Gods] Requesting Administrator access...
-    echo  Please click YES on the UAC prompt.
-    echo.
-    PowerShell -NoProfile -Command "Start-Process -FilePath $env:MYPATH -Verb RunAs"
-    exit /b
-)
-title Opti Gods by leaq  ^-  Applying Optimizations
-echo.
-echo  ============================================
-echo    OPTI GODS by leaq  ^-  Optimizer
-echo  ============================================
-echo.
-echo  [1/2] Extracting script...
-set "BATPATH=%~f0"
-set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"
-PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:BATPATH; $o=$env:TMPPS1; $c=[IO.File]::ReadAllText($b,[Text.Encoding]::UTF8); $i=$c.IndexOf('${MARKER}'); if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+${MARKER_LEN}),[Text.Encoding]::UTF8)}"
-if not exist "%TMPPS1%" (
-    echo.
-    echo  [ERROR] Extraction failed. Please re-download the file from the website.
-    echo.
-    pause
-    exit /b 1
-)
-echo  [2/2] Running optimizer...
-echo.
-PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"
-del "%TMPPS1%" 2>nul
-exit /b 0
-${MARKER}
-${ps1Content}`;
+    // IMPORTANT: use \r\n (CRLF) throughout — some CMD.EXE versions misparse LF-only batch files.
+    // Admin check uses whoami S-1-16-12288 (High Mandatory Level SID) — 100% reliable on all
+    // Win10/11 regardless of whether the Server service is running (net session is NOT reliable).
+    const batLines = [
+      `@echo off`,
+      `set "MYPATH=%~f0"`,
+      `whoami /groups 2>nul | findstr /i "S-1-16-12288" >nul 2>&1`,
+      `if %errorlevel% equ 0 goto :ISADMIN`,
+      `echo.`,
+      `echo  [Opti Gods] Requesting Administrator access...`,
+      `echo  Click YES on the UAC prompt that appears.`,
+      `echo.`,
+      `PowerShell -NoProfile -Command "Start-Process -FilePath $env:MYPATH -Verb RunAs"`,
+      `exit /b`,
+      `:ISADMIN`,
+      `title Opti Gods by leaq  - Applying Optimizations`,
+      `echo.`,
+      `echo  ============================================`,
+      `echo    OPTI GODS by leaq  -  Optimizer`,
+      `echo  ============================================`,
+      `echo.`,
+      `echo  [1/2] Extracting optimization script...`,
+      `set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:MYPATH;$o=$env:TMPPS1;$c=[IO.File]::ReadAllText($b);$i=$c.IndexOf('${MARKER}');if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+${MARKER_LEN}))}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo.`,
+      `  echo  [ERROR] Extraction failed - please re-download from the website.`,
+      `  echo.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] Launching optimizer...`,
+      `echo.`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      `${MARKER}`,
+      ps1Content,
+    ];
+    const batContent = batLines.join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
-    res.send(batContent);
+    res.end(Buffer.from(batContent, 'utf8'));
   });
 
   // Game detection scanner script download
