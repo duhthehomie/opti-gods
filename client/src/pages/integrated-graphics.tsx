@@ -407,7 +407,14 @@ export default function IntegratedGraphics() {
         </motion.div>
 
         {/* Smart Bar */}
-        <TabSmartBar tabIds={ALL_IGPU_IDS} tabName="Integrated Graphics" />
+        <TabSmartBar
+          tweakIds={ALL_IGPU_IDS}
+          recommendedIds={isIntelIGpu ? INTEL_RECOMMENDED : AMD_RECOMMENDED}
+          label="Integrated Graphics"
+          context={isAmdIGpu ? "AMD Vega 8 / Ryzen APU" : isIntelIGpu ? "Intel UHD / Iris" : "iGPU"}
+          impactLabel="iGPU Optimization Score"
+          applyLabel="Apply iGPU Recommended"
+        />
 
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-3">
