@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Button } from "@/components/ui/button";
 import { Crosshair, AlertTriangle, Info, FileCode, Zap } from "lucide-react";
+import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 
 const ALL_FORTNITE_IDS = [
@@ -127,6 +128,8 @@ export default function Fortnite() {
             Run as Administrator. Launch Fortnite once before running so the config file exists.
           </p>
         </motion.div>
+
+        <PageGuide pageName="Fortnite Optimizer" />
 
         <TabSmartBar
           tweakIds={ALL_FORTNITE_IDS}

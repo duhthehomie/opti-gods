@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { PageGuide } from "@/components/page-guide";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -436,6 +437,8 @@ export default function Memory() {
             <p className="text-zinc-500 text-sm">Intelligent pagefile, compression, and RAM profile tuning</p>
           </div>
         </motion.div>
+
+        <PageGuide pageName="Memory Optimizer" />
 
         {/* RAM Detection Panel */}
         <motion.div

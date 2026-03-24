@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -202,6 +203,8 @@ export default function Nvidia() {
             Enable All Recommended
           </Button>
         </motion.div>
+
+        <PageGuide pageName="NVIDIA Optimizer" />
 
         {/* GPU compatibility banner */}
         {!hw.loading && (

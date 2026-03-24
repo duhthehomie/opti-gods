@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Gamepad2, Info, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageGuide } from "@/components/page-guide";
 
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
@@ -122,6 +123,8 @@ export default function Fivem() {
             <p className="text-zinc-500 text-sm">Targeted tweaks for GTA V, FiveM, and RedM — process, network, and config</p>
           </div>
         </motion.div>
+
+        <PageGuide pageName="FiveM Optimizer" />
 
         <TabSmartBar
           tweakIds={ALL_FIVEM_IDS}

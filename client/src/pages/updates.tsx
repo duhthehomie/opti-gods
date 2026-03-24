@@ -205,15 +205,18 @@ function TweakDiffPanel({
               <Zap className="w-3 h-3" />
               Apply {newOnes.length} New Tweak{newOnes.length !== 1 ? "s" : ""}
             </button>
-            <button
-              data-testid={`button-download-update-${annId}`}
-              onClick={downloadUpdateScript}
-              disabled={downloading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
-            >
-              {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-              Download Script Only
-            </button>
+            <div className="flex flex-col items-start gap-0.5">
+              <button
+                data-testid={`button-download-update-${annId}`}
+                onClick={downloadUpdateScript}
+                disabled={downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                Download Script Only
+              </button>
+              <span className="text-[9px] text-zinc-600 px-1">Downloads just this update's tweaks — ignores your saved selections</span>
+            </div>
           </>
         )}
       </div>

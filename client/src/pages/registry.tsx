@@ -7,6 +7,7 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageGuide } from "@/components/page-guide";
 
 const ALL_REGISTRY_IDS = [
   "Win32PrioritySeparation","DisableHungAppDetection","SetTimerResolution","SetResponsiveness",
@@ -173,6 +174,8 @@ export default function Registry() {
             <p className="text-zinc-500 text-sm">Deep Windows registry modifications for maximum system and gaming performance</p>
           </div>
         </motion.div>
+
+        <PageGuide pageName="Registry Tweaks" />
 
         {/* Impact legend */}
         <div className="flex items-center gap-4 px-1 mb-2">

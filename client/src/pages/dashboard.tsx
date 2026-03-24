@@ -304,6 +304,34 @@ export default function Dashboard() {
         </motion.div>
 
 
+        {/* ─── HOW IT WORKS — 3-STEP STRIP (moved to top) ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+          className="grid grid-cols-1 md:grid-cols-4 gap-2"
+        >
+          {HOW_TO_STEPS.map((step, i) => (
+            <div key={i} className="relative flex items-start gap-3 p-4 rounded-xl bg-black/50 border border-white/5 hover:border-red-500/20 transition-colors group">
+              <div className="flex flex-col items-center shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-red-600/15 border border-red-500/30 flex items-center justify-center">
+                  <span className="text-base font-black text-red-400 font-display leading-none">{i + 1}</span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <step.icon className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wide">{step.title}</h3>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">{step.desc}</p>
+              </div>
+              {i < HOW_TO_STEPS.length - 1 && (
+                <ChevronRight className="hidden md:block absolute -right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-700 z-10" />
+              )}
+            </div>
+          ))}
+        </motion.div>
+
         {/* ─── ONE-CLICK RECOMMENDED BANNER ─── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -611,48 +639,6 @@ export default function Dashboard() {
           transition={{ delay: 0.34 }}
         >
           <FpsEstimate />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="p-6 rounded-2xl bg-black/40 border border-red-500/15"
-        >
-          <div className="flex items-center gap-2 mb-6">
-            <Zap className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">How to Use Opti Gods</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {HOW_TO_STEPS.map((step, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 + i * 0.07 }}
-                className="relative p-4 rounded-xl bg-red-500/5 border border-red-500/10 hover:border-red-500/20 transition-colors"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-7 h-7 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center shrink-0">
-                    <span className="text-[11px] font-bold text-red-400">{i + 1}</span>
-                  </div>
-                  <step.icon className="w-4 h-4 text-red-400" />
-                </div>
-                <h3 className="text-sm font-bold text-white mb-2">{step.title}</h3>
-                <p className="text-xs text-zinc-500 leading-relaxed">{step.desc}</p>
-                {i < HOW_TO_STEPS.length - 1 && (
-                  <ChevronRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700 z-10" />
-                )}
-              </motion.div>
-            ))}
-          </div>
-          <div className="mt-5 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 flex items-start gap-3">
-            <CheckCircle2 className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              <span className="text-white font-medium">Pro tip:</span> Save your configuration as a Preset (below) before applying — you can reload it anytime.
-              All tweaks start <span className="text-white font-medium">OFF</span> for every new visitor — nothing is applied until you download and run the script.
-            </p>
-          </div>
         </motion.div>
 
         

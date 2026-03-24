@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield } from "lucide-react";
+import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 
 const ALL_DISCORD_IDS = [
@@ -181,6 +182,8 @@ export default function Discord() {
             Enable All Recommended
           </Button>
         </motion.div>
+
+        <PageGuide pageName="Discord Optimizer" />
 
         {/* Why Discord lags banner */}
         <motion.div

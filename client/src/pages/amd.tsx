@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { Cpu, Layers, Zap, Check, Info, AlertTriangle, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -295,6 +296,8 @@ export default function Amd() {
             </motion.div>
           ) : null
         )}
+
+        <PageGuide pageName="AMD Optimizer" />
 
         <TabSmartBar
           tweakIds={ALL_AMD_IDS}
