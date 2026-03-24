@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -12,13 +12,14 @@ import { api } from "@shared/routes";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { ScanImport } from "@/components/scan-import";
 import { FpsEstimate } from "@/components/fps-estimate";
+import { HardwareScanZone } from "@/components/hardware-scan";
 
 // Feature categories
 const FEATURES = [
@@ -171,10 +172,23 @@ export default function Dashboard() {
   const { data: savedPresets = [] } = useQuery<any[]>({
     queryKey: [api.presets.list.path],
   });
+  const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
+    queryKey: ["/api/pricing"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const proPrice = pricingData?.price ?? 25;
+  const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
   const qc = useQueryClient();
   const { toast } = useToast();
   const [presetName, setPresetName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const handleScanned = useCallback((_info: ScannedSysInfo) => {
+    window.location.reload();
+  }, []);
+  const handleScanCleared = useCallback(() => {
+    window.location.reload();
+  }, []);
 
   const createPreset = useMutation({
     mutationFn: async (name: string) => {
@@ -289,7 +303,7 @@ export default function Dashboard() {
                     className="bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.5)] font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all"
                   >
                     <Lock className="w-4 h-4 mr-2" />
-                    Unlock Pro — $25 Lifetime
+                    Unlock Pro — ${proPrice} Lifetime
                   </Button>
                 </ProUnlockButton>
               )}
@@ -314,42 +328,59 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
             data-testid="card-system-profile"
-            className="rounded-xl border border-zinc-800 bg-black/50 px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-3"
+            className="rounded-xl border border-zinc-800 bg-black/50 px-5 py-4 space-y-3"
           >
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">System Profile</span>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2 flex-1 min-w-0">
-              {hw.gpuName && hw.gpuName !== "Unknown GPU" && (
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">System Profile</span>
+                {hw.scanned && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-bold uppercase tracking-wide">Scanned</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <Monitor className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  <span className="text-xs text-zinc-300 font-medium">{hw.gpuName}</span>
-                  {hw.isNvidia && <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-bold">NVIDIA</span>}
-                  {hw.isAMD && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-bold">AMD</span>}
-                  {hw.isIntel && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold">INTEL</span>}
+                  {hw.gpuName && hw.gpuName !== "Unknown GPU" ? (
+                    <>
+                      <span className="text-xs text-zinc-300 font-medium">{hw.gpuName}</span>
+                      {hw.isNvidia && <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-bold">NVIDIA</span>}
+                      {hw.isAMD && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-bold">AMD</span>}
+                      {hw.isIntel && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold">INTEL</span>}
+                    </>
+                  ) : (
+                    <span className="text-xs text-zinc-600 font-medium italic">GPU unknown — run scan below</span>
+                  )}
                 </div>
-              )}
-              {hw.cpuCores > 0 && (
+                {hw.cpuCores > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    <span className="text-xs text-zinc-300 font-medium">{hw.cpuLabel}</span>
+                  </div>
+                )}
+                {hw.ramGB > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <MemoryStick className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    <span className="text-xs text-zinc-300 font-medium">{hw.ramLabel} RAM</span>
+                    {!hw.scanned && <span className="text-[9px] text-zinc-600 italic">(approx)</span>}
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  <span className="text-xs text-zinc-300 font-medium">{hw.cpuLabel}</span>
+                  <Settings2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  <span className="text-xs text-zinc-300 font-medium">{osInfo.displayName}</span>
                 </div>
-              )}
-              {hw.ramGB > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <MemoryStick className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  <span className="text-xs text-zinc-300 font-medium">{hw.ramGB} GB RAM</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1.5">
-                <Settings2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                <span className="text-xs text-zinc-300 font-medium">{osInfo.displayName}</span>
               </div>
-            </div>
-            <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/20">
-              <Zap className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-xs font-bold text-red-400">{smartRecs.ids.size} tweaks recommended</span>
+              <div className="shrink-0 flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/20">
+                  <Zap className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-xs font-bold text-red-400">{smartRecs.ids.size} tweaks recommended</span>
+                </div>
+                <HardwareScanZone
+                  onScanned={handleScanned}
+                  onCleared={handleScanCleared}
+                  isScanned={hw.scanned}
+                />
+              </div>
             </div>
           </motion.div>
         )}
@@ -511,10 +542,22 @@ export default function Dashboard() {
               <div className="relative z-10">
                 <div className="flex items-start justify-between mb-5">
                   <div>
-                    <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm mb-3">
-                      One-Time Lifetime Access
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-red-600 text-white px-2 py-0.5 rounded-sm">
+                        One-Time Lifetime Access
+                      </div>
+                      {isWeekendDeal && (
+                        <div className="inline-block text-[10px] font-bold uppercase tracking-widest bg-amber-500 text-black px-2 py-0.5 rounded-sm animate-pulse">
+                          Weekend Deal
+                        </div>
+                      )}
                     </div>
-                    <h2 className="text-3xl font-display font-bold text-white leading-none">$25</h2>
+                    <div className="flex items-baseline gap-2">
+                      <h2 className="text-3xl font-display font-bold text-white leading-none">${proPrice}</h2>
+                      {isWeekendDeal && (
+                        <span className="text-lg text-zinc-500 line-through font-display">$25</span>
+                      )}
+                    </div>
                     <p className="text-sm text-zinc-400 mt-1">No subscription. No expiry.</p>
                   </div>
                   <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -535,7 +578,7 @@ export default function Dashboard() {
                     className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/40 shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)] font-display font-bold py-3 text-sm tracking-wide transition-all"
                   >
                     <Lock className="w-4 h-4 mr-2" />
-                    Unlock Pro — $25
+                    Unlock Pro — ${proPrice}
                   </Button>
                 </ProUnlockButton>
               </div>
