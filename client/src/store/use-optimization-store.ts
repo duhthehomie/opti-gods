@@ -73,6 +73,7 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   FiveMWorkingSet: false,
   FiveMStreamPool: false,
   FiveMDisableNvidiaTelemetry: false,
+  FiveMMenuFpsUncap: false,
   FiveMFullPerfStack: false,
   FiveMGTAProcessPerfOptions: false,
   FiveMGameModeAdd: false,

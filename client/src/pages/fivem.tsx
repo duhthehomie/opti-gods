@@ -12,7 +12,7 @@ import { PageGuide } from "@/components/page-guide";
 
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
-  "FiveMCacheClear","FiveMExtendedMemory","FiveMStreamDistance","FiveMStreamPool","FiveMDisableNvidiaTelemetry",
+  "FiveMCacheClear","FiveMExtendedMemory","FiveMStreamDistance","FiveMStreamPool","FiveMDisableNvidiaTelemetry","FiveMMenuFpsUncap",
   "FiveMDisableVSync","FiveMNetworkBuffer","FiveMDisableFullscreen","FiveMDisableDWM",
   "FiveMDNSOverride","FiveMDisableP2P","FiveMQueueFix",
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
@@ -50,6 +50,7 @@ export default function Fivem() {
     { id: "FiveMStreamDistance", title: "Cap Streaming Distance (500 units)", desc: "Sets StreamingDistance=500 in CitizenFX.ini — reduces LOD pop-in and micro-stutter on city servers.", impact: "MED" },
     { id: "FiveMStreamPool", title: "Set CitizenFX Stream Pool to 128", desc: "Updates CitizenFX.ini StreamPool setting to 128 — improves streaming stability on high-asset servers.", impact: "MED" },
     { id: "FiveMDisableNvidiaTelemetry", title: "Disable NVIDIA Telemetry Service", desc: "Stops NvTelemetryContainer service — eliminates the background GPU perf overhead it causes.", badge: "NVIDIA ONLY", impact: "MED" },
+    { id: "FiveMMenuFpsUncap", title: "Uncap FiveM Menu FPS (NVIDIA OpenGL GDI: Prefer Performance)", desc: "Sets NVIDIA OpenGL GDI Compatibility to Prefer Performance via GPU class registry — removes the monitor-refresh-rate FPS cap applied to FiveM menus by default. Without this, NVIDIA caps GDI-rendered UI to your monitor Hz (e.g. 165fps). With it, menu FPS runs uncapped (250+).", badge: "NVIDIA ONLY", impact: "HIGH", recommended: true },
   ];
 
   const WINDOWS_TWEAKS: Tweak[] = [

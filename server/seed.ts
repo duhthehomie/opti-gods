@@ -53,6 +53,12 @@ const SEED_ANNOUNCEMENTS = [
     tweakIds: [] as string[],
   },
   {
+    title: "NEW: Uncap FiveM Menu FPS — NVIDIA OpenGL GDI Fix",
+    body: `Big one for NVIDIA users on FiveM.\n\nBy default, NVIDIA caps GDI-rendered UI (like FiveM menus) to your monitor's refresh rate — so if you're on a 165Hz display, you're stuck at 165fps in menus even if your GPU can push 250+.\n\nThe fix: set OpenGL GDI Compatibility to Prefer Performance in NVIDIA Control Panel (Manage 3D Settings). This tells NVIDIA to stop capping GDI-rendered frames to your refresh rate.\n\nWe've added this as a one-click tweak under FiveM Optimizer → Client & Cache Tweaks:\n• "Uncap FiveM Menu FPS (NVIDIA OpenGL GDI: Prefer Performance)"\n\nEnable it, regenerate your script, run it as admin — your FiveM menu FPS will now run fully uncapped.`,
+    tag: "new",
+    tweakIds: ["FiveMMenuFpsUncap"],
+  },
+  {
     title: "Discord Optimizer — 8 New Tweaks Added",
     body: `New Discord Optimizer page is live with 8 targeted performance tweaks:\n\n• De-prioritize Discord CPU & I/O — prevents Discord from competing with your game for CPU time\n• Lower Discord GPU Priority — game renders first, Discord UI renders after\n• Disable Hardware Acceleration — frees your GPU encoder for game capture and streaming\n• Force H264 Screenshare Codec — lower CPU overhead when screensharing\n• Clear Discord Cache — fixes audio glitches, black screenshares, slow overlay loading\n• Enable Reduce Motion — disables Discord animations during gameplay\n• Deprioritize Discord Auto-Updater — no more CPU spikes mid-game from update checks\n• Block Crash Reporter — stops telemetry uploads in the background\n\nFind all 8 tweaks under Discord Optimizer in the sidebar.`,
     tag: "new",

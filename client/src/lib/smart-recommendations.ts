@@ -67,7 +67,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "EnableHAGS","NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
       "NvidiaOptimizeLatency","NvidiaPowerMizer","NvidiaReflexEnable","NvidiaTripleBufferOff",
       "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
-      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX",
+      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap",
       "FortniteAffinityPhysical","FortniteForceDirectX12",
     ].forEach(id => ids.add(id));
     reasons.push(`NVIDIA GPU (${hw.gpuName}) — full NVIDIA optimization suite enabled`);
