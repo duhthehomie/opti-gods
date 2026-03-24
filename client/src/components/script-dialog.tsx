@@ -25,36 +25,36 @@ interface ScriptDialogProps {
 const HOW_TO_STEPS = [
   {
     icon: FolderOpen,
-    label: "Open your Downloads folder",
-    detail: 'Press Win + E, then click "Downloads" on the left side',
+    label: 'Open your Downloads folder',
+    detail: 'Press Win + E, then click "Downloads" on the left',
     color: "text-blue-400",
     bg: "bg-blue-500/10 border-blue-500/20",
   },
   {
     icon: MousePointerClick,
-    label: 'Right-click the file "OptiGods-by-leaq.ps1"',
-    detail: 'Look for the file with a blue PowerShell icon',
+    label: 'Double-click "OptiGods-by-leaq.bat"',
+    detail: 'It has a black CMD/terminal icon. One double-click is all it takes.',
     color: "text-violet-400",
     bg: "bg-violet-500/10 border-violet-500/20",
   },
   {
     icon: ShieldCheck,
-    label: 'Click "Run with PowerShell"',
-    detail: 'A black terminal window will open — this is normal',
+    label: 'Click "Yes" on the blue permission popup',
+    detail: "Windows needs admin access to apply the tweaks — this is normal",
     color: "text-amber-400",
     bg: "bg-amber-500/10 border-amber-500/20",
   },
   {
     icon: CheckCircle2,
-    label: 'Click "Yes" on the blue popup asking for permission',
-    detail: "Windows needs permission to apply your tweaks",
+    label: 'Wait for it to finish — watch the output',
+    detail: 'You\'ll see each tweak applied in real time. Takes 10–30 seconds.',
     color: "text-green-400",
     bg: "bg-green-500/10 border-green-500/20",
   },
   {
     icon: RotateCcw,
-    label: "Wait for it to finish, then restart your PC",
-    detail: "The window will say 'Press Enter to exit' when done",
+    label: 'Press Enter when it says "Press Enter to close", then restart',
+    detail: "Restart your PC for all changes to take full effect",
     color: "text-red-400",
     bg: "bg-red-500/10 border-red-500/20",
   },
@@ -63,14 +63,42 @@ const HOW_TO_STEPS = [
 export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps) {
   const [stage, setStage] = useState<"ready" | "downloaded">("ready");
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPs1, setDownloadingPs1] = useState(false);
   const [showWhat, setShowWhat] = useState(false);
   const { tweaks, nvidiaPreset } = useOptimizationStore();
   const { toast } = useToast();
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
 
-  const handleDownload = async () => {
+  const handleDownloadBat = async () => {
     setDownloading(true);
+    try {
+      const res = await fetch("/api/script/download-bat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweaks, nvidiaPreset }),
+      });
+      if (!res.ok) throw new Error("Failed to generate script");
+      const text = await res.text();
+      const blob = new Blob([text], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods-by-leaq.bat";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setStage("downloaded");
+    } catch (e) {
+      toast({ title: "Download failed", description: String(e), variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadPs1 = async () => {
+    setDownloadingPs1(true);
     try {
       const res = await fetch("/api/script/download", {
         method: "POST",
@@ -88,11 +116,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setStage("downloaded");
+      toast({ title: "PS1 downloaded", description: "Right-click → Properties → Unblock before running if Windows blocks it." });
     } catch (e) {
       toast({ title: "Download failed", description: String(e), variant: "destructive" });
     } finally {
-      setDownloading(false);
+      setDownloadingPs1(false);
     }
   };
 
@@ -104,12 +132,10 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md border-red-500/20 bg-[#080808] backdrop-blur-xl p-0 overflow-hidden">
-        {/* Top accent bar */}
         <div className="h-1 w-full bg-gradient-to-r from-red-600 via-red-500 to-orange-500" />
 
         <AnimatePresence mode="wait">
 
-          {/* ── STAGE 1: Ready to download ── */}
           {stage === "ready" && (
             <motion.div
               key="ready"
@@ -126,12 +152,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                   </DialogTitle>
                 </DialogHeader>
                 <p className="text-sm text-zinc-400 mt-1.5">
-                  You have <span className="text-white font-semibold">{enabledCount} tweak{enabledCount !== 1 ? "s" : ""}</span> selected. Download the file, then follow the steps to run it on your PC.
+                  You have <span className="text-white font-semibold">{enabledCount} tweak{enabledCount !== 1 ? "s" : ""}</span> selected. Download and double-click — it handles everything automatically.
                 </p>
               </div>
 
               <div className="px-6 py-5 space-y-4">
-                {/* What will it do? — collapsible */}
                 <button
                   onClick={() => setShowWhat(v => !v)}
                   className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/80 transition-colors text-left"
@@ -152,23 +177,26 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                       className="overflow-hidden -mt-1"
                     >
                       <div className="px-4 py-3 rounded-xl bg-zinc-900/40 border border-zinc-800 text-xs text-zinc-400 leading-relaxed space-y-2">
-                        <p>The script makes <strong className="text-zinc-200">Windows registry changes</strong> that tell your PC to prioritize games and reduce background activity. Think of it like telling Windows "focus on my game, not everything else."</p>
-                        <p>Nothing is deleted. No programs are removed. All changes can be undone by running the Fixes & Restore tab.</p>
+                        <p>The script makes <strong className="text-zinc-200">Windows registry changes</strong> that tell your PC to prioritize games and reduce background activity.</p>
+                        <p>Nothing is deleted. No programs are removed. All changes can be undone from the Fixes & Restore tab.</p>
                         <p className="text-zinc-600">A restart is usually needed for all changes to take effect.</p>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Big download button */}
+                {/* Primary BAT download */}
                 <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-5 space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
                       <Download className="w-5 h-5 text-red-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-white">OptiGods-by-leaq.ps1</p>
-                      <p className="text-xs text-zinc-500">{enabledCount} tweaks — PowerShell script</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-white">OptiGods-by-leaq.bat</p>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-600 text-white tracking-wider">RECOMMENDED</span>
+                      </div>
+                      <p className="text-xs text-zinc-500">{enabledCount} tweaks · Double-click to run · Auto-elevates</p>
                     </div>
                     <div className="ml-auto">
                       <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500 text-white tracking-wider">STEP 1</span>
@@ -176,21 +204,35 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                   </div>
 
                   <Button
-                    data-testid="button-download-from-dialog"
-                    onClick={handleDownload}
+                    data-testid="button-download-bat"
+                    onClick={handleDownloadBat}
                     disabled={downloading || enabledCount === 0}
                     className="w-full bg-red-600 hover:bg-red-500 text-white border border-red-400/50 shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)] font-bold text-sm h-11"
                   >
                     {downloading ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating script...</>
                     ) : (
-                      <><Download className="w-4 h-4 mr-2" /> Download Script ({enabledCount} tweaks)</>
+                      <><Download className="w-4 h-4 mr-2" /> Download .BAT ({enabledCount} tweaks)</>
                     )}
                   </Button>
 
                   {enabledCount === 0 && (
-                    <p className="text-xs text-center text-amber-400">No tweaks selected yet — go back and enable some first!</p>
+                    <p className="text-xs text-center text-amber-400">No tweaks selected — go back and enable some first!</p>
                   )}
+                </div>
+
+                {/* PS1 advanced option */}
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs text-zinc-600">Advanced:</span>
+                  <button
+                    data-testid="button-download-ps1"
+                    onClick={handleDownloadPs1}
+                    disabled={downloadingPs1 || enabledCount === 0}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors disabled:opacity-40"
+                  >
+                    {downloadingPs1 ? "Downloading..." : "Download .ps1 instead"}
+                  </button>
+                  <span className="text-[10px] text-zinc-700">(requires right-click → Properties → Unblock first)</span>
                 </div>
 
                 <p className="text-center text-xs text-zinc-600">
@@ -200,7 +242,6 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
             </motion.div>
           )}
 
-          {/* ── STAGE 2: Downloaded — how to run guide ── */}
           {stage === "downloaded" && (
             <motion.div
               key="downloaded"
@@ -215,7 +256,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                   <span className="text-xs font-bold text-green-400 uppercase tracking-widest">Downloaded!</span>
                 </div>
                 <h2 className="text-xl font-display font-bold text-white">Now run it in 5 steps</h2>
-                <p className="text-sm text-zinc-500 mt-1">Follow these steps exactly — it takes about 30 seconds</p>
+                <p className="text-sm text-zinc-500 mt-1">Follow these steps — takes about 30 seconds total</p>
               </div>
 
               <div className="px-6 py-5 space-y-2.5">
@@ -227,7 +268,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                     transition={{ delay: i * 0.07 }}
                     className={cn("flex items-start gap-3 p-3.5 rounded-xl border", step.bg)}
                   >
-                    <div className={cn("shrink-0 w-7 h-7 rounded-lg bg-black/30 flex items-center justify-center")}>
+                    <div className="shrink-0 w-7 h-7 rounded-lg bg-black/30 flex items-center justify-center">
                       <step.icon className={cn("w-4 h-4", step.color)} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -240,11 +281,10 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                   </motion.div>
                 ))}
 
-                {/* Tip */}
                 <div className="flex items-start gap-2 px-1 pt-1">
                   <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider shrink-0 mt-0.5">Tip:</span>
                   <p className="text-xs text-zinc-600 leading-relaxed">
-                    If Windows says "this app may harm your device" — click <span className="text-zinc-400">"More info"</span> then <span className="text-zinc-400">"Run anyway."</span> This is normal for PowerShell scripts.
+                    If Windows SmartScreen says "Windows protected your PC" — click <span className="text-zinc-400">"More info"</span> then <span className="text-zinc-400">"Run anyway."</span> This is normal for unsigned batch files.
                   </p>
                 </div>
               </div>

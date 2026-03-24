@@ -950,46 +950,22 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // Escape the PS1 content for embedding in a .bat here-string
-    const escapedPs1 = ps1Content.replace(/%/g, '%%');
-    const batContent = `@echo off
-:: Self-elevate to Administrator if not already running as admin
+    // Polyglot BAT+PS1: CMD reads the batch header (up to exit /b).
+    // PowerShell reads the same file — the batch header is inside <# #> (block comment) so it's ignored.
+    // No temp file, no CMD special-char escaping issues, no execution policy blocks.
+    const batContent = `<# :
+@echo off
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Requesting Administrator access...
+    echo  Requesting Administrator access - approve the UAC prompt...
     PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
     exit /b
 )
-
-title Opti Gods by leaq - Running Optimizations
-echo.
-echo  ===============================================
-echo   OPTI GODS by leaq - Applying Optimizations
-echo  ===============================================
-echo.
-echo  Running as: %USERNAME% (Administrator)
-echo  Please wait while your PC is being optimized...
-echo.
-
-:: Write PowerShell script to temp
-set "TMPPS1=%TEMP%\\OptiGods-by-leaq.ps1"
-(
-echo ${escapedPs1.split('\n').join('\necho ')}
-) > "%TMPPS1%"
-
-:: Run with elevated PowerShell — bypasses execution policy
-PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"
-
-:: Clean up
-del "%TMPPS1%" 2>nul
-
-echo.
-echo  ===============================================
-echo   Done! Restart your PC for all changes to apply
-echo  ===============================================
-echo.
-pause
-`;
+title Opti Gods by leaq - Applying Optimizations
+PowerShell -NoProfile -NoExit -ExecutionPolicy Bypass -File "%~f0"
+exit /b
+#>
+${ps1Content}`;
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
     res.send(batContent);
