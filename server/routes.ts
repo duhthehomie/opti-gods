@@ -860,21 +860,25 @@ export async function registerRoutes(
   });
 
   // POST version for direct download with tweaks body
-  app.post('/api/script/download', (req, res) => {
+  app.post('/api/script/download', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
+    // Record download analytics (fire-and-forget)
+    storage.recordScriptDownload(enabledTweaks).catch(() => {});
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
     res.send(scriptContent);
   });
 
   // .bat download — double-click to run, no right-click needed
-  app.post('/api/script/download-bat', (req, res) => {
+  app.post('/api/script/download-bat', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    // Record download analytics (fire-and-forget)
+    storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
     // Escape the PS1 content for embedding in a .bat here-string
     const escapedPs1 = ps1Content.replace(/%/g, '%%');
@@ -1203,6 +1207,17 @@ Start-Sleep 2
       directRevenue,
       visits: visitStats,
     });
+  });
+
+  // Download analytics — how many scripts, which tweaks, trend
+  app.get('/api/admin/download-stats', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const stats = await storage.getDownloadStats();
+      res.json(stats);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
   });
 
   // ── Stripe Checkout (one-time payment) ──────────────────────────────────────

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement } from "@shared/schema";
 import { eq, isNotNull, gte, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
@@ -34,6 +34,15 @@ export interface IStorage {
   getAnnouncements(): Promise<Announcement[]>;
   createAnnouncement(data: InsertAnnouncement): Promise<Announcement>;
   deleteAnnouncement(id: number): Promise<void>;
+  // Script download tracking
+  recordScriptDownload(tweakIds: string[]): Promise<void>;
+  getDownloadStats(): Promise<{
+    totalDownloads: number;
+    totalTweaksDeployed: number;
+    avgTweaksPerDownload: number;
+    last7Days: { date: string; count: number }[];
+    topTweaks: { tweakId: string; count: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -186,6 +195,64 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAnnouncement(id: number): Promise<void> {
     await db.delete(announcements).where(eq(announcements.id, id));
+  }
+
+  async recordScriptDownload(tweakIds: string[]): Promise<void> {
+    await db.insert(scriptDownloads).values({
+      tweakCount: tweakIds.length,
+      tweakIds,
+    });
+  }
+
+  async getDownloadStats(): Promise<{
+    totalDownloads: number;
+    totalTweaksDeployed: number;
+    avgTweaksPerDownload: number;
+    last7Days: { date: string; count: number }[];
+    topTweaks: { tweakId: string; count: number }[];
+  }> {
+    const [totalsRow] = await db
+      .select({
+        totalDownloads: sql<number>`count(*)::int`,
+        totalTweaksDeployed: sql<number>`coalesce(sum(tweak_count), 0)::int`,
+      })
+      .from(scriptDownloads);
+
+    const totalDownloads = totalsRow?.totalDownloads ?? 0;
+    const totalTweaksDeployed = totalsRow?.totalTweaksDeployed ?? 0;
+    const avgTweaksPerDownload = totalDownloads > 0 ? Math.round(totalTweaksDeployed / totalDownloads) : 0;
+
+    // Last 7 days daily counts
+    const last7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dailyRows = await db
+      .select({
+        date: sql<string>`to_char(downloaded_at, 'YYYY-MM-DD')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(scriptDownloads)
+      .where(gte(scriptDownloads.downloadedAt, last7d))
+      .groupBy(sql`to_char(downloaded_at, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(downloaded_at, 'YYYY-MM-DD')`);
+
+    // Fill in missing days
+    const last7Days: { date: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().slice(0, 10);
+      const found = dailyRows.find(r => r.date === dateStr);
+      last7Days.push({ date: dateStr, count: found?.count ?? 0 });
+    }
+
+    // Top tweaks — unnest the array column and count
+    const tweakRows = await db.execute(
+      sql`SELECT unnested as tweak_id, count(*)::int as cnt FROM script_downloads, unnest(tweak_ids) AS unnested GROUP BY unnested ORDER BY cnt DESC LIMIT 20`
+    );
+    const topTweaks = (tweakRows.rows as { tweak_id: string; cnt: number }[]).map(r => ({
+      tweakId: r.tweak_id,
+      count: r.cnt,
+    }));
+
+    return { totalDownloads, totalTweaksDeployed, avgTweaksPerDownload, last7Days, topTweaks };
   }
 }
 

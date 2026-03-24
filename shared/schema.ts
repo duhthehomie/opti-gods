@@ -63,6 +63,14 @@ export type Announcement = typeof announcements.$inferSelect;
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 
+export const scriptDownloads = pgTable("script_downloads", {
+  id: serial("id").primaryKey(),
+  tweakCount: integer("tweak_count").notNull().default(0),
+  tweakIds: text("tweak_ids").array().default([]),
+  downloadedAt: timestamp("downloaded_at").defaultNow(),
+});
+export type ScriptDownload = typeof scriptDownloads.$inferSelect;
+
 export const emailRequests = pgTable("email_requests", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
