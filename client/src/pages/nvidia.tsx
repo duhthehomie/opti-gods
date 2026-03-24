@@ -272,14 +272,22 @@ export default function Nvidia() {
             <Cpu className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">NVIDIA Registry Tweaks</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
-            <div className="flex items-center gap-3 text-[10px] text-zinc-600">
-              {["HIGH","MED"].map((l, i) => (
-                <span key={l} className={cn("flex items-center gap-1", i === 0 ? "text-red-400" : "text-amber-400")}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full", i === 0 ? "bg-red-500" : "bg-amber-400")} />
-                  {l}
-                </span>
-              ))}
-            </div>
+            {(() => {
+              const recIds = NVIDIA_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  disabled={allOn}
+                  data-testid="button-enable-recommended-nvidia-registry"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed ml-1"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
           </div>
           <div className="space-y-3">
             {NVIDIA_TWEAKS.map((item, i) => (
@@ -304,7 +312,22 @@ export default function Nvidia() {
             <Layers className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Advanced Driver Registry</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Deep Registry</span>
+            {(() => {
+              const recIds = NVIDIA_ADVANCED_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  disabled={allOn}
+                  data-testid="button-enable-recommended-nvidia-advanced"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Direct writes to the NVIDIA GPU class key and NvTweak hive — these go deeper than NVCP and persist across driver reinstalls.</p>
           <div className="space-y-3">
