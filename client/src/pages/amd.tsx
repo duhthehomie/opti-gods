@@ -9,6 +9,8 @@ import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 const ALL_AMD_IDS = [
   "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState",
@@ -209,6 +211,10 @@ export default function Amd() {
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
+
+  const amdSmartIds = ALL_AMD_IDS.filter(id => smartRecs.ids.has(id));
 
   const applyPreset = (preset: typeof AMD_PRESETS[number]) => {
     const next = { ...tweaks };
@@ -221,8 +227,8 @@ export default function Amd() {
   };
 
   const enableAllRecommended = () => {
-    AMD_RECOMMENDED_IDS.forEach((k) => setTweak(k, true));
-    toast({ title: "AMD Recommended Applied", description: `${AMD_RECOMMENDED_IDS.length} key tweaks enabled.` });
+    amdSmartIds.forEach((k) => setTweak(k, true));
+    toast({ title: "AMD Recommended Applied", description: `${amdSmartIds.length} key tweaks enabled for your system.` });
   };
 
   return (

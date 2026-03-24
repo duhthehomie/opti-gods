@@ -3,6 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Gamepad2, Info, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
@@ -29,6 +32,9 @@ interface Tweak {
 
 export default function Fivem() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
 
   const PROCESS_TWEAKS: Tweak[] = [
     { id: "FiveMHighPriority", title: "Force GTA5.exe to High CPU Priority (Persistent)", desc: "Injects IFEO registry keys so Windows always schedules GTA5.exe at High CPU priority — survives restarts.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -68,7 +74,7 @@ export default function Fivem() {
   ];
 
   function renderSection(heading: string, items: Tweak[]) {
-    const recommended = items.filter(t => t.recommended).map(t => t.id);
+    const recommended = items.filter(t => smartRecs.ids.has(t.id)).map(t => t.id);
     const allRecommendedOn = recommended.length > 0 && recommended.every(id => tweaks[id]);
     return (
       <section>

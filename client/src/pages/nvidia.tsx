@@ -8,6 +8,8 @@ import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, Che
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax"];
 const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering"];
@@ -169,11 +171,13 @@ function NvidiaBadge({ text }: { text: string }) {
 export default function Nvidia() {
   const { tweaks, setTweak, nvidiaPreset, setNvidiaPreset } = useOptimizationStore();
   const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
+
+  const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id));
 
   const enableAllNvidia = () => {
-    [...NVIDIA_RECOMMENDED_IDS, "EnableMSIMode","NvidiaShaderCache"].forEach(
-      (k) => setTweak(k, true)
-    );
+    nvidiaSmartIds.forEach((k) => setTweak(k, true));
   };
 
   return (

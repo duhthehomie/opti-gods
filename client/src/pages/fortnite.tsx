@@ -3,6 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Button } from "@/components/ui/button";
 import { Crosshair, AlertTriangle, Info, FileCode, Zap } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
@@ -50,11 +53,13 @@ const SECTION_RECOMMENDED: Record<string, string[]> = {
   engine: ["FortniteDisableMotionBlur", "FortniteLowShadows"],
 };
 
-function SectionHeader({ title, sectionKey, tweaks, setTweak }: {
+function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
   title: string; sectionKey: string;
   tweaks: Record<string, boolean>; setTweak: (id: string, v: boolean) => void;
+  smartRecIds?: Set<string>;
 }) {
-  const ids = SECTION_RECOMMENDED[sectionKey] || [];
+  const base = SECTION_RECOMMENDED[sectionKey] || [];
+  const ids = smartRecIds ? base.filter(id => smartRecIds.has(id)) : base;
   const allOn = ids.length > 0 && ids.every(id => tweaks[id]);
   if (ids.length === 0) {
     return <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">{title}</h2>;
@@ -82,6 +87,9 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak }: {
 
 export default function Fortnite() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
 
   return (
     <AppLayout>
@@ -146,7 +154,7 @@ export default function Fortnite() {
         <div className="space-y-8">
 
           <section>
-            <SectionHeader title="FPS & Frame Timing" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} />
+            <SectionHeader title="FPS & Frame Timing" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
             <div className="space-y-3">
               {[
                 { id: "FortniteUncapLobbyFPS", title: "Uncap Lobby & Menu FPS (GameUserSettings.ini)", desc: "Patches GameUserSettings.ini to set FrameRateLimit=0.000000 — removes the 120fps menu cap. Handles read-only files automatically.", badge: "MUST HAVE", impact: "HIGH" as const },
@@ -161,7 +169,7 @@ export default function Fortnite() {
           </section>
 
           <section>
-            <SectionHeader title="CPU & Process Priority" sectionKey="cpu" tweaks={tweaks} setTweak={setTweak} />
+            <SectionHeader title="CPU & Process Priority" sectionKey="cpu" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
             <div className="space-y-3">
               {[
                 { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED", impact: "HIGH" as const },
@@ -175,7 +183,7 @@ export default function Fortnite() {
           </section>
 
           <section>
-            <SectionHeader title="Engine.ini Config Patches" sectionKey="engine" tweaks={tweaks} setTweak={setTweak} />
+            <SectionHeader title="Engine.ini Config Patches" sectionKey="engine" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
             <div className="space-y-3">
               {[
                 { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches.", impact: "MED" as const },

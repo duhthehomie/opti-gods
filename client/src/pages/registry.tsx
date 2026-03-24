@@ -5,6 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
@@ -47,10 +48,13 @@ interface SectionProps {
   tweakState: Record<string, boolean>;
   onSet: (id: string, val: boolean) => void;
   showRecommended?: boolean;
+  smartRecIds?: Set<string>;
 }
 
-function Section({ heading, tweaks, tweakState, onSet, showRecommended = true }: SectionProps) {
-  const recommended = tweaks.filter((t) => t.recommended).map((t) => t.id);
+function Section({ heading, tweaks, tweakState, onSet, showRecommended = true, smartRecIds }: SectionProps) {
+  const recommended = tweaks
+    .filter((t) => smartRecIds ? smartRecIds.has(t.id) : t.recommended)
+    .map((t) => t.id);
 
   const handleEnableRecommended = () => {
     recommended.forEach((id) => onSet(id, true));
@@ -100,6 +104,7 @@ export default function Registry() {
   const { tweaks, setTweak } = useOptimizationStore();
   const hw = useHardwareInfo();
   const osInfo = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, osInfo);
 
   const CPU_TWEAKS: TweakDef[] = [
     { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -206,12 +211,12 @@ export default function Registry() {
         />
 
         <div className="space-y-8">
-          <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} />
-          <Section heading="Network & Latency" tweaks={NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+          <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          <Section heading="Network & Latency" tweaks={NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           {/* Memory section with RAM-aware safety note */}
           <div className="space-y-3">
-            <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+            <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.ramGB <= 4 && hw.ramGB > 0 && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -225,7 +230,7 @@ export default function Registry() {
 
           {/* Visual section with GPU-aware HAGS note */}
           <div className="space-y-3">
-            <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+            <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.isIntel && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60">
                 <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
@@ -246,7 +251,7 @@ export default function Registry() {
             )}
           </div>
 
-          <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} />
+          <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 mb-4">

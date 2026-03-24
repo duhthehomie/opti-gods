@@ -13,6 +13,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
@@ -164,6 +165,7 @@ const PRO_BULLETS = [
 export default function Dashboard() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
+  const smartRecs = computeSmartRecs(hw, osInfo);
   const isPro = useProStatus();
   const { tweaks, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const { data: savedPresets = [] } = useQuery<any[]>({
@@ -215,14 +217,15 @@ export default function Dashboard() {
   const applyAllRecommended = () => {
     const next = { ...tweaks };
     let applied = 0;
-    ALL_RECOMMENDED_TWEAKS.forEach((key) => {
+    const recIds = hw.loading ? ALL_RECOMMENDED_TWEAKS : Array.from(smartRecs.ids);
+    recIds.forEach((key) => {
       if (key in next) { next[key] = true; applied++; }
     });
     setAllTweaks(next);
     setRecommendedApplied(true);
     toast({
-      title: "All Recommended Tweaks Applied!",
-      description: `${applied} tweaks enabled. Now click DOWNLOAD .PS1 in the top bar to get your script.`,
+      title: "Smart Recommended Tweaks Applied!",
+      description: `${applied} tweaks enabled for your hardware. Click DOWNLOAD .PS1 to get your script.`,
     });
   };
 
@@ -304,6 +307,53 @@ export default function Dashboard() {
         </motion.div>
 
 
+        {/* ─── SYSTEM PROFILE CARD ─── */}
+        {!hw.loading && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            data-testid="card-system-profile"
+            className="rounded-xl border border-zinc-800 bg-black/50 px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-3"
+          >
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">System Profile</span>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 flex-1 min-w-0">
+              {hw.gpuName && hw.gpuName !== "Unknown GPU" && (
+                <div className="flex items-center gap-1.5">
+                  <Monitor className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  <span className="text-xs text-zinc-300 font-medium">{hw.gpuName}</span>
+                  {hw.isNvidia && <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-bold">NVIDIA</span>}
+                  {hw.isAMD && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-bold">AMD</span>}
+                  {hw.isIntel && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold">INTEL</span>}
+                </div>
+              )}
+              {hw.cpuCores > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  <span className="text-xs text-zinc-300 font-medium">{hw.cpuLabel}</span>
+                </div>
+              )}
+              {hw.ramGB > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <MemoryStick className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  <span className="text-xs text-zinc-300 font-medium">{hw.ramGB} GB RAM</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5">
+                <Settings2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                <span className="text-xs text-zinc-300 font-medium">{osInfo.displayName}</span>
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/20">
+              <Zap className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-xs font-bold text-red-400">{smartRecs.ids.size} tweaks recommended</span>
+            </div>
+          </motion.div>
+        )}
+
         {/* ─── HOW IT WORKS — 3-STEP STRIP (moved to top) ─── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -359,7 +409,7 @@ export default function Dashboard() {
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
                 ? "Click DOWNLOAD .PS1 in the top bar to get your personalized script. Restart your PC after running it."
-                : `${ALL_RECOMMENDED_TWEAKS.length} hand-picked tweaks — safe for every PC. Covers CPU priority, network, memory, power, FiveM, and more. No uninstalls, no risks.`}
+                : `${hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} hand-picked tweaks matched to your hardware — covers CPU priority, network, memory, power, and GPU. No uninstalls, no risks.`}
             </p>
           </div>
 
@@ -370,7 +420,7 @@ export default function Dashboard() {
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-sm"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {ALL_RECOMMENDED_TWEAKS.length} Tweaks Enabled
+                {hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} Tweaks Enabled
               </div>
             ) : (
               <Button
@@ -379,7 +429,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                Apply All Recommended ({ALL_RECOMMENDED_TWEAKS.length})
+                Apply All Recommended ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size})
               </Button>
             )}
             <span className="text-[10px] text-zinc-600 text-center">
