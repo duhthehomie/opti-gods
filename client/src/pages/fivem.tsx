@@ -13,8 +13,9 @@ import { PageGuide } from "@/components/page-guide";
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
   "FiveMCacheClear","FiveMExtendedMemory","FiveMStreamDistance","FiveMStreamPool","FiveMDisableNvidiaTelemetry","FiveMMenuFpsUncap",
-  "FiveMDisableVSync","FiveMNetworkBuffer","FiveMDisableFullscreen","FiveMDisableDWM",
-  "FiveMDNSOverride","FiveMDisableP2P","FiveMQueueFix",
+  "FiveMDisableVSync","FiveMNetworkBuffer","FiveMDisableFullscreen","FiveMDisableDWM","FiveMDisableMemCompression","FiveMDisableLSO",
+  "FiveMDNSOverride","FiveMDisableP2P","FiveMQueueFix","FiveMEnableRSS",
+  "FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks",
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
@@ -58,12 +59,21 @@ export default function Fivem() {
     { id: "FiveMNetworkBuffer", title: "Increase Socket Receive Buffer (512KB)", desc: "Bumps socket send/receive buffers to 512KB — handles high player count server traffic without packet loss.", impact: "HIGH", recommended: true },
     { id: "FiveMDisableFullscreen", title: "Use Windowed Borderless Mode", desc: "Forces borderless windowed mode via CitizenFX.ini — eliminates exclusive fullscreen delays on Alt+Tab.", impact: "LOW" },
     { id: "FiveMDisableDWM", title: "Raise GTA5.exe to High Priority (DWM-Aware)", desc: "Sets GTA5.exe CPU+IO to High priority mode to minimize DWM compositor interference during gameplay.", impact: "MED" },
+    { id: "FiveMDisableMemCompression", title: "Disable Windows Memory Compression", desc: "Stops Windows from compressing RAM pages in the background. With 16GB+ RAM this is pure overhead — disabling it frees CPU cycles that GTA V's streaming engine can use instead. Huge help on 6-core CPUs.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "FiveMDisableLSO", title: "Disable Large Send Offload (LSO) — Remove Latency Spikes", desc: "Disables LSO on all active network adapters. LSO batches TCP segments which causes unpredictable 5-30ms spikes on busy FiveM servers. Disabling it makes per-packet latency tighter and more consistent.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   ];
 
   const CFX_TWEAKS: Tweak[] = [
     { id: "FiveMDNSOverride", title: "Override CFX DNS to Cloudflare 1.1.1.1", desc: "Points active adapter DNS to 1.1.1.1/1.0.0.1 — faster cfx.re resolution and lower DNS lookup latency.", impact: "MED" },
     { id: "FiveMDisableP2P", title: "Allow Direct P2P Connections", desc: "Enables direct peer connections for lower server ping. Disable on untrusted public servers.", impact: "LOW" },
     { id: "FiveMQueueFix", title: "Max Game CPU Priority (SystemResponsiveness=0)", desc: "Sets SystemResponsiveness=0 — allocates maximum CPU time to the foreground game process.", impact: "HIGH", recommended: true },
+    { id: "FiveMEnableRSS", title: "Enable RSS — Spread Packet Processing Across CPU Cores", desc: "Enables Receive Side Scaling on all active network adapters and pins the RSS base to CPU core 1 (away from core 0 which handles hardware interrupts). Distributes incoming packet processing across multiple cores — critical on 6-core CPUs in populated FiveM servers.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+  ];
+
+  const GTA_ENGINE_TWEAKS: Tweak[] = [
+    { id: "FiveMReduceNPCDensity", title: "Reduce GTA V NPC + Vehicle Density to 15%", desc: "Writes PedDensity=0.15 and TrafficDensity=0.15 to GTA V settings.xml. NPCs are the single biggest CPU cost in populated areas — a server with 32 players + full NPC density will tank a 6-core CPU. This is the highest-impact tweak for pistol FFA and crowded servers.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "FiveMReduceShadowQuality", title: "Reduce GTA V Shadow Quality to Minimum", desc: "Sets shadow quality, distance, and softness to 0 in GTA V settings.xml. Shadows are extremely CPU+GPU expensive in GTA V — running minimum quality can gain 15-30 FPS on GTX 1650-class hardware with zero gameplay impact.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "FiveMCommandLineTweaks", title: "Optimize GTA V commandline.txt Launch Flags", desc: "Creates/updates GTA V commandline.txt with: -dx11 (stable on GTX 1650), -nomemrestrict (no VRAM ceiling), -norestrictions (removes asset limits), -noBlockOnLostFocus (no pause on alt-tab), -novblank (VSync frame lock off), -noprecisefp (faster FP math). Loaded by GTA V at every launch.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   ];
 
   const PERF_OPTIONS_TWEAKS: Tweak[] = [
@@ -148,6 +158,7 @@ export default function Fivem() {
         <div className="space-y-8">
           {renderSection("FiveM / GTA V Process", PROCESS_TWEAKS)}
           {renderSection("FiveM Client Optimizations", CLIENT_TWEAKS)}
+          {renderSection("GTA V Engine, Graphics & Launch Flags", GTA_ENGINE_TWEAKS)}
           {renderSection("Windows Settings for GTA V", WINDOWS_TWEAKS)}
           {renderSection("CFX / Server Connectivity", CFX_TWEAKS)}
           {renderSection("Advanced PerfOptions — IFEO Registry Stack", PERF_OPTIONS_TWEAKS)}

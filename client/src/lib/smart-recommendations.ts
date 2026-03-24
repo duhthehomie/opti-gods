@@ -32,6 +32,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "PrivacyTelemetry","PrivacyAdvertisingID","PrivacyLocationTracking",
     "FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix",
     "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd",
+    "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy",
     "FortniteHighPriority","FortniteDisableThrottling","FortniteDisableVSync",
@@ -67,7 +68,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "EnableHAGS","NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
       "NvidiaOptimizeLatency","NvidiaPowerMizer","NvidiaReflexEnable","NvidiaTripleBufferOff",
       "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
-      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap",
+      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap","FiveMReduceShadowQuality",
       "FortniteAffinityPhysical","FortniteForceDirectX12",
     ].forEach(id => ids.add(id));
     reasons.push(`NVIDIA GPU (${hw.gpuName}) — full NVIDIA optimization suite enabled`);
@@ -97,6 +98,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "DisableMemoryCompression","MemDisableCompression","DisablePrefetch",
       "MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
       "MemDisableKernelPaging","MemGPUOptimize","FiveMExtendedMemory","FiveMWorkingSet",
+      "FiveMDisableMemCompression",
     ].forEach(id => ids.add(id));
     reasons.push("16GB+ RAM detected — memory compression disabled, aggressive memory tweaks enabled");
   } else if (ram >= 4) {
