@@ -950,25 +950,27 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // VBScript ShellExecute elevation — the gold-standard for BAT self-elevation.
-    // Works on every Windows 10/11 version regardless of UAC level, security software,
-    // or disabled services. Flow:
-    //   1. Non-elevated CMD runs: writes a tiny .vbs, calls cscript to run it.
-    //   2. VBScript calls Shell.Application ShellExecute with "runas" verb → UAC prompt.
-    //   3. User clicks Yes → elevated CMD restarts the same BAT with "ELEVATED" arg.
-    //   4. Elevated CMD sees "%~1"=="ELEVATED", jumps to :ISADMIN, extracts PS1, runs it.
-    //   5. PS1 runs with admin, shows output, Read-Host keeps window open until Enter.
+    // Elevation via cmd.exe (trusted Windows binary) — bypasses MOTW/SmartScreen.
+    // Root cause of prior failures: Windows stamps .bat files downloaded from the internet
+    // with Zone.Identifier (MOTW). When any elevation method tried to runas the .bat file
+    // itself, SmartScreen intercepted and silently killed it before UAC appeared.
+    // Fix: elevate cmd.exe (%windir%\system32\cmd.exe — signed Microsoft binary, always
+    // trusted, never SmartScreen-blocked) and pass the .bat path as its argument.
+    // Flow:
+    //   1. Non-elevated CMD runs the .bat → brief flash → PowerShell Start-Process elevates
+    //      cmd.exe (NOT the .bat) with argument '/c <bat_short_path> ELEVATED'
+    //   2. UAC shows "Windows Command Processor" (always trusted) → user clicks Yes
+    //   3. Elevated cmd.exe runs the .bat with "ELEVATED" arg → if "%~1"=="ELEVATED" passes
+    //   4. :ISADMIN: PowerShell reads the .bat, finds ##PS1_START## marker, writes temp .ps1
+    //   5. PowerShell runs the temp .ps1 as admin, applies tweaks, Read-Host keeps window open
     const MARKER = '##PS1_START##';
     const batLines = [
       `@echo off`,
       `set "MYPATH=%~f0"`,
       `if "%~1"=="ELEVATED" goto :ISADMIN`,
       ``,
-      `rem -- Write a tiny VBScript that triggers UAC via ShellExecute --`,
-      `echo Set UAC = CreateObject("Shell.Application") > "%temp%\\ogadmin.vbs"`,
-      `echo UAC.ShellExecute "%~s0", "ELEVATED", "", "runas", 1 >> "%temp%\\ogadmin.vbs"`,
-      `cscript //nologo "%temp%\\ogadmin.vbs"`,
-      `del "%temp%\\ogadmin.vbs" 2>nul`,
+      `rem -- Elevate cmd.exe (trusted Windows binary -- bypasses SmartScreen/MOTW on .bat files) --`,
+      `PowerShell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c %~s0 ELEVATED' -Verb RunAs"`,
       `exit /B`,
       ``,
       `:ISADMIN`,

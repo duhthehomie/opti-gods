@@ -33,14 +33,14 @@ const HOW_TO_STEPS = [
   {
     icon: MousePointerClick,
     label: 'Double-click "OptiGods-by-leaq.bat"',
-    detail: 'A small black window flashes briefly — that\'s normal. The UAC prompt appears right after.',
+    detail: 'A brief black window appears for 1 second — completely normal. The UAC popup follows immediately.',
     color: "text-violet-400",
     bg: "bg-violet-500/10 border-violet-500/20",
   },
   {
     icon: ShieldCheck,
-    label: 'Click "Yes" on the blue permission popup',
-    detail: "Windows asks for admin access to apply the tweaks — always required",
+    label: 'Click "Yes" on the UAC popup — it says "Windows Command Processor"',
+    detail: "That's normal — it runs cmd.exe (a trusted Windows file) to apply your tweaks safely",
     color: "text-amber-400",
     bg: "bg-amber-500/10 border-amber-500/20",
   },
