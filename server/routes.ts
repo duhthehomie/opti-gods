@@ -982,7 +982,7 @@ export async function registerRoutes(
       `echo.`,
       `set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"`,
       `echo  [1/2] Extracting optimization script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:MYPATH;$o=$env:TMPPS1;$c=[IO.File]::ReadAllText($b);$m='${MARKER}';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+$m.Length))}"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:MYPATH;$o=$env:TMPPS1;$c=[IO.File]::ReadAllText($b);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+$m.Length))}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
       `  echo  [ERROR] Extraction failed - please re-download from the website.`,
