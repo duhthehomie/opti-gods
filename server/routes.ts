@@ -688,6 +688,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
   scriptLines.push(`Read-Host "  Press Enter to close this window"`);
+  scriptLines.push(`Remove-Item $PSCommandPath -Force -EA SilentlyContinue`);
   return scriptLines.join("\n");
 }
 
@@ -950,50 +951,40 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // Elevation via cmd.exe (trusted Windows binary) — bypasses MOTW/SmartScreen.
-    // Root cause of prior failures: Windows stamps .bat files downloaded from the internet
-    // with Zone.Identifier (MOTW). When any elevation method tried to runas the .bat file
-    // itself, SmartScreen intercepted and silently killed it before UAC appeared.
-    // Fix: elevate cmd.exe (%windir%\system32\cmd.exe — signed Microsoft binary, always
-    // trusted, never SmartScreen-blocked) and pass the .bat path as its argument.
-    // Flow:
-    //   1. Non-elevated CMD runs the .bat → brief flash → PowerShell Start-Process elevates
-    //      cmd.exe (NOT the .bat) with argument '/c <bat_short_path> ELEVATED'
-    //   2. UAC shows "Windows Command Processor" (always trusted) → user clicks Yes
-    //   3. Elevated cmd.exe runs the .bat with "ELEVATED" arg → if "%~1"=="ELEVATED" passes
-    //   4. :ISADMIN: PowerShell reads the .bat, finds ##PS1_START## marker, writes temp .ps1
-    //   5. PowerShell runs the temp .ps1 as admin, applies tweaks, Read-Host keeps window open
+    // BAT flow (simple, race-condition-free):
+    //   1. CMD opens, shows header, extracts embedded PS1 to %TEMP%\OptiGods-leaq.ps1
+    //   2. CMD runs the PS1 non-elevated (PowerShell -File)
+    //   3. PS1 detects it is not admin → Start-Process PowerShell -Verb RunAs -File $PSCommandPath
+    //      (UAC shows "Windows PowerShell" — always trusted, no MOTW issue since file is in %TEMP%)
+    //   4. User clicks Yes → elevated PowerShell runs the SAME temp PS1 — applies all tweaks
+    //   5. Summary shown, Read-Host keeps window open, PS1 deletes its own temp file on exit
+    // NO del in BAT (that was the race condition bug: del ran before elevated PS1 opened the file)
     const MARKER = '##PS1_START##';
     const batLines = [
       `@echo off`,
-      `set "MYPATH=%~f0"`,
-      `if "%~1"=="ELEVATED" goto :ISADMIN`,
-      ``,
-      `rem -- Remove MOTW zone flag so SmartScreen doesn't block elevation, then self-elevate --`,
-      `PowerShell -NoProfile -Command "Unblock-File -Path $env:MYPATH -EA SilentlyContinue; Start-Process -FilePath $env:MYPATH -ArgumentList 'ELEVATED' -Verb RunAs"`,
-      `exit /B`,
-      ``,
-      `:ISADMIN`,
-      `title Opti Gods by leaq  -  Applying Optimizations`,
-      `echo.`,
-      `echo  ==========================================`,
-      `echo    OPTI GODS by leaq  -  Optimizer`,
-      `echo  ==========================================`,
-      `echo.`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
       `set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"`,
-      `echo  [1/2] Extracting optimization script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:MYPATH;$o=$env:TMPPS1;$c=[IO.File]::ReadAllText($b);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+$m.Length))}"`,
+      ``,
+      `title Opti Gods by leaq  --  Loading...`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  --  Optimizer`,
+      `echo  ==========================================`,
+      `echo.`,
+      `echo  [1/2] Extracting your optimization script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
-      `  echo  [ERROR] Extraction failed - please re-download from the website.`,
+      `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
       `  echo.`,
       `  pause`,
       `  exit /b 1`,
       `)`,
-      `echo  [2/2] Running optimizer...`,
+      `echo  [2/2] Launching optimizer...`,
+      `echo  A UAC Admin prompt will appear -- click Yes to apply tweaks.`,
       `echo.`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
-      `del "%TMPPS1%" 2>nul`,
       `exit /b 0`,
       `${MARKER}`,
       ps1Content,
