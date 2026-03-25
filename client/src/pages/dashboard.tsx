@@ -156,7 +156,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "220+ registry, network, memory, and GPU tweaks",
+  "281 registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
@@ -293,7 +293,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              220+ tweaks. One script. Zero compromise.
+              281 tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -540,6 +540,54 @@ export default function Dashboard() {
             </div>
           </div>
         </motion.div>
+
+        {/* ─── TWEAK CATEGORY BREAKDOWN ─── */}
+        {enabledCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.07 }}
+            className="rounded-xl border border-white/5 bg-black/50 px-5 py-4"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Active Tweaks by Category</span>
+              </div>
+              <span className="text-xs font-bold text-white">{enabledCount} <span className="text-zinc-600 font-normal">/ 281 total</span></span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {[
+                { label: "Registry",  keys: (k: string) => !["FiveM","Fortnite","Nvidia","game_","ProcessLasso","ProcessAuto","ProcessTrim","Discord","Mem","Service","Privacy","su_","Debloat","Remove","Amd","IntGpu"].some(p => k.startsWith(p)), total: 120 },
+                { label: "FiveM",     keys: (k: string) => k.startsWith("FiveM"), total: 28 },
+                { label: "Fortnite",  keys: (k: string) => k.startsWith("Fortnite"), total: 18 },
+                { label: "Memory",    keys: (k: string) => k.startsWith("Mem") || k.startsWith("mem"), total: 20 },
+                { label: "Games",     keys: (k: string) => k.startsWith("game_"), total: 19 },
+                { label: "Services",  keys: (k: string) => k.startsWith("Service"), total: 15 },
+                { label: "Privacy",   keys: (k: string) => k.startsWith("Privacy"), total: 12 },
+                { label: "Process",   keys: (k: string) => k.startsWith("Process"), total: 14 },
+              ].map(({ label, keys, total }) => {
+                const active = Object.entries(tweaks).filter(([k, v]) => v && keys(k)).length;
+                const pct = Math.round((active / total) * 100);
+                if (active === 0) return null;
+                return (
+                  <div key={label} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-zinc-400">{label}</span>
+                      <span className="text-[10px] font-bold text-white">{active}<span className="text-zinc-700">/{total}</span></span>
+                    </div>
+                    <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-red-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              }).filter(Boolean)}
+            </div>
+          </motion.div>
+        )}
 
         {/* ─── HOW IT WORKS — 3-STEP STRIP (moved to top) ─── */}
         <motion.div

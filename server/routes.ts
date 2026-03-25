@@ -75,9 +75,9 @@ const TWEAK_COMMANDS: Record<string, string> = {
   PrivacyAdvertisingID: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo' -Name 'Enabled' -Value 0`,
   PrivacyDiagFeedback: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules' -Name 'NumberOfSIUFInPeriod' -Value 0`,
   // Memory
-  MemFixedPagefile: `$ram = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB; $size = [math]::Round($ram * 1.5); wmic computersystem where name="%computername%" set AutomaticManagedPagefile=False; wmic pagefileset where name="C:\\pagefile.sys" set InitialSize=$size,MaximumSize=$size`,
-  MemMovePagefileFast: `$drives = Get-PhysicalDisk | Sort-Object MediaType, Size -Descending; $best = ($drives | Where-Object { $_.MediaType -eq 'SSD' -or $_.MediaType -eq 'NVMe' } | Select-Object -First 1); If (!$best) { $best = $drives[0] }; $driveLetter = (Get-Disk -Number $best.DiskNumber | Get-Partition | Get-Volume | Select-Object -First 1).DriveLetter; If ($driveLetter) { wmic computersystem where name="%computername%" set AutomaticManagedPagefile=False; wmic pagefileset delete 2>$null; wmic pagefileset create name="\${driveLetter}:\\pagefile.sys" 2>$null; Write-Host "[OK] Pagefile moved to drive \${driveLetter} (fastest available)" -ForegroundColor Green } Else { Write-Host "[SKIP] Could not identify fastest drive — move pagefile manually via System Properties > Advanced > Performance > Virtual Memory" -ForegroundColor Yellow }`,
-  MemDisablePagefile: `wmic computersystem where name="%computername%" set AutomaticManagedPagefile=False; wmic pagefileset delete`,
+  MemFixedPagefile: `$ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB); $size = [math]::Round($ram * 1.5); Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'AutomaticManagedPagefile' 0 -Type DWord -Force; Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'PagingFiles' "C:\\pagefile.sys $size $size" -Force; Write-Host "[OK] Pagefile fixed at $size MB (1.5x RAM)" -ForegroundColor Green`,
+  MemMovePagefileFast: `$psDrives = Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used -gt 0 }; $sorted = $psDrives | Sort-Object @{Expression={$_.Used+$_.Free};Descending=$true}; $ltr = ($sorted | Select-Object -First 1).Name; if ($ltr) { Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'AutomaticManagedPagefile' 0 -Type DWord -Force; Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'PagingFiles' "\${ltr}:\\pagefile.sys 0 0" -Force; Write-Host "[OK] Pagefile set to auto-size on \${ltr}: (largest drive — takes effect after restart)" -ForegroundColor Green } else { Write-Host "[SKIP] Could not identify drive — pagefile unchanged" -ForegroundColor Yellow }`,
+  MemDisablePagefile: `Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'AutomaticManagedPagefile' 0 -Type DWord -Force; Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'PagingFiles' "" -Force; Write-Host "[OK] Pagefile disabled (takes effect after restart)" -ForegroundColor Green`,
   MemClearPagefileShutdown: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'ClearPageFileAtShutdown' -Value 1`,
   MemDisableCompression: `Disable-MMAgent -MemoryCompression`,
   MemDisableSuperfetch: `Stop-Service -Name "SysMain" -Force; Set-Service -Name "SysMain" -StartupType Disabled`,
@@ -363,7 +363,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `fsutil behavior set encryptpagingfile 1 2>$null; Write-Host "[OK] Pagefile encryption re-enabled" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'DisablePagingExecutive' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Kernel paging to disk re-enabled" -ForegroundColor Green`,
       `Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name 'HeapDeCommitFreeBlockThreshold' -EA SilentlyContinue; Write-Host "[OK] Heap decommit threshold reset to Windows default" -ForegroundColor Green`,
-      `wmic computersystem where name="%computername%" set AutomaticManagedPagefile=True 2>$null; Write-Host "[OK] Pagefile restored to automatic management" -ForegroundColor Green`,
+      `Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'AutomaticManagedPagefile' 1 -Type DWord -Force; Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'PagingFiles' "?:\\pagefile.sys" -Force -EA SilentlyContinue; Write-Host "[OK] Pagefile restored to automatic management" -ForegroundColor Green`,
     ],
   },
   visual: {
@@ -666,17 +666,18 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   scriptLines.push(`Write-Host "   OPTI GODS by leaq -- TWEAKS APPLIED" -ForegroundColor Red`);
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Write-Host "  [APPLIED] ($($appliedTweaks.Count) of ${enabledTweaks.length} tweaks succeeded):" -ForegroundColor Green`);
-  scriptLines.push(`foreach ($t in $appliedTweaks) { Write-Host "    [OK] $t" -ForegroundColor Green }`);
+  scriptLines.push(`Write-Host "  [OK] $($appliedTweaks.Count) of ${enabledTweaks.length} tweaks applied" -ForegroundColor Green`);
   scriptLines.push(`if ($failedTweaks.Count -gt 0) {`);
   scriptLines.push(`    Write-Host "" `);
   scriptLines.push(`    Write-Host "  [FAILED] ($($failedTweaks.Count) tweaks had errors):" -ForegroundColor Red`);
   scriptLines.push(`    foreach ($t in $failedTweaks) { Write-Host "    [ERR] $t" -ForegroundColor Red }`);
   scriptLines.push(`    Write-Host "" `);
   scriptLines.push(`    Write-Host "  Note: Errors are normal for tweaks that don't apply to your hardware." -ForegroundColor DarkGray`);
+  scriptLines.push(`} else {`);
+  scriptLines.push(`    Write-Host "  All tweaks applied with zero errors!" -ForegroundColor Green`);
   scriptLines.push(`}`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Write-Host "  Restart your PC to activate ALL changes." -ForegroundColor Cyan`);
+  scriptLines.push(`Write-Host "  >> Restart your PC to activate ALL changes. <<" -ForegroundColor Cyan`);
   scriptLines.push(`Write-Host "  Thank you for using Opti Gods by leaq!" -ForegroundColor Red`);
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);

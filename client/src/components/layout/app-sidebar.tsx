@@ -4,7 +4,6 @@ import {
   Cpu,
   Crosshair,
   Gamepad2,
-  HelpCircle,
   MemoryStick,
   MessageCircle,
   MonitorPlay,
@@ -38,31 +37,57 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
 import { cn } from "@/lib/utils";
 
+// Which tweak keys belong to which nav section
+const SECTION_PREFIXES: Record<string, string[]> = {
+  "/registry":           ["Win32","Disable","Enable","Set","Input","Network","Optimize","ClearPage","Privacy","Service","game_"],
+  "/fivem":              ["FiveM"],
+  "/fortnite":           ["Fortnite"],
+  "/nvidia":             ["Nvidia","Gpu","gpu"],
+  "/game-detection":     ["game_"],
+  "/process-lasso":      ["ProcessLasso","ProcessAuto","ProcessTrim"],
+  "/discord":            ["Discord"],
+  "/memory":             ["Mem","mem"],
+  "/debloat":            ["Debloat","Remove","su_debloat"],
+  "/startup":            ["su_"],
+  "/amd":                ["Amd","amd"],
+  "/integrated-graphics":["IntGpu","intgpu"],
+};
+
+function countForSection(tweaks: Record<string, boolean>, url: string) {
+  const prefixes = SECTION_PREFIXES[url];
+  if (!prefixes) return 0;
+  return Object.entries(tweaks).filter(([k, v]) => v && prefixes.some(p => k.startsWith(p))).length;
+}
+
 const navItems = [
-  { title: "Dashboard", url: "/", icon: Activity },
-  { title: "Registry Tweaks", url: "/registry", icon: Settings2 },
-  { title: "FiveM Optimizer", url: "/fivem", icon: Gamepad2 },
-  { title: "Fortnite Optimizer", url: "/fortnite", icon: Crosshair },
-  { title: "Game Detection", url: "/game-detection", icon: Search },
-  { title: "NVIDIA Presets", url: "/nvidia", icon: MonitorPlay },
-  { title: "AMD Optimizer", url: "/amd", icon: Flame },
-  { title: "Integrated Graphics", url: "/integrated-graphics", icon: Monitor },
-  { title: "Process Lasso", url: "/process-lasso", icon: Cpu },
-  { title: "Discord Optimizer", url: "/discord", icon: MessageCircle },
-  { title: "Startup Apps", url: "/startup", icon: Power },
-  { title: "Memory Optimizer", url: "/memory", icon: MemoryStick },
-  { title: "Debloat Win10/11", url: "/debloat", icon: Trash2 },
-  { title: "WinUtil + OO ShutUp", url: "/wintitus", icon: Wrench, winTitusAccent: true },
-  { title: "Custom OS", url: "/custom-os", icon: HardDrive, proAccent: true },
-  { title: "Updates", url: "/updates", icon: Bell },
-  { title: "Fixes & Restore", url: "/fixes", icon: RotateCcw, fixAccent: true },
-  { title: "Help & Discord", url: "/help", icon: MessageCircle, accent: true },
+  { title: "Dashboard",           url: "/",                   icon: Activity },
+  { title: "Registry Tweaks",     url: "/registry",           icon: Settings2 },
+  { title: "FiveM Optimizer",     url: "/fivem",              icon: Gamepad2 },
+  { title: "Fortnite Optimizer",  url: "/fortnite",           icon: Crosshair },
+  { title: "Game Detection",      url: "/game-detection",     icon: Search },
+  { title: "NVIDIA Presets",      url: "/nvidia",             icon: MonitorPlay },
+  { title: "AMD Optimizer",       url: "/amd",                icon: Flame },
+  { title: "Integrated Graphics", url: "/integrated-graphics",icon: Monitor },
+  { title: "Process Lasso",       url: "/process-lasso",      icon: Cpu },
+  { title: "Discord Optimizer",   url: "/discord",            icon: MessageCircle },
+  { title: "Startup Apps",        url: "/startup",            icon: Power },
+  { title: "Memory Optimizer",    url: "/memory",             icon: MemoryStick },
+  { title: "Debloat Win10/11",    url: "/debloat",            icon: Trash2 },
+  { title: "WinUtil + OO ShutUp", url: "/wintitus",           icon: Wrench,   winTitusAccent: true },
+  { title: "Custom OS",           url: "/custom-os",          icon: HardDrive, proAccent: true },
+  { title: "Updates",             url: "/updates",            icon: Bell },
+  { title: "Fixes & Restore",     url: "/fixes",              icon: RotateCcw, fixAccent: true },
+  { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
+
+const TOTAL_TWEAKS = 281;
+
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { tweaks } = useOptimizationStore();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const optPct = Math.round((enabledCount / TOTAL_TWEAKS) * 100);
   const osInfo = useOsDetection();
   const isPro = useProStatus();
 
@@ -88,21 +113,48 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Quick stats strip */}
-        <div className="mt-4 flex items-center justify-between px-1">
-          <div className="text-center">
-            <p className="text-base font-bold font-display text-white">{enabledCount}</p>
-            <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Active</p>
+        {/* Optimization meter */}
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Optimization Level</span>
+            <span className={cn(
+              "text-[10px] font-bold",
+              optPct === 0 ? "text-zinc-600" :
+              optPct < 20  ? "text-zinc-400" :
+              optPct < 50  ? "text-yellow-400" :
+              optPct < 80  ? "text-orange-400" : "text-red-400"
+            )}>
+              {enabledCount}/{TOTAL_TWEAKS}
+            </span>
           </div>
-          <div className="h-6 w-px bg-white/5" />
-          <div className="text-center">
-            <p className="text-base font-bold font-display text-white">220+</p>
-            <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Tweaks</p>
+          <div className="relative h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                optPct === 0 ? "bg-zinc-800" :
+                optPct < 20  ? "bg-zinc-500" :
+                optPct < 50  ? "bg-yellow-500" :
+                optPct < 80  ? "bg-orange-500" : "bg-red-500"
+              )}
+              style={{ width: `${Math.max(optPct, optPct > 0 ? 3 : 0)}%` }}
+            />
           </div>
-          <div className="h-6 w-px bg-white/5" />
-          <div className="text-center">
-            <div className="w-2 h-2 rounded-full bg-red-500 mx-auto mb-1 animate-pulse" />
-            <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Live</p>
+          <div className="flex items-center justify-between">
+            <span className={cn(
+              "text-[9px] font-semibold uppercase tracking-wider",
+              optPct === 0 ? "text-zinc-700" :
+              optPct < 20  ? "text-zinc-500" :
+              optPct < 50  ? "text-yellow-500" :
+              optPct < 80  ? "text-orange-500" : "text-red-400"
+            )}>
+              {optPct === 0 ? "Not optimized" :
+               optPct < 20  ? "Light boost" :
+               optPct < 50  ? "Medium boost" :
+               optPct < 80  ? "High boost" : "Maximum performance"}
+            </span>
+            {enabledCount > 0 && (
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            )}
           </div>
         </div>
       </SidebarHeader>
@@ -118,6 +170,7 @@ export function AppSidebar() {
                 const isWinTitusAccent = (item as any).winTitusAccent;
                 const isProAccent = (item as any).proAccent;
                 const isLast = idx === navItems.length - 1;
+                const sectionCount = countForSection(tweaks, item.url);
                 return (
                   <SidebarMenuItem key={item.title} className={isLast ? "mt-1 pt-1 border-t border-white/5" : ""}>
                     <SidebarMenuButton
@@ -153,7 +206,18 @@ export function AppSidebar() {
                           isWinTitusAccent ? "text-orange-400" :
                           isProAccent ? "text-violet-400" : ""
                         )} />
-                        <span className="text-sm">{item.title}</span>
+                        <span className="text-sm flex-1">{item.title}</span>
+                        {/* Active tweak count badge for sections */}
+                        {sectionCount > 0 && !isProAccent && (
+                          <span className={cn(
+                            "ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                            isActive
+                              ? "bg-red-500/20 text-red-300"
+                              : "bg-zinc-800 text-zinc-400"
+                          )}>
+                            {sectionCount}
+                          </span>
+                        )}
                         {isProAccent && !isPro && (
                           <span className="ml-auto text-[8px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 px-1 py-0.5 rounded uppercase tracking-wider">PRO</span>
                         )}
