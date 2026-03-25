@@ -951,14 +951,15 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // BAT flow (simple, race-condition-free):
-    //   1. CMD opens, shows header, extracts embedded PS1 to %TEMP%\OptiGods-leaq.ps1
-    //   2. CMD runs the PS1 non-elevated (PowerShell -File)
-    //   3. PS1 detects it is not admin → Start-Process PowerShell -Verb RunAs -File $PSCommandPath
-    //      (UAC shows "Windows PowerShell" — always trusted, no MOTW issue since file is in %TEMP%)
-    //   4. User clicks Yes → elevated PowerShell runs the SAME temp PS1 — applies all tweaks
-    //   5. Summary shown, Read-Host keeps window open, PS1 deletes its own temp file on exit
-    // NO del in BAT (that was the race condition bug: del ran before elevated PS1 opened the file)
+    // BAT flow — race-condition-free, guaranteed window stays open:
+    //   1. CMD opens, extracts embedded PS1 to %TEMP%\OptiGods-leaq.ps1
+    //   2. CMD runs: PowerShell (non-elevated) → Start-Process powershell.exe -Verb RunAs -Wait
+    //      (-Wait is the key: non-elevated PS holds open until elevated PS fully exits)
+    //   3. UAC shows "Windows PowerShell" (trusted — %TEMP% file has no MOTW)
+    //   4. User clicks Yes → elevated powershell.exe runs the PS1 as admin
+    //   5. PS1 applies tweaks, shows summary, Read-Host keeps the elevated window open
+    //   6. User presses Enter → elevated PS exits → -Wait returns → CMD runs del (safe!) → exit
+    // [char]34 = double-quote char — avoids embedding " inside the CMD double-quoted -Command string
     const MARKER = '##PS1_START##';
     const batLines = [
       `@echo off`,
@@ -966,13 +967,13 @@ export async function registerRoutes(
       `set "SELF=%~f0"`,
       `set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"`,
       ``,
-      `title Opti Gods by leaq  --  Loading...`,
+      `title Opti Gods by leaq  --  Optimizer`,
       `echo.`,
       `echo  ==========================================`,
       `echo    OPTI GODS by leaq  --  Optimizer`,
       `echo  ==========================================`,
       `echo.`,
-      `echo  [1/2] Extracting your optimization script...`,
+      `echo  [1/2] Extracting optimization script...`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
@@ -981,10 +982,11 @@ export async function registerRoutes(
       `  pause`,
       `  exit /b 1`,
       `)`,
-      `echo  [2/2] Launching optimizer...`,
-      `echo  A UAC Admin prompt will appear -- click Yes to apply tweaks.`,
+      `echo  [2/2] Requesting Administrator rights...`,
+      `echo  Click Yes on the UAC prompt to apply your tweaks.`,
       `echo.`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
+      `PowerShell -NoProfile -Command "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File',([char]34+$env:TMPPS1+[char]34)"`,
+      `del "%TMPPS1%" 2>nul`,
       `exit /b 0`,
       `${MARKER}`,
       ps1Content,
