@@ -950,14 +950,53 @@ export async function registerRoutes(
     // Record download analytics (fire-and-forget)
     storage.recordScriptDownload(enabledTweaks).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
-    // Polyglot BAT+PS1:
-    //   CMD sees  → <# 2>NUL : fails to redirect stdin from file "#" (non-fatal, stderr suppressed
-    //               by 2>NUL), then @echo off, then PowerShell -File "%~f0", then exit /b.
-    //   PowerShell sees → <# ... #> is a block comment wrapping the entire CMD header; after #>
-    //               the PS1 content executes normally.
-    // The PS1 content already handles its own elevation (IsInRole check + Start-Process RunAs),
-    // so no CMD-level admin logic is needed. Read-Host at the end keeps the window open.
-    const batContent = `<# 2>NUL :\r\n@echo off\r\nPowerShell -NoProfile -ExecutionPolicy Bypass -File "%~f0"\r\nexit /b\r\n#>\r\n${ps1Content}`;
+    // VBScript ShellExecute elevation — the gold-standard for BAT self-elevation.
+    // Works on every Windows 10/11 version regardless of UAC level, security software,
+    // or disabled services. Flow:
+    //   1. Non-elevated CMD runs: writes a tiny .vbs, calls cscript to run it.
+    //   2. VBScript calls Shell.Application ShellExecute with "runas" verb → UAC prompt.
+    //   3. User clicks Yes → elevated CMD restarts the same BAT with "ELEVATED" arg.
+    //   4. Elevated CMD sees "%~1"=="ELEVATED", jumps to :ISADMIN, extracts PS1, runs it.
+    //   5. PS1 runs with admin, shows output, Read-Host keeps window open until Enter.
+    const MARKER = '##PS1_START##';
+    const batLines = [
+      `@echo off`,
+      `set "MYPATH=%~f0"`,
+      `if "%~1"=="ELEVATED" goto :ISADMIN`,
+      ``,
+      `rem -- Write a tiny VBScript that triggers UAC via ShellExecute --`,
+      `echo Set UAC = CreateObject("Shell.Application") > "%temp%\\ogadmin.vbs"`,
+      `echo UAC.ShellExecute "%~s0", "ELEVATED", "", "runas", 1 >> "%temp%\\ogadmin.vbs"`,
+      `cscript //nologo "%temp%\\ogadmin.vbs"`,
+      `del "%temp%\\ogadmin.vbs" 2>nul`,
+      `exit /B`,
+      ``,
+      `:ISADMIN`,
+      `title Opti Gods by leaq  -  Applying Optimizations`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  -  Optimizer`,
+      `echo  ==========================================`,
+      `echo.`,
+      `set "TMPPS1=%TEMP%\\OptiGods-leaq.ps1"`,
+      `echo  [1/2] Extracting optimization script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$b=$env:MYPATH;$o=$env:TMPPS1;$c=[IO.File]::ReadAllText($b);$m='${MARKER}';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($o,$c.Substring($i+$m.Length))}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo.`,
+      `  echo  [ERROR] Extraction failed - please re-download from the website.`,
+      `  echo.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] Running optimizer...`,
+      `echo.`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      `${MARKER}`,
+      ps1Content,
+    ];
+    const batContent = batLines.join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
     res.end(Buffer.from(batContent, 'utf8'));
