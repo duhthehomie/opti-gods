@@ -186,20 +186,20 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                 </AnimatePresence>
 
                 {/* Primary BAT download */}
-                <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-5 space-y-4">
+                <div className="relative rounded-xl border border-red-500/25 bg-red-500/5 p-5 space-y-4">
+                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+                    <span className="text-[11px] font-black text-white leading-none">1</span>
+                  </div>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
                       <Download className="w-5 h-5 text-red-400" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-white">OptiGods-by-leaq.bat</p>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-600 text-white tracking-wider">RECOMMENDED</span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-600 text-white tracking-wider whitespace-nowrap">RECOMMENDED</span>
                       </div>
                       <p className="text-xs text-zinc-500">{enabledCount} tweaks · Double-click to run · Auto-elevates</p>
-                    </div>
-                    <div className="ml-auto">
-                      <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500 text-white tracking-wider">STEP 1</span>
                     </div>
                   </div>
 
