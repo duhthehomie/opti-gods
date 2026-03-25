@@ -1387,10 +1387,10 @@ Start-Sleep 2
   });
 
   app.get('/api/script/detect', (req, res) => {
-    const script = `
-# OptiGods by leaq — PC State Detection Script
-# Run this script as Administrator, then paste the output line into the app.
-# It only READS your system — it does NOT change anything.
+    const ps1 = `
+# OptiGods by leaq — PC State Detection Script v2
+# READ-ONLY: this script does NOT change anything on your PC.
+# It saves a result file to your Desktop and Downloads folder.
 
 $state = @{}
 
@@ -1527,12 +1527,64 @@ Write-Host "=============================="
 Write-Host "OPTIGODS_STATE:$b64"
 Write-Host "=============================="
 Write-Host ""
-Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
+
+# Save result file to Desktop and Downloads
+$resultLine = "OPTIGODS_STATE:$b64"
+$nl = [Environment]::NewLine
+$resultContent = "OptiGods by leaq - Scan Result" + $nl + "==============================" + $nl + $resultLine + $nl + "==============================" + $nl + "Drag this file into the Opti Gods app to import your PC state."
+$desktop = [Environment]::GetFolderPath('Desktop')
+$downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
+$saved = @()
+try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.txt", $resultContent); $saved += "Desktop" } catch {}
+try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.txt", $resultContent); $saved += "Downloads" } catch {}
+
+Write-Host ""
+if ($saved.Count -gt 0) {
+  Write-Host "  Result file saved to: $($saved -join ' and ')" -ForegroundColor Green
+  Write-Host "  Drag OptiGods-Scan-Result.txt into the Opti Gods app to finish." -ForegroundColor Cyan
+} else {
+  Write-Host "  Could not save file automatically. Copy the OPTIGODS_STATE line above." -ForegroundColor Yellow
+}
+Write-Host ""
+Read-Host "Press Enter to close this window"
 `.trim();
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Detect.ps1"');
-    res.send(script);
+    const MARKER = '##DETECT_PS1_START##';
+    const batLines = [
+      `@echo off`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-Detect.ps1"`,
+      ``,
+      `title Opti Gods by leaq  --  PC State Scan`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  --  State Scan`,
+      `echo  ==========================================`,
+      `echo.`,
+      `echo  READ-ONLY scan -- nothing will be changed on your PC.`,
+      `echo.`,
+      `echo  [1/2] Extracting scan script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##DETECT_PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo.`,
+      `  echo  [ERROR] Extraction failed. Re-download from the website.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] Requesting Administrator rights to read registry...`,
+      `echo  Click Yes on the UAC prompt.`,
+      `echo.`,
+      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled: '+$_) -ForegroundColor Red; pause }"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      `${MARKER}`,
+      ps1,
+    ];
+    const batContent = batLines.join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Detect.bat"');
+    res.end(Buffer.from(batContent, 'utf8'));
   });
 
   // --- Admin System Status ---
@@ -1591,7 +1643,7 @@ Write-Host "Copy the OPTIGODS_STATE line above and paste it into Opti Gods."
   app.post("/api/request-code", async (req, res) => {
     const schema = z.object({
       email: z.string().email(),
-      paymentMethod: z.enum(["cashapp", "paypal"]),
+      paymentMethod: z.enum(["cashapp", "paypal", "crypto"]),
       paymentRef: z.string().min(2).max(200),
     });
     const parsed = schema.safeParse(req.body);

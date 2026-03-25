@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldCheck, Mail, ChevronDown, ChevronUp } from "lucide-react";
+import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldCheck, Mail, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
+const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
+const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 
 function ProPaymentDialog({
   open,
@@ -23,9 +25,10 @@ function ProPaymentDialog({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  const [cryptoCopied, setCryptoCopied] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailAddr, setEmailAddr] = useState("");
-  const [emailMethod, setEmailMethod] = useState<"cashapp" | "paypal">("cashapp");
+  const [emailMethod, setEmailMethod] = useState<"cashapp" | "paypal" | "crypto">("cashapp");
   const [emailRef, setEmailRef] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailDone, setEmailDone] = useState(false);
@@ -83,6 +86,15 @@ function ProPaymentDialog({
     }
   };
 
+  const handleCopyCrypto = async () => {
+    if (!CRYPTO_ADDRESS) return;
+    try {
+      await navigator.clipboard.writeText(CRYPTO_ADDRESS);
+      setCryptoCopied(true);
+      setTimeout(() => setCryptoCopied(false), 2500);
+    } catch {}
+  };
+
   const handleStripeCheckout = async () => {
     setStripeLoading(true);
     setError("");
@@ -104,7 +116,7 @@ function ProPaymentDialog({
     }
   };
 
-  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || STRIPE_ENABLED || LEGACY_LINK;
+  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || STRIPE_ENABLED || LEGACY_LINK || CRYPTO_ADDRESS || COINBASE_LINK;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -213,6 +225,46 @@ function ProPaymentDialog({
                       </a>
                     )}
 
+                    {/* Crypto — Coinbase Commerce link */}
+                    {COINBASE_LINK && (
+                      <a
+                        href={COINBASE_LINK}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="link-pay-crypto-coinbase"
+                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-orange-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-orange-400">
+                          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 19.5a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zm0-11.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"/>
+                        </svg>
+                        Pay with Crypto (BTC / ETH / USDC)
+                      </a>
+                    )}
+
+                    {/* Crypto — raw wallet address copy */}
+                    {CRYPTO_ADDRESS && !COINBASE_LINK && (
+                      <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-orange-400 shrink-0">
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 19.5a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zm0-11.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"/>
+                          </svg>
+                          <span className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Pay with Crypto (BTC / ETH / USDC)</span>
+                        </div>
+                        <div className="px-3 py-2.5 flex items-center gap-2">
+                          <code className="flex-1 text-[10px] text-zinc-400 font-mono truncate">{CRYPTO_ADDRESS}</code>
+                          <button
+                            data-testid="button-copy-crypto"
+                            onClick={handleCopyCrypto}
+                            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] text-zinc-300 font-bold transition-colors"
+                          >
+                            {cryptoCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                            {cryptoCopied ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <p className="px-3 pb-2 text-[10px] text-zinc-600">Send exact amount ($25). DM on Discord after payment.</p>
+                      </div>
+                    )}
+
                     {STRIPE_ENABLED && (
                       <button
                         data-testid="button-pay-stripe"
@@ -300,16 +352,21 @@ function ProPaymentDialog({
                               <select
                                 data-testid="select-email-method"
                                 value={emailMethod}
-                                onChange={e => setEmailMethod(e.target.value as "cashapp" | "paypal")}
+                                onChange={e => setEmailMethod(e.target.value as "cashapp" | "paypal" | "crypto")}
                                 className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-xs text-zinc-300 focus:outline-none"
                               >
                                 <option value="cashapp">CashApp</option>
                                 <option value="paypal">PayPal</option>
+                                <option value="crypto">Crypto</option>
                               </select>
                               <input
                                 data-testid="input-payment-ref"
                                 type="text"
-                                placeholder={emailMethod === "cashapp" ? "Your $cashtag or TX ID" : "PayPal TX ID or email"}
+                                placeholder={
+                                  emailMethod === "cashapp" ? "Your $cashtag or TX ID"
+                                  : emailMethod === "crypto" ? "TX hash / wallet address used"
+                                  : "PayPal TX ID or email"
+                                }
                                 value={emailRef}
                                 onChange={e => setEmailRef(e.target.value)}
                                 className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors"

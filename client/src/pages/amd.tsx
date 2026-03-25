@@ -380,14 +380,18 @@ export default function Amd() {
             <Cpu className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Performance & Latency</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
-            <div className="flex items-center gap-3 text-[10px] text-zinc-600">
-              {[{l:"HIGH",c:"text-red-400",d:"bg-red-500"},{l:"MED",c:"text-amber-400",d:"bg-amber-400"},{l:"LOW",c:"text-zinc-500",d:"bg-zinc-500"}].map((x) => (
-                <span key={x.l} className={cn("flex items-center gap-1", x.c)}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full", x.d)} />
-                  {x.l}
-                </span>
-              ))}
-            </div>
+            {(() => {
+              const recIds = PERFORMANCE_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "CRITICAL").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-amd-performance"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
           </div>
           <div className="space-y-3">
             {PERFORMANCE_TWEAKS.map((item, i) => (
@@ -412,6 +416,18 @@ export default function Amd() {
             <Layers className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Driver & Background Services</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const recIds = DRIVER_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-amd-driver"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
           </div>
           <div className="space-y-3">
             {DRIVER_TWEAKS.map((item, i) => (
@@ -460,7 +476,19 @@ export default function Amd() {
             <Zap className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Next-Gen AMD Features</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">RDNA 3 / RX 7000</span>
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider mr-2">RDNA 3 / RX 7000</span>
+            {(() => {
+              const recIds = NEXTGEN_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return recIds.length > 0 ? (
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-amd-nextgen"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              ) : null;
+            })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Driver-level registry hints for Smart Access Memory, Anti-Lag+, and Fluid Motion Frames. Requires compatible hardware and driver version.</p>
           <div className="space-y-3">
