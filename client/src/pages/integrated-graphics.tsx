@@ -598,16 +598,7 @@ export default function IntegratedGraphics() {
           </div>
         </motion.div>
 
-        <PageGuide
-          title="How to use this tab"
-          steps={[
-            "Check the detection banner — it shows your detected GPU and auto-selects the right tweaks",
-            "Click 'Apply AMD/Intel Recommended' for a safe one-click optimization",
-            "Enable additional tweaks from each section based on your needs",
-            "Go to Dashboard and hit GET MY SCRIPT — run it as Administrator",
-            "Restart your PC. Your Vega 8 / UHD will run at full speed.",
-          ]}
-        />
+        <PageGuide pageName="Integrated Graphics" />
       </div>
     </AppLayout>
   );

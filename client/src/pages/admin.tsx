@@ -604,7 +604,7 @@ export default function Admin() {
                   </span>
                   {(stats?.directRevenue ?? 0) > 0 && (
                     <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
-                      {stats.directRevenue} direct redemptions
+                      {stats?.directRevenue} direct redemptions
                     </span>
                   )}
                 </div>

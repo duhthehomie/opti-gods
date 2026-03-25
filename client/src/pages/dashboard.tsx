@@ -4,8 +4,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Save, Trash2,
   FolderOpen, Plus, CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
-  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio,
+  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio, Thermometer,
 } from "lucide-react";
+import { useLiveStats } from "@/hooks/use-live-stats";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
@@ -176,6 +177,11 @@ export default function Dashboard() {
     queryKey: ["/api/pricing"],
     staleTime: 5 * 60 * 1000,
   });
+  const { data: serverStats } = useQuery<{ cpu: number; gpu: number; memory: number; os: string }>({
+    queryKey: [api.system.stats.path],
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
+  });
   const proPrice = pricingData?.price ?? 25;
   const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
   const qc = useQueryClient();
@@ -225,6 +231,7 @@ export default function Dashboard() {
     toast({ title: `Loaded: ${preset.name}`, description: "Tweak states have been applied." });
   };
 
+  const liveStats = useLiveStats(hw.ramGB || 16);
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
 
@@ -277,7 +284,9 @@ export default function Dashboard() {
             {/* OS badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono mb-6">
               <span className={cn("w-2 h-2 rounded-full bg-red-500", osInfo.loading ? "animate-pulse" : "")} />
-              {osInfo.loading ? "DETECTING SYSTEM..." : `SYSTEM DETECTED — ${osInfo.displayName}`}
+              {osInfo.loading
+                ? (serverStats?.os ? `SYSTEM DETECTED — ${serverStats.os}` : "DETECTING SYSTEM...")
+                : `SYSTEM DETECTED — ${osInfo.displayName}`}
             </div>
 
             <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-3 leading-none tracking-tight">
@@ -385,11 +394,158 @@ export default function Dashboard() {
           </motion.div>
         )}
 
+        {/* ─── LIVE SYSTEM MONITOR ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+          className="rounded-xl border border-white/5 bg-black/50 overflow-hidden"
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-black/30">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Live System Monitor</span>
+            <span className="ml-auto text-[10px] text-zinc-700 font-mono">simulated · updates every 1s</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/5">
+            {/* CPU */}
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">CPU</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-600 flex items-center gap-0.5">
+                    <Thermometer className="w-3 h-3" />{liveStats.cpuTemp}°C
+                  </span>
+                  <span
+                    data-testid="stat-cpu-usage"
+                    className={cn(
+                      "text-xl font-bold font-display tabular-nums",
+                      liveStats.cpuUsage > 75 ? "text-red-400" : liveStats.cpuUsage > 45 ? "text-amber-400" : "text-zinc-200"
+                    )}
+                  >
+                    {liveStats.cpuUsage}%
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-zinc-900 overflow-hidden">
+                <motion.div
+                  className={cn(
+                    "h-full rounded-full",
+                    liveStats.cpuUsage > 75 ? "bg-red-500" : liveStats.cpuUsage > 45 ? "bg-amber-400" : "bg-zinc-400"
+                  )}
+                  animate={{ width: `${liveStats.cpuUsage}%` }}
+                  transition={{ duration: 0.8, ease: "easeInOut" }}
+                />
+              </div>
+              {/* Sparkline */}
+              <div className="mt-2 h-8 flex items-end gap-px">
+                {liveStats.cpuHistory.slice(-20).map((val, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex-1 rounded-sm transition-all duration-200",
+                      val > 75 ? "bg-red-500/50" : val > 45 ? "bg-amber-400/40" : "bg-zinc-600/40"
+                    )}
+                    style={{ height: `${Math.max(4, val * 0.32)}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            {/* GPU */}
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Monitor className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">GPU</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-600 flex items-center gap-0.5">
+                    <Thermometer className="w-3 h-3" />{liveStats.gpuTemp}°C
+                  </span>
+                  <span
+                    data-testid="stat-gpu-usage"
+                    className={cn(
+                      "text-xl font-bold font-display tabular-nums",
+                      liveStats.gpuUsage > 75 ? "text-red-400" : liveStats.gpuUsage > 45 ? "text-amber-400" : "text-zinc-200"
+                    )}
+                  >
+                    {liveStats.gpuUsage}%
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-zinc-900 overflow-hidden">
+                <motion.div
+                  className={cn(
+                    "h-full rounded-full",
+                    liveStats.gpuUsage > 75 ? "bg-red-500" : liveStats.gpuUsage > 45 ? "bg-amber-400" : "bg-zinc-400"
+                  )}
+                  animate={{ width: `${liveStats.gpuUsage}%` }}
+                  transition={{ duration: 0.8, ease: "easeInOut" }}
+                />
+              </div>
+              {/* Sparkline */}
+              <div className="mt-2 h-8 flex items-end gap-px">
+                {liveStats.gpuHistory.slice(-20).map((val, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex-1 rounded-sm transition-all duration-200",
+                      val > 75 ? "bg-red-500/50" : val > 45 ? "bg-amber-400/40" : "bg-zinc-600/40"
+                    )}
+                    style={{ height: `${Math.max(4, val * 0.32)}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            {/* RAM */}
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <MemoryStick className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">RAM</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-600">{liveStats.ramUsedGB} / {liveStats.ramTotalGB} GB</span>
+                  <span
+                    data-testid="stat-ram-usage"
+                    className={cn(
+                      "text-xl font-bold font-display tabular-nums",
+                      liveStats.ramPct > 80 ? "text-red-400" : liveStats.ramPct > 60 ? "text-amber-400" : "text-zinc-200"
+                    )}
+                  >
+                    {liveStats.ramPct}%
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-zinc-900 overflow-hidden">
+                <motion.div
+                  className={cn(
+                    "h-full rounded-full",
+                    liveStats.ramPct > 80 ? "bg-red-500" : liveStats.ramPct > 60 ? "bg-amber-400" : "bg-zinc-400"
+                  )}
+                  animate={{ width: `${liveStats.ramPct}%` }}
+                  transition={{ duration: 0.8, ease: "easeInOut" }}
+                />
+              </div>
+              <div className="mt-2 flex items-end justify-between gap-1 h-8">
+                {[20, 40, 60, 80, 100].map((mark) => (
+                  <div key={mark} className="flex flex-col items-center gap-0.5 flex-1">
+                    <div className={cn("w-full rounded-sm", liveStats.ramPct >= mark ? "bg-zinc-400/40" : "bg-zinc-800")} style={{ height: "12px" }} />
+                    <span className="text-[8px] text-zinc-700">{mark}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         {/* ─── HOW IT WORKS — 3-STEP STRIP (moved to top) ─── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.06 }}
+          transition={{ delay: 0.09 }}
           className="grid grid-cols-1 md:grid-cols-4 gap-2"
         >
           {HOW_TO_STEPS.map((step, i) => (

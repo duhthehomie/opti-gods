@@ -541,18 +541,14 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     ``,
     `$ErrorActionPreference = 'SilentlyContinue'`,
     ``,
-    `# --- Auto-elevate to Administrator ---`,
+    `# --- Administrator check (elevation is handled by the .bat launcher) ---`,
     `if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
-    `    if (-not \$PSCommandPath) {`,
-    `        Write-Host "" `,
-    `        Write-Host "  Run this file as Administrator:" -ForegroundColor Red`,
-    `        Write-Host "  Right-click the .ps1 file -> Run as Administrator" -ForegroundColor Yellow`,
-    `        Write-Host "" `,
-    `        Read-Host "  Press Enter to close"`,
-    `        exit`,
-    `    }`,
-    `    Write-Host "  Requesting Administrator — approve the UAC prompt to continue..." -ForegroundColor Yellow`,
-    `    Start-Process PowerShell -Verb RunAs "-NoProfile -ExecutionPolicy Bypass -File \`"\$PSCommandPath\`"" ; exit`,
+    `    Write-Host "" `,
+    `    Write-Host "  !! This script must run as Administrator !!" -ForegroundColor Red`,
+    `    Write-Host "  Please re-download and run the .bat file from the website." -ForegroundColor Yellow`,
+    `    Write-Host "" `,
+    `    Read-Host "  Press Enter to close"`,
+    `    exit 1`,
     `}`,
     ``,
     `# Keep window open on any unexpected crash`,
@@ -687,7 +683,8 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   scriptLines.push(`Write-Host "  Thank you for using Opti Gods by leaq!" -ForegroundColor Red`);
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Read-Host "  Press Enter to close this window"`);
+  scriptLines.push(`Write-Host "  Close this window when you are done." -ForegroundColor DarkGray`);
+  scriptLines.push(`Read-Host "  Press Enter"`);
   scriptLines.push(`Remove-Item $PSCommandPath -Force -EA SilentlyContinue`);
   return scriptLines.join("\n");
 }
@@ -985,7 +982,7 @@ export async function registerRoutes(
       `echo  [2/2] Requesting Administrator rights...`,
       `echo  Click Yes on the UAC prompt to apply your tweaks.`,
       `echo.`,
-      `PowerShell -NoProfile -Command "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File',([char]34+$env:TMPPS1+[char]34)"`,
+      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -NoExit -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled or launch failed: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"`,
       `del "%TMPPS1%" 2>nul`,
       `exit /b 0`,
       `${MARKER}`,
