@@ -251,7 +251,7 @@ function ProPaymentDialog({
                         href={GUMROAD_LINK}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-300 hover:text-white text-sm font-bold transition-all"
+                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
                       >
                         <CreditCard className="w-4 h-4" />
                         Pay with Card

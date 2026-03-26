@@ -6,3 +6,9 @@ id = "j4qg-mRSyqSTe4KGMtcTD"
 uri = "file://attached_assets/generated_images/optigods_thumbnail.png"
 type = "image"
 title = "Opti Gods Pro — Gumroad Thumbnail (1:1)"
+
+[[outputs]]
+id = "JRETMaeKkn-v2r3a5kh1y"
+uri = "file://attached_assets/generated_videos/optigods_promo_tiktok.mp4"
+type = "video"
+title = "Opti Gods — TikTok/Instagram Promo Video (9:16)"
