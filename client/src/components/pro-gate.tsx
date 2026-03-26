@@ -8,7 +8,7 @@ import { useProStatus, setProStatus } from "@/lib/pro-status";
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
-const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
+
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const GUMROAD_LINK = import.meta.env.VITE_GUMROAD_LINK as string | undefined;
@@ -22,7 +22,7 @@ function ProPaymentDialog({
 }) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [stripeLoading, setStripeLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -96,28 +96,7 @@ function ProPaymentDialog({
     } catch {}
   };
 
-  const handleStripeCheckout = async () => {
-    setStripeLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        setError(data.error || "Failed to start checkout. Try another payment method.");
-      }
-    } catch {
-      setError("Connection error. Please try again.");
-    } finally {
-      setStripeLoading(false);
-    }
-  };
-
-  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || STRIPE_ENABLED || LEGACY_LINK || CRYPTO_ADDRESS || COINBASE_LINK;
+  const hasPaymentOptions = CASHAPP_TAG || PAYPAL_LINK || GUMROAD_LINK || LEGACY_LINK || CRYPTO_ADDRESS || COINBASE_LINK;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -266,20 +245,6 @@ function ProPaymentDialog({
                       </div>
                     )}
 
-                    {STRIPE_ENABLED && (
-                      <button
-                        data-testid="button-pay-stripe"
-                        onClick={handleStripeCheckout}
-                        disabled={stripeLoading}
-                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-300 hover:text-white text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {stripeLoading
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <CreditCard className="w-4 h-4" />}
-                        {stripeLoading ? "Redirecting..." : "Pay with Card"}
-                      </button>
-                    )}
-
                     {GUMROAD_LINK && (
                       <a
                         data-testid="button-pay-gumroad"
@@ -293,7 +258,7 @@ function ProPaymentDialog({
                       </a>
                     )}
 
-                    {!CASHAPP_TAG && !PAYPAL_LINK && !STRIPE_ENABLED && LEGACY_LINK && (
+                    {!CASHAPP_TAG && !PAYPAL_LINK && !GUMROAD_LINK && LEGACY_LINK && (
                       <a
                         href={LEGACY_LINK}
                         target="_blank"
@@ -306,7 +271,7 @@ function ProPaymentDialog({
                     )}
                   </div>
 
-                  {!STRIPE_ENABLED && !GUMROAD_LINK && (
+                  {!GUMROAD_LINK && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
@@ -314,7 +279,7 @@ function ProPaymentDialog({
                       </p>
                     </div>
                   )}
-                  {(STRIPE_ENABLED || GUMROAD_LINK) && (CASHAPP_TAG || PAYPAL_LINK) && (
+                  {GUMROAD_LINK && (CASHAPP_TAG || PAYPAL_LINK) && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
@@ -322,7 +287,7 @@ function ProPaymentDialog({
                       </p>
                     </div>
                   )}
-                  {GUMROAD_LINK && !CASHAPP_TAG && !PAYPAL_LINK && !STRIPE_ENABLED && (
+                  {GUMROAD_LINK && !CASHAPP_TAG && !PAYPAL_LINK && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
