@@ -573,18 +573,44 @@ export default function IntegratedGraphics() {
           </div>
         </motion.div>
 
+        {/* #1 Resolution Tip — prominent callout */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <div className="relative rounded-xl overflow-hidden border border-purple-500/30 bg-gradient-to-r from-purple-950/30 via-black to-zinc-900/40">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
+            <div className="p-4 flex items-start gap-4">
+              <div className="shrink-0 w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center">
+                <Monitor className="w-6 h-6 text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Biggest Single FPS Gain</span>
+                  <span className="px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-500/30 text-[9px] font-bold text-purple-300 uppercase">Do This First</span>
+                </div>
+                <p className="text-sm font-black text-white leading-snug">Set your in-game resolution to <span className="text-purple-400">1280×720</span></p>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Integrated GPUs share system RAM as VRAM — they have a fraction of the bandwidth of a dedicated card. Dropping from 1080p to 720p cuts the number of pixels your iGPU has to push by <span className="text-white font-semibold">more than half</span>, which translates directly into higher, more stable framerates. Most games still look perfectly playable at 720p on a laptop or small monitor screen.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                  <span className="px-2 py-1 rounded-lg bg-zinc-900/80 border border-white/5 text-zinc-400">Right-click Desktop → Display Settings → change your resolution</span>
+                  <span className="px-2 py-1 rounded-lg bg-zinc-900/80 border border-white/5 text-zinc-400">Or set it per-game in the in-game graphics menu</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Tips */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <div className="rounded-xl border border-white/5 bg-zinc-900/30 p-4">
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">iGPU Gaming Tips</p>
             <div className="grid md:grid-cols-2 gap-3">
               {[
-                { tip: "Set in-game FPS cap to 5-10 below max stable", reason: "Prevents GPU from pegging 100% which causes thermal throttle" },
-                { tip: "In game graphics: set shadows to Low or Medium", reason: "Shadow rendering is extremely VRAM/bandwidth intensive on iGPU" },
-                { tip: "Use 1920x1080 or lower render resolution", reason: "Every pixel costs iGPU bandwidth — lower res = more headroom" },
-                { tip: "Close RGB software (iCUE, Armoury Crate, etc.)", reason: "RGB controller software uses GPU for color rendering" },
-                { tip: "Set RAM to XMP/EXPO in BIOS", reason: "iGPU bandwidth directly tied to RAM speed — DDR4-3200+ is huge" },
-                { tip: "Increase iGPU VRAM allocation in BIOS", reason: "BIOS usually has an option to give iGPU 1GB or 2GB dedicated" },
+                { tip: "Set in-game FPS cap to 5–10 below max stable", reason: "Prevents GPU from pegging 100% which causes thermal throttle" },
+                { tip: "In-game graphics: set shadows to Low or Off", reason: "Shadow rendering is extremely VRAM/bandwidth intensive on iGPU" },
+                { tip: "Try 1280×720 first — upgrade to 900p if it looks too rough", reason: "720p is the sweet spot: biggest FPS gain, still playable on most screens" },
+                { tip: "Close RGB software (iCUE, Armoury Crate, etc.)", reason: "RGB controller software uses GPU resources for color rendering" },
+                { tip: "Set RAM to XMP/EXPO in BIOS", reason: "iGPU bandwidth is directly tied to RAM speed — DDR4-3200+ is a major win" },
+                { tip: "Increase iGPU VRAM allocation in BIOS", reason: "Most BIOS menus let you assign 1–2GB dedicated — look under Advanced/APU" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/50">
                   <Check className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
