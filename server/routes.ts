@@ -1677,7 +1677,7 @@ Read-Host "Press Enter to close this window"
     const allRequests = await storage.getEmailRequests();
     const emailReq = allRequests.find(r => r.id === id);
     if (!emailReq) return res.status(404).json({ error: "Request not found" });
-    if (emailReq.status === "sent") return res.status(400).json({ error: "Code already sent" });
+    if (emailReq.status === "sent" || emailReq.status === "auto-sent") return res.status(400).json({ error: "Code already sent to this customer" });
 
     const allCodes = await storage.getAllCodes();
     // Exclude codes already reserved by other sent/auto-sent email requests
