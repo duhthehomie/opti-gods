@@ -11,6 +11,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
+const GUMROAD_LINK = import.meta.env.VITE_GUMROAD_LINK as string | undefined;
 
 function ProPaymentDialog({
   open,
@@ -279,6 +280,19 @@ function ProPaymentDialog({
                       </button>
                     )}
 
+                    {GUMROAD_LINK && (
+                      <a
+                        data-testid="button-pay-gumroad"
+                        href={GUMROAD_LINK}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-300 hover:text-white text-sm font-bold transition-all"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        Pay with Card
+                      </a>
+                    )}
+
                     {!CASHAPP_TAG && !PAYPAL_LINK && !STRIPE_ENABLED && LEGACY_LINK && (
                       <a
                         href={LEGACY_LINK}
@@ -292,7 +306,7 @@ function ProPaymentDialog({
                     )}
                   </div>
 
-                  {!STRIPE_ENABLED && (
+                  {!STRIPE_ENABLED && !GUMROAD_LINK && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
@@ -300,11 +314,19 @@ function ProPaymentDialog({
                       </p>
                     </div>
                   )}
-                  {STRIPE_ENABLED && (CASHAPP_TAG || PAYPAL_LINK) && (
+                  {(STRIPE_ENABLED || GUMROAD_LINK) && (CASHAPP_TAG || PAYPAL_LINK) && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
                       <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
-                        Card payment unlocks instantly. CashApp/PayPal: fill the email form below — code arrives in <strong className="text-zinc-300">5 minutes or less</strong>.
+                        Card payment: fill the email form below after checkout — code arrives in <strong className="text-zinc-300">5 min or less</strong>. CashApp/PayPal: same — pay first, then request your code.
+                      </p>
+                    </div>
+                  )}
+                  {GUMROAD_LINK && !CASHAPP_TAG && !PAYPAL_LINK && !STRIPE_ENABLED && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                      <MessageCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        After paying via Gumroad, use the <strong className="text-zinc-400">"Get code via email"</strong> form below — your code arrives in <strong className="text-zinc-300">5 minutes or less</strong>.
                       </p>
                     </div>
                   )}
