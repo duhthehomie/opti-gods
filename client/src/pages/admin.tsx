@@ -433,40 +433,50 @@ export default function Admin() {
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-5">
-          <div className="space-y-1 mb-2">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-500" />
-              <span className="font-bold text-xl text-white font-display tracking-wide">Admin Panel</span>
+      <div className="min-h-screen bg-[#070707] flex items-center justify-center p-5 relative overflow-hidden">
+        {/* Ambient glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-red-600/10 blur-[120px]" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-600/40 to-transparent" />
+        </div>
+        <div className="w-full max-w-sm space-y-5 relative z-10">
+          {/* Logo */}
+          <div className="text-center space-y-2 mb-6">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-red-600/30 to-red-900/20 border border-red-500/30 flex items-center justify-center shadow-[0_0_40px_-10px_rgba(239,68,68,0.5)]">
+              <Shield className="w-8 h-8 text-red-400" />
             </div>
-            <p className="text-xs text-zinc-600 pl-7">Opti Gods by leaq — restricted access</p>
+            <div>
+              <h1 className="text-2xl font-black font-display text-white tracking-widest uppercase">Opti Gods</h1>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono mt-0.5">Admin Control · Restricted</p>
+            </div>
           </div>
 
-          <div className="bg-zinc-900/60 border border-white/5 rounded-xl p-4 space-y-4">
-            <p className="text-[11px] text-zinc-500">Enter your <span className="text-zinc-300 font-mono">ADMIN_KEY</span> to continue</p>
+          <div className="bg-zinc-900/60 border border-white/8 rounded-2xl p-5 space-y-4 backdrop-blur-sm">
+            <p className="text-[11px] text-zinc-500">Enter your <span className="text-zinc-300 font-mono bg-zinc-800/80 px-1.5 py-0.5 rounded">ADMIN_KEY</span> to unlock</p>
             <input
               data-testid="input-admin-key"
               type="password"
-              placeholder="Admin key..."
+              placeholder="Enter admin key..."
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleLogin()}
-              className="w-full bg-black border border-zinc-700 focus:border-red-500/60 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-700 focus:outline-none font-mono transition-colors"
+              className="w-full bg-black/80 border border-zinc-700 focus:border-red-500/60 rounded-xl px-4 py-3.5 text-sm text-white placeholder-zinc-700 focus:outline-none font-mono transition-colors"
+              style={{ fontSize: "16px" }}
             />
             {authError && (
-              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {authError}
               </div>
             )}
             <Button
               data-testid="button-admin-login"
               onClick={handleLogin}
-              className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/30 font-bold"
+              className="w-full bg-red-600 hover:bg-red-500 text-white border border-red-500/30 font-black text-base py-6 rounded-xl shadow-[0_4px_20px_-4px_rgba(239,68,68,0.4)] hover:shadow-[0_4px_30px_-4px_rgba(239,68,68,0.6)] transition-all"
             >
-              <Shield className="w-4 h-4 mr-2" /> Enter Admin Panel
+              <Shield className="w-4 h-4 mr-2" /> Unlock Admin
             </Button>
           </div>
+          <p className="text-center text-[10px] text-zinc-700">by leaq · optigods.replit.app</p>
         </div>
       </div>
     );
@@ -480,36 +490,43 @@ export default function Admin() {
   const inactiveBg = inactiveSec < 300 ? "bg-emerald-500/10 border-emerald-500/20" : inactiveSec < 1500 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
 
   return (
-    <div className="min-h-screen bg-[#060606] text-white">
+    <div className="min-h-screen bg-[#060606] text-white pb-24 md:pb-6">
       {/* Top gradient bar */}
       <div className="h-1 w-full bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-80" />
 
-      <div className="max-w-5xl mx-auto p-6 space-y-5">
+      <div className="max-w-5xl mx-auto px-3 py-3 md:px-6 md:py-5 space-y-4 md:space-y-5">
 
         {/* Header */}
-        <div className="relative rounded-2xl overflow-hidden border border-red-500/10 bg-gradient-to-br from-zinc-900/80 via-black to-zinc-900/60">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 to-transparent pointer-events-none" />
-          <div className="relative px-6 py-5 flex flex-col md:flex-row md:items-center gap-4">
+        <div className="relative rounded-2xl overflow-hidden border border-red-500/15 bg-gradient-to-br from-zinc-900/80 via-black to-zinc-900/60 shadow-[inset_0_0_60px_-20px_rgba(239,68,68,0.08)]">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-950/25 to-transparent pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+          <div className="relative px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
 
             {/* Brand */}
             <div className="flex items-center gap-3 flex-1">
               <div className="relative">
-                <div className="w-11 h-11 bg-red-600/20 border border-red-500/40 rounded-xl flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-red-400" />
+                <div className="w-12 h-12 bg-gradient-to-br from-red-600/30 to-red-900/20 border border-red-500/40 rounded-xl flex items-center justify-center shadow-[0_0_20px_-6px_rgba(239,68,68,0.5)]">
+                  <Shield className="w-6 h-6 text-red-400" />
                 </div>
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-black font-display text-white tracking-wider uppercase">Opti Gods</h1>
-                  <span className="px-1.5 py-0.5 rounded bg-red-600/80 text-[9px] font-bold tracking-widest text-white uppercase">Admin</span>
+                  <span className="px-1.5 py-0.5 rounded bg-red-600 text-[9px] font-bold tracking-widest text-white uppercase shadow-[0_0_8px_rgba(239,68,68,0.4)]">Admin</span>
+                  {pendingEmailCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-bold animate-pulse">
+                      {pendingEmailCount} pending
+                    </span>
+                  )}
                 </div>
-                <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">leaq control panel · server online</p>
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">leaq · control panel · live</p>
               </div>
             </div>
 
-            {/* Live indicators */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Live indicators — horizontally scrollable on mobile */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5 md:pb-0 md:flex-wrap flex-nowrap md:flex-wrap"
+              style={{ WebkitOverflowScrolling: "touch" }}>
 
               {/* Inactive timer */}
               <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono font-bold", inactiveBg, inactiveColor)}>
@@ -644,47 +661,53 @@ export default function Admin() {
           </a>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-white/5 pb-0 flex-wrap">
+        {/* Tabs — horizontally scrollable on mobile */}
+        <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
+          style={{ WebkitOverflowScrolling: "touch" }}>
           {(["codes", "friends", "activity", "email", "announcements", "analytics"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
+            const TAB_ICONS: Record<Tab, React.ElementType> = {
+              codes: Key,
+              friends: Link,
+              activity: Activity,
+              email: Mail,
+              announcements: Bell,
+              analytics: TrendingUp,
+            };
+            const TIcon = TAB_ICONS[t];
             return (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px whitespace-nowrap flex items-center gap-1.5",
+                  "shrink-0 flex items-center gap-1.5 px-3 py-2.5 md:px-4 text-xs font-bold uppercase tracking-widest transition-all border-b-2 -mb-px whitespace-nowrap",
                   tab === t
                     ? "text-red-400 border-red-500"
                     : "text-zinc-600 border-transparent hover:text-zinc-300"
                 )}
               >
-                {t === "codes" ? `Access Codes (${stats?.totalCodes ?? 0})` :
-                 t === "friends" ? `Friend Links (${stats?.totalFriends ?? 0})` :
-                 t === "email" ? (
-                   <>
-                     <Mail className="w-3 h-3" />
-                     Email Requests
-                     {pendingEmails > 0 && (
-                       <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold">
-                         {pendingEmails}
-                       </span>
-                     )}
-                   </>
-                 ) :
-                 t === "announcements" ? (
-                   <>
-                     <Bell className="w-3 h-3" />
-                     Updates ({(announcementsQuery.data || []).length})
-                   </>
-                 ) :
-                 t === "analytics" ? (
-                   <>
-                     <TrendingUp className="w-3 h-3" />
-                     Impact Analytics
-                   </>
-                 ) :
-                 `Activity (${activityItems.length})`}
+                <TIcon className="w-3 h-3 shrink-0" />
+                <span className="hidden sm:inline">
+                  {t === "codes" ? `Codes (${stats?.totalCodes ?? 0})` :
+                   t === "friends" ? `Friends (${stats?.totalFriends ?? 0})` :
+                   t === "email" ? "Email" :
+                   t === "announcements" ? "Updates" :
+                   t === "analytics" ? "Analytics" :
+                   `Activity (${activityItems.length})`}
+                </span>
+                <span className="sm:hidden">
+                  {t === "codes" ? `${stats?.totalCodes ?? 0}` :
+                   t === "friends" ? `${stats?.totalFriends ?? 0}` :
+                   t === "email" ? "" :
+                   t === "announcements" ? "" :
+                   t === "analytics" ? "" :
+                   `${activityItems.length}`}
+                </span>
+                {t === "email" && pendingEmails > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold shadow-[0_0_6px_rgba(239,68,68,0.5)]">
+                    {pendingEmails}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1430,6 +1453,64 @@ export default function Admin() {
             })()}
           </div>
         )}
+
+        {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+          <div className="bg-zinc-950/95 border-t border-white/8 backdrop-blur-xl px-4 py-3 pb-safe-area-inset-bottom">
+            <div className="flex items-center gap-2">
+              {/* Quick Generate Code */}
+              <button
+                data-testid="mobile-fab-gen-code"
+                onClick={() => { setTab("codes"); genCode.mutate(); }}
+                disabled={genCode.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-sm transition-all shadow-[0_4px_20px_-4px_rgba(239,68,68,0.5)] active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                {genCode.isPending ? "Generating..." : "Gen Code"}
+              </button>
+
+              {/* Email Tab Shortcut */}
+              <button
+                data-testid="mobile-fab-email"
+                onClick={() => setTab("email")}
+                className={cn(
+                  "relative flex items-center justify-center w-12 h-12 rounded-xl border transition-all active:scale-95",
+                  tab === "email"
+                    ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : "bg-zinc-800/80 border-zinc-700 text-zinc-400"
+                )}
+              >
+                <Mail className="w-5 h-5" />
+                {pendingEmailCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
+                    {pendingEmailCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Quick Send Now (if pending) */}
+              {pendingEmailCount > 0 && sys?.enabled && (
+                <button
+                  data-testid="mobile-fab-send-now"
+                  onClick={() => triggerAutoSend.mutate()}
+                  disabled={triggerAutoSend.isPending}
+                  className="flex items-center justify-center gap-1.5 px-3 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold text-xs transition-all active:scale-95"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Send All
+                </button>
+              )}
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center w-12 h-12 rounded-xl bg-zinc-800/80 border border-zinc-700 text-zinc-500 transition-all active:scale-95"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
