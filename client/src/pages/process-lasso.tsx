@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Cpu, Pin, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Cpu, Pin, XCircle, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -150,35 +150,77 @@ export default function ProcessLasso() {
             </div>
           </section>
 
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">ProBalance Rules</h2>
-            <div className="space-y-3">
-              {[
-                { id: "ProcessLassoProBalance", title: "Enable ProBalance (CPU Throttling)", desc: "Automatically lowers the priority of processes that hog CPU while the foreground app is running." },
-                { id: "ProcessLassoSmartTrim", title: "Enable SmartTrim (RAM)", desc: "Trims working set of background processes to free physical memory for your game." },
-                { id: "ProcessLassoRestrain", title: "Restrain Background Apps After 5s Idle", desc: "Drops background process CPU priority 5 seconds after they stop receiving input." },
-                { id: "ProcessLassoAffinityGaming", title: "Auto-Affinity: Gaming Mode", desc: "Moves background tasks to a subset of cores so your game gets dedicated CPU access." },
-                { id: "ProcessLassoInstanceBalancer", title: "Instance Balancer (Multi-Core)", desc: "Distributes multiple instances of the same process across different CPU cores." },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
+          {(() => {
+            const probalanceTweaks = [
+              { id: "ProcessLassoProBalance", title: "Enable ProBalance (CPU Throttling)", desc: "Automatically lowers the priority of processes that hog CPU while the foreground app is running.", impact: "HIGH" as const, recommended: true },
+              { id: "ProcessLassoSmartTrim", title: "Enable SmartTrim (RAM)", desc: "Trims working set of background processes to free physical memory for your game.", impact: "HIGH" as const, recommended: true },
+              { id: "ProcessLassoRestrain", title: "Restrain Background Apps After 5s Idle", desc: "Drops background process CPU priority 5 seconds after they stop receiving input.", impact: "MED" as const, recommended: true },
+              { id: "ProcessLassoAffinityGaming", title: "Auto-Affinity: Gaming Mode", desc: "Moves background tasks to a subset of cores so your game gets dedicated CPU access.", impact: "HIGH" as const, recommended: true },
+              { id: "ProcessLassoInstanceBalancer", title: "Instance Balancer (Multi-Core)", desc: "Distributes multiple instances of the same process across different CPU cores.", impact: "MED" as const },
+            ];
+            const recIds = probalanceTweaks.filter(t => t.recommended).map(t => t.id);
+            const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+            return (
+              <section>
+                <div className="flex items-center gap-2 mb-4 px-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">ProBalance Rules</h2>
+                  <div className="flex-1 h-px bg-white/5 ml-2" />
+                  <Button
+                    variant="ghost" size="sm"
+                    onClick={() => recIds.forEach(id => setTweak(id, true))}
+                    disabled={allOn}
+                    data-testid="button-enable-recommended-probalance"
+                    className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {probalanceTweaks.map((item, i) => (
+                    <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
+                      impact={item.impact} badge={item.recommended ? "RECOMMENDED" : undefined}
+                      checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
 
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Memory Optimization</h2>
-            <div className="space-y-3">
-              {[
-                { id: "ProcessTrimWorkingSet", title: "Trim Working Set on Minimize", desc: "Reduces a process's RAM footprint when it is minimized — frees memory for active apps." },
-                { id: "ProcessDisableWindowsErrorReporting", title: "Disable Windows Error Reporting", desc: "Stops WER from freezing a crashed process for minutes while collecting a dump." },
-                { id: "ProcessAutoKillHung", title: "Auto-Kill Hung Processes (15s)", desc: "Automatically terminates unresponsive processes after 15 seconds instead of waiting." },
-              ].map((item, i) => (
-                <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
-                  checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
-              ))}
-            </div>
-          </section>
+          {(() => {
+            const memTweaks = [
+              { id: "ProcessTrimWorkingSet", title: "Trim Working Set on Minimize", desc: "Reduces a process's RAM footprint when it is minimized — frees memory for active apps.", impact: "MED" as const, recommended: true },
+              { id: "ProcessDisableWindowsErrorReporting", title: "Disable Windows Error Reporting", desc: "Stops WER from freezing a crashed process for minutes while collecting a dump.", impact: "LOW" as const },
+              { id: "ProcessAutoKillHung", title: "Auto-Kill Hung Processes (15s)", desc: "Automatically terminates unresponsive processes after 15 seconds instead of waiting.", impact: "MED" as const, recommended: true },
+            ];
+            const recIds = memTweaks.filter(t => t.recommended).map(t => t.id);
+            const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+            return (
+              <section>
+                <div className="flex items-center gap-2 mb-4 px-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Memory Optimization</h2>
+                  <div className="flex-1 h-px bg-white/5 ml-2" />
+                  <Button
+                    variant="ghost" size="sm"
+                    onClick={() => recIds.forEach(id => setTweak(id, true))}
+                    disabled={allOn}
+                    data-testid="button-enable-recommended-mem-opt"
+                    className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {memTweaks.map((item, i) => (
+                    <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
+                      impact={item.impact} badge={item.recommended ? "RECOMMENDED" : undefined}
+                      checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
         </div>
       </div>
     </AppLayout>

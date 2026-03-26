@@ -28,6 +28,8 @@ import CustomOS from "@/pages/custom-os";
 import Updates from "@/pages/updates";
 import DiscordPage from "@/pages/discord";
 import IntegratedGraphics from "@/pages/integrated-graphics";
+import Showcase from "@/pages/showcase";
+import LaptopPage from "@/pages/laptop";
 
 function VisitTracker() {
   useEffect(() => {
@@ -97,6 +99,8 @@ function Router() {
       <Route path="/updates" component={Updates} />
       <Route path="/discord" component={DiscordPage} />
       <Route path="/integrated-graphics" component={IntegratedGraphics} />
+      <Route path="/laptop" component={LaptopPage} />
+      <Route path="/showcase" component={Showcase} />
       <Route path="/help" component={Help} />
       <Route component={NotFound} />
     </Switch>

@@ -20,6 +20,8 @@ import {
   Bell,
   Download,
   ChevronRight,
+  Laptop,
+  Play,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,6 +53,7 @@ const SECTION_PREFIXES: Record<string, string[]> = {
   "/startup":            ["su_"],
   "/amd":                ["Amd","amd"],
   "/integrated-graphics":["IntGpu","intgpu"],
+  "/laptop":             ["Lap_"],
 };
 
 function countForSection(tweaks: Record<string, boolean>, url: string) {
@@ -68,6 +71,7 @@ const navItems = [
   { title: "NVIDIA Presets",      url: "/nvidia",             icon: MonitorPlay },
   { title: "AMD Optimizer",       url: "/amd",                icon: Flame },
   { title: "Integrated Graphics", url: "/integrated-graphics",icon: Monitor },
+  { title: "Laptop Optimizer",    url: "/laptop",             icon: Laptop },
   { title: "Process Lasso",       url: "/process-lasso",      icon: Cpu },
   { title: "Discord Optimizer",   url: "/discord",            icon: MessageCircle },
   { title: "Startup Apps",        url: "/startup",            icon: Power },
@@ -77,10 +81,11 @@ const navItems = [
   { title: "Custom OS",           url: "/custom-os",          icon: HardDrive, proAccent: true },
   { title: "Updates",             url: "/updates",            icon: Bell },
   { title: "Fixes & Restore",     url: "/fixes",              icon: RotateCcw, fixAccent: true },
+  { title: "Showcase",            url: "/showcase",           icon: Play },
   { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
 
-const TOTAL_TWEAKS = 281;
+const TOTAL_TWEAKS = 315;
 
 
 export function AppSidebar() {
