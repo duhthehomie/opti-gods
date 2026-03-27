@@ -7,7 +7,7 @@ import {
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
-  PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X,
+  PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -839,6 +839,10 @@ export default function Admin() {
           <a href="https://paypal.me/accountslg" target="_blank" rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-lg text-xs text-blue-400 hover:bg-blue-600/20 transition-colors font-mono">
             <Zap className="w-3 h-3" /> paypal.me/accountslg
+          </a>
+          <a href="https://duhthehomie.gumroad.com/l/esizt" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">
+            <CreditCard className="w-3 h-3" /> Gumroad (Card)
           </a>
           <a href="https://discord.gg/C8WrQknN9k" target="_blank" rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/20 transition-colors font-mono">
