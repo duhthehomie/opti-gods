@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useProStatus, setProSession, clearProStatus, getProStatus } from "@/lib/pro-status";
+import { useProStatus, setAdminPreview, getAdminPreview, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment } from "@shared/schema";
 
@@ -652,35 +652,22 @@ export default function Admin() {
                 <span>{sys?.enabled ? `Auto-send ON · ${sys.thresholdMinutes}min` : "Auto-send OFF"}</span>
               </div>
 
-              {/* Pro test toggle */}
+              {/* Pro preview toggle — instant, no server roundtrip */}
               <button
-                onClick={async () => {
-                  if (isPro) {
-                    clearProStatus();
-                    toast({ title: "Switched to Free mode" });
-                  } else {
-                    try {
-                      const res = await fetch("/api/admin/grant-pro-session", {
-                        method: "POST", headers,
-                      });
-                      const data = await res.json();
-                      if (data.sessionToken) {
-                        setProSession(data.sessionToken);
-                        toast({ title: "Pro Granted (Test)" });
-                      }
-                    } catch {
-                      toast({ title: "Failed to grant Pro", variant: "destructive" });
-                    }
-                  }
+                onClick={() => {
+                  const preview = getAdminPreview();
+                  setAdminPreview(!preview);
+                  toast({ title: preview ? "Preview: Free mode" : "Preview: Pro mode" });
                 }}
+                data-testid="button-pro-preview-toggle"
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors",
                   isPro ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-zinc-800/60 border-zinc-700 text-zinc-500 hover:text-zinc-300"
                 )}
-                title="Toggle Pro for testing"
+                title="Toggle Pro preview for testing"
               >
                 <Eye className="w-3 h-3" />
-                {isPro ? "PRO mode" : "Free mode"}
+                {isPro ? "PRO preview" : "Free mode"}
               </button>
 
               {/* Refresh all */}
