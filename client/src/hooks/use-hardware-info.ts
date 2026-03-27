@@ -158,11 +158,9 @@ export function useHardwareInfo(): HardwareInfo {
       }
     }
 
-    // Resolution — multiply by devicePixelRatio to get true physical pixels
-    // (screen.width gives CSS logical pixels; DPI scaling changes this at OS level)
-    const physW = Math.round(screen.width * (window.devicePixelRatio || 1));
-    const physH = Math.round(screen.height * (window.devicePixelRatio || 1));
-    const resolution = `${physW}×${physH}`;
+    // Resolution — use CSS logical pixels (matches what Windows Display Settings shows)
+    // Physical pixel multiplication causes inflated values on high-DPI/scaled displays
+    const resolution = `${screen.width}×${screen.height}`;
 
     // GPU — prioritize PS1 scan result
     let gpuName = scanned?.GPU?.trim() || "";

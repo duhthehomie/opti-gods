@@ -70,7 +70,7 @@ export default function Showcase() {
               Unedited clips. Real hardware. Real FPS. No fakery — just what happens when your PC is actually optimized.
             </p>
             <div className="flex items-center justify-center gap-6 text-xs text-zinc-500">
-              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-red-400" /> 315+ tweaks</span>
+              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-red-400" /> 318+ tweaks</span>
               <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-green-400" /> Measurable FPS gains</span>
               <span className="flex items-center gap-1"><Star className="w-3 h-3 text-yellow-400" /> Lifetime Pro access</span>
             </div>

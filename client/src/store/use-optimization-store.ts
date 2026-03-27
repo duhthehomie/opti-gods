@@ -315,6 +315,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   IGpu_DisableHAGSForIGpu: false,
   IGpu_NetworkThrottling: false,
   IGpu_DisableMPO: false,
+  IGpu_AmdTdrLevel: false,
+  IGpu_AmdDisableHDCP: false,
+  IGpu_AmdVegaAudioOff: false,
   // Laptop Optimizer
   Lap_UltimatePerformance: false,
   Lap_DisableCoreParking: false,

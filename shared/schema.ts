@@ -1,6 +1,7 @@
-import { pgTable, text, serial, jsonb, boolean, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 export const proAccessCodes = pgTable("pro_access_codes", {
   id: serial("id").primaryKey(),
@@ -70,6 +71,16 @@ export const scriptDownloads = pgTable("script_downloads", {
   downloadedAt: timestamp("downloaded_at").defaultNow(),
 });
 export type ScriptDownload = typeof scriptDownloads.$inferSelect;
+
+// Pro session tokens — server-side validation prevents localStorage spoofing exploit
+export const proSessions = pgTable("pro_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: varchar("session_token", { length: 64 }).notNull().unique(),
+  codeRef: text("code_ref"), // the code or friend token that was redeemed
+  createdAt: timestamp("created_at").defaultNow(),
+  lastCheckedAt: timestamp("last_checked_at").defaultNow(),
+});
+export type ProSession = typeof proSessions.$inferSelect;
 
 export const emailRequests = pgTable("email_requests", {
   id: serial("id").primaryKey(),

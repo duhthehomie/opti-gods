@@ -11,12 +11,15 @@ A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthet
 
 ## Key Features
 
-- **130+ optimization toggles** across 9 tabs (Registry, FiveM, NVIDIA, Network, Startup, Debloat, Memory, Fortnite, Game Detection)
+- **318+ optimization toggles** across 9+ tabs (Registry, FiveM, NVIDIA, AMD, AMD Integrated GPU, Intel iGPU, Laptop, Network, Startup, Debloat, Memory, Fortnite, Discord, Game Detection)
 - **PowerShell script generation** — downloads a personalized `.ps1` file based on selected tweaks
-- **Pro paywall** (`ProGate` component) — unlocked by access code, CashApp, PayPal, or Stripe (optional)
+- **Pro paywall** (`ProGate` component) — secured server-side session token (64-char hex), unlocked via access code redeem
+- **Payment options**: CashApp `$my1ik`, PayPal `paypal.me/accountslg`, Gumroad card (with prepaid card warning banner)
 - **Free friend unlock** via URL param `?unlock=<VITE_FREE_KEY>`
 - **Smart Game Detection** — PS1 scanner checks 14 game paths, opens `/game-detection?games=<ids>` in browser
 - **Preset save/load** — stored in PostgreSQL via `/api/presets`
+- **Admin panel analytics** — script generation history, top tweaks, recent 30 downloads with tweak IDs + heat coloring
+- **Integrated GPU (Vega 8) tab** — AMD Ryzen 2200G/Vega 8 specific tweaks including TDR timeout, HDCP disable, audio co-processor power-gating
 
 ## Payment System
 

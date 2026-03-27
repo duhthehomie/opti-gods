@@ -76,7 +76,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   PrivacyDiagFeedback: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules' -Name 'NumberOfSIUFInPeriod' -Value 0`,
   // Memory
   MemFixedPagefile: `$ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB); $size = [math]::Round($ram * 1.5); $regMM = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management'; Set-ItemProperty $regMM 'AutomaticManagedPagefile' 0 -Type DWord -Force -EA SilentlyContinue; New-ItemProperty $regMM 'PagingFiles' -Value @("C:\\pagefile.sys $size $size") -PropertyType MultiString -Force -EA SilentlyContinue | Out-Null; Write-Host "[OK] Pagefile fixed at $size MB (1.5x RAM, takes effect after restart)" -ForegroundColor Green`,
-  MemMovePagefileFast: `$ltr = $null; try { $ltr = (Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used -ne $null -and [long]$_.Used -gt 0 } | Sort-Object @{Expression={[long]$_.Used+[long]$_.Free};Descending=$true} | Select-Object -First 1).Name } catch {}; if ($ltr) { $regMM = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management'; Set-ItemProperty $regMM 'AutomaticManagedPagefile' 0 -Type DWord -Force -EA SilentlyContinue; New-ItemProperty $regMM 'PagingFiles' -Value @("$ltr:\\pagefile.sys 0 0") -PropertyType MultiString -Force -EA SilentlyContinue | Out-Null; Write-Host "[OK] Pagefile set to $ltr: (auto-size, takes effect after restart)" -ForegroundColor Green } else { Write-Host "[SKIP] Could not identify drive — pagefile unchanged" -ForegroundColor Yellow }`,
+  MemMovePagefileFast: `$ltr = $null; try { $ltr = (Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used -ne $null -and [long]$_.Used -gt 0 } | Sort-Object @{Expression={[long]$_.Used+[long]$_.Free};Descending=$true} | Select-Object -First 1).Name } catch {}; if ($ltr) { $regMM = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management'; Set-ItemProperty $regMM 'AutomaticManagedPagefile' 0 -Type DWord -Force -EA SilentlyContinue; New-ItemProperty $regMM 'PagingFiles' -Value @("$ltr:\\pagefile.sys 0 0") -PropertyType MultiString -Force -EA SilentlyContinue | Out-Null; Write-Host "[OK] Pagefile set to \${ltr}: (auto-size, takes effect after restart)" -ForegroundColor Green } else { Write-Host "[SKIP] Could not identify drive — pagefile unchanged" -ForegroundColor Yellow }`,
   MemDisablePagefile: `Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'AutomaticManagedPagefile' 0 -Type DWord -Force; Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' 'PagingFiles' "" -Force; Write-Host "[OK] Pagefile disabled (takes effect after restart)" -ForegroundColor Green`,
   MemClearPagefileShutdown: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'ClearPageFileAtShutdown' -Value 1`,
   MemDisableCompression: `Disable-MMAgent -MemoryCompression`,
@@ -321,6 +321,9 @@ const TWEAK_COMMANDS: Record<string, string> = {
   IGpu_DisableHAGSForIGpu: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] HAGS disabled — Hardware Accelerated GPU Scheduling causes latency on integrated GPUs (designed for discrete NVIDIA RTX 2000+ / AMD RX 6000+)" -ForegroundColor Green`,
   IGpu_NetworkThrottling: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Network throttling disabled — CPU freed from interrupt throttling (important when CPU and GPU share die)" -ForegroundColor Green`,
   IGpu_DisableMPO: `New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Force -EA SilentlyContinue | Out-Null; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Name 'OverlayTestMode' -Value 5 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] Multi-Plane Overlay (MPO) disabled — eliminates screen tearing and flickering caused by MPO on AMD integrated GPUs" -ForegroundColor Green`,
+  IGpu_AmdTdrLevel: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 60 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDdiDelay' -Value 60 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] TDR timeout extended to 60s — prevents Windows from killing Vega 8 as 'hung GPU' during heavy compute loads" -ForegroundColor Green`,
+  IGpu_AmdDisableHDCP: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|AMD' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'DisableHDCP' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'HdcpSupport' -Value 0 -Type DWord -EA SilentlyContinue }; Write-Host "[iGPU] HDCP disabled on Vega 8 — removes DRM handshake overhead from the iGPU display pipeline, frees GPU cycles for rendering" -ForegroundColor Green`,
+  IGpu_AmdVegaAudioOff: `$audioPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e977-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $audioPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|High Definition Audio' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'EnableAudioPowerManagement' -Value 0 -Type DWord -EA SilentlyContinue }; $svc = Get-Service -Name 'AtiHDAudioService' -EA SilentlyContinue; If ($svc) { Stop-Service $svc -Force -EA SilentlyContinue; Set-Service $svc.Name -StartupType Disabled -EA SilentlyContinue }; Write-Host "[iGPU] AMD HDMI/DP audio co-processor power-gated — the Vega 8 die includes an audio block that consumes power budget even when unused, disabling it gives more TDP headroom to GPU shaders" -ForegroundColor Green`,
 
   // ── LAPTOP OPTIMIZER ────────────────────────────────────────────────────────
   Lap_UltimatePerformance: `$guid = (powercfg -list | Select-String 'Ultimate').ToString(); if (-not $guid) { powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null }; $scheme = (powercfg -list | Select-String 'Ultimate' | ForEach-Object { ($_ -split '\\s+')[3] }) | Select-Object -First 1; if ($scheme) { powercfg -setactive $scheme }; Write-Host "[Laptop] Ultimate Performance power plan activated — all power-saving states disabled on AC" -ForegroundColor Green`,
@@ -1168,6 +1171,8 @@ Start-Sleep 2
   });
 
   // Pro code verify — checks DB first, then legacy env var codes
+  // Returns a server-side session token that the client stores instead of just "true"
+  // This blocks the exploit of manually setting localStorage to bypass the paywall
   app.post('/api/pro/verify', async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
@@ -1175,12 +1180,13 @@ Start-Sleep 2
 
     // Try DB single-use code (marks usedAt on first use)
     const redeemed = await storage.redeemCode(normalizedCode);
-    if (redeemed) return res.json({ valid: true });
+    if (redeemed) {
+      const sessionToken = await storage.createProSession(normalizedCode);
+      return res.json({ valid: true, sessionToken });
+    }
 
     // Backward-compat + safety net: code may have been pre-burned by the old
     // email send flow (usedAt set when admin clicked Send Code, not by customer).
-    // Also covers edge cases where customer enters a valid email-sent code twice.
-    // Grant access if this code is legitimately linked to an accepted email request.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
     if (matchingCode) {
@@ -1190,15 +1196,28 @@ Start-Sleep 2
         (r.status === "sent" || r.status === "auto-sent")
       );
       if (linkedReq) {
-        // Payment was confirmed by admin — customer is entitled to Pro access
-        return res.json({ valid: true });
+        const sessionToken = await storage.createProSession(normalizedCode);
+        return res.json({ valid: true, sessionToken });
       }
     }
 
     // Fallback: legacy env var codes (unlimited use, for backward compat)
     const legacyCodes = (process.env.PRO_CODES || '').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-    const validLegacy = legacyCodes.includes(normalizedCode);
-    res.json({ valid: validLegacy });
+    if (legacyCodes.includes(normalizedCode)) {
+      const sessionToken = await storage.createProSession(normalizedCode);
+      return res.json({ valid: true, sessionToken });
+    }
+
+    res.json({ valid: false });
+  });
+
+  // Pro status check — client calls this on load to verify their stored session token
+  // If someone manually set localStorage to "true", this will return false (no session in DB)
+  app.post('/api/pro/status', async (req, res) => {
+    const { sessionToken } = req.body || {};
+    if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
+    const valid = await storage.verifyProSession(sessionToken);
+    res.json({ valid });
   });
 
   // Friend token — single-use URL unlock
@@ -1206,7 +1225,11 @@ Start-Sleep 2
     const { token } = req.body || {};
     if (!token) return res.json({ valid: false });
     const redeemed = await storage.redeemFriendToken(String(token));
-    res.json({ valid: redeemed });
+    if (redeemed) {
+      const sessionToken = await storage.createProSession(`friend:${String(token)}`);
+      return res.json({ valid: true, sessionToken });
+    }
+    res.json({ valid: false });
   });
 
   // Admin — list all codes

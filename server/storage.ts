@@ -1,6 +1,7 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession } from "@shared/schema";
 import { eq, isNotNull, gte, sql, desc } from "drizzle-orm";
+import { randomBytes } from "crypto";
 
 export interface IStorage {
   getPresets(): Promise<Preset[]>;
@@ -34,6 +35,10 @@ export interface IStorage {
   getAnnouncements(): Promise<Announcement[]>;
   createAnnouncement(data: InsertAnnouncement): Promise<Announcement>;
   deleteAnnouncement(id: number): Promise<void>;
+  // Pro sessions (server-side validation — blocks localStorage spoofing exploit)
+  createProSession(codeRef: string): Promise<string>; // returns session token
+  verifyProSession(token: string): Promise<boolean>;
+  touchProSession(token: string): Promise<void>;
   // Script download tracking
   recordScriptDownload(tweakIds: string[]): Promise<void>;
   getDownloadStats(): Promise<{
@@ -42,6 +47,7 @@ export interface IStorage {
     avgTweaksPerDownload: number;
     last7Days: { date: string; count: number }[];
     topTweaks: { tweakId: string; count: number }[];
+    recentDownloads: { id: number; tweakCount: number; tweakIds: string[]; downloadedAt: string }[];
   }>;
 }
 
@@ -210,6 +216,7 @@ export class DatabaseStorage implements IStorage {
     avgTweaksPerDownload: number;
     last7Days: { date: string; count: number }[];
     topTweaks: { tweakId: string; count: number }[];
+    recentDownloads: { id: number; tweakCount: number; tweakIds: string[]; downloadedAt: string }[];
   }> {
     const [totalsRow] = await db
       .select({
@@ -252,7 +259,39 @@ export class DatabaseStorage implements IStorage {
       count: r.cnt,
     }));
 
-    return { totalDownloads, totalTweaksDeployed, avgTweaksPerDownload, last7Days, topTweaks };
+    // Recent downloads — last 30
+    const recentRows = await db
+      .select()
+      .from(scriptDownloads)
+      .orderBy(sql`downloaded_at DESC`)
+      .limit(30);
+    const recentDownloads = recentRows.map(r => ({
+      id: r.id,
+      tweakCount: r.tweakCount,
+      tweakIds: r.tweakIds ?? [],
+      downloadedAt: r.downloadedAt ? r.downloadedAt.toISOString() : new Date().toISOString(),
+    }));
+
+    return { totalDownloads, totalTweaksDeployed, avgTweaksPerDownload, last7Days, topTweaks, recentDownloads };
+  }
+
+  async createProSession(codeRef: string): Promise<string> {
+    const token = randomBytes(32).toString("hex"); // 64 char hex — impossible to guess
+    await db.insert(proSessions).values({ sessionToken: token, codeRef, lastCheckedAt: new Date() });
+    return token;
+  }
+
+  async verifyProSession(token: string): Promise<boolean> {
+    if (!token || token.length < 16) return false;
+    const rows = await db.select().from(proSessions).where(eq(proSessions.sessionToken, token));
+    if (!rows.length) return false;
+    // Update lastCheckedAt
+    await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
+    return true;
+  }
+
+  async touchProSession(token: string): Promise<void> {
+    await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
   }
 }
 

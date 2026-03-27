@@ -137,6 +137,7 @@ export default function Admin() {
     avgTweaksPerDownload: number;
     last7Days: { date: string; count: number }[];
     topTweaks: { tweakId: string; count: number }[];
+    recentDownloads: { id: number; tweakCount: number; tweakIds: string[]; downloadedAt: string }[];
   }>({
     queryKey: ["/api/admin/download-stats", key],
     queryFn: () => fetch("/api/admin/download-stats", { headers }).then(r => {
@@ -1448,6 +1449,48 @@ export default function Admin() {
                       <p className="text-xs text-zinc-600">Top tweaks will appear here after the first script is downloaded.</p>
                     </div>
                   )}
+
+                  {/* Recent script generations */}
+                  <div className="rounded-xl border border-white/5 bg-zinc-900/40 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
+                      <Activity className="w-3.5 h-3.5 text-emerald-500" />
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Recent Script Generations</h3>
+                      <span className="ml-auto text-[9px] text-zinc-700">last {Math.min(ds.recentDownloads?.length ?? 0, 30)} events</span>
+                    </div>
+                    {!ds.recentDownloads || ds.recentDownloads.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <Activity className="w-5 h-5 text-zinc-700 mx-auto mb-2" />
+                        <p className="text-[10px] text-zinc-700">No script generations yet. Data appears here when users download their optimization script.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-white/5">
+                        {ds.recentDownloads.map((dl) => {
+                          const when = timeAgo(dl.downloadedAt);
+                          const topIds = dl.tweakIds.slice(0, 4);
+                          const extra = dl.tweakIds.length - topIds.length;
+                          const heat = dl.tweakCount >= 50 ? "text-red-400" : dl.tweakCount >= 25 ? "text-amber-400" : "text-emerald-400";
+                          return (
+                            <div key={dl.id} data-testid={`row-download-${dl.id}`} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/2 transition-colors">
+                              <span className="text-[9px] text-zinc-700 font-mono w-5 shrink-0 pt-0.5 text-right">#{dl.id}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {topIds.map(tid => (
+                                    <span key={tid} className="text-[9px] font-mono bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded truncate max-w-[140px]" title={tid}>{tid}</span>
+                                  ))}
+                                  {extra > 0 && <span className="text-[9px] text-zinc-600">+{extra} more</span>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-[11px] font-black font-mono ${heat}`}>{dl.tweakCount}</span>
+                                <span className="text-[9px] text-zinc-700">tweaks</span>
+                                <span className="text-[9px] text-zinc-600 pl-1">{when}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })()}

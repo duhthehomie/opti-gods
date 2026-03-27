@@ -3,7 +3,7 @@ import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldC
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useProStatus, setProStatus } from "@/lib/pro-status";
+import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -70,7 +70,11 @@ function ProPaymentDialog({
       });
       const data = await res.json();
       if (data.valid) {
-        setProStatus(true);
+        if (data.sessionToken) {
+          setProSession(data.sessionToken);
+        } else {
+          setProStatus(true);
+        }
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
@@ -246,16 +250,24 @@ function ProPaymentDialog({
                     )}
 
                     {GUMROAD_LINK && (
-                      <a
-                        data-testid="button-pay-gumroad"
-                        href={GUMROAD_LINK}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        Pay with Card
-                      </a>
+                      <div className="space-y-2">
+                        <a
+                          data-testid="button-pay-gumroad"
+                          href={GUMROAD_LINK}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          Pay with Card (Gumroad)
+                        </a>
+                        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/20">
+                          <span className="text-amber-400 text-[10px] shrink-0 mt-0.5">⚠</span>
+                          <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                            <span className="font-bold text-amber-300">Visa gift cards & prepaid cards</span> are often blocked by Gumroad's payment processor. If you see "card does not support this type of purchase" — use <span className="font-bold text-white">PayPal</span> or <span className="font-bold text-white">CashApp</span> above instead. Regular debit/credit cards work fine.
+                          </p>
+                        </div>
+                      </div>
                     )}
 
                     {!CASHAPP_TAG && !PAYPAL_LINK && !GUMROAD_LINK && LEGACY_LINK && (

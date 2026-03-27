@@ -227,29 +227,50 @@ export default function Nvidia() {
             </motion.div>
           ) : hw.isAMD ? (
             <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative rounded-xl overflow-hidden border-2 border-red-500/50 bg-gradient-to-r from-red-950/40 via-zinc-950 to-zinc-900/40"
             >
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <p className="text-xs text-zinc-300">
-                <span className="text-amber-400 font-semibold">AMD GPU detected</span>
-                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
-                . Most tweaks here target NVIDIA drivers — only <span className="text-white font-medium">HAGS</span> and <span className="text-white font-medium">MSI Mode</span> apply to you. Use the <span className="text-white font-medium">AMD Optimizer</span> tab instead.
-              </p>
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-red-400 to-red-600" />
+              <div className="p-5 flex gap-4 items-start">
+                <div className="shrink-0 w-14 h-14 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                  <AlertTriangle className="w-7 h-7 text-red-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-black text-red-400 mb-1">WRONG TAB — AMD GPU Detected</p>
+                  <p className="text-sm text-zinc-300 leading-relaxed mb-3">
+                    <span className="text-white font-semibold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is AMD. Most tweaks here write to NVIDIA driver registry keys — <span className="text-red-400 font-semibold">they will have zero effect on your system</span>. HAGS and MSI Mode are the only ones that may apply.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <a href="/amd" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-all">
+                      → Go to AMD Optimizer
+                    </a>
+                    <span className="inline-flex items-center px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">This page = NVIDIA only</span>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           ) : hw.isIntel ? (
             <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative rounded-xl overflow-hidden border-2 border-zinc-600/50 bg-gradient-to-r from-zinc-900/60 via-zinc-950 to-zinc-900/40"
             >
-              <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0" />
-              <p className="text-xs text-zinc-300">
-                <span className="text-zinc-300 font-semibold">Intel GPU detected</span>
-                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
-                . NVIDIA-specific tweaks will not apply. Only <span className="text-white font-medium">HAGS</span> (requires Win10 2004+ / Win11) may be relevant. Proceed with caution.
-              </p>
+              <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-600" />
+              <div className="p-5 flex gap-4 items-start">
+                <div className="shrink-0 w-14 h-14 rounded-xl bg-zinc-700/30 border border-zinc-600/30 flex items-center justify-center">
+                  <ShieldAlert className="w-7 h-7 text-zinc-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-black text-zinc-300 mb-1">WRONG TAB — Intel GPU Detected</p>
+                  <p className="text-sm text-zinc-400 leading-relaxed mb-3">
+                    <span className="text-white font-semibold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is Intel integrated. NVIDIA driver tweaks will not apply. Use the <span className="text-white font-semibold">Integrated GPU</span> tab instead — it has Intel-specific optimizations.
+                  </p>
+                  <a href="/integrated-gpu" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-sm transition-all">
+                    → Go to Integrated GPU Tab
+                  </a>
+                </div>
+              </div>
             </motion.div>
           ) : null
         )}

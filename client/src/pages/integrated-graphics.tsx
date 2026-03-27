@@ -14,7 +14,8 @@ import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 const ALL_IGPU_IDS = [
   "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
-  "IGpu_AmdAntiLag","IGpu_SharedMemoryHint","IGpu_DisableMPO",
+  "IGpu_AmdAntiLag","IGpu_SharedMemoryHint","IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
+  "IGpu_DisableMPO","IGpu_AmdTdrLevel",
   "IGpu_DisableTransparency","IGpu_DisableAnimations","IGpu_DisableHDR","IGpu_DisableNightLight",
   "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt",
   "IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState","IGpu_DisableCoreParking",
@@ -26,7 +27,9 @@ const ALL_IGPU_IDS = [
 
 const AMD_RECOMMENDED = [
   "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
-  "IGpu_AmdAntiLag","IGpu_DisableMPO","IGpu_DisableTransparency","IGpu_DisableAnimations",
+  "IGpu_AmdAntiLag","IGpu_DisableMPO","IGpu_AmdTdrLevel",
+  "IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
+  "IGpu_DisableTransparency","IGpu_DisableAnimations",
   "IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState","IGpu_DisableCoreParking",
   "IGpu_GameModeOn","IGpu_DisableHAGSForIGpu","IGpu_NetworkThrottling",
   "IGpu_DisableSysMain","IGpu_DisableXboxGameBar","IGpu_SetTimerResolution",
@@ -100,6 +103,23 @@ const AMD_DRIVER_TWEAKS: TweakDef[] = [
     impact: "MED",
     amdOnly: true,
   },
+  {
+    id: "IGpu_AmdDisableHDCP",
+    title: "Disable HDCP on Vega 8 Display Output",
+    desc: "HDCP (High-bandwidth Digital Content Protection) runs a continuous DRM handshake on your display output. On Vega 8 this is a real per-frame GPU overhead — every frame push through the display pipeline triggers an HDCP check. Disabling DisableHDCP=1 + HdcpSupport=0 in the AMD driver key removes this overhead entirely. Only affects content protection — no impact on gaming or app performance.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    amdOnly: true,
+  },
+  {
+    id: "IGpu_AmdVegaAudioOff",
+    title: "Power-Gate AMD Vega HDMI Audio Co-Processor",
+    desc: "The Ryzen 2200G die includes a dedicated HDMI/DP audio block that runs as a separate PCI device. Even when you're not using HDMI audio, this co-processor sits powered up and competes for the same power envelope as the Vega 8 GPU shaders. Disabling its power management + stopping the AtiHDAudioService gives the GPU's shaders more of the APU's shared TDP budget — noticeably improves sustained Vega 8 clocks.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    amdOnly: true,
+    warning: "If you use HDMI/DisplayPort audio output, re-enable this after gaming. Affects HDMI/DP audio only — your motherboard's 3.5mm audio jack is unaffected.",
+  },
 ];
 
 const INTEL_DRIVER_TWEAKS: TweakDef[] = [
@@ -128,6 +148,13 @@ const SYSTEM_TWEAKS: TweakDef[] = [
     desc: "MPO is a Windows DWM feature that causes screen flickering, black screens, and tearing on many AMD integrated and discrete GPUs. Writing OverlayTestMode=5 to HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm disables MPO — this is a well-known fix that significantly improves display stability on Vega 8 systems.",
     badge: "CRITICAL",
     impact: "HIGH",
+  },
+  {
+    id: "IGpu_AmdTdrLevel",
+    title: "Extend GPU TDR Timeout (Vega 8 Crash Prevention)",
+    desc: "TDR (Timeout Detection and Recovery) is Windows' watchdog that kills your GPU driver if it stops responding for more than 2 seconds. Vega 8 can legitimately pause for longer than 2s during shader compilation or heavy compute in games like Fortnite — triggering a false 'Video Scheduler Internal Error' BSOD. Extending TdrDelay to 60s and TdrDdiDelay to 60s prevents these crashes without disabling crash detection entirely.",
+    badge: "RECOMMENDED",
+    impact: "MED",
   },
   {
     id: "IGpu_UltimatePerformancePlan",
