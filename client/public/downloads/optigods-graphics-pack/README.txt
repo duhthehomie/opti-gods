@@ -1,53 +1,47 @@
 ============================================================
-  OPTI GODS - SMOOTH ReShade Preset v1.0
+  OPTI GODS - SMOOTH GRAPHICS PACK v1.0
   For FiveM | Optimized for light-game players
   Discord: discord.gg/C8WrQknN9k
-  Site: [YOUR SITE URL]
 ============================================================
 
 WHAT'S IN THIS PACK
 --------------------
-- OptiGods_Smooth.ini  → ReShade preset (sharpness + clean colors)
-- README.txt           → This file
+  optigods-smooth/
+    fxmanifest.lua          FiveM resource manifest
+    timecycle_mods_1.xml    Graphics/sky/lighting config
 
-WHAT IT DOES
-------------
-Designed for players running low/light graphics settings in FiveM.
-No heavy effects. Sharper image, cleaner colors, smooth frame delivery.
-Tested to not hurt FPS — most players see equal or better performance.
-
-The preset name shows as "Opti Gods Smooth" in the ReShade overlay.
+  OptiGods_Smooth.ini       ReShade preset (optional, extra sharpness)
 
 ------------------------------------------------------------
-INSTALL - ReShade Preset
+INSTALL - FiveM Resource (MAIN - do this first)
+------------------------------------------------------------
+1. Copy the entire "optigods-smooth" FOLDER into your
+   FiveM server's resources folder:
+     server/resources/optigods-smooth/
+
+2. Add this line to your server.cfg:
+     ensure optigods-smooth
+
+3. Restart server — done.
+
+   NOTE: If you're on a public server that doesn't have
+   it installed, ask the server owner to add it.
+
+------------------------------------------------------------
+INSTALL - ReShade Preset (OPTIONAL - client side only)
 ------------------------------------------------------------
 1. Download ReShade FREE from https://reshade.me
-2. Run the installer, select FiveM.exe, choose DirectX 11
-3. During setup, check these effects:
-   - CAS.fx
-   - Vibrance.fx
-   - LiftGammaGain.fx
-   - Curves.fx
-   - SMAA.fx
+2. Install on FiveM.exe using DirectX 11
+3. During setup enable: CAS, Vibrance, LiftGammaGain,
+   Curves, SMAA
 4. Copy OptiGods_Smooth.ini into your FiveM root folder
-   (same folder as FiveM.exe)
-5. Launch FiveM
-6. Press the Home key in-game to open ReShade
-7. Click the preset dropdown → select OptiGods_Smooth
-8. Done — press Home to close the overlay
+5. Press Home in-game → select OptiGods_Smooth preset
 
 ------------------------------------------------------------
-UNINSTALL
+NEED MORE FPS?
 ------------------------------------------------------------
-Open ReShade overlay (Home key) → switch preset to None
-Or uninstall ReShade entirely from your FiveM folder.
-
-------------------------------------------------------------
-NEED MORE PERFORMANCE?
-------------------------------------------------------------
-Visit [YOUR SITE URL] for 329 PC optimization tweaks.
-Custom PowerShell scripts built for your exact hardware.
-Pro access available — ask in Discord for a code.
+Visit the Opti Gods dashboard for 329 PC tweaks +
+custom PowerShell scripts built for your hardware.
 
 Discord: discord.gg/C8WrQknN9k
 ============================================================

@@ -153,9 +153,9 @@ export default function Fivem() {
             <Package className="w-5 h-5 text-red-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white">Opti Gods Smooth ReShade Preset</p>
+            <p className="text-sm font-bold text-white">Opti Gods Smooth Graphics Pack</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Free ReShade preset — sharp, clean visuals with no FPS hit. Install ReShade on FiveM.exe and load the preset.
+              FiveM resource (timecycle) + ReShade preset — clean bright visuals, built for light-game players. Free.
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-medium text-red-400 shrink-0 group-hover:text-red-300 transition-colors">
