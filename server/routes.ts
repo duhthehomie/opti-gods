@@ -1020,10 +1020,11 @@ export async function registerRoutes(
   app.post('/api/script/download', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
+    const sessionToken: string | undefined = req.body?.sessionToken || undefined;
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
-    // Record download analytics (fire-and-forget)
-    storage.recordScriptDownload(enabledTweaks).catch(() => {});
+    // Record download analytics with session token for per-customer tracking
+    storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
     res.send(scriptContent);
@@ -1033,9 +1034,10 @@ export async function registerRoutes(
   app.post('/api/script/download-bat', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
+    const sessionToken: string | undefined = req.body?.sessionToken || undefined;
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
-    // Record download analytics (fire-and-forget)
-    storage.recordScriptDownload(enabledTweaks).catch(() => {});
+    // Record download analytics with session token for per-customer tracking
+    storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
     // BAT flow — race-condition-free, guaranteed window stays open:
     //   1. CMD opens, extracts embedded PS1 to %TEMP%\OptiGods-leaq.ps1
@@ -1461,6 +1463,17 @@ Start-Sleep 2
     if (!checkAdminKey(req, res)) return;
     try {
       const stats = await storage.getDownloadStats();
+      res.json(stats);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // Per-customer tweak deployment stats — joins script_downloads → pro_sessions → code
+  app.get('/api/admin/customer-deploy-stats', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const stats = await storage.getCustomerDeployStats();
       res.json(stats);
     } catch (err) {
       res.status(500).json({ error: String(err) });

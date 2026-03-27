@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { getStoredToken } from "@/lib/pro-status";
 
 interface ScriptDialogProps {
   open: boolean;
@@ -106,10 +107,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
   const handleDownloadBat = async () => {
     setDownloading(true);
     try {
+      const sessionToken = getStoredToken();
       const res = await fetch("/api/script/download-bat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks, nvidiaPreset }),
+        body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();
@@ -133,10 +135,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
   const handleDownloadPs1 = async () => {
     setDownloadingPs1(true);
     try {
+      const sessionToken = getStoredToken();
       const res = await fetch("/api/script/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks, nvidiaPreset }),
+        body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();
@@ -160,10 +163,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
   const handleCopyPs1 = async () => {
     setCopyingPs1(true);
     try {
+      const sessionToken = getStoredToken();
       const res = await fetch("/api/script/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks, nvidiaPreset }),
+        body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();

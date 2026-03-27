@@ -68,6 +68,7 @@ export const scriptDownloads = pgTable("script_downloads", {
   id: serial("id").primaryKey(),
   tweakCount: integer("tweak_count").notNull().default(0),
   tweakIds: text("tweak_ids").array().default([]),
+  sessionToken: varchar("session_token", { length: 64 }),
   downloadedAt: timestamp("downloaded_at").defaultNow(),
 });
 export type ScriptDownload = typeof scriptDownloads.$inferSelect;

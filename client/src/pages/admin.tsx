@@ -310,6 +310,21 @@ export default function Admin() {
     retry: false,
   });
 
+  type CustomerDeployStat = {
+    sessionToken: string;
+    codeRef: string | null;
+    totalTweaks: number;
+    downloadCount: number;
+    lastDownloadAt: string;
+  };
+  const customerDeployStatsQuery = useQuery<CustomerDeployStat[]>({
+    queryKey: ["/api/admin/customer-deploy-stats", key],
+    queryFn: () => fetch("/api/admin/customer-deploy-stats", { headers }).then(r => r.json()),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 5000,
+  });
+
   const sendEmailCode = useMutation({
     mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/send`, {
       method: "POST", headers,
@@ -1396,6 +1411,10 @@ export default function Admin() {
                       ? (codesQuery.data || []).find(c => c.id === req.sentCodeId)
                       : null;
                     const customerRedeemed = !!(sentCode?.usedAt);
+                    // Per-customer deploy stats — matched by code value
+                    const deployStat = sentCode?.code
+                      ? (customerDeployStatsQuery.data || []).find(s => s.codeRef === sentCode.code)
+                      : null;
                     const isSentStatus = req.status === "sent" || req.status === "auto-sent";
 
                     return (
@@ -1445,6 +1464,17 @@ export default function Admin() {
                                 <Clock className="w-2.5 h-2.5" /> Awaiting Redemption
                               </span>
                             )
+                          )}
+                          {/* Tweaks deployed — live updating every 5s */}
+                          {deployStat && (
+                            <span
+                              data-testid={`badge-tweaks-deployed-${req.id}`}
+                              className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 bg-red-500/10 border-red-500/20 shrink-0"
+                              title={`${deployStat.downloadCount} download${deployStat.downloadCount !== 1 ? 's' : ''} · last: ${deployStat.lastDownloadAt}`}
+                            >
+                              <Zap className="w-2.5 h-2.5" />
+                              {deployStat.totalTweaks} tweaks deployed
+                            </span>
                           )}
                         </div>
                         <p className="text-[10px] text-zinc-500">

@@ -42,7 +42,14 @@ export interface IStorage {
   verifyProSession(token: string): Promise<boolean>;
   touchProSession(token: string): Promise<void>;
   // Script download tracking
-  recordScriptDownload(tweakIds: string[]): Promise<void>;
+  recordScriptDownload(tweakIds: string[], sessionToken?: string): Promise<void>;
+  getCustomerDeployStats(): Promise<{
+    sessionToken: string;
+    codeRef: string | null;
+    totalTweaks: number;
+    downloadCount: number;
+    lastDownloadAt: string;
+  }[]>;
   getDownloadStats(): Promise<{
     totalDownloads: number;
     totalTweaksDeployed: number;
@@ -218,11 +225,41 @@ export class DatabaseStorage implements IStorage {
     await db.delete(announcements).where(eq(announcements.id, id));
   }
 
-  async recordScriptDownload(tweakIds: string[]): Promise<void> {
+  async recordScriptDownload(tweakIds: string[], sessionToken?: string): Promise<void> {
     await db.insert(scriptDownloads).values({
       tweakCount: tweakIds.length,
       tweakIds,
+      sessionToken: sessionToken || null,
     });
+  }
+
+  async getCustomerDeployStats(): Promise<{
+    sessionToken: string;
+    codeRef: string | null;
+    totalTweaks: number;
+    downloadCount: number;
+    lastDownloadAt: string;
+  }[]> {
+    const rows = await db.execute(sql`
+      SELECT
+        sd.session_token,
+        ps.code_ref,
+        COALESCE(SUM(sd.tweak_count), 0)::int AS total_tweaks,
+        COUNT(sd.id)::int AS download_count,
+        MAX(sd.downloaded_at)::text AS last_download_at
+      FROM script_downloads sd
+      LEFT JOIN pro_sessions ps ON ps.session_token = sd.session_token
+      WHERE sd.session_token IS NOT NULL
+      GROUP BY sd.session_token, ps.code_ref
+      ORDER BY last_download_at DESC
+    `);
+    return (rows.rows as any[]).map(r => ({
+      sessionToken: r.session_token,
+      codeRef: r.code_ref ?? null,
+      totalTweaks: r.total_tweaks,
+      downloadCount: r.download_count,
+      lastDownloadAt: r.last_download_at ?? "",
+    }));
   }
 
   async getDownloadStats(): Promise<{
