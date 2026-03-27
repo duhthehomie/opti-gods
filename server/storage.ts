@@ -16,12 +16,14 @@ export interface IStorage {
   createCode(code: string, note?: string): Promise<ProAccessCode>;
   redeemCode(code: string): Promise<boolean>;
   deleteCode(id: number): Promise<void>;
+  updateCodeNote(id: number, note: string | null): Promise<void>;
   deleteUsedCodes(): Promise<number>;
   // Friend tokens
   getAllFriendTokens(): Promise<ProFriendToken[]>;
   createFriendToken(token: string, note?: string): Promise<ProFriendToken>;
   redeemFriendToken(token: string): Promise<boolean>;
   deleteFriendToken(id: number): Promise<void>;
+  updateFriendTokenNote(id: number, note: string | null): Promise<void>;
   deleteUsedFriendTokens(): Promise<number>;
   // Visit tracking
   recordVisit(referrer?: string): Promise<void>;
@@ -114,6 +116,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(proAccessCodes).where(eq(proAccessCodes.id, id));
   }
 
+  async updateCodeNote(id: number, note: string | null): Promise<void> {
+    await db.update(proAccessCodes).set({ note }).where(eq(proAccessCodes.id, id));
+  }
+
   async deleteUsedCodes(): Promise<number> {
     const rows = await db.delete(proAccessCodes).where(isNotNull(proAccessCodes.usedAt)).returning();
     return rows.length;
@@ -142,6 +148,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFriendToken(id: number): Promise<void> {
     await db.delete(proFriendTokens).where(eq(proFriendTokens.id, id));
+  }
+
+  async updateFriendTokenNote(id: number, note: string | null): Promise<void> {
+    await db.update(proFriendTokens).set({ note }).where(eq(proFriendTokens.id, id));
   }
 
   async deleteUsedFriendTokens(): Promise<number> {

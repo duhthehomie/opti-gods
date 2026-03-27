@@ -7,7 +7,7 @@ import {
   LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
-  PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag,
+  PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -112,6 +112,9 @@ export default function Admin() {
   const [filterFriend, setFilterFriend] = useState<"all" | "available" | "used">("all");
   const [confirmPurgeCodes, setConfirmPurgeCodes] = useState(false);
   const [confirmPurgeFriends, setConfirmPurgeFriends] = useState(false);
+  const [editingCodeId, setEditingCodeId] = useState<number | null>(null);
+  const [editingFriendId, setEditingFriendId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const headers = { "Content-Type": "application/json", "x-admin-key": key };
 
@@ -186,6 +189,26 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+    },
+  });
+
+  const renameCode = useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
+      fetch(`/api/admin/codes/${id}`, { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      setEditingCodeId(null);
+      setEditValue("");
+    },
+  });
+
+  const renameFriend = useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string | null }) =>
+      fetch(`/api/admin/friends/${id}`, { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
+      setEditingFriendId(null);
+      setEditValue("");
     },
   });
 
@@ -837,7 +860,55 @@ export default function Admin() {
                     </button>
                   )}
                   <div className="flex-1 min-w-0">
-                    {c.note && <p className="text-xs text-zinc-400 truncate">{c.note}</p>}
+                    {editingCodeId === c.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          data-testid={`input-rename-code-${c.id}`}
+                          autoFocus
+                          type="text"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") renameCode.mutate({ id: c.id, note: editValue.trim() || null });
+                            if (e.key === "Escape") { setEditingCodeId(null); setEditValue(""); }
+                          }}
+                          placeholder="Customer name..."
+                          className="flex-1 bg-zinc-800 border border-red-500/30 focus:border-red-500/60 rounded px-2 py-0.5 text-xs text-white placeholder-zinc-600 focus:outline-none"
+                        />
+                        <button
+                          data-testid={`button-confirm-rename-code-${c.id}`}
+                          onClick={() => renameCode.mutate({ id: c.id, note: editValue.trim() || null })}
+                          disabled={renameCode.isPending}
+                          className="p-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                          title="Save name"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          data-testid={`button-cancel-rename-code-${c.id}`}
+                          onClick={() => { setEditingCodeId(null); setEditValue(""); }}
+                          className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"
+                          title="Cancel"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 group/note">
+                        {c.note
+                          ? <p className="text-xs text-zinc-300 truncate">{c.note}</p>
+                          : <p className="text-xs text-zinc-600 italic">No name</p>
+                        }
+                        <button
+                          data-testid={`button-rename-code-${c.id}`}
+                          onClick={() => { setEditingCodeId(c.id); setEditValue(c.note || ""); }}
+                          className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
+                          title="Rename customer"
+                        >
+                          <Pencil className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    )}
                     <p className="text-[10px] text-zinc-600">Created {fmt(c.createdAt)}</p>
                   </div>
                   <span className={cn(
@@ -972,7 +1043,55 @@ export default function Admin() {
                   >
                     <div className="shrink-0 w-5 text-[10px] text-zinc-700 text-right">{i + 1}</div>
                     <div className="flex-1 min-w-0 space-y-0.5">
-                      {t.note && <p className="text-xs font-medium text-zinc-300 truncate">{t.note}</p>}
+                      {editingFriendId === t.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            data-testid={`input-rename-friend-${t.id}`}
+                            autoFocus
+                            type="text"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") renameFriend.mutate({ id: t.id, note: editValue.trim() || null });
+                              if (e.key === "Escape") { setEditingFriendId(null); setEditValue(""); }
+                            }}
+                            placeholder="Person's name..."
+                            className="flex-1 bg-zinc-800 border border-red-500/30 focus:border-red-500/60 rounded px-2 py-0.5 text-xs text-white placeholder-zinc-600 focus:outline-none"
+                          />
+                          <button
+                            data-testid={`button-confirm-rename-friend-${t.id}`}
+                            onClick={() => renameFriend.mutate({ id: t.id, note: editValue.trim() || null })}
+                            disabled={renameFriend.isPending}
+                            className="p-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                            title="Save name"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button
+                            data-testid={`button-cancel-rename-friend-${t.id}`}
+                            onClick={() => { setEditingFriendId(null); setEditValue(""); }}
+                            className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"
+                            title="Cancel"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group/note">
+                          {t.note
+                            ? <p className="text-xs font-medium text-zinc-300 truncate">{t.note}</p>
+                            : <p className="text-xs text-zinc-600 italic">No name</p>
+                          }
+                          <button
+                            data-testid={`button-rename-friend-${t.id}`}
+                            onClick={() => { setEditingFriendId(t.id); setEditValue(t.note || ""); }}
+                            className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
+                            title="Rename person"
+                          >
+                            <Pencil className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1">
                         <span className="font-mono text-[10px] text-zinc-500 truncate max-w-[300px]">{link}</span>
                         <CopyButton text={link} />

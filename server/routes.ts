@@ -1255,6 +1255,14 @@ Start-Sleep 2
     res.json({ ok: true });
   });
 
+  // Admin — rename a code (update its note/label)
+  app.patch('/api/admin/codes/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const note = req.body?.note?.trim() || null;
+    await storage.updateCodeNote(Number(req.params.id), note);
+    res.json({ ok: true });
+  });
+
   // Admin — list all friend tokens
   app.get('/api/admin/friends', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
@@ -1275,6 +1283,14 @@ Start-Sleep 2
   app.delete('/api/admin/friends/:id', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     await storage.deleteFriendToken(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Admin — rename a friend token (update its note/label)
+  app.patch('/api/admin/friends/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const note = req.body?.note?.trim() || null;
+    await storage.updateFriendTokenNote(Number(req.params.id), note);
     res.json({ ok: true });
   });
 
