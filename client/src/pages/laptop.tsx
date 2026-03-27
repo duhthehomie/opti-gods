@@ -397,8 +397,8 @@ function Section({
             badge={t.badge}
             impact={t.impact}
             warning={t.warning}
-            enabled={!!store[t.id as keyof typeof store]}
-            onToggle={() => toggleTweak(t.id as any)}
+            checked={!!store[t.id as keyof typeof store]}
+            onCheckedChange={() => toggleTweak(t.id as any)}
           />
         ))}
       </div>
