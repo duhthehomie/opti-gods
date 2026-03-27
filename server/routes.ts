@@ -1236,17 +1236,25 @@ Start-Sleep 2
       return res.json({ valid: true, sessionToken });
     }
 
-    // Backward-compat + safety net: code may have been pre-burned by the old
-    // email send flow (usedAt set when admin clicked Send Code, not by customer).
+    // Code already used or not found via single-use path.
+    // Handle two legitimate re-entry scenarios:
+    //   A) Email-sent code: code was pre-burned when admin sent it
+    //   B) Already-redeemed code: customer on new device / cleared browser re-entering their code
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
     if (matchingCode) {
+      // Scenario A — email-sent code pre-burned before customer redeemed
       const emailReqs = await storage.getEmailRequests();
       const linkedReq = emailReqs.find(r =>
         r.sentCodeId === matchingCode.id &&
         (r.status === "sent" || r.status === "auto-sent")
       );
       if (linkedReq) {
+        const sessionToken = await storage.createProSession(normalizedCode);
+        return res.json({ valid: true, sessionToken });
+      }
+      // Scenario B — already redeemed legitimately; allow re-entry (multi-device support)
+      if (matchingCode.usedAt) {
         const sessionToken = await storage.createProSession(normalizedCode);
         return res.json({ valid: true, sessionToken });
       }

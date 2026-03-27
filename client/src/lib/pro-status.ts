@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
 
-const TOKEN_KEY = "optigods_session_v2"; // stores server-issued hex token, NOT "true"
+const TOKEN_KEY = "optigods_session_v2";
 const PRO_EVENT = "optigods_pro_changed";
 
-// In-memory verified state — cleared on page refresh and re-verified from server
-// This means manipulating localStorage does nothing without a valid server session
 let _verifiedPro: boolean | null = null;
 let _verifyPromise: Promise<boolean> | null = null;
 
@@ -16,6 +14,7 @@ export function getStoredToken(): string | null {
 export function setProSession(sessionToken: string): void {
   localStorage.setItem(TOKEN_KEY, sessionToken);
   _verifiedPro = true;
+  _verifyPromise = null;
   window.dispatchEvent(new Event(PRO_EVENT));
 }
 
@@ -26,8 +25,6 @@ export function clearProStatus(): void {
   window.dispatchEvent(new Event(PRO_EVENT));
 }
 
-// Verify the stored session token with the server
-// Returns true only if the server confirms the session is real
 async function verifyWithServer(): Promise<boolean> {
   const token = getStoredToken();
   if (!token) return false;
@@ -37,24 +34,24 @@ async function verifyWithServer(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionToken: token }),
     });
+    // If rate-limited or server error — don't clear a legitimate session
+    if (!res.ok) return !!token;
     const data = await res.json();
-    _verifiedPro = !!data.valid;
-    if (!data.valid) {
-      // Token is invalid (was fabricated or expired) — clear it
+    const valid = !!data.valid;
+    _verifiedPro = valid;
+    if (!valid) {
       localStorage.removeItem(TOKEN_KEY);
     }
-    return _verifiedPro;
+    return valid;
   } catch {
-    // Network error — assume pro if token exists (graceful degradation)
+    // Network error — trust stored token (graceful degradation)
     return !!token;
   }
 }
 
 export function getProStatus(): boolean {
   if (typeof window === "undefined") return false;
-  // Use in-memory verified state if available
   if (_verifiedPro !== null) return _verifiedPro;
-  // Optimistically trust stored token (server verify happens in background)
   return !!getStoredToken();
 }
 
@@ -66,11 +63,12 @@ export function useProStatus(): boolean {
     window.addEventListener(PRO_EVENT, update);
     window.addEventListener("storage", update);
 
-    // Verify with server in background on mount
+    // Fire server verify once per session (skipped if already in progress/done)
     if (_verifyPromise === null && getStoredToken()) {
       _verifyPromise = verifyWithServer().then(valid => {
         _verifiedPro = valid;
-        setIsPro(valid);
+        // Dispatch event so EVERY mounted useProStatus instance updates at once
+        window.dispatchEvent(new Event(PRO_EVENT));
         return valid;
       });
     }
@@ -84,8 +82,6 @@ export function useProStatus(): boolean {
   return isPro;
 }
 
-// Legacy compat — keep setProStatus so callers that haven't updated still compile
-// But now it requires a token, not just a boolean
 export function setProStatus(value: boolean, sessionToken?: string): void {
   if (value && sessionToken) {
     setProSession(sessionToken);
