@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment } from "@shared/schema";
 import { eq, isNotNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -51,6 +51,11 @@ export interface IStorage {
     topTweaks: { tweakId: string; count: number }[];
     recentDownloads: { id: number; tweakCount: number; tweakIds: string[]; downloadedAt: string }[];
   }>;
+  // Manual payment tracking (CashApp / PayPal)
+  createManualPayment(amount: number, method: string, note: string | null): Promise<ManualPayment>;
+  getManualPayments(): Promise<ManualPayment[]>;
+  deleteManualPayment(id: number): Promise<void>;
+  getManualPaymentTotal(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -302,6 +307,24 @@ export class DatabaseStorage implements IStorage {
 
   async touchProSession(token: string): Promise<void> {
     await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
+  }
+
+  async createManualPayment(amount: number, method: string, note: string | null): Promise<ManualPayment> {
+    const [row] = await db.insert(manualPayments).values({ amount, method, note }).returning();
+    return row;
+  }
+
+  async getManualPayments(): Promise<ManualPayment[]> {
+    return await db.select().from(manualPayments).orderBy(sql`paid_at DESC`);
+  }
+
+  async deleteManualPayment(id: number): Promise<void> {
+    await db.delete(manualPayments).where(eq(manualPayments.id, id));
+  }
+
+  async getManualPaymentTotal(): Promise<number> {
+    const [row] = await db.select({ total: sql<number>`coalesce(sum(amount),0)::int` }).from(manualPayments);
+    return row?.total ?? 0;
   }
 }
 

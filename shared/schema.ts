@@ -72,6 +72,18 @@ export const scriptDownloads = pgTable("script_downloads", {
 });
 export type ScriptDownload = typeof scriptDownloads.$inferSelect;
 
+// Manual payment log — for CashApp / PayPal payments logged by admin
+export const manualPayments = pgTable("manual_payments", {
+  id: serial("id").primaryKey(),
+  amount: integer("amount").notNull(), // dollars
+  method: text("method").notNull(),    // "cashapp" | "paypal"
+  note: text("note"),                  // customer name / $cashtag / PayPal ref
+  paidAt: timestamp("paid_at").defaultNow(),
+});
+export type ManualPayment = typeof manualPayments.$inferSelect;
+export const insertManualPaymentSchema = createInsertSchema(manualPayments).omit({ id: true, paidAt: true });
+export type InsertManualPayment = z.infer<typeof insertManualPaymentSchema>;
+
 // Pro session tokens — server-side validation prevents localStorage spoofing exploit
 export const proSessions = pgTable("pro_sessions", {
   id: serial("id").primaryKey(),

@@ -1335,11 +1335,12 @@ Start-Sleep 2
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [codes, friends, visitStats, emailReqs] = await Promise.all([
+    const [codes, friends, visitStats, emailReqs, manualTotal] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
       storage.getVisitStats(),
       storage.getEmailRequests(),
+      storage.getManualPaymentTotal(),
     ]);
     // Codes reserved for email requests (sentCodeId set on a sent/auto-sent request)
     const reservedCodeIds = new Set(
@@ -1353,7 +1354,8 @@ Start-Sleep 2
     const emailRevenue = emailReqs.filter(r => r.status === "sent" || r.status === "auto-sent").length;
     // Directly redeemed codes (customer entered code manually, not via email path)
     const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length;
-    const revenueEstimate = (emailRevenue + directRevenue) * 25;
+    const codeRevenue = (emailRevenue + directRevenue) * 25;
+    const revenueEstimate = codeRevenue + manualTotal;
     const usedCodes = codes.filter(c => c.usedAt).length;
     const usedFriends = friends.filter(f => f.usedAt).length;
     const availableFriends = friends.filter(f => !f.usedAt).length;
@@ -1365,10 +1367,35 @@ Start-Sleep 2
       usedFriends,
       availableFriends,
       revenueEstimate,
+      codeRevenue,
+      manualRevenue: manualTotal,
       emailRevenue,
       directRevenue,
       visits: visitStats,
     });
+  });
+
+  // Admin — list manual payments
+  app.get('/api/admin/manual-payments', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const payments = await storage.getManualPayments();
+    res.json(payments);
+  });
+
+  // Admin — log a manual payment (CashApp / PayPal)
+  app.post('/api/admin/manual-payments', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { amount, method, note } = req.body as { amount: number; method: string; note?: string };
+    if (!amount || amount < 1 || !method) return res.status(400).json({ error: "amount and method required" });
+    const row = await storage.createManualPayment(Number(amount), method, note?.trim() || null);
+    res.json(row);
+  });
+
+  // Admin — delete a manual payment
+  app.delete('/api/admin/manual-payments/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    await storage.deleteManualPayment(Number(req.params.id));
+    res.json({ ok: true });
   });
 
   // Download analytics — how many scripts, which tweaks, trend
