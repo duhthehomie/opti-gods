@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus, getProStatus } from "@/lib/pro-status";
+import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
@@ -316,6 +317,7 @@ export default function Admin() {
     totalTweaks: number;
     downloadCount: number;
     lastDownloadAt: string;
+    allTweakIds: string[];
   };
   const customerDeployStatsQuery = useQuery<CustomerDeployStat[]>({
     queryKey: ["/api/admin/customer-deploy-stats", key],
@@ -1465,17 +1467,32 @@ export default function Admin() {
                               </span>
                             )
                           )}
-                          {/* Tweaks deployed — live updating every 5s */}
-                          {deployStat && (
-                            <span
-                              data-testid={`badge-tweaks-deployed-${req.id}`}
-                              className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 bg-red-500/10 border-red-500/20 shrink-0"
-                              title={`${deployStat.downloadCount} download${deployStat.downloadCount !== 1 ? 's' : ''} · last: ${deployStat.lastDownloadAt}`}
-                            >
-                              <Zap className="w-2.5 h-2.5" />
-                              {deployStat.totalTweaks} tweaks deployed
-                            </span>
-                          )}
+                          {/* Tweaks deployed + FPS estimate — live every 5s */}
+                          {deployStat && (() => {
+                            const fps = estimateFpsGain(deployStat.allTweakIds);
+                            return (
+                              <>
+                                <span
+                                  data-testid={`badge-tweaks-deployed-${req.id}`}
+                                  className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 bg-red-500/10 border-red-500/20 shrink-0"
+                                  title={`${deployStat.downloadCount} download${deployStat.downloadCount !== 1 ? 's' : ''} · last: ${deployStat.lastDownloadAt}`}
+                                >
+                                  <Zap className="w-2.5 h-2.5" />
+                                  {deployStat.totalTweaks} tweaks deployed
+                                </span>
+                                {fps.high > 0 && (
+                                  <span
+                                    data-testid={`badge-fps-est-${req.id}`}
+                                    className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
+                                    title={`Estimated FPS gain from ${deployStat.allTweakIds.length} unique tweaks applied`}
+                                  >
+                                    <TrendingUp className="w-2.5 h-2.5" />
+                                    +{fps.low}–{fps.high} FPS est.
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                         <p className="text-[10px] text-zinc-500">
                           <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>

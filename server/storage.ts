@@ -49,6 +49,7 @@ export interface IStorage {
     totalTweaks: number;
     downloadCount: number;
     lastDownloadAt: string;
+    allTweakIds: string[];
   }[]>;
   getDownloadStats(): Promise<{
     totalDownloads: number;
@@ -239,6 +240,7 @@ export class DatabaseStorage implements IStorage {
     totalTweaks: number;
     downloadCount: number;
     lastDownloadAt: string;
+    allTweakIds: string[];
   }[]> {
     const rows = await db.execute(sql`
       SELECT
@@ -246,9 +248,11 @@ export class DatabaseStorage implements IStorage {
         ps.code_ref,
         COALESCE(SUM(sd.tweak_count), 0)::int AS total_tweaks,
         COUNT(sd.id)::int AS download_count,
-        MAX(sd.downloaded_at)::text AS last_download_at
+        MAX(sd.downloaded_at)::text AS last_download_at,
+        array_agg(DISTINCT tids.tid) FILTER (WHERE tids.tid IS NOT NULL) AS all_tweak_ids
       FROM script_downloads sd
       LEFT JOIN pro_sessions ps ON ps.session_token = sd.session_token
+      LEFT JOIN LATERAL unnest(sd.tweak_ids) AS tids(tid) ON TRUE
       WHERE sd.session_token IS NOT NULL
       GROUP BY sd.session_token, ps.code_ref
       ORDER BY last_download_at DESC
@@ -259,6 +263,7 @@ export class DatabaseStorage implements IStorage {
       totalTweaks: r.total_tweaks,
       downloadCount: r.download_count,
       lastDownloadAt: r.last_download_at ?? "",
+      allTweakIds: Array.isArray(r.all_tweak_ids) ? r.all_tweak_ids : [],
     }));
   }
 
