@@ -76,11 +76,16 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               </span>
             )}
 
-            {badge && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/20 uppercase tracking-wide">
+            {badge && badge === "DANGER" ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-red-600/20 text-red-400 border border-red-500/40 uppercase tracking-wide shadow-[0_0_6px_-2px_rgba(239,68,68,0.4)]">
+                <ShieldAlert className="w-2.5 h-2.5" />
+                DANGER
+              </span>
+            ) : badge ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
                 {badge}
               </span>
-            )}
+            ) : null}
 
             {imp && (
               <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", imp.bg, imp.text)}>
