@@ -1,10 +1,46 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
 import { autoSendState, runAutoSend } from "./auto-send";
+
+// ── In-memory rate limiter ─────────────────────────────────────────────────────
+// Protects auth endpoints from scanning/brute-force. No Redis needed.
+interface RateWindow { count: number; resetAt: number; blocked: boolean }
+const rateBuckets = new Map<string, RateWindow>();
+
+function rateLimit(maxPerWindow: number, windowMs: number, hardBlockAfter?: number) {
+  return function (req: Request, res: Response, next: () => void) {
+    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const key = `${req.path}::${ip}`;
+    const now = Date.now();
+    let w = rateBuckets.get(key);
+    if (!w || now > w.resetAt) {
+      w = { count: 0, resetAt: now + windowMs, blocked: false };
+      rateBuckets.set(key, w);
+    }
+    if (w.blocked) {
+      return res.status(429).json({ error: "Too many requests. Try again later." });
+    }
+    w.count++;
+    if (hardBlockAfter && w.count > hardBlockAfter) {
+      w.blocked = true; // IP blocked for the rest of this window
+      return res.status(429).json({ error: "Too many requests. Try again later." });
+    }
+    if (w.count > maxPerWindow) {
+      return res.status(429).json({ error: "Too many requests. Try again later." });
+    }
+    next();
+  };
+}
+
+// Clean up stale buckets every 10 minutes to prevent memory creep
+setInterval(() => {
+  const now = Date.now();
+  rateBuckets.forEach((w, k) => { if (now > w.resetAt) rateBuckets.delete(k); });
+}, 10 * 60 * 1000);
 
 const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
@@ -1173,7 +1209,8 @@ Start-Sleep 2
   // Pro code verify — checks DB first, then legacy env var codes
   // Returns a server-side session token that the client stores instead of just "true"
   // This blocks the exploit of manually setting localStorage to bypass the paywall
-  app.post('/api/pro/verify', async (req, res) => {
+  // Rate limit: 8 attempts per minute, hard-block at 15 (stops brute-force)
+  app.post('/api/pro/verify', rateLimit(8, 60_000, 15), async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
     const normalizedCode = String(code).toUpperCase().trim();
@@ -1213,7 +1250,8 @@ Start-Sleep 2
 
   // Pro status check — client calls this on load to verify their stored session token
   // If someone manually set localStorage to "true", this will return false (no session in DB)
-  app.post('/api/pro/status', async (req, res) => {
+  // Rate limit: 30 per minute (covers normal page loads + polling), hard-block at 60
+  app.post('/api/pro/status', rateLimit(30, 60_000, 60), async (req, res) => {
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
     const valid = await storage.verifyProSession(sessionToken);
@@ -1221,7 +1259,8 @@ Start-Sleep 2
   });
 
   // Friend token — single-use URL unlock
-  app.post('/api/pro/friend', async (req, res) => {
+  // Rate limit: 5 per minute, hard-block at 10
+  app.post('/api/pro/friend', rateLimit(5, 60_000, 10), async (req, res) => {
     const { token } = req.body || {};
     if (!token) return res.json({ valid: false });
     const redeemed = await storage.redeemFriendToken(String(token));
