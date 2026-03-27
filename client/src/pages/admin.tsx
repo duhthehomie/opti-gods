@@ -1078,22 +1078,36 @@ export default function Admin() {
                           <X className="w-3 h-3" />
                         </button>
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-1 group/note">
-                        {c.note
-                          ? <p className="text-xs text-zinc-300 truncate">{c.note}</p>
-                          : <p className="text-xs text-zinc-600 italic">No name</p>
-                        }
-                        <button
-                          data-testid={`button-rename-code-${c.id}`}
-                          onClick={() => { setEditingCodeId(c.id); setEditValue(c.note || ""); }}
-                          className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
-                          title="Rename customer"
-                        >
-                          <Pencil className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    )}
+                    ) : (() => {
+                      const codeDeploy = (customerDeployStatsQuery.data || []).find(s => s.codeRef === c.code);
+                      const fps = codeDeploy ? estimateFpsGain(codeDeploy.allTweakIds) : null;
+                      return (
+                        <div className="flex items-center gap-1.5 group/note flex-wrap">
+                          {c.note
+                            ? <p className="text-xs text-zinc-300 truncate">{c.note}</p>
+                            : <p className="text-xs text-zinc-600 italic">No name</p>
+                          }
+                          {fps && fps.high > 0 && (
+                            <span
+                              data-testid={`badge-fps-code-${c.id}`}
+                              className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
+                              title={`${codeDeploy!.totalTweaks} tweaks deployed · ${codeDeploy!.downloadCount} download${codeDeploy!.downloadCount !== 1 ? 's' : ''}`}
+                            >
+                              <TrendingUp className="w-2.5 h-2.5" />
+                              +{fps.low}–{fps.high} FPS
+                            </span>
+                          )}
+                          <button
+                            data-testid={`button-rename-code-${c.id}`}
+                            onClick={() => { setEditingCodeId(c.id); setEditValue(c.note || ""); }}
+                            className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
+                            title="Rename customer"
+                          >
+                            <Pencil className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      );
+                    })()}
                     <p className="text-[10px] text-zinc-600">Created {fmt(c.createdAt)}</p>
                   </div>
                   <span className={cn(
