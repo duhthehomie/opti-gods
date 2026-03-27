@@ -242,6 +242,22 @@ const NETWORK_TWEAKS: TweakDef[] = [
     impact: "MED",
     recommended: true,
   },
+  {
+    id: "Lap_USBPowerSave",
+    title: "Force Disable USB Suspend — Power Scheme + Registry",
+    desc: "Dual-path USB fix: disables selective suspend via both the active power scheme AND writes DisableSelectiveSuspend=1 to the USB services registry key. The power scheme alone can revert on some laptops — the registry key makes it permanent regardless of power plan. Eliminates mouse/keyboard drops that the softer fix misses.",
+    badge: "DEEP FIX",
+    impact: "HIGH",
+    recommended: true,
+  },
+  {
+    id: "Lap_WifiPerfMode",
+    title: "Disable Wi-Fi Power Save — Driver Registry (Deep)",
+    desc: "Writes PowerSaveMode=0 and PnPCapabilities=24 directly to the Wi-Fi adapter's driver class registry key. Unlike the netsh power management command, this registry path survives driver reinstalls and persists after power plan changes. Disabling Wi-Fi power save at the driver level removes the ~50-200ms latency spikes on budget Wi-Fi cards.",
+    badge: "DEEP FIX",
+    impact: "HIGH",
+    recommended: true,
+  },
 ];
 
 const LATENCY_TWEAKS: TweakDef[] = [

@@ -19,6 +19,7 @@ const ALL_REGISTRY_IDS = [
   "DisablePagefileEncryption","ClearPagefileOnShutdown","MemDisableHeapTermination",
   "DisableXboxGameBar","DisableGameDVR","EnableHAGS","DisablePointerPrecision",
   "DisableAnimations","DisableTelemetry","DisableWindowsError","DisableFastStartup",
+  "SysVisualBestPerf","SysHibernateOff","SysHypervisorOff",
   "SetHighPerformancePlan","DisableUSBSuspend","DisableCoreParking","DisablePowerThrottlingAdv",
   "DisableDefender","DisableAutoUpdate",
 ];
@@ -27,6 +28,7 @@ const REGISTRY_RECOMMENDED_IDS = [
   "NetworkThrottling","InputLagTCP","DisableNagle","SetDNSPriority",
   "OptimizeRAMUsage","DisableMemoryCompression",
   "DisableXboxGameBar","DisableGameDVR","EnableHAGS","DisablePointerPrecision",
+  "SysVisualBestPerf","SysHibernateOff",
   "SetHighPerformancePlan",
 ];
 
@@ -144,6 +146,9 @@ export default function Registry() {
     { id: "DisableGameDVR", title: "Disable GameDVR Background Recording", desc: "Stops Windows from recording game footage in background — frees GPU encoder bandwidth.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
     { id: "EnableHAGS", title: "Enable HAGS (Hardware Accelerated GPU Scheduling)", desc: "Offloads GPU memory scheduling to dedicated VRAM controller — lower frame-time variance.", badge: "RTX 2000+ / RX 6000+", impact: "HIGH", recommended: true },
     { id: "DisablePointerPrecision", title: "Disable Enhance Pointer Precision (Mouse Accel)", desc: "Turns off mouse acceleration entirely — critical for raw input and consistent aim.", badge: "MUST HAVE", impact: "HIGH", recommended: true },
+    { id: "SysVisualBestPerf", title: "Set Visual Effects to Best Performance", desc: "Sets Windows visual FX to 'Best Performance' — disables all compositor animations, transparency, thumbnail previews. Frees GPU VRAM and CPU cycles that DWM was consuming. Sets UserPreferencesMask and VisualFXSetting=2.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "SysHibernateOff", title: "Disable Hibernation (Reclaim hiberfil.sys)", desc: "Runs powercfg /h off and removes hiberfil.sys. Reclaims disk space equal to your installed RAM (8–32GB). Fixes Fast Startup issues caused by corrupted hibernate images. Incompatible with Fast Startup — disable that first.", badge: "RECOMMENDED", impact: "MED", recommended: true },
+    { id: "SysHypervisorOff", title: "Disable Hyper-V Hypervisor (Recover 3–8% CPU)", desc: "Sets bcdedit hypervisorlaunchtype=off and disables VBS (Virtualization-Based Security). If you don't use WSL2, Docker, or Android emulators, the Hyper-V hypervisor runs silently and taxes every system call with a VM exit overhead. Disabling it frees 3–8% CPU for games. Requires reboot.", badge: "ADVANCED", impact: "HIGH", warning: "This disables Hyper-V and Virtualization-Based Security. If you use WSL2, Docker, or Android emulators, do not enable this — they will stop working until you re-enable it via bcdedit /set hypervisorlaunchtype auto and a reboot." },
     { id: "DisableAnimations", title: "Disable All UI Animations", desc: "Turns off window open/close animations, menu fades, and taskbar transitions — snappier UI.", impact: "MED" },
     { id: "DisableTelemetry", title: "Disable Telemetry via Registry", desc: "Sets AllowTelemetry=0 — complements the DiagTrack service disable.", impact: "MED" },
     { id: "DisableFastStartup", title: "Disable Fast Startup (Hibernate Boot)", desc: "Forces a full cold boot instead of resuming from hibernate — fixes driver issues and state corruption.", impact: "MED", recommended: true },

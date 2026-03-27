@@ -261,11 +261,18 @@ function ProPaymentDialog({
                           <CreditCard className="w-4 h-4" />
                           Pay with Card (Gumroad)
                         </a>
-                        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/20">
-                          <span className="text-amber-400 text-[10px] shrink-0 mt-0.5">⚠</span>
-                          <p className="text-[10px] text-amber-300/80 leading-relaxed">
-                            <span className="font-bold text-amber-300">Visa gift cards & prepaid cards</span> are often blocked by Gumroad's payment processor. If you see "card does not support this type of purchase" — use <span className="font-bold text-white">PayPal</span> or <span className="font-bold text-white">CashApp</span> above instead. Regular debit/credit cards work fine.
-                          </p>
+                        {/* Gumroad gift card warning — prominent banner */}
+                        <div className="rounded-xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-950/40 to-zinc-950 overflow-hidden">
+                          <div className="h-0.5 w-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600" />
+                          <div className="px-3.5 py-3 flex gap-2.5 items-start">
+                            <span className="text-amber-400 text-base shrink-0 mt-0.5">⚠</span>
+                            <div>
+                              <p className="text-[11px] font-black text-amber-300 uppercase tracking-wider mb-1">Gift Card Declined?</p>
+                              <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                                Visa gift cards & prepaid cards are blocked by Gumroad's processor — this is Gumroad's restriction, not ours. If you see <span className="italic">"card does not support this type of purchase"</span>, use <span className="font-bold text-white">PayPal</span> or <span className="font-bold text-white">CashApp</span> above instead. Regular debit/credit cards work fine on Gumroad.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

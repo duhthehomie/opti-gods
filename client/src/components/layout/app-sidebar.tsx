@@ -64,19 +64,19 @@ function countForSection(tweaks: Record<string, boolean>, url: string) {
 
 const navItems = [
   { title: "Dashboard",           url: "/",                   icon: Activity },
-  { title: "Registry Tweaks",     url: "/registry",           icon: Settings2 },
-  { title: "FiveM Optimizer",     url: "/fivem",              icon: Gamepad2 },
-  { title: "Fortnite Optimizer",  url: "/fortnite",           icon: Crosshair },
+  { title: "Registry Tweaks",     url: "/registry",           icon: Settings2,    recCount: 20 },
+  { title: "FiveM Optimizer",     url: "/fivem",              icon: Gamepad2,     recCount: 13 },
+  { title: "Fortnite Optimizer",  url: "/fortnite",           icon: Crosshair,    recCount: 8  },
   { title: "Game Detection",      url: "/game-detection",     icon: Search },
-  { title: "NVIDIA Presets",      url: "/nvidia",             icon: MonitorPlay },
-  { title: "AMD Optimizer",       url: "/amd",                icon: Flame },
-  { title: "Integrated Graphics", url: "/integrated-graphics",icon: Monitor },
-  { title: "Laptop Optimizer",    url: "/laptop",             icon: Laptop },
+  { title: "NVIDIA Presets",      url: "/nvidia",             icon: MonitorPlay,  recCount: 12 },
+  { title: "AMD Optimizer",       url: "/amd",                icon: Flame,        recCount: 9  },
+  { title: "Integrated Graphics", url: "/integrated-graphics",icon: Monitor,      recCount: 17 },
+  { title: "Laptop Optimizer",    url: "/laptop",             icon: Laptop,       recCount: 29 },
   { title: "Process Lasso",       url: "/process-lasso",      icon: Cpu },
-  { title: "Discord Optimizer",   url: "/discord",            icon: MessageCircle },
+  { title: "Discord Optimizer",   url: "/discord",            icon: MessageCircle,recCount: 5  },
   { title: "Startup Apps",        url: "/startup",            icon: Power },
-  { title: "Memory Optimizer",    url: "/memory",             icon: MemoryStick },
-  { title: "Debloat Win10/11",    url: "/debloat",            icon: Trash2 },
+  { title: "Memory Optimizer",    url: "/memory",             icon: MemoryStick,  recCount: 6  },
+  { title: "Debloat Win10/11",    url: "/debloat",            icon: Trash2,       recCount: 10 },
   { title: "WinUtil + OO ShutUp", url: "/wintitus",           icon: Wrench,   winTitusAccent: true },
   { title: "Custom OS",           url: "/custom-os",          icon: HardDrive, proAccent: true },
   { title: "Updates",             url: "/updates",            icon: Bell },
@@ -85,7 +85,7 @@ const navItems = [
   { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
 
-const TOTAL_TWEAKS = 318;
+const TOTAL_TWEAKS = 329;
 
 
 export function AppSidebar() {
@@ -215,12 +215,18 @@ export function AppSidebar() {
                         {/* Active tweak count badge for sections */}
                         {sectionCount > 0 && !isProAccent && (
                           <span className={cn(
-                            "ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                            "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
                             isActive
                               ? "bg-red-500/20 text-red-300"
                               : "bg-zinc-800 text-zinc-400"
                           )}>
                             {sectionCount}
+                          </span>
+                        )}
+                        {/* Recommended count badge — shown when no active tweaks yet */}
+                        {sectionCount === 0 && (item as any).recCount && !isProAccent && (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500/70 border border-red-500/15 shrink-0">
+                            {(item as any).recCount} rec
                           </span>
                         )}
                         {isProAccent && !isPro && (

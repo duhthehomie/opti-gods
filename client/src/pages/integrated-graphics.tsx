@@ -23,6 +23,7 @@ const ALL_IGPU_IDS = [
   "IGpu_DisableSysMain","IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace",
   "IGpu_DisableHAGSForIGpu",
   "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling",
+  "IGpu_Intel_TDR","IGpu_Intel_PanelFitter","IGpu_Intel_QSVOff",
 ];
 
 const AMD_RECOMMENDED = [
@@ -36,7 +37,8 @@ const AMD_RECOMMENDED = [
 ];
 
 const INTEL_RECOMMENDED = [
-  "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling","IGpu_DisableTransparency",
+  "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling","IGpu_Intel_TDR",
+  "IGpu_Intel_PanelFitter","IGpu_Intel_QSVOff","IGpu_DisableTransparency",
   "IGpu_DisableAnimations","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
   "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_NetworkThrottling",
   "IGpu_DisableSysMain","IGpu_DisableXboxGameBar","IGpu_SetTimerResolution",
@@ -137,6 +139,30 @@ const INTEL_DRIVER_TWEAKS: TweakDef[] = [
     desc: "Sets RC6Enable=0 and DisablePowerWell=1 in the Intel GPU driver key. RC6 is Intel's GPU power state that scales frequency down during idle — this causes the same 'ramp up' latency you see on AMD ULPS. Disabling keeps Intel UHD at max sustained frequency.",
     badge: "RECOMMENDED",
     impact: "HIGH",
+    intelOnly: true,
+  },
+  {
+    id: "IGpu_Intel_TDR",
+    title: "Extend Intel TDR Timeout (Prevent GPU Reset Crashes)",
+    desc: "The default GPU Timeout Detection and Recovery (TDR) delay is 2 seconds — Intel iGPUs can legitimately pause longer during shader compilation in games like Fortnite and Minecraft. Windows triggers a false 'GPU crash' and resets the driver. Extending TdrDelay to 8s and TdrDdiDelay to 8s prevents these resets without disabling crash protection.",
+    badge: "RECOMMENDED",
+    impact: "HIGH",
+    intelOnly: true,
+  },
+  {
+    id: "IGpu_Intel_PanelFitter",
+    title: "Disable Intel Panel Fitter (Remove Display Latency Layer)",
+    desc: "Intel Panel Fitter is a hardware display scaler that adds a post-processing step to every frame rendered. On Intel UHD 620/630/770/Iris Xe, disabling PanelFitterControl and DitherEnable removes this per-frame processing overhead — noticeably reduces display latency. Only run at your monitor's native resolution for best results.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    intelOnly: true,
+  },
+  {
+    id: "IGpu_Intel_QSVOff",
+    title: "Free iGPU Compute from Intel Quick Sync Reservation",
+    desc: "Intel Quick Sync Video reserves a portion of the iGPU's EU (execution unit) budget for hardware video encoding even when you're not encoding anything. Disabling GuC submission and HuC firmware reserve releases these compute units back to your game. Critical on Intel UHD 620 (24 EUs total) — even 2-4 freed EUs is a measurable gain.",
+    badge: "ADVANCED",
+    impact: "MED",
     intelOnly: true,
   },
 ];

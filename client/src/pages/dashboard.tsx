@@ -155,7 +155,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "318+ registry, network, memory, and GPU tweaks",
+  "329+ registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",

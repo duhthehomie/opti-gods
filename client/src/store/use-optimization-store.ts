@@ -43,6 +43,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   DisableTelemetry: false,
   DisableXboxGameBar: false,
   DisableGameDVR: false,
+  SysVisualBestPerf: false,
+  SysHibernateOff: false,
+  SysHypervisorOff: false,
   EnableHAGS: false,
   DisablePointerPrecision: false,
   DisableFastStartup: false,
@@ -188,6 +191,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   NvidiaGSyncOptimize: false,
   NvidiaOpenGLOpt: false,
   NvidiaVRAMMax: false,
+  NvShaderDiskCache: false,
+  NvTextureFilterPerf: false,
+  NvFXAADriverOff: false,
   // Memory
   MemFixedPagefile: false,
   MemDisablePagefile: false,
@@ -312,6 +318,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   IGpu_DisableCoreParking: false,
   IGpu_Intel_MaxFreq: false,
   IGpu_Intel_DisableFreqScaling: false,
+  IGpu_Intel_TDR: false,
+  IGpu_Intel_PanelFitter: false,
+  IGpu_Intel_QSVOff: false,
   IGpu_DisableHAGSForIGpu: false,
   IGpu_NetworkThrottling: false,
   IGpu_DisableMPO: false,
@@ -353,6 +362,8 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   Lap_DisableMPO: false,
   Lap_VisualPerformance: false,
   Lap_DisableHAGS: false,
+  Lap_USBPowerSave: false,
+  Lap_WifiPerfMode: false,
 };
 
 export const useOptimizationStore = create<OptimizationState>()(
