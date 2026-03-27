@@ -1,0 +1,88 @@
+# ============================================================
+#  OPTI GODS - SMOOTH GRAPHICS PACK v1.0
+#  Optimized for FiveM — Clean visuals, light on GPU
+#  Built for players running light/low-end game settings
+#  Install: FiveM Application Data\citizen\
+#  Discord: discord.gg/C8WrQknN9k
+# ============================================================
+
+# --- BLOOM (reduced for cleaner, less washed-out look) ------
+lodlight.bloom.groundlighting_switch        0.12
+lodlight.bloom.intensity                    0.70
+lodlight.bloom.interpval                    0.50
+bloom.threshold                             0.85
+bloom.intensity                             0.55
+bloom.radius                                0.70
+bloom.colorscale.r                          0.95
+bloom.colorscale.g                          0.95
+bloom.colorscale.b                          0.95
+
+# --- HDR / EXPOSURE (balanced, not crushed) -----------------
+hdr.maxExposure                             1.20
+hdr.minExposure                             0.10
+hdr.targetExposure                          0.60
+hdr.exposureAdjustSpeed                     1.20
+hdr.luminanceInfluence                      0.80
+
+# --- COLOR CORRECTION (smooth, natural, good visibility) ----
+postfx.colorCorrection.brightness           0.02
+postfx.colorCorrection.contrast             0.05
+postfx.colorCorrection.saturation           0.08
+postfx.colorCorrection.gamma                1.04
+postfx.colorCorrection.r                    0.0
+postfx.colorCorrection.g                    0.0
+postfx.colorCorrection.b                    0.0
+
+# --- TONE MAPPING (prevents washed-out daytime look) --------
+postfx.toneMapping.shoulder                 0.97
+postfx.toneMapping.midtoneScale             0.80
+postfx.toneMapping.heejkCoeff.a             0.20
+postfx.toneMapping.heejkCoeff.b             0.28
+postfx.toneMapping.heejkCoeff.c             0.10
+postfx.toneMapping.heejkCoeff.d             0.20
+postfx.toneMapping.heejkCoeff.e             0.01
+postfx.toneMapping.heejkCoeff.f             0.30
+
+# --- AMBIENT OCCLUSION (light — keeps performance up) -------
+ambientOcclusion.enable                     1
+ambientOcclusion.radius                     0.40
+ambientOcclusion.intensity                  0.50
+ambientOcclusion.bias                       0.04
+ambientOcclusion.fadeStart                  30.0
+ambientOcclusion.fadeEnd                    70.0
+
+# --- SHADOWS (optimized — looks clean without heavy load) ---
+shadows.shadowCascadeDistances              25.0 55.0 120.0 250.0
+shadows.shadowSoftness                      0.80
+shadows.shadowBias                          0.0012
+shadows.shadowSlopeBias                     0.14
+shadows.shadowMapResolution                 2048
+shadows.shadowMapCascadeResolution          512
+
+# --- MOTION BLUR (off — cleaner visuals, better FPS) --------
+motionBlur.enable                           0
+motionBlur.strength                         0.00
+
+# --- DEPTH OF FIELD (off for competitive/smooth look) -------
+dof.enable                                  0
+
+# --- REFLECTION (light settings for performance) ------------
+reflection.envMapStrength                   0.60
+reflection.roughnessStrength                0.50
+reflection.mirror.quality                   0
+
+# --- WATER (light but looks decent) -------------------------
+water.reflectionsEnable                     1
+water.reflectionIntensity                   0.65
+water.foamEnable                            1
+water.wavesIntensity                        0.80
+
+# --- PARTICLES / FX (reduced for clarity and FPS) -----------
+particles.enable                            1
+particles.densityScale                      0.70
+
+# --- LOD DISTANCES (balanced visibility vs performance) -----
+lod.switch0                                 0.80
+lod.switch1                                 0.70
+lod.switch2                                 0.60
+lod.switch3                                 0.50
