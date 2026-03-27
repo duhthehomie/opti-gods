@@ -19,6 +19,7 @@ export interface IStorage {
   deleteCode(id: number): Promise<void>;
   updateCodeNote(id: number, note: string | null): Promise<void>;
   deleteUsedCodes(): Promise<number>;
+  reviveDeadCodes(): Promise<number>;
   // Friend tokens
   getAllFriendTokens(): Promise<ProFriendToken[]>;
   createFriendToken(token: string, note?: string): Promise<ProFriendToken>;
@@ -134,6 +135,20 @@ export class DatabaseStorage implements IStorage {
 
   async resetCode(id: number): Promise<void> {
     await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
+  }
+
+  async reviveDeadCodes(): Promise<number> {
+    // Find codes that are marked used but have no pro_session linked to them
+    // These are "dead" — customer burned the code but has no active session
+    const allUsed = await db.select().from(proAccessCodes).where(isNotNull(proAccessCodes.usedAt));
+    const sessions = await db.select({ codeRef: proSessions.codeRef }).from(proSessions);
+    const activeCodes = new Set(sessions.map(s => s.codeRef));
+    const deadIds = allUsed.filter(c => !activeCodes.has(c.code)).map(c => c.id);
+    if (!deadIds.length) return 0;
+    for (const id of deadIds) {
+      await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
+    }
+    return deadIds.length;
   }
 
   async deleteCode(id: number): Promise<void> {

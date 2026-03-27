@@ -1384,6 +1384,13 @@ Start-Sleep 2
     res.json({ ok: true, deleted: count });
   });
 
+  // Admin — bulk revive dead codes (used codes with no active session)
+  app.post('/api/admin/codes/revive-dead', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const count = await storage.reviveDeadCodes();
+    res.json({ ok: true, revived: count });
+  });
+
   // Admin — bulk purge all used friend tokens
   app.delete('/api/admin/friends/used/purge', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

@@ -263,6 +263,18 @@ export default function Admin() {
     },
   });
 
+  const reviveDeadCodes = useMutation({
+    mutationFn: () => fetch("/api/admin/codes/revive-dead", { method: "POST", headers }).then(r => r.json()),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      if (data.revived === 0) {
+        toast({ title: "No dead codes found", description: "All used codes already have active sessions." });
+      } else {
+        toast({ title: `Revived ${data.revived} code${data.revived !== 1 ? "s" : ""}`, description: "Customers can now re-enter their codes to get access back." });
+      }
+    },
+  });
+
   const genFriend = useMutation({
     mutationFn: () => fetch("/api/admin/friends", {
       method: "POST", headers, body: JSON.stringify({ note: noteFriend.trim() || null }),
@@ -1041,33 +1053,48 @@ export default function Admin() {
                   </button>
                 ))}
               </div>
-              {(codesQuery.data?.filter(c => c.usedAt).length ?? 0) > 0 && (
-                confirmPurgeCodes ? (
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <span className="text-[10px] text-red-400">Delete all used codes?</span>
-                    <button
-                      onClick={() => purgeUsedCodes.mutate()}
-                      disabled={purgeUsedCodes.isPending}
-                      className="px-2 py-1 bg-red-600/20 border border-red-500/30 rounded text-[10px] text-red-400 hover:bg-red-600/30 transition-colors"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => setConfirmPurgeCodes(false)}
-                      className="px-2 py-1 bg-zinc-800 rounded text-[10px] text-zinc-400 hover:bg-zinc-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
+              <div className="ml-auto flex items-center gap-1.5">
+                {/* Revive dead codes button — always visible if any used codes have no session */}
+                {(codesQuery.data?.filter(c => c.usedAt && !c.lastSessionAt).length ?? 0) > 0 && (
                   <button
-                    onClick={() => setConfirmPurgeCodes(true)}
-                    className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 border border-white/5 rounded text-[10px] text-zinc-500 hover:text-red-400 hover:border-red-500/20 transition-colors"
+                    data-testid="button-revive-dead-codes"
+                    onClick={() => reviveDeadCodes.mutate()}
+                    disabled={reviveDeadCodes.isPending}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/40 transition-colors font-medium"
+                    title="Reset all dead codes (used but no active session) back to available"
                   >
-                    <Trash2 className="w-3 h-3" /> Purge used
+                    <RotateCcw className="w-3 h-3" />
+                    Revive dead ({codesQuery.data?.filter(c => c.usedAt && !c.lastSessionAt).length})
                   </button>
-                )
-              )}
+                )}
+                {(codesQuery.data?.filter(c => c.usedAt).length ?? 0) > 0 && (
+                  confirmPurgeCodes ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-red-400">Delete all used codes?</span>
+                      <button
+                        onClick={() => purgeUsedCodes.mutate()}
+                        disabled={purgeUsedCodes.isPending}
+                        className="px-2 py-1 bg-red-600/20 border border-red-500/30 rounded text-[10px] text-red-400 hover:bg-red-600/30 transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmPurgeCodes(false)}
+                        className="px-2 py-1 bg-zinc-800 rounded text-[10px] text-zinc-400 hover:bg-zinc-700 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmPurgeCodes(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 border border-white/5 rounded text-[10px] text-zinc-500 hover:text-red-400 hover:border-red-500/20 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" /> Purge used
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {/* Codes list */}
