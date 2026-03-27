@@ -138,8 +138,8 @@ const HOW_TO_STEPS = [
   },
   {
     icon: Download,
-    title: "Download Your Script",
-    desc: "Click DOWNLOAD .PS1 in the top bar. Builds a personalized PowerShell script with only your enabled tweaks — nothing extra, nothing missing.",
+    title: "Get Your Script",
+    desc: "Click GET MY SCRIPT in the top right. Builds a personalized PowerShell script with only your enabled tweaks — nothing extra, nothing missing.",
   },
   {
     icon: ShieldAlert,
@@ -244,7 +244,7 @@ export default function Dashboard() {
     setRecommendedApplied(true);
     toast({
       title: "Smart Recommended Tweaks Applied!",
-      description: `${applied} tweaks enabled for your hardware. Click DOWNLOAD .PS1 to get your script.`,
+      description: `${applied} tweaks enabled for your hardware. Click GET MY SCRIPT (top right) to get your script.`,
     });
   };
 
@@ -555,7 +555,7 @@ export default function Dashboard() {
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
-                ? "Click DOWNLOAD .PS1 in the top bar to get your personalized script. Restart your PC after running it."
+                ? "Click GET MY SCRIPT (top right) to download your personalized script. Restart your PC after running it."
                 : `${hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} hand-picked tweaks matched to your hardware — covers CPU priority, network, memory, power, and GPU. No uninstalls, no risks.`}
             </p>
           </div>
