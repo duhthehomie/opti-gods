@@ -143,18 +143,33 @@ function ProPaymentDialog({
             ))}
           </div>
 
-          {/* Discord manual session banner */}
-          <div className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-indigo-950/40 border border-indigo-500/20">
-            <MessageCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[11px] font-black text-indigo-300 uppercase tracking-wider mb-0.5">Free 1-on-1 Manual Optimization</p>
-              <p className="text-[10px] text-indigo-200/70 leading-relaxed">
-                Every Pro purchase includes a personal optimization session. After you unlock, join our{" "}
-                <a href={DISCORD_LINK} target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white transition-colors font-semibold">
+          {/* Discord manual optimization banner */}
+          <div className="rounded-xl bg-indigo-950/40 border border-indigo-500/20 overflow-hidden">
+            <div className="flex items-center gap-2 px-3.5 pt-3 pb-1">
+              <MessageCircle className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <p className="text-[11px] font-black text-indigo-300 uppercase tracking-wider">Free Manual Optimization Included</p>
+            </div>
+            <div className="px-3.5 pb-3">
+              <p className="text-[10px] text-indigo-200/70 leading-relaxed mb-2">
+                After unlocking Pro, open a ticket in our{" "}
+                <a href={DISCORD_LINK} target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white font-semibold">
                   Discord
                 </a>{" "}
-                and DM <strong className="text-white">leaq</strong> — he'll manually tune your PC for your exact setup.
+                to get manually optimized. Here's how it works:
               </p>
+              <ol className="space-y-1">
+                {[
+                  <>Open a ticket in the Discord server</>,
+                  <>Download <a href="https://parsec.app" target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white font-semibold">Parsec</a> → click <strong className="text-white">Download Parsec</strong> → choose <strong className="text-white">Per User</strong> (top right)</>,
+                  <>Create a free Parsec account and add <strong className="text-white">leaqy#18445432</strong> as a friend</>,
+                  <>DM leaq on Discord to check if you're in queue — he'll remote in and optimize your exact setup</>,
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[10px] text-indigo-200/60">
+                    <span className="shrink-0 w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-[9px] mt-0.5">{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
           </div>
 

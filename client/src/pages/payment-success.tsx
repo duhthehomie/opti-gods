@@ -112,28 +112,43 @@ export default function PaymentSuccess() {
               ))}
             </div>
 
-            {/* Discord 1-on-1 session callout */}
-            <div className="rounded-xl border border-indigo-500/25 bg-indigo-950/40 p-4 text-left">
-              <div className="flex items-start gap-3">
-                <MessageCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-black text-indigo-300 uppercase tracking-wider mb-1">
-                    Claim Your Free 1-on-1 Session
-                  </p>
-                  <p className="text-xs text-indigo-200/70 leading-relaxed mb-2">
-                    Your purchase includes a personal manual optimization with leaq. Join the Discord and DM him — he'll tune your exact PC setup for maximum FPS.
-                  </p>
-                  <a
-                    href={DISCORD_LINK}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid="link-discord-session"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-white underline transition-colors"
-                  >
-                    <MessageCircle className="w-3 h-3" />
-                    Join Discord → DM leaq
-                  </a>
-                </div>
+            {/* Discord manual optimization callout */}
+            <div className="rounded-xl border border-indigo-500/25 bg-indigo-950/40 overflow-hidden text-left">
+              <div className="flex items-center gap-2 px-4 pt-4 pb-1">
+                <MessageCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+                <p className="text-sm font-black text-indigo-300 uppercase tracking-wider">
+                  Claim Your Free Manual Optimization
+                </p>
+              </div>
+              <div className="px-4 pb-4">
+                <p className="text-xs text-indigo-200/60 leading-relaxed mb-3">
+                  Open a ticket in the{" "}
+                  <a href={DISCORD_LINK} target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white font-semibold">Discord</a>
+                  {" "}— leaq will remote into your PC via Parsec and manually optimize your exact setup.
+                </p>
+                <ol className="space-y-1.5 mb-3">
+                  {[
+                    <>Open a ticket in the Discord server</>,
+                    <>Download <a href="https://parsec.app" target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white font-semibold">Parsec</a> → click <strong className="text-white">Download Parsec</strong> → choose <strong className="text-white">Per User</strong> (top right)</>,
+                    <>Create a Parsec account and add friend: <strong className="text-white">leaqy#18445432</strong></>,
+                    <>DM leaq to check the queue — he'll remote in and tune your PC for max FPS</>,
+                  ].map((step, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-indigo-200/60">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-[10px] mt-0.5">{i + 1}</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                <a
+                  href={DISCORD_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-discord-session"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-white underline transition-colors"
+                >
+                  <MessageCircle className="w-3 h-3" />
+                  Join Discord → Open a Ticket
+                </a>
               </div>
             </div>
 
