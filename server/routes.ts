@@ -1331,6 +1331,13 @@ Start-Sleep 2
     res.json({ ok: true });
   });
 
+  // Admin — reset a used code back to available (clears usedAt, keeps the code string)
+  app.post('/api/admin/codes/:id/reset', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    await storage.resetCode(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
   // Admin — rename a code (update its note/label)
   app.patch('/api/admin/codes/:id', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

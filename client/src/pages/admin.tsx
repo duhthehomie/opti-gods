@@ -162,7 +162,7 @@ export default function Admin() {
     refetchInterval: 60000,
   });
 
-  const codesQuery = useQuery<ProAccessCode[]>({
+  const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null })[]>({
     queryKey: ["/api/admin/codes", key],
     queryFn: () => fetch("/api/admin/codes", { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
@@ -222,6 +222,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+    },
+  });
+
+  const resetCode = useMutation({
+    mutationFn: (id: number) => fetch(`/api/admin/codes/${id}/reset`, { method: "POST", headers }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      toast({ title: "Code reset", description: "Code is available again — customer can re-enter it." });
     },
   });
 
@@ -1160,7 +1168,15 @@ export default function Admin() {
                           </div>
                         );
                       })()}
-                      <p className="text-[10px] text-zinc-600 whitespace-nowrap">Created {fmt(c.createdAt)}</p>
+                      <p className="text-[10px] text-zinc-600 whitespace-nowrap">
+                        Created {fmt(c.createdAt)}
+                        {c.usedAt && c.lastSessionAt && (
+                          <span className="ml-1.5 text-blue-500/70">· Active {timeAgo(c.lastSessionAt)}</span>
+                        )}
+                        {c.usedAt && !c.lastSessionAt && (
+                          <span className="ml-1.5 text-zinc-700">· No session</span>
+                        )}
+                      </p>
                     </div>
                     {/* Actions — always visible on mobile (no hover-only) */}
                     <div className="flex items-center gap-0.5 shrink-0">
@@ -1175,6 +1191,17 @@ export default function Admin() {
                           title="Copy ready-to-send DM"
                         >
                           <MessageSquare className="w-3 h-3" /> <span className="hidden sm:inline">DM</span>
+                        </button>
+                      )}
+                      {c.usedAt && (
+                        <button
+                          data-testid={`button-reset-code-${c.id}`}
+                          onClick={() => resetCode.mutate(c.id)}
+                          disabled={resetCode.isPending}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-blue-500/10 text-zinc-600 hover:text-blue-400 transition-colors"
+                          title="Reset — let customer re-enter this code"
+                        >
+                          <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">Reset</span>
                         </button>
                       )}
                       <button

@@ -12,9 +12,10 @@ export interface IStorage {
   getOptimizations(): Promise<Optimization[]>;
   updateOptimization(id: number, isApplied: boolean): Promise<Optimization>;
   // Access codes
-  getAllCodes(): Promise<ProAccessCode[]>;
+  getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null })[]>;
   createCode(code: string, note?: string): Promise<ProAccessCode>;
   redeemCode(code: string): Promise<boolean>;
+  resetCode(id: number): Promise<void>;
   deleteCode(id: number): Promise<void>;
   updateCodeNote(id: number, note: string | null): Promise<void>;
   deleteUsedCodes(): Promise<number>;
@@ -104,8 +105,14 @@ export class DatabaseStorage implements IStorage {
     return opt;
   }
 
-  async getAllCodes(): Promise<ProAccessCode[]> {
-    return await db.select().from(proAccessCodes).orderBy(proAccessCodes.createdAt);
+  async getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null })[]> {
+    const codes = await db.select().from(proAccessCodes).orderBy(desc(proAccessCodes.createdAt));
+    const sessions = await db.select({
+      codeRef: proSessions.codeRef,
+      lastCheckedAt: sql<Date>`MAX(last_checked_at)`.as("last_checked_at"),
+    }).from(proSessions).groupBy(proSessions.codeRef);
+    const sessionMap = new Map(sessions.map(s => [s.codeRef, s.lastCheckedAt]));
+    return codes.map(c => ({ ...c, lastSessionAt: sessionMap.get(c.code) ?? null }));
   }
 
   async createCode(code: string, note?: string): Promise<ProAccessCode> {
@@ -123,6 +130,10 @@ export class DatabaseStorage implements IStorage {
       .set({ usedAt: new Date() })
       .where(eq(proAccessCodes.id, row.id));
     return true;
+  }
+
+  async resetCode(id: number): Promise<void> {
+    await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
   }
 
   async deleteCode(id: number): Promise<void> {
