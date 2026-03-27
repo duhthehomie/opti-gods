@@ -123,13 +123,14 @@ function ProPaymentDialog({
             <h3 className="text-white font-bold text-sm">What you get:</h3>
             {[
               "Download your personalized PowerShell optimization script",
-              "130+ registry, network, memory, GPU, and game-specific tweaks",
+              "329+ registry, network, memory, GPU, and game-specific tweaks",
               "FiveM, Fortnite, CS2, Valorant, Apex and 10+ game packs",
               "Lifetime access — one-time payment",
+              "Code delivered to your inbox in 5 minutes or less",
             ].map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-xs text-zinc-300">
-                <CheckCircle2 className="w-3 h-3 text-red-500 shrink-0" />
-                {f}
+                <CheckCircle2 className={`w-3 h-3 shrink-0 ${i === 4 ? "text-emerald-500" : "text-red-500"}`} />
+                {i === 4 ? <span className="text-emerald-400 font-semibold">{f}</span> : f}
               </div>
             ))}
           </div>

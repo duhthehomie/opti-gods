@@ -1807,8 +1807,43 @@ Read-Host "Press Enter to close this window"
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid request" });
     const { email, paymentMethod, paymentRef } = parsed.data;
-    const req2 = await storage.createEmailRequest(email, paymentMethod, paymentRef);
-    return res.json({ ok: true, id: req2.id });
+
+    // Create the request record
+    const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef);
+
+    // If email is configured, immediately find or auto-generate a code and send it
+    if (isEmailConfigured()) {
+      try {
+        const allRequests = await storage.getEmailRequests();
+        const allCodes = await storage.getAllCodes();
+
+        // Find codes already reserved by previously sent requests
+        const reservedCodeIds = new Set(
+          allRequests
+            .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
+            .map(r => r.sentCodeId)
+        );
+
+        // Find an available unreserved code
+        let available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
+
+        // No code available — auto-generate one on the fly
+        if (!available) {
+          const newCode = generateCode();
+          available = await storage.createCode(newCode, `Auto-generated for ${email}`);
+        }
+
+        const siteUrl = `${req.protocol}://${req.get("host")}`;
+        await sendProCode(email, available.code, siteUrl);
+        await storage.updateEmailRequestStatus(emailReq.id, "auto-sent", available.id, "Sent immediately on request");
+        return res.json({ ok: true, id: emailReq.id, autoSent: true });
+      } catch (err) {
+        // Email send failed — leave in pending state for admin to handle manually
+        log(`[request-code] Auto-send failed for ${email}: ${err}`, "email");
+      }
+    }
+
+    return res.json({ ok: true, id: emailReq.id });
   });
 
   // --- Email Admin Routes ---
