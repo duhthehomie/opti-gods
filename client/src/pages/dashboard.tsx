@@ -134,22 +134,22 @@ const HOW_TO_STEPS = [
   {
     icon: Terminal,
     title: "Browse & Toggle",
-    desc: "Open any tab in the sidebar (Registry, FiveM, Fortnite, etc.) and flip the toggles for every optimization you want. Red = will be applied.",
+    desc: "Hit 'Smart Recommendations' on the Home tab — it auto-selects 329+ tweaks matched to your exact GPU, CPU, and RAM. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.",
   },
   {
     icon: Download,
     title: "Download Your Script",
-    desc: "Click DOWNLOAD .PS1 in the top bar. This generates a personalized PowerShell script containing only the tweaks you enabled — nothing else.",
+    desc: "Click DOWNLOAD .PS1 in the top bar. Builds a personalized PowerShell script with only your enabled tweaks — nothing extra, nothing missing.",
   },
   {
     icon: ShieldAlert,
     title: "Run as Administrator",
-    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. Click Yes on the Administrator popup — it handles everything automatically.",
+    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. Hit Yes on the UAC popup — it runs the script and applies every tweak automatically.",
   },
   {
     icon: RotateCcw,
     title: "Restart & Done",
-    desc: "After the script finishes, restart your PC. All changes take effect on the next boot. Create a Windows Restore Point first as a precaution.",
+    desc: "Restart your PC after the script finishes. All registry and system changes take effect on the next boot. Create a Windows Restore Point first as a safety net.",
   },
 ];
 
