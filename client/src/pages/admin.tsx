@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useProStatus, setProStatus, getProStatus } from "@/lib/pro-status";
+import { useProStatus, setProSession, clearProStatus, getProStatus } from "@/lib/pro-status";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
@@ -612,7 +612,25 @@ export default function Admin() {
 
               {/* Pro test toggle */}
               <button
-                onClick={() => { setProStatus(!isPro); toast({ title: isPro ? "Pro Reset" : "Pro Granted (Test)" }); }}
+                onClick={async () => {
+                  if (isPro) {
+                    clearProStatus();
+                    toast({ title: "Switched to Free mode" });
+                  } else {
+                    try {
+                      const res = await fetch("/api/admin/grant-pro-session", {
+                        method: "POST", headers,
+                      });
+                      const data = await res.json();
+                      if (data.sessionToken) {
+                        setProSession(data.sessionToken);
+                        toast({ title: "Pro Granted (Test)" });
+                      }
+                    } catch {
+                      toast({ title: "Failed to grant Pro", variant: "destructive" });
+                    }
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors",
                   isPro ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-zinc-800/60 border-zinc-700 text-zinc-500 hover:text-zinc-300"

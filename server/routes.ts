@@ -1270,6 +1270,13 @@ Start-Sleep 2
     res.json({ valid });
   });
 
+  // Admin — grant themselves a real Pro session for testing (requires admin key)
+  app.post('/api/admin/grant-pro-session', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const sessionToken = await storage.createProSession('admin-test-session');
+    return res.json({ sessionToken });
+  });
+
   // Friend token — single-use URL unlock
   // Rate limit: 5 per minute, hard-block at 10
   app.post('/api/pro/friend', rateLimit(5, 60_000, 10), async (req, res) => {
