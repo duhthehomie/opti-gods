@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldCheck, Mail, ChevronDown, ChevronUp, Copy, Check, Flame, Timer } from "lucide-react";
+import { Lock, Zap, X, Loader2, CheckCircle2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -26,16 +26,7 @@ function ProPaymentDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
-
   const [cryptoCopied, setCryptoCopied] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [emailAddr, setEmailAddr] = useState("");
-  const [emailMethod, setEmailMethod] = useState<"cashapp" | "paypal" | "crypto">("cashapp");
-  const [emailRef, setEmailRef] = useState("");
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailDone, setEmailDone] = useState(false);
-  const [emailError, setEmailError] = useState("");
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -44,29 +35,6 @@ function ProPaymentDialog({
 
   const price = pricing?.price ?? 25;
   const isWeekend = pricing?.isWeekendDeal ?? false;
-
-  const handleEmailSubmit = async () => {
-    if (!emailAddr || !emailRef) return;
-    setEmailLoading(true);
-    setEmailError("");
-    try {
-      const res = await fetch("/api/request-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddr, paymentMethod: emailMethod, paymentRef: emailRef }),
-      });
-      if (res.ok) {
-        setEmailDone(true);
-      } else {
-        const d = await res.json();
-        setEmailError(d.error || "Failed to submit. Check your email address.");
-      }
-    } catch {
-      setEmailError("Connection error. Please try again.");
-    } finally {
-      setEmailLoading(false);
-    }
-  };
 
   const handleVerify = async () => {
     if (!code.trim()) return;
@@ -311,6 +279,25 @@ function ProPaymentDialog({
                 </div>
               )}
 
+              {/* Step 2 — after paying, get your code */}
+              {hasPaymentOptions && (
+                <a
+                  href="/get-code"
+                  className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-gradient-to-r from-red-950/60 to-zinc-900/80 border border-red-500/30 hover:border-red-500/50 transition-all group"
+                >
+                  <div className="w-6 h-6 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-white mb-0.5">After paying → Get Your Code</p>
+                    <p className="text-[11px] text-zinc-400 leading-snug">
+                      Tap here to submit your email — your code arrives in your inbox within 5 minutes.
+                    </p>
+                    <p className="text-[10px] text-red-400 font-bold mt-1 group-hover:text-red-300 transition-colors">
+                      optigods.replit.app/get-code →
+                    </p>
+                  </div>
+                </a>
+              )}
+
               {/* Divider */}
               <div className="flex items-center gap-3 pt-1">
                 <div className="flex-1 h-px bg-white/5" />
@@ -354,86 +341,6 @@ function ProPaymentDialog({
                 </p>
               )}
 
-              {/* Email code request — collapsed by default */}
-              {hasPaymentOptions && (
-                <div className="border border-white/5 rounded-lg overflow-hidden">
-                  <button
-                    data-testid="button-email-code-toggle"
-                    onClick={() => setEmailOpen(v => !v)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>Paid? Request your code via email</span>
-                    </div>
-                    {emailOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  </button>
-
-                  {emailOpen && (
-                    <div className="px-3 pb-3 space-y-2.5 border-t border-white/5 pt-3">
-                      {emailDone ? (
-                        <div className="flex items-center gap-2 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold text-emerald-300">Request submitted!</p>
-                            <p className="text-[10px] text-emerald-700 mt-0.5">
-                              Check your inbox at <strong>{emailAddr}</strong> — code arrives in 5 minutes or less.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-[10px] text-zinc-600">
-                            Pay first, then fill this out. We'll email your access code after verifying payment.
-                          </p>
-                          <input
-                            data-testid="input-email-addr"
-                            type="email"
-                            placeholder="your@email.com"
-                            value={emailAddr}
-                            onChange={e => setEmailAddr(e.target.value)}
-                            className="w-full bg-zinc-900 border border-zinc-700 focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors"
-                          />
-                          <div className="flex gap-2">
-                            <select
-                              data-testid="select-email-method"
-                              value={emailMethod}
-                              onChange={e => setEmailMethod(e.target.value as "cashapp" | "paypal" | "crypto")}
-                              className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-xs text-zinc-300 focus:outline-none"
-                            >
-                              <option value="cashapp">CashApp</option>
-                              <option value="paypal">PayPal</option>
-                              <option value="crypto">Crypto</option>
-                            </select>
-                            <input
-                              data-testid="input-payment-ref"
-                              type="text"
-                              placeholder={
-                                emailMethod === "cashapp" ? "Your $cashtag or TX ID"
-                                : emailMethod === "crypto" ? "TX hash / wallet address used"
-                                : "PayPal TX ID or email"
-                              }
-                              value={emailRef}
-                              onChange={e => setEmailRef(e.target.value)}
-                              className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors"
-                            />
-                          </div>
-                          {emailError && <p className="text-[10px] text-red-400">{emailError}</p>}
-                          <button
-                            data-testid="button-submit-email-request"
-                            onClick={handleEmailSubmit}
-                            disabled={emailLoading || !emailAddr || !emailRef}
-                            className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-xs font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                          >
-                            {emailLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                            {emailLoading ? "Submitting..." : "Submit Email Request"}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Discord help link */}
               <div className="flex items-center justify-center pt-1">

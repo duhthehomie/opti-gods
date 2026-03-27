@@ -28,6 +28,7 @@ import CustomOS from "@/pages/custom-os";
 import Updates from "@/pages/updates";
 import DiscordPage from "@/pages/discord";
 import IntegratedGraphics from "@/pages/integrated-graphics";
+import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
 import LaptopPage from "@/pages/laptop";
 
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/laptop" component={LaptopPage} />
       <Route path="/showcase" component={Showcase} />
       <Route path="/help" component={Help} />
+      <Route path="/get-code" component={GetCode} />
       <Route component={NotFound} />
     </Switch>
   );
