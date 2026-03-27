@@ -170,6 +170,12 @@ function ProPaymentDialog({
                   </li>
                 ))}
               </ol>
+              <div className="mt-2 flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/15">
+                <span className="text-indigo-400 text-[10px] shrink-0">💡</span>
+                <p className="text-[10px] text-indigo-200/60 leading-relaxed">
+                  <strong className="text-indigo-300">Speed up your session:</strong> Post screenshots of your CPU, GPU, and RAM from Task Manager (Performance tab) in the ticket — it lets leaq start immediately without waiting to scan your specs.
+                </p>
+              </div>
             </div>
           </div>
 

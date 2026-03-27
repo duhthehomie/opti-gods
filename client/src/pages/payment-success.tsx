@@ -139,6 +139,12 @@ export default function PaymentSuccess() {
                     </li>
                   ))}
                 </ol>
+                <div className="mt-3 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/15">
+                  <span className="text-indigo-400 text-xs shrink-0">💡</span>
+                  <p className="text-xs text-indigo-200/60 leading-relaxed">
+                    <strong className="text-indigo-300">Speed tip:</strong> Post screenshots of your CPU, GPU, and RAM from Task Manager (Performance tab) in your ticket — leaq can start immediately without needing to scan your specs first.
+                  </p>
+                </div>
                 <a
                   href={DISCORD_LINK}
                   target="_blank"
