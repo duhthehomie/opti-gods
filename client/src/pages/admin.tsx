@@ -1079,106 +1079,113 @@ export default function Admin() {
                   key={c.id}
                   data-testid={`row-code-${c.id}`}
                   className={cn(
-                    "group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 transition-colors",
-                    c.usedAt ? "opacity-40 hover:opacity-60" : "hover:bg-zinc-900/40"
+                    "group px-3 py-3 border-b border-white/5 last:border-0 transition-colors",
+                    c.usedAt ? "opacity-40" : "hover:bg-zinc-900/40"
                   )}
                 >
-                  <div className="shrink-0 w-5 text-[10px] text-zinc-700 text-right">{i + 1}</div>
-                  <span className="font-mono text-sm font-bold text-white tracking-wider w-[140px] shrink-0">{c.code}</span>
-                  <CopyButton text={c.code} />
-                  {!c.usedAt && (
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(dmTemplate(c.code));
-                        toast({ title: "DM template copied!", description: "Paste directly into Discord or text." });
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-zinc-800 text-zinc-500 hover:text-amber-400 transition-colors"
-                      title="Copy ready-to-send DM"
-                    >
-                      <MessageSquare className="w-3 h-3" /> DM
-                    </button>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    {editingCodeId === c.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          data-testid={`input-rename-code-${c.id}`}
-                          autoFocus
-                          type="text"
-                          value={editValue}
-                          onChange={e => setEditValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") renameCode.mutate({ id: c.id, note: editValue.trim() || null });
-                            if (e.key === "Escape") { setEditingCodeId(null); setEditValue(""); }
-                          }}
-                          placeholder="Customer name..."
-                          className="flex-1 bg-zinc-800 border border-red-500/30 focus:border-red-500/60 rounded px-2 py-0.5 text-xs text-white placeholder-zinc-600 focus:outline-none"
-                        />
-                        <button
-                          data-testid={`button-confirm-rename-code-${c.id}`}
-                          onClick={() => renameCode.mutate({ id: c.id, note: editValue.trim() || null })}
-                          disabled={renameCode.isPending}
-                          className="p-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                          title="Save name"
-                        >
-                          <Check className="w-3 h-3" />
-                        </button>
-                        <button
-                          data-testid={`button-cancel-rename-code-${c.id}`}
-                          onClick={() => { setEditingCodeId(null); setEditValue(""); }}
-                          className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"
-                          title="Cancel"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (() => {
-                      const codeDeploy = (customerDeployStatsQuery.data || []).find(s => s.codeRef === c.code);
-                      const fps = codeDeploy ? estimateFpsGain(codeDeploy.allTweakIds) : null;
-                      return (
-                        <div className="flex items-center gap-1.5 group/note flex-wrap">
-                          {c.note
-                            ? <p className="text-xs text-zinc-300 truncate">{c.note}</p>
-                            : <p className="text-xs text-zinc-600 italic">No name</p>
-                          }
-                          {fps && fps.high > 0 && (
-                            <span
-                              data-testid={`badge-fps-code-${c.id}`}
-                              className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
-                              title={`${codeDeploy!.totalTweaks} tweaks deployed · ${codeDeploy!.downloadCount} download${codeDeploy!.downloadCount !== 1 ? 's' : ''}`}
-                            >
-                              <TrendingUp className="w-2.5 h-2.5" />
-                              +{fps.low}–{fps.high} FPS
-                            </span>
-                          )}
+                  {/* Row 1: index + code (full width) + status badge */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="shrink-0 w-5 text-[10px] text-zinc-700 text-right tabular-nums">{i + 1}</span>
+                    <span className="font-mono text-sm font-bold text-white tracking-wider flex-1 min-w-0">{c.code}</span>
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded border shrink-0",
+                      c.usedAt
+                        ? "text-zinc-600 bg-zinc-800/50 border-zinc-700"
+                        : "text-red-400 bg-red-500/10 border-red-500/20"
+                    )}>
+                      {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : "AVAILABLE"}
+                    </span>
+                  </div>
+                  {/* Row 2: name/note + date on left, actions on right */}
+                  <div className="flex items-center gap-1.5 pl-7">
+                    <div className="flex-1 min-w-0">
+                      {editingCodeId === c.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            data-testid={`input-rename-code-${c.id}`}
+                            autoFocus
+                            type="text"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") renameCode.mutate({ id: c.id, note: editValue.trim() || null });
+                              if (e.key === "Escape") { setEditingCodeId(null); setEditValue(""); }
+                            }}
+                            placeholder="Customer name..."
+                            className="flex-1 bg-zinc-800 border border-red-500/30 focus:border-red-500/60 rounded px-2 py-0.5 text-xs text-white placeholder-zinc-600 focus:outline-none"
+                          />
                           <button
-                            data-testid={`button-rename-code-${c.id}`}
-                            onClick={() => { setEditingCodeId(c.id); setEditValue(c.note || ""); }}
-                            className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
-                            title="Rename customer"
+                            data-testid={`button-confirm-rename-code-${c.id}`}
+                            onClick={() => renameCode.mutate({ id: c.id, note: editValue.trim() || null })}
+                            disabled={renameCode.isPending}
+                            className="p-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
                           >
-                            <Pencil className="w-2.5 h-2.5" />
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button
+                            data-testid={`button-cancel-rename-code-${c.id}`}
+                            onClick={() => { setEditingCodeId(null); setEditValue(""); }}
+                            className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
-                      );
-                    })()}
-                    <p className="text-[10px] text-zinc-600">Created {fmt(c.createdAt)}</p>
+                      ) : (() => {
+                        const codeDeploy = (customerDeployStatsQuery.data || []).find(s => s.codeRef === c.code);
+                        const fps = codeDeploy ? estimateFpsGain(codeDeploy.allTweakIds) : null;
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {c.note
+                              ? <p className="text-xs text-zinc-300 truncate max-w-[120px] sm:max-w-none">{c.note}</p>
+                              : <p className="text-xs text-zinc-600 italic">No name</p>
+                            }
+                            {fps && fps.high > 0 && (
+                              <span
+                                data-testid={`badge-fps-code-${c.id}`}
+                                className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
+                                title={`${codeDeploy!.totalTweaks} tweaks deployed · ${codeDeploy!.downloadCount} download${codeDeploy!.downloadCount !== 1 ? 's' : ''}`}
+                              >
+                                <TrendingUp className="w-2.5 h-2.5" />
+                                +{fps.low}–{fps.high} FPS
+                              </span>
+                            )}
+                            <button
+                              data-testid={`button-rename-code-${c.id}`}
+                              onClick={() => { setEditingCodeId(c.id); setEditValue(c.note || ""); }}
+                              className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
+                              title="Rename customer"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
+                      <p className="text-[10px] text-zinc-600 whitespace-nowrap">Created {fmt(c.createdAt)}</p>
+                    </div>
+                    {/* Actions — always visible on mobile (no hover-only) */}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <CopyButton text={c.code} />
+                      {!c.usedAt && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(dmTemplate(c.code));
+                            toast({ title: "DM template copied!", description: "Paste directly into Discord or text." });
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-zinc-800 text-zinc-500 hover:text-amber-400 transition-colors"
+                          title="Copy ready-to-send DM"
+                        >
+                          <MessageSquare className="w-3 h-3" /> <span className="hidden sm:inline">DM</span>
+                        </button>
+                      )}
+                      <button
+                        data-testid={`button-del-code-${c.id}`}
+                        onClick={() => delCode.mutate(c.id)}
+                        className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <span className={cn(
-                    "text-[10px] font-bold px-2 py-0.5 rounded border shrink-0",
-                    c.usedAt
-                      ? "text-zinc-600 bg-zinc-800/50 border-zinc-700"
-                      : "text-red-400 bg-red-500/10 border-red-500/20"
-                  )}>
-                    {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : "AVAILABLE"}
-                  </span>
-                  <button
-                    data-testid={`button-del-code-${c.id}`}
-                    onClick={() => delCode.mutate(c.id)}
-                    className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               ))}
             </div>
@@ -1290,14 +1297,15 @@ export default function Admin() {
                     key={t.id}
                     data-testid={`row-friend-${t.id}`}
                     className={cn(
-                      "group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 transition-colors",
-                      t.usedAt ? "opacity-40 hover:opacity-60" : "hover:bg-zinc-900/40"
+                      "group px-3 py-3 border-b border-white/5 last:border-0 transition-colors",
+                      t.usedAt ? "opacity-40" : "hover:bg-zinc-900/40"
                     )}
                   >
-                    <div className="shrink-0 w-5 text-[10px] text-zinc-700 text-right">{i + 1}</div>
-                    <div className="flex-1 min-w-0 space-y-0.5">
+                    {/* Row 1: index + status badge */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="shrink-0 w-5 text-[10px] text-zinc-700 text-right tabular-nums">{i + 1}</span>
                       {editingFriendId === t.id ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           <input
                             data-testid={`input-rename-friend-${t.id}`}
                             autoFocus
@@ -1316,7 +1324,6 @@ export default function Admin() {
                             onClick={() => renameFriend.mutate({ id: t.id, note: editValue.trim() || null })}
                             disabled={renameFriend.isPending}
                             className="p-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                            title="Save name"
                           >
                             <Check className="w-3 h-3" />
                           </button>
@@ -1324,13 +1331,12 @@ export default function Admin() {
                             data-testid={`button-cancel-rename-friend-${t.id}`}
                             onClick={() => { setEditingFriendId(null); setEditValue(""); }}
                             className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"
-                            title="Cancel"
                           >
                             <X className="w-3 h-3" />
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 group/note">
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           {t.note
                             ? <p className="text-xs font-medium text-zinc-300 truncate">{t.note}</p>
                             : <p className="text-xs text-zinc-600 italic">No name</p>
@@ -1338,34 +1344,34 @@ export default function Admin() {
                           <button
                             data-testid={`button-rename-friend-${t.id}`}
                             onClick={() => { setEditingFriendId(t.id); setEditValue(t.note || ""); }}
-                            className="p-0.5 rounded opacity-0 group-hover/note:opacity-100 hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
-                            title="Rename person"
+                            className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-all"
                           >
                             <Pencil className="w-2.5 h-2.5" />
                           </button>
                         </div>
                       )}
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-[10px] text-zinc-500 truncate max-w-[300px]">{link}</span>
-                        <CopyButton text={link} />
-                      </div>
-                      <p className="text-[10px] text-zinc-700">Created {fmt(t.createdAt)}</p>
+                      <span className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded border shrink-0",
+                        t.usedAt
+                          ? "text-zinc-600 bg-zinc-800/50 border-zinc-700"
+                          : "text-red-400 bg-red-500/10 border-red-500/20"
+                      )}>
+                        {t.usedAt ? `USED ${timeAgo(t.usedAt)}` : "AVAILABLE"}
+                      </span>
                     </div>
-                    <span className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded border shrink-0",
-                      t.usedAt
-                        ? "text-zinc-600 bg-zinc-800/50 border-zinc-700"
-                        : "text-red-400 bg-red-500/10 border-red-500/20"
-                    )}>
-                      {t.usedAt ? `USED ${timeAgo(t.usedAt)}` : "AVAILABLE"}
-                    </span>
-                    <button
-                      data-testid={`button-del-friend-${t.id}`}
-                      onClick={() => delFriend.mutate(t.id)}
-                      className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Row 2: link + copy + delete */}
+                    <div className="flex items-center gap-1.5 pl-7">
+                      <span className="font-mono text-[10px] text-zinc-500 truncate flex-1 min-w-0">{link}</span>
+                      <CopyButton text={link} />
+                      <button
+                        data-testid={`button-del-friend-${t.id}`}
+                        onClick={() => delFriend.mutate(t.id)}
+                        className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-700 pl-7 mt-1 whitespace-nowrap">Created {fmt(t.createdAt)}</p>
                   </div>
                 );
               })}
@@ -1492,81 +1498,88 @@ export default function Admin() {
                       key={req.id}
                       data-testid={`row-email-req-${req.id}`}
                       className={cn(
-                        "flex items-center gap-3 px-4 py-3 transition-colors",
+                        "px-3 py-3 transition-colors",
                         req.status === "pending" ? "hover:bg-zinc-900/40" : "opacity-60 hover:opacity-80"
                       )}
                     >
-                      <div className={cn(
-                        "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                        isSentStatus && customerRedeemed ? "bg-blue-500/10 border border-blue-500/20"
-                          : isSentStatus ? "bg-emerald-500/10 border border-emerald-500/20"
-                          : req.status === "rejected" ? "bg-zinc-800 border border-zinc-700"
-                          : "bg-red-500/10 border border-red-500/20"
-                      )}>
-                        <Mail className={cn(
-                          "w-3.5 h-3.5",
-                          isSentStatus && customerRedeemed ? "text-blue-400"
-                            : isSentStatus ? "text-emerald-400"
-                            : req.status === "rejected" ? "text-zinc-600"
-                            : "text-red-400"
-                        )} />
+                      {/* Row 1: icon + email + status badge */}
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className={cn(
+                          "w-6 h-6 rounded-lg flex items-center justify-center shrink-0",
+                          isSentStatus && customerRedeemed ? "bg-blue-500/10 border border-blue-500/20"
+                            : isSentStatus ? "bg-emerald-500/10 border border-emerald-500/20"
+                            : req.status === "rejected" ? "bg-zinc-800 border border-zinc-700"
+                            : "bg-red-500/10 border border-red-500/20"
+                        )}>
+                          <Mail className={cn(
+                            "w-3 h-3",
+                            isSentStatus && customerRedeemed ? "text-blue-400"
+                              : isSentStatus ? "text-emerald-400"
+                              : req.status === "rejected" ? "text-zinc-600"
+                              : "text-red-400"
+                          )} />
+                        </div>
+                        <p className="text-xs font-semibold text-white truncate flex-1 min-w-0">{req.email}</p>
+                        <span className={cn(
+                          "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
+                          isSentStatus ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                            : req.status === "rejected" ? "text-zinc-600 bg-zinc-800 border-zinc-700"
+                            : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                        )}>
+                          {req.status.toUpperCase()}
+                        </span>
+                        <button
+                          data-testid={`button-del-email-${req.id}`}
+                          onClick={() => delEmailReq.mutate(req.id)}
+                          className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
 
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-xs font-medium text-white truncate">{req.email}</p>
-                          <span className={cn(
-                            "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
-                            isSentStatus ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                              : req.status === "rejected" ? "text-zinc-600 bg-zinc-800 border-zinc-700"
-                              : "text-amber-400 bg-amber-500/10 border-amber-500/20"
-                          )}>
-                            {req.status.toUpperCase()}
-                          </span>
-                          {/* Redemption status — only shown for sent requests */}
+                      {/* Row 2: payment ref + badges */}
+                      <div className="pl-8 space-y-1">
+                        <p className="text-[10px] text-zinc-500">
+                          <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>
+                          {" — "}
+                          <span className="font-mono break-all">{req.paymentRef}</span>
+                        </p>
+                        <div className="flex flex-wrap gap-1">
                           {isSentStatus && (
                             customerRedeemed ? (
-                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 bg-blue-500/10 border-blue-500/20 shrink-0">
-                                <Check className="w-2.5 h-2.5" /> Customer Redeemed
+                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 bg-blue-500/10 border-blue-500/20">
+                                <Check className="w-2.5 h-2.5" /> Redeemed
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-zinc-500 bg-zinc-800/50 border-zinc-700 shrink-0">
+                              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-zinc-500 bg-zinc-800/50 border-zinc-700">
                                 <Clock className="w-2.5 h-2.5" /> Awaiting Redemption
                               </span>
                             )
                           )}
-                          {/* Tweaks deployed + FPS estimate — live every 5s */}
                           {deployStat && (() => {
                             const fps = estimateFpsGain(deployStat.allTweakIds);
                             return (
                               <>
                                 <span
                                   data-testid={`badge-tweaks-deployed-${req.id}`}
-                                  className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 bg-red-500/10 border-red-500/20 shrink-0"
-                                  title={`${deployStat.downloadCount} download${deployStat.downloadCount !== 1 ? 's' : ''} · last: ${deployStat.lastDownloadAt}`}
+                                  className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 bg-red-500/10 border-red-500/20"
                                 >
                                   <Zap className="w-2.5 h-2.5" />
-                                  {deployStat.totalTweaks} tweaks deployed
+                                  {deployStat.totalTweaks} tweaks
                                 </span>
                                 {fps.high > 0 && (
                                   <span
                                     data-testid={`badge-fps-est-${req.id}`}
-                                    className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0"
-                                    title={`Estimated FPS gain from ${deployStat.allTweakIds.length} unique tweaks applied`}
+                                    className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
                                   >
                                     <TrendingUp className="w-2.5 h-2.5" />
-                                    +{fps.low}–{fps.high} FPS est.
+                                    +{fps.low}–{fps.high} FPS
                                   </span>
                                 )}
                               </>
                             );
                           })()}
                         </div>
-                        <p className="text-[10px] text-zinc-500">
-                          <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>
-                          {" — "}
-                          <span className="font-mono">{req.paymentRef}</span>
-                        </p>
                         {sentCode && (
                           <p className="text-[10px] text-zinc-700 font-mono">
                             Code: <span className="text-zinc-500">{sentCode.code}</span>
@@ -1575,41 +1588,33 @@ export default function Admin() {
                             )}
                           </p>
                         )}
-                        <p className="text-[10px] text-zinc-700">{timeAgo(req.createdAt)} · {fmt(req.createdAt)}</p>
+                        <p className="text-[10px] text-zinc-700 whitespace-nowrap">{timeAgo(req.createdAt)} · {fmt(req.createdAt)}</p>
                         {req.note && <p className="text-[10px] text-zinc-600 italic">{req.note}</p>}
+
+                        {/* Action buttons — full width on mobile for easy tapping */}
+                        {req.status === "pending" && (
+                          <div className="flex gap-2 pt-1.5">
+                            <button
+                              data-testid={`button-send-email-${req.id}`}
+                              onClick={() => sendEmailCode.mutate(req.id)}
+                              disabled={sendEmailCode.isPending}
+                              className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition-colors disabled:opacity-50"
+                            >
+                              <Send className="w-3 h-3" />
+                              Send Code
+                            </button>
+                            <button
+                              data-testid={`button-reject-email-${req.id}`}
+                              onClick={() => rejectEmailReq.mutate(req.id)}
+                              disabled={rejectEmailReq.isPending}
+                              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-xs font-bold transition-colors"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              Reject
+                            </button>
+                          </div>
+                        )}
                       </div>
-
-                      {req.status === "pending" && (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            data-testid={`button-send-email-${req.id}`}
-                            onClick={() => sendEmailCode.mutate(req.id)}
-                            disabled={sendEmailCode.isPending}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-[11px] font-bold transition-colors disabled:opacity-50"
-                          >
-                            <Send className="w-3 h-3" />
-                            Send Code
-                          </button>
-                          <button
-                            data-testid={`button-reject-email-${req.id}`}
-                            onClick={() => rejectEmailReq.mutate(req.id)}
-                            disabled={rejectEmailReq.isPending}
-                            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-amber-400 transition-colors"
-                            title="Reject request"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      <button
-                        data-testid={`button-del-email-${req.id}`}
-                        onClick={() => delEmailReq.mutate(req.id)}
-                        className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   );
                   })}
