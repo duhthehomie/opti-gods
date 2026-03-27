@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, Zap, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setProStatus } from "@/lib/pro-status";
+
+const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
 
 type Status = "verifying" | "success" | "error";
 
@@ -92,22 +94,47 @@ export default function PaymentSuccess() {
             <div>
               <h1 className="text-3xl font-display font-bold mb-3">You're In.</h1>
               <p className="text-zinc-400 text-sm leading-relaxed">
-                Payment confirmed. Your Pro access is active — all 130+ tweaks and every game pack are unlocked.
+                Payment confirmed. Your Pro access is active — all 329+ tweaks and every game pack are unlocked.
               </p>
             </div>
 
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2">
               {[
-                "Download your personalized .PS1 script",
-                "130+ system, network, GPU, and memory tweaks",
-                "FiveM, Fortnite, CS2, Valorant, Apex packs",
-                "Lifetime access — never expires",
+                { text: "Download your personalized .PS1 script", color: "text-red-500" },
+                { text: "329+ system, network, GPU, and memory tweaks", color: "text-red-500" },
+                { text: "FiveM, Fortnite, CS2, Valorant, Apex packs", color: "text-red-500" },
+                { text: "Lifetime access — never expires", color: "text-red-500" },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm text-zinc-300">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                  {item}
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
+                  {item.text}
                 </div>
               ))}
+            </div>
+
+            {/* Discord 1-on-1 session callout */}
+            <div className="rounded-xl border border-indigo-500/25 bg-indigo-950/40 p-4 text-left">
+              <div className="flex items-start gap-3">
+                <MessageCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-black text-indigo-300 uppercase tracking-wider mb-1">
+                    Claim Your Free 1-on-1 Session
+                  </p>
+                  <p className="text-xs text-indigo-200/70 leading-relaxed mb-2">
+                    Your purchase includes a personal manual optimization with leaq. Join the Discord and DM him — he'll tune your exact PC setup for maximum FPS.
+                  </p>
+                  <a
+                    href={DISCORD_LINK}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-discord-session"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-white underline transition-colors"
+                  >
+                    <MessageCircle className="w-3 h-3" />
+                    Join Discord → DM leaq
+                  </a>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3">

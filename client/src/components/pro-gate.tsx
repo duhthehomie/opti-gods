@@ -123,19 +123,39 @@ function ProPaymentDialog({
 
         <div className="px-6 py-5 space-y-4">
           <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 space-y-2">
-            <h3 className="text-white font-bold text-sm">What you get:</h3>
+            <h3 className="text-white font-bold text-sm">What you get with $25:</h3>
             {[
-              "Download your personalized PowerShell optimization script",
-              "329+ registry, network, memory, GPU, and game-specific tweaks",
-              "FiveM, Fortnite, CS2, Valorant, Apex and 10+ game packs",
-              "Lifetime access — one-time payment",
-              "Code delivered to your inbox in 5 minutes or less",
+              { text: "Download your personalized PowerShell optimization script", highlight: false },
+              { text: "329+ registry, network, memory, GPU, and game-specific tweaks", highlight: false },
+              { text: "FiveM, Fortnite, CS2, Valorant, Apex and 10+ game packs", highlight: false },
+              { text: "Lifetime access — one-time payment, no subscription", highlight: false },
+              { text: "1-on-1 manual optimization session with leaq on Discord — included", highlight: "discord" },
+              { text: "Code delivered to your inbox in 5 minutes or less", highlight: "green" },
             ].map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-xs text-zinc-300">
-                <CheckCircle2 className={`w-3 h-3 shrink-0 ${i === 4 ? "text-emerald-500" : "text-red-500"}`} />
-                {i === 4 ? <span className="text-emerald-400 font-semibold">{f}</span> : f}
+                <CheckCircle2 className={`w-3 h-3 shrink-0 ${f.highlight === "green" ? "text-emerald-500" : f.highlight === "discord" ? "text-indigo-400" : "text-red-500"}`} />
+                {f.highlight === "green"
+                  ? <span className="text-emerald-400 font-semibold">{f.text}</span>
+                  : f.highlight === "discord"
+                  ? <span className="text-indigo-300 font-semibold">{f.text}</span>
+                  : f.text}
               </div>
             ))}
+          </div>
+
+          {/* Discord manual session banner */}
+          <div className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-indigo-950/40 border border-indigo-500/20">
+            <MessageCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-black text-indigo-300 uppercase tracking-wider mb-0.5">Free 1-on-1 Manual Optimization</p>
+              <p className="text-[10px] text-indigo-200/70 leading-relaxed">
+                Every Pro purchase includes a personal optimization session. After you unlock, join our{" "}
+                <a href={DISCORD_LINK} target="_blank" rel="noopener noreferrer" className="underline text-indigo-300 hover:text-white transition-colors font-semibold">
+                  Discord
+                </a>{" "}
+                and DM <strong className="text-white">leaq</strong> — he'll manually tune your PC for your exact setup.
+              </p>
+            </div>
           </div>
 
           {success ? (
@@ -277,7 +297,7 @@ function ProPaymentDialog({
                           className="flex items-center justify-center gap-2.5 w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:border-red-500/50 hover:bg-zinc-700 text-zinc-100 text-sm font-bold transition-all"
                         >
                           <CreditCard className="w-4 h-4" />
-                          Pay with Card (Gumroad)
+                          Pay by Card — Visa / Mastercard / Amex
                         </a>
                         {/* Gumroad gift card warning — prominent banner */}
                         <div className="rounded-xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-950/40 to-zinc-950 overflow-hidden">
