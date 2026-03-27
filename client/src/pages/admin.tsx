@@ -107,6 +107,8 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>("codes");
   const [noteCode, setNoteCode] = useState("");
   const [noteFriend, setNoteFriend] = useState("");
+  const [importCode, setImportCode] = useState("");
+  const [importCodeNote, setImportCodeNote] = useState("");
   const [searchCode, setSearchCode] = useState("");
   const [searchFriend, setSearchFriend] = useState("");
   const [filterCode, setFilterCode] = useState<"all" | "available" | "used">("all");
@@ -189,6 +191,29 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
       setNoteCode("");
       toast({ title: "Code generated", description: "New access code is ready to send." });
+    },
+  });
+
+  const importCodeMut = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/codes", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ customCode: importCode.trim().toUpperCase(), note: importCodeNote.trim() || `Registered: ${importCode.trim().toUpperCase()}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to register code");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+      setImportCode("");
+      setImportCodeNote("");
+      toast({ title: "Code registered", description: "The code is now active in the system." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
@@ -948,6 +973,44 @@ export default function Admin() {
                 >
                   <Plus className="w-4 h-4" /> Generate
                 </Button>
+              </div>
+            </div>
+
+            {/* Register existing code (for codes DM'd manually without going through the system) */}
+            <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4 space-y-3">
+              <p className="text-[11px] text-amber-400/80 leading-relaxed">
+                <span className="font-black text-amber-300">Already sent someone a code manually?</span>{" "}
+                Register it here so the system recognises it — prevents "Invalid code" errors when they try to unlock.
+              </p>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    data-testid="input-import-code"
+                    type="text"
+                    placeholder="Paste code e.g. ZF3W-P4VC-HQ9Z"
+                    value={importCode}
+                    onChange={e => setImportCode(e.target.value.toUpperCase())}
+                    className="flex-1 bg-black border border-amber-500/30 focus:border-amber-500/60 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors font-mono tracking-widest"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    data-testid="input-import-code-note"
+                    type="text"
+                    placeholder="Customer name / note (e.g. Lovers Rack)"
+                    value={importCodeNote}
+                    onChange={e => setImportCodeNote(e.target.value)}
+                    className="flex-1 bg-black border border-zinc-700 focus:border-amber-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-700 focus:outline-none transition-colors"
+                  />
+                  <Button
+                    data-testid="button-import-code"
+                    onClick={() => importCodeMut.mutate()}
+                    disabled={importCodeMut.isPending || importCode.trim().length < 5}
+                    className="bg-amber-700 hover:bg-amber-600 text-white border border-amber-500/30 shrink-0 gap-1.5 font-bold"
+                  >
+                    <Key className="w-4 h-4" /> Register
+                  </Button>
+                </div>
               </div>
             </div>
 

@@ -12,6 +12,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const GUMROAD_LINK = import.meta.env.VITE_GUMROAD_LINK as string | undefined;
+const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
 
 function ProPaymentDialog({
   open,
@@ -82,7 +83,9 @@ function ProPaymentDialog({
           setCode("");
         }, 1400);
       } else {
-        setError("Invalid code. Pay via CashApp or PayPal below, then DM for your code.");
+        setError(DISCORD_LINK
+          ? `Invalid code. If you already paid, DM us on Discord — we'll fix it instantly.`
+          : "Invalid code. If you already paid, contact support to get your code registered.");
       }
     } catch {
       setError("Connection error. Please try again.");
@@ -165,7 +168,21 @@ function ProPaymentDialog({
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
                 </Button>
               </div>
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {error && (
+                <p className="text-xs text-red-400">
+                  {error}{" "}
+                  {DISCORD_LINK && error.includes("Discord") && (
+                    <a
+                      href={DISCORD_LINK}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline text-red-300 hover:text-white transition-colors"
+                    >
+                      Join Discord →
+                    </a>
+                  )}
+                </p>
+              )}
 
               {hasPaymentOptions && (
                 <>

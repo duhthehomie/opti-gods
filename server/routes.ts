@@ -1311,7 +1311,15 @@ Start-Sleep 2
   app.post('/api/admin/codes', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     const note = req.body?.note || null;
-    const code = generateCode();
+    const customCode = req.body?.customCode?.trim().toUpperCase() || null;
+    const code = customCode || generateCode();
+    // If registering a custom code, check it doesn't already exist
+    if (customCode) {
+      const existing = await storage.getAllCodes();
+      if (existing.find(c => c.code === customCode)) {
+        return res.status(409).json({ error: 'Code already exists in the system.' });
+      }
+    }
     const row = await storage.createCode(code, note);
     res.json(row);
   });
