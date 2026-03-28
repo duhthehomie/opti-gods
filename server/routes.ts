@@ -1246,7 +1246,11 @@ Start-Sleep 2
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
     const normalizedCode = String(code).toUpperCase().trim();
-    if (normalizedCode.length < 6 || normalizedCode.length > 32) return res.json({ valid: false });
+    // Strict format: only XXXX-XXXX-XXXX (4 alphanumeric groups separated by dashes)
+    // Rejects anything that doesn't match a real Opti Gods code — stops all non-code probing
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(normalizedCode)) {
+      return res.json({ valid: false });
+    }
 
     // Path 1: Fresh single-use code (marks usedAt on first use, enforces 2-session cap)
     const redeemed = await storage.redeemCode(normalizedCode);
@@ -1293,6 +1297,25 @@ Start-Sleep 2
     if (!checkAdminKey(req, res)) return;
     const sessionToken = await storage.createProSession('admin-test-session');
     return res.json({ sessionToken });
+  });
+
+  // Admin — revoke any Pro session instantly (kill free/fraudulent access)
+  app.delete('/api/admin/sessions/:token', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { token } = req.params;
+    if (!token || token.length < 8) return res.status(400).json({ error: "Invalid token" });
+    await storage.revokeProSession(token);
+    log(`[admin] Revoked Pro session: ${token.slice(0, 8)}…`, "admin");
+    return res.json({ ok: true });
+  });
+
+  // Admin — revoke ALL sessions tied to a specific code (kill everyone who used a leaked code)
+  app.delete('/api/admin/sessions/by-code/:codeRef', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { codeRef } = req.params;
+    const count = await storage.revokeProSessionsByCode(codeRef);
+    log(`[admin] Revoked ${count} session(s) for codeRef=${codeRef}`, "admin");
+    return res.json({ ok: true, revoked: count });
   });
 
   // Friend token — single-use URL unlock
@@ -1581,7 +1604,11 @@ Start-Sleep 2
         lineItems.some((item: any) => item.price?.id === expectedPriceId);
       const paid = session.payment_status === 'paid' && isOurProduct && isPaymentMode && priceMatches;
 
-      res.json({ paid });
+      if (!paid) return res.json({ paid: false });
+
+      // Issue a real server-side Pro session so the client can persist access properly
+      const sessionToken = await storage.createProSession(`stripe:${sessionId}`);
+      res.json({ paid: true, sessionToken });
     } catch (err: any) {
       console.error('Stripe verify error:', err.message);
       res.status(500).json({ paid: false, error: 'Could not verify payment.' });
@@ -1866,22 +1893,33 @@ Read-Host "Press Enter to close this window"
   });
 
   // --- Email Code Requests (public) ---
-  // SECURITY: This endpoint ONLY logs the request for admin review.
-  // No code is sent automatically — ever. Admin must manually verify payment proof
-  // and send the code via the admin panel. Auto-send and auto-generate are intentionally removed.
+  // SECURITY: Amount paid must EXACTLY match the current day's price.
+  // Wrong amount = instant reject before anything is saved. This stops anyone who
+  // hasn't actually paid from getting into the auto-send queue.
+  // Auto-send fires after 5 min ONLY for requests with a verified amountPaid.
   app.post("/api/request-code", rateLimit(3, 60_000 * 10, 5), async (req, res) => {
     const schema = z.object({
       email: z.string().email().max(254),
-      paymentMethod: z.enum(["cashapp", "paypal", "crypto"]),
+      paymentMethod: z.enum(["cashapp", "paypal", "gumroad"]),
       paymentRef: z.string().min(4).max(200),
+      discordUsername: z.string().min(2).max(50),
+      amountPaid: z.number().int().positive(),
     });
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid request" });
-    const { email, paymentMethod, paymentRef } = parsed.data;
+    if (!parsed.success) return res.status(400).json({ error: "All fields are required." });
+    const { email, paymentMethod, paymentRef, discordUsername, amountPaid } = parsed.data;
 
-    // Save for admin review only — no code sent here
-    const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef);
-    log(`[request-code] New request queued: ${email} via ${paymentMethod} ref=${paymentRef}`, "email");
+    // Validate amount against today's real price — wrong amount = instant reject
+    const day = new Date().getDay();
+    const todayPrice = (day === 0 || day === 6) ? 15 : 25;
+    if (amountPaid !== todayPrice) {
+      return res.status(400).json({
+        error: `Incorrect amount. Today's Pro price is $${todayPrice}. Please enter the exact amount you paid.`
+      });
+    }
+
+    const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef, discordUsername, amountPaid);
+    log(`[request-code] New verified request: ${email} | discord=${discordUsername} | $${amountPaid} via ${paymentMethod} | ref=${paymentRef}`, "email");
 
     return res.json({ ok: true, id: emailReq.id });
   });

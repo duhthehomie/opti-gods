@@ -31,7 +31,7 @@ export interface IStorage {
   recordVisit(referrer?: string): Promise<void>;
   getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }>;
   // Email code requests
-  createEmailRequest(email: string, paymentMethod: string, paymentRef: string): Promise<EmailRequest>;
+  createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number): Promise<EmailRequest>;
   getEmailRequests(): Promise<EmailRequest[]>;
   updateEmailRequestStatus(id: number, status: string, sentCodeId?: number, note?: string): Promise<EmailRequest>;
   deleteEmailRequest(id: number): Promise<void>;
@@ -42,6 +42,8 @@ export interface IStorage {
   // Pro sessions (server-side validation — blocks localStorage spoofing exploit)
   createProSession(codeRef: string): Promise<string>; // returns session token
   verifyProSession(token: string): Promise<boolean>;
+  revokeProSession(token: string): Promise<void>;
+  revokeProSessionsByCode(codeRef: string): Promise<number>;
   touchProSession(token: string): Promise<void>;
   // Script download tracking
   recordScriptDownload(tweakIds: string[], sessionToken?: string): Promise<void>;
@@ -218,8 +220,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createEmailRequest(email: string, paymentMethod: string, paymentRef: string): Promise<EmailRequest> {
-    const [row] = await db.insert(emailRequests).values({ email, paymentMethod, paymentRef }).returning();
+  async createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number): Promise<EmailRequest> {
+    const [row] = await db.insert(emailRequests).values({
+      email, paymentMethod, paymentRef,
+      ...(discordUsername ? { discordUsername } : {}),
+      ...(amountPaid !== undefined ? { amountPaid } : {}),
+    }).returning();
     return row;
   }
 
@@ -384,6 +390,15 @@ export class DatabaseStorage implements IStorage {
     // Update lastCheckedAt
     await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
     return true;
+  }
+
+  async revokeProSession(token: string): Promise<void> {
+    await db.delete(proSessions).where(eq(proSessions.sessionToken, token));
+  }
+
+  async revokeProSessionsByCode(codeRef: string): Promise<number> {
+    const rows = await db.delete(proSessions).where(eq(proSessions.codeRef, codeRef)).returning();
+    return rows.length;
   }
 
   async touchProSession(token: string): Promise<void> {

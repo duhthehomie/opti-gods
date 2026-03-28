@@ -410,6 +410,19 @@ export default function Admin() {
     },
   });
 
+  // Revoke all Pro sessions tied to a code — instantly kills access for a cheater
+  const revokeByCode = useMutation({
+    mutationFn: (codeRef: string) => fetch(`/api/admin/sessions/by-code/${encodeURIComponent(codeRef)}`, {
+      method: "DELETE", headers,
+    }).then(r => r.json()),
+    onSuccess: (data) => {
+      toast({
+        title: data.revoked > 0 ? `Access revoked (${data.revoked} session${data.revoked > 1 ? "s" : ""} killed)` : "No active sessions found",
+        description: data.revoked > 0 ? "That user can no longer access Pro." : "They may have already lost access.",
+      });
+    },
+  });
+
   // System status (auto-send)
   const systemStatusQuery = useQuery<{
     autoSend: {
@@ -1591,13 +1604,25 @@ export default function Admin() {
                         </button>
                       </div>
 
-                      {/* Row 2: payment ref + badges */}
+                      {/* Row 2: payment ref + discord + amount + badges */}
                       <div className="pl-8 space-y-1">
                         <p className="text-[10px] text-zinc-500">
                           <span className="uppercase font-bold text-zinc-600">{req.paymentMethod}</span>
                           {" — "}
                           <span className="font-mono break-all">{req.paymentRef}</span>
                         </p>
+                        <div className="flex flex-wrap gap-2">
+                          {(req as any).discordUsername && (
+                            <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                              Discord: {(req as any).discordUsername}
+                            </span>
+                          )}
+                          {(req as any).amountPaid != null && (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                              Paid: ${(req as any).amountPaid}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {isSentStatus && (
                             customerRedeemed ? (
@@ -1645,7 +1670,7 @@ export default function Admin() {
                         <p className="text-[10px] text-zinc-700 whitespace-nowrap">{timeAgo(req.createdAt)} · {fmt(req.createdAt)}</p>
                         {req.note && <p className="text-[10px] text-zinc-600 italic">{req.note}</p>}
 
-                        {/* Action buttons — full width on mobile for easy tapping */}
+                        {/* Action buttons */}
                         {req.status === "pending" && (
                           <div className="flex gap-2 pt-1.5">
                             <button
@@ -1655,7 +1680,7 @@ export default function Admin() {
                               className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition-colors disabled:opacity-50"
                             >
                               <Send className="w-3 h-3" />
-                              Send Code
+                              Send Code Now
                             </button>
                             <button
                               data-testid={`button-reject-email-${req.id}`}
@@ -1667,6 +1692,21 @@ export default function Admin() {
                               Reject
                             </button>
                           </div>
+                        )}
+                        {/* Revoke — kills active Pro sessions for this customer instantly */}
+                        {isSentStatus && sentCode && (
+                          <button
+                            data-testid={`button-revoke-${req.id}`}
+                            onClick={() => {
+                              if (confirm(`Revoke ALL Pro access for ${req.email}?\n\nThis kills their session immediately. They will lose access on their next page load.`))
+                                revokeByCode.mutate(sentCode.code);
+                            }}
+                            disabled={revokeByCode.isPending}
+                            className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-lg bg-red-950/60 border border-red-500/20 text-red-400 hover:bg-red-900/60 hover:border-red-500/40 text-[10px] font-bold transition-colors disabled:opacity-50"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            Revoke Pro Access
+                          </button>
                         )}
                       </div>
                     </div>

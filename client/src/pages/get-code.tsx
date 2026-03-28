@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Mail, Loader2, CheckCircle2, Zap, ArrowLeft, MessageCircle } from "lucide-react";
+import { Mail, Loader2, CheckCircle2, Zap, ArrowLeft, MessageCircle, AlertTriangle } from "lucide-react";
 
 const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
 
@@ -8,26 +8,51 @@ export default function GetCode() {
   const [, setLocation] = useLocation();
 
   const [email, setEmail] = useState("");
-  const [method, setMethod] = useState<"cashapp" | "paypal" | "gumroad">("gumroad");
+  const [method, setMethod] = useState<"cashapp" | "paypal" | "gumroad">("cashapp");
   const [ref, setRef] = useState("");
+  const [discord, setDiscord] = useState("");
+  const [amountPaid, setAmountPaid] = useState("");
+  const [price, setPrice] = useState<number | null>(null);
+  const [isWeekend, setIsWeekend] = useState(false);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    fetch("/api/pricing")
+      .then(r => r.json())
+      .then(d => { setPrice(d.price); setIsWeekend(d.isWeekendDeal); })
+      .catch(() => {});
+  }, []);
+
   const handleSubmit = async () => {
-    if (!email || !ref) return;
-    setLoading(true);
     setError("");
+    if (!email || !ref || !discord || !amountPaid) {
+      setError("All fields are required.");
+      return;
+    }
+    const amt = parseInt(amountPaid, 10);
+    if (isNaN(amt) || amt <= 0) {
+      setError("Enter a valid dollar amount.");
+      return;
+    }
+    setLoading(true);
     try {
       const res = await fetch("/api/request-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, paymentMethod: method, paymentRef: ref }),
+        body: JSON.stringify({
+          email,
+          paymentMethod: method,
+          paymentRef: ref,
+          discordUsername: discord,
+          amountPaid: amt,
+        }),
       });
-      if (res.ok) {
+      const d = await res.json();
+      if (res.ok && d.ok) {
         setDone(true);
       } else {
-        const d = await res.json();
         setError(d.error || "Something went wrong. Try again.");
       }
     } catch {
@@ -59,12 +84,34 @@ export default function GetCode() {
           </div>
           <h1 className="text-2xl font-black text-white leading-tight mb-1">Get Your Access Code</h1>
           <p className="text-sm text-zinc-500 leading-relaxed">
-            Already paid? Fill this out and your code lands in your inbox within <strong className="text-zinc-300">5 minutes or less.</strong>
+            Already paid? Fill this out and your code lands in your inbox within{" "}
+            <strong className="text-zinc-300">5 minutes or less.</strong>
           </p>
         </div>
 
+        {/* Today's price banner */}
+        {price !== null && (
+          <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
+            isWeekend ? "border-emerald-500/25 bg-emerald-950/30" : "border-red-500/15 bg-red-950/20"
+          }`}>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                {isWeekend ? "Weekend Deal" : "Today's Price"}
+              </p>
+              <p className={`text-2xl font-black ${isWeekend ? "text-emerald-400" : "text-white"}`}>
+                ${price}
+              </p>
+            </div>
+            {isWeekend && (
+              <span className="text-[10px] font-black bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 px-2 py-1 rounded-lg uppercase tracking-wider">
+                Weekend Deal
+              </span>
+            )}
+          </div>
+        )}
+
         {done ? (
-          /* Success state */
+          /* Success */
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-6 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-7 h-7 text-emerald-400" />
@@ -121,13 +168,28 @@ export default function GetCode() {
               <p className="text-[10px] text-zinc-600">We'll send your access code here</p>
             </div>
 
+            {/* Discord username */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Your Discord Username</label>
+              <input
+                data-testid="input-getcode-discord"
+                type="text"
+                placeholder="e.g. mamba#1234 or mamba"
+                value={discord}
+                onChange={e => setDiscord(e.target.value)}
+                className="w-full bg-black border border-zinc-700 focus:border-red-500/50 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors"
+              />
+              <p className="text-[10px] text-zinc-600">So leaq can verify your payment in Discord DMs</p>
+            </div>
+
             {/* Payment method */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">How Did You Pay?</label>
               <div className="grid grid-cols-3 gap-2">
-                {(["gumroad", "cashapp", "paypal"] as const).map(m => (
+                {(["cashapp", "paypal", "gumroad"] as const).map(m => (
                   <button
                     key={m}
+                    data-testid={`button-method-${m}`}
                     onClick={() => setMethod(m)}
                     className={`py-2 rounded-xl border text-xs font-bold capitalize transition-all ${
                       method === m
@@ -135,7 +197,7 @@ export default function GetCode() {
                         : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {m === "gumroad" ? "Card" : m === "cashapp" ? "CashApp" : "PayPal"}
+                    {m === "gumroad" ? "Card/Gumroad" : m === "cashapp" ? "CashApp" : "PayPal"}
                   </button>
                 ))}
               </div>
@@ -153,17 +215,39 @@ export default function GetCode() {
                 type="text"
                 placeholder={
                   method === "gumroad" ? "e.g. hCUm0SBwEQ... or your email"
-                    : method === "cashapp" ? "e.g. $my1ik or TX ID"
+                    : method === "cashapp" ? "e.g. $yourcashtag or TX ID"
                     : "e.g. PayPal TX ID"
                 }
                 value={ref}
                 onChange={e => setRef(e.target.value)}
                 className="w-full bg-black border border-zinc-700 focus:border-red-500/50 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors font-mono"
               />
-              {method === "gumroad" && (
-                <p className="text-[10px] text-zinc-600">
-                  Find your Order ID in the Gumroad confirmation email — it starts with a long string of letters/numbers
-                </p>
+            </div>
+
+            {/* Amount paid — must exactly match today's price */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                Exact Amount You Paid (USD)
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-bold">$</span>
+                <input
+                  data-testid="input-getcode-amount"
+                  type="number"
+                  placeholder={price ? String(price) : "25"}
+                  value={amountPaid}
+                  onChange={e => setAmountPaid(e.target.value)}
+                  className="w-full bg-black border border-zinc-700 focus:border-red-500/50 rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors"
+                />
+              </div>
+              {price !== null && (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/15">
+                  <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                  <p className="text-[10px] text-amber-600">
+                    Must match today's price exactly: <strong className="text-amber-400">${price}</strong>
+                    {isWeekend ? " (weekend deal)" : " (weekday)"}. Wrong amount = rejected.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -177,7 +261,7 @@ export default function GetCode() {
             <button
               data-testid="button-getcode-submit"
               onClick={handleSubmit}
-              disabled={loading || !email || !ref}
+              disabled={loading || !email || !ref || !discord || !amountPaid}
               className="w-full py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-sm tracking-wide transition-all disabled:opacity-40 flex items-center justify-center gap-2"
             >
               {loading

@@ -100,6 +100,8 @@ export const emailRequests = pgTable("email_requests", {
   email: text("email").notNull(),
   paymentMethod: text("payment_method").notNull(),
   paymentRef: text("payment_ref").notNull(),
+  discordUsername: text("discord_username"),
+  amountPaid: integer("amount_paid"),
   status: text("status").notNull().default("pending"),
   sentCodeId: integer("sent_code_id"),
   note: text("note"),

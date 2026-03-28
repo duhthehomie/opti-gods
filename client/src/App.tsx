@@ -68,8 +68,8 @@ function FriendUnlockHandler() {
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.valid) {
-          setProStatus(true);
+        if (data.valid && data.sessionToken) {
+          setProStatus(true, data.sessionToken); // store real session token
           window.location.reload();
         }
       })

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { setProStatus } from "@/lib/pro-status";
+import { setProStatus, setProSession } from "@/lib/pro-status";
 
 const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
 
@@ -28,6 +28,7 @@ export default function PaymentSuccess() {
         const data = await res.json();
 
         if (data.paid) {
+          if (data.sessionToken) setProSession(data.sessionToken);
           setProStatus(true);
           setStatus("success");
         } else {
