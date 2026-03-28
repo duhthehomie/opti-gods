@@ -1,6 +1,7 @@
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
-import { Play, Zap, Trophy, TrendingUp, Star } from "lucide-react";
+import { Play, Zap, Trophy, TrendingUp, Star, AlertCircle, RefreshCw } from "lucide-react";
 import { ProUnlockButton } from "@/components/pro-gate";
 
 const CLIPS = [
@@ -56,12 +57,99 @@ const CLIPS = [
   },
 ];
 
+function VideoCard({ clip, index }: { clip: typeof CLIPS[0]; index: number }) {
+  const [started, setStarted] = useState(false);
+  const [errored, setErrored] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handlePlay = () => {
+    setStarted(true);
+    setTimeout(() => {
+      videoRef.current?.play().catch(() => {});
+    }, 50);
+  };
+
+  const handleRetry = () => {
+    setErrored(false);
+    setRetryKey(k => k + 1);
+    setStarted(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.08 }}
+      className={`rounded-xl overflow-hidden border ${clip.border} bg-zinc-900/60 flex flex-col`}
+    >
+      <div className="relative bg-black aspect-video w-full">
+        {errored ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-900">
+            <AlertCircle className="w-8 h-8 text-red-500/60" />
+            <p className="text-xs text-zinc-500 text-center px-4">Video failed to load — file may be loading or unavailable</p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-zinc-300 text-xs hover:bg-zinc-700 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            <video
+              key={retryKey}
+              ref={videoRef}
+              controls={started}
+              preload={started ? "auto" : "none"}
+              className="w-full h-full object-contain"
+              playsInline
+              onError={() => { if (started) setErrored(true); }}
+            >
+              <source src={clip.src} type="video/mp4" />
+              Your browser does not support video playback.
+            </video>
+
+            {!started && (
+              <button
+                onClick={handlePlay}
+                data-testid={`button-play-clip-${index}`}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 hover:bg-black/30 transition-colors group"
+              >
+                <div className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center group-hover:bg-white/20 group-hover:scale-105 transition-all">
+                  <Play className="w-6 h-6 text-white fill-white ml-1" />
+                </div>
+                <span className="text-[11px] text-white/60 font-medium">Click to play</span>
+              </button>
+            )}
+          </>
+        )}
+
+        <div className="absolute top-2 left-2 pointer-events-none">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/80 text-white border border-white/10">
+            {clip.badge}
+          </span>
+        </div>
+      </div>
+
+      <div className={`p-4 bg-gradient-to-b ${clip.color}`}>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="text-sm font-bold text-white leading-tight">{clip.label}</h3>
+          <span className="shrink-0 px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-black text-red-400 border border-red-500/20">
+            {clip.stat}
+          </span>
+        </div>
+        <p className="text-[11px] text-zinc-400 leading-relaxed">{clip.desc}</p>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Showcase() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-0">
 
-        {/* Hero */}
         <div className="relative overflow-hidden border-b border-white/5 bg-gradient-to-b from-red-950/20 to-transparent px-6 py-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -87,49 +175,12 @@ export default function Showcase() {
           </motion.div>
         </div>
 
-        {/* Video Grid */}
         <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
           {CLIPS.map((clip, i) => (
-            <motion.div
-              key={clip.src}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: i * 0.08 }}
-              className={`rounded-xl overflow-hidden border ${clip.border} bg-zinc-900/60 flex flex-col`}
-            >
-              {/* Video */}
-              <div className="relative bg-black aspect-video w-full group">
-                <video
-                  src={clip.src}
-                  controls
-                  preload="metadata"
-                  className="w-full h-full object-contain"
-                  playsInline
-                >
-                  Your browser does not support video playback.
-                </video>
-                <div className="absolute top-2 left-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/80 text-white border border-white/10">
-                    {clip.badge}
-                  </span>
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className={`p-4 bg-gradient-to-b ${clip.color}`}>
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h3 className="text-sm font-bold text-white leading-tight">{clip.label}</h3>
-                  <span className="shrink-0 px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-black text-red-400 border border-red-500/20">
-                    {clip.stat}
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">{clip.desc}</p>
-              </div>
-            </motion.div>
+            <VideoCard key={clip.src} clip={clip} index={i} />
           ))}
         </div>
 
-        {/* CTA */}
         <div className="mx-6 mb-8 p-6 rounded-xl border border-red-500/20 bg-gradient-to-r from-red-950/20 to-zinc-900/40 text-center">
           <h2 className="text-xl font-black text-white mb-1">Want These Results on Your PC?</h2>
           <p className="text-sm text-zinc-400 mb-4">One-time $25. Lifetime access. Your hardware, fully unleashed.</p>

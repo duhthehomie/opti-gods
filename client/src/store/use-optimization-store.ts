@@ -17,7 +17,6 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   // Registry - CPU Scheduling
   Win32PrioritySeparation: false,
   DisableHungAppDetection: false,
-  EnableLargeSystemCache: false,
   DisablePagefileEncryption: false,
   SetTimerResolution: false,
   SetResponsiveness: false,

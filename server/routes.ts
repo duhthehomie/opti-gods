@@ -606,7 +606,14 @@ function buildRestoreScript(categories: string[]): string {
     `# Categories: ${categories.join(', ')}`,
     `# ============================================`,
     ``,
-    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `# ── Auto-elevate to Administrator (UAC prompt will appear if not already elevated) ──`,
+    `If (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]'Administrator')) {`,
+    `    Write-Host "  Requesting Administrator rights..." -ForegroundColor Yellow`,
+    `    Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + \$MyInvocation.MyCommand.Definition + '"')`,
+    `    exit`,
+    `}`,
+    ``,
+    `\$ErrorActionPreference = 'SilentlyContinue'`,
     `Write-Host "=====================================" -ForegroundColor Cyan`,
     `Write-Host "  OPTI GODS — RESTORE TOOL by leaq" -ForegroundColor Cyan`,
     `Write-Host "  Undoing selected optimizations..." -ForegroundColor White`,
@@ -890,6 +897,13 @@ export async function registerRoutes(
       `# Generated: ${new Date().toISOString()}`,
       `# =============================================`,
       ``,
+      `# ── Auto-elevate to Administrator (UAC prompt will appear) ──`,
+      `If (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]'Administrator')) {`,
+      `    Write-Host "  Requesting Administrator rights..." -ForegroundColor Yellow`,
+      `    Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + $MyInvocation.MyCommand.Definition + '"')`,
+      `    exit`,
+      `}`,
+      ``,
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$applied = 0`,
       `$missing = 0`,
@@ -969,10 +983,10 @@ export async function registerRoutes(
       `Read-Host "Press ENTER to close"`,
     ];
 
-    const script = scanLines.join('\n');
+    const script = scanLines.join('\r\n');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-ScanSystem.ps1"');
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(script);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
   app.get(api.startup.list.path, async (_req, res) => {
@@ -1053,9 +1067,9 @@ export async function registerRoutes(
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
-    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
-    res.send(scriptContent);
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(scriptContent, 'utf8')]));
   });
 
   // .bat download — double-click to run, no right-click needed
@@ -1125,6 +1139,13 @@ export async function registerRoutes(
     const script = `# Opti Gods by leaq - Game Scanner
 # Scans your PC for installed games and opens your personalized dashboard
 # Run this, then check your browser!
+
+# Auto-elevate to Administrator (UAC prompt will appear)
+If (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]'Administrator')) {
+    Write-Host "  Requesting Administrator rights..." -ForegroundColor Yellow
+    Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + $MyInvocation.MyCommand.Definition + '"')
+    exit
+}
 
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -1210,9 +1231,9 @@ Write-Host ""
 Start-Sleep 2
 `;
 
-    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-DetectGames.ps1"');
-    res.send(script);
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
   // Helpers
@@ -1479,8 +1500,14 @@ Start-Sleep 2
       `# ============================================================`,
       `#  Opti Gods — FiveM + Discord Stability Fix  (by leaq)`,
       `#  Fixes: Discord randomly closing, FiveM / GTA V crashing`,
-      `#  Run as Administrator — restart your PC after it finishes`,
       `# ============================================================`,
+      ``,
+      `# ── Auto-elevate to Administrator (UAC prompt will appear) ──`,
+      `If (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]'Administrator')) {`,
+      `    Write-Host "  Requesting Administrator rights..." -ForegroundColor Yellow`,
+      `    Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + \$MyInvocation.MyCommand.Definition + '"')`,
+      `    exit`,
+      `}`,
       ``,
       `\$ErrorActionPreference = 'SilentlyContinue'`,
       ``,
@@ -1489,58 +1516,58 @@ Start-Sleep 2
       `Write-Host "  ===========================================" -ForegroundColor DarkRed`,
       `Write-Host ""`,
       ``,
-      `# ── FIX 1: SystemResponsiveness was set to 0 (kills Discord) ──────────────`,
+      `# -- FIX 1: SystemResponsiveness was set to 0 (kills Discord) ---------------`,
       `# Value 0 = Windows gives 100% CPU scheduling to the game, nothing for Discord.`,
-      `# Discord audio/video pipelines are background threads — they starve and crash.`,
+      `# Discord audio/video pipelines are background threads - they starve and crash.`,
       `# Fix: set to 10 = game gets 90%, Discord/audio keep their 10% minimum.`,
       `Write-Host "[FIX 1] Correcting SystemResponsiveness..." -ForegroundColor Yellow`,
       `\$mmPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'`,
       `\$old = (Get-ItemProperty \$mmPath -Name SystemResponsiveness -EA SilentlyContinue).SystemResponsiveness`,
       `Set-ItemProperty -Path \$mmPath -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force`,
-      `Write-Host "        Was: \$old  →  Now: 10  (Discord-safe game priority)" -ForegroundColor Green`,
+      `Write-Host "        Was: \$old -> Now: 10  (Discord-safe game priority)" -ForegroundColor Green`,
       ``,
-      `# ── FIX 2: Win32PrioritySeparation was set to 38 (server scheduler mode) ──`,
-      `# Value 38 = Windows server scheduling mode — reduces foreground thread priority.`,
+      `# -- FIX 2: Win32PrioritySeparation was set to 38 (server scheduler mode) --`,
+      `# Value 38 = Windows server scheduling mode - reduces foreground thread priority.`,
       `# This actively fought against game performance and caused instability.`,
       `# Fix: set to 26 = short quantum + max foreground boost (gaming-optimal).`,
       `Write-Host "[FIX 2] Correcting CPU scheduler mode..." -ForegroundColor Yellow`,
       `\$pcPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl'`,
       `\$old2 = (Get-ItemProperty \$pcPath -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
       `Set-ItemProperty -Path \$pcPath -Name 'Win32PrioritySeparation' -Value 26 -Type DWord -Force`,
-      `Write-Host "        Was: \$old2  →  Now: 26  (short quantum, max foreground boost)" -ForegroundColor Green`,
+      `Write-Host "        Was: \$old2 -> Now: 26  (short quantum, max foreground boost)" -ForegroundColor Green`,
       ``,
-      `# ── FIX 3: Restart Discord so it picks up the new CPU scheduling ───────────`,
+      `# -- FIX 3: Restart Discord so it picks up the new CPU scheduling -----------`,
       `Write-Host "[FIX 3] Checking Discord..." -ForegroundColor Yellow`,
       `\$disc = Get-Process 'Discord' -EA SilentlyContinue`,
       `If (\$disc) {`,
-      `    Write-Host "        Discord is running — restarting it to apply new scheduling..." -ForegroundColor Cyan`,
+      `    Write-Host "  Discord is running - restarting to apply new scheduling..." -ForegroundColor Cyan`,
       `    Stop-Process -Name 'Discord' -Force -EA SilentlyContinue`,
       `    Start-Sleep -Seconds 2`,
       `    \$discExe = "\$env:LocalAppData\\Discord\\Update.exe"`,
       `    If (Test-Path \$discExe) { Start-Process \$discExe '--processStart Discord.exe' -EA SilentlyContinue }`,
-      `    Write-Host "        Discord restarted." -ForegroundColor Green`,
+      `    Write-Host "  Discord restarted." -ForegroundColor Green`,
       `} Else {`,
-      `    Write-Host "        Discord not running — no restart needed." -ForegroundColor DarkGray`,
+      `    Write-Host "  Discord not running - no restart needed." -ForegroundColor DarkGray`,
       `}`,
       ``,
-      `# ── VERIFY ──────────────────────────────────────────────────────────────────`,
+      `# -- VERIFY ------------------------------------------------------------------`,
       `Write-Host ""`,
       `Write-Host "  Verification" -ForegroundColor White`,
-      `Write-Host "  ─────────────────────────────────────────────────" -ForegroundColor DarkGray`,
+      `Write-Host "  -------------------------------------------------" -ForegroundColor DarkGray`,
       `\$sr  = (Get-ItemProperty \$mmPath -Name SystemResponsiveness -EA SilentlyContinue).SystemResponsiveness`,
       `\$w32 = (Get-ItemProperty \$pcPath  -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
       `\$srOk  = \$sr  -eq 10`,
       `\$w32Ok = \$w32 -eq 26`,
-      `Write-Host "  SystemResponsiveness  = \$sr   $(if (\$srOk)  { '[OK]' } else { '[FAIL - expected 10]' })" -ForegroundColor \$(if (\$srOk)  { 'Green' } else { 'Red' })`,
-      `Write-Host "  Win32PrioritySeparation = \$w32 $(if (\$w32Ok) { '[OK]' } else { '[FAIL - expected 26]' })" -ForegroundColor \$(if (\$w32Ok) { 'Green' } else { 'Red' })`,
+      `If (\$srOk)  { Write-Host "  SystemResponsiveness    = \$sr   [OK]"  -ForegroundColor Green } Else { Write-Host "  SystemResponsiveness    = \$sr   [FAIL - expected 10]" -ForegroundColor Red }`,
+      `If (\$w32Ok) { Write-Host "  Win32PrioritySeparation = \$w32  [OK]"  -ForegroundColor Green } Else { Write-Host "  Win32PrioritySeparation = \$w32  [FAIL - expected 26]" -ForegroundColor Red }`,
       `Write-Host ""`,
       `If (\$srOk -and \$w32Ok) {`,
       `    Write-Host "  ALL FIXES APPLIED. Restart your PC to fully apply changes." -ForegroundColor Cyan`,
       `} Else {`,
-      `    Write-Host "  One or more fixes may not have applied. Try running as Administrator." -ForegroundColor Red`,
+      `    Write-Host "  One or more fixes did not apply. Make sure UAC approved the elevation." -ForegroundColor Red`,
       `}`,
       `Write-Host ""`,
-      `Write-Host "  Opti Gods by leaq — optifps.com" -ForegroundColor DarkRed`,
+      `Write-Host "  Opti Gods by leaq" -ForegroundColor DarkRed`,
       `Write-Host ""`,
       `pause`,
     ];
@@ -1548,7 +1575,7 @@ Start-Sleep 2
     const script = lines.join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-CrashFix-by-leaq.ps1"');
-    res.send(script);
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
   // Public — generate restore/undo script for selected categories
@@ -1561,7 +1588,7 @@ Start-Sleep 2
     const script = buildRestoreScript(selected.length ? selected : valid);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-RESTORE-by-leaq.ps1"');
-    res.send(script);
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
   // Public — track a site visit (called once per browser session from frontend)
