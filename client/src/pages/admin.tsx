@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useProStatus, setAdminPreview, getAdminPreview, clearProStatus } from "@/lib/pro-status";
+import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment } from "@shared/schema";
 
@@ -708,12 +708,26 @@ export default function Admin() {
                 <span>{sys?.enabled ? `Auto-send ON · ${sys.thresholdMinutes}min` : "Auto-send OFF"}</span>
               </div>
 
-              {/* Pro preview toggle — instant, no server roundtrip */}
+              {/* Pro preview toggle — uses real server-side session (requires admin key) */}
               <button
-                onClick={() => {
-                  const preview = getAdminPreview();
-                  setAdminPreview(!preview);
-                  toast({ title: preview ? "Preview: Free mode" : "Preview: Pro mode" });
+                onClick={async () => {
+                  if (isPro) {
+                    clearProStatus();
+                    toast({ title: "Preview: Free mode" });
+                  } else {
+                    try {
+                      const res = await fetch("/api/admin/grant-pro-session", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "x-admin-key": key },
+                      });
+                      if (!res.ok) throw new Error("unauthorized");
+                      const data = await res.json();
+                      setProSession(data.sessionToken);
+                      toast({ title: "Preview: Pro mode" });
+                    } catch {
+                      toast({ title: "Failed — check your admin key", variant: "destructive" });
+                    }
+                  }
                 }}
                 data-testid="button-pro-preview-toggle"
                 className={cn(
