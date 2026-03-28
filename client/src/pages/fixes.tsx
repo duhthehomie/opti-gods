@@ -165,8 +165,10 @@ const CATEGORIES = [
     color: "text-cyan-400",
     border: "border-cyan-500/20",
     bg: "bg-cyan-500/5",
-    desc: "Removes GTA5.exe and FiveM.exe IFEO entries, cleans CitizenFX.ini P2P/streaming tweaks, re-enables NvTelemetry.",
+    desc: "Fixes FiveM_GTAProcess.exe memory write crashes and FiveM_ChromeBrowser 0xe0000008 heap errors. Also removes IFEO entries, cleans CitizenFX.ini tweaks, and re-enables NvTelemetry.",
     restores: [
+      "LargeSystemCache → 0 (fixes GTA process memory write crash 0xDEED)",
+      "Memory Compression re-enabled (fixes CEF/ChromeBrowser 0xe0000008 crash)",
       "GTA5.exe IFEO PerfOptions removed",
       "FiveM.exe IFEO PerfOptions removed",
       "CitizenFX.ini P2P entry removed",
