@@ -156,7 +156,7 @@ export default function ProcessLasso() {
               { id: "ProcessLassoSmartTrim", title: "Enable SmartTrim (RAM)", desc: "Trims working set of background processes to free physical memory for your game.", impact: "HIGH" as const, recommended: true },
               { id: "ProcessLassoRestrain", title: "Restrain Background Apps After 5s Idle", desc: "Drops background process CPU priority 5 seconds after they stop receiving input.", impact: "MED" as const, recommended: true },
               { id: "ProcessLassoAffinityGaming", title: "Auto-Affinity: Gaming Mode", desc: "Moves background tasks to a subset of cores so your game gets dedicated CPU access.", impact: "HIGH" as const, recommended: true },
-              { id: "ProcessLassoInstanceBalancer", title: "Instance Balancer (Multi-Core)", desc: "Distributes multiple instances of the same process across different CPU cores.", impact: "MED" as const },
+              { id: "ProcessLassoInstanceBalancer", title: "CPU Scheduler: Short Quantum + Max Foreground Boost (Win32PrioritySeparation=26)", desc: "Sets Win32PrioritySeparation=26 — short time quanta, variable mode, maximum foreground boost. This is the gaming-optimal Windows scheduler mode. (Previous value 38 was a server scheduling mode that reduced foreground priority — fixed.)", impact: "MED" as const },
             ];
             const recIds = probalanceTweaks.filter(t => t.recommended).map(t => t.id);
             const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);

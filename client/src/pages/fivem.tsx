@@ -67,7 +67,7 @@ export default function Fivem() {
   const CFX_TWEAKS: Tweak[] = [
     { id: "FiveMDNSOverride", title: "Override CFX DNS to Cloudflare 1.1.1.1", desc: "Points active adapter DNS to 1.1.1.1/1.0.0.1 — faster cfx.re resolution and lower DNS lookup latency.", impact: "MED" },
     { id: "FiveMDisableP2P", title: "Allow Direct P2P Connections", desc: "Enables direct peer connections for lower server ping. Disable on untrusted public servers.", impact: "LOW" },
-    { id: "FiveMQueueFix", title: "Max Game CPU Priority (SystemResponsiveness=0)", desc: "Sets SystemResponsiveness=0 — allocates maximum CPU time to the foreground game process.", impact: "HIGH", recommended: true },
+    { id: "FiveMQueueFix", title: "Game CPU Priority Boost (SystemResponsiveness=10)", desc: "Sets SystemResponsiveness=10 — gives 90% of CPU scheduling to the foreground game while keeping 10% for background apps like Discord and audio. (Previous value of 0 was starving Discord threads causing random crashes — fixed.)", impact: "HIGH", recommended: true },
     { id: "FiveMEnableRSS", title: "Enable RSS — Spread Packet Processing Across CPU Cores", desc: "Enables Receive Side Scaling on all active network adapters and pins the RSS base to CPU core 1 (away from core 0 which handles hardware interrupts). Distributes incoming packet processing across multiple cores — critical on 6-core CPUs in populated FiveM servers.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   ];
 
