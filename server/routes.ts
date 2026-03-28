@@ -1236,30 +1236,30 @@ Start-Sleep 2
     res.json({ price: isWeekend ? 15 : 25, isWeekendDeal: isWeekend });
   });
 
-  // Pro code verify — checks DB first, then legacy env var codes
-  // Returns a server-side session token that the client stores instead of just "true"
-  // This blocks the exploit of manually setting localStorage to bypass the paywall
-  // Rate limit: 8 attempts per minute, hard-block at 15 (stops brute-force)
-  app.post('/api/pro/verify', rateLimit(8, 60_000, 15), async (req, res) => {
+  // Pro code verify — checks DB only (no legacy env var fallback)
+  // Returns a server-side session token that the client stores
+  // Codes are single-use: once redeemed, the session token is the customer's permanent key.
+  // Re-entry of a code is ONLY allowed if the code was pre-burned by the email flow (Scenario A).
+  // Scenario B (open re-entry of any used code) is intentionally removed — it allowed free sharing.
+  // Rate limit: 5 attempts per minute, hard-block at 10 (tighter brute-force protection)
+  app.post('/api/pro/verify', rateLimit(5, 60_000, 10), async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
     const normalizedCode = String(code).toUpperCase().trim();
+    if (normalizedCode.length < 6 || normalizedCode.length > 32) return res.json({ valid: false });
 
-    // Try DB single-use code (marks usedAt on first use)
+    // Path 1: Fresh single-use code (marks usedAt on first use, enforces 2-session cap)
     const redeemed = await storage.redeemCode(normalizedCode);
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       return res.json({ valid: true, sessionToken });
     }
 
-    // Code already used or not found via single-use path.
-    // Handle two legitimate re-entry scenarios:
-    //   A) Email-sent code: code was pre-burned when admin sent it
-    //   B) Already-redeemed code: customer on new device / cleared browser re-entering their code
+    // Path 2 (Scenario A only): Email-sent code pre-burned by admin before customer redeems.
+    // This is the ONLY legitimate re-entry path. The code must be linked to a real email request.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
     if (matchingCode) {
-      // Scenario A — email-sent code pre-burned before customer redeemed
       const emailReqs = await storage.getEmailRequests();
       const linkedReq = emailReqs.find(r =>
         r.sentCodeId === matchingCode.id &&
@@ -1269,20 +1269,12 @@ Start-Sleep 2
         const sessionToken = await storage.createProSession(normalizedCode);
         return res.json({ valid: true, sessionToken });
       }
-      // Scenario B — already redeemed legitimately; allow re-entry (multi-device support)
-      if (matchingCode.usedAt) {
-        const sessionToken = await storage.createProSession(normalizedCode);
-        return res.json({ valid: true, sessionToken });
-      }
+      // Code exists in DB but has no email link and was already redeemed — reject.
+      // This stops shared/leaked codes from granting access to multiple people.
+      return res.json({ valid: false });
     }
 
-    // Fallback: legacy env var codes (unlimited use, for backward compat)
-    const legacyCodes = (process.env.PRO_CODES || '').split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-    if (legacyCodes.includes(normalizedCode)) {
-      const sessionToken = await storage.createProSession(normalizedCode);
-      return res.json({ valid: true, sessionToken });
-    }
-
+    // No match at all
     res.json({ valid: false });
   });
 

@@ -359,6 +359,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProSession(codeRef: string): Promise<string> {
+    // Enforce 2-session cap per code to prevent shared-code abuse.
+    // Admin/friend token refs are exempt (they start with "admin-" or "friend:").
+    const isSystemRef = codeRef.startsWith("admin-") || codeRef.startsWith("friend:");
+    if (!isSystemRef) {
+      const existing = await db.select({ id: proSessions.id, sessionToken: proSessions.sessionToken })
+        .from(proSessions)
+        .where(eq(proSessions.codeRef, codeRef))
+        .orderBy(proSessions.createdAt);
+      if (existing.length >= 2) {
+        // Evict the oldest session to stay at the cap — keeps the customer's newest device working
+        await db.delete(proSessions).where(eq(proSessions.sessionToken, existing[0].sessionToken));
+      }
+    }
     const token = randomBytes(32).toString("hex"); // 64 char hex — impossible to guess
     await db.insert(proSessions).values({ sessionToken: token, codeRef, lastCheckedAt: new Date() });
     return token;
