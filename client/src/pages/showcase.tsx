@@ -44,6 +44,16 @@ const CLIPS = [
     border: "border-green-500/30",
     badge: "🚀 Max Performance",
   },
+  {
+    src: "/videos/clip5-vanswars-speedboost.mp4",
+    label: "VansWars — Max FPS Speedboosting in TMFRZ",
+    game: "FiveM",
+    desc: "Getting max possible frames while speedboosting at VansWars in TMFRZ. Every frame counts when you're mid-boost — this is what fully optimized looks like.",
+    stat: "Max FPS",
+    color: "from-purple-600/20 to-transparent",
+    border: "border-purple-500/30",
+    badge: "⚡ VansWars",
+  },
 ];
 
 export default function Showcase() {
