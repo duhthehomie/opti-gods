@@ -291,7 +291,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              281 tweaks. One script. Zero compromise.
+              329+ tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">
