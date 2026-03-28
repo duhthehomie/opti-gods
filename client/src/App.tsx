@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { setProStatus } from "@/lib/pro-status";
+import { OnboardingModal } from "@/components/onboarding-modal";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -31,6 +32,7 @@ import IntegratedGraphics from "@/pages/integrated-graphics";
 import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
 import LaptopPage from "@/pages/laptop";
+import BoostPage from "@/pages/boost";
 
 function VisitTracker() {
   useEffect(() => {
@@ -104,6 +106,7 @@ function Router() {
       <Route path="/showcase" component={Showcase} />
       <Route path="/help" component={Help} />
       <Route path="/get-code" component={GetCode} />
+      <Route path="/boost" component={BoostPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -115,6 +118,7 @@ function App() {
       <TooltipProvider>
         <VisitTracker />
         <FriendUnlockHandler />
+        <OnboardingModal />
         <Toaster />
         <Router />
       </TooltipProvider>

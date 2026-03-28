@@ -14,6 +14,8 @@ interface GameEntry {
   name: string;
   publisher: string;
   accentBorder: string;
+  coverUrl?: string;
+  coverGradient?: string;
   detectPaths: string[];
   processName: string;
   tweaks: string[];
@@ -25,6 +27,7 @@ const GAMES: GameEntry[] = [
     name: "Valorant",
     publisher: "Riot Games",
     accentBorder: "border-l-red-500",
+    coverGradient: "from-red-900 via-red-800 to-zinc-900",
     detectPaths: ["%LocalAppData%\\VALORANT", "C:\\Riot Games\\VALORANT"],
     processName: "VALORANT-Win64-Shipping.exe",
     tweaks: ["Above Normal CPU priority (IFEO persistent)", "High I/O priority for asset streaming", "Disable Riot Vanguard telemetry service"],
@@ -34,6 +37,7 @@ const GAMES: GameEntry[] = [
     name: "Counter-Strike 2",
     publisher: "Valve",
     accentBorder: "border-l-orange-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe"],
     processName: "cs2.exe",
     tweaks: ["Above Normal CPU priority (IFEO persistent)", "Disable TCP timestamps for lower RTT", "Set socket send/receive buffers to 256KB"],
@@ -43,6 +47,7 @@ const GAMES: GameEntry[] = [
     name: "Apex Legends",
     publisher: "Respawn / EA",
     accentBorder: "border-l-red-700",
+    coverGradient: "from-orange-950 via-red-900 to-zinc-900",
     detectPaths: ["C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe", "C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe"],
     processName: "r5apex.exe",
     tweaks: ["Above Normal CPU priority", "Disable EA/Origin in-game overlay service", "Set process I/O to High priority"],
@@ -52,6 +57,7 @@ const GAMES: GameEntry[] = [
     name: "Call of Duty: Warzone",
     publisher: "Activision",
     accentBorder: "border-l-zinc-400",
+    coverGradient: "from-zinc-900 via-slate-800 to-zinc-950",
     detectPaths: ["C:\\Program Files (x86)\\Call of Duty", "C:\\Program Files\\Battle.net Apps\\Call of Duty"],
     processName: "cod.exe",
     tweaks: ["Above Normal CPU priority", "Disable Battle.net overlay agent", "Increase network socket buffer for BR servers"],
@@ -61,6 +67,7 @@ const GAMES: GameEntry[] = [
     name: "League of Legends",
     publisher: "Riot Games",
     accentBorder: "border-l-amber-600",
+    coverGradient: "from-amber-950 via-yellow-900 to-zinc-900",
     detectPaths: ["C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe"],
     processName: "League of Legends.exe",
     tweaks: ["Above Normal CPU priority", "High I/O for champion asset loading", "Disable Riot background update agent at launch"],
@@ -70,6 +77,7 @@ const GAMES: GameEntry[] = [
     name: "Overwatch 2",
     publisher: "Blizzard",
     accentBorder: "border-l-orange-500",
+    coverGradient: "from-orange-900 via-orange-800 to-zinc-900",
     detectPaths: ["C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe", "C:\\Program Files\\Overwatch\\_retail_\\Overwatch.exe"],
     processName: "Overwatch.exe",
     tweaks: ["Above Normal CPU priority", "Disable Blizzard agent background service", "Network buffer tuning for 64-tick servers"],
@@ -79,6 +87,7 @@ const GAMES: GameEntry[] = [
     name: "Rainbow Six Siege",
     publisher: "Ubisoft",
     accentBorder: "border-l-zinc-500",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/359550/header.jpg",
     detectPaths: ["C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Tom Clancy's Rainbow Six Siege"],
     processName: "RainbowSix.exe",
     tweaks: ["Above Normal CPU priority + all physical cores", "Disable Ubisoft Connect telemetry", "High I/O priority for map streaming"],
@@ -88,6 +97,7 @@ const GAMES: GameEntry[] = [
     name: "Rust",
     publisher: "Facepunch Studios",
     accentBorder: "border-l-red-800",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/252490/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Rust\\RustClient.exe"],
     processName: "RustClient.exe",
     tweaks: ["Above Normal CPU priority", "Expand streaming pool size in registry", "Disable background application throttling"],
@@ -97,6 +107,7 @@ const GAMES: GameEntry[] = [
     name: "Minecraft (Java)",
     publisher: "Mojang / Microsoft",
     accentBorder: "border-l-zinc-600",
+    coverGradient: "from-green-950 via-emerald-900 to-zinc-900",
     detectPaths: ["%AppData%\\.minecraft\\launcher_profiles.json"],
     processName: "javaw.exe",
     tweaks: ["Add .minecraft to Defender exclusions (scan skip)", "Set javaw.exe to Above Normal priority", "Disable Windows Update delivery optimization bandwidth cap"],
@@ -106,6 +117,7 @@ const GAMES: GameEntry[] = [
     name: "Roblox",
     publisher: "Roblox Corporation",
     accentBorder: "border-l-red-400",
+    coverGradient: "from-red-950 via-red-900 to-zinc-900",
     detectPaths: ["%LocalAppData%\\Roblox\\Versions"],
     processName: "RobloxPlayerBeta.exe",
     tweaks: ["Above Normal CPU priority for Roblox player", "Disable Roblox background crash reporter", "Set I/O priority to High"],
@@ -115,6 +127,7 @@ const GAMES: GameEntry[] = [
     name: "Escape from Tarkov",
     publisher: "Battlestate Games",
     accentBorder: "border-l-stone-500",
+    coverGradient: "from-stone-900 via-neutral-800 to-zinc-900",
     detectPaths: ["C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe", "C:\\Games\\EFT\\EscapeFromTarkov.exe"],
     processName: "EscapeFromTarkov.exe",
     tweaks: ["High CPU priority (EFT is extremely CPU-heavy)", "Disable Windows Game DVR for EFT", "Expand socket buffer for server desync reduction"],
@@ -124,6 +137,7 @@ const GAMES: GameEntry[] = [
     name: "PUBG: Battlegrounds",
     publisher: "Krafton",
     accentBorder: "border-l-amber-700",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/578080/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\PUBG\\TslGame\\Binaries\\Win64\\TslGame.exe"],
     processName: "TslGame.exe",
     tweaks: ["Above Normal CPU priority", "Unreal Engine streaming pool expansion", "Disable PUBG telemetry background tasks"],
@@ -133,6 +147,7 @@ const GAMES: GameEntry[] = [
     name: "Dead by Daylight",
     publisher: "Behaviour Interactive",
     accentBorder: "border-l-red-900",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/381210/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Dead by Daylight\\DeadByDaylight\\Binaries\\Win64\\DeadByDaylight-Win64-Shipping.exe"],
     processName: "DeadByDaylight-Win64-Shipping.exe",
     tweaks: ["Above Normal CPU priority", "Disable background shader compilation worker throttling", "I/O priority boost for asset loading"],
@@ -142,6 +157,7 @@ const GAMES: GameEntry[] = [
     name: "Dota 2",
     publisher: "Valve",
     accentBorder: "border-l-zinc-400",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/570/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe"],
     processName: "dota2.exe",
     tweaks: ["Above Normal CPU priority", "Disable Steam friend presence during gaming (CPU)", "Optimize network tick for South Asian servers"],
@@ -151,6 +167,7 @@ const GAMES: GameEntry[] = [
     name: "Warframe",
     publisher: "Digital Extremes",
     accentBorder: "border-l-blue-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/230410/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Warframe", "%LOCALAPPDATA%\\Warframe"],
     processName: "Warframe.x64.exe",
     tweaks: ["Above Normal CPU priority (IFEO persistent)", "High I/O priority for Warframe asset streaming", "Disable background shader recompile throttling"],
@@ -160,6 +177,7 @@ const GAMES: GameEntry[] = [
     name: "Forza Horizon 5",
     publisher: "Playground Games / Xbox",
     accentBorder: "border-l-orange-400",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1551360/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\ForzaHorizon5", "%ProgramFiles%\\WindowsApps"],
     processName: "ForzaHorizon5.exe",
     tweaks: ["Above Normal CPU priority (IFEO)", "High I/O priority for open-world streaming", "Disable Xbox Game Bar interference"],
@@ -169,6 +187,7 @@ const GAMES: GameEntry[] = [
     name: "Ready or Not",
     publisher: "VOID Interactive",
     accentBorder: "border-l-zinc-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1144200/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Ready Or Not", "D:\\SteamLibrary\\steamapps\\common\\Ready Or Not"],
     processName: "ReadyOrNot.exe",
     tweaks: ["Above Normal CPU priority (Unreal Engine 4)", "High I/O priority for level streaming", "Disable background shader worker throttle"],
@@ -178,6 +197,7 @@ const GAMES: GameEntry[] = [
     name: "Phasmophobia",
     publisher: "Kinetic Games",
     accentBorder: "border-l-violet-700",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/739630/header.jpg",
     detectPaths: ["Steam\\steamapps\\common\\Phasmophobia"],
     processName: "Phasmophobia.exe",
     tweaks: ["Above Normal CPU priority (Unity engine)", "High I/O priority for audio/level assets", "Reduce lobby load time via cache hints"],
@@ -187,6 +207,7 @@ const GAMES: GameEntry[] = [
     name: "Battlefield 2042",
     publisher: "DICE / EA",
     accentBorder: "border-l-amber-500",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1517290/header.jpg",
     detectPaths: ["C:\\Program Files\\EA Games\\Battlefield 2042", "Origin Games\\Battlefield 2042", "Steam\\steamapps\\common\\Battlefield 2042"],
     processName: "BF2042.exe",
     tweaks: ["Above Normal CPU priority (Frostbite engine)", "High I/O priority for large map streaming", "Disable EA Anti-Cheat telemetry service"],
@@ -196,63 +217,98 @@ const GAMES: GameEntry[] = [
 function GameCard({ game }: { game: GameEntry }) {
   const { tweaks, setTweak } = useOptimizationStore();
   const enabled = tweaks[game.id] || false;
+  const [imgErr, setImgErr] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const showImg = game.coverUrl && !imgErr;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "rounded-xl border border-l-4 p-5 transition-all duration-200",
-        game.accentBorder,
+        "rounded-xl overflow-hidden border transition-all duration-200 group",
         enabled
-          ? "bg-red-500/5 border-red-500/20 border-l-4 shadow-[inset_0_0_20px_-10px_rgba(239,68,68,0.12)]"
-          : "bg-black/40 border-white/5 hover:border-white/10 hover:bg-black/60"
+          ? "border-red-500/50 shadow-[0_0_16px_-4px_rgba(239,68,68,0.35)]"
+          : "border-white/8 hover:border-white/15"
       )}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <h3 className={cn("font-bold text-sm", enabled ? "text-white" : "text-zinc-200")}>{game.name}</h3>
-            {enabled && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 uppercase">
-                INCLUDED
-              </span>
+      {/* Cover art area */}
+      <div
+        className={cn(
+          "relative w-full overflow-hidden cursor-pointer",
+          "h-[120px]",
+          !showImg && `bg-gradient-to-br ${game.coverGradient || "from-zinc-900 to-zinc-800"}`
+        )}
+        onClick={() => setExpanded(e => !e)}
+      >
+        {showImg && (
+          <img
+            src={game.coverUrl}
+            alt={game.name}
+            onError={() => setImgErr(true)}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        )}
+        {!showImg && (
+          <div className="absolute inset-0 flex items-end p-3">
+            <span className="text-sm font-black text-white/60 uppercase tracking-widest leading-tight drop-shadow">
+              {game.name}
+            </span>
+          </div>
+        )}
+        {/* Dark overlay + enabled badge */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+        {enabled && (
+          <div className="absolute top-2 left-2">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-600 text-white uppercase tracking-wide shadow">
+              INCLUDED
+            </span>
+          </div>
+        )}
+        {/* Toggle button */}
+        <div className="absolute top-2 right-2">
+          <button
+            data-testid={`toggle-game-${game.id}`}
+            onClick={(e) => { e.stopPropagation(); setTweak(game.id, !enabled); }}
+            className={cn(
+              "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 shadow-lg",
+              enabled ? "bg-red-600" : "bg-zinc-700/80 backdrop-blur-sm"
             )}
-          </div>
-          <p className="text-[11px] text-zinc-500">{game.publisher}</p>
+          >
+            <span className={cn(
+              "pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow ring-0 transition-transform duration-200",
+              enabled ? "translate-x-4" : "translate-x-0.5"
+            )} />
+          </button>
         </div>
-        <button
-          data-testid={`toggle-game-${game.id}`}
-          onClick={() => setTweak(game.id, !enabled)}
-          className={cn(
-            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none",
-            enabled ? "bg-red-600" : "bg-zinc-700"
-          )}
+        {/* Game name at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2">
+          <p className="text-xs font-bold text-white leading-tight truncate drop-shadow">{game.name}</p>
+          <p className="text-[10px] text-zinc-400 truncate">{game.publisher}</p>
+        </div>
+      </div>
+
+      {/* Tweak list — shown on expand */}
+      {expanded && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          className="bg-zinc-900/80 border-t border-white/5 px-3 py-2.5 space-y-1.5"
         >
-          <span className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200",
-            enabled ? "translate-x-5" : "translate-x-0.5"
-          )} />
-        </button>
-      </div>
-
-      <div className="mb-3 space-y-1">
-        {game.detectPaths.map((p, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <Terminal className="w-2.5 h-2.5 text-zinc-600 shrink-0" />
-            <span className="text-[10px] font-mono text-zinc-600 truncate">{p}</span>
+          {game.tweaks.map((tweak, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <CheckCircle className={cn("w-3 h-3 shrink-0 mt-0.5", enabled ? "text-red-400" : "text-zinc-600")} />
+              <span className="text-[10px] text-zinc-400 leading-snug">{tweak}</span>
+            </div>
+          ))}
+          <div className="pt-1 flex flex-wrap gap-1">
+            {game.detectPaths.map((p, i) => (
+              <span key={i} className="text-[9px] font-mono text-zinc-700 truncate max-w-full">{p}</span>
+            ))}
           </div>
-        ))}
-      </div>
-
-      <div className="space-y-1.5">
-        {game.tweaks.map((tweak, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <CheckCircle className={cn("w-3 h-3 shrink-0 mt-0.5", enabled ? "text-red-500" : "text-zinc-600")} />
-            <span className="text-[11px] text-zinc-500 leading-snug">{tweak}</span>
-          </div>
-        ))}
-      </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }
@@ -479,7 +535,7 @@ export default function GameDetection() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
               Included in Script ({enabledGames.length})
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {enabledGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
@@ -498,7 +554,7 @@ export default function GameDetection() {
                   : `All Games (${GAMES.length})`
               }
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {disabledGames.map((game, i) => (
                 <motion.div key={game.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <GameCard game={game} />

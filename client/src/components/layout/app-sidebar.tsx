@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Laptop,
   Play,
+  TrendingUp,
 } from "lucide-react";
 import {
   Sidebar,
@@ -64,6 +65,7 @@ function countForSection(tweaks: Record<string, boolean>, url: string) {
 
 const navItems = [
   { title: "Dashboard",           url: "/",                   icon: Activity },
+  { title: "Quick Boost",         url: "/boost",              icon: TrendingUp,   boostAccent: true },
   { title: "Registry Tweaks",     url: "/registry",           icon: Settings2,    recCount: 20 },
   { title: "FiveM Optimizer",     url: "/fivem",              icon: Gamepad2,     recCount: 13 },
   { title: "Fortnite Optimizer",  url: "/fortnite",           icon: Crosshair,    recCount: 8  },
@@ -174,6 +176,7 @@ export function AppSidebar() {
                 const isFixAccent = (item as any).fixAccent;
                 const isWinTitusAccent = (item as any).winTitusAccent;
                 const isProAccent = (item as any).proAccent;
+                const isBoostAccent = (item as any).boostAccent;
                 const isLast = idx === navItems.length - 1;
                 const sectionCount = countForSection(tweaks, item.url);
                 return (
@@ -193,6 +196,8 @@ export function AppSidebar() {
                           ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
                           : isProAccent
                           ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+                          : isBoostAccent
+                          ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
                           : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
                       )}
                     >
@@ -209,7 +214,8 @@ export function AppSidebar() {
                           isAccent ? "text-[#5865F2]" :
                           isFixAccent ? "text-cyan-500" :
                           isWinTitusAccent ? "text-orange-400" :
-                          isProAccent ? "text-violet-400" : ""
+                          isProAccent ? "text-violet-400" :
+                          isBoostAccent ? "text-amber-400" : ""
                         )} />
                         <span className="text-sm flex-1">{item.title}</span>
                         {/* Active tweak count badge for sections */}

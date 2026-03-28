@@ -17,6 +17,7 @@ const ALL_FIVEM_IDS = [
   "FiveMDNSOverride","FiveMDisableP2P","FiveMQueueFix","FiveMEnableRSS",
   "FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks",
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
+  "FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable","FiveM5600CoreAffinity","FiveM5600PowerPlan",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
 
@@ -82,6 +83,14 @@ export default function Fivem() {
     { id: "FiveMGameModeAdd", title: "Add FiveM + GTA5 to Windows Game Mode", desc: "Enables Auto Game Mode and whitelists GTA5.exe and FiveM.exe in the Windows Game Mode process registry — ensures Windows grants them priority scheduling automatically.", impact: "MED" },
     { id: "FiveMRenderingBoost", title: "Disable Rendering Preemption (FiveM + GTA5)", desc: "Sets DisableRenderingContextPreemption=1, DisableRenderingPreemption=1, EnableHWAcceleration=1, GpuIdle=0 on both FiveM.exe and GTA5.exe — eliminates GPU preemption micro-stutters during scene transitions.", impact: "HIGH" },
     { id: "FiveMGPUPriorityStack", title: "GPU Priority Stack (GpuPriorityClass=8 + HAGS)", desc: "Sets GpuPriorityClass=8, GPU Priority=8, GpuMaxPerformance=256, GpuThrottling=0 on FiveM.exe and applies GPU Priority=8, MaximumPreRenderedFrames=1 to the system Games multimedia profile.", badge: "NVIDIA/AMD", impact: "HIGH" },
+  ];
+
+  const GTX1060_RYZEN5600_TWEAKS: Tweak[] = [
+    { id: "FiveM1060VRAMFlag", title: "GTX 1060 6GB: Force GTA V to Use Full 6GB VRAM", desc: "Appends -availablevidmem 6144 to GTA V commandline.txt — forces the engine to recognize and use the full 6GB VRAM budget. Some Pascal GPU setups incorrectly report available VRAM as lower, limiting texture streaming. This patch fixes it.", badge: "GTX 1060", impact: "HIGH" },
+    { id: "FiveM1060DisableHAGS", title: "GTX 1060: Disable Hardware-Accelerated GPU Scheduling (HAGS)", desc: "HAGS causes additional frame-time variance on Pascal-gen GPUs (GTX 1060, 1080, 1080 Ti). These cards were designed before HAGS existed and the scheduler overhead costs more than it saves. Disabling it reduces micro-stutters on populated FiveM servers.", badge: "GTX 1060", impact: "HIGH" },
+    { id: "FiveM1060AnselDisable", title: "GTX 1060: Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel (NVContainerLocalSystem) from injecting into GTA V. Ansel hooks every frame on NVIDIA GPUs including GTX 1060 — on older cards this is measurable overhead. Disabling it frees a small but consistent amount of GPU time.", badge: "GTX 1060", impact: "MED" },
+    { id: "FiveM5600CoreAffinity", title: "Ryzen 5 5600: Pin GTA5 + FiveM to Physical Cores (0,2,4,6,8,10)", desc: "Sets CPU affinity for GTA5.exe and FiveM.exe to physical cores only — avoiding the SMT (hyperthreaded) sibling cores. On Zen 3 (Ryzen 5 5600), GTA V's threading model interacts poorly with SMT under load, causing frame-time spikes. This forces it onto the 6 real cores for tighter frametimes.", badge: "RYZEN 5 5600", impact: "HIGH" },
+    { id: "FiveM5600PowerPlan", title: "Ryzen 5 5600: Apply AMD Ryzen High Performance Power Plan", desc: "Activates the AMD Ryzen High Performance power plan (GUID: fc5a4062). Zen 3 CPUs have aggressive frequency scaling that can cause latency spikes in GTA V. The Ryzen-tuned plan sets minimum processor state to 99% and removes the governor ramp-up delay — keeps boost clocks on for the full GTA V session.", badge: "RYZEN 5 5600", impact: "MED" },
   ];
 
   function renderSection(heading: string, items: Tweak[]) {
@@ -183,6 +192,31 @@ export default function Fivem() {
           {renderSection("Windows Settings for GTA V", WINDOWS_TWEAKS)}
           {renderSection("CFX / Server Connectivity", CFX_TWEAKS)}
           {renderSection("Advanced PerfOptions — IFEO Registry Stack", PERF_OPTIONS_TWEAKS)}
+
+          {/* GTX 1060 + Ryzen 5 5600 specific */}
+          <section>
+            <div className="flex items-center gap-3 mb-4 px-1">
+              <div className="flex-1">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-amber-500">GTX 1060 6GB + Ryzen 5 5600 Profile</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Hardware-specific tweaks for Pascal GPU + Zen 3 CPU builds (applies to Stun's rig and similar configs)</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {GTX1060_RYZEN5600_TWEAKS.map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={(v) => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[

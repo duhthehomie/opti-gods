@@ -17,6 +17,8 @@ const ALL_DEBLOAT_IDS = [
   "DebloatPowerAutomate","DebloatQuickAssist","DebloatTeamsConsumer","DebloatAlarmsAndClock",
   "ServiceDiagTrack","ServiceWSearch","ServiceSysMain","ServiceRemoteReg","ServiceWMPNetworkSvc",
   "ServiceFax","ServiceRetailDemo","ServiceTabletInput","ServiceMapsBroker",
+  "ServiceWerSvc","ServiceDPS","ServicePrintSpooler","ServiceDusmSvc","ServiceTrkWks",
+  "ServiceLltdsvc","ServiceFDHost","ServiceWbioSrvc","ServicePcaSvc","ServiceAeLookupSvc",
   "PrivacyTelemetry","PrivacyActivityHistory","PrivacyLocationTracking","PrivacyAdvertisingID","PrivacyDiagFeedback",
   "Win11TeamsChat","Win11Widgets","Win11Copilot","Win11StartRecommended","Win11AdsInStart",
   "Win11EdgeSidebar","Win11ChatIcon","Win11OneDriveBackup","Win11BingSearch","Win11Snap",
@@ -91,6 +93,16 @@ const SERVICES: DebloatItem[] = [
   { id: "ServiceRetailDemo", title: "Disable Retail Demo Service", desc: "Removes the demo mode service pre-installed on all Windows.", status: "preinstalled" },
   { id: "ServiceTabletInput", title: "Disable Tablet Input Panel Service", desc: "Disables tablet/touchscreen input service on desktop PCs.", status: "preinstalled" },
   { id: "ServiceMapsBroker", title: "Disable Maps Broker Service", desc: "Stops Maps data download service running in background.", status: "preinstalled" },
+  { id: "ServiceWerSvc", title: "Disable Windows Error Reporting (WerSvc)", desc: "Stops crash dump uploads to Microsoft — reduces disk writes and background CPU on crash events.", status: "preinstalled" },
+  { id: "ServiceDPS", title: "Disable Diagnostics Policy Service (DPS)", desc: "Stops network and hardware auto-diagnosis in background. Reduces idle CPU on gaming rigs.", status: "preinstalled" },
+  { id: "ServicePrintSpooler", title: "Disable Print Spooler", desc: "Disables print queue service on systems with no printer — removes a known attack vector and frees RAM.", status: "preinstalled", warning: "Do NOT disable if you have a printer connected. The Print Spooler is required for all printing functionality. Only disable this on a dedicated gaming PC with no printer." },
+  { id: "ServiceDusmSvc", title: "Disable Data Usage Monitoring (DusmSvc)", desc: "Stops Windows data usage tracking service — small constant background overhead eliminated.", status: "preinstalled" },
+  { id: "ServiceTrkWks", title: "Disable Distributed Link Tracking (TrkWks)", desc: "Disables the service that tracks shortcut links across network shares — useless on home PCs.", status: "preinstalled" },
+  { id: "ServiceLltdsvc", title: "Disable Link Layer Topology Discovery (Lltdsvc)", desc: "Stops network topology mapper — only needed for corporate network mapping tools.", status: "preinstalled" },
+  { id: "ServiceFDHost", title: "Disable Function Discovery Host (FDHost)", desc: "Disables SSDP-based device discovery. Reduces background activity if you don't use network-shared printers/devices.", status: "preinstalled" },
+  { id: "ServiceWbioSrvc", title: "Disable Windows Biometric Service (WbioSrvc)", desc: "Stops fingerprint/face ID service on desktop PCs with no biometric hardware.", status: "preinstalled", warning: "Do not disable if you use Windows Hello (fingerprint or face recognition). This service is required for biometric login." },
+  { id: "ServicePcaSvc", title: "Disable Program Compatibility Assistant (PcaSvc)", desc: "Stops the service that auto-monitors apps for compatibility issues — rarely needed on gaming rigs.", status: "preinstalled" },
+  { id: "ServiceAeLookupSvc", title: "Disable Application Experience (AeLookupSvc)", desc: "Disables app compatibility telemetry lookup — every legacy app launch triggers a Microsoft lookup without this disabled.", status: "preinstalled" },
 ];
 
 const PRIVACY: DebloatItem[] = [
