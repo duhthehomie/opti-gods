@@ -1299,6 +1299,37 @@ Start-Sleep 2
     return res.json({ sessionToken });
   });
 
+  // Admin — list all active Pro sessions, enriched with email from email_requests
+  app.get('/api/admin/sessions', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const sessions = await storage.getAllProSessions();
+    const emailReqs = await storage.getEmailRequests();
+    const codes = await storage.getAllCodes();
+
+    // Build a codeRef → email map: first check email_requests.sentCodeId → code.code
+    const codeValueToEmail: Record<string, string> = {};
+    const codeValueToDiscord: Record<string, string> = {};
+    for (const req of emailReqs) {
+      if (req.sentCodeId) {
+        const code = codes.find(c => c.id === req.sentCodeId);
+        if (code?.code) {
+          codeValueToEmail[code.code] = req.email;
+          if ((req as any).discordUsername) codeValueToDiscord[code.code] = (req as any).discordUsername;
+        }
+      }
+    }
+
+    const enriched = sessions.map(s => ({
+      ...s,
+      email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
+      discordUsername: s.codeRef ? (codeValueToDiscord[s.codeRef] ?? null) : null,
+      // Mask the token — show first 8 chars only so admin can reference it without exposing full token
+      tokenMasked: s.sessionToken.slice(0, 8) + "…",
+    }));
+
+    return res.json(enriched);
+  });
+
   // Admin — revoke any Pro session instantly (kill free/fraudulent access)
   app.delete('/api/admin/sessions/:token', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

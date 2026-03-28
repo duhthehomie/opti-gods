@@ -94,7 +94,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "announcements" | "analytics";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -420,6 +420,29 @@ export default function Admin() {
         title: data.revoked > 0 ? `Access revoked (${data.revoked} session${data.revoked > 1 ? "s" : ""} killed)` : "No active sessions found",
         description: data.revoked > 0 ? "That user can no longer access Pro." : "They may have already lost access.",
       });
+    },
+  });
+
+  // Pro Sessions — all active sessions with identity info
+  type SessionRow = {
+    id: number; sessionToken: string; tokenMasked: string;
+    codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null;
+    email: string | null; discordUsername: string | null;
+  };
+  const sessionsQuery = useQuery<SessionRow[]>({
+    queryKey: ["/api/admin/sessions", key],
+    queryFn: () => fetch("/api/admin/sessions", { headers }).then(r => r.json()),
+    enabled: authed && tab === "sessions",
+    refetchInterval: 30_000, // refresh every 30s so online status stays current
+  });
+
+  const revokeSession = useMutation({
+    mutationFn: (token: string) => fetch(`/api/admin/sessions/${encodeURIComponent(token)}`, {
+      method: "DELETE", headers,
+    }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions", key] });
+      toast({ title: "Session revoked", description: "That token is now dead — user loses Pro on next page load." });
     },
   });
 
@@ -922,13 +945,14 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "announcements", "analytics"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
               friends: Link,
               activity: Activity,
               email: Mail,
+              sessions: Users,
               announcements: Bell,
               analytics: TrendingUp,
             };
@@ -949,6 +973,7 @@ export default function Admin() {
                   {t === "codes" ? `Codes (${stats?.totalCodes ?? 0})` :
                    t === "friends" ? `Friends (${stats?.totalFriends ?? 0})` :
                    t === "email" ? "Email" :
+                   t === "sessions" ? "Sessions" :
                    t === "announcements" ? "Updates" :
                    t === "analytics" ? "Analytics" :
                    `Activity (${activityItems.length})`}
@@ -957,6 +982,7 @@ export default function Admin() {
                   {t === "codes" ? `${stats?.totalCodes ?? 0}` :
                    t === "friends" ? `${stats?.totalFriends ?? 0}` :
                    t === "email" ? "" :
+                   t === "sessions" ? "" :
                    t === "announcements" ? "" :
                    t === "analytics" ? "" :
                    `${activityItems.length}`}
@@ -964,6 +990,11 @@ export default function Admin() {
                 {t === "email" && pendingEmails > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold shadow-[0_0_6px_rgba(239,68,68,0.5)]">
                     {pendingEmails}
+                  </span>
+                )}
+                {t === "sessions" && (sessionsQuery.data?.length ?? 0) > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold">
+                    {sessionsQuery.data!.length}
                   </span>
                 )}
               </button>
@@ -1716,6 +1747,145 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        {/* ─── PRO SESSIONS TAB ──────────────────────────────────────── */}
+        {tab === "sessions" && (() => {
+          const sessions = sessionsQuery.data ?? [];
+          const now = Date.now();
+          // "Online" = last ping within 15 min (pro-status check fires on every page load + navigate)
+          const isOnline = (s: { lastCheckedAt: string | null }) =>
+            s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 15 * 60_000 : false;
+          const onlineCount = sessions.filter(isOnline).length;
+
+          return (
+            <div className="space-y-4">
+              {/* Summary bar */}
+              <div className="flex items-center gap-3 p-3 bg-zinc-900/40 border border-white/5 rounded-xl">
+                <Users className="w-4 h-4 text-zinc-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white">{sessions.length} active Pro session{sessions.length !== 1 ? "s" : ""}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">
+                    {onlineCount > 0
+                      ? <><span className="text-emerald-400 font-bold">{onlineCount} online</span> right now (pinged in the last 15 min)</>
+                      : "Nobody active in the last 15 minutes"}
+                  </p>
+                </div>
+                <button
+                  data-testid="button-refresh-sessions"
+                  onClick={() => sessionsQuery.refetch()}
+                  className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw className={cn("w-3.5 h-3.5", sessionsQuery.isFetching && "animate-spin")} />
+                </button>
+              </div>
+
+              <div className="text-[10px] text-zinc-600 leading-relaxed">
+                Each row is a device that redeemed a Pro code or friend link. "Online" means they loaded the app in the last 15 min. Revoking kills their session immediately — they're locked out on next page load.
+              </div>
+
+              {sessionsQuery.isLoading ? (
+                <div className="p-12 text-center text-xs text-zinc-600 animate-pulse">Loading sessions…</div>
+              ) : sessions.length === 0 ? (
+                <div className="p-12 text-center">
+                  <Users className="w-8 h-8 text-zinc-800 mx-auto mb-3" />
+                  <p className="text-xs text-zinc-600">No active Pro sessions yet.</p>
+                  <p className="text-[10px] text-zinc-700 mt-1">Sessions appear here once a customer redeems a code.</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+                  {[...sessions]
+                    .sort((a, b) => (isOnline(b) ? 1 : 0) - (isOnline(a) ? 1 : 0) ||
+                      new Date(b.lastCheckedAt ?? 0).getTime() - new Date(a.lastCheckedAt ?? 0).getTime())
+                    .map(s => {
+                      const online = isOnline(s);
+                      const isFriend = s.codeRef?.startsWith("friend:");
+                      const isAdminTest = s.codeRef?.startsWith("admin-");
+                      return (
+                        <div
+                          key={s.id}
+                          data-testid={`row-session-${s.id}`}
+                          className={cn(
+                            "px-3 py-3 transition-colors",
+                            online ? "hover:bg-emerald-950/10" : "opacity-60 hover:opacity-80"
+                          )}
+                        >
+                          {/* Row 1: status dot + identity */}
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className={cn(
+                              "w-2 h-2 rounded-full shrink-0 ring-2",
+                              online
+                                ? "bg-emerald-400 ring-emerald-400/30 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+                                : "bg-zinc-700 ring-zinc-700/30"
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              {s.email ? (
+                                <p className="text-xs font-semibold text-white truncate">{s.email}</p>
+                              ) : (
+                                <p className="text-xs font-semibold text-zinc-500 italic">
+                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : "Unknown (code not matched)"}
+                                </p>
+                              )}
+                              {s.discordUsername && (
+                                <p className="text-[10px] text-indigo-400 font-bold truncate">Discord: {s.discordUsername}</p>
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
+                              online
+                                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                                : "text-zinc-600 bg-zinc-800 border-zinc-700"
+                            )}>
+                              {online ? "ONLINE" : "OFFLINE"}
+                            </span>
+                            <button
+                              data-testid={`button-revoke-session-${s.id}`}
+                              onClick={() => {
+                                if (confirm(`Revoke session for ${s.email ?? s.tokenMasked}?\n\nThey lose Pro access immediately.`))
+                                  revokeSession.mutate(s.sessionToken);
+                              }}
+                              disabled={revokeSession.isPending}
+                              className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                              title="Revoke this session"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Row 2: code info + timestamps */}
+                          <div className="pl-4 space-y-0.5">
+                            {s.codeRef && (
+                              <p className="text-[10px] text-zinc-600 font-mono">
+                                <span className="text-zinc-700 uppercase font-bold">Code: </span>
+                                {isFriend ? (
+                                  <span className="text-amber-600">friend link</span>
+                                ) : isAdminTest ? (
+                                  <span className="text-violet-600">admin test</span>
+                                ) : (
+                                  <span className="text-zinc-500">{s.codeRef}</span>
+                                )}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                              <p className="text-[10px] text-zinc-700">
+                                <span className="text-zinc-600">Activated: </span>
+                                {s.createdAt ? timeAgo(s.createdAt) : "—"}
+                              </p>
+                              <p className="text-[10px] text-zinc-700">
+                                <span className="text-zinc-600">Last seen: </span>
+                                {s.lastCheckedAt ? timeAgo(s.lastCheckedAt) : "—"}
+                              </p>
+                              <p className="text-[10px] text-zinc-800 font-mono">Token: {s.tokenMasked}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
         {tab === "announcements" && (

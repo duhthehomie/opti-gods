@@ -45,6 +45,7 @@ export interface IStorage {
   revokeProSession(token: string): Promise<void>;
   revokeProSessionsByCode(codeRef: string): Promise<number>;
   touchProSession(token: string): Promise<void>;
+  getAllProSessions(): Promise<ProSession[]>;
   // Script download tracking
   recordScriptDownload(tweakIds: string[], sessionToken?: string): Promise<void>;
   getCustomerDeployStats(): Promise<{
@@ -403,6 +404,10 @@ export class DatabaseStorage implements IStorage {
 
   async touchProSession(token: string): Promise<void> {
     await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
+  }
+
+  async getAllProSessions(): Promise<ProSession[]> {
+    return db.select().from(proSessions).orderBy(proSessions.lastCheckedAt);
   }
 
   async createManualPayment(amount: number, method: string, note: string | null): Promise<ManualPayment> {
