@@ -308,7 +308,7 @@ export default function Fixes() {
       URL.revokeObjectURL(url);
       toast({
         title: "Crash Fix Downloaded",
-        description: "Right-click → Run with PowerShell as Administrator, then restart your PC.",
+        description: "Double-click the file — it will request admin automatically. Restart your PC when done.",
       });
     } catch {
       toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
@@ -426,7 +426,7 @@ export default function Fixes() {
                 {downloadingFix ? "Generating..." : "Download Crash Fix"}
               </Button>
               <p className="text-[9px] text-zinc-600 text-center">
-                Right-click → Run as Administrator → restart PC
+                Double-click → allow UAC prompt → restart PC
               </p>
             </div>
           </div>

@@ -145,7 +145,7 @@ const STATUS_CONFIG = {
 
 function getPS1(actions: BoostAction[]): string {
   return [
-    "# Opti Gods Quick Boost — Run as Administrator",
+    `# Opti Gods Quick Boost`,
     "Set-ExecutionPolicy Bypass -Scope Process -Force",
     "",
     ...actions.map(a => `# ${a.title}\n${a.ps1}\n`),
@@ -177,7 +177,6 @@ export default function BoostPage() {
   function downloadSingle(action: BoostAction) {
     const ps1 = [
       `# Opti Gods Quick Boost — ${action.title}`,
-      "# Run as Administrator",
       "Set-ExecutionPolicy Bypass -Scope Process -Force",
       "",
       action.ps1,
@@ -404,7 +403,7 @@ export default function BoostPage() {
                       <div className="flex items-start gap-2">
                         <Info className="w-3 h-3 text-zinc-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-zinc-600 leading-relaxed">
-                          Downloads a single PS1 file. Right-click → Run as Administrator.
+                          Downloads a PS1 file — double-click to run, it requests admin automatically.
                         </p>
                       </div>
                     </div>

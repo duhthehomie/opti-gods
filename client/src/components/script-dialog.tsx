@@ -152,7 +152,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: "PS1 downloaded", description: "Right-click → Properties → Unblock before running if Windows blocks it." });
+      toast({ title: "PS1 downloaded", description: "Double-click to run. If Windows blocks it: right-click → Properties → Unblock → OK." });
     } catch (e) {
       toast({ title: "Download failed", description: String(e), variant: "destructive" });
     } finally {

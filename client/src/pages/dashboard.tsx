@@ -143,8 +143,8 @@ const HOW_TO_STEPS = [
   },
   {
     icon: ShieldAlert,
-    title: "Run as Administrator",
-    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. Hit Yes on the UAC popup — it runs the script and applies every tweak automatically.",
+    title: "Click Yes on the Prompt",
+    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. A Windows security prompt will appear — click Yes. The script runs automatically and applies every tweak.",
   },
   {
     icon: RotateCcw,

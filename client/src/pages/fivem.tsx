@@ -177,7 +177,7 @@ export default function Fivem() {
           tweakIds={ALL_FIVEM_IDS}
           recommendedIds={FIVEM_RECOMMENDED}
           label="FiveM"
-          context="These tweaks are applied via PowerShell and target GTA V and FiveM process scheduling, network buffers, and CitizenFX config. Run as Administrator after downloading the script."
+          context="These tweaks are applied via PowerShell and target GTA V and FiveM process scheduling, network buffers, and CitizenFX config. Download the script and double-click to run — it requests admin automatically."
           tips={[
             "Start with Recommended — High Priority + Cache Clear are the biggest wins.",
             "Network Buffer tweak reduces packet loss on high-population RP servers.",
