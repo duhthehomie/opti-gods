@@ -92,6 +92,7 @@ export const proSessions = pgTable("pro_sessions", {
   codeRef: text("code_ref"), // the code or friend token that was redeemed
   createdAt: timestamp("created_at").defaultNow(),
   lastCheckedAt: timestamp("last_checked_at").defaultNow(),
+  ipAddress: text("ip_address"), // last seen IP address
 });
 export type ProSession = typeof proSessions.$inferSelect;
 

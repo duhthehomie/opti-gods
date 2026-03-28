@@ -94,7 +94,88 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security";
+
+function SecurityTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
+  const [blocks, setBlocks] = React.useState<BlockedIp[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [unblocking, setUnblocking] = React.useState<string | null>(null);
+
+  const loadBlocks = () => {
+    setLoading(true);
+    fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setLoading(false));
+  };
+
+  React.useEffect(() => { loadBlocks(); }, []);
+
+  const unblock = async (b: BlockedIp) => {
+    setUnblocking(b.key);
+    await fetch("/api/admin/blocked-ips", {
+      method: "DELETE",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ key: b.key }),
+    });
+    setBlocks(prev => prev.filter(x => x.key !== b.key));
+    setUnblocking(null);
+    toast({ title: `Unblocked ${b.ip}` });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold text-white">Rate-limit Blocks</p>
+          <p className="text-[10px] text-zinc-600 mt-0.5">IPs hard-blocked by the rate limiter. Unblock if they've paid and were just being impatient.</p>
+        </div>
+        <button
+          data-testid="button-refresh-blocks"
+          onClick={loadBlocks}
+          className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="p-10 text-center text-xs text-zinc-600 animate-pulse">Checking for blocks…</div>
+      ) : blocks.length === 0 ? (
+        <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+          <ShieldOff className="w-7 h-7 text-zinc-700 mx-auto mb-2" />
+          <p className="text-xs text-zinc-500 font-bold">No blocked IPs</p>
+          <p className="text-[10px] text-zinc-700 mt-1">Nobody has been hard-blocked by the rate limiter right now.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+          {blocks.map(b => (
+            <div key={b.key} data-testid={`row-block-${b.ip}`} className="flex items-center gap-3 px-3 py-3">
+              <div className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-red-500/20 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-white font-mono">{b.ip}</p>
+                <p className="text-[10px] text-zinc-600 truncate">
+                  <span className="text-zinc-700">Endpoint: </span>{b.path}
+                  <span className="ml-2 text-zinc-700">Expires: </span>
+                  <span className="text-amber-500">{b.minutesLeft}m</span>
+                </p>
+              </div>
+              <button
+                data-testid={`button-unblock-${b.ip}`}
+                onClick={() => unblock(b)}
+                disabled={unblocking === b.key}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+              >
+                <Shield className="w-3 h-3" />
+                {unblocking === b.key ? "Unblocking…" : "Unblock"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Admin() {
   const { toast } = useToast();
@@ -426,7 +507,7 @@ export default function Admin() {
   // Pro Sessions — all active sessions with identity info
   type SessionRow = {
     id: number; sessionToken: string; tokenMasked: string;
-    codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null;
+    codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
     email: string | null; discordUsername: string | null;
   };
   const sessionsQuery = useQuery<SessionRow[]>({
@@ -959,7 +1040,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -969,6 +1050,7 @@ export default function Admin() {
               sessions: Users,
               announcements: Bell,
               analytics: TrendingUp,
+              security: Shield,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -990,6 +1072,7 @@ export default function Admin() {
                    t === "sessions" ? "Sessions" :
                    t === "announcements" ? "Updates" :
                    t === "analytics" ? "Analytics" :
+                   t === "security" ? "Security" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -999,6 +1082,7 @@ export default function Admin() {
                    t === "sessions" ? "" :
                    t === "announcements" ? "" :
                    t === "analytics" ? "" :
+                   t === "security" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -1843,6 +1927,9 @@ export default function Admin() {
                               {s.discordUsername && (
                                 <p className="text-[10px] text-indigo-400 font-bold truncate">Discord: {s.discordUsername}</p>
                               )}
+                              {s.ipAddress && (
+                                <p className="text-[10px] text-zinc-500 font-mono truncate">IP: {s.ipAddress}</p>
+                              )}
                             </div>
                             <span className={cn(
                               "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
@@ -2181,6 +2268,8 @@ export default function Admin() {
             })()}
           </div>
         )}
+
+        {tab === "security" && <SecurityTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

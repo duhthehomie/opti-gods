@@ -41,7 +41,7 @@ export interface IStorage {
   deleteAnnouncement(id: number): Promise<void>;
   // Pro sessions (server-side validation — blocks localStorage spoofing exploit)
   createProSession(codeRef: string): Promise<string>; // returns session token
-  verifyProSession(token: string): Promise<boolean>;
+  verifyProSession(token: string, ip?: string): Promise<boolean>;
   revokeProSession(token: string): Promise<void>;
   revokeProSessionsByCode(codeRef: string): Promise<number>;
   touchProSession(token: string): Promise<void>;
@@ -384,12 +384,13 @@ export class DatabaseStorage implements IStorage {
     return token;
   }
 
-  async verifyProSession(token: string): Promise<boolean> {
+  async verifyProSession(token: string, ip?: string): Promise<boolean> {
     if (!token || token.length < 16) return false;
     const rows = await db.select().from(proSessions).where(eq(proSessions.sessionToken, token));
     if (!rows.length) return false;
-    // Update lastCheckedAt
-    await db.update(proSessions).set({ lastCheckedAt: new Date() }).where(eq(proSessions.sessionToken, token));
+    const update: Partial<typeof proSessions.$inferInsert> = { lastCheckedAt: new Date() };
+    if (ip) update.ipAddress = ip;
+    await db.update(proSessions).set(update).where(eq(proSessions.sessionToken, token));
     return true;
   }
 

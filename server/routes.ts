@@ -1288,7 +1288,8 @@ Start-Sleep 2
   app.post('/api/pro/status', rateLimit(30, 60_000, 60), async (req, res) => {
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
-    const valid = await storage.verifyProSession(sessionToken);
+    const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const valid = await storage.verifyProSession(sessionToken, ip);
     res.json({ valid });
   });
 
@@ -1970,6 +1971,45 @@ Read-Host "Press Enter to close this window"
     if (!checkAdminKey(req, res)) return;
     const sent = await runAutoSend();
     return res.json({ ok: true, sent });
+  });
+
+  // Admin — list all currently hard-blocked IPs (rate limiter)
+  app.get("/api/admin/blocked-ips", (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const now = Date.now();
+    const blocks: { key: string; ip: string; path: string; resetAt: number; minutesLeft: number }[] = [];
+    rateBuckets.forEach((w, key) => {
+      if (w.blocked && now <= w.resetAt) {
+        const [path, ip] = key.split("::").reduce((acc, part, i) => i === 0 ? [part, ""] : [acc[0], acc[1] + part], ["", ""]);
+        blocks.push({
+          key,
+          ip: key.substring(key.indexOf("::") + 2),
+          path: key.substring(0, key.indexOf("::")),
+          resetAt: w.resetAt,
+          minutesLeft: Math.ceil((w.resetAt - now) / 60000),
+        });
+      }
+    });
+    return res.json(blocks);
+  });
+
+  // Admin — unblock a specific rate-limit key (by full key or just IP prefix)
+  app.delete("/api/admin/blocked-ips", (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { key, ip } = req.body || {};
+    if (key) {
+      const w = rateBuckets.get(key);
+      if (w) { w.blocked = false; w.count = 0; }
+      return res.json({ ok: true, unblocked: key });
+    }
+    if (ip) {
+      let count = 0;
+      rateBuckets.forEach((w, k) => {
+        if (k.endsWith(`::${ip}`)) { w.blocked = false; w.count = 0; count++; }
+      });
+      return res.json({ ok: true, unblocked: ip, count });
+    }
+    return res.status(400).json({ error: "Provide key or ip" });
   });
 
   // --- Announcements (public read) ---
