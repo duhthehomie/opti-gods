@@ -1866,50 +1866,22 @@ Read-Host "Press Enter to close this window"
   });
 
   // --- Email Code Requests (public) ---
-  app.post("/api/request-code", async (req, res) => {
+  // SECURITY: This endpoint ONLY logs the request for admin review.
+  // No code is sent automatically — ever. Admin must manually verify payment proof
+  // and send the code via the admin panel. Auto-send and auto-generate are intentionally removed.
+  app.post("/api/request-code", rateLimit(3, 60_000 * 10, 5), async (req, res) => {
     const schema = z.object({
-      email: z.string().email(),
+      email: z.string().email().max(254),
       paymentMethod: z.enum(["cashapp", "paypal", "crypto"]),
-      paymentRef: z.string().min(2).max(200),
+      paymentRef: z.string().min(4).max(200),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid request" });
     const { email, paymentMethod, paymentRef } = parsed.data;
 
-    // Create the request record
+    // Save for admin review only — no code sent here
     const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef);
-
-    // If email is configured, immediately find or auto-generate a code and send it
-    if (isEmailConfigured()) {
-      try {
-        const allRequests = await storage.getEmailRequests();
-        const allCodes = await storage.getAllCodes();
-
-        // Find codes already reserved by previously sent requests
-        const reservedCodeIds = new Set(
-          allRequests
-            .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
-            .map(r => r.sentCodeId)
-        );
-
-        // Find an available unreserved code
-        let available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
-
-        // No code available — auto-generate one on the fly
-        if (!available) {
-          const newCode = generateCode();
-          available = await storage.createCode(newCode, `Auto-generated for ${email}`);
-        }
-
-        const siteUrl = `${req.protocol}://${req.get("host")}`;
-        await sendProCode(email, available.code, siteUrl);
-        await storage.updateEmailRequestStatus(emailReq.id, "auto-sent", available.id, "Sent immediately on request");
-        return res.json({ ok: true, id: emailReq.id, autoSent: true });
-      } catch (err) {
-        // Email send failed — leave in pending state for admin to handle manually
-        log(`[request-code] Auto-send failed for ${email}: ${err}`, "email");
-      }
-    }
+    log(`[request-code] New request queued: ${email} via ${paymentMethod} ref=${paymentRef}`, "email");
 
     return res.json({ ok: true, id: emailReq.id });
   });
