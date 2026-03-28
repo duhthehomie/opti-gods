@@ -1460,6 +1460,84 @@ Start-Sleep 2
     res.json({ ok: true, deleted: count });
   });
 
+  // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
+  app.get('/api/stability-fix-script', (req, res) => {
+    const lines = [
+      `# ============================================================`,
+      `#  Opti Gods — FiveM + Discord Stability Fix  (by leaq)`,
+      `#  Fixes: Discord randomly closing, FiveM / GTA V crashing`,
+      `#  Run as Administrator — restart your PC after it finishes`,
+      `# ============================================================`,
+      ``,
+      `\$ErrorActionPreference = 'SilentlyContinue'`,
+      ``,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods - FiveM + Discord Stability Fix" -ForegroundColor Red`,
+      `Write-Host "  ===========================================" -ForegroundColor DarkRed`,
+      `Write-Host ""`,
+      ``,
+      `# ── FIX 1: SystemResponsiveness was set to 0 (kills Discord) ──────────────`,
+      `# Value 0 = Windows gives 100% CPU scheduling to the game, nothing for Discord.`,
+      `# Discord audio/video pipelines are background threads — they starve and crash.`,
+      `# Fix: set to 10 = game gets 90%, Discord/audio keep their 10% minimum.`,
+      `Write-Host "[FIX 1] Correcting SystemResponsiveness..." -ForegroundColor Yellow`,
+      `\$mmPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'`,
+      `\$old = (Get-ItemProperty \$mmPath -Name SystemResponsiveness -EA SilentlyContinue).SystemResponsiveness`,
+      `Set-ItemProperty -Path \$mmPath -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force`,
+      `Write-Host "        Was: \$old  →  Now: 10  (Discord-safe game priority)" -ForegroundColor Green`,
+      ``,
+      `# ── FIX 2: Win32PrioritySeparation was set to 38 (server scheduler mode) ──`,
+      `# Value 38 = Windows server scheduling mode — reduces foreground thread priority.`,
+      `# This actively fought against game performance and caused instability.`,
+      `# Fix: set to 26 = short quantum + max foreground boost (gaming-optimal).`,
+      `Write-Host "[FIX 2] Correcting CPU scheduler mode..." -ForegroundColor Yellow`,
+      `\$pcPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl'`,
+      `\$old2 = (Get-ItemProperty \$pcPath -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
+      `Set-ItemProperty -Path \$pcPath -Name 'Win32PrioritySeparation' -Value 26 -Type DWord -Force`,
+      `Write-Host "        Was: \$old2  →  Now: 26  (short quantum, max foreground boost)" -ForegroundColor Green`,
+      ``,
+      `# ── FIX 3: Restart Discord so it picks up the new CPU scheduling ───────────`,
+      `Write-Host "[FIX 3] Checking Discord..." -ForegroundColor Yellow`,
+      `\$disc = Get-Process 'Discord' -EA SilentlyContinue`,
+      `If (\$disc) {`,
+      `    Write-Host "        Discord is running — restarting it to apply new scheduling..." -ForegroundColor Cyan`,
+      `    Stop-Process -Name 'Discord' -Force -EA SilentlyContinue`,
+      `    Start-Sleep -Seconds 2`,
+      `    \$discExe = "\$env:LocalAppData\\Discord\\Update.exe"`,
+      `    If (Test-Path \$discExe) { Start-Process \$discExe '--processStart Discord.exe' -EA SilentlyContinue }`,
+      `    Write-Host "        Discord restarted." -ForegroundColor Green`,
+      `} Else {`,
+      `    Write-Host "        Discord not running — no restart needed." -ForegroundColor DarkGray`,
+      `}`,
+      ``,
+      `# ── VERIFY ──────────────────────────────────────────────────────────────────`,
+      `Write-Host ""`,
+      `Write-Host "  Verification" -ForegroundColor White`,
+      `Write-Host "  ─────────────────────────────────────────────────" -ForegroundColor DarkGray`,
+      `\$sr  = (Get-ItemProperty \$mmPath -Name SystemResponsiveness -EA SilentlyContinue).SystemResponsiveness`,
+      `\$w32 = (Get-ItemProperty \$pcPath  -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
+      `\$srOk  = \$sr  -eq 10`,
+      `\$w32Ok = \$w32 -eq 26`,
+      `Write-Host "  SystemResponsiveness  = \$sr   $(if (\$srOk)  { '[OK]' } else { '[FAIL - expected 10]' })" -ForegroundColor \$(if (\$srOk)  { 'Green' } else { 'Red' })`,
+      `Write-Host "  Win32PrioritySeparation = \$w32 $(if (\$w32Ok) { '[OK]' } else { '[FAIL - expected 26]' })" -ForegroundColor \$(if (\$w32Ok) { 'Green' } else { 'Red' })`,
+      `Write-Host ""`,
+      `If (\$srOk -and \$w32Ok) {`,
+      `    Write-Host "  ALL FIXES APPLIED. Restart your PC to fully apply changes." -ForegroundColor Cyan`,
+      `} Else {`,
+      `    Write-Host "  One or more fixes may not have applied. Try running as Administrator." -ForegroundColor Red`,
+      `}`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods by leaq — optifps.com" -ForegroundColor DarkRed`,
+      `Write-Host ""`,
+      `pause`,
+    ];
+
+    const script = lines.join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-CrashFix-by-leaq.ps1"');
+    res.send(script);
+  });
+
   // Public — generate restore/undo script for selected categories
   app.post('/api/generate-restore', (req, res) => {
     const { categories } = req.body as { categories?: string[] };

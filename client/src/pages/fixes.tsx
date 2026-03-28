@@ -4,7 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2, ShieldAlert,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Siren, CheckCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -290,6 +290,30 @@ export default function Fixes() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set(CATEGORIES.map((c) => c.id)));
   const [downloading, setDownloading] = useState(false);
+  const [downloadingFix, setDownloadingFix] = useState(false);
+
+  const downloadCrashFix = async () => {
+    setDownloadingFix(true);
+    try {
+      const res = await fetch("/api/stability-fix-script");
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods-CrashFix-by-leaq.ps1";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Crash Fix Downloaded",
+        description: "Right-click → Run with PowerShell as Administrator, then restart your PC.",
+      });
+    } catch {
+      toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
+    } finally {
+      setDownloadingFix(false);
+    }
+  };
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -347,6 +371,62 @@ export default function Fixes() {
           <div>
             <h1 className="text-2xl font-display font-bold">Fixes & Restore</h1>
             <p className="text-zinc-500 text-sm">Undo any tweak Opti Gods applied — download a restore script and run it as Administrator</p>
+          </div>
+        </motion.div>
+
+        {/* ── EMERGENCY CRASH FIX BANNER ─────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.02 }}
+          className="rounded-2xl border-2 border-red-500/40 bg-red-950/30 overflow-hidden"
+        >
+          {/* Top label strip */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-600/20 border-b border-red-500/30">
+            <Siren className="w-3.5 h-3.5 text-red-400 animate-pulse shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
+              Known Issue — FiveM &amp; Discord Crashing
+            </span>
+          </div>
+
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                Two optimizer settings were causing crashes. Run this fix.
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">SystemResponsiveness was set to 0</span> — starved Discord's audio threads, causing it to randomly close during gameplay.
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Win32PrioritySeparation was set to 38</span> — put Windows in server scheduling mode, reducing game thread priority and causing FiveM instability.
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Both values are corrected in the optimizer going forward. Run this script once to fix your current PC — it takes 5 seconds.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button
+                data-testid="button-download-crash-fix"
+                onClick={downloadCrashFix}
+                disabled={downloadingFix}
+                className="bg-red-600 hover:bg-red-500 text-white font-black text-sm px-5 py-2.5 border border-red-400/30 shadow-[0_0_24px_-4px_rgba(220,38,38,0.5)] whitespace-nowrap"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {downloadingFix ? "Generating..." : "Download Crash Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">
+                Right-click → Run as Administrator → restart PC
+              </p>
+            </div>
           </div>
         </motion.div>
 
