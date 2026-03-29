@@ -6,9 +6,10 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { Gamepad2, Info, CheckCircle2, Download, Package } from "lucide-react";
+import { Gamepad2, Info, CheckCircle2, Download, Package, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
@@ -177,6 +178,26 @@ export default function Fivem() {
             <span>Free Download</span>
           </div>
         </a>
+
+        {/* Hardware-optimized recommendation banner */}
+        {!hw.loading && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-lg border border-red-500/30 bg-red-500/5 flex items-start gap-3"
+          >
+            <Zap className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs leading-relaxed space-y-1">
+              <p className="text-red-400 font-semibold">Hardware-Optimized FiveM Settings</p>
+              <p className="text-zinc-300">
+                {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
+              </p>
+              <p className="text-zinc-500 text-[11px] mt-2">
+                💡 Recommended: Start with "Recommended" button below. Hardware-specific tweaks (GTX 1060 section, Ryzen 5600 profile) only show if detected. Network Buffer + Cache Clear are universally safe.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         <TabSmartBar
           tweakIds={ALL_FIVEM_IDS}

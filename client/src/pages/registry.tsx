@@ -6,9 +6,10 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
+import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 const ALL_REGISTRY_IDS = [
   "Win32PrioritySeparation","DisableHungAppDetection","SetTimerResolution","SetResponsiveness",
@@ -112,7 +113,7 @@ export default function Registry() {
     { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableHungAppDetection", title: "Disable Hung App Detection Delay", desc: "Removes the 5-second wait for unresponsive app dialogs — kills hung processes instantly.", impact: "LOW" },
     { id: "SetTimerResolution", title: "Set System Timer to 0.5ms", desc: "Forces Windows timer interrupt to high-resolution — better CPU scheduling precision for games.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
-    { id: "SetResponsiveness", title: "Set System Responsiveness = 10", desc: "Sets SystemResponsiveness=10 — balances game priority with system stability. 0 can cause audio/UI stutters; 10 is the sweet spot for gaming.", badge: "RECOMMENDED", impact: "MED", recommended: true },
+    { id: "SetResponsiveness", title: "Set System Responsiveness (Hardware-Optimized)", desc: "Adjusts SystemResponsiveness based on your CPU/GPU — balances game priority with stability. 0 = audio/Discord breaks; 10 = stable baseline; 26 = balanced sweet spot; 38 = high-power friendly. Will auto-detect your best value.", badge: "RECOMMENDED", impact: "MED", recommended: true },
     { id: "GameModeTweaks", title: "Game Mode Scheduler: High Priority", desc: "Sets Games task profile: Scheduling Category=High, SFIO=High, GPU Priority=8, CPU Priority=6, MaxPreRenderedFrames=1 — Windows treats your game as top-priority process.", badge: "NEW", impact: "HIGH", recommended: true },
     { id: "EnableMSIMode", title: "Enable MSI Mode for GPU", desc: "Forces Message Signaled Interrupts on the GPU — eliminates interrupt sharing latency with other PCI-e devices.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
     { id: "DisableCoreParking", title: "Disable CPU Core Parking (Advanced)", desc: "Forces all CPU cores active via PowerSettings registry path + powercfg — removes 1–3ms wake latency on parked cores.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -203,6 +204,26 @@ export default function Registry() {
           ))}
           <span className="ml-auto text-[10px] text-zinc-600 italic">Click "Enable Recommended" on any section to apply curated safe picks</span>
         </div>
+
+        {/* Hardware-optimized recommendation banner */}
+        {!hw.loading && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/5 flex items-start gap-3"
+          >
+            <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs leading-relaxed space-y-1">
+              <p className="text-amber-400 font-semibold">Hardware-Optimized Settings Detected</p>
+              <p className="text-zinc-300">
+                {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
+              </p>
+              <p className="text-zinc-500 text-[11px] mt-2">
+                💡 Tweak irrelevance: GPU-specific tweaks skip automatically if you don't have that GPU; memory tweaks check your RAM; hardware-specific profiles only show if matched. Just enable "Recommended" for a safe starting point tailored to your PC.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         <TabSmartBar
           tweakIds={ALL_REGISTRY_IDS}
