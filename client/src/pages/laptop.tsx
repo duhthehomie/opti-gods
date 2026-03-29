@@ -7,6 +7,7 @@ import { Laptop, Cpu, Zap, Wifi, Battery, Thermometer, Monitor, Check, AlertTria
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 type Impact = "HIGH" | "MED" | "LOW";
 interface TweakDef {
@@ -466,6 +467,23 @@ export default function LaptopPage() {
               </button>
             </div>
           </div>
+
+          {/* Hardware-optimized settings */}
+          {!hw.loading && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-4 rounded-lg border border-amber-500/30 bg-amber-500/5 flex items-start gap-3"
+            >
+              <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 text-xs leading-relaxed space-y-1">
+                <p className="text-amber-400 font-semibold">Hardware-Optimized Laptop Settings</p>
+                <p className="text-zinc-300">
+                  {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
+                </p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Detection Banner */}
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">

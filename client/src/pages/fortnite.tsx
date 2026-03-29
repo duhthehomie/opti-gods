@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Crosshair, AlertTriangle, Info, FileCode, Zap } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 const ALL_FORTNITE_IDS = [
   "FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableVSync","FortniteGameMode",

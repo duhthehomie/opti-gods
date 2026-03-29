@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 import {
   MemoryStick, AlertTriangle, CheckCircle2, Cpu,
@@ -11,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -440,6 +442,23 @@ export default function Memory() {
         </motion.div>
 
         <PageGuide pageName="Memory Optimizer" />
+
+        {/* Hardware-optimized settings */}
+        {!hw.loading && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-lg border border-red-500/30 bg-red-500/5 flex items-start gap-3"
+          >
+            <Zap className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs leading-relaxed space-y-1">
+              <p className="text-red-400 font-semibold">Hardware-Optimized Memory Settings</p>
+              <p className="text-zinc-300">
+                {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* RAM Detection Panel */}
         <motion.div

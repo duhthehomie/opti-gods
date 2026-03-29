@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   Shield, Lock, Wrench, Eye, Cpu, Globe, Settings2, Trash2,
-  AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, Sparkles,
+  AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, Sparkles, Zap,
 } from "lucide-react";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
+import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
 interface TweakEntry {
   key: string;
@@ -248,6 +250,23 @@ export default function WinTitus() {
             </p>
           </div>
         </motion.div>
+
+        {/* Hardware-optimized settings */}
+        {!hw.loading && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-lg border border-orange-500/30 bg-orange-500/5 flex items-start gap-3"
+          >
+            <Zap className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs leading-relaxed space-y-1">
+              <p className="text-orange-400 font-semibold">Hardware-Optimized Settings</p>
+              <p className="text-zinc-300">
+                {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* One-click recommended */}
         <motion.div

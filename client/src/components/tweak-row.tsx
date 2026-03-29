@@ -15,6 +15,7 @@ interface TweakRowProps {
   badge?: string;
   impact?: "HIGH" | "MED" | "LOW";
   warning?: string;
+  relevanceWarning?: string; // e.g., "GPU-specific: NVIDIA GPU not detected"
 }
 
 const IMPACT_STYLES = {
@@ -23,7 +24,7 @@ const IMPACT_STYLES = {
   LOW:  { dot: "bg-zinc-500",  label: "LOW",  text: "text-zinc-500",  bg: "bg-zinc-800 border-zinc-700" },
 };
 
-export function TweakRow({ id, title, description, checked, onCheckedChange, delay = 0, badge, impact, warning }: TweakRowProps) {
+export function TweakRow({ id, title, description, checked, onCheckedChange, delay = 0, badge, impact, warning, relevanceWarning }: TweakRowProps) {
   const imp = impact ? IMPACT_STYLES[impact] : null;
   const [pendingEnable, setPendingEnable] = useState(false);
 
@@ -101,6 +102,9 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             )}
           </div>
           <p className="text-xs text-zinc-500 leading-snug">{description}</p>
+          {relevanceWarning && (
+            <p className="text-[11px] text-zinc-600 mt-1 italic">💡 {relevanceWarning}</p>
+          )}
         </div>
         <CustomSwitch
           id={id}
