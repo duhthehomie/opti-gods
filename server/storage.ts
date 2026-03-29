@@ -12,9 +12,9 @@ export interface IStorage {
   getOptimizations(): Promise<Optimization[]>;
   updateOptimization(id: number, isApplied: boolean): Promise<Optimization>;
   // Access codes
-  getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null })[]>;
+  getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null; sessionIp: string | null })[]>;
   createCode(code: string, note?: string): Promise<ProAccessCode>;
-  redeemCode(code: string): Promise<boolean>;
+  redeemCode(code: string, ip?: string): Promise<boolean>;
   resetCode(id: number): Promise<void>;
   deleteCode(id: number): Promise<void>;
   updateCodeNote(id: number, note: string | null): Promise<void>;
@@ -109,14 +109,22 @@ export class DatabaseStorage implements IStorage {
     return opt;
   }
 
-  async getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null })[]> {
+  async getAllCodes(): Promise<(ProAccessCode & { lastSessionAt: Date | null; sessionIp: string | null })[]> {
     const codes = await db.select().from(proAccessCodes).orderBy(desc(proAccessCodes.createdAt));
     const sessions = await db.select({
       codeRef: proSessions.codeRef,
       lastCheckedAt: sql<Date>`MAX(last_checked_at)`.as("last_checked_at"),
+      ipAddress: sql<string>`(array_agg(ip_address ORDER BY last_checked_at DESC))[1]`.as("ip_address"),
     }).from(proSessions).groupBy(proSessions.codeRef);
-    const sessionMap = new Map(sessions.map(s => [s.codeRef, s.lastCheckedAt]));
-    return codes.map(c => ({ ...c, lastSessionAt: sessionMap.get(c.code) ?? null }));
+    const sessionMap = new Map(sessions.map(s => [s.codeRef, { lastCheckedAt: s.lastCheckedAt, ip: s.ipAddress }]));
+    return codes.map(c => {
+      const sess = sessionMap.get(c.code) ?? null;
+      return {
+        ...c,
+        lastSessionAt: sess?.lastCheckedAt ?? null,
+        sessionIp: c.usedByIp ?? sess?.ip ?? null,
+      };
+    });
   }
 
   async createCode(code: string, note?: string): Promise<ProAccessCode> {
@@ -124,14 +132,14 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async redeemCode(code: string): Promise<boolean> {
+  async redeemCode(code: string, ip?: string): Promise<boolean> {
     const rows = await db.select().from(proAccessCodes)
       .where(eq(proAccessCodes.code, code.toUpperCase().trim()));
     if (!rows.length) return false;
     const row = rows[0];
     if (row.usedAt) return false;
     await db.update(proAccessCodes)
-      .set({ usedAt: new Date() })
+      .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
       .where(eq(proAccessCodes.id, row.id));
     return true;
   }

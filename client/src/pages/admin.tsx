@@ -243,7 +243,7 @@ export default function Admin() {
     refetchInterval: 60000,
   });
 
-  const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null })[]>({
+  const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null; sessionIp: string | null })[]>({
     queryKey: ["/api/admin/codes", key],
     queryFn: () => fetch("/api/admin/codes", { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
@@ -1344,6 +1344,9 @@ export default function Admin() {
                         )}
                         {c.usedAt && !c.lastSessionAt && (
                           <span className="ml-1.5 text-zinc-700">· No session</span>
+                        )}
+                        {c.sessionIp && (
+                          <span className="ml-1.5 text-amber-500/70 font-mono">· {c.sessionIp}</span>
                         )}
                       </p>
                     </div>

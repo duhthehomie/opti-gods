@@ -8,6 +8,7 @@ export const proAccessCodes = pgTable("pro_access_codes", {
   code: text("code").notNull().unique(),
   note: text("note"),
   usedAt: timestamp("used_at"),
+  usedByIp: text("used_by_ip"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

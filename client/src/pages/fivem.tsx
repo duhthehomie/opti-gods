@@ -18,6 +18,7 @@ const ALL_FIVEM_IDS = [
   "FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks",
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
   "FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable","FiveM5600CoreAffinity","FiveM5600PowerPlan",
+  "FiveMFixNvidiaOverlay",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
 
@@ -83,6 +84,10 @@ export default function Fivem() {
     { id: "FiveMGameModeAdd", title: "Add FiveM + GTA5 to Windows Game Mode", desc: "Enables Auto Game Mode and whitelists GTA5.exe and FiveM.exe in the Windows Game Mode process registry — ensures Windows grants them priority scheduling automatically.", impact: "MED" },
     { id: "FiveMRenderingBoost", title: "Disable Rendering Preemption (FiveM + GTA5)", desc: "Sets DisableRenderingContextPreemption=1, DisableRenderingPreemption=1, EnableHWAcceleration=1, GpuIdle=0 on both FiveM.exe and GTA5.exe — eliminates GPU preemption micro-stutters during scene transitions.", impact: "HIGH" },
     { id: "FiveMGPUPriorityStack", title: "GPU Priority Stack (GpuPriorityClass=8 + HAGS)", desc: "Sets GpuPriorityClass=8, GPU Priority=8, GpuMaxPerformance=256, GpuThrottling=0 on FiveM.exe and applies GPU Priority=8, MaximumPreRenderedFrames=1 to the system Games multimedia profile.", badge: "NVIDIA/AMD", impact: "HIGH" },
+  ];
+
+  const CRASH_FIX_TWEAKS: Tweak[] = [
+    { id: "FiveMFixNvidiaOverlay", title: "Fix: NVIDIA Overlay.exe 0x80000003 Crash", desc: "Root cause: stopping NVDisplay.ContainerLocalSystem while NVIDIA Overlay.exe is running orphans the overlay process — it throws a 0x80000003 breakpoint exception and crashes FiveM. This fix kills crashed overlay processes, restores the container service if disabled, then blocks the overlay from relaunching via registry. Run this if you see 'NVIDIA Overlay.exe — Application Error — A breakpoint has been reached (0x80000003)'. Reboot once after applying.", impact: "HIGH", badge: "CRASH FIX" },
   ];
 
   const GTX1060_RYZEN5600_TWEAKS: Tweak[] = [
@@ -192,6 +197,31 @@ export default function Fivem() {
           {renderSection("Windows Settings for GTA V", WINDOWS_TWEAKS)}
           {renderSection("CFX / Server Connectivity", CFX_TWEAKS)}
           {renderSection("Advanced PerfOptions — IFEO Registry Stack", PERF_OPTIONS_TWEAKS)}
+
+          {/* Crash Fixes */}
+          <section>
+            <div className="flex items-center gap-3 mb-4 px-1">
+              <div className="flex-1">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Crash Fixes</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Targeted fixes for known NVIDIA / FiveM crash patterns — run after applying tweaks if you experience these errors</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {CRASH_FIX_TWEAKS.map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={(v) => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
+          </section>
 
           {/* GTX 1060 + Ryzen 5 5600 specific */}
           <section>
