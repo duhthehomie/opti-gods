@@ -12,3 +12,15 @@ id = "JRETMaeKkn-v2r3a5kh1y"
 uri = "file://attached_assets/generated_videos/optigods_promo_tiktok.mp4"
 type = "video"
 title = "Opti Gods — TikTok/Instagram Promo Video (9:16)"
+
+[[outputs]]
+id = "T8HtNwC36ffAC-CShQ9v-"
+uri = "file://client/public/optigods_pfp.png"
+type = "image"
+title = "Opti Gods Profile Picture (PFP)"
+
+[[outputs]]
+id = "fEoahrNhJo8tR9-mHjW7X"
+uri = "file://client/public/optigods_banner.png"
+type = "image"
+title = "Opti Gods YouTube Banner"
