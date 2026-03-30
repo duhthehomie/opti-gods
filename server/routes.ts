@@ -1263,11 +1263,9 @@ Start-Sleep 2
     return true;
   }
 
-  // Weekend pricing — $15 on Sat/Sun, $25 on weekdays
+  // Flat $15 pricing (good pricing for everyone)
   app.get('/api/pricing', (_req, res) => {
-    const day = new Date().getDay(); // 0=Sun, 6=Sat
-    const isWeekend = day === 0 || day === 6;
-    res.json({ price: isWeekend ? 15 : 25, isWeekendDeal: isWeekend });
+    res.json({ price: 15, isWeekendDeal: false });
   });
 
   // Pro code verify — checks DB only (no legacy env var fallback)

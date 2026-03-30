@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 
-const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File "$env:USERPROFILE\\Desktop\\optigods-sysinfo.json" -Encoding utf8; Write-Host "Done! Drag optigods-sysinfo.json from Desktop onto Opti Gods." -ForegroundColor Green`;
+const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
 
 interface HardwareScanZoneProps {
   onScanned: (info: ScannedSysInfo) => void;
