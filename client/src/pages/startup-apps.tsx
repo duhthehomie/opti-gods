@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Power, AlertTriangle, XCircle, Clock } from "lucide-react";
+import { Power, AlertTriangle, XCircle, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -42,9 +42,44 @@ const IMPACT_COLOR: Record<string, string> = {
   Low: "text-zinc-500 bg-zinc-700/10 border-zinc-700/30",
 };
 
+interface DetectedStartupApp {
+  name: string;
+  path: string;
+  type: string;
+}
+
 export default function StartupApps() {
   const { toast } = useToast();
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
+  const [detectedApps, setDetectedApps] = useState<DetectedStartupApp[]>([]);
+  const [scanning, setScanning] = useState(false);
+
+  // Fetch and display actual startup apps scan script
+  const handleScanStartupApps = async () => {
+    setScanning(true);
+    try {
+      const response = await fetch('/api/startup/scan');
+      const ps1Script = await response.text();
+      
+      // Download the scan script for user to run
+      const blob = new Blob([ps1Script], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "scan-startup-apps.ps1";
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Scan script downloaded",
+        description: "Run scan-startup-apps.ps1 in PowerShell to detect all startup apps. Output will be JSON you can paste back here."
+      });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to download scan script" });
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const disabledCount = ALL_STARTUP_APPS.filter(a => tweaks[a.id]).length;
   const savedSeconds = ALL_STARTUP_IDS
@@ -82,6 +117,34 @@ export default function StartupApps() {
             <h1 className="text-2xl font-display font-bold">Startup Applications</h1>
             <p className="text-zinc-500 text-sm">Disable unnecessary apps from launching on boot — cuts boot time and idle RAM</p>
           </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-lg border border-blue-500/30 bg-blue-500/5 flex items-start gap-3 justify-between"
+        >
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-400 mb-1">Scan for All Startup Apps</p>
+            <p className="text-xs text-zinc-400">Run a PowerShell scan to detect ALL startup apps currently on your system — including ones not in this list.</p>
+          </div>
+          <Button
+            onClick={handleScanStartupApps}
+            disabled={scanning}
+            variant="outline"
+            size="sm"
+            className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 shrink-0 whitespace-nowrap"
+            data-testid="button-scan-startup"
+          >
+            {scanning ? (
+              <>
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Scanning...
+              </>
+            ) : (
+              "Download Scan Script"
+            )}
+          </Button>
         </motion.div>
 
         <TabSmartBar

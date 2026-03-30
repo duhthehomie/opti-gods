@@ -114,6 +114,42 @@ const BOOST_ACTIONS: BoostAction[] = [
     ps1: `netsh winsock reset; netsh int ip reset; Write-Host "[OK] Winsock + TCP/IP stack reset — REBOOT required for changes to take effect" -ForegroundColor Yellow`,
     recommendedIfDays: 60,
   },
+  {
+    id: "disable-telemetry-services",
+    title: "Disable Telemetry Services",
+    desc: "Disables DiagTrack (Connected User Experience and Telemetry), dmwappushservice, and other telemetry services. Frees RAM and reduces background network activity. This is what ReviOS disables by default.",
+    icon: Shield,
+    category: "System",
+    ps1: `$services = @("DiagTrack","dmwappushservice","WerSvc","waaSMedicSvc"); foreach ($svc in $services) { try { Stop-Service -Name $svc -Force -EA SilentlyContinue; Set-Service -Name $svc -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Disabled: $svc" -ForegroundColor Green } catch {} }`,
+    recommendedIfDays: 90,
+  },
+  {
+    id: "disable-windows-update-service",
+    title: "Disable Windows Update Service",
+    desc: "Stops the Windows Update service. Prevents unwanted auto-restarts during gaming. You can re-enable anytime. ReviOS + WinTitus both disable this by default.",
+    icon: RefreshCw,
+    category: "System",
+    ps1: `Stop-Service -Name wuauserv -Force -EA SilentlyContinue; Set-Service -Name wuauserv -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Windows Update service disabled — you can manually check for updates when ready" -ForegroundColor Green`,
+    recommendedIfDays: 90,
+  },
+  {
+    id: "disable-indexing-service",
+    title: "Disable Windows Search Indexing",
+    desc: "Stops the Windows Search indexing service (WSearch). Reduces CPU usage, disk I/O, and RAM consumption. File search will be slower but standard Explorer search still works.",
+    icon: HardDrive,
+    category: "System",
+    ps1: `Stop-Service -Name WSearch -Force -EA SilentlyContinue; Set-Service -Name WSearch -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Windows Search indexing disabled — search will be slower but you'll save ~500MB RAM and reduce background I/O" -ForegroundColor Green`,
+    recommendedIfDays: 90,
+  },
+  {
+    id: "disable-superfetch",
+    title: "Disable Superfetch (Sysmain)",
+    desc: "Stops the Superfetch service. Reduces disk I/O and cache memory usage. Modern SSDs make prefetch obsolete — Windows already loads apps fast enough.",
+    icon: TrendingUp,
+    category: "System",
+    ps1: `Stop-Service -Name SysMain -Force -EA SilentlyContinue; Set-Service -Name SysMain -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Superfetch disabled — RAM and SSD I/O freed up" -ForegroundColor Green`,
+    recommendedIfDays: 90,
+  },
 ];
 
 type Status = "optimized" | "degrading" | "needs-attention" | "never";

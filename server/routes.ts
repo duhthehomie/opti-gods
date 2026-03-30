@@ -994,6 +994,71 @@ export async function registerRoutes(
     res.json([]);
   });
 
+  // Scan for actual startup apps from Windows registry
+  app.get('/api/startup/scan', (_req, res) => {
+    const ps1 = `
+# Scan Windows registry for all startup apps
+$startupApps = @()
+
+# Check Run registry (HKLM)
+try {
+  $regPath = "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+  if (Test-Path $regPath) {
+    Get-ItemProperty $regPath -EA SilentlyContinue | ForEach-Object {
+      if ($_.PSObject.Properties.Value) {
+        $_.PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" } | ForEach-Object {
+          $startupApps += @{ name = $_.Name; path = $_.Value; type = "HKLM\\Run" }
+        }
+      }
+    }
+  }
+} catch {}
+
+# Check Run registry (HKCU)
+try {
+  $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+  if (Test-Path $regPath) {
+    Get-ItemProperty $regPath -EA SilentlyContinue | ForEach-Object {
+      if ($_.PSObject.Properties.Value) {
+        $_.PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" } | ForEach-Object {
+          $startupApps += @{ name = $_.Name; path = $_.Value; type = "HKCU\\Run" }
+        }
+      }
+    }
+  }
+} catch {}
+
+# Check RunOnce registry
+try {
+  $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce"
+  if (Test-Path $regPath) {
+    Get-ItemProperty $regPath -EA SilentlyContinue | ForEach-Object {
+      if ($_.PSObject.Properties.Value) {
+        $_.PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" } | ForEach-Object {
+          $startupApps += @{ name = $_.Name; path = $_.Value; type = "HKCU\\RunOnce" }
+        }
+      }
+    }
+  }
+} catch {}
+
+# Check Startup folder
+try {
+  $startupFolder = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+  if (Test-Path $startupFolder) {
+    Get-ChildItem $startupFolder -Filter "*.lnk" -EA SilentlyContinue | ForEach-Object {
+      $startupApps += @{ name = $_.BaseName; path = $_.FullName; type = "StartupFolder" }
+    }
+  }
+} catch {}
+
+# Convert to JSON with proper escaping
+$json = $startupApps | ConvertTo-Json -Compress
+Write-Output $json
+`;
+    res.type("text/plain").send(ps1);
+  });
+
   app.patch(api.startup.toggle.path, async (req, res) => {
     try {
       const { isEnabled } = api.startup.toggle.input.parse(req.body);
