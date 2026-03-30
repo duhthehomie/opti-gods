@@ -1437,8 +1437,17 @@ Start-Sleep 2
   // Admin — rename a code (update its note/label)
   app.patch('/api/admin/codes/:id', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
+    const id = Number(req.params.id);
     const note = req.body?.note?.trim() || null;
-    await storage.updateCodeNote(Number(req.params.id), note);
+    const amountOverride = req.body?.amountOverride ? Number(req.body.amountOverride) : null;
+    
+    // Update both note and amount override if provided
+    if (note !== null || amountOverride !== null) {
+      await storage.updateCodeNote(id, note);
+      if (amountOverride !== null) {
+        await storage.updateCodeAmount(id, amountOverride);
+      }
+    }
     res.json({ ok: true });
   });
 
@@ -1620,11 +1629,13 @@ Start-Sleep 2
     );
     // Available = not used AND not reserved by a sent email request
     const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
-    // Confirmed email payments (admin accepted = payment confirmed)
-    const emailRevenue = emailReqs.filter(r => r.status === "sent" || r.status === "auto-sent").length;
-    // Directly redeemed codes (customer entered code manually, not via email path)
-    const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length;
-    const codeRevenue = (emailRevenue + directRevenue) * 25;
+    // Confirmed email revenue (sum actual amountPaid from email requests)
+    const emailRevenue = emailReqs
+      .filter(r => r.status === "sent" || r.status === "auto-sent")
+      .reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+    // Directly redeemed codes (customer entered code manually, not via email path) — default $15 per code
+    const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
+    const codeRevenue = emailRevenue + directRevenue;
     const revenueEstimate = codeRevenue + manualTotal;
     const usedCodes = codes.filter(c => c.usedAt).length;
     const usedFriends = friends.filter(f => f.usedAt).length;

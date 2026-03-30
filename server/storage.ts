@@ -18,6 +18,7 @@ export interface IStorage {
   resetCode(id: number): Promise<void>;
   deleteCode(id: number): Promise<void>;
   updateCodeNote(id: number, note: string | null): Promise<void>;
+  updateCodeAmount(codeId: number, amount: number): Promise<void>;
   deleteUsedCodes(): Promise<number>;
   reviveDeadCodes(): Promise<number>;
   // Friend tokens
@@ -168,6 +169,20 @@ export class DatabaseStorage implements IStorage {
 
   async updateCodeNote(id: number, note: string | null): Promise<void> {
     await db.update(proAccessCodes).set({ note }).where(eq(proAccessCodes.id, id));
+  }
+
+  async updateCodeAmount(codeId: number, amount: number): Promise<void> {
+    // Find the email request that was sent for this code
+    const emailReq = await db.select().from(emailRequests)
+      .where(eq(emailRequests.sentCodeId, codeId))
+      .limit(1);
+    
+    if (emailReq.length > 0) {
+      // Update the email request's amountPaid
+      await db.update(emailRequests)
+        .set({ amountPaid: amount })
+        .where(eq(emailRequests.id, emailReq[0].id));
+    }
   }
 
   async deleteUsedCodes(): Promise<number> {
