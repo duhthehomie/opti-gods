@@ -129,18 +129,18 @@ const GAMING_STACK = [
 ];
 
 const COMPARE_ROWS = [
-  { feature: "Safe to use on main PC", opti: true, atlas: true, revi: true, stock: false },
-  { feature: "Game-specific PerfOptions (FiveM/Fortnite/CS2)", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "NVIDIA + AMD specific tuning", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "FiveM build-agnostic GTA process targeting", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "Telemetry completely removed", opti: true, atlas: true, revi: true, stock: false },
-  { feature: "Windows Update (security patches kept)", opti: true, atlas: false, revi: true, stock: true },
-  { feature: "Kernel scheduler hardened", opti: true, atlas: true, revi: true, stock: false },
-  { feature: "Network stack optimized (TCP, DNS, buffers)", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "30+ bloat services disabled", opti: true, atlas: true, revi: true, stock: false },
-  { feature: "SystemResponsiveness=0 (max CPU for games)", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "GPU scheduling tuned (HAGS + priority stack)", opti: true, atlas: false, revi: false, stock: false },
-  { feature: "CpuPriorityClass safe value (3) enforced", opti: true, atlas: false, revi: false, stock: false },
+  { feature: "Safe to use on main PC", opti: true, revi: true },
+  { feature: "Game-specific PerfOptions (FiveM/Fortnite/CS2)", opti: true, revi: false },
+  { feature: "NVIDIA + AMD specific tuning", opti: true, revi: false },
+  { feature: "FiveM build-agnostic GTA process targeting", opti: true, revi: false },
+  { feature: "Telemetry completely removed", opti: true, revi: true },
+  { feature: "Windows Update (security patches kept)", opti: true, revi: true },
+  { feature: "Kernel scheduler hardened", opti: true, revi: true },
+  { feature: "Network stack optimized (TCP, DNS, buffers)", opti: true, revi: false },
+  { feature: "30+ bloat services disabled", opti: true, revi: true },
+  { feature: "SystemResponsiveness=0 (max CPU for games)", opti: true, revi: false },
+  { feature: "GPU scheduling tuned (HAGS + priority stack)", opti: true, revi: false },
+  { feature: "CpuPriorityClass safe value (3) enforced", opti: true, revi: false },
 ];
 
 const INSTALL_STEPS = [
@@ -340,37 +340,6 @@ export default function CustomOS() {
                   Get ReviOS at reviproject.com
                 </a>
               </div>
-
-              {/* AtlasOS */}
-              <div className="rounded-xl border border-yellow-500/20 bg-gradient-to-br from-yellow-950/15 to-zinc-950 p-4">
-                <div className="flex items-center gap-2.5 mb-2.5">
-                  <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                    <HardDrive className="w-4 h-4 text-yellow-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">AtlasOS</p>
-                    <p className="text-[10px] text-yellow-400 font-medium">Widely used, big community</p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
-                  Also runs via AME Wizard. More aggressive debloat than ReviOS — removes more Windows features but gives better raw performance. Great choice if you want the most stripped-down experience and don't need every Windows feature.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {["AME Wizard", "Most aggressive debloat", "Large community", "Competitive gaming", "Low DPC latency"].map(t => (
-                    <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/15 font-medium">{t}</span>
-                  ))}
-                </div>
-                <a
-                  href="https://atlasos.net"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="link-atlasos"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-yellow-300 hover:text-white transition-colors underline"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Get AtlasOS at atlasos.net
-                </a>
-              </div>
             </div>
 
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
@@ -420,28 +389,22 @@ export default function CustomOS() {
             >
               <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">How we stack up</h2>
               <div className="rounded-xl border border-white/5 overflow-hidden">
-                <div className="grid grid-cols-5 bg-zinc-900/80 border-b border-white/5">
+                <div className="grid grid-cols-4 bg-zinc-900/80 border-b border-white/5">
                   <div className="py-2.5 px-3 text-[11px] font-bold text-zinc-400 uppercase tracking-wider col-span-2">Feature</div>
                   <div className="py-2.5 px-1 text-center">
                     <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Opti Gods</p>
-                  </div>
-                  <div className="py-2.5 px-1 text-center">
-                    <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">AtlasOS</p>
                   </div>
                   <div className="py-2.5 px-1 text-center">
                     <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">ReviOS</p>
                   </div>
                 </div>
                 {COMPARE_ROWS.map((row, i) => (
-                  <div key={i} className={`grid grid-cols-5 border-b border-white/4 ${i % 2 === 0 ? "bg-zinc-950/40" : "bg-transparent"}`}>
+                  <div key={i} className={`grid grid-cols-4 border-b border-white/4 ${i % 2 === 0 ? "bg-zinc-950/40" : "bg-transparent"}`}>
                     <div className="py-2.5 px-3 col-span-2 flex items-center">
                       <span className="text-xs text-zinc-300">{row.feature}</span>
                     </div>
                     <div className="py-2.5 px-1 flex items-center justify-center">
                       <CheckIcon val={row.opti} />
-                    </div>
-                    <div className="py-2.5 px-1 flex items-center justify-center">
-                      <CheckIcon val={row.atlas} />
                     </div>
                     <div className="py-2.5 px-1 flex items-center justify-center">
                       <CheckIcon val={row.revi} />
@@ -596,7 +559,7 @@ export default function CustomOS() {
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Opti Gods OS is built on the AME Wizard framework — the same open-source, community-audited tool
-                that powers AtlasOS and ReviOS. Every modification applied by the playbook is{" "}
+                that powers ReviOS. Every modification applied by the playbook is{" "}
                 <span className="text-white font-medium">documented, reversible, and tested</span> on both
                 Windows 10 and Windows 11. We do not modify system files or replace system executables.
                 All changes happen through official Windows APIs: Group Policy, Services, Registry, and Task Scheduler.
@@ -618,6 +581,37 @@ export default function CustomOS() {
               </div>
             </motion.div>
 
+            {/* AME Wizard Setup */}
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.33 }}
+              className="space-y-3"
+            >
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard (No Ads)</h2>
+              <p className="text-xs text-zinc-500 px-1">Get the official AME Wizard without ads or bloat for a clean install experience</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open("https://ameliorated.io", "_blank", "noopener noreferrer")}
+                  className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  Official AME Wizard (No Ads)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open("https://github.com/Ameliorated-LLC/trusted-uninstaller/releases", "_blank", "noopener noreferrer")}
+                  className="text-xs border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  GitHub (Always Latest)
+                </Button>
+              </div>
+            </motion.div>
+
             {/* CTA */}
             <motion.div
               initial={{ opacity: 0, y: 6 }}
@@ -628,10 +622,10 @@ export default function CustomOS() {
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(220,38,38,0.08),_transparent_70%)]" />
               <div className="relative z-10">
                 <Star className="w-8 h-8 text-red-400 mx-auto mb-3" />
-                <h3 className="text-xl font-display font-bold text-white mb-2">Get Opti Gods OS</h3>
+                <h3 className="text-xl font-display font-bold text-white mb-2">2. Apply Opti Gods OS</h3>
                 <p className="text-zinc-400 text-sm mb-5 max-w-md mx-auto">
-                  Your exclusive .apbx playbook is ready. Download it, run AME Wizard, and transform your Windows install
-                  into the fastest gaming OS you've ever used.
+                  Download your exclusive .apbx playbook. Open AME Wizard → select your playbook → apply → restart.
+                  Your Windows install will transform into the fastest gaming OS you've ever used.
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   <Button
@@ -649,7 +643,7 @@ export default function CustomOS() {
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white font-semibold text-sm"
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    Join Discord for Early Access
+                    Questions? Join Discord
                   </Button>
                 </div>
               </div>
