@@ -246,32 +246,24 @@ export default function Fivem() {
 
           {/* GTX 1060 + Ryzen 5 5600 specific — auto-show for matching hardware */}
           {(hw.nvidiaIsLowEnd || hw.isRyzen) && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-amber-500">Your Hardware Profile</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Optimizations for your specific GPU/CPU</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {GTX1060_RYZEN5600_TWEAKS.filter(t => 
-                  (t.id.includes("1060") && hw.nvidiaIsLowEnd) || 
-                  (t.id.includes("5600") && hw.isRyzen)
-                ).map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
+            <div className="space-y-3">
+              {GTX1060_RYZEN5600_TWEAKS.filter(t => 
+                (t.id.includes("1060") && hw.nvidiaIsLowEnd) || 
+                (t.id.includes("5600") && hw.isRyzen)
+              ).map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={(v) => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
