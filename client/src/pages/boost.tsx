@@ -421,7 +421,7 @@ export default function BoostPage() {
                       <div className="flex items-start gap-2">
                         <Info className="w-3 h-3 text-zinc-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-zinc-600 leading-relaxed">
-                          Downloads a PS1 file — double-click to run, it requests admin automatically.
+                          Downloads a PS1 file — right-click and run with PowerShell, it requests admin automatically.
                         </p>
                       </div>
                     </div>

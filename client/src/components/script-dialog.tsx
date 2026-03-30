@@ -25,9 +25,9 @@ interface ScriptDialogProps {
 
 const HOW_TO_STEPS = [
   {
-    icon: FolderOpen,
-    label: 'Open your Downloads folder',
-    detail: 'Press Win + E, then click "Downloads" on the left',
+    icon: Download,
+    label: 'Download the .bat file',
+    detail: 'Click the download button below — OptiGods-by-leaq.bat will save to your Downloads folder or Desktop (depending on your browser settings).',
     color: "text-blue-400",
     bg: "bg-blue-500/10 border-blue-500/20",
   },

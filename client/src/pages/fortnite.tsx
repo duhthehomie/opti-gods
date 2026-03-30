@@ -134,7 +134,7 @@ export default function Fortnite() {
           </div>
           <p className="text-[11px] text-zinc-600 mt-3 flex items-center gap-1.5">
             <AlertTriangle className="w-3 h-3 text-zinc-500" />
-            Double-click to run — admin is requested automatically. Launch Fortnite once first so the config file exists.
+            Right-click the PS1 file and "Run with PowerShell" — admin is requested automatically. Launch Fortnite once first so the config file exists.
           </p>
         </motion.div>
 

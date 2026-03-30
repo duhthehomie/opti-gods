@@ -346,7 +346,7 @@ export default function Fixes() {
       URL.revokeObjectURL(url);
       toast({
         title: "Restore Script Downloaded",
-        description: `Double-click the .bat file → click Yes on the admin popup → restart your PC.`,
+        description: `Right-click the .ps1 file → "Run with PowerShell" → click Yes → restart your PC.`,
       });
     } catch {
       toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
@@ -465,7 +465,7 @@ export default function Fixes() {
               <p className="text-xs text-zinc-500 max-w-lg">
                 Downloads a single PowerShell script that reverses every optimization category —
                 CPU, network, memory, power, services, NVIDIA, AMD, process priorities, and FiveM.
-                Run it as Administrator and restart your PC.
+                Right-click and run with PowerShell, then restart your PC.
               </p>
             </div>
             <Button
