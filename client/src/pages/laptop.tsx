@@ -3,6 +3,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Laptop, Cpu, Zap, Wifi, Battery, Thermometer, Monitor, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -426,6 +428,8 @@ function Section({
 export default function LaptopPage() {
   const { tweaks, setTweak } = useOptimizationStore();
   const hw = useHardwareInfo();
+  const osInfo = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, osInfo);
   const { toast } = useToast();
 
   const enableAll = () => {

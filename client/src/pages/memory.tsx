@@ -4,6 +4,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { useToast } from "@/hooks/use-toast";
 import {
   MemoryStick, AlertTriangle, CheckCircle2, Cpu,
@@ -302,6 +304,9 @@ const VRAM_TWEAKS: Tweak[] = [
 
 export default function Memory() {
   const { tweaks, setTweak, setAllTweaks, systemRamGB, setSystemRamGB } = useOptimizationStore();
+  const hw = useHardwareInfo();
+  const osInfo = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, osInfo);
   const { toast } = useToast();
 
   const [detectedRam, setDetectedRam] = useState<number | null>(null);

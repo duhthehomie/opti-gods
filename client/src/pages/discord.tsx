@@ -4,6 +4,8 @@ import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
@@ -148,9 +150,14 @@ function SectionHeader({
 
 export default function Discord() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const hw = useHardwareInfo();
+  const osInfo = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, osInfo);
+  
+  const recIds = hw.loading ? DISCORD_RECOMMENDED : Array.from(smartRecs.ids).filter(id => DISCORD_RECOMMENDED.includes(id));
 
   const enableAll = () => {
-    DISCORD_RECOMMENDED.forEach(id => setTweak(id, true));
+    recIds.forEach(id => setTweak(id, true));
   };
 
   const enabledCount = ALL_DISCORD_IDS.filter(id => tweaks[id]).length;
@@ -235,7 +242,7 @@ export default function Discord() {
 
         <TabSmartBar
           tweakIds={ALL_DISCORD_IDS}
-          recommendedIds={DISCORD_RECOMMENDED}
+          recommendedIds={recIds}
           label="Discord"
           context="These tweaks modify Windows priority registry entries and Discord's local settings.json file. Discord settings (HW accel, codec, animations) take effect on the next Discord launch. Priority tweaks take effect immediately on next Discord start."
           tips={[
