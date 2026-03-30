@@ -588,8 +588,8 @@ export default function CustomOS() {
               transition={{ delay: 0.33 }}
               className="space-y-3"
             >
-              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard (No Ads)</h2>
-              <p className="text-xs text-zinc-500 px-1">Get the official AME Wizard without ads or bloat for a clean install experience</p>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard & Playbooks (No Ads)</h2>
+              <p className="text-xs text-zinc-500 px-1">Get the official AME Wizard and choose your playbook — all without ads or bloat for a clean install</p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -598,7 +598,7 @@ export default function CustomOS() {
                   className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
                 >
                   <Download className="w-3 h-3" />
-                  Official AME Wizard (No Ads)
+                  AME Wizard (No Ads)
                 </Button>
                 <Button
                   variant="outline"
@@ -607,7 +607,16 @@ export default function CustomOS() {
                   className="text-xs border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-1"
                 >
                   <Download className="w-3 h-3" />
-                  GitHub (Always Latest)
+                  GitHub (Latest)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open("https://reviproject.com/downloads", "_blank", "noopener noreferrer")}
+                  className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  ReviOS Playbook (No Ads)
                 </Button>
               </div>
             </motion.div>
