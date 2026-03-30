@@ -150,6 +150,33 @@ const BOOST_ACTIONS: BoostAction[] = [
     ps1: `Stop-Service -Name SysMain -Force -EA SilentlyContinue; Set-Service -Name SysMain -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Superfetch disabled — RAM and SSD I/O freed up" -ForegroundColor Green`,
     recommendedIfDays: 90,
   },
+  {
+    id: "disable-xbox-services",
+    title: "Disable Xbox Live Services",
+    desc: "Disables XblAuthManager, XblGameSave, XboxGipSvc, XboxNetApiSvc and Game DVR. These run in the background constantly for Xbox features nobody uses on a gaming PC. Also disables the Windows Game Bar overlay that causes FPS drops.",
+    icon: Gamepad2,
+    category: "System",
+    ps1: `$xboxSvcs = @("XblAuthManager","XblGameSave","XboxGipSvc","XboxNetApiSvc","BcastDVRUserService","GameDVR"); foreach ($svc in $xboxSvcs) { Stop-Service -Name $svc -Force -EA SilentlyContinue; Set-Service -Name $svc -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Disabled: $svc" -ForegroundColor Green }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name 'AppCaptureEnabled' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\default\\ApplicationManagement\\AllowGameDVR' -Name 'value' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Xbox Game DVR + Game Bar disabled" -ForegroundColor Green`,
+    recommendedIfDays: 90,
+  },
+  {
+    id: "disable-bits-diagnostics",
+    title: "Disable BITS + Diagnostic Services",
+    desc: "Stops Background Intelligent Transfer Service (BITS) which Windows Update uses for background downloads, plus Diagnostic Policy Service (DPS) and Program Compatibility Assistant. ReviOS disables these — saves ~50MB RAM and eliminates background CPU spikes.",
+    icon: Shield,
+    category: "System",
+    ps1: `$svcs = @("BITS","DPS","PcaSvc","WMPNetworkSvc","Fax","TrkWks","wisvc","lltdsvc","MapsBroker"); foreach ($svc in $svcs) { Stop-Service -Name $svc -Force -EA SilentlyContinue; Set-Service -Name $svc -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Disabled: $svc" -ForegroundColor Green }; Write-Host "[OK] Background download and diagnostic services disabled" -ForegroundColor Cyan`,
+    recommendedIfDays: 90,
+  },
+  {
+    id: "disable-remote-registry-print",
+    title: "Disable Remote Registry + Print Spooler",
+    desc: "Disables Remote Registry (security risk + background overhead) and Print Spooler (safe if you have no printer). Also disables Windows Error Reporting service if it's still running. These are standard on hardened ReviOS/WinTitus installs.",
+    icon: Terminal,
+    category: "System",
+    ps1: `$svcs = @("RemoteRegistry","Spooler","WerSvc","stisvc","WbioSrvc","lfsvc"); foreach ($svc in $svcs) { Stop-Service -Name $svc -Force -EA SilentlyContinue; Set-Service -Name $svc -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Disabled: $svc" -ForegroundColor Green }; Write-Host "[OK] Remote Registry, Print Spooler, Error Reporting + misc disabled" -ForegroundColor Cyan`,
+    recommendedIfDays: 90,
+  },
 ];
 
 type Status = "optimized" | "degrading" | "needs-attention" | "never";

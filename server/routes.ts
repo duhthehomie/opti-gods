@@ -353,6 +353,11 @@ const TWEAK_COMMANDS: Record<string, string> = {
   game_readyornot: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Ready Or Not","D:\\SteamLibrary\\steamapps\\common\\Ready Or Not","E:\\SteamLibrary\\steamapps\\common\\Ready Or Not"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Ready or Not" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\ReadyOrNot.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Ready or Not: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Ready or Not not detected" -ForegroundColor DarkGray }`,
   game_phasmo: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Phasmophobia","D:\\SteamLibrary\\steamapps\\common\\Phasmophobia"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Phasmophobia" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Phasmophobia.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Phasmophobia: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Phasmophobia not detected" -ForegroundColor DarkGray }`,
   game_battlefield: `$paths = @("C:\\Program Files\\EA Games\\Battlefield 2042","C:\\Program Files (x86)\\Origin Games\\Battlefield 2042","C:\\Program Files (x86)\\Steam\\steamapps\\common\\Battlefield 2042","D:\\SteamLibrary\\steamapps\\common\\Battlefield 2042"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Battlefield 2042" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\BF2042.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Battlefield 2042: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Battlefield 2042 not detected" -ForegroundColor DarkGray }`,
+  game_gta5: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V\\GTA5.exe","D:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V\\GTA5.exe","E:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V\\GTA5.exe","C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe","D:\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe","D:\\Games\\Grand Theft Auto V\\GTA5.exe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { $dir = Split-Path $found -Parent; Write-Host "[DETECTED] GTA V at $dir" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $key 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $key 'GPUPriority' 8 -Type DWord -Force; Set-ItemProperty $key 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $key 'DisableEnergyThrottling' 1 -Type DWord -Force; Add-MpPreference -ExclusionPath $dir -EA SilentlyContinue; $scKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\SocialClubHelper.exe\\PerfOptions'; If (!(Test-Path $scKey)) { New-Item -Path $scKey -Force | Out-Null }; Set-ItemProperty $scKey 'CpuPriorityClass' 1 -Type DWord -Force; Write-Host "[OK] GTA V: Above Normal CPU+IO, GPU=8, Defender exclusion added, SocialClub deprioritized" -ForegroundColor Green } Else { Write-Host "[SKIP] GTA V not detected" -ForegroundColor DarkGray }`,
+  game_fivem: `$paths = @("$env:LocalAppData\\FiveM\\FiveM.exe","$env:LocalAppData\\FiveM\\FiveM.app\\FiveM.exe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { $fivemDir = "$env:LocalAppData\\FiveM\\FiveM.app"; Write-Host "[DETECTED] FiveM at $env:LocalAppData\\FiveM" -ForegroundColor Green; $ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; $applyPerf = { param($exe) $p = "$ifeo\\$exe\\PerfOptions"; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $p 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $p 'DisableEnergyThrottling' 1 -Type DWord -Force; Set-ItemProperty $p 'EnableBoost' 1 -Type DWord -Force; Set-ItemProperty $p 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $p 'PagePriority' 5 -Type DWord -Force; Write-Host "[OK] PerfOptions applied: $exe" -ForegroundColor Green }; @('FiveM.exe','GTA5.exe','FiveM_b2189_GTAProcess.exe','FiveM_b3323_GTAProcess.exe','FiveM_b3258_GTAProcess.exe','FiveM_b2802_GTAProcess.exe') | ForEach-Object { & $applyPerf $_ }; If (Test-Path $fivemDir) { Add-MpPreference -ExclusionPath $fivemDir -EA SilentlyContinue; Write-Host "[OK] FiveM.app added to Defender exclusions" -ForegroundColor Green }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 524288 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 524288 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force; $adapter = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; If ($adapter) { Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ('1.1.1.1','1.0.0.1') -EA SilentlyContinue; Write-Host "[OK] DNS set to Cloudflare 1.1.1.1" -ForegroundColor Green }; Write-Host "[OK] FiveM: Full PerfOptions + Defender exclusion + 512KB network buffer + SystemResponsiveness=10" -ForegroundColor Green } Else { Write-Host "[SKIP] FiveM not detected" -ForegroundColor DarkGray }`,
+  game_rocketleague: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","D:\\SteamLibrary\\steamapps\\common\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","E:\\SteamLibrary\\steamapps\\common\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","C:\\Program Files\\Epic Games\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","D:\\Epic Games\\rocketleague\\Binaries\\Win64\\RocketLeague.exe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Rocket League at $found" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RocketLeague.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $key 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $key 'GPUPriority' 8 -Type DWord -Force; Set-ItemProperty $key 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $key 'DisableEnergyThrottling' 1 -Type DWord -Force; Stop-Service 'EpicGamesLauncher' -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 524288 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 524288 -Type DWord -Force; Write-Host "[OK] Rocket League: Above Normal CPU+IO, GPU=8, EnergyThrottle=Off, 512KB network buffer" -ForegroundColor Green } Else { Write-Host "[SKIP] Rocket League not detected" -ForegroundColor DarkGray }`,
+  game_arcraiders: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\ARC Raiders","D:\\SteamLibrary\\steamapps\\common\\ARC Raiders","E:\\SteamLibrary\\steamapps\\common\\ARC Raiders","C:\\Program Files (x86)\\Steam\\steamapps\\common\\Arc Raiders","D:\\SteamLibrary\\steamapps\\common\\Arc Raiders"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] ARC Raiders at $found" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\ArcRaiders.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $key 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $key 'GPUPriority' 8 -Type DWord -Force; Set-ItemProperty $key 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $key 'DisableEnergyThrottling' 1 -Type DWord -Force; Set-ItemProperty $key 'ForceForegroundBoost' 1 -Type DWord -Force; Add-MpPreference -ExclusionPath $found -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 524288 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 524288 -Type DWord -Force; Write-Host "[OK] ARC Raiders: High CPU+IO, GPU=8, Defender exclusion, 512KB network buffer" -ForegroundColor Green } Else { Write-Host "[SKIP] ARC Raiders not detected" -ForegroundColor DarkGray }`,
+  game_marvelrivals: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Marvel Rivals","D:\\SteamLibrary\\steamapps\\common\\Marvel Rivals","E:\\SteamLibrary\\steamapps\\common\\Marvel Rivals","C:\\Program Files (x86)\\Steam\\steamapps\\common\\MarvelRivals","D:\\SteamLibrary\\steamapps\\common\\MarvelRivals"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Marvel Rivals at $found" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\MarvelRivals-Win64-Shipping.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $key 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $key 'GPUPriority' 8 -Type DWord -Force; Set-ItemProperty $key 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $key 'DisableEnergyThrottling' 1 -Type DWord -Force; Set-ItemProperty $key 'ForceForegroundBoost' 1 -Type DWord -Force; Add-MpPreference -ExclusionPath $found -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 524288 -Type DWord -Force; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 524288 -Type DWord -Force; Write-Host "[OK] Marvel Rivals: Above Normal CPU+IO, GPU=8, Defender exclusion, network buffer tuned" -ForegroundColor Green } Else { Write-Host "[SKIP] Marvel Rivals not detected" -ForegroundColor DarkGray }`,
 
   // ── Integrated Graphics (AMD Vega / Intel UHD) ─────────────────────────────
   IGpu_DisableULPS: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'Radeon|Vega|RX|AMD|UHD Graphics|Iris|HD Graphics' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'EnableULPS' -Value 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'EnableULPS_NA' -Value 0 -Type DWord -EA SilentlyContinue; Write-Host "[iGPU] ULPS disabled on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc) — prevents GPU downclocking between frames" -ForegroundColor Green }`,
@@ -1226,20 +1231,40 @@ $detected = [System.Collections.Generic.List[string]]::new()
 
 function Resolve-GamePath { param([string]$Path); [System.Environment]::ExpandEnvironmentVariables($Path) }
 
-# Discover Steam library roots
+# Discover Steam library roots — check all common install locations including D: and E: drives
 $steamRoots = @()
-$defaultSteam = @('C:\\Program Files (x86)\\Steam', 'C:\\Program Files\\Steam')
-foreach ($s in $defaultSteam) { if (Test-Path $s) { $steamRoots += $s } }
-$vdfPath = 'C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf'
-if (Test-Path $vdfPath) {
-    Get-Content $vdfPath | ForEach-Object {
-        if ($_ -match '"path"\\s+"([^"]+)"') { $steamRoots += $Matches[1] }
+$knownSteamPaths = @(
+    'C:\\Program Files (x86)\\Steam',
+    'C:\\Program Files\\Steam',
+    'D:\\Steam',
+    'D:\\SteamLibrary',
+    'D:\\Program Files (x86)\\Steam',
+    'E:\\Steam',
+    'E:\\SteamLibrary',
+    'E:\\Program Files (x86)\\Steam',
+    'F:\\Steam',
+    'F:\\SteamLibrary'
+)
+foreach ($s in $knownSteamPaths) { if (Test-Path $s) { $steamRoots += $s } }
+
+# Read libraryfolders.vdf from whichever Steam root was found (finds additional library paths)
+foreach ($root in ($steamRoots | Select-Object -First 3)) {
+    $vdfPath = Join-Path $root 'steamapps\\libraryfolders.vdf'
+    if (Test-Path $vdfPath) {
+        Get-Content $vdfPath | ForEach-Object {
+            if ($_ -match '"path"\\s+"([^"]+)"') {
+                $p = $Matches[1] -replace '\\\\','\\'
+                if ($p -notin $steamRoots) { $steamRoots += $p }
+            }
+        }
+        break
     }
 }
 
 function Find-Game { param([string[]]$Paths)
     foreach ($p in $Paths) {
-        if (Test-Path (Resolve-GamePath $p)) { return $true }
+        $resolved = Resolve-GamePath $p
+        if (Test-Path $resolved) { return $true }
         foreach ($root in $steamRoots) {
             if (Test-Path (Join-Path $root $p)) { return $true }
         }
@@ -1248,20 +1273,30 @@ function Find-Game { param([string[]]$Paths)
 }
 
 $games = @(
-    @{ id = "game_valorant";   paths = @("%LocalAppData%\\VALORANT", "C:\\Riot Games\\VALORANT") },
-    @{ id = "game_cs2";        paths = @("Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe") },
-    @{ id = "game_apex";       paths = @("C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe","C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe") },
-    @{ id = "game_warzone";    paths = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty") },
-    @{ id = "game_lol";        paths = @("C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe") },
-    @{ id = "game_overwatch";  paths = @("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe","C:\\Program Files\\Overwatch\\_retail_\\Overwatch.exe") },
-    @{ id = "game_siege";      paths = @("C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Tom Clancy's Rainbow Six Siege") },
-    @{ id = "game_rust";       paths = @("Steam\\steamapps\\common\\Rust\\RustClient.exe") },
-    @{ id = "game_minecraft";  paths = @("%AppData%\\.minecraft\\launcher_profiles.json") },
-    @{ id = "game_roblox";     paths = @("%LocalAppData%\\Roblox\\Versions") },
-    @{ id = "game_tarkov";     paths = @("C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe","C:\\Games\\EFT\\EscapeFromTarkov.exe") },
-    @{ id = "game_pubg";       paths = @("Steam\\steamapps\\common\\PUBG\\TslGame\\Binaries\\Win64\\TslGame.exe") },
-    @{ id = "game_dbd";        paths = @("Steam\\steamapps\\common\\Dead by Daylight\\DeadByDaylight\\Binaries\\Win64\\DeadByDaylight-Win64-Shipping.exe") },
-    @{ id = "game_dota2";      paths = @("Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe") }
+    @{ id = "game_valorant";      paths = @("%LocalAppData%\\VALORANT","C:\\Riot Games\\VALORANT","D:\\Riot Games\\VALORANT") },
+    @{ id = "game_cs2";           paths = @("steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe") },
+    @{ id = "game_apex";          paths = @("C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe","C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe","D:\\Origin Games\\Apex Legends\\r5apex.exe") },
+    @{ id = "game_warzone";       paths = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Call of Duty","D:\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty") },
+    @{ id = "game_lol";           paths = @("C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe","D:\\Riot Games\\League of Legends\\Game\\League of Legends.exe") },
+    @{ id = "game_overwatch";     paths = @("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe","C:\\Program Files\\Overwatch\\_retail_\\Overwatch.exe","D:\\Overwatch\\_retail_\\Overwatch.exe") },
+    @{ id = "game_siege";         paths = @("C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Tom Clancy's Rainbow Six Siege","D:\\Ubisoft\\Ubisoft Game Launcher\\games\\Tom Clancy's Rainbow Six Siege") },
+    @{ id = "game_rust";          paths = @("steamapps\\common\\Rust\\RustClient.exe") },
+    @{ id = "game_minecraft";     paths = @("%AppData%\\.minecraft\\launcher_profiles.json") },
+    @{ id = "game_roblox";        paths = @("%LocalAppData%\\Roblox\\Versions") },
+    @{ id = "game_tarkov";        paths = @("C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe","C:\\Games\\EFT\\EscapeFromTarkov.exe","D:\\Games\\EFT\\EscapeFromTarkov.exe","D:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe") },
+    @{ id = "game_pubg";          paths = @("steamapps\\common\\PUBG\\TslGame\\Binaries\\Win64\\TslGame.exe") },
+    @{ id = "game_dbd";           paths = @("steamapps\\common\\Dead by Daylight\\DeadByDaylight\\Binaries\\Win64\\DeadByDaylight-Win64-Shipping.exe") },
+    @{ id = "game_dota2";         paths = @("steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe") },
+    @{ id = "game_warframe";      paths = @("steamapps\\common\\Warframe","%LocalAppData%\\Warframe") },
+    @{ id = "game_forza";         paths = @("steamapps\\common\\ForzaHorizon5","%ProgramFiles%\\WindowsApps") },
+    @{ id = "game_readyornot";    paths = @("steamapps\\common\\Ready Or Not") },
+    @{ id = "game_phasmo";        paths = @("steamapps\\common\\Phasmophobia") },
+    @{ id = "game_battlefield";   paths = @("C:\\Program Files\\EA Games\\Battlefield 2042","steamapps\\common\\Battlefield 2042") },
+    @{ id = "game_gta5";          paths = @("steamapps\\common\\Grand Theft Auto V\\GTA5.exe","C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe","D:\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe","D:\\Games\\Grand Theft Auto V\\GTA5.exe") },
+    @{ id = "game_fivem";         paths = @("%LocalAppData%\\FiveM\\FiveM.exe","%LocalAppData%\\FiveM\\FiveM.app\\FiveM.exe") },
+    @{ id = "game_rocketleague";  paths = @("steamapps\\common\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","C:\\Program Files\\Epic Games\\rocketleague\\Binaries\\Win64\\RocketLeague.exe","D:\\Epic Games\\rocketleague\\Binaries\\Win64\\RocketLeague.exe") },
+    @{ id = "game_arcraiders";    paths = @("steamapps\\common\\ARC Raiders","steamapps\\common\\Arc Raiders") },
+    @{ id = "game_marvelrivals";  paths = @("steamapps\\common\\Marvel Rivals","steamapps\\common\\MarvelRivals") }
 )
 
 Write-Host "  Scanning installed games..." -ForegroundColor Gray
