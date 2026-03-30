@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { Button } from "@/components/ui/button";
-import { Zap, Loader2, Download } from "lucide-react";
+import { Loader2, Download, X } from "lucide-react";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useGenerateScript } from "@/hooks/use-script";
 import { ScriptDialog } from "../script-dialog";
@@ -15,7 +15,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [command, setCommand] = useState<string | null>(null);
 
-  const { tweaks, nvidiaPreset } = useOptimizationStore();
+  const { tweaks, nvidiaPreset, reset } = useOptimizationStore();
   const generateScript = useGenerateScript();
   const { toast } = useToast();
   const osInfo = useOsDetection();
@@ -57,6 +57,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Unselect All — only shown when tweaks are selected */}
+              {enabledCount > 0 && (
+                <Button
+                  data-testid="button-clear-all-tweaks"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => reset()}
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-800 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-200 font-mono text-xs px-3"
+                >
+                  <X className="w-3.5 h-3.5 mr-1.5" />
+                  Unselect All
+                </Button>
+              )}
               {/* Single clear download CTA */}
               <ProGate>
                 <Button
