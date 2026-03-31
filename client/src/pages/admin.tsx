@@ -99,16 +99,16 @@ type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announceme
 function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const { toast } = useToast();
   type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
-  const [blocks, setBlocks] = React.useState<BlockedIp[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [unblocking, setUnblocking] = React.useState<string | null>(null);
+  const [blocks, setBlocks] = useState<BlockedIp[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [unblocking, setUnblocking] = useState<string | null>(null);
 
   const loadBlocks = () => {
     setLoading(true);
     fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setLoading(false));
   };
 
-  React.useEffect(() => { loadBlocks(); }, []);
+  useEffect(() => { loadBlocks(); }, []);
 
   const unblock = async (b: BlockedIp) => {
     setUnblocking(b.key);

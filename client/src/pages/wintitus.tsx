@@ -215,6 +215,7 @@ function Section({ section }: { section: SectionDef }) {
 export default function WinTitus() {
   const { tweaks, setTweak } = useOptimizationStore();
   const { toast } = useToast();
+  const hw = useHardwareInfo();
 
   const allKeys = SECTIONS.flatMap((s) => s.tweaks.map((t) => t.key));
   const enabledTotal = allKeys.filter((k) => tweaks[k]).length;

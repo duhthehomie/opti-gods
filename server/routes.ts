@@ -5,6 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
 import { autoSendState, runAutoSend } from "./auto-send";
+import { log } from "./index";
 
 // ── In-memory rate limiter ─────────────────────────────────────────────────────
 // Protects auth endpoints from scanning/brute-force. No Redis needed.
