@@ -331,14 +331,14 @@ export default function CustomOS() {
                   ))}
                 </div>
                 <a
-                  href="https://reviproject.com"
+                  href="https://www.revi.cc/"
                   target="_blank"
                   rel="noopener noreferrer"
                   data-testid="link-revios"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-300 hover:text-white transition-colors underline"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  Get ReviOS at reviproject.com
+                  Get ReviOS at revi.cc
                 </a>
               </div>
             </div>
@@ -613,7 +613,7 @@ export default function CustomOS() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open("https://reviproject.com/downloads", "_blank", "noopener noreferrer")}
+                  onClick={() => window.open("https://www.revi.cc/", "_blank", "noopener noreferrer")}
                   className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
                 >
                   <Download className="w-3 h-3" />
