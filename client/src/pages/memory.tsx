@@ -368,7 +368,7 @@ export default function Memory() {
     const recommended = items.filter(t => t.recommended && !isTweakLocked(t).locked).map(t => t.id);
     const allRecommendedOn = recommended.length > 0 && recommended.every(id => tweaks[id]);
     return (
-      <section>
+      <section className="text-white">
         <div className="flex items-center justify-between mb-4 px-1">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">{heading}</h2>
@@ -429,13 +429,13 @@ export default function Memory() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10 text-white">
+      <div className="space-y-6 max-w-4xl pb-10 text-white bg-transparent">
 
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3"
+          className="flex items-center gap-3 text-white"
         >
           <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
             <MemoryStick className="w-6 h-6 text-red-500" />
@@ -634,7 +634,7 @@ export default function Memory() {
         })()}
 
         {/* Tweak sections */}
-        <div className="space-y-8">
+        <div className="space-y-8 text-white">
           {renderSection("Pagefile & Virtual Memory", PAGEFILE_TWEAKS)}
           {renderSection("RAM Compression & Caching", COMPRESSION_TWEAKS)}
           {renderSection("Working Set & Process Memory", WORKINGSET_TWEAKS)}
