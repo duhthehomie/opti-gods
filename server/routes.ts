@@ -633,6 +633,42 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `Write-Host "[DONE] If your clock was wrong after WinUtil tweaks, it should now be correct." -ForegroundColor Green`,
     ],
   },
+  "processes-reduction": {
+    label: "Processes Reduction (Service Restore)",
+    commands: [
+      `Write-Host "[RESTORE] Processes Reduction — restoring services to Windows defaults..." -ForegroundColor Cyan`,
+      // === Services that default to Automatic — restore + restart ===
+      `Set-Service 'DiagTrack' -StartupType Automatic -EA SilentlyContinue; Start-Service 'DiagTrack' -EA SilentlyContinue; Write-Host "[OK] DiagTrack (Telemetry) restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'DPS' -StartupType Automatic -EA SilentlyContinue; Start-Service 'DPS' -EA SilentlyContinue; Write-Host "[OK] Diagnostics Policy Service restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'DusmSvc' -StartupType Automatic -EA SilentlyContinue; Start-Service 'DusmSvc' -EA SilentlyContinue; Write-Host "[OK] Data Usage Monitoring restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'DoSvc' -StartupType Automatic -EA SilentlyContinue; Start-Service 'DoSvc' -EA SilentlyContinue; Write-Host "[OK] Delivery Optimization restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'BITS' -StartupType Automatic -EA SilentlyContinue; Start-Service 'BITS' -EA SilentlyContinue; Write-Host "[OK] Background Intelligent Transfer restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'WSearch' -StartupType Automatic -EA SilentlyContinue; Start-Service 'WSearch' -EA SilentlyContinue; Write-Host "[OK] Windows Search restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'SysMain' -StartupType Automatic -EA SilentlyContinue; Start-Service 'SysMain' -EA SilentlyContinue; Write-Host "[OK] SysMain (Superfetch) restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'TrkWks' -StartupType Automatic -EA SilentlyContinue; Start-Service 'TrkWks' -EA SilentlyContinue; Write-Host "[OK] Distributed Link Tracking Client restored to Automatic" -ForegroundColor Green`,
+      `Set-Service 'MapsBroker' -StartupType Automatic -EA SilentlyContinue; Write-Host "[OK] Downloaded Maps Manager restored to Automatic" -ForegroundColor Green`,
+      // === Services that default to Manual — just reset startup type ===
+      `Set-Service 'WerSvc' -StartupType Manual -EA SilentlyContinue; Set-Service 'wercplsupport' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Windows Error Reporting (WerSvc + wercplsupport) reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'XblAuthManager' -StartupType Manual -EA SilentlyContinue; Set-Service 'XblGameSave' -StartupType Manual -EA SilentlyContinue; Set-Service 'XboxNetApiSvc' -StartupType Manual -EA SilentlyContinue; Set-Service 'XboxGipSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Xbox Live services reset to Manual (Windows default)" -ForegroundColor Green`,
+      `Set-Service 'SSDPSRV' -StartupType Manual -EA SilentlyContinue; Set-Service 'upnphost' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] SSDP + UPnP reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'FDResPub' -StartupType Manual -EA SilentlyContinue; Set-Service 'fdPHost' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Function Discovery services reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'lltdsvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Link Layer Topology Discovery reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'SharedAccess' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Internet Connection Sharing reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'WinRM' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Windows Remote Management reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'WbioSrvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Windows Biometric Service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'TabletInputService' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Tablet Input Service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'bthserv' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Bluetooth Support Service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'Fax' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Fax service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'lfsvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Geolocation Service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'PhoneSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Phone Service reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'RetailDemo' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Retail Demo reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'WMPNetworkSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[OK] Windows Media Player Network Sharing reset to Manual" -ForegroundColor Green`,
+      `Set-Service 'W32Time' -StartupType Manual -EA SilentlyContinue; Start-Service 'W32Time' -EA SilentlyContinue; w32tm /resync /force 2>$null; Write-Host "[OK] Windows Time reset to Manual and resynced" -ForegroundColor Green`,
+      // === Services that default to Disabled ===
+      `Set-Service 'RemoteRegistry' -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Remote Registry set back to Disabled (Windows default)" -ForegroundColor Green`,
+      `Write-Host "[DONE] All Processes Reduction services restored to Windows defaults. Restart your PC to apply." -ForegroundColor Green`,
+    ],
+  },
 };
 
 function buildRestoreScript(categories: string[]): string {

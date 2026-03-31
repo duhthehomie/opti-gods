@@ -4,7 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2, ShieldAlert,
-  ChevronDown, ChevronUp, Siren, CheckCheck,
+  ChevronDown, ChevronUp, Siren, CheckCheck, Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -223,6 +223,23 @@ const CATEGORIES = [
       "NTP server reset to time.windows.com",
       "Time sync on startup re-enabled",
       "Fixes clock that runs fast/slow after WinUtil tweaks",
+    ],
+  },
+  {
+    id: "processes-reduction",
+    label: "Processes Reduction (Service Restore)",
+    icon: Server,
+    color: "text-emerald-400",
+    border: "border-emerald-500/20",
+    bg: "bg-emerald-500/5",
+    desc: "Restores all 31 services changed by the Processes Reduction tab back to their Windows default startup types. Auto-restarts the ones that should be running.",
+    restores: [
+      "DiagTrack, DPS, DusmSvc, DoSvc → Automatic + restarted",
+      "BITS, WSearch, SysMain, TrkWks, MapsBroker → Automatic + restarted",
+      "WerSvc, Xbox services, SSDP, UPnP, FD services → Manual (Windows default)",
+      "WinRM, WbioSrvc, TabletInput, Bluetooth, Fax → Manual (Windows default)",
+      "Geolocation, Phone, WMP Network, W32Time → Manual (Windows default)",
+      "RemoteRegistry → Disabled (Windows default)",
     ],
   },
 ];
