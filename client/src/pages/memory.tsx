@@ -429,7 +429,7 @@ export default function Memory() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-6 max-w-4xl pb-10 text-white">
 
         {/* Header */}
         <motion.div
