@@ -409,6 +409,43 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   ProcSvc_SysMain: false,
   ProcSvc_RemoteReg: false,
   ProcSvc_ApplyAll: false,
+  // Cloud & Notification Services
+  ProcSvc_OneSyncSvc: false,
+  ProcSvc_CDPSvc: false,
+  ProcSvc_WpnService: false,
+  ProcSvc_cbdhsvc: false,
+  ProcSvc_dmwappushsvc: false,
+  ProcSvc_PushToInstall: false,
+  // IoT, Remote & Legacy Network
+  ProcSvc_AJRouter: false,
+  ProcSvc_SharedRealitySvc: false,
+  ProcSvc_icssvc: false,
+  ProcSvc_WFDSConMgr: false,
+  ProcSvc_p2pimsvc: false,
+  // Enterprise & System Misc
+  ProcSvc_EapHost: false,
+  ProcSvc_seclogon: false,
+  ProcSvc_SCardSvr: false,
+  ProcSvc_AppReadiness: false,
+  ProcSvc_PcaSvc: false,
+  ProcSvc_PrintNotify: false,
+  // NVIDIA GPU Thermal Management
+  NvidiaDisableHDMIAudio: false,
+  NvidiaRTXVideoOff: false,
+  NvidiaGpuBgOptimize: false,
+  // AMD GPU Thermal Management
+  AmdDisableHDMIAudio: false,
+  AmdDisableReLive: false,
+  // Additional Startup Apps
+  su_ea_app: false,
+  su_epic: false,
+  su_ubisoft: false,
+  su_battlenet: false,
+  su_razer: false,
+  su_chrome: false,
+  su_firefox: false,
+  su_edge_startup: false,
+  su_obs: false,
 };
 
 export const useOptimizationStore = create<OptimizationState>()(

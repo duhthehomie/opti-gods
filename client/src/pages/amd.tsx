@@ -4,7 +4,7 @@ import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
-import { Cpu, Layers, Zap, Check, Info, AlertTriangle, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Cpu, Layers, Zap, Check, Info, AlertTriangle, ShieldAlert, CheckCircle2, Thermometer } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -527,6 +527,41 @@ export default function Amd() {
                 delay={i + 1}
               />
             ))}
+          </div>
+        </section>
+
+        {/* GPU Thermal Management */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Thermometer className="w-4 h-4 text-orange-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-orange-400">GPU Thermal Management</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+          </div>
+          <p className="text-xs text-zinc-500 px-1 mb-4">
+            Optional tweaks that reduce AMD GPU die temperature by disabling hardware that runs on the GPU even when not actively used.
+            HDMI audio codecs consume power on the GPU die, and AMD ReLive/Adrenalin recording encodes in the background using your GPU's video encoder — both generate unnecessary heat and steal GPU resources during gaming.
+          </p>
+          <div className="space-y-3">
+            <TweakRow
+              id="AmdDisableHDMIAudio"
+              title="Disable AMD HDMI Audio Device"
+              description="The AMD HDMI audio codec is embedded on the GPU die and draws power constantly, even when you're using a different audio output. Disabling it via Device Manager reduces GPU power draw and lowers operating temperature by 1–3°C. Your Realtek, USB, or other audio devices are completely unaffected."
+              badge="THERMAL"
+              impact="MED"
+              checked={tweaks["AmdDisableHDMIAudio"] || false}
+              onCheckedChange={(v) => setTweak("AmdDisableHDMIAudio", v)}
+              delay={1}
+            />
+            <TweakRow
+              id="AmdDisableReLive"
+              title="Disable AMD ReLive / Adrenalin Recording"
+              description="AMD ReLive and Adrenalin's DVR mode keep the GPU video encoder (VCE/VCN) active in the background, ready to instantly record. This means your encoder is always loaded, consuming power and elevating GPU temperature even while you're not recording. Disable if you don't use AMD's built-in recording — use OBS or ShadowPlay instead."
+              badge="THERMAL"
+              impact="MED"
+              checked={tweaks["AmdDisableReLive"] || false}
+              onCheckedChange={(v) => setTweak("AmdDisableReLive", v)}
+              delay={2}
+            />
           </div>
         </section>
 

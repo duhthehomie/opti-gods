@@ -5,7 +5,7 @@ import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
-import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, CheckCircle2, X } from "lucide-react";
+import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, CheckCircle2, X, Thermometer } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -539,6 +539,51 @@ export default function Nvidia() {
                 </motion.div>
               );
             })}
+          </div>
+        </section>
+
+        {/* GPU Thermal Management */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Thermometer className="w-4 h-4 text-orange-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-orange-400">GPU Thermal Management</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+          </div>
+          <p className="text-xs text-zinc-500 px-1 mb-4">
+            Optional tweaks that reduce GPU die temperature by disabling hardware components that run on the GPU even when unused.
+            HDMI audio codecs, RTX video enhancement, and background container processes all consume GPU power and generate heat — disabling them recovers 1–3°C and a few watts for gaming headroom.
+          </p>
+          <div className="space-y-3">
+            <TweakRow
+              id="NvidiaDisableHDMIAudio"
+              title="Disable NVIDIA HDMI Audio Device"
+              description="The NVIDIA HDMI audio codec runs directly on the GPU die and draws power even when no audio is routed through it. Disabling the PnP device in Device Manager saves 5–10W and lowers GPU temperature by 1–3°C. Only affects HDMI audio — your Realtek/USB audio is completely unaffected."
+              badge="THERMAL"
+              impact="MED"
+              checked={tweaks["NvidiaDisableHDMIAudio"] || false}
+              onCheckedChange={(v) => setTweak("NvidiaDisableHDMIAudio", v)}
+              delay={1}
+            />
+            <TweakRow
+              id="NvidiaRTXVideoOff"
+              title="Disable RTX Video Super Resolution + RTX HDR"
+              description="RTX Video SR and RTX HDR use tensor cores to upscale and color-grade video streams in real time. This keeps tensor cores active 24/7 during any video playback, generating heat and costing power. Disable if you don't actively use these features — your GPU will run cooler during videos and non-gaming tasks."
+              badge="THERMAL"
+              impact="MED"
+              checked={tweaks["NvidiaRTXVideoOff"] || false}
+              onCheckedChange={(v) => setTweak("NvidiaRTXVideoOff", v)}
+              delay={2}
+            />
+            <TweakRow
+              id="NvidiaGpuBgOptimize"
+              title="Flush NVIDIA Background GPU Container Processes"
+              description="The NVIDIA container stack (nvcontainer, NVDisplay.Container.exe) occasionally idles with elevated GPU context. This tweak writes a VRR optimization preference and flushes the container processes, reducing background dGPU load for desktop and productivity tasks. NvDisplayContainerLS is intentionally not killed — stopping it breaks NVIDIA Overlay in FiveM."
+              badge="OPTIONAL"
+              impact="LOW"
+              checked={tweaks["NvidiaGpuBgOptimize"] || false}
+              onCheckedChange={(v) => setTweak("NvidiaGpuBgOptimize", v)}
+              delay={3}
+            />
           </div>
         </section>
 

@@ -149,6 +149,19 @@ const TWEAK_COMMANDS: Record<string, string> = {
   su_ccleaner: `$ccKeys = @("CCleaner","CCleaner64","CCleaner Smart Cleaning","CCleanerSmartCleaning"); foreach ($v in $ccKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null; reg delete "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in @("CCleaner","CCleaner64")) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*CCleaner*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] CCleaner removed from ALL startup locations (HKCU+HKLM registry x4, StartupApproved, scheduled tasks)" -ForegroundColor Green`,
   su_corsair: `$iCUEKeys = @("iCUE","Corsair iCUE","ICUE","CorsairHID"); foreach ($v in $iCUEKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $lnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\iCUE.lnk","$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Corsair iCUE.lnk"); foreach ($lnk in $lnks) { If (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in @("iCUE","ICUE")) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Corsair*" -or $_.TaskName -like "*iCUE*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Corsair iCUE removed from ALL startup locations (registry x4, StartupApproved, .lnk, scheduled tasks)" -ForegroundColor Green`,
   su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "RadeonSoftware" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] Radeon Software removed from startup" -ForegroundColor Green`,
+  // Game Launchers — startup removal
+  su_ea_app: `$eaKeys = @("EADesktop","EA Desktop","EALauncher","Electronic Arts"); foreach ($v in $eaKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in $eaKeys) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*EABackground*" -or $_.TaskName -like "*EA Desktop*" -or $_.TaskName -like "*EALauncher*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] EA App removed from ALL startup locations — open EA App manually when you want to play EA games" -ForegroundColor Green`,
+  su_epic: `$epicKeys = @("EpicGamesLauncher","Epic Games Launcher","EpicLauncher"); foreach ($v in $epicKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $lnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Epic Games Launcher.lnk"); foreach ($lnk in $lnks) { If (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "EpicGamesLauncher" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Epic*" -or $_.TaskName -like "*EOS*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Epic Games Launcher removed from ALL startup locations" -ForegroundColor Green`,
+  su_ubisoft: `$ubiKeys = @("Ubisoft Connect","UbisoftConnect","upc"); foreach ($v in $ubiKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in $ubiKeys) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Ubisoft*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Ubisoft Connect removed from ALL startup locations" -ForegroundColor Green`,
+  su_battlenet: `$bnKeys = @("Battle.net","Battle.net Update Agent","Blizzard Update Agent"); foreach ($v in $bnKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in $bnKeys) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Blizzard*" -or $_.TaskName -like "*Battle.net*" -or $_.TaskName -like "*Battlenet*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Battle.net removed from ALL startup locations" -ForegroundColor Green`,
+  // Peripheral software
+  su_razer: `$razKeys = @("RzSynapse","Razer Synapse","RazerSynapse","RazerSynapseService"); foreach ($v in $razKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in $razKeys) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Razer*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Razer Synapse removed from ALL startup locations — Synapse still opens when you launch it manually" -ForegroundColor Green`,
+  // Browser startup boost / background agents
+  su_chrome: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Google Chrome" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Google Chrome" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome" -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Chrome Startup Boost + background mode disabled — Chrome still works normally when you open it" -ForegroundColor Green`,
+  su_firefox: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Firefox" /f 2>$null; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Firefox*" -and $_.TaskName -notlike "*Update*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Firefox background agent task disabled — Firefox updates and normal browsing are unaffected" -ForegroundColor Green`,
+  su_edge_startup: `$edgeKeys = @("Microsoft Edge","MicrosoftEdge","msedge"); foreach ($v in $edgeKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Edge Startup Boost + background mode disabled via policy — Edge works normally when opened" -ForegroundColor Green`,
+  // Streaming
+  su_obs: `$obsKeys = @("OBS Studio","obs64","obs"); foreach ($v in $obsKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $lnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OBS Studio.lnk"); foreach ($lnk in $lnks) { If (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "OBS Studio" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] OBS Studio removed from startup — OBS still works fine when launched manually" -ForegroundColor Green`,
   // Registry - Extra
   SetResponsiveness: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 10`,
   GameModeTweaks: `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item -Path $gamePath -Force | Out-Null }; Set-ItemProperty -Path $gamePath -Name 'Scheduling Category' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'SFIO Priority' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'GPU Priority' -Value 8 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'Priority' -Value 6 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'MaximumPreRenderedFrames' -Value 1 -Type DWord; Write-Host "[OK] Game Mode Scheduler: High Category, High SFIO, GPU Priority 8, CPU Priority 6, MaxPreRendered 1" -ForegroundColor Green`,
@@ -341,11 +354,18 @@ const TWEAK_COMMANDS: Record<string, string> = {
   NvShaderDiskCache: `$dxPath = 'HKLM:\\SOFTWARE\\Microsoft\\DirectX'; If (!(Test-Path $dxPath)) { New-Item $dxPath -Force | Out-Null }; Set-ItemProperty $dxPath 'ShaderCache' 1 -Type DWord -Force -EA SilentlyContinue; $nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'ShaderDiskCacheMaxSize' 0x40000000 -Type DWord -Force -EA SilentlyContinue; $gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; 0,1,2,3 | ForEach-Object { $k = "$gpuClass\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') { Set-ItemProperty $k 'ShaderCache' 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[NVIDIA] Shader disk cache = unlimited on GPU class $k" -ForegroundColor Green } }; Write-Host "[NVIDIA] Shader disk cache maximized — eliminates compilation stutter on GTX 1060 / 1650 / RTX series" -ForegroundColor Green`,
   NvTextureFilterPerf: `$nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'TextureFilterQuality' 0 -Type DWord -Force -EA SilentlyContinue; $gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $found = $false; 0,1,2,3 | ForEach-Object { $k = "$gpuClass\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') { Set-ItemProperty $k 'TextureFilterQuality' 0 -Type DWord -Force -EA SilentlyContinue; $found = $true; Write-Host "[NVIDIA] Texture filter = High Performance on $k (saves 3-8 FPS on GTX 1060/1650 vs default Quality mode)" -ForegroundColor Green } }; If (-not $found) { Write-Host "[NVIDIA] GPU class key not found — apply via NVCP: Manage 3D Settings > Texture filtering quality = High Performance" -ForegroundColor Yellow }`,
   NvFXAADriverOff: `$nvKey = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak'; If (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }; Set-ItemProperty $nvKey 'FXAA' 0 -Type DWord -Force -EA SilentlyContinue; $gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; 0,1,2,3 | ForEach-Object { $k = "$gpuClass\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') { Set-ItemProperty $k 'FXAA' 0 -Type DWord -Force -EA SilentlyContinue } }; Write-Host "[NVIDIA] Driver-level FXAA injection disabled — prevents NVIDIA from adding anti-aliasing overhead without your consent. Use in-game AA settings instead." -ForegroundColor Green`,
+  // NVIDIA GPU Thermal Management
+  NvidiaDisableHDMIAudio: `$hdmiAudio = Get-PnpDevice | Where-Object { $_.FriendlyName -match 'NVIDIA.*Audio|NVIDIA.*HDMI|NVIDIA.*High Definition' -and $_.Status -eq 'OK' }; If ($hdmiAudio) { $hdmiAudio | ForEach-Object { Disable-PnpDevice -InputObject $_ -Confirm:$false -EA SilentlyContinue; Write-Host "[GPU Thermal] Disabled: $($_.FriendlyName) — HDMI audio runs on GPU die, disabling saves 5-10W and lowers temp 1-3C" -ForegroundColor Green } } Else { Write-Host "[GPU Thermal] No active NVIDIA HDMI Audio device found (may already be disabled)" -ForegroundColor Yellow }`,
+  NvidiaRTXVideoOff: `$vsrPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NvControlPanel2\\Client'; If (!(Test-Path $vsrPath)) { New-Item $vsrPath -Force | Out-Null }; Set-ItemProperty $vsrPath 'OptInOrOutPreference' 0 -Type DWord -Force -EA SilentlyContinue; $rtxVid = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\RTXVideoManager'; If (!(Test-Path $rtxVid)) { New-Item $rtxVid -Force | Out-Null }; Set-ItemProperty $rtxVid 'RTXVideoSuperRes' 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $rtxVid 'RTXVideoHDR' 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[GPU Thermal] RTX Video Super Resolution + RTX HDR disabled — stops continuous tensor core usage during video playback, reduces GPU heat" -ForegroundColor Green`,
+  NvidiaGpuBgOptimize: `$gpuPref = 'HKCU:\\SOFTWARE\\Microsoft\\DirectX\\UserGpuPreferences'; If (!(Test-Path $gpuPref)) { New-Item $gpuPref -Force | Out-Null }; Set-ItemProperty $gpuPref 'DirectXUserGlobalSettings' 'VRROptimizeEnable=0;' -Type String -Force -EA SilentlyContinue; Stop-Process -Name 'nvcontainer' -Force -EA SilentlyContinue; Stop-Process -Name 'NVDisplay.Container.exe' -Force -EA SilentlyContinue; Write-Host "[GPU Thermal] Background GPU container processes flushed, display preference written — dGPU load reduced for desktop tasks" -ForegroundColor Green`,
 
   // ── AMD Advanced Tweaks ───────────────────────────────────────────────────
   AmdSmartAccessMemory: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $found=$false; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnableResizableBar' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_EnableSmartAccessMemory' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Smart Access Memory enabled on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc)" -ForegroundColor Green; $found=$true }; If (-not $found) { Write-Host "[AMD] No AMD GPU class key found — verify Resizable BAR is enabled in BIOS first" -ForegroundColor Yellow } Else { Write-Host "[AMD] SAM (Resizable BAR) enabled — CPU has full VRAM access, improves DX12/Vulkan 5-15%" -ForegroundColor Green }`,
   AmdAntiLagPlus: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLag' -Value 1 -Type DWord -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'AntiLagPlus' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] Anti-Lag + Anti-Lag+ enabled. Anti-Lag works on RX 5000+, Anti-Lag+ requires RX 7000 series + driver 23.11.1+" -ForegroundColor Green`,
   AmdFluidMotionFrames: `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnableFrameGeneration' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[AMD] AFMF frame generation hint set on $((Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc)" -ForegroundColor Green }; Write-Host "[AMD] Fluid Motion Frames (AFMF) hint applied. Requires RX 7000 + driver 23.11.1+ + enable in Radeon Software Global Graphics" -ForegroundColor Cyan`,
+  // AMD GPU Thermal Management
+  AmdDisableHDMIAudio: `$amdAudio = Get-PnpDevice | Where-Object { $_.FriendlyName -match 'AMD.*Audio|Radeon.*Audio|AMD.*High Definition|ATI.*HDMI' -and $_.Status -eq 'OK' }; If ($amdAudio) { $amdAudio | ForEach-Object { Disable-PnpDevice -InputObject $_ -Confirm:$false -EA SilentlyContinue; Write-Host "[GPU Thermal] Disabled: $($_.FriendlyName) — AMD HDMI audio codec runs on GPU die, disabling reduces power draw and lowers temperature" -ForegroundColor Green } } Else { Write-Host "[GPU Thermal] No active AMD HDMI Audio device found (may already be disabled)" -ForegroundColor Yellow }`,
+  AmdDisableReLive: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'DVR_Enabled' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'Recording_Enabled' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\DVR' -Name 'DVREnabled' -Value 0 -Type DWord -Force -EA SilentlyContinue; Stop-Process -Name 'RSServr' -Force -EA SilentlyContinue; Stop-Process -Name 'AMDRSServ' -Force -EA SilentlyContinue; Write-Host "[GPU Thermal] AMD ReLive/Adrenalin recording disabled — stops background GPU encoder usage that causes heat spikes and FPS drops" -ForegroundColor Green`,
 
   // ── Game Detection: Additional Games ────────────────────────────────────────
   game_warframe: `$paths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Warframe","D:\\SteamLibrary\\steamapps\\common\\Warframe","$env:LOCALAPPDATA\\Warframe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Warframe at $found" -ForegroundColor Green; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Warframe.x64.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty $key 'CpuPriorityClass' 3; Set-ItemProperty $key 'IoPriority' 3; Write-Host "[OK] Warframe: Above Normal CPU + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Warframe not detected" -ForegroundColor DarkGray }`,
@@ -464,7 +484,27 @@ const TWEAK_COMMANDS: Record<string, string> = {
   ProcSvc_WSearch: `Stop-Service 'WSearch' -Force -EA SilentlyContinue; Set-Service 'WSearch' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Windows Search indexing set to Manual — stops constant disk I/O from file indexing" -ForegroundColor Green`,
   ProcSvc_SysMain: `Stop-Service 'SysMain' -Force -EA SilentlyContinue; Set-Service 'SysMain' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Superfetch / SysMain set to Manual — no more RAM pre-loading overhead (beneficial on SSD+16GB+)" -ForegroundColor Green`,
   ProcSvc_RemoteReg: `Stop-Service 'RemoteRegistry' -Force -EA SilentlyContinue; Set-Service 'RemoteRegistry' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Remote Registry set to Manual — reduces remote attack surface" -ForegroundColor Green`,
-  ProcSvc_ApplyAll: `$svcs = @('DiagTrack','WerSvc','wercplsupport','DPS','DusmSvc','DoSvc','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM','WbioSrvc','TabletInputService','Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time','BITS','WSearch','SysMain','RemoteRegistry'); $count = 0; foreach ($s in $svcs) { $svc = Get-Service $s -EA SilentlyContinue; if ($svc) { try { Stop-Service $s -Force -EA SilentlyContinue; Set-Service $s -StartupType Manual -EA SilentlyContinue; $count++ } catch {} } }; Write-Host "[Processes] $count non-essential services set to Manual startup — fewer background processes, more CPU/RAM for games" -ForegroundColor Green`,
+  // Cloud & Notification Services
+  ProcSvc_OneSyncSvc: `Stop-Service 'OneSyncSvc' -Force -EA SilentlyContinue; Set-Service 'OneSyncSvc' -StartupType Manual -EA SilentlyContinue; Get-Service 'OneSyncSvc_*' -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue }; Write-Host "[Processes] OneSyncSvc (Cloud Sync Platform) set to Manual — stops Microsoft account mail/contacts/settings sync at boot" -ForegroundColor Green`,
+  ProcSvc_CDPSvc: `Stop-Service 'CDPSvc' -Force -EA SilentlyContinue; Set-Service 'CDPSvc' -StartupType Manual -EA SilentlyContinue; Get-Service 'CDPUserSvc_*' -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue }; Write-Host "[Processes] Connected Devices Platform (CDPSvc) set to Manual — stops cross-device phone/tablet pairing daemon" -ForegroundColor Green`,
+  ProcSvc_WpnService: `Stop-Service 'WpnService' -Force -EA SilentlyContinue; Set-Service 'WpnService' -StartupType Manual -EA SilentlyContinue; Get-Service 'WpnUserService_*' -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue }; Write-Host "[Processes] Windows Push Notifications (WpnService) set to Manual — reduces UWP notification worker threads at boot" -ForegroundColor Green`,
+  ProcSvc_cbdhsvc: `Get-Service 'cbdhsvc_*' -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue }; Write-Host "[Processes] Clipboard User Service (cbdhsvc) set to Manual — only needed if actively using Win+V Clipboard History" -ForegroundColor Green`,
+  ProcSvc_dmwappushsvc: `Stop-Service 'dmwappushsvc' -Force -EA SilentlyContinue; Set-Service 'dmwappushsvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] WAP Push Message Routing (dmwappushsvc) set to Manual — enterprise MDM device management, zero use on home gaming PCs" -ForegroundColor Green`,
+  ProcSvc_PushToInstall: `Stop-Service 'PushToInstall' -Force -EA SilentlyContinue; Set-Service 'PushToInstall' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Windows Store Push to Install set to Manual — remote app installation daemon, not needed on gaming PCs" -ForegroundColor Green`,
+  // IoT, Remote & Legacy Network Features
+  ProcSvc_AJRouter: `Stop-Service 'AJRouter' -Force -EA SilentlyContinue; Set-Service 'AJRouter' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] AllJoyn Router (IoT) set to Manual — smart home IoT protocol, gaming PCs have zero use for this" -ForegroundColor Green`,
+  ProcSvc_SharedRealitySvc: `Stop-Service 'SharedRealitySvc' -Force -EA SilentlyContinue; Set-Service 'SharedRealitySvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Mixed Reality Spatial Data Service set to Manual — Windows HoloLens/VR compositor, irrelevant on gaming PCs" -ForegroundColor Green`,
+  ProcSvc_icssvc: `Stop-Service 'icssvc' -Force -EA SilentlyContinue; Set-Service 'icssvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Windows Mobile Hotspot Service (icssvc) set to Manual — only needed if sharing your PC internet as a Wi-Fi hotspot" -ForegroundColor Green`,
+  ProcSvc_WFDSConMgr: `Stop-Service 'WFDSConMgrSvc' -Force -EA SilentlyContinue; Set-Service 'WFDSConMgrSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Wi-Fi Direct Services Connection Manager set to Manual — wireless display/casting protocol, useless on desktop gaming rigs" -ForegroundColor Green`,
+  ProcSvc_p2pimsvc: `Stop-Service 'p2pimsvc' -Force -EA SilentlyContinue; Set-Service 'p2pimsvc' -StartupType Manual -EA SilentlyContinue; Stop-Service 'PNRPsvc' -Force -EA SilentlyContinue; Set-Service 'PNRPsvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Peer Networking (p2pimsvc + PNRPsvc) set to Manual — Windows peer-to-peer discovery, unused on gaming PCs" -ForegroundColor Green`,
+  // Enterprise & System Misc
+  ProcSvc_EapHost: `Stop-Service 'EapHost' -Force -EA SilentlyContinue; Set-Service 'EapHost' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Extensible Authentication Protocol (EapHost) set to Manual — enterprise WPA2-Enterprise/RADIUS, home Wi-Fi does not need it" -ForegroundColor Green`,
+  ProcSvc_seclogon: `Stop-Service 'seclogon' -Force -EA SilentlyContinue; Set-Service 'seclogon' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Secondary Logon (seclogon) set to Manual — run-as-different-user, rarely needed and starts on-demand if required" -ForegroundColor Green`,
+  ProcSvc_SCardSvr: `Stop-Service 'SCardSvr' -Force -EA SilentlyContinue; Set-Service 'SCardSvr' -StartupType Manual -EA SilentlyContinue; Stop-Service 'ScDeviceEnum' -Force -EA SilentlyContinue; Set-Service 'ScDeviceEnum' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Smart Card services (SCardSvr + ScDeviceEnum) set to Manual — enterprise smart card hardware, not used on gaming PCs" -ForegroundColor Green`,
+  ProcSvc_AppReadiness: `Stop-Service 'AppReadiness' -Force -EA SilentlyContinue; Set-Service 'AppReadiness' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] App Readiness (AppReadiness) set to Manual — prepares UWP apps on first login, wasteful overhead on already-configured PCs" -ForegroundColor Green`,
+  ProcSvc_PcaSvc: `Stop-Service 'PcaSvc' -Force -EA SilentlyContinue; Set-Service 'PcaSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Program Compatibility Assistant (PcaSvc) set to Manual — monitors every app launch for compat issues, pure CPU overhead on modern software" -ForegroundColor Green`,
+  ProcSvc_PrintNotify: `Stop-Service 'PrintNotify' -Force -EA SilentlyContinue; Set-Service 'PrintNotify' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Printer Extensions and Notifications (PrintNotify) set to Manual — useless without an active printer" -ForegroundColor Green`,
+  ProcSvc_ApplyAll: `$svcs = @('DiagTrack','WerSvc','wercplsupport','DPS','DusmSvc','DoSvc','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM','WbioSrvc','TabletInputService','Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time','BITS','WSearch','SysMain','RemoteRegistry','OneSyncSvc','CDPSvc','WpnService','dmwappushsvc','PushToInstall','AJRouter','SharedRealitySvc','icssvc','WFDSConMgrSvc','p2pimsvc','PNRPsvc','EapHost','seclogon','SCardSvr','ScDeviceEnum','AppReadiness','PcaSvc','PrintNotify'); $count = 0; foreach ($s in $svcs) { $svc = Get-Service $s -EA SilentlyContinue; if ($svc) { try { Stop-Service $s -Force -EA SilentlyContinue; Set-Service $s -StartupType Manual -EA SilentlyContinue; $count++ } catch {} } }; $perUser = @('OneSyncSvc','CDPUserSvc','WpnUserService','cbdhsvc'); foreach ($b in $perUser) { Get-Service "\${b}_*" -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue; $count++ } }; Write-Host "[Processes] \${count} non-essential services set to Manual — fewer background processes, more CPU/RAM for games" -ForegroundColor Green`,
 };
 
 // ── RESTORE / UNDO COMMANDS ─────────────────────────────────────────────────
@@ -1097,6 +1137,101 @@ export async function registerRoutes(
   });
 
   // Scan for actual startup apps from Windows registry
+  // Processes — Smart Scan + Auto-Apply PS1 script
+  app.get('/api/processes/smart-scan', (_req, res) => {
+    const ps1 = `
+#Requires -RunAsAdministrator
+$ErrorActionPreference = 'SilentlyContinue'
+Clear-Host
+Write-Host "=========================================" -ForegroundColor Red
+Write-Host "  OPTI GODS - Smart Process Optimizer" -ForegroundColor White
+Write-Host "=========================================" -ForegroundColor Red
+Write-Host ""
+
+$before = (Get-Process).Count
+Write-Host ">>> Processes BEFORE: $before" -ForegroundColor Yellow
+Write-Host ""
+
+$allServices = @(
+  'DiagTrack','WerSvc','wercplsupport','DPS','DusmSvc','DoSvc',
+  'XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc',
+  'SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM',
+  'WbioSrvc','TabletInputService',
+  'Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time',
+  'BITS','WSearch','SysMain','RemoteRegistry',
+  'OneSyncSvc','CDPSvc','WpnService','dmwappushsvc','PushToInstall',
+  'AJRouter','SharedRealitySvc','icssvc','WFDSConMgrSvc',
+  'p2pimsvc','PNRPsvc',
+  'EapHost','seclogon','SCardSvr','ScDeviceEnum','AppReadiness','PcaSvc','PrintNotify'
+)
+
+$perUserBases = @('OneSyncSvc','CDPSvc','CDPUserSvc','WpnService','WpnUserService','cbdhsvc')
+
+$applied = 0
+$alreadyOk = 0
+$notFound = 0
+
+Write-Host "--- Scanning $($allServices.Count) non-essential Windows services ---" -ForegroundColor Cyan
+foreach ($svcName in $allServices) {
+  $svc = Get-Service $svcName -EA SilentlyContinue
+  if (!$svc) { $notFound++; continue }
+  if ($svc.StartType -eq 'Manual' -or $svc.StartType -eq 'Disabled') {
+    $alreadyOk++
+    Write-Host "  [OK]  $svcName already Manual/Disabled" -ForegroundColor DarkGreen
+  } else {
+    try {
+      Stop-Service $svcName -Force -EA SilentlyContinue
+      Set-Service $svcName -StartupType Manual
+      $applied++
+      Write-Host "  [SET] $svcName -> Manual  (was $($svc.StartType))" -ForegroundColor Green
+    } catch {
+      Write-Host "  [SKIP] $svcName — $($_.Exception.Message)" -ForegroundColor DarkYellow
+    }
+  }
+}
+
+Write-Host ""
+Write-Host "--- Scanning per-user service instances ---" -ForegroundColor Cyan
+foreach ($base in $perUserBases) {
+  $instances = Get-Service "$($base)_*" -EA SilentlyContinue
+  foreach ($inst in $instances) {
+    if ($inst.StartType -ne 'Manual' -and $inst.StartType -ne 'Disabled') {
+      try {
+        Stop-Service $inst -Force -EA SilentlyContinue
+        Set-Service $inst -StartupType Manual
+        $applied++
+        Write-Host "  [SET] $($inst.Name) -> Manual" -ForegroundColor Green
+      } catch {}
+    } else { $alreadyOk++ }
+  }
+}
+
+Write-Host ""
+Write-Host "=========================================" -ForegroundColor Red
+Write-Host "  RESULTS" -ForegroundColor White
+Write-Host "=========================================" -ForegroundColor Red
+Write-Host "Services set to Manual: $applied" -ForegroundColor Green
+Write-Host "Already optimal:        $alreadyOk" -ForegroundColor DarkGreen
+Write-Host "Not on this Windows:    $notFound" -ForegroundColor DarkYellow
+Write-Host ""
+Write-Host "Waiting 3s for services to stop..." -ForegroundColor Cyan
+Start-Sleep 3
+$after = (Get-Process).Count
+Write-Host ""
+Write-Host ">>> Processes BEFORE: $before" -ForegroundColor Yellow
+Write-Host ">>> Processes AFTER:  $after" -ForegroundColor Green
+Write-Host ">>> Freed right now:  $($before - $after) processes" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "[INFO] Restart your PC for full effect." -ForegroundColor White
+Write-Host "[INFO] Services set to Manual will NOT auto-start next boot." -ForegroundColor White
+Write-Host ""
+Read-Host "Press Enter to close"
+`;
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="optigods-smart-scan.ps1"');
+    res.send(ps1.trim());
+  });
+
   app.get('/api/startup/scan', (_req, res) => {
     const ps1 = `
 # Scan Windows registry for all startup apps

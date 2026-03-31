@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -5,7 +6,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { PageGuide } from "@/components/page-guide";
 import {
-  Server, Zap, CheckCircle2, AlertTriangle, ShieldAlert,
+  Server, Zap, CheckCircle2, AlertTriangle, ShieldAlert, ScanSearch, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -248,6 +249,143 @@ const BACKGROUND_SERVICES: ServiceTweak[] = [
   },
 ];
 
+const CLOUD_SERVICES: ServiceTweak[] = [
+  {
+    id: "ProcSvc_OneSyncSvc",
+    title: "OneSyncSvc — Cloud Sync Platform",
+    desc: "Syncs your Microsoft account mail, contacts, calendar, and settings from the cloud at boot. Gaming PCs don't need this running constantly in the background.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_CDPSvc",
+    title: "CDPSvc — Connected Devices Platform",
+    desc: "Pairs your PC with your phone and tablet for cross-device notifications. Spawns multiple worker processes. Safe to set Manual on standalone gaming PCs.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_WpnService",
+    title: "WpnService — Windows Push Notifications",
+    desc: "Maintains push notification connections for UWP apps (Store apps). Spawns WpnUserService worker threads. Set Manual to stop constant cloud polling.",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_cbdhsvc",
+    title: "cbdhsvc — Clipboard User Service",
+    desc: "Powers Win+V clipboard history that syncs clipboard across devices. If you never use clipboard history, this runs for nothing.",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_dmwappushsvc",
+    title: "dmwappushsvc — WAP Push / MDM Router",
+    desc: "Routes WAP push messages for enterprise Mobile Device Management. Home gaming PCs have absolutely zero use for this service.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_PushToInstall",
+    title: "PushToInstall — Windows Store Remote Install",
+    desc: "Lets you push-install apps to your PC from the Microsoft Store app on your phone. Completely unnecessary daemon on gaming PCs.",
+    impact: "LOW",
+    recommended: true,
+  },
+];
+
+const IOT_SERVICES: ServiceTweak[] = [
+  {
+    id: "ProcSvc_AJRouter",
+    title: "AJRouter — AllJoyn Router (IoT)",
+    desc: "Implements the AllJoyn smart home IoT protocol for connected devices. Gaming PCs have zero use for IoT routing — this is pure wasted overhead.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_SharedRealitySvc",
+    title: "SharedRealitySvc — Mixed Reality Compositor",
+    desc: "Windows HoloLens and Mixed Reality runtime service. Runs spatial data processing in the background. Irrelevant on all standard gaming PCs.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_icssvc",
+    title: "icssvc — Windows Mobile Hotspot",
+    desc: "Manages internet sharing from your PC to other devices via Wi-Fi hotspot. If your PC isn't a hotspot, this process runs for nothing.",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_WFDSConMgr",
+    title: "WFDSConMgrSvc — Wi-Fi Direct Services",
+    desc: "Manages Miracast and Wi-Fi Direct wireless display connections. Useless on desktop gaming rigs not connected to wireless displays.",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_p2pimsvc",
+    title: "p2pimsvc + PNRPsvc — Peer-to-Peer Networking",
+    desc: "Legacy Windows peer-to-peer discovery and name resolution protocols. Not used by any modern game or app. Both services stopped together.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+];
+
+const ENTERPRISE_SERVICES: ServiceTweak[] = [
+  {
+    id: "ProcSvc_EapHost",
+    title: "EapHost — Extensible Authentication Protocol",
+    desc: "Enterprise WPA2-Enterprise and RADIUS 802.1X authentication. Home Wi-Fi uses WPA2-Personal — this service is never needed on home gaming PCs.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_seclogon",
+    title: "seclogon — Secondary Logon",
+    desc: "Allows running programs as a different user (Run As). Rarely used by home gamers. Starts on-demand if ever needed — safe to set Manual.",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_SCardSvr",
+    title: "SCardSvr + ScDeviceEnum — Smart Card Services",
+    desc: "Enterprise smart card reader hardware stack. No home gaming PC uses smart cards. Both services stopped and set to Manual together.",
+    badge: "RECOMMENDED",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_AppReadiness",
+    title: "AppReadiness — App Readiness at Login",
+    desc: "Prepares UWP apps during user login on first boot. Wasteful on already-configured gaming PCs — adds latency to every login with no benefit.",
+    impact: "LOW",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_PcaSvc",
+    title: "PcaSvc — Program Compatibility Assistant",
+    desc: "Monitors every app launch for compatibility issues with old Windows versions. Checks every crash, every new install. Pure CPU overhead on modern software.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "ProcSvc_PrintNotify",
+    title: "PrintNotify — Printer Extension Notifications",
+    desc: "Handles printer status pop-ups and extension UIs. Useless if you don't have an active printer attached. Starts on-demand if a printer is connected.",
+    impact: "LOW",
+    recommended: true,
+  },
+];
+
 const ALL_TWEAKS = [
   ...TELEMETRY_SERVICES,
   ...XBOX_SERVICES,
@@ -255,6 +393,9 @@ const ALL_TWEAKS = [
   ...HARDWARE_SERVICES,
   ...LEGACY_SERVICES,
   ...BACKGROUND_SERVICES,
+  ...CLOUD_SERVICES,
+  ...IOT_SERVICES,
+  ...ENTERPRISE_SERVICES,
 ];
 
 const APPLY_ALL_ID = "ProcSvc_ApplyAll";
@@ -262,6 +403,30 @@ const APPLY_ALL_ID = "ProcSvc_ApplyAll";
 export default function ProcessesPage() {
   const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const [scanning, setScanning] = useState(false);
+
+  const handleSmartScan = async () => {
+    setScanning(true);
+    try {
+      const res = await fetch('/api/processes/smart-scan');
+      const ps1 = await res.text();
+      const blob = new Blob([ps1], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "optigods-smart-scan.ps1";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Smart Scan script downloaded",
+        description: "Run optigods-smart-scan.ps1 as Administrator — it scans 47+ services and shows your process count before and after.",
+      });
+    } catch {
+      toast({ title: "Error", description: "Failed to download scan script", variant: "destructive" });
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const activeCount = ALL_TWEAKS.filter(t => tweaks[t.id]).length;
   const recommendedIds = ALL_TWEAKS.filter(t => t.recommended).map(t => t.id);
@@ -416,14 +581,53 @@ export default function ProcessesPage() {
           <div className="border-t border-white/5 px-5 py-3">
             <TweakRow
               id={APPLY_ALL_ID}
-              title="Bulk: Set ALL listed services to Manual (29 service groups)"
-              description="Runs a single PowerShell command that sets all 29 service groups on this page (32+ actual Windows services) to Manual startup in one shot. Equivalent to enabling every toggle above."
+              title="Bulk: Set ALL listed services to Manual (47+ service groups)"
+              description="Runs a single PowerShell command that sets all 47+ service groups on this page to Manual startup in one shot. Handles per-user service instances (cbdhsvc, WpnUserService, etc.) automatically. Equivalent to enabling every toggle above."
               badge="BULK"
               impact="HIGH"
               checked={tweaks[APPLY_ALL_ID] || false}
               onCheckedChange={(v) => setTweak(APPLY_ALL_ID, v)}
               delay={0}
             />
+          </div>
+        </motion.div>
+
+        {/* Smart Scan Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="rounded-xl border border-cyan-500/20 bg-zinc-900/60 overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-cyan-500/10">
+                <ScanSearch className="w-4 h-4 text-cyan-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Smart Process Scan</p>
+                <p className="text-xs text-zinc-500">
+                  Downloads a PS1 script that scans all 47+ services, shows your process count before and after, and auto-applies every safe optimization
+                </p>
+              </div>
+            </div>
+            <Button
+              data-testid="button-smart-scan-download"
+              onClick={handleSmartScan}
+              disabled={scanning}
+              className="bg-cyan-700 hover:bg-cyan-600 text-white border border-cyan-500/30 text-xs font-bold gap-1.5 disabled:opacity-50 shrink-0"
+              size="sm"
+            >
+              {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ScanSearch className="w-3.5 h-3.5" />}
+              {scanning ? "Generating…" : "Download Smart Scan .ps1"}
+            </Button>
+          </div>
+          <div className="border-t border-white/5 px-5 py-2.5 bg-zinc-950/40">
+            <p className="text-[11px] text-zinc-500">
+              Run as <span className="text-white font-semibold">Administrator</span> in PowerShell.
+              The script prints <span className="text-green-400">[OK]</span> for already-optimal services and <span className="text-green-400">[SET]</span> for ones it changes.
+              Restart PC after for full effect.
+            </p>
           </div>
         </motion.div>
 
@@ -435,6 +639,9 @@ export default function ProcessesPage() {
           {renderSection("Hardware & Input Services", HARDWARE_SERVICES, "text-purple-500")}
           {renderSection("Legacy & Unused Services", LEGACY_SERVICES, "text-amber-500")}
           {renderSection("Background Update Services", BACKGROUND_SERVICES, "text-orange-500")}
+          {renderSection("Cloud & Notification Services", CLOUD_SERVICES, "text-cyan-500")}
+          {renderSection("IoT, Remote & Legacy Network", IOT_SERVICES, "text-violet-400")}
+          {renderSection("Enterprise & System Misc", ENTERPRISE_SERVICES, "text-rose-400")}
         </div>
 
       </div>
