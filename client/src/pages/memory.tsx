@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -640,7 +641,12 @@ export default function Memory() {
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
-                  <span className="text-[11px] text-zinc-400">Use the <span className="text-white font-semibold">Processes Reduction tab</span> to free 1–3GB RAM before launching a game</span>
+                  <span className="text-[11px] text-zinc-400">Use the{" "}
+                    <Link href="/processes" data-testid="link-processes-reduction" className="text-white font-semibold underline underline-offset-2 hover:text-amber-300 transition-colors">
+                      Processes Reduction tab
+                    </Link>
+                    {" "}to free 1–3GB RAM before launching a game
+                  </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
