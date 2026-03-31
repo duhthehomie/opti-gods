@@ -416,8 +416,8 @@ export default function ProcessesPage() {
           <div className="border-t border-white/5 px-5 py-3">
             <TweakRow
               id={APPLY_ALL_ID}
-              title="Bulk: Set ALL listed services to Manual (31 services)"
-              description="Runs a single PowerShell command that sets all 31 services on this page to Manual startup in one shot. Equivalent to enabling every toggle above."
+              title="Bulk: Set ALL listed services to Manual (29 service groups)"
+              description="Runs a single PowerShell command that sets all 29 service groups on this page (32+ actual Windows services) to Manual startup in one shot. Equivalent to enabling every toggle above."
               badge="BULK"
               impact="HIGH"
               checked={tweaks[APPLY_ALL_ID] || false}

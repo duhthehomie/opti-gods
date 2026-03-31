@@ -197,6 +197,7 @@ function CheckIcon({ val }: { val: boolean }) {
 
 export default function CustomOS() {
   const { toast } = useToast();
+  const hw = useHardwareInfo();
 
   const downloadPlaybook = () => {
     const link = document.createElement("a");

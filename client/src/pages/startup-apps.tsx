@@ -243,7 +243,9 @@ export default function StartupApps() {
                     {app.impact.toUpperCase()} IMPACT
                   </span>
                 </div>
-                <p className="text-xs text-zinc-600 font-mono truncate">C:\\{app.path}</p>
+                <p className="text-xs text-zinc-600 font-mono truncate">
+                  {app.path.startsWith("AppData\\Local\\") ? `%LocalAppData%\\${app.path.slice("AppData\\Local\\".length)}` : app.path.startsWith("AppData\\Roaming\\") ? `%AppData%\\${app.path.slice("AppData\\Roaming\\".length)}` : `C:\\${app.path}`}
+                </p>
               </div>
 
               <button

@@ -566,7 +566,7 @@ export default function Fixes() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { step: "1", text: "Download the restore script above" },
-              { step: "2", text: "Double-click the .bat file → click Yes on the admin popup" },
+              { step: "2", text: "Right-click the .ps1 file → \"Run with PowerShell\" → click Yes on the UAC prompt" },
               { step: "3", text: "Restart your PC — all changes take effect on reboot" },
             ].map((s) => (
               <div key={s.step} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/60 border border-white/5">

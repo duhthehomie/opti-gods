@@ -4,8 +4,6 @@ import { TweakRow } from "@/components/tweak-row";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
-import { useOsDetection } from "@/hooks/use-os-detection";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
@@ -151,10 +149,7 @@ function SectionHeader({
 export default function Discord() {
   const { tweaks, setTweak } = useOptimizationStore();
   const hw = useHardwareInfo();
-  const osInfo = useOsDetection();
-  const smartRecs = computeSmartRecs(hw, osInfo);
-  
-  const recIds = hw.loading ? DISCORD_RECOMMENDED : Array.from(smartRecs.ids).filter(id => DISCORD_RECOMMENDED.includes(id));
+  const recIds = DISCORD_RECOMMENDED;
 
   const enableAll = () => {
     recIds.forEach(id => setTweak(id, true));

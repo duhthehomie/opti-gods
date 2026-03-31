@@ -513,7 +513,7 @@ export default function Admin() {
   const sessionsQuery = useQuery<SessionRow[]>({
     queryKey: ["/api/admin/sessions", key],
     queryFn: () => fetch("/api/admin/sessions", { headers }).then(r => r.json()),
-    enabled: authed && tab === "sessions",
+    enabled: authed,
     refetchInterval: 30_000, // refresh every 30s so online status stays current
   });
 

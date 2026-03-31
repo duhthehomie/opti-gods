@@ -217,7 +217,7 @@ export default function Nvidia() {
         >
           <div className="flex items-center gap-3">
             <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
-              <MonitorPlay className="w-6 h-6 text-red-500" />
+              <MonitorPlay className="w-6 h-6 text-green-400" />
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold">NVIDIA Optimizer</h1>

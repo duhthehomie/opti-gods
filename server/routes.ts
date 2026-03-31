@@ -2275,12 +2275,11 @@ Read-Host "Press Enter to close this window"
     if (!parsed.success) return res.status(400).json({ error: "All fields are required." });
     const { email, paymentMethod, paymentRef, discordUsername, amountPaid } = parsed.data;
 
-    // Validate amount against today's real price — wrong amount = instant reject
-    const day = new Date().getDay();
-    const todayPrice = (day === 0 || day === 6) ? 15 : 25;
+    // Validate amount against current flat price of $15
+    const todayPrice = 15;
     if (amountPaid !== todayPrice) {
       return res.status(400).json({
-        error: `Incorrect amount. Today's Pro price is $${todayPrice}. Please enter the exact amount you paid.`
+        error: `Incorrect amount. Pro is a flat $${todayPrice}. Please enter the exact amount you paid.`
       });
     }
 
