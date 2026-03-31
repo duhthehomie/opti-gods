@@ -171,14 +171,19 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
 
   // ===== RAM =====
   const ram = hw.ramGB || 0;
-  if (ram >= 8) {
+  if (ram >= 32) {
     [
-      "DisableMemoryCompression","MemDisableCompression","DisablePrefetch",
-      "MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
+      "DisableMemoryCompression","MemDisableCompression","FiveMDisableMemCompression",
+      "DisablePrefetch","MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
       "MemDisableKernelPaging","MemGPUOptimize","FiveMExtendedMemory","FiveMWorkingSet",
-      "FiveMDisableMemCompression",
     ].forEach(id => ids.add(id));
-    reasons.push("16GB+ RAM detected — memory compression disabled, aggressive memory tweaks enabled");
+    reasons.push("32GB+ RAM — memory compression safe to disable, aggressive memory tweaks enabled");
+  } else if (ram >= 8) {
+    [
+      "DisablePrefetch","MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
+      "MemDisableKernelPaging","MemGPUOptimize","FiveMExtendedMemory","FiveMWorkingSet",
+    ].forEach(id => ids.add(id));
+    reasons.push(`${ram}GB RAM — memory tweaks applied, compression kept ON (requires 32GB+ to disable safely)`);
   } else if (ram >= 4) {
     [
       "DisablePrefetch","MemTrimStandbyList","MemTrimOnMinimize","MemDisableKernelPaging",
