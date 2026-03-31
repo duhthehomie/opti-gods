@@ -21,13 +21,13 @@ const PRESETS = [
     id: "Performance",
     title: "Maximum Performance",
     description: "Sacrifices visual quality for the highest possible framerates and lowest latency. Ideal for competitive shooters.",
-    features: ["Texture Filtering: High Perf", "Power Management: Max", "Low Latency Mode: Ultra", "Shader Cache: On", "Triple Buffering: Off"],
+    features: ["Texture Filtering: High Perf", "Power Management: Max", "Low Latency Mode: On", "Shader Cache: Unlimited", "Triple Buffering: Off"],
   },
   {
     id: "Balanced",
     title: "Balanced",
     description: "The default Opti Gods recommendation. Keeps games looking good while removing unnecessary driver overhead.",
-    features: ["Texture Filtering: Quality", "Power Management: Optimal", "Low Latency Mode: On", "Anisotropic Filtering: x8"],
+    features: ["Texture Filtering: Quality", "Power Management: Optimal", "Low Latency Mode: On", "Shader Cache: Unlimited", "Anisotropic Filtering: x8"],
   },
   {
     id: "Quality",

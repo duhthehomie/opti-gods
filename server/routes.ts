@@ -815,11 +815,41 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     ``,
   ];
 
-  if (nvidiaPreset && nvidiaPreset !== "Balanced") {
-    scriptLines.push(`Write-Host "[NVIDIA] Applying ${nvidiaPreset} preset..." -ForegroundColor DarkRed`);
+  if (nvidiaPreset && nvidiaPreset !== "") {
+    scriptLines.push(`Write-Host "[NVIDIA] Applying ${nvidiaPreset} NVCP preset..." -ForegroundColor DarkRed`);
     if (nvidiaPreset === "Performance") {
-      scriptLines.push(`# NVIDIA Maximum Performance preset`);
-      scriptLines.push(`Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Video' -Name 'PowerMizerEnable' -Value 1`);
+      scriptLines.push(`# NVIDIA Maximum Performance preset — matches FiveM uncap FPS NVCP settings`);
+      scriptLines.push(`$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'`);
+      scriptLines.push(`0..3 | ForEach-Object { $k = "$gpuClass\\000\$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') {`);
+      scriptLines.push(`  Set-ItemProperty $k 'PowerMizerEnable' 0 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`  Set-ItemProperty $k 'PowerMizerLevel' 1 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`  Set-ItemProperty $k 'PerfLevelSrc' 0x2222 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`  Set-ItemProperty $k 'OpenGLCompatibilityMode' 0 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`  Write-Host "[NVCP] PowerMizer=MaxPerf, OpenGL GDI=Prefer Perf on $k" -ForegroundColor Green`);
+      scriptLines.push(`}}`);
+      scriptLines.push(`$nvTweak = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak'`);
+      scriptLines.push(`If (!(Test-Path $nvTweak)) { New-Item $nvTweak -Force | Out-Null }`);
+      scriptLines.push(`Set-ItemProperty $nvTweak 'Gestalt' 1 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`$d3d = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\d3d'`);
+      scriptLines.push(`If (!(Test-Path $d3d)) { New-Item $d3d -Force | Out-Null }`);
+      scriptLines.push(`Set-ItemProperty $d3d 'LowLatencyMode' 1 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Set-ItemProperty $d3d 'ShaderCacheSize' 0xFFFFFFFF -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Set-ItemProperty $d3d 'TripleBuffer' 0 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Write-Host "[NVCP] Low Latency=On, Shader Cache=Unlimited, Triple Buffer=Off" -ForegroundColor Green`);
+    } else if (nvidiaPreset === "Quality") {
+      scriptLines.push(`# NVIDIA High Quality preset`);
+      scriptLines.push(`$d3d = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\d3d'`);
+      scriptLines.push(`If (!(Test-Path $d3d)) { New-Item $d3d -Force | Out-Null }`);
+      scriptLines.push(`Set-ItemProperty $d3d 'LowLatencyMode' 0 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Set-ItemProperty $d3d 'ShaderCacheSize' 0xFFFFFFFF -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Write-Host "[NVCP] Quality preset applied — Shader Cache=Unlimited, DLSS=Quality" -ForegroundColor Green`);
+    } else if (nvidiaPreset === "Balanced") {
+      scriptLines.push(`# NVIDIA Balanced preset`);
+      scriptLines.push(`$d3d = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\d3d'`);
+      scriptLines.push(`If (!(Test-Path $d3d)) { New-Item $d3d -Force | Out-Null }`);
+      scriptLines.push(`Set-ItemProperty $d3d 'LowLatencyMode' 1 -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Set-ItemProperty $d3d 'ShaderCacheSize' 0xFFFFFFFF -Type DWord -Force -EA SilentlyContinue`);
+      scriptLines.push(`Write-Host "[NVCP] Balanced preset applied — Low Latency=On, Shader Cache=Unlimited" -ForegroundColor Green`);
     }
     scriptLines.push(``);
   }

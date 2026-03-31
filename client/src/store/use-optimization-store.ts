@@ -415,7 +415,7 @@ export const useOptimizationStore = create<OptimizationState>()(
   persist(
     (set) => ({
       tweaks: { ...DEFAULT_TWEAKS },
-      nvidiaPreset: 'Balanced',
+      nvidiaPreset: '',
       systemRamGB: null,
 
       setSystemRamGB: (gb) => set({ systemRamGB: gb }),
@@ -432,7 +432,7 @@ export const useOptimizationStore = create<OptimizationState>()(
 
       setAllTweaks: (tweaks) => set({ tweaks }),
 
-      reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: 'Balanced' }),
+      reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: '' }),
     }),
     {
       name: 'optigods-tweaks-v1',
