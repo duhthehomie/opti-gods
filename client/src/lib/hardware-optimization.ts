@@ -4,20 +4,26 @@ import type { HardwareInfo } from "@/hooks/use-hardware-info";
  * Map hardware profile to optimal SystemResponsiveness value.
  * Lower = more CPU priority to game, higher = more to background.
  * 0 = 99% game (breaks Discord), 10 = 90% game, 26 = 77% game, 38 = 65% game
+ *
+ * Uses cpuPhysicalCores (not logical threads) to avoid misclassifying
+ * SMT/HT CPUs. E.g. Ryzen 7 3700X = 8 physical / 16 threads — should be
+ * mid-range (26), not high-end (38).
  */
 export function getOptimalSystemResponsiveness(hw: HardwareInfo): number {
-  // High-end systems (RTX 30/40 + Ryzen 7/i7+ or 12+ cores) → can handle hex 26 (38 decimal)
-  if ((hw.nvidiaIsRTX || hw.isAmdGpu) && hw.cpuCores >= 12) {
-    return 38; // hex 26 — give background more breathing room on powerful hardware
+  const phys = hw.cpuPhysicalCores || Math.ceil(hw.cpuCores / 2);
+
+  // High-end systems (RTX + 12+ physical cores, e.g. Ryzen 9 5900X, i9-12900K)
+  if ((hw.nvidiaIsRTX || hw.isAmdGpu) && phys >= 12) {
+    return 38; // hex 26 — breathing room for powerful hardware
   }
 
-  // Mid-range (RTX 20 or GTX 16xx + Ryzen 5/i5+ or 8-10 cores) → stick with hex 1A (26 decimal)
-  if ((hw.nvidiaIsRTX || hw.isAmdGpu || hw.nvidiaIsLowEnd) && hw.cpuCores >= 8) {
-    return 26; // hex 1A — balanced, proven to work well
+  // Mid-range (RTX/AMD discrete + 6-10 physical cores, e.g. R7 3700X, i7-10700K)
+  if ((hw.nvidiaIsRTX || hw.isAmdGpu || hw.nvidiaIsLowEnd) && phys >= 6) {
+    return 26; // hex 1A — balanced sweet spot
   }
 
-  // Low-end or laptop (GTX 10xx, iGPU, or <8 cores) → conservative hex 0A (10 decimal)
-  return 10; // Conservative setting for stability on resource-constrained hardware
+  // Low-end or laptop (iGPU, <6 physical cores, or GTX 10xx)
+  return 10; // hex 0A — conservative, stable
 }
 
 /**
@@ -25,12 +31,13 @@ export function getOptimalSystemResponsiveness(hw: HardwareInfo): number {
  */
 export function getSystemResponsivenessExplanation(hw: HardwareInfo, value: number): string {
   const hex = value.toString(16).toUpperCase().padStart(2, "0");
+  const phys = hw.cpuPhysicalCores || Math.ceil(hw.cpuCores / 2);
   const cpuDesc =
-    hw.cpuCores >= 12
-      ? "12+ cores (powerful)"
-      : hw.cpuCores >= 8
-        ? "8-10 cores (mid-range)"
-        : "<8 cores (resource-constrained)";
+    phys >= 12
+      ? `${phys} physical cores (high-end)`
+      : phys >= 6
+        ? `${phys} physical cores (mid-range)`
+        : `${phys} physical cores (resource-constrained)`;
   const gpuDesc = hw.nvidiaIsRTX
     ? "RTX (high-end)"
     : hw.isAmdGpu
@@ -68,7 +75,9 @@ export function getTweakRelevance(
 
   // Memory-specific tweaks
   if (tweakId.includes("DisableMemoryCompression")) {
-    return { applies: hw.ramGB >= 16, reason: hw.ramGB >= 16 ? undefined : `RAM-specific: Requires 16GB+, you have ${hw.ramGB}GB` };
+    // Only recommend disabling compression at 32GB+ — at 16GB heavy RAM users
+    // (like gaming PCs at 80%+ utilisation) will see disk paging without it.
+    return { applies: hw.ramGB >= 32, reason: hw.ramGB >= 32 ? undefined : `RAM-specific: Only recommended at 32GB+ (you have ${hw.ramGB}GB — keep compression ON to avoid disk paging)` };
   }
   if (tweakId.includes("DisablePrefetch")) {
     return { applies: true, reason: "Best on SSD/NVMe (you can still apply on HDD, but may slow load times)" };

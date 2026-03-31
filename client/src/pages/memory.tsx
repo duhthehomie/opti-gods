@@ -98,20 +98,21 @@ function getRamProfile(ram: number): RamProfile {
   if (ram <= 16) return {
     label: "Standard Gaming Profile",
     color: "text-green-400",
-    desc: "16GB — Optimal for most games. Disable compression, fixed pagefile, disable Superfetch.",
+    desc: "16GB — Keep Memory Compression ON. Focus on fixed pagefile, disable Superfetch, trim standby list.",
     recommendations: [
-      "Disable memory compression — CPU overhead no longer justified",
+      "Keep memory compression ON — at 16GB, compression prevents disk paging when RAM fills under load",
       "Set fixed pagefile (prevents mid-game resizing stutter)",
       "Disable Superfetch — NVMe/SSD loads are already instant",
-      "Keep kernel in RAM at all times",
-      "Aggressive standby list trimming for max free RAM",
+      "Keep kernel in RAM at all times (disable kernel paging)",
+      "Aggressive standby list trimming — frees cached RAM for the active game",
+      "Reduce background processes via the Processes Reduction tab before gaming",
     ],
     applyTweaks: {
       MemFixedPagefile: true,
       MemMovePagefileFast: true,
       MemClearPagefileShutdown: true,
       MemDisablePagefile: false,
-      MemDisableCompression: true,
+      MemDisableCompression: false,
       MemDisableSuperfetch: true,
       MemDisableKernelPaging: true,
       MemTrimStandbyList: true,
@@ -610,6 +611,47 @@ export default function Memory() {
             <p className="text-sm text-amber-400/90">
               With <strong>{ram}GB RAM</strong>, some aggressive tweaks like disabling compression or the pagefile are locked to protect your system from crashes. Apply the {ram}GB profile above for the safest boost.
             </p>
+          </motion.div>
+        )}
+
+        {/* 16GB RAM pressure warning */}
+        {ram && ram === 16 && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-amber-500/30 bg-amber-950/30 overflow-hidden"
+          >
+            <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                16GB RAM — High Pressure Risk
+              </span>
+            </div>
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                <span className="text-amber-300 font-semibold">Do NOT disable Memory Compression at 16GB.</span>{" "}
+                Modern gaming PCs regularly hit 12–14GB usage at idle — background apps, browsers, and Discord alone can consume 8–10GB.
+                Without compression, Windows pages directly to disk the moment RAM fills up, causing severe in-game stutters even on NVMe.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                  <span className="text-[11px] text-zinc-400">Compression keeps RAM virtual — fits more into 16GB before hitting disk</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                  <span className="text-[11px] text-zinc-400">Use the <span className="text-white font-semibold">Processes Reduction tab</span> to free 1–3GB RAM before launching a game</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                  <span className="text-[11px] text-zinc-400">"Disable Memory Compression" tweak is only safe at 32GB+</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                  <span className="text-[11px] text-zinc-400">Close Discord, browser, and background apps before launching FiveM or GTA V</span>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 

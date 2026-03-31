@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 
 export interface HardwareInfo {
-  cpuCores: number;
+  cpuCores: number;           // logical processors (threads)
+  cpuPhysicalCores: number;   // physical cores (threads / 2 when scanned data unavailable)
   cpuLabel: string;
   ramGB: number;
   ramLabel: string;
@@ -13,7 +14,7 @@ export interface HardwareInfo {
   isIntel: boolean;
   // GPU tier / generation
   nvidiaIsLowEnd: boolean;    // GTX 10xx/16xx (Pascal/Turing) — limited VRAM
-  nvidiaIsRTX: boolean;       // RTX 20xx/30xx/40xx
+  nvidiaIsRTX: boolean;       // RTX 20xx/30xx/40xx/50xx
   isAmdGpu: boolean;          // AMD discrete GPU (RX 5xx / 6xx / 7xx series)
   isAmdApu: boolean;          // AMD APU / Vega iGPU
   // CPU brand
@@ -117,7 +118,7 @@ function detectGPUViaWebGL(): { gpuName: string; gpuVendor: string } {
 function detectNvidiaGen(gpuName: string): { nvidiaIsLowEnd: boolean; nvidiaIsRTX: boolean } {
   const n = gpuName.toLowerCase();
   // RTX series = high end with hardware ray tracing
-  const nvidiaIsRTX = /rtx\s*\d/.test(n) || /\b(2060|2070|2080|3060|3070|3080|3090|4060|4070|4080|4090)\b/.test(n);
+  const nvidiaIsRTX = /rtx\s*\d/.test(n) || /\b(2060|2070|2080|3060|3070|3080|3090|4060|4070|4080|4090|5060|5070|5080|5090)\b/.test(n);
   // GTX series = low end (Pascal GTX 10xx, Turing GTX 16xx)
   const nvidiaIsLowEnd = /gtx\s*\d/.test(n) || /\b(1030|1050|1060|1650|1660|1070|1080|980|970|960)\b/.test(n);
   return { nvidiaIsLowEnd: nvidiaIsLowEnd && !nvidiaIsRTX, nvidiaIsRTX };
@@ -160,6 +161,7 @@ function detectCpuInfo(cpuName: string): {
 export function useHardwareInfo(): HardwareInfo {
   const [info, setInfo] = useState<HardwareInfo>({
     cpuCores: 0,
+    cpuPhysicalCores: 0,
     cpuLabel: "Detecting...",
     ramGB: 0,
     ramLabel: "Detecting...",
@@ -261,6 +263,7 @@ export function useHardwareInfo(): HardwareInfo {
 
     setInfo({
       cpuCores,
+      cpuPhysicalCores: physicalCores,
       cpuLabel,
       ramGB,
       ramLabel,
