@@ -134,7 +134,7 @@ const HOW_TO_STEPS = [
   {
     icon: Terminal,
     title: "Browse & Toggle",
-    desc: "Hit 'Smart Recommendations' on the Home tab — it auto-selects 329+ tweaks matched to your exact GPU, CPU, and RAM. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.",
+    desc: "Hit 'Smart Recommendations' on the Home tab — it auto-selects 360+ tweaks matched to your exact GPU, CPU, and RAM. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.",
   },
   {
     icon: Download,
@@ -155,7 +155,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "329+ registry, network, memory, and GPU tweaks",
+  "396+ registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
@@ -291,7 +291,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              329+ tweaks. One script. Zero compromise.
+              396+ tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">

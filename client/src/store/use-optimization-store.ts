@@ -433,6 +433,12 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   NvidiaDisableHDMIAudio: false,
   NvidiaRTXVideoOff: false,
   NvidiaGpuBgOptimize: false,
+  // AMD CPU Performance (Zen 2 / Zen 3 — Ryzen 5 3500, 7 3700X, etc.)
+  AmdCpuCoalescingOff: false,
+  AmdCpuPowerPinMax: false,
+  AmdCpuCStatePolicy: false,
+  AmdCpuCapabilities: false,
+  AmdCpuSchedulerHint: false,
   // AMD GPU Thermal Management
   AmdDisableHDMIAudio: false,
   AmdDisableReLive: false,

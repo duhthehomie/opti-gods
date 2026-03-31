@@ -20,6 +20,10 @@ const ALL_AMD_IDS = [
   "AmdShaderCache","AmdImageSharpening","AmdDisableFreeSyncCompetitive",
   "AmdDisableVariBright","AmdDisableVSR","EnableHAGS",
   "AmdSmartAccessMemory","AmdAntiLagPlus","AmdFluidMotionFrames",
+  // AMD CPU
+  "AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy","AmdCpuCapabilities","AmdCpuSchedulerHint",
+  // AMD GPU Thermal
+  "AmdDisableHDMIAudio","AmdDisableReLive",
 ];
 
 const AMD_RECOMMENDED_IDS = [
@@ -27,6 +31,8 @@ const AMD_RECOMMENDED_IDS = [
   "AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag",
   "AmdDisableTelemetry","AmdDisableCrashDefender","AmdShaderCache","EnableHAGS",
   "AmdSmartAccessMemory","AmdAntiLagPlus",
+  // AMD CPU recommended
+  "AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -527,6 +533,83 @@ export default function Amd() {
                 delay={i + 1}
               />
             ))}
+          </div>
+        </section>
+
+        {/* AMD CPU Performance Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Cpu className="w-4 h-4 text-red-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-400">AMD CPU Performance</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider mr-2">Zen 2 / Zen 3 — Ryzen 3000 / 5000</span>
+            {(() => {
+              const cpuRecIds = ["AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy"];
+              const allOn = cpuRecIds.every(id => tweaks[id]);
+              return (
+                <Button variant="ghost" size="sm" onClick={() => cpuRecIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-amd-cpu"
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : "Enable Recommended (3)"}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-500 px-1 mb-4">
+            Windows-level registry and power plan tweaks tuned for AMD Ryzen CPUs (Zen 2 / Zen 3). These address known Windows scheduling issues with Ryzen — particularly important for Ryzen 5 3500 (6-core, no SMT) and Ryzen 7 3700X (8-core, SMT). Works for all Ryzen 3000 and 5000 series.
+          </p>
+          <div className="space-y-3">
+            <TweakRow
+              id="AmdCpuCoalescingOff"
+              title="Disable Timer Coalescing"
+              description="Windows batches timer interrupts into 15ms groups to save power — this means your game loop, input polling, and audio callbacks may all be delayed up to 15ms. Setting CoalescingTimerInterval=0 tells Windows to process each interrupt on its exact schedule. Critical for Ryzen 5 3500 / 7 3700X gaming responsiveness."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdCpuCoalescingOff"] || false}
+              onCheckedChange={(v) => setTweak("AmdCpuCoalescingOff", v)}
+              delay={1}
+            />
+            <TweakRow
+              id="AmdCpuPowerPinMax"
+              title="Pin CPU Min/Max Performance to 100%"
+              description="Stops Windows from setting a performance floor below 100% in the active power plan. Without this, Windows may cap CPU frequency at 80-90% during perceived idle periods between frames, causing Precision Boost 2 to not reach its full boost clocks. Safe — Ryzen's own PB2 algorithm still controls actual power and temp."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdCpuPowerPinMax"] || false}
+              onCheckedChange={(v) => setTweak("AmdCpuPowerPinMax", v)}
+              delay={2}
+            />
+            <TweakRow
+              id="AmdCpuCStatePolicy"
+              title="CPU Performance Decrease Policy = Fastest"
+              description="Controls how quickly Windows reduces CPU clock after a burst. Default is 'Gradual' which keeps clocks elevated for up to 100ms after load. Setting 'Fastest' means clocks drop and rise more aggressively — reduces idle-state power, but more importantly eliminates the transition latency spike when Ryzen ramps back up mid-game."
+              badge="RECOMMENDED"
+              impact="MED"
+              checked={tweaks["AmdCpuCStatePolicy"] || false}
+              onCheckedChange={(v) => setTweak("AmdCpuCStatePolicy", v)}
+              delay={3}
+            />
+            <TweakRow
+              id="AmdCpuCapabilities"
+              title="Processor Capabilities Register (DRAM ODT)"
+              description="Writes a capabilities hint to the Windows processor control block that improves DRAM On-Die Termination (ODT) scheduling hints for AMD memory controllers. Reduces memory latency by ~2-5ns on DDR4 Ryzen 3000/5000 systems with dual-channel memory. Most effective when combined with FCLK/UCLK 1:1 mode in BIOS."
+              badge="OPTIONAL"
+              impact="LOW"
+              checked={tweaks["AmdCpuCapabilities"] || false}
+              onCheckedChange={(v) => setTweak("AmdCpuCapabilities", v)}
+              delay={4}
+            />
+            <TweakRow
+              id="AmdCpuSchedulerHint"
+              title="CPU Scheduler Assist + SMT Thread Dispatch"
+              description="Writes SchedulerAssist=1 and a HeteroCpuPolicy hint. For Ryzen 7 3700X (8C/16T SMT): routes latency-critical game threads to highest-frequency physical cores first. For Ryzen 5 3500 (6C/6T, no SMT): sets policy=4 (all-cores-equal) — no wasted dispatch overhead for SMT. Script auto-detects your core count."
+              badge="OPTIONAL"
+              impact="LOW"
+              checked={tweaks["AmdCpuSchedulerHint"] || false}
+              onCheckedChange={(v) => setTweak("AmdCpuSchedulerHint", v)}
+              delay={5}
+            />
           </div>
         </section>
 

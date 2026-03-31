@@ -553,6 +553,13 @@ export default function Nvidia() {
             Optional tweaks that reduce GPU die temperature by disabling hardware components that run on the GPU even when unused.
             HDMI audio codecs, RTX video enhancement, and background container processes all consume GPU power and generate heat — disabling them recovers 1–3°C and a few watts for gaming headroom.
           </p>
+          <div className="flex items-start gap-2 mb-4 px-3 py-2.5 rounded-lg bg-orange-500/5 border border-orange-500/15">
+            <Thermometer className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              <span className="text-orange-400 font-semibold">GTX 1650 SUPER owners:</span> Running at 72°C at 28% load? The HDMI audio disable below is your highest-impact fix — it eliminates a constant die-level power draw on your card's small 100W cooler. Expected result: 2–4°C reduction at idle/light load.
+              {" "}<span className="text-zinc-500">RTX 2070 SUPER owners:</span> HDMI audio + background container flush are both effective on your 215W card.
+            </p>
+          </div>
           <div className="space-y-3">
             <TweakRow
               id="NvidiaDisableHDMIAudio"
@@ -567,8 +574,8 @@ export default function Nvidia() {
             <TweakRow
               id="NvidiaRTXVideoOff"
               title="Disable RTX Video Super Resolution + RTX HDR"
-              description="RTX Video SR and RTX HDR use tensor cores to upscale and color-grade video streams in real time. This keeps tensor cores active 24/7 during any video playback, generating heat and costing power. Disable if you don't actively use these features — your GPU will run cooler during videos and non-gaming tasks."
-              badge="THERMAL"
+              description="RTX Video Super Resolution and RTX HDR use tensor cores to upscale and color-grade video in real time, keeping tensor cores active 24/7 during video playback. Applies to RTX 30 and 40 series — RTX 20 series (e.g. RTX 2070 SUPER) has partial support depending on driver. GTX 16 series (e.g. GTX 1650 SUPER) has no tensor cores — registry writes are harmless but have no effect. For RTX 30/40 users: disabling saves real GPU heat and power during video."
+              badge="RTX 30/40"
               impact="MED"
               checked={tweaks["NvidiaRTXVideoOff"] || false}
               onCheckedChange={(v) => setTweak("NvidiaRTXVideoOff", v)}
