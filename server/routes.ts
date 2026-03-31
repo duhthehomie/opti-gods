@@ -1826,10 +1826,10 @@ Start-Sleep 2
     );
     // Available = not used AND not reserved by a sent email request
     const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
-    // Confirmed email revenue (sum actual amountPaid from email requests)
+    // Confirmed email revenue (sum actual amountPaid from email requests — default $15 for legacy rows with null amountPaid)
     const emailRevenue = emailReqs
       .filter(r => r.status === "sent" || r.status === "auto-sent")
-      .reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+      .reduce((sum, r) => sum + (r.amountPaid ?? 15), 0);
     // Directly redeemed codes (customer entered code manually, not via email path) — default $15 per code
     const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
     const codeRevenue = emailRevenue + directRevenue;
