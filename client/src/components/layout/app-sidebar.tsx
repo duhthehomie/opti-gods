@@ -23,6 +23,7 @@ import {
   Laptop,
   Play,
   TrendingUp,
+  Server,
 } from "lucide-react";
 import {
   Sidebar,
@@ -48,6 +49,7 @@ const SECTION_PREFIXES: Record<string, string[]> = {
   "/nvidia":             ["Nvidia","Gpu","gpu"],
   "/game-detection":     ["game_"],
   "/process-lasso":      ["ProcessLasso","ProcessAuto","ProcessTrim"],
+  "/processes":          ["ProcSvc_"],
   "/discord":            ["Discord"],
   "/memory":             ["Mem","mem"],
   "/debloat":            ["Debloat","Remove","su_debloat"],
@@ -75,6 +77,7 @@ const navItems = [
   { title: "Integrated Graphics", url: "/integrated-graphics",icon: Monitor,      recCount: 17 },
   { title: "Laptop Optimizer",    url: "/laptop",             icon: Laptop,       recCount: 29 },
   { title: "Process Lasso",       url: "/process-lasso",      icon: Cpu },
+  { title: "Processes Reduction", url: "/processes",          icon: Server, recCount: 20 },
   { title: "Discord Optimizer",   url: "/discord",            icon: MessageCircle,recCount: 5  },
   { title: "Startup Apps",        url: "/startup",            icon: Power },
   { title: "Memory Optimizer",    url: "/memory",             icon: MemoryStick,  recCount: 6  },
@@ -87,7 +90,7 @@ const navItems = [
   { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
 
-const TOTAL_TWEAKS = 329;
+const TOTAL_TWEAKS = 359;
 
 
 export function AppSidebar() {

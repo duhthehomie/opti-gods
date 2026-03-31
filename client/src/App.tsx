@@ -14,6 +14,7 @@ import Fivem from "@/pages/fivem";
 import Nvidia from "@/pages/nvidia";
 import Amd from "@/pages/amd";
 import ProcessLasso from "@/pages/process-lasso";
+import ProcessesPage from "@/pages/processes";
 import StartupApps from "@/pages/startup-apps";
 import Debloat from "@/pages/debloat";
 import Memory from "@/pages/memory";
@@ -107,6 +108,7 @@ function Router() {
       <Route path="/help" component={Help} />
       <Route path="/get-code" component={GetCode} />
       <Route path="/boost" component={BoostPage} />
+      <Route path="/processes" component={ProcessesPage} />
       <Route component={NotFound} />
     </Switch>
   );
