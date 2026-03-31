@@ -223,10 +223,10 @@ const COMPRESSION_TWEAKS: Tweak[] = [
   {
     id: "MemDisableCompression",
     title: "Disable Memory Compression",
-    desc: "Stops Windows from compressing memory pages in RAM. Recommended for 16GB+ — removes CPU overhead from compression.",
-    badge: "16GB+ RAM",
+    desc: "Stops Windows from compressing memory pages in RAM. Only recommended at 32GB+ — at 16GB, compression prevents disk paging when RAM fills under gaming load.",
+    badge: "32GB+ RAM",
     impact: "HIGH",
-    warnBelow: 16,
+    warnBelow: 32,
   },
   {
     id: "MemDisableSuperfetch",
@@ -615,7 +615,7 @@ export default function Memory() {
         )}
 
         {/* 16GB RAM pressure warning */}
-        {ram && ram === 16 && (
+        {ram && ram > 0 && ram <= 16 && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}

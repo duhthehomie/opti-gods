@@ -17,8 +17,8 @@ export function getOptimalSystemResponsiveness(hw: HardwareInfo): number {
     return 38; // hex 26 — breathing room for powerful hardware
   }
 
-  // Mid-range (RTX/AMD discrete + 6-10 physical cores, e.g. R7 3700X, i7-10700K)
-  if ((hw.nvidiaIsRTX || hw.isAmdGpu || hw.nvidiaIsLowEnd) && phys >= 6) {
+  // Mid-range (RTX/AMD discrete + 8-10 physical cores, e.g. R7 3700X, i7-10700K)
+  if ((hw.nvidiaIsRTX || hw.isAmdGpu || hw.nvidiaIsLowEnd) && phys >= 8) {
     return 26; // hex 1A — balanced sweet spot
   }
 
