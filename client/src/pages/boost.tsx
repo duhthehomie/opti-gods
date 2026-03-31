@@ -207,15 +207,38 @@ const STATUS_CONFIG = {
   never: { dot: "bg-zinc-600", label: "Never Run", text: "text-zinc-500" },
 };
 
-function getPS1(actions: BoostAction[]): string {
-  return [
-    `# Opti Gods Quick Boost`,
-    "Set-ExecutionPolicy Bypass -Scope Process -Force",
-    "",
-    ...actions.map(a => `# ${a.title}\n${a.ps1}\n`),
-    'Write-Host "" -ForegroundColor White',
-    'Write-Host "=== Quick Boost complete! ===" -ForegroundColor Cyan',
-  ].join("\n");
+const BAT_MARKER = "__OPTIGODS_PS1__";
+
+// Generates a self-contained .bat file that calls PowerShell with
+// -ExecutionPolicy Bypass via cmd.exe — bypasses Windows Restricted
+// policy without the user needing to change any settings.
+// The bat reads itself, splits on BAT_MARKER, and executes the PS1 half.
+function wrapInBat(title: string, ps1Body: string): string {
+  const header = [
+    `@title Opti Gods — ${title}`,
+    `@echo off`,
+    `echo [Opti Gods] Applying tweaks — please wait...`,
+    `echo.`,
+    `set "OGFILE=%~f0"`,
+    `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& {[scriptblock]::Create(([IO.File]::ReadAllText($Env:OGFILE) -split '${BAT_MARKER}',2)[1]).Invoke()}"`,
+    `echo.`,
+    `echo [Opti Gods] All done! Close this window or press any key.`,
+    `pause > nul`,
+    `exit /b`,
+    BAT_MARKER,
+  ].join("\r\n");
+
+  const ps1 = [
+    `# Opti Gods — ${title}`,
+    `Set-ExecutionPolicy Bypass -Scope Process -Force`,
+    ``,
+    ps1Body,
+    ``,
+    `Write-Host "" -ForegroundColor White`,
+    `Write-Host "=== ${title} complete! ===" -ForegroundColor Cyan`,
+  ].join("\r\n");
+
+  return header + "\r\n" + ps1;
 }
 
 export default function BoostPage() {
@@ -239,20 +262,17 @@ export default function BoostPage() {
   }
 
   function downloadSingle(action: BoostAction) {
-    const ps1 = [
-      `# Opti Gods Quick Boost — ${action.title}`,
-      "Set-ExecutionPolicy Bypass -Scope Process -Force",
-      "",
+    const ps1Body = [
       action.ps1,
       "",
-      'Write-Host "Done! Press any key to exit." -ForegroundColor Cyan',
-      "pause",
-    ].join("\n");
-    const blob = new Blob([ps1], { type: "text/plain" });
+      'Write-Host "Done!" -ForegroundColor Cyan',
+    ].join("\r\n");
+    const bat = wrapInBat(`Quick Boost — ${action.title}`, ps1Body);
+    const blob = new Blob([bat], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `optigods-boost-${action.id}.ps1`;
+    a.download = `optigods-boost-${action.id}.bat`;
     a.click();
     URL.revokeObjectURL(url);
     markRun(action.id);
@@ -266,11 +286,13 @@ export default function BoostPage() {
       return s === "never" || s === "needs-attention" || s === "degrading";
     });
     const actions = needsAttn.length > 0 ? needsAttn : BOOST_ACTIONS;
-    const blob = new Blob([getPS1(actions)], { type: "text/plain" });
+    const ps1Body = actions.map(a => `# ${a.title}\r\n${a.ps1}`).join("\r\n\r\n");
+    const bat = wrapInBat("Quick Boost — All Actions", ps1Body);
+    const blob = new Blob([bat], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "optigods-quick-boost.ps1";
+    a.download = "optigods-quick-boost.bat";
     a.click();
     URL.revokeObjectURL(url);
     actions.forEach(a => markRun(a.id));
@@ -484,7 +506,7 @@ export default function BoostPage() {
                       <div className="flex items-start gap-2">
                         <Info className="w-3 h-3 text-zinc-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-zinc-600 leading-relaxed">
-                          Downloads a PS1 file — right-click and run with PowerShell, it requests admin automatically.
+                          Downloads a .bat file — double-click it and click Yes on the UAC prompt. Works even if Windows blocks PS1 files.
                         </p>
                       </div>
                     </div>
