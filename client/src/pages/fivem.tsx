@@ -19,6 +19,9 @@ const ALL_FIVEM_IDS = [
   "FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks",
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
   "FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable","FiveM5600CoreAffinity","FiveM5600PowerPlan",
+  "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode",
+  "FiveM3500CoreAffinity","FiveM3500PerfPlan",
+  "FiveMCitizenDisableMedia","FiveMSteamChildOff","FiveMCommandlineMax","FiveMSteamOverlayOff","FiveMMMCSSAudio",
   "FiveMFixNvidiaOverlay",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
@@ -97,6 +100,23 @@ export default function Fivem() {
     { id: "FiveM1060AnselDisable", title: "GTX 1060: Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel (NVContainerLocalSystem) from injecting into GTA V. Ansel hooks every frame on NVIDIA GPUs including GTX 1060 — on older cards this is measurable overhead. Disabling it frees a small but consistent amount of GPU time.", badge: "GTX 1060", impact: "MED" },
     { id: "FiveM5600CoreAffinity", title: "Ryzen 5 5600: Pin GTA5 + FiveM to Physical Cores (0,2,4,6,8,10)", desc: "Sets CPU affinity for GTA5.exe and FiveM.exe to physical cores only — avoiding the SMT (hyperthreaded) sibling cores. On Zen 3 (Ryzen 5 5600), GTA V's threading model interacts poorly with SMT under load, causing frame-time spikes. This forces it onto the 6 real cores for tighter frametimes.", badge: "RYZEN 5 5600", impact: "HIGH" },
     { id: "FiveM5600PowerPlan", title: "Ryzen 5 5600: Apply AMD Ryzen High Performance Power Plan", desc: "Activates the AMD Ryzen High Performance power plan (GUID: fc5a4062). Zen 3 CPUs have aggressive frequency scaling that can cause latency spikes in GTA V. The Ryzen-tuned plan sets minimum processor state to 99% and removes the governor ramp-up delay — keeps boost clocks on for the full GTA V session.", badge: "RYZEN 5 5600", impact: "MED" },
+  ];
+
+  const GTX1650_RYZEN3500_TWEAKS: Tweak[] = [
+    { id: "FiveM1650DisableHAGS", title: "GTX 1650 SUPER: Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS causes frame-time variance on Turing-gen GTX 16xx cards. The GTX 1650 SUPER, like Pascal GPUs, was released before HAGS existed — disabling it tightens frametimes noticeably in populated FiveM servers with many player models. Reboot required.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+    { id: "FiveM1650VRAMBudget", title: "GTX 1650 SUPER: Force GTA V to Use Full 4GB VRAM Budget", desc: "Appends -availablevidmem 4096 and -percentvidmem 100 to GTA V commandline.txt. Some 4GB VRAM cards report lower available memory than actual — this forces the engine to claim the full 4GB, which prevents GTA V from dropping texture streaming quality mid-session.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+    { id: "FiveM1650DisableAnsel", title: "GTX 1650 SUPER: Disable NVIDIA Ansel Screenshot Hook", desc: "Disables Ansel injection into GTA V via registry. Ansel hooks every render frame on all NVIDIA GPUs — measurable CPU overhead per frame even on the 1650 SUPER. Keeps the display container running (no 0x80000003 overlay crash risk).", badge: "GTX 1650 SUPER", impact: "MED" },
+    { id: "FiveM1650LowLatencyMode", title: "GTX 1650 SUPER: NVIDIA Low Latency Mode = Ultra (Driver Registry)", desc: "Writes FlipQueueSize=1, RmLowLatencyMode=1, and forces max PerfLevel via the NVIDIA GPU driver class registry key. Equivalent to enabling 'Low Latency Mode = Ultra' in NVIDIA Control Panel, but applied at the driver level — persists across driver reinstalls.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+    { id: "FiveM3500CoreAffinity", title: "Ryzen 5 3500: Pin GTA5 + FiveM to All 6 Physical Cores (0x3F)", desc: "Sets affinity mask 0x3F for GTA5.exe and FiveM.exe — all 6 physical cores on the Ryzen 5 3500. Unlike the 5600 (which has SMT), the 3500 has no SMT so 0x3F covers all real cores with no sibling-core skipping needed. Also sets IFEO CpuPriorityClass=High and ForceForegroundBoost.", badge: "RYZEN 5 3500", impact: "HIGH" },
+    { id: "FiveM3500PerfPlan", title: "Ryzen 5 3500: Force High Performance + 100% CPU Min/Max State", desc: "Activates High Performance plan and sets processor min/max to 100% with Boost=Aggressive. Precision Boost 2 on the 3500 (no SMT, 6-core) runs at max clocks for all 6 cores the entire FiveM session — no frequency dips between frames.", badge: "RYZEN 5 3500", impact: "MED" },
+  ];
+
+  const FIVEM_CLIENT_TWEAKS: Tweak[] = [
+    { id: "FiveMCitizenDisableMedia", title: "CitizenFX.ini: Disable In-Game Media Player (GTA Radio)", desc: "Writes disable_media_player=1 to CitizenFX.ini. Kills the NUI Chromium audio thread that streams GTA radio. On 6-core CPUs, this thread competes directly with the render thread — disabling it frees ~2-4% CPU during city driving on high-density FiveM servers.", badge: "CITIZENFX", impact: "MED" },
+    { id: "FiveMSteamChildOff", title: "CitizenFX.ini: Disable Steam Child Process Spawner", desc: "Writes steam_child_spawner_disabled=1 to CitizenFX.ini. Prevents FiveM from spawning a child Steam process to validate the session at every server join. Eliminates the IPC handshake delay (~200-400ms) and reduces spawn overhead on first server join.", badge: "CITIZENFX", impact: "MED" },
+    { id: "FiveMCommandlineMax", title: "GTA V commandline.txt: Full Unlock (-norestrictions, -nomemrestrict)", desc: "Writes a complete optimized commandline.txt: -norestrictions (removes memory limits), -nomemrestrict (removes VRAM ceiling), -noBlockScripts (allows all FiveM server scripts), -percentvidmem 100 (full VRAM), -nointrovideos/-noIntroCutscene (skip intro). All flags verified safe for FiveM RP and RZ servers.", badge: "COMMANDLINE", impact: "HIGH" },
+    { id: "FiveMSteamOverlayOff", title: "Disable Steam Overlay for FiveM", desc: "Sets EnableGameOverlay=0 in Steam registry. Steam overlay hooks every render frame — on GTX 1650 SUPER this adds 0.3-0.8ms of GPU hook overhead per frame. Re-enable in Steam Settings > In-Game if you need overlay features.", badge: "STEAM", impact: "MED" },
+    { id: "FiveMMMCSSAudio", title: "MMCSS: Demote Audio Threads, Give Game 100% Scheduler", desc: "Sets SystemResponsiveness=0 (game thread gets 100% of CPU scheduler time) and demotes Audio/Pro Audio MMCSS categories to Medium priority. Discord and Windows audio still work but the game thread is never preempted by audio tasks. Improves frametimes in audio-heavy FiveM scenarios.", badge: "MMCSS", impact: "MED" },
   ];
 
   function renderSection(heading: string, items: Tweak[]) {
@@ -193,7 +213,7 @@ export default function Fivem() {
                 {getSystemResponsivenessExplanation(hw, getOptimalSystemResponsiveness(hw))}
               </p>
               <p className="text-zinc-500 text-[11px] mt-2">
-                💡 Recommended: Start with "Recommended" button below. Hardware-specific tweaks (GTX 1060 section, Ryzen 5600 profile) only show if detected. Network Buffer + Cache Clear are universally safe.
+                💡 Recommended: Start with "Recommended" button below. Hardware-specific tweaks (GTX 1060, GTX 1650 SUPER, Ryzen 5600, Ryzen 5 3500 sections) only show for matching hardware. Network Buffer + Cache Clear are universally safe.
               </p>
             </div>
           </motion.div>
@@ -265,6 +285,12 @@ export default function Fivem() {
               ))}
             </div>
           )}
+
+          {/* GTX 1650 SUPER + Ryzen 5 3500 — always visible (hardware-targeted but not gated) */}
+          {renderSection("GTX 1650 SUPER + Ryzen 5 3500 Profile", GTX1650_RYZEN3500_TWEAKS)}
+
+          {/* FiveM Client Config — CitizenFX.ini, commandline.txt, Steam overlay */}
+          {renderSection("FiveM Client Config Tweaks", FIVEM_CLIENT_TWEAKS)}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[

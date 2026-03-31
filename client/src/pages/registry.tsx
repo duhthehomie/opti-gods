@@ -18,6 +18,7 @@ const ALL_REGISTRY_IDS = [
   "OptimizeTCP","EnableTCPAutoTuning","DisablePowerThrottling","DisableIPv6",
   "OptimizeRAMUsage","DisableMemoryCompression","DisablePrefetch","MemDisableKernelPaging",
   "DisablePagefileEncryption","ClearPagefileOnShutdown","MemDisableHeapTermination",
+  "RegistryNTFSOptimize","RegistryIOPageLock","RegistryDPCLatency","RegistryLargePageHeap",
   "DisableXboxGameBar","DisableGameDVR","EnableHAGS","DisablePointerPrecision",
   "DisableAnimations","DisableTelemetry","DisableWindowsError","DisableFastStartup",
   "SysVisualBestPerf","SysHibernateOff","SysHypervisorOff",
@@ -165,6 +166,13 @@ export default function Registry() {
     { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power.", impact: "MED" },
   ];
 
+  const KERNEL_TWEAKS: TweakDef[] = [
+    { id: "RegistryNTFSOptimize", title: "NTFS: Disable Last Access Timestamp + 8.3 Filenames", desc: "Disables NtfsDisableLastAccessUpdate (removes per-read disk write), NtfsDisable8dot3NameCreation (no legacy short filenames), and sets MftZoneReservation=2 (12.5% MFT reserve). Reduces disk I/O by ~5-10% during game asset streaming — especially noticeable in GTA V's streaming zones.", badge: "NTFS", impact: "MED" },
+    { id: "RegistryIOPageLock", title: "Raise IOPageLockLimit for 16GB/32GB RAM Systems", desc: "Sets IOPageLockLimit based on total RAM — 2GB for 32GB systems, 1GB for 16GB. Allows the kernel to lock more physical pages for DMA/I/O operations. Reduces streaming stutter and improves asset throughput in open-world games. Safe on systems with 16GB+.", badge: "MEMORY", impact: "MED", warning: "Only beneficial on systems with 16 GB+ RAM. On 8 GB or less, raising IOPageLockLimit can starve user-space processes of physical pages." },
+    { id: "RegistryDPCLatency", title: "Reduce DPC Latency: AHCI Link Power Off + TSC Clock + No Dynamic Tick", desc: "Disables AHCI link power management (eliminates DPC spikes from storage sleep states), switches boot clock to TSC (lower overhead than HPET), sets TSC sync=enhanced, and disables dynamic tick. Targets DPC latency spikes from 100-500µs down to under 50µs during GTA V streaming.", badge: "KERNEL", impact: "HIGH" },
+    { id: "RegistryLargePageHeap", title: "Set Accurate CPU Cache Hints + Disable Superfetch", desc: "Writes SecondLevelDataCache=512KB and ThirdLevelDataCache=16384KB (matching Ryzen 5 3500 L2/L3). Enables Prefetcher mode 3 (App+Boot) and disables Superfetch. Windows uses cache size hints for heap allocation alignment — accurate values reduce cache line conflicts in memory-intensive game threads.", badge: "MEMORY", impact: "LOW" },
+  ];
+
   const RISKY_TWEAKS: TweakDef[] = [
     { id: "DisableAutoUpdate", title: "Disable Windows Update Service", desc: "Stops the wuauserv service permanently. Re-enable manually to get security patches. Prevents forced reboots mid-game.", badge: "RISKY", impact: "MED", warning: "This stops Windows from receiving security updates. Your system will not automatically receive patches for newly discovered vulnerabilities. Only enable this if you manually check for updates regularly, or if forced reboots mid-game are a critical issue for you." },
     { id: "DisableDefender", title: "Disable Windows Defender Real-Time Protection", desc: "Disables real-time scanning. Can free 5–15% CPU during heavy I/O loads. Only do this if you have an alternative AV.", badge: "RISKY", impact: "MED", warning: "This removes your real-time antivirus protection. Your PC will no longer actively block malware, ransomware, or malicious downloads. Only enable this if you have a third-party antivirus (such as Malwarebytes, ESET, or Bitdefender) installed and active." },
@@ -279,6 +287,8 @@ export default function Registry() {
           </div>
 
           <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+
+          <Section heading="Advanced Kernel Tweaks (NTFS / DPC / Memory)" tweaks={KERNEL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 mb-4">

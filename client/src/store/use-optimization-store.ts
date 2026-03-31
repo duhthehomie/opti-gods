@@ -92,6 +92,20 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   FiveM1060AnselDisable: false,
   FiveM5600CoreAffinity: false,
   FiveM5600PowerPlan: false,
+  // FiveM: GTX 1650 SUPER specific
+  FiveM1650DisableHAGS: false,
+  FiveM1650VRAMBudget: false,
+  FiveM1650DisableAnsel: false,
+  FiveM1650LowLatencyMode: false,
+  // FiveM: Ryzen 5 3500 specific
+  FiveM3500CoreAffinity: false,
+  FiveM3500PerfPlan: false,
+  // FiveM: CitizenFX config + commandline
+  FiveMCitizenDisableMedia: false,
+  FiveMSteamChildOff: false,
+  FiveMCommandlineMax: false,
+  FiveMSteamOverlayOff: false,
+  FiveMMMCSSAudio: false,
   // Process Lasso
   ProcessLassoProBalance: false,
   ProcessLassoSmartTrim: false,
@@ -442,6 +456,11 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   // AMD GPU Thermal Management
   AmdDisableHDMIAudio: false,
   AmdDisableReLive: false,
+  // Registry: Advanced Kernel Tweaks
+  RegistryNTFSOptimize: false,
+  RegistryIOPageLock: false,
+  RegistryDPCLatency: false,
+  RegistryLargePageHeap: false,
   // Additional Startup Apps
   su_ea_app: false,
   su_epic: false,
