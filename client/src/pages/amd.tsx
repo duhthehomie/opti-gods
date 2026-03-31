@@ -316,7 +316,7 @@ export default function Amd() {
                   <p className="text-sm text-zinc-400 leading-relaxed mb-3">
                     <span className="text-white font-semibold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is Intel. AMD driver tweaks will not apply to Intel integrated graphics. Use the <span className="text-white font-semibold">Integrated GPU</span> tab which has Intel-specific optimizations.
                   </p>
-                  <a href="/integrated-gpu" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-sm transition-all">
+                  <a href="/integrated-graphics" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-sm transition-all">
                     → Go to Integrated GPU Tab
                   </a>
                 </div>

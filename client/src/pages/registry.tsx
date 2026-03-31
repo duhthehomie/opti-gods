@@ -27,7 +27,7 @@ const ALL_REGISTRY_IDS = [
 const REGISTRY_RECOMMENDED_IDS = [
   "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks","EnableMSIMode","DisableCoreParking",
   "NetworkThrottling","InputLagTCP","DisableNagle","SetDNSPriority",
-  "OptimizeRAMUsage","DisableMemoryCompression",
+  "OptimizeRAMUsage",
   "DisableXboxGameBar","DisableGameDVR","EnableHAGS",
   "SysVisualBestPerf","SysHibernateOff",
   "SetHighPerformancePlan",
@@ -134,7 +134,7 @@ export default function Registry() {
 
   const MEMORY_TWEAKS: TweakDef[] = [
     { id: "OptimizeRAMUsage", title: "Flush RAM Standby List (Aggressive Trim)", desc: "Frees cached standby memory more frequently to give games priority access to physical RAM.", impact: "MED", badge: "RECOMMENDED", recommended: true },
-    { id: "DisableMemoryCompression", title: "Disable Memory Compression", desc: "Stops CPU-heavy RAM compression — beneficial on 16GB+ systems.", badge: "16GB+ RAM", impact: "MED", recommended: true, warning: "Memory compression helps Windows fit more data into limited RAM. On systems with 8 GB or less, disabling it can cause games and apps to run out of physical memory faster, leading to freezes or crashes. Only enable this if your PC has 16 GB or more RAM." },
+    { id: "DisableMemoryCompression", title: "Disable Memory Compression", desc: "Stops CPU-heavy RAM compression — only safe on 32GB+ systems. On 16GB or less, disabling compression can cause games to page to disk, leading to stutters and freezes.", badge: "32GB+ RAM", impact: "MED", recommended: false, warning: "Memory compression is critical on 16 GB or less. Disabling it on low-RAM systems causes disk paging and severe stutters. Only enable this if your PC has 32 GB or more RAM." },
     { id: "DisablePrefetch", title: "Disable Superfetch / Prefetch", desc: "Reduces background disk usage — recommended for NVMe/SSD. Harmful on HDDs.", impact: "MED", warning: "On systems with a traditional hard drive (HDD), disabling Prefetch significantly slows down app and game launch times. Only enable this if your OS and games are installed on an SSD or NVMe drive." },
     { id: "MemDisableKernelPaging", title: "Disable Kernel Paging (Disable Paging Executive)", desc: "Keeps core OS code in RAM instead of being paged to disk — reduces micro-stutter from kernel page faults.", impact: "LOW", warning: "Requires at least 8 GB RAM. On low-memory systems this can cause instability. Only enable on 8 GB+ systems with a pagefile present." },
     { id: "EnableLargeSystemCache", title: "Enable Large System Cache (File I/O Boost)", desc: "Tells Windows to use all available RAM for the system file cache instead of the working-set trimmer — dramatically speeds up large file reads/writes. Ideal for 32 GB+ workstations, streamers, and video editors.", impact: "MED", badge: "NOT FOR GAMING", warning: "⚠ DO NOT enable this if you play games (especially FiveM / GTA). LargeSystemCache=1 is a Windows Server setting that aggressively trims game process working sets, causing crash 0xDEED in FiveM and random CTDs in other games. Only use this on non-gaming workstations with 32 GB+ RAM dedicated to file I/O workloads." },

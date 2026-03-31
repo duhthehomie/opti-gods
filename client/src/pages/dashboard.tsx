@@ -44,7 +44,7 @@ const SAFE_TWEAKS = [
 const MAX_FPS_TWEAKS = [
   ...SAFE_TWEAKS,
   "DisableDynamicTick","EnableMSIMode","DisablePowerThrottlingAdv","DisableUSBSuspend",
-  "DisableAnimations","DisableNDU","DisablePowerThrottling","MemDisableCompression",
+  "DisableAnimations","DisableNDU","DisablePowerThrottling",
   "OptimizeRAMUsage","ServiceDiagTrack","ServiceWSearch","PrivacyTelemetry",
 ];
 const COMPETITIVE_TWEAKS = [
@@ -119,7 +119,7 @@ const ALL_RECOMMENDED_TWEAKS = [
   // Visual / Game
   "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
   // Memory
-  "MemDisableCompression", "OptimizeRAMUsage",
+  "OptimizeRAMUsage",
   // Services (safe)
   "ServiceDiagTrack", "ServiceSysMain",
   // Privacy

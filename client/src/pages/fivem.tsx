@@ -62,7 +62,7 @@ export default function Fivem() {
     { id: "FiveMNetworkBuffer", title: "Increase Socket Receive Buffer (512KB)", desc: "Bumps socket send/receive buffers to 512KB — handles high player count server traffic without packet loss.", impact: "HIGH", recommended: true },
     { id: "FiveMDisableFullscreen", title: "Use Windowed Borderless Mode", desc: "Forces borderless windowed mode via CitizenFX.ini — eliminates exclusive fullscreen delays on Alt+Tab.", impact: "LOW" },
     { id: "FiveMDisableDWM", title: "Raise GTA5.exe to High Priority (DWM-Aware)", desc: "Sets GTA5.exe CPU+IO to High priority mode to minimize DWM compositor interference during gameplay.", impact: "MED" },
-    { id: "FiveMDisableMemCompression", title: "Disable Windows Memory Compression", desc: "Stops Windows from compressing RAM pages in the background. With 16GB+ RAM this is pure overhead — disabling it frees CPU cycles that GTA V's streaming engine can use instead. Huge help on 6-core CPUs.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "FiveMDisableMemCompression", title: "Disable Windows Memory Compression", desc: "Stops Windows from compressing RAM pages in the background. With 32GB+ RAM this is pure overhead — disabling it frees CPU cycles that GTA V's streaming engine can use instead. Huge help on 6-core CPUs.", badge: "32GB+ RAM", impact: "HIGH", recommended: false },
     { id: "FiveMDisableLSO", title: "Disable Large Send Offload (LSO) — Remove Latency Spikes", desc: "Disables LSO on all active network adapters. LSO batches TCP segments which causes unpredictable 5-30ms spikes on busy FiveM servers. Disabling it makes per-packet latency tighter and more consistent.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   ];
 
