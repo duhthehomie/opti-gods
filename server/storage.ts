@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment } from "@shared/schema";
-import { eq, isNotNull, gte, sql, desc } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
 export interface IStorage {
@@ -200,15 +200,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async redeemFriendToken(token: string): Promise<boolean> {
-    const rows = await db.select().from(proFriendTokens)
-      .where(eq(proFriendTokens.token, token.trim()));
-    if (!rows.length) return false;
-    const row = rows[0];
-    if (row.usedAt) return false;
-    await db.update(proFriendTokens)
+    const result = await db.update(proFriendTokens)
       .set({ usedAt: new Date() })
-      .where(eq(proFriendTokens.id, row.id));
-    return true;
+      .where(and(eq(proFriendTokens.token, token.trim()), isNull(proFriendTokens.usedAt)))
+      .returning();
+    return result.length > 0;
   }
 
   async deleteFriendToken(id: number): Promise<void> {

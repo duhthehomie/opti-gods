@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { setProStatus } from "@/lib/pro-status";
+import { useToast } from "@/hooks/use-toast";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import NotFound from "@/pages/not-found";
 
@@ -51,17 +52,16 @@ function VisitTracker() {
 }
 
 function FriendUnlockHandler() {
+  const { toast } = useToast();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("friend");
     if (!token) return;
 
-    // Remove token from URL immediately
     const url = new URL(window.location.href);
     url.searchParams.delete("friend");
     window.history.replaceState({}, "", url.toString());
 
-    // Verify with server — single-use token
     fetch("/api/pro/friend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -70,8 +70,14 @@ function FriendUnlockHandler() {
       .then((r) => r.json())
       .then((data) => {
         if (data.valid && data.sessionToken) {
-          setProStatus(true, data.sessionToken); // store real session token
+          setProStatus(true, data.sessionToken);
           window.location.reload();
+        } else {
+          toast({
+            title: "Link already used",
+            description: "This friend link has already been redeemed. Each link can only be used once.",
+            variant: "destructive",
+          });
         }
       })
       .catch(() => {});
