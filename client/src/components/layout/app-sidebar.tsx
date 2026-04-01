@@ -90,7 +90,7 @@ const navItems = [
   { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
 
-const TOTAL_TWEAKS = 432;
+const TOTAL_TWEAKS = 437;
 
 
 export function AppSidebar() {

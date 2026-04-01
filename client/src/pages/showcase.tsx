@@ -73,7 +73,7 @@ const RESULTS = [
 ];
 
 const STATS = [
-  { icon: Zap, value: "432+", label: "Optimization Tweaks", color: "text-red-400" },
+  { icon: Zap, value: "437+", label: "Optimization Tweaks", color: "text-red-400" },
   { icon: TrendingUp, value: "8×", label: "Average FPS Multiplier", color: "text-green-400" },
   { icon: Cpu, value: "100%", label: "Hardware Utilized", color: "text-blue-400" },
   { icon: Monitor, value: "<5min", label: "Setup Time", color: "text-yellow-400" },
@@ -104,7 +104,7 @@ export default function Showcase() {
               Unedited numbers. Real hardware. Real FPS. No fakery — just what happens when your PC is actually optimized.
             </p>
             <div className="flex items-center justify-center gap-6 text-xs text-zinc-500">
-              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-red-400" /> 432+ tweaks</span>
+              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-red-400" /> 437+ tweaks</span>
               <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-green-400" /> Measurable FPS gains</span>
               <span className="flex items-center gap-1"><Star className="w-3 h-3 text-yellow-400" /> Lifetime Pro access</span>
             </div>
