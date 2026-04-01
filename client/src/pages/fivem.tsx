@@ -20,7 +20,9 @@ const ALL_FIVEM_IDS = [
   "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd","FiveMRenderingBoost","FiveMGPUPriorityStack",
   "FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable","FiveM5600CoreAffinity","FiveM5600PowerPlan",
   "FiveMCitizenDisableMedia","FiveMSteamChildOff","FiveMCommandlineMax","FiveMSteamOverlayOff","FiveMMMCSSAudio",
-  "FiveMFixNvidiaOverlay",
+  "FiveMFixNvidiaOverlay","FiveMDisableMPO",
+  "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode",
+  "FiveM3500CoreAffinity","FiveM3500PerfPlan",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
 
@@ -90,6 +92,19 @@ export default function Fivem() {
 
   const CRASH_FIX_TWEAKS: Tweak[] = [
     { id: "FiveMFixNvidiaOverlay", title: "Fix: NVIDIA Overlay.exe 0x80000003 Crash", desc: "Root cause: stopping NVDisplay.ContainerLocalSystem while NVIDIA Overlay.exe is running orphans the overlay process — it throws a 0x80000003 breakpoint exception and crashes FiveM. This fix kills crashed overlay processes, restores the container service if disabled, then blocks the overlay from relaunching via registry. Run this if you see 'NVIDIA Overlay.exe — Application Error — A breakpoint has been reached (0x80000003)'. Reboot once after applying.", impact: "HIGH", badge: "CRASH FIX" },
+    { id: "FiveMDisableMPO", title: "Fix: Black Screen at FiveM Server Load-In (Disable MPO)", desc: "Disables Multi-Plane Overlay (MPO) by setting OverlayTestMode=5 in the DWM registry key. MPO causes Windows DWM to conflict with Discord and Steam overlays during the FiveM server transition phase — producing a full black screen. This is the #1 cause of 'black screen when connecting to a server'. Reboot required after applying.", impact: "HIGH", badge: "BLACK SCREEN FIX" },
+  ];
+
+  const GTX1650_TWEAKS: Tweak[] = [
+    { id: "FiveM1650DisableHAGS", title: "GTX 1650 SUPER: Disable HAGS (Reduce Frame-Time Variance)", desc: "Disables Hardware-Accelerated GPU Scheduling on GTX 16xx (Turing) cards. HAGS was built for RTX 2000+ and RX 6000+ — on GTX 1650 SUPER it adds more frame-time variance than it removes. Turning it off is measurable in crowded FiveM servers. Reboot required.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+    { id: "FiveM1650VRAMBudget", title: "GTX 1650 SUPER: Force Full 4GB VRAM Budget in GTA V", desc: "Appends -availablevidmem 4096 -percentvidmem 100 to GTA V commandline.txt. Some 4GB Turing setups report VRAM below actual, capping texture streaming. This forces GTA V to use the full 4GB — improves texture quality and reduces VRAM-related hitches on high-asset FiveM servers.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+    { id: "FiveM1650DisableAnsel", title: "GTX 1650 SUPER: Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 and OptInOrOutPreference=0 in NVIDIA registry. Ansel injects into every render frame on all NVIDIA GPUs including GTX 1650 SUPER. Disabling it removes measurable hook overhead — keeps the display container alive to avoid 0x80000003 overlay crashes.", badge: "GTX 1650 SUPER", impact: "MED" },
+    { id: "FiveM1650LowLatencyMode", title: "GTX 1650 SUPER: NVIDIA Low Latency Ultra (Driver-Level)", desc: "Forces FlipQueueSize=1, PerfLevelSrc=max, PowerMizerLevel=1 directly in the GPU class registry key. Bypasses NVCP and locks the driver to max-performance, ultra-low-latency mode for the full session. Reduces input lag by 1-3 frames vs default NVIDIA driver behavior.", badge: "GTX 1650 SUPER", impact: "HIGH" },
+  ];
+
+  const RYZEN3500_TWEAKS: Tweak[] = [
+    { id: "FiveM3500CoreAffinity", title: "Ryzen 5 3500: Pin GTA5 + FiveM to All 6 Physical Cores (0x3F)", desc: "Sets CPU affinity mask 0x3F (all 6 cores) for GTA5.exe and FiveM.exe. The Ryzen 5 3500 has no SMT — 0x3F is ALL physical cores. Also applies via IFEO so it persists on next launch: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. Tighter frametimes under CPU load on dense servers.", badge: "RYZEN 5 3500", impact: "HIGH" },
+    { id: "FiveM3500PerfPlan", title: "Ryzen 5 3500: Lock to High Performance Plan (Boost 100%)", desc: "Activates the High Performance plan and forces Min=100%, Max=100%, BoostMode=Aggressive, BoostPolicy=100%, CpuMinCores=100%. Precision Boost 2 on Zen 2 can drop clocks aggressively between frames. Locking to 100% removes the ramp-up delay and keeps all 6 cores at max boost for the full FiveM session.", badge: "RYZEN 5 3500", impact: "MED" },
   ];
 
   const GTX1060_RYZEN5600_TWEAKS: Tweak[] = [
@@ -274,6 +289,56 @@ export default function Fivem() {
               ))}
             </div>
           )}
+
+          {/* GTX 1650 SUPER Tweaks */}
+          <section>
+            <div className="flex items-center gap-3 mb-4 px-1">
+              <div className="flex-1">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1650 SUPER Tweaks</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1650 SUPER (Turing/TU116) — HAGS off, VRAM budget unlock, Ansel hook removal, Low Latency Ultra driver mode</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {GTX1650_TWEAKS.map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={(v) => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
+          </section>
+
+          {/* Ryzen 5 3500 Tweaks */}
+          <section>
+            <div className="flex items-center gap-3 mb-4 px-1">
+              <div className="flex-1">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 3500 Tweaks</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 3500 (Zen 2, 6C no SMT) — core affinity, High Performance plan with boost locked to 100%</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {RYZEN3500_TWEAKS.map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={(v) => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
+          </section>
 
           {/* FiveM Client Config — CitizenFX.ini, commandline.txt, Steam overlay */}
           {renderSection("FiveM Client Config Tweaks", FIVEM_CLIENT_TWEAKS)}

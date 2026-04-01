@@ -106,6 +106,7 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   FiveMCommandlineMax: false,
   FiveMSteamOverlayOff: false,
   FiveMMMCSSAudio: false,
+  FiveMDisableMPO: false,
   // Process Lasso
   ProcessLassoProBalance: false,
   ProcessLassoSmartTrim: false,
