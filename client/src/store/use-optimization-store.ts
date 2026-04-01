@@ -107,6 +107,7 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   FiveMSteamOverlayOff: false,
   FiveMMMCSSAudio: false,
   FiveMDisableMPO: false,
+  FiveMFixNvidiaOverlay: false,
   // Process Lasso
   ProcessLassoProBalance: false,
   ProcessLassoSmartTrim: false,
@@ -239,6 +240,7 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   MemDisableHeapTermination: false,
   MemGPUOptimize: false,
   MemDisableGPUPagefile: false,
+  EnableLargeSystemCache: false,
   MemGPUSchedulerTweak: false,
   // Game Detection
   game_valorant: false,
@@ -260,6 +262,11 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   game_readyornot: false,
   game_phasmo: false,
   game_battlefield: false,
+  game_gta5: false,
+  game_fivem: false,
+  game_rocketleague: false,
+  game_arcraiders: false,
+  game_marvelrivals: false,
   // Fortnite
   FortniteHighPriority: false,
   FortniteUncapLobbyFPS: false,

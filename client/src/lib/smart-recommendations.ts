@@ -44,6 +44,11 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix",
     "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd",
     "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
+    "FiveMRenderingBoost","FiveMGPUPriorityStack","FiveMDisableMPO",
+    "FiveMReduceShadowQuality","FiveMStreamDistance","FiveMDisableVSync",
+    "FiveMMMCSSAudio","FiveMCommandlineMax",
+    // Registry — safe kernel tweaks every gaming PC benefits from
+    "RegistryNTFSOptimize","RegistryIOPageLock",
     // WinUtil
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy",
@@ -84,16 +89,18 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
 
   // ===== CPU BRAND — Ryzen vs Intel Core specific =====
   if (hw.isRyzen) {
-    // Ryzen benefits from precision boost-friendly memory settings and MMCSS
     [
       "FiveMGTAProcessPerfOptions","FiveMAffinityMask",
     ].forEach(id => ids.add(id));
     if (hw.cpuGeneration >= 5) {
-      // Ryzen 5000+ (Zen 3+) — very fast, mainly needs power plan to be unlimited
       reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan tweaks applied`);
     } else if (hw.cpuGeneration >= 3) {
-      // Ryzen 3000 (Zen 2) — benefits from BCLK stability + scheduler
-      reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series (Zen 2) — core parking + scheduler priority tweaks`);
+      ["FiveM3500CoreAffinity","FiveM3500PerfPlan"].forEach(id => ids.add(id));
+      if (hw.cpuLabel && /3500/i.test(hw.cpuLabel)) {
+        reasons.push(`AMD Ryzen 5 3500 detected (Zen 2, 6C no SMT) — core affinity 0x3F + Boost locked 100%`);
+      } else {
+        reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series (Zen 2) — core parking + scheduler + power plan tweaks`);
+      }
     } else {
       reasons.push(`AMD Ryzen CPU — performance tweaks applied`);
     }
@@ -119,14 +126,21 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {
-      // GTX 10xx (Pascal) / GTX 16xx (Turing) — limited VRAM, need shader cache + texture perf
       ["NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff"].forEach(id => ids.add(id));
-      reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — shader cache maximized, texture filter optimized for limited VRAM`);
+      if (hw.gpuName && /1650/i.test(hw.gpuName)) {
+        ["FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode"].forEach(id => ids.add(id));
+        reasons.push(`GTX 1650 SUPER detected — HAGS off, 4GB VRAM unlocked, Ansel hook removed, Low Latency Ultra enabled`);
+      } else if (hw.gpuName && /1060/i.test(hw.gpuName)) {
+        ["FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable"].forEach(id => ids.add(id));
+        reasons.push(`GTX 1060 detected — 6GB VRAM unlocked, HAGS off, Ansel removed`);
+      } else {
+        reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — shader cache maximized, texture filter optimized for limited VRAM`);
+      }
+      ["RegistryDPCLatency"].forEach(id => ids.add(id));
     } else if (hw.nvidiaIsRTX) {
-      // RTX series — can skip the aggressive texture filter (has more VRAM)
-      reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — full RTX optimization suite`);
+      ["RegistryDPCLatency","RegistryLargePageHeap"].forEach(id => ids.add(id));
+      reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — full RTX optimization suite + DPC latency reduction`);
     } else {
-      // Unknown NVIDIA — apply low-end tweaks as safe default
       ["NvShaderDiskCache","NvFXAADriverOff"].forEach(id => ids.add(id));
       reasons.push(`NVIDIA GPU (${hw.gpuName}) — NVIDIA optimization suite enabled`);
     }

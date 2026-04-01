@@ -46,6 +46,10 @@ const MAX_FPS_TWEAKS = [
   "DisableDynamicTick","EnableMSIMode","DisablePowerThrottlingAdv","DisableUSBSuspend",
   "DisableAnimations","DisableNDU","DisablePowerThrottling",
   "OptimizeRAMUsage","ServiceDiagTrack","ServiceWSearch","PrivacyTelemetry",
+  "FiveMHighPriority","FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMRenderingBoost",
+  "FiveMGPUPriorityStack","FiveMDisableMPO","FiveMReduceNPCDensity","FiveMCommandLineTweaks",
+  "FiveMDisableLSO","FiveMEnableRSS","FiveMCacheClear","FiveMNetworkBuffer",
+  "RegistryNTFSOptimize","RegistryIOPageLock","RegistryDPCLatency",
 ];
 const COMPETITIVE_TWEAKS = [
   ...MAX_FPS_TWEAKS,
@@ -107,26 +111,20 @@ const QUICK_BOOST_PRESETS = [
   },
 ];
 
-// Global recommended tweaks — safe for every PC, biggest impact
 const ALL_RECOMMENDED_TWEAKS = [
-  // Core system responsiveness
   "Win32PrioritySeparation", "SetTimerResolution", "SetResponsiveness", "GameModeTweaks",
-  "DisablePointerPrecision", "EnableHAGS",
-  // Network
+  "DisablePointerPrecision", "EnableHAGS", "EnableMSIMode",
   "NetworkThrottling", "OptimizeTCP", "DisableNagle", "InputLagTCP", "SetDNSPriority",
-  // Power
   "SetHighPerformancePlan", "DisableCoreParking", "DisableDynamicTick",
-  // Visual / Game
   "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
-  // Memory
-  "OptimizeRAMUsage",
-  // Services (safe)
+  "OptimizeRAMUsage", "DisablePowerThrottling",
   "ServiceDiagTrack", "ServiceSysMain",
-  // Privacy
   "PrivacyTelemetry", "PrivacyAdvertisingID",
-  // FiveM
   "FiveMHighPriority", "FiveMCacheClear", "FiveMNetworkBuffer", "FiveMQueueFix",
-  "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions",
+  "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMGameModeAdd",
+  "FiveMRenderingBoost", "FiveMGPUPriorityStack", "FiveMDisableMPO",
+  "FiveMReduceNPCDensity", "FiveMCommandLineTweaks", "FiveMDisableLSO", "FiveMEnableRSS",
+  "RegistryNTFSOptimize", "RegistryIOPageLock",
 ];
 
 // How to use steps
@@ -155,7 +153,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "412+ registry, network, memory, and GPU tweaks",
+  "432+ registry, network, memory, and GPU tweaks",
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
@@ -291,7 +289,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              412+ tweaks. One script. Zero compromise.
+              432+ tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -314,6 +312,24 @@ export default function Dashboard() {
                   </Button>
                 </ProUnlockButton>
               )}
+
+              <Button
+                data-testid="button-full-optimize"
+                onClick={applyAllRecommended}
+                disabled={recommendedApplied}
+                className={cn(
+                  "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
+                  recommendedApplied
+                    ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-default"
+                    : "bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
+                )}
+              >
+                {recommendedApplied ? (
+                  <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size})</>
+                ) : (
+                  <><Rocket className="w-4 h-4 mr-2" />Full Optimize ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} tweaks)</>
+                )}
+              </Button>
 
               <Button
                 data-testid="button-restore-point"
