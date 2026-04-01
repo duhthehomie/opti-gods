@@ -19,6 +19,11 @@ const ALL_DISCORD_IDS = [
   "DiscordDisableUpdateCheck",
   "DiscordDisableAnimations",
   "DiscordDisableCrashHandler",
+  "DiscordDisableOverlay",
+  "DiscordDisableClips",
+  "DiscordDisableVAD",
+  "DiscordLowerVoiceQuality",
+  "DiscordDisableStreaming",
 ];
 
 const DISCORD_RECOMMENDED = [
@@ -27,6 +32,9 @@ const DISCORD_RECOMMENDED = [
   "DiscordDisableHWAccel",
   "DiscordClearCache",
   "DiscordDisableAnimations",
+  "DiscordDisableOverlay",
+  "DiscordDisableClips",
+  "DiscordLowerVoiceQuality",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -106,6 +114,42 @@ const MAINTENANCE_TWEAKS: Tweak[] = [
     desc: "Denies execute permission on crashpad_handler.exe — prevents Discord from spawning its crash upload process. Eliminates the hidden network + CPU activity caused by crash telemetry collection.",
     impact: "LOW",
     warning: "This prevents Discord from uploading crash reports to Discord's servers. If Discord crashes, the report won't be sent. This has no effect on your PC or Discord's functionality — it only blocks the background telemetry upload process.",
+  },
+  {
+    id: "DiscordDisableOverlay",
+    title: "Disable Discord In-Game Overlay",
+    desc: "Sets OVERLAY_ENABLED: false in settings.json — completely disables the Discord in-game overlay (Alt+F9). Overlay rendering competes for GPU/CPU with your game. Disabling it frees this overhead entirely.",
+    badge: "RECOMMENDED",
+    impact: "HIGH",
+    recommended: true,
+  },
+  {
+    id: "DiscordDisableClips",
+    title: "Disable Discord Clips Auto-Recording",
+    desc: "Sets disableClips: true in settings.json — stops Discord from recording your gameplay in the background to fill its clip buffer. Clips feature eats memory, GPU VRAM, and CPU for post-processing of recorded footage.",
+    badge: "RECOMMENDED",
+    impact: "HIGH",
+    recommended: true,
+  },
+  {
+    id: "DiscordDisableVAD",
+    title: "Disable Voice Activity Detection",
+    desc: "Sets noVoiceActivityDetection: true — stops Discord from continuously analyzing your microphone input for speech. VAD causes CPU spikes and can introduce audio lag during intense gaming moments.",
+    impact: "MED",
+  },
+  {
+    id: "DiscordLowerVoiceQuality",
+    title: "Lower Voice Quality to Basic (8kbps)",
+    desc: "Sets audioQualityMode: basic — reduces voice codec from high-quality to basic 8kbps encoding. You save ~90% CPU overhead for voice encoding. Discord quality is still acceptable for gaming.",
+    badge: "RECOMMENDED",
+    impact: "HIGH",
+    recommended: true,
+  },
+  {
+    id: "DiscordDisableStreaming",
+    title: "Disable Streaming Features & Buffers",
+    desc: "Disables streamNotices, streamingConsent, and streamPauseNotification in settings.json. Removes background streaming metadata processing and screenshare buffer overhead. Screenshare still works, just without the extra overhead.",
+    impact: "MED",
   },
 ];
 

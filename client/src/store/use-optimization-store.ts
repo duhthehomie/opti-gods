@@ -315,6 +315,11 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   DiscordOptimizeCodec: false,
   DiscordDisableCrashHandler: false,
   DiscordDisableAnimations: false,
+  DiscordDisableOverlay: false,
+  DiscordDisableClips: false,
+  DiscordDisableVAD: false,
+  DiscordLowerVoiceQuality: false,
+  DiscordDisableStreaming: false,
   // Startup Apps
   su_discord: false,
   su_spotify: false,
