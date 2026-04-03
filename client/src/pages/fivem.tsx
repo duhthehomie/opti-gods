@@ -271,8 +271,8 @@ export default function Fivem() {
             </div>
           </section>
 
-          {/* GTX 1060 Tweaks */}
-          {hw.nvidiaIsLowEnd && (
+          {/* GTX 1060 Tweaks — only show if GPU is specifically GTX 1060 */}
+          {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") && (
             <section>
               <div className="flex items-center gap-3 mb-4 px-1">
                 <div className="flex-1">
@@ -298,8 +298,8 @@ export default function Fivem() {
             </section>
           )}
 
-          {/* Ryzen 5 5600 Tweaks */}
-          {hw.isRyzen && (
+          {/* Ryzen 5 5600 Tweaks — only show if CPU is specifically Ryzen 5 5600 (gen 5) */}
+          {hw.isRyzen && hw.cpuGeneration === 5 && hw.cpuLabel.toLowerCase().includes("5600") && (
             <section>
               <div className="flex items-center gap-3 mb-4 px-1">
                 <div className="flex-1">
@@ -325,55 +325,59 @@ export default function Fivem() {
             </section>
           )}
 
-          {/* GTX 1650 SUPER Tweaks */}
-          <section>
-            <div className="flex items-center gap-3 mb-4 px-1">
-              <div className="flex-1">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1650 SUPER Tweaks</h2>
-                <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1650 SUPER (Turing/TU116) — HAGS off, VRAM budget unlock, Ansel hook removal, Low Latency Ultra driver mode</p>
+          {/* GTX 1650 SUPER Tweaks — only show if GPU is specifically GTX 1650 */}
+          {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1650 SUPER Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1650 SUPER (Turing/TU116) — HAGS off, VRAM budget unlock, Ansel hook removal, Low Latency Ultra driver mode</p>
+                </div>
               </div>
-            </div>
-            <div className="space-y-3">
-              {GTX1650_TWEAKS.map((item, i) => (
-                <TweakRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  description={item.desc}
-                  badge={item.badge}
-                  impact={item.impact}
-                  checked={tweaks[item.id] || false}
-                  onCheckedChange={(v) => setTweak(item.id, v)}
-                  delay={i + 1}
-                />
-              ))}
-            </div>
-          </section>
+              <div className="space-y-3">
+                {GTX1650_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
-          {/* Ryzen 5 3500 Tweaks */}
-          <section>
-            <div className="flex items-center gap-3 mb-4 px-1">
-              <div className="flex-1">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 3500 Tweaks</h2>
-                <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 3500 (Zen 2, 6C no SMT) — core affinity, High Performance plan with boost locked to 100%</p>
+          {/* Ryzen 5 3500 Tweaks — only show if CPU is specifically Ryzen 5 3500 (gen 3) */}
+          {hw.isRyzen && hw.cpuGeneration === 3 && hw.cpuLabel.toLowerCase().includes("3500") && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 3500 Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 3500 (Zen 2, 6C no SMT) — core affinity, High Performance plan with boost locked to 100%</p>
+                </div>
               </div>
-            </div>
-            <div className="space-y-3">
-              {RYZEN3500_TWEAKS.map((item, i) => (
-                <TweakRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  description={item.desc}
-                  badge={item.badge}
-                  impact={item.impact}
-                  checked={tweaks[item.id] || false}
-                  onCheckedChange={(v) => setTweak(item.id, v)}
-                  delay={i + 1}
-                />
-              ))}
-            </div>
-          </section>
+              <div className="space-y-3">
+                {RYZEN3500_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* FiveM Client Config — CitizenFX.ini, commandline.txt, Steam overlay */}
           {renderSection("FiveM Client Config Tweaks", FIVEM_CLIENT_TWEAKS)}
