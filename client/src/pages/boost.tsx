@@ -212,22 +212,8 @@ const BAT_MARKER = "__OPTIGODS_PS1__";
 // Generates a self-contained .bat file that calls PowerShell with
 // -ExecutionPolicy Bypass via cmd.exe — bypasses Windows Restricted
 // policy without the user needing to change any settings.
-// The bat reads itself, splits on BAT_MARKER, and executes the PS1 half.
+// Encodes PS1 in base64 to avoid quote escaping issues entirely.
 function wrapInBat(title: string, ps1Body: string): string {
-  const header = [
-    `@title Opti Gods — ${title}`,
-    `@echo off`,
-    `echo [Opti Gods] Applying tweaks — please wait...`,
-    `echo.`,
-    `set "OGFILE=%~f0"`,
-    `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& {[scriptblock]::Create(([IO.File]::ReadAllText($Env:OGFILE) -split '${BAT_MARKER}',2)[1]).Invoke()}"`,
-    `echo.`,
-    `echo [Opti Gods] All done! Close this window or press any key.`,
-    `pause > nul`,
-    `exit /b`,
-    BAT_MARKER,
-  ].join("\r\n");
-
   const ps1 = [
     `# Opti Gods — ${title}`,
     `Set-ExecutionPolicy Bypass -Scope Process -Force`,
@@ -238,7 +224,28 @@ function wrapInBat(title: string, ps1Body: string): string {
     `Write-Host "=== ${title} complete! ===" -ForegroundColor Cyan`,
   ].join("\r\n");
 
-  return header + "\r\n" + ps1;
+  // Convert PS1 to UTF-16LE and encode to base64 (PowerShell -EncodedCommand expects this)
+  let utf16str = "";
+  for (let i = 0; i < ps1.length; i++) {
+    const code = ps1.charCodeAt(i);
+    utf16str += String.fromCharCode(code & 0xFF);
+    utf16str += String.fromCharCode((code >> 8) & 0xFF);
+  }
+  const b64 = btoa(utf16str);
+
+  const header = [
+    `@title Opti Gods — ${title}`,
+    `@echo off`,
+    `echo [Opti Gods] Applying tweaks — please wait...`,
+    `echo.`,
+    `PowerShell -NoProfile -ExecutionPolicy Bypass -EncodedCommand "${b64}"`,
+    `echo.`,
+    `echo [Opti Gods] All done! Close this window or press any key.`,
+    `pause > nul`,
+    `exit /b`,
+  ].join("\r\n");
+
+  return header;
 }
 
 export default function BoostPage() {
