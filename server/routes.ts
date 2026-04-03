@@ -1682,10 +1682,12 @@ Start-Sleep 2
         (r.status === "sent" || r.status === "auto-sent")
       );
       if (linkedReq) {
-        // Mark the code as redeemed and record the IP (only if not already used)
-        if (!matchingCode.usedAt) {
-          await storage.redeemCode(normalizedCode, clientIp);
+        // Email-sent codes are also single-use — if already redeemed, reject.
+        // Admin must reset (revive) the code for the customer to use it again.
+        if (matchingCode.usedAt) {
+          return res.json({ valid: false });
         }
+        await storage.redeemCode(normalizedCode, clientIp);
         const sessionToken = await storage.createProSession(normalizedCode);
         return res.json({ valid: true, sessionToken });
       }
