@@ -107,10 +107,13 @@ export default function Fivem() {
     { id: "FiveM3500PerfPlan", title: "Ryzen 5 3500: Lock to High Performance Plan (Boost 100%)", desc: "Activates the High Performance plan and forces Min=100%, Max=100%, BoostMode=Aggressive, BoostPolicy=100%, CpuMinCores=100%. Precision Boost 2 on Zen 2 can drop clocks aggressively between frames. Locking to 100% removes the ramp-up delay and keeps all 6 cores at max boost for the full FiveM session.", badge: "RYZEN 5 3500", impact: "MED" },
   ];
 
-  const GTX1060_RYZEN5600_TWEAKS: Tweak[] = [
+  const GTX1060_TWEAKS: Tweak[] = [
     { id: "FiveM1060VRAMFlag", title: "GTX 1060 6GB: Force GTA V to Use Full 6GB VRAM", desc: "Appends -availablevidmem 6144 to GTA V commandline.txt — forces the engine to recognize and use the full 6GB VRAM budget. Some Pascal GPU setups incorrectly report available VRAM as lower, limiting texture streaming. This patch fixes it.", badge: "GTX 1060", impact: "HIGH" },
     { id: "FiveM1060DisableHAGS", title: "GTX 1060: Disable Hardware-Accelerated GPU Scheduling (HAGS)", desc: "HAGS causes additional frame-time variance on Pascal-gen GPUs (GTX 1060, 1080, 1080 Ti). These cards were designed before HAGS existed and the scheduler overhead costs more than it saves. Disabling it reduces micro-stutters on populated FiveM servers.", badge: "GTX 1060", impact: "HIGH" },
     { id: "FiveM1060AnselDisable", title: "GTX 1060: Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel (NVContainerLocalSystem) from injecting into GTA V. Ansel hooks every frame on NVIDIA GPUs including GTX 1060 — on older cards this is measurable overhead. Disabling it frees a small but consistent amount of GPU time.", badge: "GTX 1060", impact: "MED" },
+  ];
+
+  const RYZEN5600_TWEAKS: Tweak[] = [
     { id: "FiveM5600CoreAffinity", title: "Ryzen 5 5600: Pin GTA5 + FiveM to Physical Cores (0,2,4,6,8,10)", desc: "Sets CPU affinity for GTA5.exe and FiveM.exe to physical cores only — avoiding the SMT (hyperthreaded) sibling cores. On Zen 3 (Ryzen 5 5600), GTA V's threading model interacts poorly with SMT under load, causing frame-time spikes. This forces it onto the 6 real cores for tighter frametimes.", badge: "RYZEN 5 5600", impact: "HIGH" },
     { id: "FiveM5600PowerPlan", title: "Ryzen 5 5600: Apply AMD Ryzen High Performance Power Plan", desc: "Activates the AMD Ryzen High Performance power plan (GUID: fc5a4062). Zen 3 CPUs have aggressive frequency scaling that can cause latency spikes in GTA V. The Ryzen-tuned plan sets minimum processor state to 99% and removes the governor ramp-up delay — keeps boost clocks on for the full GTA V session.", badge: "RYZEN 5 5600", impact: "MED" },
   ];
@@ -268,26 +271,58 @@ export default function Fivem() {
             </div>
           </section>
 
-          {/* GTX 1060 + Ryzen 5 5600 specific — auto-show for matching hardware */}
-          {(hw.nvidiaIsLowEnd || hw.isRyzen) && (
-            <div className="space-y-3">
-              {GTX1060_RYZEN5600_TWEAKS.filter(t => 
-                (t.id.includes("1060") && hw.nvidiaIsLowEnd) || 
-                (t.id.includes("5600") && hw.isRyzen)
-              ).map((item, i) => (
-                <TweakRow
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  description={item.desc}
-                  badge={item.badge}
-                  impact={item.impact}
-                  checked={tweaks[item.id] || false}
-                  onCheckedChange={(v) => setTweak(item.id, v)}
-                  delay={i + 1}
-                />
-              ))}
-            </div>
+          {/* GTX 1060 Tweaks */}
+          {hw.nvidiaIsLowEnd && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1060 Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1060 6GB (Pascal) — HAGS off, VRAM budget unlock, Ansel hook removal</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {GTX1060_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Ryzen 5 5600 Tweaks */}
+          {hw.isRyzen && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 5600 Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 5600 (Zen 3, 6C SMT) — core affinity to physical cores, Ryzen power plan</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {RYZEN5600_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
           {/* GTX 1650 SUPER Tweaks */}
