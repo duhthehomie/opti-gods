@@ -34,12 +34,21 @@ export async function runAutoSend(): Promise<number> {
     //   1. Are pending
     //   2. Have been waiting at least thresholdMinutes
     //   3. Have a verified amountPaid (amount was validated against today's price on submission)
-    const stale = requests.filter(r =>
-      r.status === "pending" &&
-      r.amountPaid !== null && r.amountPaid !== undefined && r.amountPaid > 0 &&
-      r.createdAt &&
-      now - new Date(r.createdAt).getTime() >= thresholdMs
-    );
+    //   4. Email address doesn't already have a sent/auto-sent code
+    const stale = requests.filter(r => {
+      const isOldEnough = r.status === "pending" &&
+        r.amountPaid !== null && r.amountPaid !== undefined && r.amountPaid > 0 &&
+        r.createdAt &&
+        now - new Date(r.createdAt).getTime() >= thresholdMs;
+      
+      // Check if this email already has a code in flight (sent or auto-sent)
+      const emailAlreadyHasCode = requests.some(other =>
+        other.email === r.email &&
+        (other.status === "sent" || other.status === "auto-sent")
+      );
+      
+      return isOldEnough && !emailAlreadyHasCode;
+    });
 
     const reservedCodeIds = new Set(
       requests

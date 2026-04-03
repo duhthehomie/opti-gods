@@ -1682,6 +1682,10 @@ Start-Sleep 2
         (r.status === "sent" || r.status === "auto-sent")
       );
       if (linkedReq) {
+        // Mark the code as redeemed and record the IP (only if not already used)
+        if (!matchingCode.usedAt) {
+          await storage.redeemCode(normalizedCode, clientIp);
+        }
         const sessionToken = await storage.createProSession(normalizedCode);
         return res.json({ valid: true, sessionToken });
       }
