@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const DISCORD_INVITE = "https://discord.gg/C8WrQknN9k";
+const DISCORD_INVITE = "https://discord.gg/optigods";
 
 const FAQ_ITEMS = [
   {

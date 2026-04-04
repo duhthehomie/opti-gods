@@ -4,7 +4,7 @@ import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { setProStatus, setProSession } from "@/lib/pro-status";
 
-const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
+const DISCORD_LINK = "https://discord.gg/optigods";
 
 type Status = "verifying" | "success" | "error";
 

@@ -649,7 +649,7 @@ export default function CustomOS() {
                   <Button
                     data-testid="button-discord-os"
                     variant="outline"
-                    onClick={() => window.open("https://discord.gg/C8WrQknN9k", "_blank", "noopener noreferrer")}
+                    onClick={() => window.open("https://discord.gg/optigods", "_blank", "noopener noreferrer")}
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white font-semibold text-sm"
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />

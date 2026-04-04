@@ -48,7 +48,7 @@ export async function sendProCode(toEmail: string, code: string, siteUrl: string
 
     <p style="color:#71717a;font-size:13px;line-height:1.7;margin:0 0 24px;">
       need help or have questions? drop in the discord and i'll sort you out:<br>
-      <a href="https://discord.gg/C8WrQknN9k" style="color:#5865f2;text-decoration:none;">discord.gg/C8WrQknN9k</a>
+      <a href="https://discord.gg/optigods" style="color:#5865f2;text-decoration:none;">discord.gg/optigods</a>
     </p>
 
     <div style="border-top:1px solid #1c1c1c;padding-top:16px;margin-top:8px;">
@@ -73,7 +73,7 @@ how to use it:
 3. click "I Have an Access Code"
 4. paste the code and hit Activate
 
-need help? join the discord: discord.gg/C8WrQknN9k
+need help? join the discord: discord.gg/optigods
 
 — leaq
     `.trim(),

@@ -13,7 +13,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const GUMROAD_LINK = import.meta.env.VITE_GUMROAD_LINK as string | undefined;
-const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
+const DISCORD_LINK = "https://discord.gg/optigods";
 
 function ProPaymentDialog({
   open,

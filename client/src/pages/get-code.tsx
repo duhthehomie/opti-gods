@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Mail, Loader2, CheckCircle2, Zap, ArrowLeft, MessageCircle, AlertTriangle } from "lucide-react";
 
-const DISCORD_LINK = "https://discord.gg/C8WrQknN9k";
+const DISCORD_LINK = "https://discord.gg/optigods";
 
 export default function GetCode() {
   const [, setLocation] = useLocation();
