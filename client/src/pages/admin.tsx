@@ -1570,7 +1570,12 @@ export default function Admin() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <p className="text-[10px] text-zinc-700 pl-7 mt-1 whitespace-nowrap">Created {fmt(t.createdAt)}</p>
+                    <p className="text-[10px] text-zinc-700 pl-7 mt-1">
+                      Created {fmt(t.createdAt)}
+                      {(t as any).usedByIp && (
+                        <span className="ml-1.5 text-amber-500/70 font-mono">· {(t as any).usedByIp}</span>
+                      )}
+                    </p>
                   </div>
                 );
               })}

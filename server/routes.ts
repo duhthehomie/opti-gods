@@ -1773,7 +1773,8 @@ Start-Sleep 2
   app.post('/api/pro/friend', rateLimit(5, 60_000, 10), async (req, res) => {
     const { token } = req.body || {};
     if (!token) return res.json({ valid: false });
-    const redeemed = await storage.redeemFriendToken(String(token));
+    const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const redeemed = await storage.redeemFriendToken(String(token), clientIp);
     if (redeemed) {
       const sessionToken = await storage.createProSession(`friend:${String(token)}`);
       return res.json({ valid: true, sessionToken });

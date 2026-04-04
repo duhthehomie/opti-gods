@@ -17,6 +17,7 @@ export const proFriendTokens = pgTable("pro_friend_tokens", {
   token: text("token").notNull().unique(),
   note: text("note"),
   usedAt: timestamp("used_at"),
+  usedByIp: text("used_by_ip"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

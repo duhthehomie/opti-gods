@@ -24,7 +24,7 @@ export interface IStorage {
   // Friend tokens
   getAllFriendTokens(): Promise<ProFriendToken[]>;
   createFriendToken(token: string, note?: string): Promise<ProFriendToken>;
-  redeemFriendToken(token: string): Promise<boolean>;
+  redeemFriendToken(token: string, ip?: string): Promise<boolean>;
   deleteFriendToken(id: number): Promise<void>;
   updateFriendTokenNote(id: number, note: string | null): Promise<void>;
   deleteUsedFriendTokens(): Promise<number>;
@@ -199,9 +199,9 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async redeemFriendToken(token: string): Promise<boolean> {
+  async redeemFriendToken(token: string, ip?: string): Promise<boolean> {
     const result = await db.update(proFriendTokens)
-      .set({ usedAt: new Date() })
+      .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
       .where(and(eq(proFriendTokens.token, token.trim()), isNull(proFriendTokens.usedAt)))
       .returning();
     return result.length > 0;
