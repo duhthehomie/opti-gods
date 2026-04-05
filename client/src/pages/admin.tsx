@@ -8,6 +8,7 @@ import {
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
+  MapPin, AlertTriangle, Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -199,6 +200,7 @@ export default function Admin() {
   const [editingCodeId, setEditingCodeId] = useState<number | null>(null);
   const [editingFriendId, setEditingFriendId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [expandedCodeIps, setExpandedCodeIps] = useState<Set<number>>(new Set());
 
   // Manual payment logging form
   const [showLogPayment, setShowLogPayment] = useState(false);
@@ -261,6 +263,18 @@ export default function Admin() {
     }),
     enabled: authed,
     retry: false,
+  });
+
+  type IpLog = { id: number; codeRef: string; ipAddress: string; city: string | null; region: string | null; country: string | null; isp: string | null; lat: string | null; lon: string | null; seenAt: string };
+  const ipLogsQuery = useQuery<IpLog[]>({
+    queryKey: ["/api/admin/ip-logs", key],
+    queryFn: () => fetch("/api/admin/ip-logs", { headers }).then(r => {
+      if (!r.ok) throw new Error("Unauthorized");
+      return r.json();
+    }),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 30000,
   });
 
   const genCode = useMutation({
@@ -1376,6 +1390,34 @@ export default function Admin() {
                           <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">Reset</span>
                         </button>
                       )}
+                      {(() => {
+                        const codeLogs = (ipLogsQuery.data || []).filter(l => l.codeRef === c.code);
+                        const hasNewIp = codeLogs.length > 1;
+                        const isOpen = expandedCodeIps.has(c.id);
+                        if (!c.usedAt) return null;
+                        return (
+                          <button
+                            data-testid={`button-ips-code-${c.id}`}
+                            onClick={() => setExpandedCodeIps(prev => {
+                              const next = new Set(prev);
+                              if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                              return next;
+                            })}
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                              hasNewIp
+                                ? "text-red-400 hover:bg-red-500/10 border border-red-500/20"
+                                : "text-zinc-500 hover:bg-zinc-800"
+                            )}
+                            title="View IP history"
+                          >
+                            {hasNewIp && <AlertTriangle className="w-3 h-3" />}
+                            <Globe className="w-3 h-3" />
+                            <span className="hidden sm:inline">{codeLogs.length} IP{codeLogs.length !== 1 ? "s" : ""}</span>
+                            {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        );
+                      })()}
                       <button
                         data-testid={`button-del-code-${c.id}`}
                         onClick={() => delCode.mutate(c.id)}
@@ -1385,6 +1427,67 @@ export default function Admin() {
                       </button>
                     </div>
                   </div>
+
+                  {/* IP History Panel */}
+                  {expandedCodeIps.has(c.id) && (() => {
+                    const codeLogs = (ipLogsQuery.data || []).filter(l => l.codeRef === c.code);
+                    if (codeLogs.length === 0) return (
+                      <div className="mt-2 pl-7 text-[10px] text-zinc-600 italic">No IPs logged yet.</div>
+                    );
+                    return (
+                      <div className="mt-2 pl-7 space-y-1.5">
+                        {codeLogs.map((log, idx) => {
+                          const isFirst = idx === 0;
+                          const location = [log.city, log.region, log.country].filter(Boolean).join(", ");
+                          return (
+                            <div
+                              key={log.id}
+                              className={cn(
+                                "rounded-lg border px-3 py-2 space-y-0.5",
+                                isFirst
+                                  ? "border-emerald-500/20 bg-emerald-500/5"
+                                  : "border-red-500/25 bg-red-500/5"
+                              )}
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={cn(
+                                  "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0",
+                                  isFirst
+                                    ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                                    : "text-red-400 border-red-500/30 bg-red-500/10"
+                                )}>
+                                  {isFirst ? "ORIGINAL" : "⚠ NEW IP"}
+                                </span>
+                                <span className="font-mono text-xs text-white">{log.ipAddress}</span>
+                                {log.isp && (
+                                  <span className="text-[10px] text-zinc-500 truncate">{log.isp}</span>
+                                )}
+                                <span className="text-[10px] text-zinc-600 ml-auto whitespace-nowrap">
+                                  {new Date(log.seenAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              {location && (
+                                <div className="flex items-center gap-1 text-[10px] text-zinc-400">
+                                  <MapPin className="w-2.5 h-2.5 shrink-0" />
+                                  <span>{location}</span>
+                                  {log.lat && log.lon && (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${log.lat},${log.lon}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-400/60 hover:text-blue-400 transition-colors ml-1 text-[9px]"
+                                    >
+                                      Map
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

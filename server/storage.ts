@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -70,6 +70,9 @@ export interface IStorage {
   getManualPayments(): Promise<ManualPayment[]>;
   deleteManualPayment(id: number): Promise<void>;
   getManualPaymentTotal(): Promise<number>;
+  // IP access logging
+  logProIp(codeRef: string, ip: string): Promise<void>;
+  getIpLogs(codeRef?: string): Promise<ProIpLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -446,6 +449,46 @@ export class DatabaseStorage implements IStorage {
   async getManualPaymentTotal(): Promise<number> {
     const [row] = await db.select({ total: sql<number>`coalesce(sum(amount),0)::int` }).from(manualPayments);
     return row?.total ?? 0;
+  }
+
+  async logProIp(codeRef: string, ip: string): Promise<void> {
+    if (!ip || ip === "unknown" || ip === "127.0.0.1" || ip === "::1") return;
+    // Only insert if this IP hasn't been seen for this codeRef yet
+    const existing = await db.select({ id: proIpLogs.id })
+      .from(proIpLogs)
+      .where(and(eq(proIpLogs.codeRef, codeRef), eq(proIpLogs.ipAddress, ip)));
+    if (existing.length > 0) return;
+    // Fetch geolocation from ip-api.com (free, no key needed, server-side only)
+    let city: string | null = null;
+    let region: string | null = null;
+    let country: string | null = null;
+    let isp: string | null = null;
+    let lat: string | null = null;
+    let lon: string | null = null;
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp,lat,lon`);
+      if (geoRes.ok) {
+        const geo = await geoRes.json() as { status: string; country?: string; regionName?: string; city?: string; isp?: string; lat?: number; lon?: number };
+        if (geo.status === "success") {
+          city = geo.city ?? null;
+          region = geo.regionName ?? null;
+          country = geo.country ?? null;
+          isp = geo.isp ?? null;
+          lat = geo.lat != null ? String(geo.lat) : null;
+          lon = geo.lon != null ? String(geo.lon) : null;
+        }
+      }
+    } catch {
+      // Geolocation is best-effort; don't block logging on failure
+    }
+    await db.insert(proIpLogs).values({ codeRef, ipAddress: ip, city, region, country, isp, lat, lon });
+  }
+
+  async getIpLogs(codeRef?: string): Promise<ProIpLog[]> {
+    if (codeRef) {
+      return db.select().from(proIpLogs).where(eq(proIpLogs.codeRef, codeRef)).orderBy(proIpLogs.seenAt);
+    }
+    return db.select().from(proIpLogs).orderBy(proIpLogs.seenAt);
   }
 }
 

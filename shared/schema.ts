@@ -87,6 +87,21 @@ export type ManualPayment = typeof manualPayments.$inferSelect;
 export const insertManualPaymentSchema = createInsertSchema(manualPayments).omit({ id: true, paidAt: true });
 export type InsertManualPayment = z.infer<typeof insertManualPaymentSchema>;
 
+// IP access log — tracks every unique IP per pro code for sharing detection
+export const proIpLogs = pgTable("pro_ip_logs", {
+  id: serial("id").primaryKey(),
+  codeRef: text("code_ref").notNull(),
+  ipAddress: text("ip_address").notNull(),
+  city: text("city"),
+  region: text("region"),
+  country: text("country"),
+  isp: text("isp"),
+  lat: text("lat"),
+  lon: text("lon"),
+  seenAt: timestamp("seen_at").defaultNow(),
+});
+export type ProIpLog = typeof proIpLogs.$inferSelect;
+
 // Pro session tokens — server-side validation prevents localStorage spoofing exploit
 export const proSessions = pgTable("pro_sessions", {
   id: serial("id").primaryKey(),

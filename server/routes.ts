@@ -1668,6 +1668,7 @@ Start-Sleep 2
     const redeemed = await storage.redeemCode(normalizedCode, clientIp);
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
+      storage.logProIp(normalizedCode, clientIp).catch(() => {});
       return res.json({ valid: true, sessionToken });
     }
 
@@ -1689,6 +1690,7 @@ Start-Sleep 2
         }
         await storage.redeemCode(normalizedCode, clientIp);
         const sessionToken = await storage.createProSession(normalizedCode);
+        storage.logProIp(normalizedCode, clientIp).catch(() => {});
         return res.json({ valid: true, sessionToken });
       }
       // Code exists in DB but has no email link and was already redeemed — reject.
@@ -1708,6 +1710,12 @@ Start-Sleep 2
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
     const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const valid = await storage.verifyProSession(sessionToken, ip);
+    if (valid) {
+      // Fire-and-forget: log IP if it's new for this code (used for code sharing detection)
+      const sessions = await storage.getAllProSessions();
+      const session = sessions.find(s => s.sessionToken === sessionToken);
+      if (session?.codeRef) storage.logProIp(session.codeRef, ip).catch(() => {});
+    }
     res.json({ valid });
   });
 
@@ -1776,7 +1784,9 @@ Start-Sleep 2
     const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const redeemed = await storage.redeemFriendToken(String(token), clientIp);
     if (redeemed) {
-      const sessionToken = await storage.createProSession(`friend:${String(token)}`);
+      const codeRef = `friend:${String(token)}`;
+      const sessionToken = await storage.createProSession(codeRef);
+      storage.logProIp(codeRef, clientIp).catch(() => {});
       return res.json({ valid: true, sessionToken });
     }
     res.json({ valid: false });
@@ -1887,6 +1897,14 @@ Start-Sleep 2
     if (!checkAdminKey(req, res)) return;
     const count = await storage.deleteUsedFriendTokens();
     res.json({ ok: true, deleted: count });
+  });
+
+  // Admin — IP access logs (all logs or filtered by codeRef) — for code sharing detection
+  app.get('/api/admin/ip-logs', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { codeRef } = req.query;
+    const logs = await storage.getIpLogs(codeRef ? String(codeRef) : undefined);
+    res.json(logs);
   });
 
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
