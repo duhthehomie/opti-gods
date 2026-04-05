@@ -1688,6 +1688,10 @@ Start-Sleep 2
         if (matchingCode.usedAt) {
           return res.json({ valid: false });
         }
+        // IP lock: if code was previously used, only the original IP can re-use it (after admin reset)
+        if (matchingCode.usedByIp && matchingCode.usedByIp !== clientIp) {
+          return res.json({ valid: false });
+        }
         await storage.redeemCode(normalizedCode, clientIp);
         const sessionToken = await storage.createProSession(normalizedCode);
         storage.logProIp(normalizedCode, clientIp).catch(() => {});

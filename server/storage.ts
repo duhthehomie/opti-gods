@@ -141,6 +141,8 @@ export class DatabaseStorage implements IStorage {
       .where(eq(proAccessCodes.code, code.toUpperCase().trim()));
     if (!rows.length) return false;
     const row = rows[0];
+    // If code was already used, only allow the same IP (original buyer) to re-use after admin reset
+    if (row.usedByIp && ip && row.usedByIp !== ip) return false;
     if (row.usedAt) return false;
     await db.update(proAccessCodes)
       .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
