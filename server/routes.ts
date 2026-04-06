@@ -2114,7 +2114,7 @@ Start-Sleep 2
       `Write-Host ""`,
       `Write-Host "  Opti Gods by leaq" -ForegroundColor DarkRed`,
       `Write-Host ""`,
-      `pause`,
+      `Read-Host "Press Enter to close"`,
     ];
 
     const script = lines.join('\r\n');

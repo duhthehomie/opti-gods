@@ -106,7 +106,7 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
           </div>
 
           <div className="relative">
-            <pre className="text-[10px] leading-relaxed bg-zinc-900 border border-zinc-700 rounded-lg p-3 overflow-x-auto text-green-400 whitespace-pre-wrap break-all font-mono">
+            <pre className="text-[9px] leading-relaxed bg-zinc-900 border border-zinc-700 rounded-lg p-3 overflow-x-auto overflow-y-auto max-h-32 text-green-400 whitespace-pre font-mono">
               {PS1_CMD}
             </pre>
             <button
