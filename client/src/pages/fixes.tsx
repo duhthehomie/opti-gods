@@ -310,6 +310,30 @@ export default function Fixes() {
   const [selected, setSelected] = useState<Set<string>>(new Set(CATEGORIES.map((c) => c.id)));
   const [downloading, setDownloading] = useState(false);
   const [downloadingFix, setDownloadingFix] = useState(false);
+  const [downloadingRLFix, setDownloadingRLFix] = useState(false);
+
+  const downloadRocketLeagueFix = async () => {
+    setDownloadingRLFix(true);
+    try {
+      const res = await fetch("/api/rocket-league-fix-script");
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods-RocketLeagueFix-by-leaq.ps1";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Rocket League Fix Downloaded",
+        description: "Double-click the file — allow admin prompt → restart your PC. Game will re-validate shaders on first launch.",
+      });
+    } catch {
+      toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
+    } finally {
+      setDownloadingRLFix(false);
+    }
+  };
 
   const downloadCrashFix = async () => {
     setDownloadingFix(true);
@@ -390,6 +414,68 @@ export default function Fixes() {
           <div>
             <h1 className="text-2xl font-display font-bold">Fixes & Restore</h1>
             <p className="text-zinc-500 text-sm">Undo any tweak Opti Gods applied — download a restore script and run it as Administrator</p>
+          </div>
+        </motion.div>
+
+        {/* ── ROCKET LEAGUE FIX ─────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.01 }}
+          className="rounded-2xl border-2 border-orange-500/40 bg-orange-950/30 overflow-hidden"
+        >
+          {/* Top label strip */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-orange-600/20 border-b border-orange-500/30">
+            <Gamepad2 className="w-3.5 h-3.5 text-orange-400 animate-pulse shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">
+              Rocket League Won't Start
+            </span>
+          </div>
+
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                Game shows "Running" then hangs, never appears in Task Manager.
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Resets all game config</span> — wipes corrupted settings
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Validates DirectX & runtimes</span> — checks GPU access
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Runs system file checker</span> — repairs Windows corruption
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Advanced recovery script that resets everything and validates system. Takes ~10 minutes (system file check included).
+              </p>
+            </div>
+
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button
+                data-testid="button-download-rocket-league-fix"
+                onClick={downloadRocketLeagueFix}
+                disabled={downloadingRLFix}
+                className="bg-orange-600 hover:bg-orange-500 text-white font-black text-sm px-5 py-2.5 border border-orange-400/30 shadow-[0_0_24px_-4px_rgba(234,88,12,0.5)] whitespace-nowrap"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {downloadingRLFix ? "Generating..." : "Download RL Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">
+                Double-click → allow UAC → restart PC
+              </p>
+            </div>
           </div>
         </motion.div>
 
