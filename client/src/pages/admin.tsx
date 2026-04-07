@@ -1005,10 +1005,15 @@ export default function Admin() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-lg text-xs text-blue-400 hover:bg-blue-600/20 transition-colors font-mono">
             <Zap className="w-3 h-3" /> paypal.me/accountslg
           </a>
-          <a href="https://duhthehomie.gumroad.com/l/esizt" target="_blank" rel="noreferrer"
+          <button onClick={() => {
+            fetch("/api/create-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
+              .then(r => r.json())
+              .then(d => { if (d.url) window.location.href = d.url; })
+              .catch(() => alert("Stripe checkout failed"));
+          }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">
-            <CreditCard className="w-3 h-3" /> Gumroad (Card)
-          </a>
+            <CreditCard className="w-3 h-3" /> Stripe (Card)
+          </button>
           <a href="https://discord.gg/optigods" target="_blank" rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/20 transition-colors font-mono">
             <MessageSquare className="w-3 h-3" /> Discord

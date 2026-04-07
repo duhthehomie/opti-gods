@@ -12,7 +12,6 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
-const GUMROAD_LINK = import.meta.env.VITE_GUMROAD_LINK as string | undefined;
 const DISCORD_LINK = "https://discord.gg/optigods";
 
 function ProPaymentDialog({
@@ -28,6 +27,7 @@ function ProPaymentDialog({
   const [success, setSuccess] = useState(false);
   const [cryptoCopied, setCryptoCopied] = useState(false);
   const [withSession, setWithSession] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -84,8 +84,29 @@ function ProPaymentDialog({
     } catch {}
   };
 
+  const handleStripeCheckout = async () => {
+    setStripeLoading(true);
+    try {
+      const res = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError("Failed to create checkout session. Please try again.");
+      }
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
   const hasPaymentOptions =
-    CASHAPP_TAG || PAYPAL_LINK || GUMROAD_LINK || LEGACY_LINK || CRYPTO_ADDRESS || COINBASE_LINK;
+    CASHAPP_TAG || PAYPAL_LINK || LEGACY_LINK || CRYPTO_ADDRESS || COINBASE_LINK || true;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -239,31 +260,24 @@ function ProPaymentDialog({
                     </a>
                   )}
 
-                  {GUMROAD_LINK && (
-                    <div className="space-y-2">
-                      <a
-                        data-testid="button-pay-gumroad"
-                        href={GUMROAD_LINK}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 border border-red-500 text-white text-sm font-black tracking-wide transition-all shadow-lg shadow-red-900/30"
-                      >
+                  <button
+                    data-testid="button-pay-stripe"
+                    onClick={handleStripeCheckout}
+                    disabled={stripeLoading}
+                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed border border-red-500 text-white text-sm font-black tracking-wide transition-all shadow-lg shadow-red-900/30"
+                  >
+                    {stripeLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading Stripe...
+                      </>
+                    ) : (
+                      <>
                         <CreditCard className="w-4 h-4" />
-                        Pay by Card — Visa / Mastercard / Amex
-                      </a>
-                      <div className="rounded-xl border border-amber-500/25 bg-amber-950/30 overflow-hidden">
-                        <div className="px-3 py-2.5 flex gap-2.5 items-start">
-                          <span className="text-amber-400 text-sm shrink-0">⚠</span>
-                          <div>
-                            <p className="text-[10px] font-black text-amber-300 uppercase tracking-wider mb-0.5">Gift Card Declined?</p>
-                            <p className="text-[10px] text-amber-200/70 leading-relaxed">
-                              Prepaid/gift cards are blocked by Gumroad. Use <strong className="text-white">PayPal</strong> or <strong className="text-white">CashApp</strong> instead — they work every time.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                        Pay ${price} with Card — Stripe
+                      </>
+                    )}
+                  </button>
 
                   {COINBASE_LINK && (
                     <a
@@ -303,7 +317,7 @@ function ProPaymentDialog({
                     </div>
                   )}
 
-                  {!CASHAPP_TAG && !PAYPAL_LINK && !GUMROAD_LINK && LEGACY_LINK && (
+                  {!CASHAPP_TAG && !PAYPAL_LINK && LEGACY_LINK && (
                     <a
                       href={LEGACY_LINK}
                       target="_blank"

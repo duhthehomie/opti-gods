@@ -8,7 +8,7 @@ export default function GetCode() {
   const [, setLocation] = useLocation();
 
   const [email, setEmail] = useState("");
-  const [method, setMethod] = useState<"cashapp" | "paypal" | "gumroad">("cashapp");
+  const [method, setMethod] = useState<"cashapp" | "paypal" | "stripe">("cashapp");
   const [ref, setRef] = useState("");
   const [discord, setDiscord] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
@@ -186,7 +186,7 @@ export default function GetCode() {
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">How Did You Pay?</label>
               <div className="grid grid-cols-3 gap-2">
-                {(["cashapp", "paypal", "gumroad"] as const).map(m => (
+                {(["cashapp", "paypal", "stripe"] as const).map(m => (
                   <button
                     key={m}
                     data-testid={`button-method-${m}`}
@@ -197,7 +197,7 @@ export default function GetCode() {
                         : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {m === "gumroad" ? "Card/Gumroad" : m === "cashapp" ? "CashApp" : "PayPal"}
+                    {m === "stripe" ? "Card/Stripe" : m === "cashapp" ? "CashApp" : "PayPal"}
                   </button>
                 ))}
               </div>
@@ -206,7 +206,7 @@ export default function GetCode() {
             {/* Payment reference */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                {method === "gumroad" ? "Order ID or Email Used at Checkout"
+                {method === "stripe" ? "Stripe Charge ID or Transaction ID"
                   : method === "cashapp" ? "Your $Cashtag or Transaction ID"
                   : "PayPal Transaction ID or Email"}
               </label>
@@ -214,7 +214,7 @@ export default function GetCode() {
                 data-testid="input-getcode-ref"
                 type="text"
                 placeholder={
-                  method === "gumroad" ? "e.g. hCUm0SBwEQ... or your email"
+                  method === "stripe" ? "e.g. ch_1AB2CD... or ch_live_..."
                     : method === "cashapp" ? "e.g. $yourcashtag or TX ID"
                     : "e.g. PayPal TX ID"
                 }
