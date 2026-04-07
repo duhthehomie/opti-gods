@@ -321,7 +321,7 @@ export default function Fixes() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "OptiGods-RocketLeagueFix-by-leaq.ps1";
+      a.download = "OptiGods-RocketLeagueFix-by-leaq.bat";
       a.click();
       URL.revokeObjectURL(url);
       toast({
