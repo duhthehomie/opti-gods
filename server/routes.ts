@@ -2715,5 +2715,119 @@ Read-Host "Press Enter to close this window"
     return res.json({ ok: true });
   });
 
+  // ── Opti Gods AI (Gemini) ──────────────────────────────────────────────────
+  app.post("/api/ai/chat", rateLimit("/api/ai/chat", 20, 60_000, 40), async (req, res) => {
+    const { message, history = [], sessionId, isPro = false, imageBase64 } = req.body as {
+      message: string;
+      history?: { role: string; content: string }[];
+      sessionId?: string;
+      isPro?: boolean;
+      imageBase64?: string;
+    };
+
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+    if (message.length > 2000) {
+      return res.status(400).json({ error: "Message too long" });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: "AI not configured" });
+    }
+
+    try {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
+
+You have deep expertise in every single one of these 437+ optimization categories:
+- Registry Tweaks: Win32PrioritySeparation, SystemResponsiveness, GPU priority, network throttle, TCP/IP optimizations, timer resolution
+- FiveM Optimizer: Game server cache, CFX settings, NUI rendering, server switching, memory leaks, FPS locks
+- Fortnite Optimizer: Engine.ini tweaks, texture streaming, shadow quality, GameUserSettings
+- NVIDIA: Control Panel optimal settings, HAGS (only enable on RTX 2000+ and RX 6000+, disable on GTX/older), low latency mode, shader cache, DLSS, G-Sync
+- AMD: Radeon Software tweaks, Anti-Lag, Radeon Boost, shader cache, undervolting
+- Laptop: Power plan, battery-to-performance mode, thermal throttle prevention, GPU switching
+- Process Lasso: CPU affinity, ProBalance, gaming mode, background process trimming
+- Discord: Hardware acceleration, krisp noise suppression, overlay disable, GPU usage reduction
+- Memory: Working set trimming, pagefile optimization, large pages, RAM cache clearing
+- Debloat: Xbox services, Cortana, telemetry, Copilot, unnecessary background apps
+- Startup Apps: Boot time reduction, unnecessary startup items
+- Quick Boost: One-click performance profiles
+- Custom OS: Advanced Windows configuration
+- Game Detection: Auto-detect installed games and apply relevant tweaks
+- Fixes & Restore: System restore points, driver rollback, common crash fixes
+- Integrated Graphics: Intel/AMD iGPU optimization for budget laptops
+- WinUtil & OO ShutUp: Privacy tweaks, telemetry removal
+
+CRITICAL RULES:
+- NEVER tell users to disable NVDisplay.ContainerLocalSystem or NvDisplayContainerLS — this causes the NVIDIA Overlay 0x80000003 crash
+- HAGS: Only recommend enabling for RTX 2000+ or RX 6000+ GPUs. GTX 10xx, GTX 16xx, and older Radeon = always disable HAGS
+- Give specific, actionable advice — not vague tips
+- Keep responses concise and direct — gamers want answers fast
+- Use a confident, expert tone — you are THE authority on PC optimization
+- Format with short paragraphs or bullet points for readability
+- When answering about a specific game, always ask about their GPU/CPU if not mentioned
+${isPro ? "\n- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately." : "\n- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'"}
+
+If they upload a screenshot, analyze it carefully — look for FPS counters, error messages, game settings, NVIDIA/AMD panel screenshots, Task Manager, or any relevant optimization data.`;
+
+      const geminiHistory = (history as { role: string; content: string }[])
+        .slice(-10)
+        .map(m => ({
+          role: m.role === "user" ? "user" as const : "model" as const,
+          parts: [{ text: m.content }],
+        }));
+
+      const chat = model.startChat({
+        history: geminiHistory,
+        systemInstruction: systemPrompt,
+      });
+
+      let userParts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [];
+
+      if (imageBase64) {
+        const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        userParts = [
+          { inlineData: { mimeType, data: base64Data } },
+          { text: message },
+        ];
+      } else {
+        userParts = [{ text: message }];
+      }
+
+      const result = await chat.sendMessage(userParts as any);
+      const responseText = result.response.text();
+
+      // Persist session to DB if sessionId provided
+      if (sessionId && typeof sessionId === "string" && sessionId.length <= 64) {
+        const updatedMessages = [
+          ...history,
+          { role: "user", content: message, timestamp: new Date().toISOString() },
+          { role: "assistant", content: responseText, timestamp: new Date().toISOString() },
+        ].slice(-40); // keep last 40 messages
+        await storage.upsertAiSession(sessionId, updatedMessages).catch(() => {});
+      }
+
+      return res.json({ response: responseText });
+    } catch (err: any) {
+      console.error("[AI] Gemini error:", err?.message ?? err);
+      return res.status(500).json({ error: "AI request failed. Try again." });
+    }
+  });
+
+  // Load AI chat session history
+  app.get("/api/ai/session/:sessionId", rateLimit("/api/ai/session", 30, 60_000, 60), async (req, res) => {
+    const { sessionId } = req.params;
+    if (!sessionId || sessionId.length > 64) return res.status(400).json({ error: "Invalid session" });
+    const session = await storage.getAiSession(sessionId);
+    return res.json({ messages: (session?.messages as any[]) ?? [] });
+  });
+
   return httpServer;
 }

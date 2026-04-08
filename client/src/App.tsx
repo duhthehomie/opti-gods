@@ -35,6 +35,7 @@ import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
 import LaptopPage from "@/pages/laptop";
 import BoostPage from "@/pages/boost";
+import OptiGodsAI from "@/pages/opti-gods-ai";
 
 function VisitTracker() {
   useEffect(() => {
@@ -115,6 +116,7 @@ function Router() {
       <Route path="/get-code" component={GetCode} />
       <Route path="/boost" component={BoostPage} />
       <Route path="/processes" component={ProcessesPage} />
+      <Route path="/ai" component={OptiGodsAI} />
       <Route component={NotFound} />
     </Switch>
   );

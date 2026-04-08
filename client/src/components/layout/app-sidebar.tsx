@@ -24,6 +24,7 @@ import {
   Play,
   TrendingUp,
   Server,
+  Bot,
 } from "lucide-react";
 import {
   Sidebar,
@@ -67,6 +68,7 @@ function countForSection(tweaks: Record<string, boolean>, url: string) {
 
 const navItems = [
   { title: "Dashboard",           url: "/",                   icon: Activity },
+  { title: "Opti Gods AI",        url: "/ai",                 icon: Bot,          aiAccent: true },
   { title: "Quick Boost",         url: "/boost",              icon: TrendingUp,   boostAccent: true },
   { title: "Registry Tweaks",     url: "/registry",           icon: Settings2,    recCount: 20 },
   { title: "FiveM Optimizer",     url: "/fivem",              icon: Gamepad2,     recCount: 13 },
@@ -180,6 +182,7 @@ export function AppSidebar() {
                 const isWinTitusAccent = (item as any).winTitusAccent;
                 const isProAccent = (item as any).proAccent;
                 const isBoostAccent = (item as any).boostAccent;
+                const isAiAccent = (item as any).aiAccent;
                 const isLast = idx === navItems.length - 1;
                 const sectionCount = countForSection(tweaks, item.url);
                 return (
@@ -191,6 +194,8 @@ export function AppSidebar() {
                         "h-auto rounded-md transition-all",
                         isActive
                           ? "bg-red-500/10 text-red-400 hover:bg-red-500/15 hover:text-red-300 font-medium"
+                          : isAiAccent
+                          ? "text-red-400 hover:text-red-300 hover:bg-red-500/10 font-semibold"
                           : isAccent
                           ? "text-[#5865F2] hover:text-[#818cf8] hover:bg-[#5865F2]/10"
                           : isFixAccent
@@ -214,6 +219,7 @@ export function AppSidebar() {
                         <item.icon className={cn(
                           "w-4 h-4 shrink-0",
                           isActive ? "text-red-400" :
+                          isAiAccent ? "text-red-400" :
                           isAccent ? "text-[#5865F2]" :
                           isFixAccent ? "text-cyan-500" :
                           isWinTitusAccent ? "text-orange-400" :
