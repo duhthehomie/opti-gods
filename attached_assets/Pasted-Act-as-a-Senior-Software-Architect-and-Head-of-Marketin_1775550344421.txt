@@ -1,0 +1,25 @@
+Act as a Senior Software Architect and Head of Marketing. We are integrating the 'Aether' AI Orchestrator into my 'Opti Gods' project as a separate, sleek module.
+Core Requirements:
+Aether Tab (Admin Panel): Add a 'Aether' tab to my existing Admin Panel. It must be sleek and minimalist to match my current design. It should show live feeds of:
+Agent Activity Logs: What Aether is thinking/doing right now.
+Marketing Gallery: A grid of the latest generated TikToks/YouTube Shorts.
+Self-Healing Status: Any bugs identified and code patches suggested.
+The Ultimate Marketing Agent:
+Automated Content Creation: Use Replit’s Animation Skill + Shotstack API to generate high-quality 9:16 vertical videos.
+Call to Action (CTA): Every video must automatically include an overlay or caption advertising discord.gg/optigods and the main website for tweaks.
+Smart SEO: The agent must research and append high-engagement hashtags (e.g., #FiveM, #PCBoost, #FPSFix) and SEO-optimized descriptions.
+Auto-Post Pipeline: Connect to TikTok/YouTube APIs (via Shotstack or a direct webhook) to upload videos autonomously when a user hits a performance milestone.
+Technical Oracle (System-Aware):
+Hook into my system detection files. Provide hyper-specific FPS tweaks for FiveM based on the user's CPU/GPU/RAM.
+Diagnose any app errors and present the fix in the 'Aether Tab' for me to approve.
+Execution Guidelines:
+Zero-Tax/Modular Build: Do NOT overwrite my existing codebase. Build these as new modules (e.g., in /aether-core) and 'plug' them into the Admin UI to save Replit compute resources.
+Sleek Minimalism: Use Tailwind CSS or my existing styles for the Aether Tab. No clutter—just high-performance data.
+Analyze First: Provide a complete Integration Blueprint before you start coding to ensure my current functionality remains 100% intact.
+Aether is the future of Opti Gods. Show me the Blueprint for this autonomous ecosystem."
+Why this prompt is your "Level 100" moment:
+Discord & Web Traffic: By hardcoding your vanity link (discord.gg/optigods) into the agent's logic, every piece of content it makes becomes a permanent ad for your community.
+The "Sleek" UI: Telling the agent to match your existing minimalist panel ensures the new Aether tab doesn't look like a cheap plugin—it looks like a premium feature.
+Hands-Off Viral Success: Using Shotstack or Creatomate means your app doesn't just "talk"—it shows. When a user gets a massive FPS boost, the AI records it, edits it with smooth GFX, adds trending hashtags, and posts it to TikTok while you're offline.
+Your Next Step:
+Paste this into the Replit Agent. When it gives you the Blueprint, pay close attention to how it plans to connect the Video Pipeline. Once you approve the plan, Aether will begin building itself.
