@@ -2740,7 +2740,6 @@ Read-Host "Press Enter to close this window"
     try {
       const { GoogleGenerativeAI } = await import("@google/generative-ai");
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
 
@@ -2771,21 +2770,29 @@ CRITICAL RULES:
 - Use a confident, expert tone — you are THE authority on PC optimization
 - Format with short paragraphs or bullet points for readability
 - When answering about a specific game, always ask about their GPU/CPU if not mentioned
-${isPro ? "\n- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately." : "\n- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'"}
+${isPro ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately." : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'"}
 
 If they upload a screenshot, analyze it carefully — look for FPS counters, error messages, game settings, NVIDIA/AMD panel screenshots, Task Manager, or any relevant optimization data.`;
 
-      const geminiHistory = (history as { role: string; content: string }[])
-        .slice(-10)
-        .map(m => ({
-          role: m.role === "user" ? "user" as const : "model" as const,
-          parts: [{ text: m.content }],
-        }));
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      const chat = model.startChat({
-        history: geminiHistory,
-        systemInstruction: systemPrompt,
-      });
+      // Inject system context as first turn (most reliable cross-version approach)
+      const primeHistory = [
+        { role: "user" as const, parts: [{ text: systemPrompt }] },
+        { role: "model" as const, parts: [{ text: "Understood. I'm Opti Gods AI, powered by Aether. I'm ready to help with PC optimization, FPS, lag, crashes, drivers, and all 437+ tweaks in the Opti Gods dashboard. What do you need?" }] },
+      ];
+
+      const geminiHistory = [
+        ...primeHistory,
+        ...(history as { role: string; content: string }[])
+          .slice(-10)
+          .map(m => ({
+            role: m.role === "user" ? "user" as const : "model" as const,
+            parts: [{ text: m.content }],
+          })),
+      ];
+
+      const chat = model.startChat({ history: geminiHistory });
 
       let userParts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [];
 
