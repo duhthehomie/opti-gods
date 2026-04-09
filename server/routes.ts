@@ -2732,14 +2732,14 @@ Read-Host "Press Enter to close this window"
       return res.status(400).json({ error: "Message too long" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       return res.status(503).json({ error: "AI not configured" });
     }
 
     try {
-      const { GoogleGenerativeAI } = await import("@google/generative-ai");
-      const genAI = new GoogleGenerativeAI(apiKey);
+      const Groq = (await import("groq-sdk")).default;
+      const groq = new Groq({ apiKey });
 
       const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
 
@@ -2774,42 +2774,36 @@ ${isPro ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with 
 
 If they upload a screenshot, analyze it carefully — look for FPS counters, error messages, game settings, NVIDIA/AMD panel screenshots, Task Manager, or any relevant optimization data.`;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      // Build message history in OpenAI format
+      const chatHistory = (history as { role: string; content: string }[])
+        .slice(-10)
+        .map(m => ({ role: m.role === "user" ? "user" as const : "assistant" as const, content: m.content }));
 
-      // Inject system context as first turn (most reliable cross-version approach)
-      const primeHistory = [
-        { role: "user" as const, parts: [{ text: systemPrompt }] },
-        { role: "model" as const, parts: [{ text: "Understood. I'm Opti Gods AI, powered by Aether. I'm ready to help with PC optimization, FPS, lag, crashes, drivers, and all 437+ tweaks in the Opti Gods dashboard. What do you need?" }] },
-      ];
-
-      const geminiHistory = [
-        ...primeHistory,
-        ...(history as { role: string; content: string }[])
-          .slice(-10)
-          .map(m => ({
-            role: m.role === "user" ? "user" as const : "model" as const,
-            parts: [{ text: m.content }],
-          })),
-      ];
-
-      const chat = model.startChat({ history: geminiHistory });
-
-      let userParts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [];
-
+      // Build the final user message content (text + optional image)
+      let userContent: string | { type: string; text?: string; image_url?: { url: string } }[];
       if (imageBase64) {
-        const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
-        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-        userParts = [
-          { inlineData: { mimeType, data: base64Data } },
-          { text: message },
+        userContent = [
+          { type: "image_url", image_url: { url: imageBase64 } },
+          { type: "text", text: message || "Analyze this screenshot for PC optimization advice." },
         ];
       } else {
-        userParts = [{ text: message }];
+        userContent = message;
       }
 
-      const result = await chat.sendMessage(userParts as any);
-      const responseText = result.response.text();
+      // Use vision model when image is present, fast text model otherwise
+      const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+
+      const completion = await groq.chat.completions.create({
+        model,
+        max_tokens: 1024,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...chatHistory,
+          { role: "user", content: userContent as any },
+        ],
+      });
+
+      const responseText = completion.choices[0]?.message?.content ?? "No response generated.";
 
       // Persist session to DB if sessionId provided
       if (sessionId && typeof sessionId === "string" && sessionId.length <= 64) {
@@ -2817,13 +2811,13 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
           ...history,
           { role: "user", content: message, timestamp: new Date().toISOString() },
           { role: "assistant", content: responseText, timestamp: new Date().toISOString() },
-        ].slice(-40); // keep last 40 messages
+        ].slice(-40);
         await storage.upsertAiSession(sessionId, updatedMessages).catch(() => {});
       }
 
       return res.json({ response: responseText });
     } catch (err: any) {
-      console.error("[AI] Gemini error:", err?.message ?? err);
+      console.error("[AI] Groq error:", err?.message ?? err);
       return res.status(500).json({ error: "AI request failed. Try again." });
     }
   });
