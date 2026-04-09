@@ -379,10 +379,13 @@ export default function OptiGodsAI() {
             <EmptyState onSelect={q => sendMessage(q)} />
           ) : (
             <>
-              {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} />
-              ))}
-              {isLoading && messages[messages.length - 1]?.role !== "assistant" && <TypingIndicator />}
+              {messages.map((msg, i) =>
+                msg.content || msg.imageUrl ? <MessageBubble key={i} msg={msg} /> : null
+              )}
+              {isLoading && (
+                messages[messages.length - 1]?.role !== "assistant" ||
+                messages[messages.length - 1]?.content === ""
+              ) && <TypingIndicator />}
               <div ref={bottomRef} />
             </>
           )}
