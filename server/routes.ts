@@ -2738,8 +2738,7 @@ Read-Host "Press Enter to close this window"
     }
 
     try {
-      const Groq = (await import("groq-sdk")).default;
-      const groq = new Groq({ apiKey });
+      // Use fetch directly — groq-sdk has env issues in this runtime
 
       const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
 
@@ -2777,7 +2776,7 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
       // Build message history in OpenAI format
       const chatHistory = (history as { role: string; content: string }[])
         .slice(-10)
-        .map(m => ({ role: m.role === "user" ? "user" as const : "assistant" as const, content: m.content }));
+        .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
 
       // Build the final user message content (text + optional image)
       let userContent: string | { type: string; text?: string; image_url?: { url: string } }[];
@@ -2793,16 +2792,30 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
       // Use vision model when image is present, fast text model otherwise
       const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
 
-      const completion = await groq.chat.completions.create({
-        model,
-        max_tokens: 1024,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...chatHistory,
-          { role: "user", content: userContent as any },
-        ],
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...chatHistory,
+            { role: "user", content: userContent },
+          ],
+        }),
       });
 
+      if (!groqRes.ok) {
+        const errBody = await groqRes.text();
+        console.error("[AI] Groq HTTP error:", groqRes.status, errBody);
+        throw new Error(`Groq API ${groqRes.status}`);
+      }
+
+      const completion = await groqRes.json() as { choices: { message: { content: string } }[] };
       const responseText = completion.choices[0]?.message?.content ?? "No response generated.";
 
       // Persist session to DB if sessionId provided
