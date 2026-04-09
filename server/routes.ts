@@ -2716,7 +2716,7 @@ Read-Host "Press Enter to close this window"
   });
 
   // ── Opti Gods AI (Groq — SSE streaming) ───────────────────────────────────
-  app.post("/api/ai/chat", rateLimit("/api/ai/chat", 20, 60_000, 40), async (req, res) => {
+  app.post("/api/ai/chat", rateLimit(20, 60_000, 40), async (req, res) => {
     const { message, history = [], sessionId, isPro = false, imageBase64 } = req.body as {
       message: string;
       history?: { role: string; content: string }[];
@@ -2869,9 +2869,9 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
   });
 
   // Load AI chat session history
-  app.get("/api/ai/session/:sessionId", rateLimit("/api/ai/session", 30, 60_000, 60), async (req, res) => {
-    const { sessionId } = req.params;
-    if (!sessionId || sessionId.length > 64) return res.status(400).json({ error: "Invalid session" });
+  app.get("/api/ai/session/:sessionId", rateLimit(30, 60_000, 60), async (req, res) => {
+    const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId;
+    if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) return res.status(400).json({ error: "Invalid session" });
     const session = await storage.getAiSession(sessionId);
     return res.json({ messages: (session?.messages as any[]) ?? [] });
   });
