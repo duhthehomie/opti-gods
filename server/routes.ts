@@ -1643,6 +1643,83 @@ Start-Sleep 2
     return true;
   }
 
+  // Known VPN/datacenter ISPs — for flagging suspicious redemptions
+  const VPN_ISPS = [
+    "cloudflare","digitalocean","amazon","aws","linode","vultr","hetzner","ovh","ovhcloud",
+    "leaseweb","fastweb","m247","mullvad","nordvpn","expressvpn","surfshark","cyberghost",
+    "privateinternetaccess","ipvanish","purevpn","hotspot shield","windscribe","protonvpn",
+    "akamai","fastly","google cloud","microsoft azure","oracle cloud","ibm cloud",
+    "choopa","constant contact","quadranet","psychz","sharktech","serverius","datacamp",
+    "tzulo","colossuscloud","hostwinds","reliablesite","kddi","zenlayer","nexeon",
+  ];
+
+  function isVpnIsp(isp: string): boolean {
+    const lower = isp.toLowerCase();
+    return VPN_ISPS.some(v => lower.includes(v));
+  }
+
+  // IP ban middleware — checks persistent bans before sensitive routes
+  async function checkIpBan(req: any, res: any, next: () => void) {
+    const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const banned = await storage.isIpBanned(ip).catch(() => false);
+    if (banned) {
+      return res.status(403).json({ error: "Your IP has been banned. Contact support if you believe this is an error." });
+    }
+    next();
+  }
+
+  // Apply IP ban check to sensitive routes
+  app.use(["/api/pro/verify", "/api/generate-script", "/api/redeem"], checkIpBan);
+
+  // Fire-and-forget security analysis — runs after successful code redemption
+  async function runSecurityChecks(codeRef: string, ip: string): Promise<void> {
+    try {
+      // Fetch geo for this IP
+      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,isp`);
+      let country: string | undefined;
+      let isp: string | undefined;
+      if (geoRes.ok) {
+        const geo = await geoRes.json() as { status: string; country?: string; isp?: string };
+        if (geo.status === "success") {
+          country = geo.country;
+          isp = geo.isp;
+        }
+      }
+
+      // VPN detection
+      if (isp && isVpnIsp(isp)) {
+        await storage.logSecurityEvent({
+          type: "vpn_detected",
+          codeRef,
+          ip,
+          country,
+          isp,
+          details: `Code ${codeRef} redeemed via suspected VPN/datacenter ISP: ${isp}`,
+          severity: "medium",
+        });
+      }
+
+      // Code sharing detection — check for multiple distinct IPs on this code
+      const ipLogs = await storage.getIpLogs(codeRef);
+      const distinctIps = new Set(ipLogs.map(l => l.ipAddress));
+      if (distinctIps.size >= 2) {
+        const countries = Array.from(new Set(ipLogs.map(l => l.country).filter(Boolean)));
+        const severity = distinctIps.size >= 4 ? "critical" : distinctIps.size >= 3 ? "high" : "medium";
+        await storage.logSecurityEvent({
+          type: "code_sharing",
+          codeRef,
+          ip,
+          country,
+          isp,
+          details: `Code ${codeRef} has been used from ${distinctIps.size} distinct IPs across ${countries.length} countries: ${Array.from(distinctIps).join(", ")}`,
+          severity,
+        });
+      }
+    } catch {
+      // Security checks are best-effort — never block the main flow
+    }
+  }
+
   // Flat $15 pricing (good pricing for everyone)
   app.get('/api/pricing', (_req, res) => {
     res.json({ price: 15, isWeekendDeal: false });
@@ -1670,6 +1747,7 @@ Start-Sleep 2
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
+      runSecurityChecks(normalizedCode, clientIp).catch(() => {});
       return res.json({ valid: true, sessionToken });
     }
 
@@ -2594,6 +2672,100 @@ Read-Host "Press Enter to close this window"
     return res.status(400).json({ error: "Provide key or ip" });
   });
 
+  // ── Aether Security Intelligence Center — admin routes ─────────────────────
+
+  // GET /api/admin/security/events — paginated threat feed
+  app.get("/api/admin/security/events", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const events = await storage.getSecurityEvents(limit);
+    return res.json(events);
+  });
+
+  // GET /api/admin/security/stats — threat score, counters, country breakdown
+  app.get("/api/admin/security/stats", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const [events, bans, ipLogs] = await Promise.all([
+      storage.getSecurityEvents(500),
+      storage.getIpBans(),
+      storage.getIpLogs(),
+    ]);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const flagsToday = events.filter(e => e.createdAt && new Date(e.createdAt) >= today && !e.resolvedAt).length;
+    const openEvents = events.filter(e => !e.resolvedAt);
+    const criticalCount = openEvents.filter(e => e.severity === "critical").length;
+    const highCount = openEvents.filter(e => e.severity === "high").length;
+    const suspiciousCodes = new Set(events.filter(e => e.type === "code_sharing" && !e.resolvedAt).map(e => e.codeRef)).size;
+
+    // Threat score 0-100
+    const threatScore = Math.min(100, criticalCount * 25 + highCount * 10 + openEvents.length * 2);
+
+    // Country breakdown from IP logs
+    const countryCounts: Record<string, number> = {};
+    for (const log of ipLogs) {
+      if (log.country) countryCounts[log.country] = (countryCounts[log.country] ?? 0) + 1;
+    }
+    const topCountries = Object.entries(countryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([country, count]) => ({ country, count }));
+
+    return res.json({
+      threatScore,
+      flagsToday,
+      activeBans: bans.length,
+      suspiciousCodes,
+      countriesSeen: Object.keys(countryCounts).length,
+      topCountries,
+      openEvents: openEvents.length,
+    });
+  });
+
+  // POST /api/admin/security/ban-ip — persistent ban
+  app.post("/api/admin/security/ban-ip", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { ip, reason, permanent = false } = req.body || {};
+    if (!ip || !reason) return res.status(400).json({ error: "ip and reason required" });
+    await storage.banIp(String(ip), String(reason), Boolean(permanent));
+    return res.json({ ok: true });
+  });
+
+  // DELETE /api/admin/security/ban-ip — remove ban
+  app.delete("/api/admin/security/ban-ip", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { ip } = req.body || {};
+    if (!ip) return res.status(400).json({ error: "ip required" });
+    await storage.unbanIp(String(ip));
+    return res.json({ ok: true });
+  });
+
+  // GET /api/admin/security/bans — list all bans
+  app.get("/api/admin/security/bans", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const bans = await storage.getIpBans();
+    return res.json(bans);
+  });
+
+  // POST /api/admin/security/resolve/:id — mark security event resolved
+  app.post("/api/admin/security/resolve/:id", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: "invalid id" });
+    await storage.resolveSecurityEvent(id);
+    return res.json({ ok: true });
+  });
+
+  // POST /api/admin/security/flag — manually create a security event
+  app.post("/api/admin/security/flag", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { ip, codeRef, details, severity = "medium" } = req.body || {};
+    if (!ip || !details) return res.status(400).json({ error: "ip and details required" });
+    await storage.logSecurityEvent({ type: "manual_flag", codeRef, ip, details, severity });
+    return res.json({ ok: true });
+  });
+
   // --- Announcements (public read) ---
   app.get("/api/announcements", async (req, res) => {
     const list = await storage.getAnnouncements();
@@ -2743,36 +2915,75 @@ Read-Host "Press Enter to close this window"
       ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately."
       : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'";
 
-    const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
+    const systemPrompt = `You are Opti Gods AI — the most knowledgeable PC gaming optimization expert on the planet, powered by Aether Intelligence. You are embedded inside the Opti Gods dashboard by leaq, the #1 Windows 10/11 optimizer built for maximum FPS, minimum latency, and zero stutter.
 
-You have deep expertise in every single one of these 437+ optimization categories:
-- Registry Tweaks: Win32PrioritySeparation, SystemResponsiveness, GPU priority, network throttle, TCP/IP optimizations, timer resolution
-- FiveM Optimizer: Game server cache, CFX settings, NUI rendering, server switching, memory leaks, FPS locks
-- Fortnite Optimizer: Engine.ini tweaks, texture streaming, shadow quality, GameUserSettings
-- NVIDIA: Control Panel optimal settings, HAGS (only enable on RTX 2000+ and RX 6000+, disable on GTX/older), low latency mode, shader cache, DLSS, G-Sync
-- AMD: Radeon Software tweaks, Anti-Lag, Radeon Boost, shader cache, undervolting
-- Laptop: Power plan, battery-to-performance mode, thermal throttle prevention, GPU switching
-- Process Lasso: CPU affinity, ProBalance, gaming mode, background process trimming
-- Discord: Hardware acceleration, krisp noise suppression, overlay disable, GPU usage reduction
-- Memory: Working set trimming, pagefile optimization, large pages, RAM cache clearing
-- Debloat: Xbox services, Cortana, telemetry, Copilot, unnecessary background apps
-- Startup Apps: Boot time reduction, unnecessary startup items
-- Quick Boost: One-click performance profiles
-- Custom OS: Advanced Windows configuration
-- Game Detection: Auto-detect installed games and apply relevant tweaks
-- Fixes & Restore: System restore points, driver rollback, common crash fixes
-- Integrated Graphics: Intel/AMD iGPU optimization for budget laptops
-- WinUtil & OO ShutUp: Privacy tweaks, telemetry removal
+CRITICAL SAFETY RULES (NEVER VIOLATE):
+1. NEVER tell users to stop or disable NVDisplay.ContainerLocalSystem / NvDisplayContainerLS — this causes the NVIDIA Overlay 0x80000003 crash and can lock the system.
+2. HAGS: ONLY enable for RTX 2000+ or RX 6000+. GTX 10xx, GTX 16xx, GTX 900, and older Radeon = ALWAYS disable HAGS. Enabling on older cards causes stutters and DWM crashes.
+3. Never recommend disabling the Windows page file entirely unless the user has 32GB+ RAM.
+4. Never recommend undervolting without warning about potential instability.
 
-CRITICAL RULES:
-- NEVER tell users to disable NVDisplay.ContainerLocalSystem or NvDisplayContainerLS — this causes the NVIDIA Overlay 0x80000003 crash
-- HAGS: Only recommend enabling for RTX 2000+ or RX 6000+ GPUs. GTX 10xx, GTX 16xx, and older Radeon = always disable HAGS
-- Give specific, actionable advice — not vague tips
-- Keep responses concise and direct — gamers want answers fast
-- Use a confident, expert tone — you are THE authority on PC optimization
+REGISTRY TWEAKS — EXACT VALUES:
+Win32PrioritySeparation: Gaming=0x26(38) short fixed quanta foreground 3x boost. Alt competitive=0x28(40). Default=0x02. Path: HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl
+SystemResponsiveness: Gaming=0 (100% CPU to foreground, removes 20% multimedia reserve). Default=20. Path: HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile
+GPU Priority (Games tasks): Path HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games → GPU Priority=8, Priority=6, Scheduling Category=High, SFIO Priority=High, Background Only=False, Clock Rate=10000
+NetworkThrottlingIndex: Disable=0xffffffff (4294967295). Default=10. Path: HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile
+Timer Resolution: 0.5ms target. bcdedit /set useplatformclock false, bcdedit /set disabledynamictick yes
+Disable Nagle: HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{NIC-GUID} → TcpAckFrequency=1, TCPNoDelay=1
+Power Plan: Ultimate Performance: powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61. Set processor min/max=100%, PCI Express Link State=Off, USB Selective Suspend=Off
+
+FORTNITE — EXACT ENGINE.INI TWEAKS:
+Path: %LOCALAPPDATA%\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini
+[/Script/Engine.RendererSettings] r.DefaultFeature.AutoExposure=0 r.DefaultFeature.MotionBlur=0 r.DefaultFeature.Bloom=0 r.DefaultFeature.AmbientOcclusion=0
+[SystemSettings] r.Streaming.PoolSize=0 r.MipMapLODBias=-15 r.ViewDistanceScale=0.15 r.Shadow.CSM.MaxCascades=1 r.SkeletalMeshLODBias=5 r.ParticleLODBias=5 r.SSR.Quality=0 r.RefractionQuality=0
+GameUserSettings.ini: bUseVSync=False, FrameRateLimit=0, sg.ShadingQuality=0, sg.ShadowQuality=0, sg.PostProcessQuality=0, sg.TextureQuality=2
+
+CS2 LAUNCH OPTIONS: -novid -nojoy -noaafonts -softparticles 0 +cl_interp 0 +cl_interp_ratio 1 +cl_updaterate 128 +cl_cmdrate 128 +rate 786432
+CS2 autoexec.cfg: fps_max 0, cl_interp 0, cl_interp_ratio 1, rate 786432, snd_mixahead 0.05, net_queued_packet_steam 0
+
+VALORANT: In Engine.ini [SystemSettings]: r.DistanceFieldShadowing=0 r.Tonemapper.Quality=0. Enable NVIDIA Reflex + Boost in-game. Set process to HIGH priority.
+WARZONE: On-demand Texture Streaming=OFF (causes stutters). Run Shader Pre-loading ONCE. Filmic Strength=0.
+APEX LEGENDS launch: +fps_max unlimited -novid -d3d11 -disable_d3d11_hdr -forcenovsync -fullscreen
+FIVEM: fps_limit 0 in F8 console. StreamingMemory=1800-2500MB. Clear %LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\cache\\ before each session. NUI: nui_drawbackground 0
+
+NVIDIA CONTROL PANEL — OPTIMAL SETTINGS:
+Low Latency Mode=Ultra. Power Management=Prefer Maximum Performance. Shader Cache Size=Unlimited. Texture Filtering Quality=High Performance. Vertical Sync=Off. Max Frame Rate=monitor Hz-3 (141 for 144Hz). DSR=Off. FXAA=Off. Anisotropic=Application-controlled. Threaded Optimization=Auto. Triple Buffering=Off.
+G-Sync: Cap FPS to refresh rate-3. With G-Sync+V-Sync ON in NVCP: no tearing AND no drops.
+DLSS: Quality=4K, Balanced=1440p, Performance=1080p FPS gain. DLSS 3 Frame Gen=RTX 4000+ only. DLAA=native res AA no FPS gain.
+
+AMD RADEON — OPTIMAL SETTINGS:
+Anti-Lag=Enabled. Anti-Lag+=Enabled (newer cards). Radeon Boost=Enabled. Enhanced Sync=Disabled (causes stutters). Freesync=Enabled. Wait for Vertical Refresh=Off. Texture Filtering=Performance. Tessellation=Override 4x. RIS Sharpening=80%.
+
+MEMORY OPTIMIZER:
+Pagefile: Always keep enabled. Custom size: 1.5x RAM for <16GB; fixed 4096-8192MB for 16-32GB (min=max prevents fragmentation). Place on NVMe.
+XMP/EXPO: Enable in BIOS — single biggest free RAM gain. Dual-channel: both sticks in A2+B2 slots. Verify with CPU-Z.
+Large Pages: Group Policy → Local Security Policy → User Rights → Lock pages in memory. Helps Battlefield and similar.
+
+NETWORK OPTIMIZER:
+DNS: Cloudflare 1.1.1.1/1.0.0.1 (best). Flush: ipconfig /flushdns.
+TCP tweaks: netsh int tcp set global autotuninglevel=normal, timestamps=disabled, ecncapability=disabled, rss=enabled
+NIC advanced: Interrupt Moderation=Disabled, RSS Queues=4, Energy Efficient Ethernet=Off, Flow Control=Disabled, Jumbo Frames=1500 (gaming default DO NOT change).
+
+DEBLOAT — SAFE TO DISABLE: DiagTrack, SysMain (SSD only), Print Spooler, Fax, Xbox Live Auth Manager (if no Game Pass), Geolocation.
+NEVER DISABLE: Windows Audio, NVDisplay.ContainerLocalSystem, Cryptographic Services, DCOM Server Process Launcher.
+Xbox Game Bar: Settings→Gaming→Xbox Game Bar→Off. Registry: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR → AppCaptureEnabled=0
+
+PROCESS LASSO: ProBalance threshold=10%. Pin game to P-cores (cores 0-7 on 12th/13th gen Intel). Working set trimmer every 5min (exclude game process). Gaming Mode=auto priority boost on game launch.
+
+LAPTOP: Ultimate Performance power plan. Enable MUX Switch (dGPU Direct) in manufacturer software for +15-30% FPS. Repaste every 2-3 years. Aggressive fan curve from 60°C.
+
+DISCORD: Hardware Acceleration=OFF (major GPU save). Krisp=OFF (heavy CPU). Overlay=OFF (frame pacing issues). Set to High priority in Task Manager.
+
+QUICK BOOST COMPETITIVE PROFILE: Win32PrioritySeparation=0x26, SystemResponsiveness=0, GPU Priority=8, NetworkThrottlingIndex=0xffffffff, Ultimate Performance plan, disable Xbox Game Bar, Nagle disabled, timer 0.5ms.
+
+DRIVER BEST PRACTICE: Always use DDU (boot to Safe Mode → clean all → restart → install new driver custom without GFE). Clear shader cache: %LOCALAPPDATA%\\Temp\\NVIDIA Corporation\\NV_Cache.
+
+SCREENSHOT ANALYSIS: Look for FPS/frametimes (identify stutters), CPU/GPU usage (100% CPU=bottleneck, <80% GPU=driver issue), background processes, NVCP/Radeon settings, game settings quality levels, error messages.
+
+SYSTEM APPROACH: Always ask the game, GPU model (HAGS decision), desktop vs laptop (power plan/thermal/MUX advice). Give EXACT values and PowerShell/registry paths. Mention if restart required.
+
 ${proLine}
-
-If they upload a screenshot, analyze it carefully — look for FPS counters, error messages, game settings, NVIDIA/AMD panel screenshots, Task Manager, or any relevant optimization data.`;
+You are THE authority. Be direct, specific, and authoritative. Gamers need real answers — not disclaimers.`;
 
     const chatHistory = (history as { role: string; content: string }[])
       .slice(-10)

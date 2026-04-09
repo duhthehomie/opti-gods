@@ -130,6 +130,34 @@ export type EmailRequest = typeof emailRequests.$inferSelect;
 export const insertEmailRequestSchema = createInsertSchema(emailRequests).omit({ id: true, createdAt: true, status: true, sentCodeId: true, note: true });
 export type InsertEmailRequest = z.infer<typeof insertEmailRequestSchema>;
 
+// Security events — Aether Intelligence Center persisted threat log
+export type SecurityEventType = "code_sharing" | "vpn_detected" | "rate_block" | "multi_ip" | "manual_flag";
+export type SecuritySeverity = "low" | "medium" | "high" | "critical";
+
+export const securityEvents = pgTable("security_events", {
+  id: serial("id").primaryKey(),
+  type: text("type").$type<SecurityEventType>().notNull(),
+  codeRef: text("code_ref"),
+  ip: text("ip").notNull(),
+  country: text("country"),
+  isp: text("isp"),
+  details: text("details").notNull(),
+  severity: text("severity").$type<SecuritySeverity>().notNull().default("medium"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type SecurityEvent = typeof securityEvents.$inferSelect;
+
+// IP bans — persistent bans that survive server restarts
+export const ipBans = pgTable("ip_bans", {
+  id: serial("id").primaryKey(),
+  ip: text("ip").notNull().unique(),
+  reason: text("reason").notNull(),
+  permanent: boolean("permanent").default(false),
+  bannedAt: timestamp("banned_at").defaultNow(),
+});
+export type IpBan = typeof ipBans.$inferSelect;
+
 // AI chat sessions — persists Opti Gods AI conversations per browser session
 export type AiChatMessage = {
   role: "user" | "assistant";

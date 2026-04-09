@@ -8,14 +8,15 @@ import {
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
-  MapPin, AlertTriangle, Globe,
+  MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
+  ServerCrash, Network, Flag, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
-import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment } from "@shared/schema";
+import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, IpBan } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -97,21 +98,137 @@ function StatCard({
 
 type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security";
 
+// ── Aether Security Intelligence Center ─────────────────────────────────────
+type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
+
+type SecurityStats = {
+  threatScore: number;
+  flagsToday: number;
+  activeBans: number;
+  suspiciousCodes: number;
+  countriesSeen: number;
+  topCountries: { country: string; count: number }[];
+  openEvents: number;
+};
+
+function severityBadge(severity: string) {
+  const cfg: Record<string, string> = {
+    critical: "bg-red-500/20 text-red-400 border border-red-500/30",
+    high:     "bg-orange-500/20 text-orange-400 border border-orange-500/30",
+    medium:   "bg-amber-500/20 text-amber-400 border border-amber-500/30",
+    low:      "bg-zinc-800 text-zinc-500 border border-white/5",
+  };
+  return (
+    <span className={cn("text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded", cfg[severity] ?? cfg.low)}>
+      {severity}
+    </span>
+  );
+}
+
+function typeBadge(type: string) {
+  const cfg: Record<string, { label: string; cls: string }> = {
+    code_sharing: { label: "CODE SHARE", cls: "bg-red-500/15 text-red-400" },
+    vpn_detected: { label: "VPN",         cls: "bg-violet-500/15 text-violet-400" },
+    rate_block:   { label: "RATE BLOCK",  cls: "bg-amber-500/15 text-amber-400" },
+    multi_ip:     { label: "MULTI-IP",    cls: "bg-orange-500/15 text-orange-400" },
+    manual_flag:  { label: "MANUAL",      cls: "bg-zinc-700 text-zinc-400" },
+  };
+  const c = cfg[type] ?? cfg.manual_flag;
+  return <span className={cn("text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded", c.cls)}>{c.label}</span>;
+}
+
+function ThreatGauge({ score }: { score: number }) {
+  const color = score >= 70 ? "text-red-400" : score >= 40 ? "text-amber-400" : "text-emerald-400";
+  const bgColor = score >= 70 ? "bg-red-500" : score >= 40 ? "bg-amber-500" : "bg-emerald-500";
+  const label = score >= 70 ? "HIGH THREAT" : score >= 40 ? "MODERATE" : "ALL CLEAR";
+  return (
+    <div className="flex flex-col items-center justify-center gap-1.5 p-4 bg-zinc-900/70 border border-white/5 rounded-xl">
+      <Radar className={cn("w-8 h-8", color)} />
+      <div className={cn("text-3xl font-display font-bold", color)}>{score}</div>
+      <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", bgColor)} style={{ width: `${score}%` }} />
+      </div>
+      <p className={cn("text-[9px] font-bold uppercase tracking-widest", color)}>{label}</p>
+    </div>
+  );
+}
+
 function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const { toast } = useToast();
-  type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
-  const [blocks, setBlocks] = useState<BlockedIp[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [activeSection, setActiveSection] = useState<"feed" | "sharing" | "vpn" | "bans" | "rate">("feed");
+  const [resolving, setResolving] = useState<number | null>(null);
+  const [banning, setBanning] = useState<string | null>(null);
+  const [banForm, setBanForm] = useState<{ ip: string; reason: string; permanent: boolean } | null>(null);
   const [unblocking, setUnblocking] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  const refresh = () => setRefreshKey(k => k + 1);
+
+  const statsQ = useQuery<SecurityStats>({
+    queryKey: ["/api/admin/security/stats", refreshKey],
+    queryFn: () => fetch("/api/admin/security/stats", { headers }).then(r => r.json()),
+    refetchInterval: 30_000,
+  });
+
+  const eventsQ = useQuery<SecurityEvent[]>({
+    queryKey: ["/api/admin/security/events", refreshKey],
+    queryFn: () => fetch("/api/admin/security/events?limit=200", { headers }).then(r => r.json()),
+    refetchInterval: 30_000,
+  });
+
+  const bansQ = useQuery<IpBan[]>({
+    queryKey: ["/api/admin/security/bans", refreshKey],
+    queryFn: () => fetch("/api/admin/security/bans", { headers }).then(r => r.json()),
+  });
+
+  const [blocks, setBlocks] = useState<BlockedIp[]>([]);
+  const [blocksLoading, setBlocksLoading] = useState(false);
   const loadBlocks = () => {
-    setLoading(true);
-    fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setLoading(false));
+    setBlocksLoading(true);
+    fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setBlocksLoading(false));
+  };
+  useEffect(() => { loadBlocks(); }, [refreshKey]);
+
+  const events = eventsQ.data ?? [];
+  const stats = statsQ.data;
+  const bans = bansQ.data ?? [];
+
+  const codeSharingEvents = events.filter(e => e.type === "code_sharing" && !e.resolvedAt);
+  const vpnEvents = events.filter(e => e.type === "vpn_detected" && !e.resolvedAt);
+  const feedEvents = events.slice(0, 60);
+
+  const resolveEvent = async (id: number) => {
+    setResolving(id);
+    await fetch(`/api/admin/security/resolve/${id}`, { method: "POST", headers });
+    refresh();
+    setResolving(null);
+    toast({ title: "Event resolved" });
   };
 
-  useEffect(() => { loadBlocks(); }, []);
+  const banIp = async (ip: string, reason: string, permanent: boolean) => {
+    setBanning(ip);
+    await fetch("/api/admin/security/ban-ip", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ ip, reason, permanent }),
+    });
+    refresh();
+    setBanning(null);
+    setBanForm(null);
+    toast({ title: `Banned ${ip}${permanent ? " (permanent)" : ""}`, variant: "destructive" });
+  };
 
-  const unblock = async (b: BlockedIp) => {
+  const unbanIp = async (ip: string) => {
+    await fetch("/api/admin/security/ban-ip", {
+      method: "DELETE",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ ip }),
+    });
+    refresh();
+    toast({ title: `Unbanned ${ip}` });
+  };
+
+  const unblockRate = async (b: BlockedIp) => {
     setUnblocking(b.key);
     await fetch("/api/admin/blocked-ips", {
       method: "DELETE",
@@ -123,55 +240,394 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
     toast({ title: `Unblocked ${b.ip}` });
   };
 
+  const SECTIONS = [
+    { id: "feed",    label: "Threat Feed",    icon: ShieldAlert, badge: events.filter(e => !e.resolvedAt).length },
+    { id: "sharing", label: "Code Sharing",   icon: Network,     badge: codeSharingEvents.length },
+    { id: "vpn",     label: "VPN Flags",      icon: ServerCrash, badge: vpnEvents.length },
+    { id: "bans",    label: "IP Bans",        icon: Ban,         badge: bans.length },
+    { id: "rate",    label: "Rate Blocks",    icon: ShieldOff,   badge: blocks.length },
+  ] as const;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-white">Rate-limit Blocks</p>
-          <p className="text-[10px] text-zinc-600 mt-0.5">IPs hard-blocked by the rate limiter. Unblock if they've paid and were just being impatient.</p>
+    <div className="space-y-5">
+      {/* Aether Header */}
+      <div className="flex items-center gap-2 pb-1 border-b border-white/5">
+        <div className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20">
+          <Radar className="w-4 h-4 text-red-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs font-bold text-white">Aether Intelligence Center</p>
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest">Security Operations — Opti Gods</p>
         </div>
         <button
-          data-testid="button-refresh-blocks"
-          onClick={loadBlocks}
+          data-testid="button-refresh-security"
+          onClick={refresh}
           className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
-          title="Refresh"
+          title="Refresh all"
         >
-          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+          <RefreshCw className={cn("w-3.5 h-3.5", (statsQ.isFetching || eventsQ.isFetching) && "animate-spin")} />
         </button>
       </div>
 
-      {loading ? (
-        <div className="p-10 text-center text-xs text-zinc-600 animate-pulse">Checking for blocks…</div>
-      ) : blocks.length === 0 ? (
-        <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
-          <ShieldOff className="w-7 h-7 text-zinc-700 mx-auto mb-2" />
-          <p className="text-xs text-zinc-500 font-bold">No blocked IPs</p>
-          <p className="text-[10px] text-zinc-700 mt-1">Nobody has been hard-blocked by the rate limiter right now.</p>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
-          {blocks.map(b => (
-            <div key={b.key} data-testid={`row-block-${b.ip}`} className="flex items-center gap-3 px-3 py-3">
-              <div className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-red-500/20 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white font-mono">{b.ip}</p>
-                <p className="text-[10px] text-zinc-600 truncate">
-                  <span className="text-zinc-700">Endpoint: </span>{b.path}
-                  <span className="ml-2 text-zinc-700">Expires: </span>
-                  <span className="text-amber-500">{b.minutesLeft}m</span>
-                </p>
+      {/* Threat Score + Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <ThreatGauge score={stats.threatScore} />
+          <div className="grid grid-cols-2 gap-2 col-span-1 sm:col-span-2">
+            {[
+              { label: "Flags Today",     value: stats.flagsToday,       icon: Flag,         color: "text-red-400" },
+              { label: "Active Bans",     value: stats.activeBans,       icon: Ban,          color: "text-orange-400" },
+              { label: "Suspicious Codes",value: stats.suspiciousCodes,  icon: AlertTriangle,color: "text-amber-400" },
+              { label: "Countries",       value: stats.countriesSeen,    icon: Globe,        color: "text-blue-400" },
+            ].map(s => (
+              <div key={s.label} className="bg-zinc-900/70 border border-white/5 rounded-xl p-3 flex items-center gap-2.5">
+                <s.icon className={cn("w-4 h-4 shrink-0", s.color)} />
+                <div>
+                  <p className="text-lg font-bold font-display text-white">{s.value}</p>
+                  <p className="text-[9px] text-zinc-600 uppercase tracking-wider">{s.label}</p>
+                </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Section tabs */}
+      <div className="flex gap-1 flex-wrap">
+        {SECTIONS.map(s => (
+          <button
+            key={s.id}
+            data-testid={`button-security-section-${s.id}`}
+            onClick={() => setActiveSection(s.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+              activeSection === s.id
+                ? "bg-red-500/15 text-red-400 border border-red-500/20"
+                : "text-zinc-600 hover:text-zinc-300 hover:bg-white/5 border border-transparent"
+            )}
+          >
+            <s.icon className="w-3 h-3" />
+            {s.label}
+            {s.badge > 0 && (
+              <span className={cn("px-1 rounded text-[8px]", activeSection === s.id ? "bg-red-500/30 text-red-300" : "bg-zinc-800 text-zinc-500")}>
+                {s.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Threat Feed ── */}
+      {activeSection === "feed" && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Recent security events — newest first</p>
+          {eventsQ.isLoading ? (
+            <div className="p-8 text-center text-xs text-zinc-600 animate-pulse">Loading threat feed…</div>
+          ) : feedEvents.length === 0 ? (
+            <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+              <ShieldCheck className="w-7 h-7 text-emerald-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500 font-bold">No threats detected</p>
+              <p className="text-[10px] text-zinc-700 mt-1">All clear — no security events on record.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              {feedEvents.map(e => (
+                <div key={e.id} data-testid={`row-event-${e.id}`} className={cn("px-3 py-3 flex items-start gap-3", e.resolvedAt ? "opacity-40" : "")}>
+                  <div className="shrink-0 mt-0.5">{typeBadge(e.type)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {severityBadge(e.severity)}
+                      <span className="text-[10px] font-mono text-zinc-400">{e.ip}</span>
+                      {e.country && <span className="text-[10px] text-zinc-600">{e.country}</span>}
+                      {e.codeRef && <span className="text-[10px] font-mono text-zinc-600">· {e.codeRef}</span>}
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">{e.details}</p>
+                    <p className="text-[9px] text-zinc-700 mt-0.5">{timeAgo(e.createdAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!e.resolvedAt && (
+                      <>
+                        <button
+                          data-testid={`button-resolve-event-${e.id}`}
+                          onClick={() => resolveEvent(e.id)}
+                          disabled={resolving === e.id}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          {resolving === e.id ? "…" : "Resolve"}
+                        </button>
+                        <button
+                          data-testid={`button-ban-event-ip-${e.id}`}
+                          onClick={() => setBanForm({ ip: e.ip, reason: e.details.slice(0, 100), permanent: false })}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] font-bold hover:bg-red-500/20 transition-colors"
+                        >
+                          <Ban className="w-3 h-3" />
+                          Ban IP
+                        </button>
+                      </>
+                    )}
+                    {e.resolvedAt && <span className="text-[9px] text-emerald-600 font-bold">RESOLVED</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Code Sharing ── */}
+      {activeSection === "sharing" && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Codes used from multiple IPs — possible sharing</p>
+          {codeSharingEvents.length === 0 ? (
+            <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+              <ShieldCheck className="w-7 h-7 text-emerald-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500 font-bold">No sharing detected</p>
+              <p className="text-[10px] text-zinc-700 mt-1">All codes are clean so far.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              {codeSharingEvents.map(e => (
+                <div key={e.id} className="px-3 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {severityBadge(e.severity)}
+                    {e.codeRef && <span className="text-xs font-mono font-bold text-red-400">{e.codeRef}</span>}
+                    <span className="text-[10px] text-zinc-500">{timeAgo(e.createdAt)}</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 leading-relaxed">{e.details}</p>
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => resolveEvent(e.id)}
+                      disabled={resolving === e.id}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3 h-3" />Resolve
+                    </button>
+                    <button
+                      onClick={() => setBanForm({ ip: e.ip, reason: `Code sharing: ${e.codeRef}`, permanent: false })}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] font-bold hover:bg-red-500/20 transition-colors"
+                    >
+                      <Ban className="w-3 h-3" />Ban IP
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── VPN Flags ── */}
+      {activeSection === "vpn" && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Redemptions via VPN or datacenter IPs</p>
+          {vpnEvents.length === 0 ? (
+            <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+              <ShieldCheck className="w-7 h-7 text-emerald-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500 font-bold">No VPN activity</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              {vpnEvents.map(e => (
+                <div key={e.id} className="px-3 py-3 flex items-start gap-3">
+                  <div className="shrink-0 mt-0.5">{severityBadge(e.severity)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-zinc-400">{e.ip}</span>
+                      {e.country && <span className="text-[10px] text-zinc-600">{e.country}</span>}
+                      {e.codeRef && <span className="text-[10px] font-mono text-zinc-600">· {e.codeRef}</span>}
+                    </div>
+                    {e.isp && <p className="text-[9px] text-violet-400 mt-0.5">ISP: {e.isp}</p>}
+                    <p className="text-[9px] text-zinc-700 mt-0.5">{timeAgo(e.createdAt)}</p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => resolveEvent(e.id)}
+                      disabled={resolving === e.id}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3 h-3" />OK
+                    </button>
+                    <button
+                      onClick={() => setBanForm({ ip: e.ip, reason: `VPN usage: ${e.isp ?? "unknown ISP"}`, permanent: false })}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] font-bold hover:bg-red-500/20 transition-colors"
+                    >
+                      <Ban className="w-3 h-3" />Ban
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── IP Bans ── */}
+      {activeSection === "bans" && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Persistent IP bans — survive server restarts</p>
+          <button
+            onClick={() => setBanForm({ ip: "", reason: "", permanent: false })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition-colors"
+          >
+            <Plus className="w-3 h-3" />Ban IP Manually
+          </button>
+          {bans.length === 0 ? (
+            <div className="p-8 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+              <ShieldCheck className="w-7 h-7 text-emerald-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500 font-bold">No banned IPs</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              {bans.map(b => (
+                <div key={b.id} data-testid={`row-ban-${b.ip}`} className="flex items-center gap-3 px-3 py-3">
+                  <div className={cn("w-2 h-2 rounded-full shrink-0", b.permanent ? "bg-red-500 ring-2 ring-red-500/20" : "bg-amber-500 ring-2 ring-amber-500/20")} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-white font-mono">{b.ip}</p>
+                      {b.permanent && <span className="text-[8px] font-bold bg-red-500/20 text-red-400 px-1 py-0.5 rounded uppercase">PERMANENT</span>}
+                    </div>
+                    <p className="text-[10px] text-zinc-600 truncate">{b.reason}</p>
+                    <p className="text-[9px] text-zinc-700">{timeAgo(b.bannedAt)}</p>
+                  </div>
+                  <button
+                    data-testid={`button-unban-${b.ip}`}
+                    onClick={() => unbanIp(b.ip)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors"
+                  >
+                    <Shield className="w-3 h-3" />Unban
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Rate Blocks ── */}
+      {activeSection === "rate" && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Temporary rate-limit blocks (in-memory, reset on restart)</p>
+          {blocksLoading ? (
+            <div className="p-8 text-center text-xs text-zinc-600 animate-pulse">Checking for blocks…</div>
+          ) : blocks.length === 0 ? (
+            <div className="p-10 text-center rounded-xl border border-white/5 bg-zinc-900/30">
+              <ShieldOff className="w-7 h-7 text-zinc-700 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500 font-bold">No rate-limit blocks</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              {blocks.map(b => (
+                <div key={b.key} data-testid={`row-block-${b.ip}`} className="flex items-center gap-3 px-3 py-3">
+                  <div className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-red-500/20 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white font-mono">{b.ip}</p>
+                    <p className="text-[10px] text-zinc-600 truncate">
+                      {b.path} · <span className="text-amber-500">{b.minutesLeft}m left</span>
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      data-testid={`button-unblock-${b.ip}`}
+                      onClick={() => unblockRate(b)}
+                      disabled={unblocking === b.key}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <Shield className="w-3 h-3" />{unblocking === b.key ? "…" : "Unblock"}
+                    </button>
+                    <button
+                      onClick={() => setBanForm({ ip: b.ip, reason: `Rate-limit abuse on ${b.path}`, permanent: false })}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] font-bold hover:bg-red-500/20 transition-colors"
+                    >
+                      <Ban className="w-3 h-3" />Ban
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Country breakdown (always visible when stats loaded) */}
+      {stats && stats.topCountries.length > 0 && (
+        <div className="space-y-2 pt-2 border-t border-white/5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest flex items-center gap-1.5">
+            <Globe className="w-3 h-3" />Global Reach — Top Countries
+          </p>
+          <div className="space-y-1.5">
+            {stats.topCountries.map((c, i) => {
+              const max = stats.topCountries[0]?.count ?? 1;
+              return (
+                <div key={c.country} className="flex items-center gap-2">
+                  <span className="text-[9px] text-zinc-600 w-4 text-right">{i + 1}</span>
+                  <span className="text-[10px] text-zinc-400 w-24 truncate">{c.country}</span>
+                  <div className="flex-1 bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="h-full bg-red-500/60 rounded-full" style={{ width: `${(c.count / max) * 100}%` }} />
+                  </div>
+                  <span className="text-[9px] text-zinc-500 w-6 text-right">{c.count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ban IP modal */}
+      {banForm !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setBanForm(null)}>
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-5 w-full max-w-sm mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <Ban className="w-4 h-4 text-red-400" />
+              <p className="text-sm font-bold text-white">Ban IP Address</p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">IP Address</label>
+                <input
+                  data-testid="input-ban-ip"
+                  value={banForm.ip}
+                  onChange={e => setBanForm(f => f ? { ...f, ip: e.target.value } : f)}
+                  className="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-red-500/50"
+                  placeholder="e.g. 192.168.1.100"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Reason</label>
+                <input
+                  data-testid="input-ban-reason"
+                  value={banForm.reason}
+                  onChange={e => setBanForm(f => f ? { ...f, reason: e.target.value } : f)}
+                  className="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-red-500/50"
+                  placeholder="Code sharing, VPN abuse, etc."
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  data-testid="checkbox-ban-permanent"
+                  type="checkbox"
+                  checked={banForm.permanent}
+                  onChange={e => setBanForm(f => f ? { ...f, permanent: e.target.checked } : f)}
+                  className="accent-red-500"
+                />
+                <span className="text-xs text-zinc-400">Permanent ban (no expiry)</span>
+              </label>
+            </div>
+            <div className="flex gap-2">
               <button
-                data-testid={`button-unblock-${b.ip}`}
-                onClick={() => unblock(b)}
-                disabled={unblocking === b.key}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                onClick={() => setBanForm(null)}
+                className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-xs font-bold hover:bg-zinc-700 transition-colors"
+              >Cancel</button>
+              <button
+                data-testid="button-confirm-ban"
+                onClick={() => banIp(banForm.ip, banForm.reason, banForm.permanent)}
+                disabled={!banForm.ip || !banForm.reason || banning === banForm.ip}
+                className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-500 transition-colors disabled:opacity-50"
               >
-                <Shield className="w-3 h-3" />
-                {unblocking === b.key ? "Unblocking…" : "Unblock"}
+                {banning === banForm.ip ? "Banning…" : "Ban IP"}
               </button>
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>

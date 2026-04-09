@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -76,6 +76,15 @@ export interface IStorage {
   // AI chat sessions
   getAiSession(sessionId: string): Promise<AiChatSession | null>;
   upsertAiSession(sessionId: string, messages: AiChatMessage[]): Promise<void>;
+  // Security events
+  logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void>;
+  getSecurityEvents(limit?: number): Promise<SecurityEvent[]>;
+  resolveSecurityEvent(id: number): Promise<void>;
+  // IP bans
+  banIp(ip: string, reason: string, permanent?: boolean): Promise<void>;
+  unbanIp(ip: string): Promise<void>;
+  isIpBanned(ip: string): Promise<boolean>;
+  getIpBans(): Promise<IpBan[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -510,6 +519,36 @@ export class DatabaseStorage implements IStorage {
     } else {
       await db.insert(aiChatSessions).values({ sessionId, messages });
     }
+  }
+
+  async logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void> {
+    await db.insert(securityEvents).values(event);
+  }
+
+  async getSecurityEvents(limit = 100): Promise<SecurityEvent[]> {
+    return await db.select().from(securityEvents).orderBy(desc(securityEvents.createdAt)).limit(limit);
+  }
+
+  async resolveSecurityEvent(id: number): Promise<void> {
+    await db.update(securityEvents).set({ resolvedAt: new Date() }).where(eq(securityEvents.id, id));
+  }
+
+  async banIp(ip: string, reason: string, permanent = false): Promise<void> {
+    await db.insert(ipBans).values({ ip, reason, permanent })
+      .onConflictDoUpdate({ target: ipBans.ip, set: { reason, permanent, bannedAt: new Date() } });
+  }
+
+  async unbanIp(ip: string): Promise<void> {
+    await db.delete(ipBans).where(eq(ipBans.ip, ip));
+  }
+
+  async isIpBanned(ip: string): Promise<boolean> {
+    const [row] = await db.select().from(ipBans).where(eq(ipBans.ip, ip));
+    return !!row;
+  }
+
+  async getIpBans(): Promise<IpBan[]> {
+    return await db.select().from(ipBans).orderBy(desc(ipBans.bannedAt));
   }
 }
 
