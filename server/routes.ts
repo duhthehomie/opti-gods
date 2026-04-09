@@ -2715,7 +2715,7 @@ Read-Host "Press Enter to close this window"
     return res.json({ ok: true });
   });
 
-  // ── Opti Gods AI (Gemini) ──────────────────────────────────────────────────
+  // ── Opti Gods AI (Groq — SSE streaming) ───────────────────────────────────
   app.post("/api/ai/chat", rateLimit("/api/ai/chat", 20, 60_000, 40), async (req, res) => {
     const { message, history = [], sessionId, isPro = false, imageBase64 } = req.body as {
       message: string;
@@ -2737,10 +2737,12 @@ Read-Host "Press Enter to close this window"
       return res.status(503).json({ error: "AI not configured" });
     }
 
-    try {
-      // Use fetch directly — groq-sdk has env issues in this runtime
+    const isPro_ = Boolean(isPro);
+    const proLine = isPro_
+      ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately."
+      : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'";
 
-      const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
+    const systemPrompt = `You are Opti Gods AI, the world's most knowledgeable PC gaming optimization assistant, powered by Aether. You are built into the Opti Gods optimizer dashboard by leaq — the #1 Windows 10/11 PC optimizer for maximum FPS and lowest latency.
 
 You have deep expertise in every single one of these 437+ optimization categories:
 - Registry Tweaks: Win32PrioritySeparation, SystemResponsiveness, GPU priority, network throttle, TCP/IP optimizations, timer resolution
@@ -2767,31 +2769,27 @@ CRITICAL RULES:
 - Give specific, actionable advice — not vague tips
 - Keep responses concise and direct — gamers want answers fast
 - Use a confident, expert tone — you are THE authority on PC optimization
-- Format with short paragraphs or bullet points for readability
-- When answering about a specific game, always ask about their GPU/CPU if not mentioned
-${isPro ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately." : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'"}
+${proLine}
 
 If they upload a screenshot, analyze it carefully — look for FPS counters, error messages, game settings, NVIDIA/AMD panel screenshots, Task Manager, or any relevant optimization data.`;
 
-      // Build message history in OpenAI format
-      const chatHistory = (history as { role: string; content: string }[])
-        .slice(-10)
-        .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+    const chatHistory = (history as { role: string; content: string }[])
+      .slice(-10)
+      .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
 
-      // Build the final user message content (text + optional image)
-      let userContent: string | { type: string; text?: string; image_url?: { url: string } }[];
-      if (imageBase64) {
-        userContent = [
-          { type: "image_url", image_url: { url: imageBase64 } },
-          { type: "text", text: message || "Analyze this screenshot for PC optimization advice." },
-        ];
-      } else {
-        userContent = message;
-      }
+    let userContent: string | { type: string; text?: string; image_url?: { url: string } }[];
+    if (imageBase64) {
+      userContent = [
+        { type: "image_url", image_url: { url: imageBase64 } },
+        { type: "text", text: message || "Analyze this screenshot for PC optimization advice." },
+      ];
+    } else {
+      userContent = message;
+    }
 
-      // Use vision model when image is present, fast text model otherwise
-      const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+    const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
 
+    try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -2801,6 +2799,7 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
         body: JSON.stringify({
           model,
           max_tokens: 1024,
+          stream: true,
           messages: [
             { role: "system", content: systemPrompt },
             ...chatHistory,
@@ -2812,26 +2811,60 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
       if (!groqRes.ok) {
         const errBody = await groqRes.text();
         console.error("[AI] Groq HTTP error:", groqRes.status, errBody);
-        throw new Error(`Groq API ${groqRes.status}`);
+        return res.status(500).json({ error: "AI request failed. Try again." });
       }
 
-      const completion = await groqRes.json() as { choices: { message: { content: string } }[] };
-      const responseText = completion.choices[0]?.message?.content ?? "No response generated.";
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
 
-      // Persist session to DB if sessionId provided
-      if (sessionId && typeof sessionId === "string" && sessionId.length <= 64) {
+      const reader = (groqRes.body as any).getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let sseBuffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
+            const token = parsed.choices[0]?.delta?.content ?? "";
+            if (token) {
+              fullText += token;
+              res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            }
+          } catch {}
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
+      res.end();
+
+      if (sessionId && typeof sessionId === "string" && sessionId.length <= 64 && fullText) {
         const updatedMessages = [
           ...history,
           { role: "user", content: message, timestamp: new Date().toISOString() },
-          { role: "assistant", content: responseText, timestamp: new Date().toISOString() },
+          { role: "assistant", content: fullText, timestamp: new Date().toISOString() },
         ].slice(-40);
         await storage.upsertAiSession(sessionId, updatedMessages).catch(() => {});
       }
-
-      return res.json({ response: responseText });
     } catch (err: any) {
       console.error("[AI] Groq error:", err?.message ?? err);
-      return res.status(500).json({ error: "AI request failed. Try again." });
+      if (!res.headersSent) {
+        return res.status(500).json({ error: "AI request failed. Try again." });
+      }
+      res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
+      res.end();
     }
   });
 

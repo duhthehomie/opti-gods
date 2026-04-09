@@ -240,6 +240,11 @@ export default function OptiGodsAI() {
     setImagePreview(null);
     setIsLoading(true);
 
+    // Placeholder streaming message appended immediately so typing indicator is replaced
+    const aiPlaceholder: Message = { role: "assistant", content: "", timestamp: new Date().toISOString() };
+    const withPlaceholder = [...newMessages, aiPlaceholder];
+    setMessages(withPlaceholder);
+
     try {
       const historyForApi = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
       const res = await fetch("/api/ai/chat", {
@@ -254,18 +259,52 @@ export default function OptiGodsAI() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "AI request failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(errData.error || "AI request failed");
+      }
 
-      const aiMsg: Message = {
-        role: "assistant",
-        content: data.response,
-        timestamp: new Date().toISOString(),
-      };
-      const finalMessages = [...newMessages, aiMsg];
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let sseBuffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(payload) as { token?: string; done?: boolean; fullText?: string; error?: string };
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.token) {
+              accumulated += parsed.token;
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulated };
+                return updated;
+              });
+            }
+            if (parsed.done && parsed.fullText) {
+              accumulated = parsed.fullText;
+            }
+          } catch {}
+        }
+      }
+
+      const finalMsg: Message = { role: "assistant", content: accumulated, timestamp: new Date().toISOString() };
+      const finalMessages = [...newMessages, finalMsg];
       setMessages(finalMessages);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(finalMessages));
     } catch (err: any) {
+      setMessages(newMessages);
       toast({ title: "AI error", description: err.message || "Could not reach Opti Gods AI.", variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -342,7 +381,7 @@ export default function OptiGodsAI() {
               {messages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} />
               ))}
-              {isLoading && <TypingIndicator />}
+              {isLoading && messages[messages.length - 1]?.role !== "assistant" && <TypingIndicator />}
               <div ref={bottomRef} />
             </>
           )}
