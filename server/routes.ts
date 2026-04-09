@@ -6,6 +6,7 @@ import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
+import type { AiChatMessage } from "@shared/schema";
 
 // ── In-memory rate limiter ─────────────────────────────────────────────────────
 // Protects auth endpoints from scanning/brute-force. No Redis needed.
@@ -2820,7 +2821,8 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
       res.setHeader("X-Accel-Buffering", "no");
       res.flushHeaders();
 
-      const reader = (groqRes.body as any).getReader();
+      if (!groqRes.body) throw new Error("No response body from Groq");
+      const reader = (groqRes.body as ReadableStream<Uint8Array>).getReader();
       const decoder = new TextDecoder();
       let fullText = "";
       let sseBuffer = "";
@@ -2851,15 +2853,23 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
       res.end();
 
       if (sessionId && typeof sessionId === "string" && sessionId.length <= 64 && fullText) {
-        const updatedMessages = [
-          ...history,
+        const historyMsgs = (history as { role: string; content: string; timestamp?: string }[])
+          .slice(-38)
+          .map(m => ({
+            role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
+            content: m.content,
+            timestamp: m.timestamp ?? new Date().toISOString(),
+          }));
+        const updatedMessages: AiChatMessage[] = [
+          ...historyMsgs,
           { role: "user", content: message, timestamp: new Date().toISOString() },
           { role: "assistant", content: fullText, timestamp: new Date().toISOString() },
-        ].slice(-40);
+        ];
         await storage.upsertAiSession(sessionId, updatedMessages).catch(() => {});
       }
-    } catch (err: any) {
-      console.error("[AI] Groq error:", err?.message ?? err);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[AI] Groq error:", errMsg);
       if (!res.headersSent) {
         return res.status(500).json({ error: "AI request failed. Try again." });
       }
@@ -2873,7 +2883,7 @@ If they upload a screenshot, analyze it carefully — look for FPS counters, err
     const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId;
     if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) return res.status(400).json({ error: "Invalid session" });
     const session = await storage.getAiSession(sessionId);
-    return res.json({ messages: (session?.messages as any[]) ?? [] });
+    return res.json({ messages: session?.messages ?? [] });
   });
 
   return httpServer;

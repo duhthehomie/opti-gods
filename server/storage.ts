@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -75,7 +75,7 @@ export interface IStorage {
   getIpLogs(codeRef?: string): Promise<ProIpLog[]>;
   // AI chat sessions
   getAiSession(sessionId: string): Promise<AiChatSession | null>;
-  upsertAiSession(sessionId: string, messages: unknown[]): Promise<void>;
+  upsertAiSession(sessionId: string, messages: AiChatMessage[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -501,14 +501,14 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
-  async upsertAiSession(sessionId: string, messages: unknown[]): Promise<void> {
+  async upsertAiSession(sessionId: string, messages: AiChatMessage[]): Promise<void> {
     const existing = await this.getAiSession(sessionId);
     if (existing) {
       await db.update(aiChatSessions)
-        .set({ messages: messages as any, updatedAt: new Date() })
+        .set({ messages, updatedAt: new Date() })
         .where(eq(aiChatSessions.sessionId, sessionId));
     } else {
-      await db.insert(aiChatSessions).values({ sessionId, messages: messages as any });
+      await db.insert(aiChatSessions).values({ sessionId, messages });
     }
   }
 }

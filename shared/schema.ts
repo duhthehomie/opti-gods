@@ -131,10 +131,16 @@ export const insertEmailRequestSchema = createInsertSchema(emailRequests).omit({
 export type InsertEmailRequest = z.infer<typeof insertEmailRequestSchema>;
 
 // AI chat sessions — persists Opti Gods AI conversations per browser session
+export type AiChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+};
+
 export const aiChatSessions = pgTable("ai_chat_sessions", {
   id: serial("id").primaryKey(),
   sessionId: varchar("session_id", { length: 64 }).notNull().unique(),
-  messages: jsonb("messages").notNull().default([]),
+  messages: jsonb("messages").$type<AiChatMessage[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

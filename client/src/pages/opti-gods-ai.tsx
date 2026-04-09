@@ -303,9 +303,10 @@ export default function OptiGodsAI() {
       const finalMessages = [...newMessages, finalMsg];
       setMessages(finalMessages);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(finalMessages));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessages(newMessages);
-      toast({ title: "AI error", description: err.message || "Could not reach Opti Gods AI.", variant: "destructive" });
+      const errMsg = err instanceof Error ? err.message : "Could not reach Opti Gods AI.";
+      toast({ title: "AI error", description: errMsg, variant: "destructive" });
     } finally {
       setIsLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
