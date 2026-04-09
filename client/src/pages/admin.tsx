@@ -271,9 +271,9 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
       {/* Threat Score + Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <ThreatGauge score={stats.threatScore} />
-          <div className="grid grid-cols-2 gap-2 col-span-1 sm:col-span-2">
+          <div className="grid grid-cols-2 gap-2 sm:col-span-2">
             {[
               { label: "Flags Today",     value: stats.flagsToday,       icon: Flag,         color: "text-red-400" },
               { label: "Active Bans",     value: stats.activeBans,       icon: Ban,          color: "text-orange-400" },
@@ -2889,6 +2889,21 @@ export default function Admin() {
                   Send All
                 </button>
               )}
+
+              {/* Security / Aether Shortcut */}
+              <button
+                data-testid="mobile-fab-security"
+                onClick={() => setTab("security")}
+                className={cn(
+                  "relative flex items-center justify-center w-12 h-12 rounded-xl border transition-all active:scale-95",
+                  tab === "security"
+                    ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : "bg-zinc-800/80 border-zinc-700 text-zinc-400"
+                )}
+                title="Aether Security"
+              >
+                <Shield className="w-5 h-5" />
+              </button>
 
               {/* Logout */}
               <button
