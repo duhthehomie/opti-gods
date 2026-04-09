@@ -42,6 +42,19 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
 import { cn } from "@/lib/utils";
 
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent?: boolean;
+  fixAccent?: boolean;
+  winTitusAccent?: boolean;
+  proAccent?: boolean;
+  boostAccent?: boolean;
+  aiAccent?: boolean;
+  recCount?: number;
+};
+
 // Which tweak keys belong to which nav section
 const SECTION_PREFIXES: Record<string, string[]> = {
   "/registry":           ["Win32","Disable","Enable","Set","Input","Network","Optimize","ClearPage","Privacy","Service","game_"],
@@ -66,7 +79,7 @@ function countForSection(tweaks: Record<string, boolean>, url: string) {
   return Object.entries(tweaks).filter(([k, v]) => v && prefixes.some(p => k.startsWith(p))).length;
 }
 
-const navItems = [
+const navItems: NavItem[] = [
   { title: "Dashboard",           url: "/",                   icon: Activity },
   { title: "Opti Gods AI",        url: "/ai",                 icon: Bot,          aiAccent: true },
   { title: "Quick Boost",         url: "/boost",              icon: TrendingUp,   boostAccent: true },
@@ -177,12 +190,12 @@ export function AppSidebar() {
             <SidebarMenu className="px-2 gap-0.5">
               {navItems.map((item, idx) => {
                 const isActive = location === item.url;
-                const isAccent = (item as any).accent;
-                const isFixAccent = (item as any).fixAccent;
-                const isWinTitusAccent = (item as any).winTitusAccent;
-                const isProAccent = (item as any).proAccent;
-                const isBoostAccent = (item as any).boostAccent;
-                const isAiAccent = (item as any).aiAccent;
+                const isAccent = item.accent;
+                const isFixAccent = item.fixAccent;
+                const isWinTitusAccent = item.winTitusAccent;
+                const isProAccent = item.proAccent;
+                const isBoostAccent = item.boostAccent;
+                const isAiAccent = item.aiAccent;
                 const isLast = idx === navItems.length - 1;
                 const sectionCount = countForSection(tweaks, item.url);
                 return (
@@ -239,9 +252,9 @@ export function AppSidebar() {
                           </span>
                         )}
                         {/* Recommended count badge — shown when no active tweaks yet */}
-                        {sectionCount === 0 && (item as any).recCount && !isProAccent && (
+                        {sectionCount === 0 && item.recCount && !isProAccent && (
                           <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500/70 border border-red-500/15 shrink-0">
-                            {(item as any).recCount} rec
+                            {item.recCount} rec
                           </span>
                         )}
                         {isProAccent && !isPro && (
