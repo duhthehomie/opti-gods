@@ -2915,8 +2915,12 @@ Read-Host "Press Enter to close this window"
       ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately."
       : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'";
 
-    const systemPrompt = `You are Opti Gods AI — the most knowledgeable PC gaming optimization expert on the planet, powered by Aether Intelligence. You are embedded inside the Opti Gods dashboard by leaq, the #1 Windows 10/11 optimizer built for maximum FPS, minimum latency, and zero stutter.
+    const visionNote = imageBase64
+      ? `\nVISION MODE: The user has attached a screenshot. You CAN see the image — analyze it directly. Identify any error messages, crash reports, settings panels, benchmark results, or in-game graphics configs visible in the screenshot. Give specific optimization advice based on exactly what you see.\n`
+      : "";
 
+    const systemPrompt = `You are Opti Gods AI — the most knowledgeable PC gaming optimization expert on the planet, powered by Aether Intelligence. You are embedded inside the Opti Gods dashboard by leaq, the #1 Windows 10/11 optimizer built for maximum FPS, minimum latency, and zero stutter.
+${visionNote}
 CRITICAL SAFETY RULES (NEVER VIOLATE):
 1. NEVER tell users to stop or disable NVDisplay.ContainerLocalSystem / NvDisplayContainerLS — this causes the NVIDIA Overlay 0x80000003 crash and can lock the system.
 2. HAGS: ONLY enable for RTX 2000+ or RX 6000+. GTX 10xx, GTX 16xx, GTX 900, and older Radeon = ALWAYS disable HAGS. Enabling on older cards causes stutters and DWM crashes.
@@ -2992,14 +2996,14 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     let userContent: string | { type: string; text?: string; image_url?: { url: string } }[];
     if (imageBase64) {
       userContent = [
-        { type: "image_url", image_url: { url: imageBase64 } },
         { type: "text", text: message || "Analyze this screenshot for PC optimization advice." },
+        { type: "image_url", image_url: { url: imageBase64 } },
       ];
     } else {
       userContent = message;
     }
 
-    const model = imageBase64 ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+    const model = imageBase64 ? "meta-llama/llama-4-maverick-17b-128e-instruct" : "llama-3.3-70b-versatile";
 
     try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -3022,8 +3026,13 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
 
       if (!groqRes.ok) {
         const errBody = await groqRes.text();
-        console.error("[AI] Groq HTTP error:", groqRes.status, errBody);
-        return res.status(500).json({ error: "AI request failed. Try again." });
+        console.error("[AI] Groq HTTP error:", groqRes.status, errBody, "model:", model);
+        let userMsg = "AI request failed. Try again.";
+        try {
+          const parsed = JSON.parse(errBody);
+          if (parsed?.error?.message) userMsg = parsed.error.message;
+        } catch {}
+        return res.status(500).json({ error: userMsg });
       }
 
       res.setHeader("Content-Type", "text/event-stream");
