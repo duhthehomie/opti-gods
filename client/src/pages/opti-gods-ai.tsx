@@ -3,8 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useProStatus } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, Sparkles } from "lucide-react";
+import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, Sparkles, Download } from "lucide-react";
 import { Link } from "wouter";
+import { useOptimizationStore } from "@/store/use-optimization-store";
 
 type Message = {
   role: "user" | "assistant";
@@ -30,13 +31,70 @@ function getOrCreateSessionId(): string {
 }
 
 const STARTER_QUESTIONS = [
+  "Give me a smart FPS preset for my dashboard",
   "How do I fix FiveM lag spikes?",
   "Best NVIDIA settings for RTX 3070?",
   "Why does my Fortnite stutter?",
   "How to reduce Discord CPU usage?",
-  "My PC restarts when gaming — why?",
   "What registry tweaks boost FPS?",
 ];
+
+const PRESET_TWEAK_KEYS = [
+  "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","NetworkThrottling",
+  "DisableNagle","InputLagTCP","EnableMSIMode","GameModeTweaks","OptimizeTCP",
+  "DisableXboxGameBar","DisableGameDVR","DisableAnimations","DisablePointerPrecision",
+];
+
+const SAVE_PRESET_REGEX = /\[SAVE_PRESET:[^\]]+\]/g;
+
+function SavePresetCard() {
+  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { toast } = useToast();
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    const presetTweaks: Record<string, boolean> = {};
+    PRESET_TWEAK_KEYS.forEach(k => { presetTweaks[k] = true; });
+    try {
+      await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "AI Smart FPS Preset", config: { tweaks: presetTweaks } }),
+      });
+      setAllTweaks({ ...tweaks, ...presetTweaks });
+      setSaved(true);
+      toast({ title: "Smart FPS Preset saved!", description: "13 tweaks applied to your dashboard. Download your script to activate them." });
+    } catch {
+      toast({ title: "Save failed", description: "Try again.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Zap className="w-4 h-4 text-red-400 shrink-0" />
+        <span className="text-xs font-bold text-red-400 uppercase tracking-wider">AI Smart FPS Preset Ready</span>
+      </div>
+      <p className="text-[11px] text-zinc-400 leading-relaxed">
+        13 high-impact tweaks — CPU scheduling, timer resolution, network, MSI mode, Xbox Game Bar removed. Safe for all PCs.
+      </p>
+      <button
+        data-testid="button-save-preset"
+        onClick={save}
+        disabled={saved}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+          saved
+            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+            : "bg-red-600 hover:bg-red-500 text-white border border-red-500/40 cursor-pointer"
+        )}
+      >
+        <Download className="w-3.5 h-3.5" />
+        {saved ? "Saved to Dashboard ✓" : "Save to Dashboard"}
+      </button>
+    </div>
+  );
+}
 
 function TypingIndicator() {
   return (
@@ -55,9 +113,9 @@ function TypingIndicator() {
   );
 }
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, displayContent }: { msg: Message; displayContent?: string }) {
   const isUser = msg.role === "user";
-  const lines = msg.content.split("\n");
+  const lines = (displayContent ?? msg.content).split("\n");
 
   const formatted = lines.map((line, i) => {
     if (line.startsWith("**") && line.endsWith("**")) {
@@ -220,6 +278,22 @@ export default function OptiGodsAI() {
     if (file) handleImageUpload(file);
   }, []);
 
+  const handlePaste = useCallback((e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) { e.preventDefault(); handleImageUpload(file); break; }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [handlePaste]);
+
   const sendMessage = async (text?: string) => {
     const msgText = (text ?? input).trim();
     if (!msgText && !imageBase64) return;
@@ -379,9 +453,18 @@ export default function OptiGodsAI() {
             <EmptyState onSelect={q => sendMessage(q)} />
           ) : (
             <>
-              {messages.map((msg, i) =>
-                msg.content || msg.imageUrl ? <MessageBubble key={i} msg={msg} /> : null
-              )}
+              {messages.map((msg, i) => {
+                if (!msg.content && !msg.imageUrl) return null;
+                const hasPreset = msg.role === "assistant" && SAVE_PRESET_REGEX.test(msg.content);
+                SAVE_PRESET_REGEX.lastIndex = 0;
+                const displayContent = hasPreset ? msg.content.replace(SAVE_PRESET_REGEX, "").trim() : undefined;
+                return (
+                  <div key={i}>
+                    <MessageBubble msg={msg} displayContent={displayContent} />
+                    {hasPreset && <div className="ml-10"><SavePresetCard /></div>}
+                  </div>
+                );
+              })}
               {isLoading && (
                 messages[messages.length - 1]?.role !== "assistant" ||
                 messages[messages.length - 1]?.content === ""
@@ -457,7 +540,7 @@ export default function OptiGodsAI() {
             </button>
           </div>
           <p className="text-[9px] text-zinc-700 text-center mt-2">
-            Drag & drop a screenshot anywhere • Shift+Enter for new line
+            Drag & drop or Ctrl+V to paste a screenshot • Shift+Enter for new line
           </p>
         </div>
       </div>

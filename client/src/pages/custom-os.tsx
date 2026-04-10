@@ -8,7 +8,6 @@ import {
   MonitorPlay, Flame, Trash2, Settings2, Star,
   ChevronRight, AlertTriangle, Eye, EyeOff,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
@@ -149,7 +148,7 @@ const INSTALL_STEPS = [
     title: "Download AME Wizard",
     desc: "AME Wizard is the open-source tool that applies the playbook to your Windows install safely.",
     link: "https://ameliorated.io",
-    label: "ameliorated.io →",
+    label: "ameliorated.io (No Ads) →",
     accent: "violet",
   },
   {
@@ -162,15 +161,16 @@ const INSTALL_STEPS = [
   },
   {
     n: "03",
-    title: "Download the Opti Gods OS Playbook (.apbx)",
-    desc: "Download your exclusive Opti Gods OS playbook — the .apbx file that transforms your Windows install into Opti Gods OS.",
-    action: true,
+    title: "Download ReviOS Playbook — click the No Ads link",
+    desc: "Visit revi.cc and download the ReviOS .apbx playbook. When you land on the download page, click the 'No Ads' link — this skips any ad redirect and downloads directly.",
+    link: "https://www.revi.cc/",
+    label: "revi.cc → click No Ads →",
     accent: "red",
   },
   {
     n: "04",
-    title: "Run AME Wizard with the Playbook",
-    desc: "Open AME Wizard, drag your Opti Gods OS .apbx file into it. AME Wizard will verify, then walk you through the automated setup. Takes 5–15 minutes.",
+    title: "Run AME Wizard with the ReviOS Playbook",
+    desc: "Open AME Wizard, drag the ReviOS .apbx file into it. AME Wizard will verify, then walk you through the automated setup. Takes 10–15 minutes.",
     accent: "orange",
   },
   {
@@ -196,21 +196,7 @@ function CheckIcon({ val }: { val: boolean }) {
 }
 
 export default function CustomOS() {
-  const { toast } = useToast();
   const hw = useHardwareInfo();
-
-  const downloadPlaybook = () => {
-    const link = document.createElement("a");
-    link.href = "/OptiGodsOS.apbx";
-    link.download = "OptiGodsOS-by-leaq.apbx";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast({
-      title: "Downloading Opti Gods OS .apbx",
-      description: "Open AME Wizard, drag this file in, and follow the prompts to apply the playbook.",
-    });
-  };
 
   return (
     <AppLayout>
@@ -289,17 +275,6 @@ export default function CustomOS() {
           transition={{ delay: 0.08 }}
           className="space-y-4"
         >
-          {/* SmartScreen warning */}
-          <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-amber-500/25 bg-amber-950/20">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold text-amber-300 mb-0.5">Opti Gods OS — SmartScreen Notice</p>
-              <p className="text-[11px] text-amber-200/60 leading-relaxed">
-                Windows SmartScreen and some browsers flag the .apbx download as unrecognized because it's a new file without enough download history yet — this is a common false positive for all new AME playbooks. Google confirmed this is likely a false positive. Until it builds reputation, we recommend using <strong className="text-white">ReviOS</strong> below, which is the closest thing to what Opti Gods OS is built toward.
-              </p>
-            </div>
-          </div>
-
           {/* Best OS Picks */}
           <div className="space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">Our OS Picks — Best Gaming Windows Right Now</h2>
@@ -340,6 +315,9 @@ export default function CustomOS() {
                   <ExternalLink className="w-3 h-3" />
                   Get ReviOS at revi.cc
                 </a>
+                <p className="text-[10px] text-amber-400/80 mt-1.5 font-medium">
+                  ⚠ On the download page — click the <strong className="text-amber-300">"No Ads"</strong> link to download directly without any ad redirects.
+                </p>
               </div>
             </div>
 
@@ -505,7 +483,7 @@ export default function CustomOS() {
               transition={{ delay: 0.28 }}
               className="space-y-3"
             >
-              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">How to install Opti Gods OS</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">How to set up ReviOS</h2>
               <div className="space-y-2">
                 {INSTALL_STEPS.map((s, i) => {
                   const cls = accentMap[s.accent];
@@ -528,17 +506,6 @@ export default function CustomOS() {
                             {s.label}
                             <ExternalLink className="w-2.5 h-2.5" />
                           </a>
-                        )}
-                        {s.action && (
-                          <Button
-                            size="sm"
-                            data-testid="button-download-playbook-step"
-                            onClick={downloadPlaybook}
-                            className="mt-2 bg-red-600 hover:bg-red-700 text-white border border-red-500/40 font-bold text-xs h-7 px-3"
-                          >
-                            <Download className="w-3 h-3 mr-1.5" />
-                            Download Opti Gods OS .apbx
-                          </Button>
                         )}
                       </div>
                     </div>
@@ -589,8 +556,8 @@ export default function CustomOS() {
               transition={{ delay: 0.33 }}
               className="space-y-3"
             >
-              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard & Playbooks (No Ads)</h2>
-              <p className="text-xs text-zinc-500 px-1">Get the official AME Wizard and choose your playbook — all without ads or bloat for a clean install</p>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard & ReviOS Playbook (No Ads)</h2>
+              <p className="text-xs text-zinc-500 px-1">Get AME Wizard and the ReviOS playbook — both free and no ads needed</p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -622,29 +589,31 @@ export default function CustomOS() {
               </div>
             </motion.div>
 
-            {/* CTA */}
+            {/* CTA — ReviOS */}
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35 }}
-              className="relative rounded-xl border border-red-500/25 bg-gradient-to-br from-red-950/20 via-zinc-950 to-black p-6 text-center overflow-hidden"
+              className="relative rounded-xl border border-blue-500/25 bg-gradient-to-br from-blue-950/20 via-zinc-950 to-black p-6 text-center overflow-hidden"
             >
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(220,38,38,0.08),_transparent_70%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(59,130,246,0.07),_transparent_70%)]" />
               <div className="relative z-10">
-                <Star className="w-8 h-8 text-red-400 mx-auto mb-3" />
-                <h3 className="text-xl font-display font-bold text-white mb-2">2. Apply Opti Gods OS</h3>
-                <p className="text-zinc-400 text-sm mb-5 max-w-md mx-auto">
-                  Download your exclusive .apbx playbook. Open AME Wizard → select your playbook → apply → restart.
-                  Your Windows install will transform into the fastest gaming OS you've ever used.
+                <HardDrive className="w-8 h-8 text-blue-400 mx-auto mb-3" />
+                <h3 className="text-xl font-display font-bold text-white mb-2">2. Apply ReviOS Playbook</h3>
+                <p className="text-zinc-400 text-sm mb-2 max-w-md mx-auto">
+                  Open AME Wizard → drag in the ReviOS .apbx → hit Apply → wait 10–15 min → reboot.
+                </p>
+                <p className="text-amber-400 text-xs font-semibold mb-5">
+                  ⚠ On the download page at revi.cc — click the <strong>"No Ads"</strong> link to download directly.
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   <Button
-                    data-testid="button-download-optigods-os"
-                    onClick={downloadPlaybook}
-                    className="bg-red-600 hover:bg-red-700 text-white border border-red-500/40 font-bold text-sm px-6"
+                    data-testid="button-revios-download"
+                    onClick={() => window.open("https://www.revi.cc/", "_blank", "noopener noreferrer")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white border border-blue-500/40 font-bold text-sm px-6"
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Opti Gods OS .apbx
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Get ReviOS at revi.cc
                   </Button>
                   <Button
                     data-testid="button-discord-os"
@@ -669,8 +638,8 @@ export default function CustomOS() {
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <p className="text-xs text-zinc-500 leading-relaxed">
                 <span className="text-amber-300 font-semibold">Backup your data before applying any OS playbook.</span>{" "}
-                While Opti Gods OS is designed to be safe and non-destructive, a clean Windows install is always the
-                best foundation. AME Wizard will pause and ask for confirmation before making any changes.
+                ReviOS and AME Wizard are non-destructive, but a clean Windows install is always the best foundation.
+                AME Wizard will pause and ask for confirmation before making any changes.
               </p>
             </motion.div>
 
