@@ -3003,7 +3003,7 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       userContent = message;
     }
 
-    const model = imageBase64 ? "meta-llama/llama-4-maverick-17b-128e-instruct" : "llama-3.3-70b-versatile";
+    const model = imageBase64 ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
 
     try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
