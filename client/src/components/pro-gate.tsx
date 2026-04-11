@@ -26,7 +26,7 @@ function ProPaymentDialog({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [cryptoCopied, setCryptoCopied] = useState(false);
-  const [withSession, setWithSession] = useState(false);
+  const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
@@ -141,43 +141,15 @@ function ProPaymentDialog({
             </button>
           </div>
 
-          {/* Tier selector */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setWithSession(false)}
-              className={cn(
-                "rounded-xl border p-3 text-left transition-all",
-                !withSession
-                  ? "bg-red-600/15 border-red-500/50 shadow-[0_0_12px_-4px_rgba(239,68,68,0.3)]"
-                  : "bg-zinc-900/60 border-zinc-700/50 hover:border-zinc-600"
-              )}
-            >
-              <div className="flex items-baseline gap-1.5 mb-1">
-                <span className="text-2xl font-black text-white">${basePrice}</span>
-                {isWeekend && <span className="text-sm font-bold text-zinc-600 line-through">$25</span>}
-              </div>
-              <p className="text-[11px] font-bold text-white mb-0.5">Pro Only</p>
-              <p className="text-[10px] text-zinc-500">App + all tweaks</p>
-            </button>
-
-            <button
-              onClick={() => setWithSession(true)}
-              className={cn(
-                "rounded-xl border p-3 text-left transition-all relative overflow-hidden",
-                withSession
-                  ? "bg-red-600/15 border-red-500/50 shadow-[0_0_12px_-4px_rgba(239,68,68,0.3)]"
-                  : "bg-zinc-900/60 border-zinc-700/50 hover:border-zinc-600"
-              )}
-            >
-              <div className="absolute top-2 right-2">
-                <span className="text-[8px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded uppercase tracking-wide">POPULAR</span>
-              </div>
-              <div className="flex items-baseline gap-1.5 mb-1">
-                <span className="text-2xl font-black text-white">${basePrice + 20}</span>
-              </div>
-              <p className="text-[11px] font-bold text-white mb-0.5">Pro + Session</p>
-              <p className="text-[10px] text-zinc-500">App + live Parsec opti</p>
-            </button>
+          {/* Price display */}
+          <div className="rounded-xl border border-red-500/30 bg-red-600/10 p-3 text-left">
+            <div className="flex items-baseline gap-1.5 mb-1">
+              <span className="text-2xl font-black text-white">${basePrice}</span>
+              {isWeekend && <span className="text-sm font-bold text-zinc-600 line-through">$25</span>}
+              <span className="text-xs text-zinc-500 font-medium">one-time</span>
+            </div>
+            <p className="text-[11px] font-bold text-white mb-0.5">Pro Access — Lifetime</p>
+            <p className="text-[10px] text-zinc-500">All 437+ tweaks · custom script · lifetime access</p>
           </div>
         </div>
 
@@ -192,10 +164,6 @@ function ProPaymentDialog({
               { icon: "🔁", text: "14 games auto-detected · preset save/load" },
               { icon: "✅", text: "Lifetime access — pay once, never pay again", bold: true },
               { icon: "📧", text: "Code in your inbox within 5 minutes of payment" },
-              ...(withSession ? [
-                { icon: "🖥️", text: "Live Parsec session — leaqy logs in & optimizes your PC directly", bold: true, highlight: true },
-                { icon: "🎯", text: "Best for users who want everything done for them — no setup needed", highlight: true },
-              ] : []),
             ].map((f: { icon: string; text: string; bold?: boolean; highlight?: boolean }, i) => (
               <div key={i} className={cn("flex items-start gap-2.5 text-xs", f.highlight && "bg-red-500/5 border border-red-500/15 rounded-lg p-2 -mx-1")}>
                 <span className="text-sm shrink-0 leading-none mt-0.5">{f.icon}</span>
@@ -210,10 +178,8 @@ function ProPaymentDialog({
           <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <p className="text-[11px] text-emerald-300 font-semibold leading-snug">
-              {withSession
-                ? <>Pay ${basePrice + 20} below → DM on Discord with proof → <span className="text-emerald-200">session booked within 24h</span></>
-                : <>Code delivered automatically within <span className="text-emerald-200">5 minutes or less</span> — just pay below, then request it</>
-              }
+              <>Code delivered automatically within <span className="text-emerald-200">5 minutes or less</span> — just pay below, then request it</>
+            
             </p>
           </div>
 
