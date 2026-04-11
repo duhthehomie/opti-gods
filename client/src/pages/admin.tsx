@@ -638,12 +638,73 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 }
 
 // ── Admin Preset Generator ─────────────────────────────────────────────────
+// Infer CPU brand, thread count, generation, and Ryzen model from a typed CPU name
+function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number; generation: number; cpuLabel: string; isRyzen: boolean; isIntelCore: boolean } {
+  const m = model.trim().toLowerCase();
+  // Intel detection
+  if (m.includes("intel") || /\bi[3579]-\d/.test(m) || m.includes("core ultra") || m.includes("pentium") || m.includes("celeron") || m.includes("xeon")) {
+    let threads = 8;
+    let generation = 0;
+    // Match i3/i5/i7/i9-XYYY or i5-12600K style
+    const match = m.match(/i[3579]-?(\d{4,5})/);
+    if (match) {
+      const num = match[1];
+      generation = parseInt(num.slice(0, num.length - 3)) || 0;
+      const tier = m.includes("i9") ? 4 : m.includes("i7") ? 3 : m.includes("i5") ? 2 : 1;
+      if (generation >= 12) {
+        // 12th+ gen has E-cores
+        if (tier === 4) threads = 32; // i9-12900K = 24C/32T
+        else if (tier === 3) threads = 20; // i7-12700K = 12C/20T
+        else if (tier === 2) threads = 16; // i5-12600K = 10C/16T
+        else threads = 8;
+      } else if (generation >= 10) {
+        if (tier === 4) threads = 20;
+        else if (tier === 3) threads = 16;
+        else if (tier === 2) threads = 12;
+        else threads = 8;
+      } else {
+        if (tier === 4) threads = 16;
+        else if (tier === 3) threads = 12;
+        else if (tier === 2) threads = 8;
+        else threads = 4;
+      }
+    }
+    // Core Ultra
+    if (m.includes("ultra 9")) threads = 24;
+    else if (m.includes("ultra 7")) threads = 20;
+    else if (m.includes("ultra 5")) threads = 14;
+    const label = model.trim() || `Intel ${threads}T`;
+    return { brand: "intel", threads, generation, cpuLabel: label, isRyzen: false, isIntelCore: true };
+  }
+  // AMD Ryzen detection
+  if (m.includes("ryzen") || m.includes("amd") || /r[3579]\s*\d{4}/.test(m) || m.includes("threadripper")) {
+    let threads = 12;
+    let generation = 0;
+    // Ryzen X 3000/5000/7000 — model number gives generation
+    const genMatch = m.match(/ryzen\s*[3579]\s*(\d)(\d{3})/);
+    if (genMatch) {
+      generation = parseInt(genMatch[1]);
+      const tier = m.includes("ryzen 9") ? 4 : m.includes("ryzen 7") ? 3 : m.includes("ryzen 5") ? 2 : 1;
+      // 3500 = 6C/6T (no SMT), 3600 = 6C/12T, 5600 = 6C/12T, 5800 = 8C/16T, 5900 = 12C/24T, 5950 = 16C/32T
+      if (m.includes("3500") || m.includes("3300")) { threads = 6; }
+      else if (tier === 4) threads = 32;
+      else if (tier === 3) threads = 16;
+      else if (tier === 2) threads = 12;
+      else threads = 8;
+    }
+    if (m.includes("threadripper")) threads = 64;
+    const label = model.trim() || `AMD Ryzen ${threads}T`;
+    return { brand: "amd", threads, generation, cpuLabel: label, isRyzen: true, isIntelCore: false };
+  }
+  // Unknown — default
+  return { brand: "intel", threads: 8, generation: 0, cpuLabel: model.trim() || "Unknown CPU", isRyzen: false, isIntelCore: true };
+}
+
 function AdminPresetGenerator() {
   const { toast } = useToast();
   const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">("nvidia");
   const [gpuName, setGpuName] = useState("");
-  const [cpuBrand, setCpuBrand] = useState<"intel" | "amd">("intel");
-  const [cpuCores, setCpuCores] = useState("8");
+  const [cpuModel, setCpuModel] = useState("");
   const [ramGB, setRamGB] = useState("16");
   const [osVersion, setOsVersion] = useState<"win11" | "win10">("win11");
   const [isLaptop, setIsLaptop] = useState(false);
@@ -651,7 +712,8 @@ function AdminPresetGenerator() {
   const [generating, setGenerating] = useState(false);
 
   const buildFakeHW = (): HardwareInfo => {
-    const cores = parseInt(cpuCores) || 8;
+    const cpu = parseCpuModel(cpuModel);
+    const cores = cpu.threads;
     const ram = parseInt(ramGB) || 16;
     const isNvidia = gpuVendor === "nvidia";
     const isAmdGpu = gpuVendor === "amd";
@@ -661,19 +723,17 @@ function AdminPresetGenerator() {
     const gpuNameLower = gpuName.toLowerCase();
     const nvidiaIsRTX = isNvidia && (gpuNameLower.includes("rtx") || gpuNameLower.includes(" 30") || gpuNameLower.includes(" 40") || gpuNameLower.includes(" 50"));
     const nvidiaIsLowEnd = isNvidia && !nvidiaIsRTX;
-    const isRyzen = cpuBrand === "amd";
-    const isIntelCore = cpuBrand === "intel";
     const gpuLabel = gpuName || (isNvidia ? "NVIDIA GPU" : isAmdGpu ? "AMD GPU" : "Intel GPU");
-    const cpuLabel = `${cpuBrand === "intel" ? "Intel" : "AMD"} ${cores}T`;
     const ramLabel = `${ram}GB`;
     return {
       loading: false, scanned: true,
       gpuName: gpuLabel, gpuVendor: gpuVendor,
-      cpuLabel, cpuCores: cores, cpuPhysicalCores: Math.max(1, Math.ceil(cores / 2)),
+      cpuLabel: cpu.cpuLabel, cpuCores: cores, cpuPhysicalCores: Math.max(1, Math.ceil(cores / 2)),
       ramGB: ram, ramLabel, ramNote: "",
       isNvidia, isAmdGpu, isAmdApu, isAMD, isIntel, isLaptop,
       nvidiaIsRTX, nvidiaIsLowEnd,
-      cpuBrand: cpuBrand, isRyzen, isIntelCore, cpuGeneration: 0,
+      cpuBrand: cpu.brand, isRyzen: cpu.isRyzen, isIntelCore: cpu.isIntelCore,
+      cpuGeneration: cpu.generation,
       resolution: "1920x1080",
     } as HardwareInfo;
   };
@@ -702,10 +762,10 @@ function AdminPresetGenerator() {
       const tweakMap: Record<string, boolean> = {};
       tweakIds.forEach(id => { tweakMap[id] = true; });
 
-      const res = await fetch("/api/script/download", {
+      const res = await fetch("/api/script/download-bat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: null }),
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
       });
 
       if (!res.ok) throw new Error("Script generation failed");
@@ -714,9 +774,10 @@ function AdminPresetGenerator() {
       const a = document.createElement("a");
       a.href = url;
       const gpuStr = (gpuName || gpuVendor).replace(/\s+/g, "_").toUpperCase();
+      const cpuStr = parseCpuModel(cpuModel).cpuLabel.replace(/\s+/g, "_").replace(/[^A-Za-z0-9_]/g, "") || "CPU";
       const ramStr = `${ramGB}GB`;
-      const osStr = osVersion.toUpperCase();
-      a.download = `OptiGods_Preset_${gpuStr}_${ramStr}_${osStr}.ps1`;
+      const osStr = osVersion === "win11" ? "Win11" : "Win10";
+      a.download = `OptiGods_${gpuStr}_${cpuStr}_${ramStr}_${osStr}.bat`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -725,7 +786,7 @@ function AdminPresetGenerator() {
       setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
       toast({
         title: `Preset generated — ${tweakIds.length} tweaks`,
-        description: `Profile: ${recs.profile}. Send the .ps1 file to the user.`,
+        description: `Profile: ${recs.profile}. Send the .bat file to the user — they just double-click it.`,
       });
     } catch (e) {
       toast({ title: "Generation failed", description: String(e), variant: "destructive" });
@@ -745,7 +806,7 @@ function AdminPresetGenerator() {
         </div>
         <div>
           <h2 className="text-sm font-bold text-white">Custom Preset Generator</h2>
-          <p className="text-xs text-zinc-500">Input a user's specs → downloads a hardware-optimized .ps1 script</p>
+          <p className="text-xs text-zinc-500">Input a user's specs → downloads a hardware-optimized .bat script</p>
         </div>
       </div>
 
@@ -781,33 +842,29 @@ function AdminPresetGenerator() {
           />
         </div>
 
-        {/* CPU Brand */}
-        <div>
-          <label className={labelCls}>CPU Brand</label>
-          <div className="flex gap-2">
-            {(["intel", "amd"] as const).map(b => (
-              <button key={b} onClick={() => setCpuBrand(b)}
-                className={cn("flex-1 py-2 rounded-lg text-xs font-bold uppercase border transition-all",
-                  cpuBrand === b
-                    ? "bg-red-500/15 border-red-500/40 text-red-400"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-600 hover:border-zinc-600"
-                )}>
-                <Cpu className="w-3 h-3 inline mr-1" />{b}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* CPU Cores / Threads */}
-        <div>
-          <label className={labelCls}>CPU Threads</label>
+        {/* CPU Model */}
+        <div className="sm:col-span-2">
+          <label className={labelCls}>CPU Model</label>
           <input
-            data-testid="input-cpu-cores"
-            type="number" min="2" max="64"
-            value={cpuCores}
-            onChange={e => setCpuCores(e.target.value)}
+            data-testid="input-cpu-model"
+            value={cpuModel}
+            onChange={e => setCpuModel(e.target.value)}
+            placeholder="e.g. i7-12700K, Ryzen 5 5600X, i9-13900K"
             className={inputCls}
           />
+          {cpuModel.trim() && (() => {
+            const parsed = parseCpuModel(cpuModel);
+            return (
+              <p className="text-[10px] text-zinc-500 mt-1 flex gap-2">
+                <span className={parsed.brand === "intel" ? "text-blue-400" : "text-red-400"}>
+                  {parsed.brand === "intel" ? "Intel" : "AMD Ryzen"}
+                </span>
+                <span>·</span>
+                <span>{parsed.threads} threads detected</span>
+                {parsed.generation > 0 && <><span>·</span><span>Gen {parsed.generation}</span></>}
+              </p>
+            );
+          })()}
         </div>
 
         {/* RAM */}
@@ -897,7 +954,7 @@ function AdminPresetGenerator() {
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <p className="text-xs text-emerald-300">
-            Generated: <strong>{generated.name}</strong> — {generated.tweakCount} tweaks downloaded. Send the .ps1 file to the user.
+            Generated: <strong>{generated.name}</strong> — {generated.tweakCount} tweaks downloaded. Send the .bat file to the user — they double-click it, click Yes, done.
           </p>
         </div>
       )}
