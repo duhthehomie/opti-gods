@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useProStatus } from "@/lib/pro-status";
 import { cn } from "@/lib/utils";
 
@@ -114,7 +115,21 @@ export function AppSidebar() {
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const optPct = Math.round((enabledCount / TOTAL_TWEAKS) * 100);
   const osInfo = useOsDetection();
+  const hw = useHardwareInfo();
   const isPro = useProStatus();
+
+  // Sidebar filtering: hide GPU tabs that don't match detected hardware
+  // Only hide if we have confident GPU detection (not just loading/unknown)
+  const gpuKnown = !hw.loading && hw.gpuName && hw.gpuName !== "Unknown GPU" && hw.gpuName !== "Detecting...";
+
+  const shouldHide = (url: string): boolean => {
+    if (!gpuKnown) return false;
+    if (url === "/nvidia") return !hw.isNvidia;
+    if (url === "/amd") return !hw.isAMD || hw.isAmdApu;
+    if (url === "/integrated-graphics") return !hw.isIntel && !hw.isAmdApu;
+    if (url === "/laptop") return !hw.isLaptop;
+    return false;
+  };
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#050505]">
@@ -188,7 +203,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="px-2 gap-0.5">
-              {navItems.map((item, idx) => {
+              {navItems.filter(item => !shouldHide(item.url)).map((item, idx, filteredItems) => {
                 const isActive = location === item.url;
                 const isAccent = item.accent;
                 const isFixAccent = item.fixAccent;
@@ -196,7 +211,7 @@ export function AppSidebar() {
                 const isProAccent = item.proAccent;
                 const isBoostAccent = item.boostAccent;
                 const isAiAccent = item.aiAccent;
-                const isLast = idx === navItems.length - 1;
+                const isLast = idx === filteredItems.length - 1;
                 const sectionCount = countForSection(tweaks, item.url);
                 return (
                   <SidebarMenuItem key={item.title} className={isLast ? "mt-1 pt-1 border-t border-white/5" : ""}>
