@@ -756,7 +756,7 @@ function AdminPresetGenerator() {
       const fakeHW = buildFakeHW();
       const fakeOS = buildFakeOS();
       const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakIds = Array.from(recs.ids).filter(id => !["RegistryDPCLatency","DebloatMSPaint3D","DebloatWindowsCamera","FiveM3500PerfPlan"].includes(id));
+      const tweakIds = Array.from(recs.ids);
 
       // Build the .bat / PS1 content by calling the existing generate endpoint
       const tweakMap: Record<string, boolean> = {};
