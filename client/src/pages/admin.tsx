@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
+import type { HardwareInfo } from "@/hooks/use-hardware-info";
+import type { OsInfo } from "@/hooks/use-os-detection";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
@@ -9,7 +12,7 @@ import {
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
-  ServerCrash, Network, Flag, CheckCircle2,
+  ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -96,7 +99,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -628,6 +631,274 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Admin Preset Generator ─────────────────────────────────────────────────
+function AdminPresetGenerator() {
+  const { toast } = useToast();
+  const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">("nvidia");
+  const [gpuName, setGpuName] = useState("");
+  const [cpuBrand, setCpuBrand] = useState<"intel" | "amd">("intel");
+  const [cpuCores, setCpuCores] = useState("8");
+  const [ramGB, setRamGB] = useState("16");
+  const [osVersion, setOsVersion] = useState<"win11" | "win10">("win11");
+  const [isLaptop, setIsLaptop] = useState(false);
+  const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const buildFakeHW = (): HardwareInfo => {
+    const cores = parseInt(cpuCores) || 8;
+    const ram = parseInt(ramGB) || 16;
+    const isNvidia = gpuVendor === "nvidia";
+    const isAmdGpu = gpuVendor === "amd";
+    const isAmdApu = gpuVendor === "amd" && isLaptop && ram <= 16;
+    const isIntel = gpuVendor === "intel";
+    const isAMD = isAmdGpu || isAmdApu;
+    const gpuNameLower = gpuName.toLowerCase();
+    const nvidiaIsRTX = isNvidia && (gpuNameLower.includes("rtx") || gpuNameLower.includes(" 30") || gpuNameLower.includes(" 40") || gpuNameLower.includes(" 50"));
+    const nvidiaIsLowEnd = isNvidia && !nvidiaIsRTX;
+    const isRyzen = cpuBrand === "amd";
+    const isIntelCore = cpuBrand === "intel";
+    const gpuLabel = gpuName || (isNvidia ? "NVIDIA GPU" : isAmdGpu ? "AMD GPU" : "Intel GPU");
+    const cpuLabel = `${cpuBrand === "intel" ? "Intel" : "AMD"} ${cores}T`;
+    const ramLabel = `${ram}GB`;
+    return {
+      loading: false, scanned: true,
+      gpuName: gpuLabel, gpuVendor: gpuVendor,
+      cpuLabel, cpuCores: cores, cpuPhysicalCores: Math.max(1, Math.ceil(cores / 2)),
+      ramGB: ram, ramLabel, ramNote: "",
+      isNvidia, isAmdGpu, isAmdApu, isAMD, isIntel, isLaptop,
+      nvidiaIsRTX, nvidiaIsLowEnd,
+      cpuBrand: cpuBrand, isRyzen, isIntelCore, cpuGeneration: 0,
+      resolution: "1920x1080",
+    } as HardwareInfo;
+  };
+
+  const buildFakeOS = (): OsInfo => {
+    return {
+      loading: false,
+      os: osVersion === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
+      displayName: osVersion === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
+      isWindows: true,
+      isWindows11: osVersion === "win11",
+      isWindows10: osVersion === "win10",
+      build: osVersion === "win11" ? "22631" : "19045",
+    } as OsInfo;
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const fakeHW = buildFakeHW();
+      const fakeOS = buildFakeOS();
+      const recs = computeSmartRecs(fakeHW, fakeOS);
+      const tweakIds = Array.from(recs.ids);
+
+      // Build the .bat / PS1 content by calling the existing generate endpoint
+      const tweakMap: Record<string, boolean> = {};
+      tweakIds.forEach(id => { tweakMap[id] = true; });
+
+      const res = await fetch("/api/script/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: null }),
+      });
+
+      if (!res.ok) throw new Error("Script generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const gpuStr = (gpuName || gpuVendor).replace(/\s+/g, "_").toUpperCase();
+      const ramStr = `${ramGB}GB`;
+      const osStr = osVersion.toUpperCase();
+      a.download = `OptiGods_Preset_${gpuStr}_${ramStr}_${osStr}.ps1`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
+      toast({
+        title: `Preset generated — ${tweakIds.length} tweaks`,
+        description: `Profile: ${recs.profile}. Send the .ps1 file to the user.`,
+      });
+    } catch (e) {
+      toast({ title: "Generation failed", description: String(e), variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const inputCls = "w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-red-500/50 transition-colors";
+  const labelCls = "text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1 block";
+
+  return (
+    <div className="p-5 space-y-6">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+          <Sliders className="w-5 h-5 text-red-400" />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-white">Custom Preset Generator</h2>
+          <p className="text-xs text-zinc-500">Input a user's specs → downloads a hardware-optimized .ps1 script</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* GPU Vendor */}
+        <div>
+          <label className={labelCls}>GPU Vendor</label>
+          <div className="flex gap-2">
+            {(["nvidia", "amd", "intel"] as const).map(v => (
+              <button key={v} onClick={() => setGpuVendor(v)}
+                className={cn("flex-1 py-2 rounded-lg text-xs font-bold uppercase border transition-all",
+                  gpuVendor === v
+                    ? v === "nvidia" ? "bg-green-500/15 border-green-500/40 text-green-400"
+                      : v === "amd" ? "bg-red-500/15 border-red-500/40 text-red-400"
+                      : "bg-blue-500/15 border-blue-500/40 text-blue-400"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-600 hover:border-zinc-600"
+                )}>
+                <Monitor className="w-3 h-3 inline mr-1" />{v}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* GPU Name */}
+        <div>
+          <label className={labelCls}>GPU Model (optional)</label>
+          <input
+            data-testid="input-gpu-name"
+            value={gpuName}
+            onChange={e => setGpuName(e.target.value)}
+            placeholder={gpuVendor === "nvidia" ? "e.g. RTX 3060, GTX 1660" : gpuVendor === "amd" ? "e.g. RX 6600, RX 580" : "e.g. UHD 770"}
+            className={inputCls}
+          />
+        </div>
+
+        {/* CPU Brand */}
+        <div>
+          <label className={labelCls}>CPU Brand</label>
+          <div className="flex gap-2">
+            {(["intel", "amd"] as const).map(b => (
+              <button key={b} onClick={() => setCpuBrand(b)}
+                className={cn("flex-1 py-2 rounded-lg text-xs font-bold uppercase border transition-all",
+                  cpuBrand === b
+                    ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-600 hover:border-zinc-600"
+                )}>
+                <Cpu className="w-3 h-3 inline mr-1" />{b}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* CPU Cores / Threads */}
+        <div>
+          <label className={labelCls}>CPU Threads</label>
+          <input
+            data-testid="input-cpu-cores"
+            type="number" min="2" max="64"
+            value={cpuCores}
+            onChange={e => setCpuCores(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+
+        {/* RAM */}
+        <div>
+          <label className={labelCls}>RAM (GB)</label>
+          <select data-testid="select-ram" value={ramGB} onChange={e => setRamGB(e.target.value)} className={inputCls}>
+            {["4","8","12","16","24","32","48","64"].map(v => (
+              <option key={v} value={v}>{v}GB</option>
+            ))}
+          </select>
+        </div>
+
+        {/* OS */}
+        <div>
+          <label className={labelCls}>Windows Version</label>
+          <div className="flex gap-2">
+            {([["win11", "Windows 11"], ["win10", "Windows 10"]] as const).map(([v, label]) => (
+              <button key={v} onClick={() => setOsVersion(v)}
+                className={cn("flex-1 py-2 rounded-lg text-xs font-bold border transition-all",
+                  osVersion === v
+                    ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-600 hover:border-zinc-600"
+                )}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Laptop toggle */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
+        <Laptop className="w-4 h-4 text-zinc-500 shrink-0" />
+        <div className="flex-1">
+          <p className="text-xs font-bold text-zinc-300">Laptop</p>
+          <p className="text-[10px] text-zinc-600">Enable laptop-specific tweaks and battery optimizations</p>
+        </div>
+        <button
+          data-testid="toggle-laptop"
+          onClick={() => setIsLaptop(v => !v)}
+          className={cn(
+            "w-10 h-5 rounded-full transition-all relative shrink-0",
+            isLaptop ? "bg-red-600" : "bg-zinc-700"
+          )}
+        >
+          <div className={cn("w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all", isLaptop ? "left-5" : "left-0.5")} />
+        </button>
+      </div>
+
+      {/* Preview */}
+      {(() => {
+        const fakeHW = buildFakeHW();
+        const fakeOS = buildFakeOS();
+        const recs = computeSmartRecs(fakeHW, fakeOS);
+        return (
+          <div className="rounded-xl border border-white/5 bg-zinc-900/40 p-4 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Preset Preview</p>
+            <div className="flex flex-wrap gap-2">
+              <span className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{recs.ids.size} tweaks</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.profile}</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.gpuLabel}</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.cpuLabel}</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.osLabel}</span>
+              {isLaptop && <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">Laptop</span>}
+            </div>
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {recs.reasons.slice(0, 6).map((r, i) => (
+                <p key={i} className="text-[10px] text-zinc-500 flex gap-1.5"><span className="text-red-500/50 shrink-0">•</span>{r}</p>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Generate button */}
+      <button
+        data-testid="button-generate-preset"
+        onClick={handleGenerate}
+        disabled={generating}
+        className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm border border-red-500/30 flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        <Download className="w-4 h-4" />
+        {generating ? "Generating Script..." : "Generate & Download Preset Script"}
+      </button>
+
+      {generated && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <p className="text-xs text-emerald-300">
+            Generated: <strong>{generated.name}</strong> — {generated.tweakCount} tweaks downloaded. Send the .ps1 file to the user.
+          </p>
         </div>
       )}
     </div>
@@ -1515,7 +1786,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -1526,6 +1797,7 @@ export default function Admin() {
               announcements: Bell,
               analytics: TrendingUp,
               security: Shield,
+              preset: Sliders,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -1548,6 +1820,7 @@ export default function Admin() {
                    t === "announcements" ? "Updates" :
                    t === "analytics" ? "Analytics" :
                    t === "security" ? "Security" :
+                   t === "preset" ? "Preset Gen" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -1558,6 +1831,7 @@ export default function Admin() {
                    t === "announcements" ? "" :
                    t === "analytics" ? "" :
                    t === "security" ? "" :
+                   t === "preset" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -2842,6 +3116,7 @@ export default function Admin() {
         )}
 
         {tab === "security" && <SecurityTab headers={headers} />}
+        {tab === "preset" && <AdminPresetGenerator />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

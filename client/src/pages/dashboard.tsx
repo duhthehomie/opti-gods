@@ -325,9 +325,9 @@ export default function Dashboard() {
                 )}
               >
                 {recommendedApplied ? (
-                  <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size})</>
+                  <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />Full Optimize ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} tweaks)</>
+                  <><Rocket className="w-4 h-4 mr-2" />Full Optimize</>
                 )}
               </Button>
 

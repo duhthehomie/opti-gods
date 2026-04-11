@@ -3,9 +3,12 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useProStatus } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, Sparkles, Download } from "lucide-react";
+import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download } from "lucide-react";
 import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 type Message = {
   role: "user" | "assistant";
@@ -39,31 +42,61 @@ const STARTER_QUESTIONS = [
   "What registry tweaks boost FPS?",
 ];
 
-const PRESET_TWEAK_KEYS = [
-  "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","NetworkThrottling",
-  "DisableNagle","InputLagTCP","EnableMSIMode","GameModeTweaks","OptimizeTCP",
-  "DisableXboxGameBar","DisableGameDVR","DisableAnimations","DisablePointerPrecision",
-];
-
 const SAVE_PRESET_REGEX = /\[SAVE_PRESET:[^\]]+\]/g;
 
 function SavePresetCard() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
   const [saved, setSaved] = useState(false);
+
+  const smartRecs = computeSmartRecs(hw, os);
+  const tweakCount = smartRecs.ids.size;
+  const isReady = !hw.loading && !os.loading;
+
+  // If hardware not scanned, show scan prompt
+  if (!hw.scanned && isReady) {
+    return (
+      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <ScanLine className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Hardware Scan Required</span>
+        </div>
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
+          Run a hardware scan first so the AI can select the exact right tweaks for your GPU, CPU, and OS. Without it, the preset can't be hardware-optimized.
+        </p>
+        <Link href="/">
+          <button
+            data-testid="button-go-scan"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white border border-amber-500/40 cursor-pointer transition-all"
+          >
+            <ScanLine className="w-3.5 h-3.5" />
+            Go to Dashboard → Run Scan
+          </button>
+        </Link>
+      </div>
+    );
+  }
 
   const save = async () => {
     const presetTweaks: Record<string, boolean> = {};
-    PRESET_TWEAK_KEYS.forEach(k => { presetTweaks[k] = true; });
+    smartRecs.ids.forEach(k => { presetTweaks[k] = true; });
     try {
       await fetch("/api/presets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "AI Smart FPS Preset", config: { tweaks: presetTweaks } }),
+        body: JSON.stringify({
+          name: `AI Smart Preset — ${smartRecs.profile}`,
+          config: { tweaks: presetTweaks },
+        }),
       });
       setAllTweaks({ ...tweaks, ...presetTweaks });
       setSaved(true);
-      toast({ title: "Smart FPS Preset saved!", description: "13 tweaks applied to your dashboard. Download your script to activate them." });
+      toast({
+        title: "Smart Preset saved!",
+        description: `${tweakCount} hardware-matched tweaks applied. Download your script to activate.`,
+      });
     } catch {
       toast({ title: "Save failed", description: "Try again.", variant: "destructive" });
     }
@@ -73,10 +106,15 @@ function SavePresetCard() {
     <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2">
       <div className="flex items-center gap-2">
         <Zap className="w-4 h-4 text-red-400 shrink-0" />
-        <span className="text-xs font-bold text-red-400 uppercase tracking-wider">AI Smart FPS Preset Ready</span>
+        <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
+          AI Smart Preset — {smartRecs.profile}
+        </span>
       </div>
       <p className="text-[11px] text-zinc-400 leading-relaxed">
-        13 high-impact tweaks — CPU scheduling, timer resolution, network, MSI mode, Xbox Game Bar removed. Safe for all PCs.
+        {hw.scanned
+          ? `${tweakCount} tweaks matched to your exact hardware — ${smartRecs.gpuLabel}, ${smartRecs.cpuLabel}, ${smartRecs.osLabel}. Every tweak is compatible with your system.`
+          : `${tweakCount} universal high-impact tweaks — CPU scheduling, timer resolution, network, gaming mode, and more. Safe for all PCs.`
+        }
       </p>
       <button
         data-testid="button-save-preset"
@@ -90,7 +128,7 @@ function SavePresetCard() {
         )}
       >
         <Download className="w-3.5 h-3.5" />
-        {saved ? "Saved to Dashboard ✓" : "Save to Dashboard"}
+        {saved ? "Saved to Dashboard ✓" : `Save ${tweakCount} Tweaks to Dashboard`}
       </button>
     </div>
   );

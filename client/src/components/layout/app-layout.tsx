@@ -9,6 +9,7 @@ import { ScriptDialog } from "../script-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
+import { HardwareDetectionBanner } from "@/components/hardware-detection-banner";
 import { cn } from "@/lib/utils";
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -97,7 +98,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {/* Main Content Area */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10 relative">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
-            <div className="max-w-5xl mx-auto w-full h-full">
+            <div className="max-w-5xl mx-auto w-full h-full space-y-6">
+              <HardwareDetectionBanner compact />
               {children}
             </div>
           </main>
