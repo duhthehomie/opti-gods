@@ -639,7 +639,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
 // ── Admin Preset Generator ─────────────────────────────────────────────────
 // Infer CPU brand, thread count, generation, and Ryzen model from a typed CPU name
-function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number; generation: number; cpuLabel: string; isRyzen: boolean; isIntelCore: boolean } {
+function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number; cores: number; generation: number; cpuLabel: string; isRyzen: boolean; isIntelCore: boolean } {
   const m = model.trim().toLowerCase();
   // Intel detection
   if (m.includes("intel") || /\bi[3579]-\d/.test(m) || m.includes("core ultra") || m.includes("pentium") || m.includes("celeron") || m.includes("xeon")) {
@@ -674,30 +674,34 @@ function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number
     else if (m.includes("ultra 7")) threads = 20;
     else if (m.includes("ultra 5")) threads = 14;
     const label = model.trim() || `Intel ${threads}T`;
-    return { brand: "intel", threads, generation, cpuLabel: label, isRyzen: false, isIntelCore: true };
+    return { brand: "intel", threads, cores: Math.max(1, Math.floor(threads / 2)), generation, cpuLabel: label, isRyzen: false, isIntelCore: true };
   }
   // AMD Ryzen detection
   if (m.includes("ryzen") || m.includes("amd") || /r[3579]\s*\d{4}/.test(m) || m.includes("threadripper")) {
     let threads = 12;
+    let cores = 6;
     let generation = 0;
     // Ryzen X 3000/5000/7000 — model number gives generation
     const genMatch = m.match(/ryzen\s*[3579]\s*(\d)(\d{3})/);
     if (genMatch) {
       generation = parseInt(genMatch[1]);
       const tier = m.includes("ryzen 9") ? 4 : m.includes("ryzen 7") ? 3 : m.includes("ryzen 5") ? 2 : 1;
-      // 3500 = 6C/6T (no SMT), 3600 = 6C/12T, 5600 = 6C/12T, 5800 = 8C/16T, 5900 = 12C/24T, 5950 = 16C/32T
-      if (m.includes("3500") || m.includes("3300")) { threads = 6; }
-      else if (tier === 4) threads = 32;
-      else if (tier === 3) threads = 16;
-      else if (tier === 2) threads = 12;
-      else threads = 8;
+      // 3500 = 6C/6T (no SMT), 5600 = 6C/12T, 5800X = 8C/16T, 5900X = 12C/24T, 5950X = 16C/32T
+      if (m.includes("3500") || m.includes("3300")) { cores = 6; threads = 6; }
+      else if (m.includes("5800")) { cores = 8; threads = 16; }
+      else if (m.includes("5900")) { cores = 12; threads = 24; }
+      else if (m.includes("5950")) { cores = 16; threads = 32; }
+      else if (tier === 4) { cores = 12; threads = 24; }
+      else if (tier === 3) { cores = 8; threads = 16; }
+      else if (tier === 2) { cores = 6; threads = 12; }
+      else { cores = 4; threads = 8; }
     }
     if (m.includes("threadripper")) threads = 64;
     const label = model.trim() || `AMD Ryzen ${threads}T`;
-    return { brand: "amd", threads, generation, cpuLabel: label, isRyzen: true, isIntelCore: false };
+    return { brand: "amd", threads, generation, cpuLabel: label, isRyzen: true, isIntelCore: false, cores };
   }
   // Unknown — default
-  return { brand: "intel", threads: 8, generation: 0, cpuLabel: model.trim() || "Unknown CPU", isRyzen: false, isIntelCore: true };
+  return { brand: "intel", threads: 8, cores: 4, generation: 0, cpuLabel: model.trim() || "Unknown CPU", isRyzen: false, isIntelCore: true };
 }
 
 function AdminPresetGenerator() {
