@@ -66,7 +66,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "FiveMStreamPool","FiveMWorkingSet","FiveMExtendedMemory","FiveMAffinityMask",
     "FiveMDisableMemCompression","FiveMMenuFpsUncap",
     // Registry — safe kernel tweaks every gaming PC benefits from
-    "RegistryNTFSOptimize","RegistryIOPageLock","RegistryDPCLatency","RegistryLargePageHeap",
+    "RegistryNTFSOptimize","RegistryIOPageLock","RegistryLargePageHeap",
     "ClearPagefileOnShutdown",
     // WinUtil
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
