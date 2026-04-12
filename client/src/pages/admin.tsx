@@ -713,7 +713,6 @@ function AdminPresetGenerator() {
   const [osVersion, setOsVersion] = useState<"win11" | "win10">("win11");
   const [isLaptop, setIsLaptop] = useState(false);
   const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
-  const [safeMode, setSafeMode] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   const buildFakeHW = (): HardwareInfo => {
@@ -761,27 +760,52 @@ function AdminPresetGenerator() {
       const fakeHW = buildFakeHW();
       const fakeOS = buildFakeOS();
       const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakIds = Array.from(recs.ids).filter(id => safeMode ? ![
-        "Win32PrioritySeparation",
-        "SetTimerResolution",
-        "NetworkThrottling",
-        "OptimizeTCP",
-        "InputLagTCP",
-        "DisablePowerThrottling",
-        "DisablePowerThrottlingAdv",
-        "EnableMSIMode",
-        "FiveMHighPriority",
-        "FiveMExtendedMemory",
-        "FiveMAffinityMask",
-        "ProcessLassoProBalance",
-        "ProcessLassoAffinityGaming",
-        "ProcessLassoInstanceBalancer",
-        "FiveMRenderingBoost",
-        "FiveMGPUPriorityStack",
-        "FiveMDisableDWM",
-        "FiveMDisableFullscreen",
-        "FiveMIOPriority"
-      ].includes(id) : true);
+      const tweakIds = [
+        "DisableCoreParking",
+        "DisableHungAppDetection",
+        "DisableXboxGameBar",
+        "DisableGameDVR",
+        "DisablePointerPrecision",
+        "DisableAnimations",
+        "SysVisualBestPerf",
+        "DisableTelemetry",
+        "DisableFastStartup",
+        "DisableWindowsError",
+        "SetHighPerformancePlan",
+        "DisableUSBSuspend",
+        "OptimizeRAMUsage",
+        "MemDisableCompression",
+        "MemDisableSuperfetch",
+        "MemTrimStandbyList",
+        "MemTrimOnMinimize",
+        "MemDisableKernelPaging",
+        "DebloatCortana",
+        "DebloatOneDrive",
+        "DebloatXboxApp",
+        "DebloatXboxGameBar",
+        "DebloatBing",
+        "DebloatSkype",
+        "DebloatTeamsConsumer",
+        "DebloatFeedback",
+        "DebloatGetHelp",
+        "DebloatClipchamp",
+        "DebloatPowerAutomate",
+        "DebloatQuickAssist",
+        "DebloatWindowsCamera",
+        "DebloatMSPaint3D",
+        "ServiceDiagTrack",
+        "ServiceSysMain",
+        "ServiceFax",
+        "ServiceRemoteReg",
+        "ServiceRetailDemo",
+        "PrivacyTelemetry",
+        "PrivacyAdvertisingID",
+        "PrivacyLocationTracking",
+        "PrivacyActivityHistory",
+        "PrivacyDiagFeedback",
+        "RegistryNTFSOptimize",
+        "RegistryIOPageLock"
+      ];
 
       // Build the .bat / PS1 content by calling the existing generate endpoint
       const tweakMap: Record<string, boolean> = {};
@@ -798,20 +822,16 @@ function AdminPresetGenerator() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const gpuStr = (gpuName || gpuVendor).replace(/\s+/g, "_").toUpperCase();
-      const cpuStr = parseCpuModel(cpuModel).cpuLabel.replace(/\s+/g, "_").replace(/[^A-Za-z0-9_]/g, "") || "CPU";
-      const ramStr = `${ramGB}GB`;
-      const osStr = osVersion === "win11" ? "Win11" : "Win10";
-      a.download = `OptiGods_${gpuStr}_${cpuStr}_${ramStr}_${osStr}.bat`;
+      a.download = `OptiGods_Fix_FPS_Drops.bat`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
+      setGenerated({ name: "FPS Drop Fix", tweakCount: tweakIds.length });
       toast({
-        title: `Preset generated — ${tweakIds.length} tweaks`,
-        description: `Profile: ${recs.profile}. Send the .bat file to the user — they just double-click it.`,
+        title: `Fix file generated — ${tweakIds.length} tweaks`,
+        description: `Send the .bat file to the user — double-click it to apply the fix.`,
       });
     } catch (e) {
       toast({ title: "Generation failed", description: String(e), variant: "destructive" });
@@ -936,23 +956,6 @@ function AdminPresetGenerator() {
           )}
         >
           <div className={cn("w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all", isLaptop ? "left-5" : "left-0.5")} />
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-        <div className="flex-1">
-          <p className="text-xs font-bold text-emerald-300">Stutter Fix Mode</p>
-          <p className="text-[10px] text-emerald-200/70">Safer preset for bad FPS drops while driving, aiming, or punching</p>
-        </div>
-        <button
-          data-testid="toggle-safe-mode"
-          onClick={() => setSafeMode(v => !v)}
-          className={cn(
-            "w-10 h-5 rounded-full transition-all relative shrink-0",
-            safeMode ? "bg-emerald-500" : "bg-zinc-700"
-          )}
-        >
-          <div className={cn("w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all", safeMode ? "left-5" : "left-0.5")} />
         </button>
       </div>
 
