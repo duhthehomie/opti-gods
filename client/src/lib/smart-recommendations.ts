@@ -21,13 +21,13 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   // ===== CORE — every Windows gaming PC benefits from these =====
   const CORE = [
     // Scheduler / responsiveness
-    "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
+    "SetResponsiveness","GameModeTweaks",
     "DisableHungAppDetection","EnableMSIMode",
     // Network
-    "NetworkThrottling","DisableNagle","InputLagTCP","SetDNSPriority","DisableNDU","OptimizeTCP",
+    "DisableNagle","SetDNSPriority","DisableNDU",
     "EnableTCPAutoTuning","DisableIPv6",
     // Power / throttling
-    "DisablePowerThrottling","DisablePowerThrottlingAdv",
+    "DisablePowerThrottling",
     // Visual / gaming
     "DisableXboxGameBar","DisableGameDVR","DisablePointerPrecision","DisableAnimations",
     "SysVisualBestPerf","SysHypervisorOff",
@@ -51,14 +51,13 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "PrivacyTelemetry","PrivacyAdvertisingID","PrivacyLocationTracking",
     "PrivacyActivityHistory","PrivacyDiagFeedback",
     // Process Lasso tweaks (safe for all PCs)
-    "ProcessLassoProBalance","ProcessLassoSmartTrim","ProcessLassoRestrain",
-    "ProcessLassoInstanceBalancer","ProcessTrimWorkingSet",
+    "ProcessLassoSmartTrim","ProcessLassoRestrain","ProcessTrimWorkingSet",
     "ProcessAutoKillHung","ProcessDisableWindowsErrorReporting",
     // FiveM — universal game pack
-    "FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix",
+    "FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix",
     "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd",
     "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
-    "FiveMRenderingBoost","FiveMGPUPriorityStack","FiveMDisableMPO",
+    "FiveMRenderingBoost","FiveMDisableMPO",
     "FiveMReduceShadowQuality","FiveMStreamDistance","FiveMDisableVSync",
     "FiveMMMCSSAudio","FiveMCommandlineMax","FiveMIOPriority",
     "FiveMCitizenDisableMedia","FiveMDisableDWM","FiveMDisableFullscreen",
