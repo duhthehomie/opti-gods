@@ -713,7 +713,9 @@ function AdminPresetGenerator() {
   const [osVersion, setOsVersion] = useState<"win11" | "win10">("win11");
   const [isLaptop, setIsLaptop] = useState(false);
   const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
+  const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [generatingFix, setGeneratingFix] = useState(false);
 
   const buildFakeHW = (): HardwareInfo => {
     const cpu = parseCpuModel(cpuModel);
@@ -792,6 +794,55 @@ function AdminPresetGenerator() {
       toast({ title: "Generation failed", description: String(e), variant: "destructive" });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleGenerateFix = async () => {
+    setGeneratingFix(true);
+    try {
+      const fixTweaks = [
+        "DisableCoreParking",
+        "DisableHungAppDetection",
+        "DisablePointerPrecision",
+        "DisableAnimations",
+        "SysVisualBestPerf",
+        "DisableTelemetry",
+        "DisableFastStartup",
+        "DisableWindowsError",
+        "SetHighPerformancePlan",
+        "DisableUSBSuspend",
+        "OptimizeRAMUsage",
+        "MemDisableCompression",
+        "MemTrimStandbyList",
+        "ServiceDiagTrack",
+        "ServiceSysMain",
+        "PrivacyTelemetry",
+        "PrivacyAdvertisingID",
+        "PrivacyLocationTracking"
+      ];
+      const tweakMap: Record<string, boolean> = {};
+      fixTweaks.forEach(id => { tweakMap[id] = true; });
+      const res = await fetch("/api/script/download-bat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
+      });
+      if (!res.ok) throw new Error("Fix generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `OptiGods_Fix_FPS_Drops.bat`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setFixGenerated({ name: "FPS Drop Fix", tweakCount: fixTweaks.length });
+      toast({ title: "Fix generated", description: "Send the .bat fix file to the user." });
+    } catch (e) {
+      toast({ title: "Fix generation failed", description: String(e), variant: "destructive" });
+    } finally {
+      setGeneratingFix(false);
     }
   };
 
@@ -947,7 +998,17 @@ function AdminPresetGenerator() {
         className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm border border-red-500/30 flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Download className="w-4 h-4" />
-        {generating ? "Generating Script..." : "Generate & Download Preset Script"}
+        {generating ? "Generating Preset..." : "Generate Preset Script"}
+      </button>
+
+      <button
+        data-testid="button-generate-fix"
+        onClick={handleGenerateFix}
+        disabled={generatingFix}
+        className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm border border-zinc-700 flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        <Download className="w-4 h-4" />
+        {generatingFix ? "Generating Fix..." : "Generate Fix Script"}
       </button>
 
       {generated && (
@@ -955,6 +1016,15 @@ function AdminPresetGenerator() {
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <p className="text-xs text-emerald-300">
             Generated: <strong>{generated.name}</strong> — {generated.tweakCount} tweaks downloaded. Send the .bat file to the user — they double-click it, click Yes, done.
+          </p>
+        </div>
+      )}
+
+      {fixGenerated && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+          <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+          <p className="text-xs text-blue-300">
+            Fix generated: <strong>{fixGenerated.name}</strong> — {fixGenerated.tweakCount} tweaks downloaded.
           </p>
         </div>
       )}
