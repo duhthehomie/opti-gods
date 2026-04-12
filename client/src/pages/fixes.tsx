@@ -311,6 +311,30 @@ export default function Fixes() {
   const [downloading, setDownloading] = useState(false);
   const [downloadingFix, setDownloadingFix] = useState(false);
   const [downloadingRLFix, setDownloadingRLFix] = useState(false);
+  const [downloadingFiveMFix, setDownloadingFiveMFix] = useState(false);
+
+  const downloadFiveMCrashFix = async () => {
+    setDownloadingFiveMFix(true);
+    try {
+      const res = await fetch("/api/fivem-crash-fix-script");
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods_FiveM_Crash_Fix.bat";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "FiveM Crash Fix Downloaded",
+        description: "Double-click the .bat file → allow UAC → restart your PC when done.",
+      });
+    } catch {
+      toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
+    } finally {
+      setDownloadingFiveMFix(false);
+    }
+  };
 
   const downloadRocketLeagueFix = async () => {
     setDownloadingRLFix(true);
@@ -414,6 +438,73 @@ export default function Fixes() {
           <div>
             <h1 className="text-2xl font-display font-bold">Fixes & Restore</h1>
             <p className="text-zinc-500 text-sm">Undo any tweak Opti Gods applied — download a restore script and run it as Administrator</p>
+          </div>
+        </motion.div>
+
+        {/* ── FIVEM CRASH FIX ──────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.005 }}
+          className="rounded-2xl border-2 border-red-600/60 bg-red-950/40 overflow-hidden shadow-[0_0_32px_-8px_rgba(220,38,38,0.4)]"
+        >
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-700/30 border-b border-red-600/40">
+            <Siren className="w-3.5 h-3.5 text-red-400 animate-pulse shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
+              FiveM &amp; GTA V — All Crash Types Fixed
+            </span>
+          </div>
+
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                FiveM crashing with no error, random black screen exits, or "memory could not be written"?
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Removes GpuPriorityClass=8 from all FiveM IFEO keys</span> — Real-time GPU was starving the FiveM browser process (CEF), causing exception 0xe0000008 with no dialog
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Removes DisableRenderingContextPreemption</span> — blocked GPU hang recovery, causing silent black screen exits with no error
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Restores GPU VRAM overflow paging</span> — PagingAllocation=0 was killing the game silently when VRAM filled up (FiveM uses 4–6 GB)
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Fixes DisablePagingExecutive + WorkingSetLimitInKB + TDR delay</span> — three more crash vectors that all produce either no error or a generic memory write error
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Safe for all systems. Covers all 13 known FiveM build numbers. Takes ~5 seconds. All fixes now also applied permanently in the optimizer going forward.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button
+                data-testid="button-download-fivem-crash-fix"
+                onClick={downloadFiveMCrashFix}
+                disabled={downloadingFiveMFix}
+                className="bg-red-700 hover:bg-red-600 text-white font-black text-sm px-5 py-2.5 border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] whitespace-nowrap"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {downloadingFiveMFix ? "Generating..." : "Download FiveM Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">
+                Double-click → allow UAC → restart PC
+              </p>
+            </div>
           </div>
         </motion.div>
 
