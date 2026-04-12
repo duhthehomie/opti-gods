@@ -885,7 +885,7 @@ function AdminPresetGenerator() {
                   {parsed.brand === "intel" ? "Intel" : "AMD Ryzen"}
                 </span>
                 <span>·</span>
-                <span>{parsed.threads} threads detected</span>
+                <span>{parsed.cores} cores / {parsed.threads} threads detected</span>
                 {parsed.generation > 0 && <><span>·</span><span>Gen {parsed.generation}</span></>}
               </p>
             );
