@@ -760,52 +760,27 @@ function AdminPresetGenerator() {
       const fakeHW = buildFakeHW();
       const fakeOS = buildFakeOS();
       const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakIds = [
-        "DisableCoreParking",
-        "DisableHungAppDetection",
-        "DisableXboxGameBar",
-        "DisableGameDVR",
-        "DisablePointerPrecision",
-        "DisableAnimations",
-        "SysVisualBestPerf",
-        "DisableTelemetry",
-        "DisableFastStartup",
-        "DisableWindowsError",
-        "SetHighPerformancePlan",
-        "DisableUSBSuspend",
-        "OptimizeRAMUsage",
-        "MemDisableCompression",
-        "MemDisableSuperfetch",
-        "MemTrimStandbyList",
-        "MemTrimOnMinimize",
-        "MemDisableKernelPaging",
-        "DebloatCortana",
-        "DebloatOneDrive",
-        "DebloatXboxApp",
-        "DebloatXboxGameBar",
-        "DebloatBing",
-        "DebloatSkype",
-        "DebloatTeamsConsumer",
-        "DebloatFeedback",
-        "DebloatGetHelp",
-        "DebloatClipchamp",
-        "DebloatPowerAutomate",
-        "DebloatQuickAssist",
-        "DebloatWindowsCamera",
-        "DebloatMSPaint3D",
-        "ServiceDiagTrack",
-        "ServiceSysMain",
-        "ServiceFax",
-        "ServiceRemoteReg",
-        "ServiceRetailDemo",
-        "PrivacyTelemetry",
-        "PrivacyAdvertisingID",
-        "PrivacyLocationTracking",
-        "PrivacyActivityHistory",
-        "PrivacyDiagFeedback",
-        "RegistryNTFSOptimize",
-        "RegistryIOPageLock"
-      ];
+      const tweakIds = Array.from(recs.ids).filter(id => ![
+        "Win32PrioritySeparation",
+        "SetTimerResolution",
+        "NetworkThrottling",
+        "OptimizeTCP",
+        "InputLagTCP",
+        "DisablePowerThrottling",
+        "DisablePowerThrottlingAdv",
+        "EnableMSIMode",
+        "FiveMHighPriority",
+        "FiveMExtendedMemory",
+        "FiveMAffinityMask",
+        "ProcessLassoProBalance",
+        "ProcessLassoAffinityGaming",
+        "ProcessLassoInstanceBalancer",
+        "FiveMRenderingBoost",
+        "FiveMGPUPriorityStack",
+        "FiveMDisableDWM",
+        "FiveMDisableFullscreen",
+        "FiveMIOPriority"
+      ].includes(id));
 
       // Build the .bat / PS1 content by calling the existing generate endpoint
       const tweakMap: Record<string, boolean> = {};
@@ -822,16 +797,16 @@ function AdminPresetGenerator() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `OptiGods_Fix_FPS_Drops.bat`;
+      a.download = `OptiGods_Custom_Preset.bat`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setGenerated({ name: "FPS Drop Fix", tweakCount: tweakIds.length });
+      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
       toast({
-        title: `Fix file generated — ${tweakIds.length} tweaks`,
-        description: `Send the .bat file to the user — double-click it to apply the fix.`,
+        title: `Preset generated — ${tweakIds.length} tweaks`,
+        description: `Send the .bat file to the user — they just double-click it.`,
       });
     } catch (e) {
       toast({ title: "Generation failed", description: String(e), variant: "destructive" });
