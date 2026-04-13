@@ -458,36 +458,36 @@ export default function Fixes() {
           <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm font-bold text-white leading-snug">
-                FiveM crashing with no error, random black screen exits, or "memory could not be written"?
+                FiveM crashing? Silent exits, "memory could not be written", or "Assertion failure: status == MH_OK"?
               </p>
               <div className="space-y-1">
                 <div className="flex items-start gap-2">
                   <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Removes GpuPriorityClass=8 from all FiveM IFEO keys</span> — Real-time GPU was starving the FiveM browser process (CEF), causing exception 0xe0000008 with no dialog
+                    <span className="text-white font-semibold">Clears Windows Exploit Protection / ACG flags</span> — Arbitrary Code Guard blocked FiveM's hook system from writing trampoline stubs → <span className="text-red-300">Assertion failure: status == MH_OK (Hooking.Stubs.cpp:20)</span>
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Removes DisableRenderingContextPreemption</span> — blocked GPU hang recovery, causing silent black screen exits with no error
+                    <span className="text-white font-semibold">Removes GpuPriorityClass=8 + DisableRenderingContextPreemption</span> — Real-time GPU starved the CEF browser, blocked GPU hang recovery → silent black screen exits
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Restores GPU VRAM overflow paging</span> — PagingAllocation=0 was killing the game silently when VRAM filled up (FiveM uses 4–6 GB)
+                    <span className="text-white font-semibold">Restores GPU VRAM paging + TDR delay</span> — PagingAllocation=0 killed the game silently on VRAM fill; TdrDelay=60s caused display to go black with no crash report
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Fixes DisablePagingExecutive + WorkingSetLimitInKB + TDR delay</span> — three more crash vectors that all produce either no error or a generic memory write error
+                    <span className="text-white font-semibold">Fixes DisablePagingExecutive + WorkingSetLimitInKB + Memory Compression</span> — memory write crashes and CEF browser heap failures
                   </p>
                 </div>
               </div>
               <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Safe for all systems. Covers all 13 known FiveM build numbers. Takes ~5 seconds. All fixes now also applied permanently in the optimizer going forward.
+                Universal fix — safe for all systems. Covers all 13 FiveM build numbers. Takes ~5 seconds. All crashes now also permanently fixed in the optimizer.
               </p>
             </div>
 
