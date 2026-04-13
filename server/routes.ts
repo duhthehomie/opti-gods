@@ -2504,8 +2504,32 @@ Start-Sleep 2
 
       if (!paid) return res.json({ paid: false });
 
-      // Issue a real server-side Pro session so the client can persist access properly
-      const sessionToken = await storage.createProSession(`stripe:${sessionId}`);
+      // Get customer email from Stripe for admin visibility
+      const customerEmail = (session as any).customer_details?.email
+        || (session as any).customer_email
+        || 'unknown@card';
+
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+
+      // Check if we already created a code for this Stripe session (idempotent — handles page refresh)
+      const existingCode = await storage.findCodeByStripeRef(sessionId);
+
+      let codeValue: string;
+      if (existingCode) {
+        // Customer revisited payment/success — just issue a new session for the same code
+        codeValue = existingCode.code;
+      } else {
+        // First verification — create a real Pro access code so this buyer shows in admin
+        const { randomBytes } = await import('crypto');
+        const shortId = randomBytes(3).toString('hex').toUpperCase(); // e.g. A3F92C
+        codeValue = `STRIPE-${shortId}`;
+        const noteValue = `${customerEmail} | stripe:${sessionId}`;
+        await storage.createCode(codeValue, noteValue);
+        await storage.claimStripeCode(codeValue, clientIp);
+      }
+
+      // Issue a server-side Pro session linked to the real code (not the raw Stripe session ID)
+      const sessionToken = await storage.createProSession(codeValue);
       res.json({ paid: true, sessionToken });
     } catch (err: any) {
       console.error('Stripe verify error:', err.message);

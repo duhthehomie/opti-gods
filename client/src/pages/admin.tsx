@@ -2188,10 +2188,25 @@ export default function Admin() {
                         const fps = codeDeploy ? estimateFpsGain(codeDeploy.allTweakIds) : null;
                         return (
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {c.note
-                              ? <p className="text-xs text-zinc-300 truncate max-w-[120px] sm:max-w-none">{c.note}</p>
-                              : <p className="text-xs text-zinc-600 italic">No name</p>
-                            }
+                            {(() => {
+                              const isStripe = c.code.startsWith('STRIPE-');
+                              const displayNote = isStripe && c.note
+                                ? c.note.split(' | stripe:')[0]
+                                : c.note;
+                              return (
+                                <>
+                                  {isStripe && (
+                                    <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 shrink-0">
+                                      <CreditCard className="w-2.5 h-2.5" />CARD
+                                    </span>
+                                  )}
+                                  {displayNote
+                                    ? <p className="text-xs text-zinc-300 truncate max-w-[140px] sm:max-w-none">{displayNote}</p>
+                                    : <p className="text-xs text-zinc-600 italic">No name</p>
+                                  }
+                                </>
+                              );
+                            })()}
                             {fps && fps.high > 0 && (
                               <span
                                 data-testid={`badge-fps-code-${c.id}`}
@@ -2247,9 +2262,24 @@ export default function Admin() {
                           onClick={() => resetCode.mutate(c.id)}
                           disabled={resetCode.isPending}
                           className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-blue-500/10 text-zinc-600 hover:text-blue-400 transition-colors"
-                          title="Reset — let customer re-enter this code"
+                          title={c.code.startsWith('STRIPE-') ? "Revive — restore their access (they revisit payment page to get new session)" : "Reset — let customer re-enter this code"}
                         >
-                          <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">Reset</span>
+                          <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">{c.code.startsWith('STRIPE-') ? 'Revive' : 'Reset'}</span>
+                        </button>
+                      )}
+                      {c.usedAt && (
+                        <button
+                          data-testid={`button-kill-code-${c.id}`}
+                          onClick={() => {
+                            if (confirm(`Kill ALL Pro access for ${c.note?.split(' | stripe:')[0] || c.code}?\n\nThis revokes their session immediately. They lose access on next page load.`)) {
+                              revokeByCode.mutate(c.code);
+                            }
+                          }}
+                          disabled={revokeByCode.isPending}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors"
+                          title="Kill — instantly revoke all Pro sessions for this buyer"
+                        >
+                          <Ban className="w-3 h-3" /> <span className="hidden sm:inline">Kill</span>
                         </button>
                       )}
                       {(() => {

@@ -80,6 +80,9 @@ export interface IStorage {
   logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void>;
   getSecurityEvents(limit?: number): Promise<SecurityEvent[]>;
   resolveSecurityEvent(id: number): Promise<void>;
+  // Stripe purchases — find by stripe session ref stored in note
+  findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
+  claimStripeCode(codeValue: string, ip?: string): Promise<void>;
   // IP bans
   banIp(ip: string, reason: string, permanent?: boolean): Promise<void>;
   unbanIp(ip: string): Promise<void>;
@@ -531,6 +534,18 @@ export class DatabaseStorage implements IStorage {
 
   async resolveSecurityEvent(id: number): Promise<void> {
     await db.update(securityEvents).set({ resolvedAt: new Date() }).where(eq(securityEvents.id, id));
+  }
+
+  async findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null> {
+    const rows = await db.select().from(proAccessCodes)
+      .where(sql`note LIKE ${'%stripe:' + stripeSessionId + '%'}`);
+    return rows[0] ?? null;
+  }
+
+  async claimStripeCode(codeValue: string, ip?: string): Promise<void> {
+    await db.update(proAccessCodes)
+      .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
+      .where(eq(proAccessCodes.code, codeValue));
   }
 
   async banIp(ip: string, reason: string, permanent = false): Promise<void> {
