@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react";
+import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { setProStatus, setProSession } from "@/lib/pro-status";
 
@@ -95,14 +96,14 @@ export default function PaymentSuccess() {
             <div>
               <h1 className="text-3xl font-display font-bold mb-3">You're In.</h1>
               <p className="text-zinc-400 text-sm leading-relaxed">
-                Payment confirmed. Your Pro access is active — all 461+ tweaks and every game pack are unlocked.
+                Payment confirmed. Your Pro access is active — all {TOTAL_TWEAKS_LABEL} tweaks and every game pack are unlocked.
               </p>
             </div>
 
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2">
               {[
                 { text: "Download your personalized .PS1 script", color: "text-red-500" },
-                { text: "461+ system, network, GPU, and memory tweaks", color: "text-red-500" },
+                { text: `${TOTAL_TWEAKS_LABEL} system, network, GPU, and memory tweaks`, color: "text-red-500" },
                 { text: "FiveM, Fortnite, CS2, Valorant, Apex packs", color: "text-red-500" },
                 { text: "Lifetime access — never expires", color: "text-red-500" },
               ].map((item, i) => (

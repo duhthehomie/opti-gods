@@ -38,6 +38,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { TOTAL_TWEAKS } from "@/lib/tweak-count";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useProStatus } from "@/lib/pro-status";
@@ -105,9 +106,6 @@ const navItems: NavItem[] = [
   { title: "Showcase",            url: "/showcase",           icon: Play },
   { title: "Help & Discord",      url: "/help",               icon: MessageCircle, accent: true },
 ];
-
-const TOTAL_TWEAKS = 461;
-
 
 export function AppSidebar() {
   const [location] = useLocation();

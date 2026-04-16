@@ -76,6 +76,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "DisableDynamicTick",
     // Advanced Network — safe for all PCs
     "NetDNSCloudflare","NetDisableQoS","NetInterruptModeration","NetRSSQueues","NetAdapterPowerSave","NetTCPChimneyOffload",
+    // NOTE: NetDNSGoogle is intentionally EXCLUDED — it is a manual alternative to NetDNSCloudflare.
+    // Only one DNS provider should be applied; Cloudflare is recommended by default for lower latency.
     // Process Scheduling — safe for all gaming PCs
     "ProcMMCSSGaming","ProcGPUSchedulerHigh",
     // WinUtil
@@ -193,6 +195,9 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "FiveMGPUPriorityStack",
       // New NVIDIA tweaks
       "NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableShadowPlay",
+      // NOTE: NvidiaDisableContainerLS is intentionally EXCLUDED from auto-recommendations.
+      // Stopping NVDisplay.ContainerLocalSystem causes NVIDIA Overlay 0x80000003 crash for many users.
+      // It is exposed in the UI as a manual opt-in tweak with an explicit warning.
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {

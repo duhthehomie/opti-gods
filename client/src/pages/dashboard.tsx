@@ -17,6 +17,7 @@ import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
+import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { ScanImport } from "@/components/scan-import";
 import { FpsEstimate } from "@/components/fps-estimate";
 import { HardwareScanZone } from "@/components/hardware-scan";
@@ -153,7 +154,7 @@ const HOW_TO_STEPS = [
 
 // Pro pricing bullet points
 const PRO_BULLETS = [
-  "461+ registry, network, memory, and GPU tweaks",
+  `${TOTAL_TWEAKS_LABEL} registry, network, memory, and GPU tweaks`,
   "FiveM, Fortnite, CS2, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
@@ -290,7 +291,7 @@ export default function Dashboard() {
               OPTI GODS <span className="text-red-500">by leaq</span>
             </h1>
             <p className="text-base md:text-lg text-zinc-400 mb-8 leading-relaxed font-medium">
-              461+ tweaks. One script. Zero compromise.
+              {TOTAL_TWEAKS_LABEL} tweaks. One script. Zero compromise.
             </p>
 
             <div className="flex flex-wrap gap-3">

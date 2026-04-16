@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Zap, X, Loader2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame, Ticket } from "lucide-react";
+import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -158,7 +159,7 @@ function ProPaymentDialog({
               <span className="text-xs text-zinc-500 font-medium">one-time</span>
             </div>
             <p className="text-[11px] font-bold text-white mb-0.5">Pro Access — Lifetime</p>
-            <p className="text-[10px] text-zinc-500">All 461+ tweaks · custom script · lifetime access</p>
+            <p className="text-[10px] text-zinc-500">All {TOTAL_TWEAKS_LABEL} tweaks · custom script · lifetime access</p>
           </div>
         </div>
 
@@ -167,7 +168,7 @@ function ProPaymentDialog({
           {/* Feature list */}
           <div className="rounded-xl bg-zinc-900/80 border border-white/8 p-4 space-y-2.5">
             {[
-              { icon: "⚡", text: "461+ registry, GPU, network & game-specific tweaks", bold: true },
+              { icon: "⚡", text: `${TOTAL_TWEAKS_LABEL} registry, GPU, network & game-specific tweaks`, bold: true },
               { icon: "🎮", text: "FiveM, Fortnite, CS2, Valorant, Apex + 10 more game packs" },
               { icon: "📄", text: "Your custom PowerShell script — download in seconds" },
               { icon: "🔁", text: "14 games auto-detected · preset save/load" },

@@ -13,7 +13,7 @@ interface OptimizationState {
   reset: () => void;
 }
 
-const DEFAULT_TWEAKS: Record<string, boolean> = {
+export const DEFAULT_TWEAKS: Record<string, boolean> = {
   // Registry - CPU Scheduling
   Win32PrioritySeparation: false,
   DisableHungAppDetection: false,
