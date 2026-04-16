@@ -3206,7 +3206,7 @@ Read-Host "Press Enter to close this window"
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) return res.status(503).json({ error: "AI not configured" });
 
-    const [codes, friends, visitStats, emailReqs, manualTotal, downloads, secEvents, reports] = await Promise.all([
+    const [codes, friends, visitStats, emailReqs, manualTotal, downloads, secEvents, reports, activeSessions] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
       storage.getVisitStats(),
@@ -3215,6 +3215,7 @@ Read-Host "Press Enter to close this window"
       storage.getDownloadStats(),
       storage.getSecurityEvents(20),
       storage.getUserReports(),
+      storage.getAllProSessions(),
     ]);
 
     const reservedCodeIds = new Set(
@@ -3233,6 +3234,9 @@ Read-Host "Press Enter to close this window"
     const openReports = reports.filter(r => r.status === "open").length;
     const acknowledgedReports = reports.filter(r => r.status === "acknowledged").length;
     const openSecEvents = secEvents.filter(e => !e.resolvedAt).length;
+    const recentSessionThreshold = Date.now() - 24 * 60 * 60 * 1000;
+    const activeSessionsLast24h = activeSessions.filter(s => s.lastCheckedAt && new Date(s.lastCheckedAt).getTime() > recentSessionThreshold).length;
+    const uniqueActiveCodeRefs = new Set(activeSessions.map(s => s.codeRef)).size;
 
     const reportSummary = reports
       .filter(r => r.status !== "resolved")
@@ -3248,6 +3252,7 @@ LIVE APP DATA (updated this moment):
 - Friend Tokens: ${friends.filter(f => !f.usedAt).length} available, ${friends.filter(f => f.usedAt).length} used
 - Visits: ${visitStats.today} today, ${visitStats.total} all-time
 - Downloads: ${downloads.totalDownloads} scripts, ${downloads.totalTweaksDeployed} tweaks deployed
+- Active Sessions: ${activeSessions.length} total, ${activeSessionsLast24h} active in last 24h, ${uniqueActiveCodeRefs} unique codes
 - Pending Emails: ${pendingEmails} awaiting codes
 - Security: ${openSecEvents} unresolved events
 - User Tickets: ${openReports} open, ${acknowledgedReports} acknowledged
@@ -3332,7 +3337,7 @@ RESPONSE STYLE:
             const token = parsed.choices[0]?.delta?.content ?? "";
             if (token) {
               fullText += token;
-              const safeToken = token.replace(/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g, "[REDACTED]");
+              const safeToken = sanitizeAetherOutput(token);
               res.write(`data: ${JSON.stringify({ token: safeToken })}\n\n`);
             }
           } catch {}
