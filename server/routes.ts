@@ -2386,15 +2386,26 @@ Start-Sleep 2
       `Read-Host "Press Enter to close"`,
     ];
 
-    const script = [
+    const batchHeader = [
       `@echo off`,
       `setlocal`,
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = @'`,
-      ...ps1Lines,
-      `'@; $f = Join-Path $env:TEMP ('fivem_fix_' + [guid]::NewGuid().ToString() + '.ps1'); Set-Content -Path $f -Value $p -Encoding UTF8; & powershell -NoProfile -ExecutionPolicy Bypass -File $f; Remove-Item $f -Force -ErrorAction SilentlyContinue"`,
+      `net session >nul 2>&1`,
+      `if %errorLevel% == 0 goto :run`,
+      `echo  Requesting Administrator rights...`,
+      `PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"`,
+      `exit /b`,
+      `:run`,
+      `set "TMP_PS1=%temp%\\fivem_fix_%RANDOM%.ps1"`,
+      `SKIP_PLACEHOLDER`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
+      `del "%TMP_PS1%" 2>nul`,
       `endlocal`,
       `exit /b`,
-    ].join('\r\n');
+      ``,
+    ];
+    const skipCount = batchHeader.length;
+    batchHeader[batchHeader.indexOf('SKIP_PLACEHOLDER')] = `more +${skipCount} "%~f0" > "%TMP_PS1%"`;
+    const script = batchHeader.join('\r\n') + ps1Lines.join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_Crash_Fix.bat"');
