@@ -40,7 +40,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
     "MemDisableKernelPaging","MemGPUOptimize","MemGPUSchedulerTweak",
     "MemSetWorkingSetSize","MemDisableHeapTermination","MemSystemCacheBoost",
-    "EnableLargeSystemCache","MemLargePageSupport",
+    "MemLargePageSupport",
     // Services
     "ServiceDiagTrack","ServiceSysMain","ServiceFax","ServiceRemoteReg","ServiceRetailDemo",
     "ServiceDPS","ServiceDusmSvc","ServiceLltdsvc","ServiceMapsBroker","ServicePcaSvc",
@@ -66,7 +66,6 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "FiveMDisableMemCompression","FiveMMenuFpsUncap",
     // Registry — safe kernel tweaks every gaming PC benefits from
     "RegistryNTFSOptimize","RegistryIOPageLock","RegistryLargePageHeap",
-    "ClearPagefileOnShutdown",
     // Scheduler precision — reduces frame time variance on all CPUs
     "DisableDynamicTick",
     // WinUtil
@@ -169,7 +168,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   // ===== GPU =====
   if (hw.isNvidia) {
     [
-      "EnableHAGS","NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
+      "NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
       "NvidiaOptimizeLatency","NvidiaPowerMizer","NvidiaReflexEnable","NvidiaTripleBufferOff",
       "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
       "NvidiaAnisoFiltering","NvidiaOpenGLOpt","NvidiaThreadedOpt","NvidiaVRAMMax",
@@ -178,19 +177,24 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {
+      // HAGS HURTS GTX 10xx/16xx — do NOT enable it for these cards
       ["NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff"].forEach(id => ids.add(id));
       if (hw.gpuName && /1650/i.test(hw.gpuName)) {
         ["FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode"].forEach(id => ids.add(id));
-        reasons.push(`GTX 1650 SUPER — HAGS off, 4GB VRAM unlocked, Ansel removed, Low Latency Ultra`);
+        reasons.push(`GTX 1650 SUPER — HAGS disabled (Pascal/Turing = micro-stutters with HAGS), 4GB VRAM unlocked, Ansel removed, Low Latency Ultra`);
       } else if (hw.gpuName && /1060/i.test(hw.gpuName)) {
         ["FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable"].forEach(id => ids.add(id));
-        reasons.push(`GTX 1060 — 6GB VRAM unlocked, HAGS off, Ansel removed`);
+        reasons.push(`GTX 1060 — HAGS disabled (Pascal = micro-stutters with HAGS), 6GB VRAM unlocked, Ansel removed`);
       } else {
-        reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — shader cache maximized, texture filter optimized`);
+        reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — HAGS disabled, shader cache maximized, texture filter optimized`);
       }
     } else if (hw.nvidiaIsRTX) {
-      reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — full RTX optimization suite + DPC latency reduction`);
+      // HAGS only benefits RTX 2000+ on Windows 11 — safe to enable
+      ids.add("EnableHAGS");
+      reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS enabled (RTX 2000+), full RTX optimization suite + DPC latency reduction`);
     } else {
+      // Mid-range GTX (non-Pascal/Turing low-end, non-RTX) — enable HAGS conservatively
+      ids.add("EnableHAGS");
       ["NvShaderDiskCache","NvFXAADriverOff"].forEach(id => ids.add(id));
       reasons.push(`NVIDIA GPU (${hw.gpuName}) — NVIDIA optimization suite enabled`);
     }
@@ -237,26 +241,31 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "DisableMemoryCompression","MemDisableCompression","FiveMDisableMemCompression",
       "DisablePrefetch","MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
       "MemDisableKernelPaging","MemGPUOptimize","FiveMExtendedMemory","FiveMWorkingSet",
-      "MemDisableGPUPagefile","MemClearPagefileShutdown","MemMovePagefileFast",
-      "MemFixedPagefile",
+      "MemDisableGPUPagefile","MemMovePagefileFast","MemFixedPagefile",
     ].forEach(id => ids.add(id));
-    reasons.push("32GB+ RAM — memory compression safe to disable, aggressive memory tweaks enabled");
+    reasons.push("32GB+ RAM — memory compression disabled, fixed pagefile (prevents runtime resize stutters), aggressive tweaks enabled");
   } else if (ram >= 8) {
     [
       "DisablePrefetch","MemDisableSuperfetch","MemTrimStandbyList","MemTrimOnMinimize",
       "MemDisableKernelPaging","MemGPUOptimize","FiveMExtendedMemory","FiveMWorkingSet",
-      "MemClearPagefileShutdown",
+      // Fixed pagefile for 8-31GB: prevents Windows from resizing the pagefile mid-game (causes stutters)
+      // MemFixedPagefile calculates 25% min / 100% max of actual RAM at runtime — safe for all configs
+      "MemFixedPagefile",
     ].forEach(id => ids.add(id));
-    reasons.push(`${ram}GB RAM — memory tweaks applied, compression kept ON (requires 32GB+ to disable safely)`);
+    reasons.push(`${ram}GB RAM — fixed pagefile (prevents mid-game resize stutters), compression kept ON (requires 32GB+ to disable safely)`);
   } else if (ram >= 4) {
-    ["DisablePrefetch","MemTrimStandbyList","MemTrimOnMinimize","MemDisableKernelPaging"].forEach(id => ids.add(id));
-    reasons.push(`${ram}GB RAM — safe memory tweaks`);
+    [
+      "DisablePrefetch","MemTrimStandbyList","MemTrimOnMinimize","MemDisableKernelPaging",
+      // Fixed pagefile for 4-7GB: critical — low RAM means pagefile is actively used; fixed size prevents fragmentation
+      "MemFixedPagefile",
+    ].forEach(id => ids.add(id));
+    reasons.push(`${ram}GB RAM — fixed pagefile applied (low RAM systems need stable swap space for crash prevention)`);
   } else if (ram > 0) {
-    ["MemTrimOnMinimize","MemSystemCacheBoost"].forEach(id => ids.add(id));
-    reasons.push(`Low RAM (${ram}GB) — minimal memory tweaks`);
+    ["MemTrimOnMinimize","MemSystemCacheBoost","MemFixedPagefile"].forEach(id => ids.add(id));
+    reasons.push(`Low RAM (${ram}GB) — fixed pagefile + minimal memory tweaks`);
   } else {
-    ["DisablePrefetch","MemTrimStandbyList","MemDisableKernelPaging"].forEach(id => ids.add(id));
-    reasons.push("RAM unknown — safe memory defaults applied");
+    ["DisablePrefetch","MemTrimStandbyList","MemDisableKernelPaging","MemFixedPagefile"].forEach(id => ids.add(id));
+    reasons.push("RAM unknown — fixed pagefile + safe memory defaults applied");
   }
 
   // ===== LAPTOP =====
