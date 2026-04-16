@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Zap, X, Loader2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame } from "lucide-react";
+import { Lock, Zap, X, Loader2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const DISCORD_LINK = "https://discord.gg/optigods";
+const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $25 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
 
 function ProPaymentDialog({
   open,
@@ -103,6 +104,14 @@ function ProPaymentDialog({
     } finally {
       setStripeLoading(false);
     }
+  };
+
+  const handleSupportTicket = () => {
+    window.open(
+      `${DISCORD_LINK}/channels/@me`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   const hasPaymentOptions =
@@ -245,6 +254,17 @@ function ProPaymentDialog({
                     )}
                   </button>
 
+                  <a
+                    href={`https://discord.com/channels/@me?text=${SUPPORT_TICKET_TEXT}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-manual-card-support"
+                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 hover:bg-[#5865F2]/20 hover:border-[#5865F2]/50 text-white text-sm font-black tracking-wide transition-all"
+                  >
+                    <Ticket className="w-4 h-4 text-[#5865F2]" />
+                    $25 Manual Card — Open Discord Ticket
+                  </a>
+
                   {COINBASE_LINK && (
                     <a
                       href={COINBASE_LINK}
@@ -366,10 +386,11 @@ function ProPaymentDialog({
                   href={DISCORD_LINK}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-testid="link-discord-support"
                   className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1.5"
                 >
                   <MessageCircle className="w-3 h-3" />
-                  Questions? Ask in Discord
+                  Questions? Ask in Discord support
                 </a>
               </div>
             </div>
