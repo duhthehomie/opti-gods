@@ -283,10 +283,11 @@ function ReportIssueModal({ onClose }: { onClose: () => void }) {
       }
       if (os.displayName) systemInfo.os = os.displayName;
 
+      const chatSessionId = localStorage.getItem("optigods_ai_session_id") || undefined;
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, description: description.trim(), systemInfo }),
+        body: JSON.stringify({ category, description: description.trim(), systemInfo, sessionId: chatSessionId }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Submit failed" }));

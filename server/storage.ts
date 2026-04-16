@@ -92,7 +92,7 @@ export interface IStorage {
   isIpBanned(ip: string): Promise<boolean>;
   getIpBans(): Promise<IpBan[]>;
   // User reports
-  createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>): Promise<UserReport>;
+  createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>, sessionId?: string): Promise<UserReport>;
   getUserReports(status?: ReportStatus): Promise<UserReport[]>;
   updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport | undefined>;
 }
@@ -583,8 +583,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(ipBans).orderBy(desc(ipBans.bannedAt));
   }
 
-  async createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>): Promise<UserReport> {
-    const [report] = await db.insert(userReports).values({ category, description, systemInfo: systemInfo ?? null }).returning();
+  async createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>, sessionId?: string): Promise<UserReport> {
+    const [report] = await db.insert(userReports).values({ category, description, systemInfo: systemInfo ?? null, sessionId: sessionId ?? null }).returning();
     return report;
   }
 

@@ -3129,15 +3129,34 @@ Read-Host "Press Enter to close this window"
     return res.json({ ok: true });
   });
 
+  function sanitizeAetherOutput(text: string): string {
+    let s = text;
+    s = s.replace(/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g, "[REDACTED]");
+    s = s.replace(/```[\s\S]*?```/g, "[code block removed]");
+    s = s.replace(/`[^`]{20,}`/g, "[code removed]");
+    s = s.replace(/sk_live_[A-Za-z0-9]{20,}/g, "[REDACTED]");
+    s = s.replace(/sk_test_[A-Za-z0-9]{20,}/g, "[REDACTED]");
+    s = s.replace(/price_[A-Za-z0-9]{20,}/g, "[REDACTED]");
+    s = s.replace(/Bearer\s+[A-Za-z0-9._\-]{20,}/g, "Bearer [REDACTED]");
+    s = s.replace(/DATABASE_URL\s*=\s*\S+/gi, "DATABASE_URL=[REDACTED]");
+    s = s.replace(/GROQ_API_KEY\s*=\s*\S+/gi, "GROQ_API_KEY=[REDACTED]");
+    s = s.replace(/gsk_[A-Za-z0-9]{20,}/g, "[REDACTED]");
+    s = s.replace(/\b(password|secret|token|api_key)\s*[:=]\s*["']?[^\s"']{8,}["']?/gi, "$1=[REDACTED]");
+    s = s.replace(/\b(powershell|bash|sh|cmd)\s*[-\/]c(ommand)?\s+.{20,}/gi, "[command removed]");
+    return s;
+  }
+
   // ── User Reports (public submit, admin view) ─────────────────────────────
   app.post("/api/reports", rateLimit(5, 60_000, 10), async (req, res) => {
-    const { category, description, systemInfo } = req.body as {
+    const { category, description, systemInfo, sessionId } = req.body as {
       category?: string;
       description?: string;
       systemInfo?: Record<string, unknown>;
+      sessionId?: string;
     };
-    const validCategories = ["script_not_working", "tweak_problem", "crash", "other"];
-    if (!category || !validCategories.includes(category)) {
+    const validCategories: ("script_not_working" | "tweak_problem" | "crash" | "other")[] = ["script_not_working", "tweak_problem", "crash", "other"];
+    const validCategory = validCategories.find(c => c === category);
+    if (!validCategory) {
       return res.status(400).json({ error: "Invalid category" });
     }
     if (!description || typeof description !== "string" || description.trim().length < 10) {
@@ -3146,17 +3165,16 @@ Read-Host "Press Enter to close this window"
     if (description.length > 2000) {
       return res.status(400).json({ error: "Description too long" });
     }
-    const report = await storage.createUserReport(category as any, description.trim(), systemInfo);
+    const report = await storage.createUserReport(validCategory, description.trim(), systemInfo, sessionId);
     return res.json({ ok: true, id: report.id });
   });
 
   app.get("/api/admin/reports", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     const status = req.query.status as string | undefined;
-    const validStatuses = ["open", "acknowledged", "resolved"];
-    const reports = await storage.getUserReports(
-      status && validStatuses.includes(status) ? (status as any) : undefined
-    );
+    const validStatuses: ("open" | "acknowledged" | "resolved")[] = ["open", "acknowledged", "resolved"];
+    const validStatus = validStatuses.find(s => s === status);
+    const reports = await storage.getUserReports(validStatus);
     return res.json(reports);
   });
 
@@ -3165,11 +3183,12 @@ Read-Host "Press Enter to close this window"
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const { status, adminNote } = req.body as { status?: string; adminNote?: string };
-    const validStatuses = ["open", "acknowledged", "resolved"];
-    if (!status || !validStatuses.includes(status)) {
+    const validStatuses: ("open" | "acknowledged" | "resolved")[] = ["open", "acknowledged", "resolved"];
+    const validStatus = validStatuses.find(s => s === status);
+    if (!validStatus) {
       return res.status(400).json({ error: "Invalid status" });
     }
-    const report = await storage.updateReportStatus(id, status as any, adminNote);
+    const report = await storage.updateReportStatus(id, validStatus, adminNote);
     if (!report) return res.status(404).json({ error: "Report not found" });
     return res.json(report);
   });
@@ -3312,16 +3331,16 @@ RESPONSE STYLE:
             const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
             const token = parsed.choices[0]?.delta?.content ?? "";
             if (token) {
-              const codePattern = /[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g;
-              const sanitizedToken = token.replace(codePattern, "[REDACTED]");
-              fullText += sanitizedToken;
-              res.write(`data: ${JSON.stringify({ token: sanitizedToken })}\n\n`);
+              fullText += token;
+              const safeToken = token.replace(/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g, "[REDACTED]");
+              res.write(`data: ${JSON.stringify({ token: safeToken })}\n\n`);
             }
           } catch {}
         }
       }
 
-      res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
+      const sanitized = sanitizeAetherOutput(fullText);
+      res.write(`data: ${JSON.stringify({ done: true, fullText: sanitized })}\n\n`);
       res.end();
     } catch (err: unknown) {
       console.error("[Aether] Error:", err instanceof Error ? err.message : String(err));

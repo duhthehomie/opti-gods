@@ -195,6 +195,7 @@ export type ReportStatus = "open" | "acknowledged" | "resolved";
 
 export const userReports = pgTable("user_reports", {
   id: serial("id").primaryKey(),
+  sessionId: text("session_id"),
   category: text("category").$type<ReportCategory>().notNull(),
   description: text("description").notNull(),
   systemInfo: jsonb("system_info").$type<Record<string, unknown>>(),
