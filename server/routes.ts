@@ -3170,6 +3170,7 @@ Read-Host "Press Enter to close this window"
       return res.status(400).json({ error: "Invalid status" });
     }
     const report = await storage.updateReportStatus(id, status as any, adminNote);
+    if (!report) return res.status(404).json({ error: "Report not found" });
     return res.json(report);
   });
 
@@ -3311,16 +3312,16 @@ RESPONSE STYLE:
             const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
             const token = parsed.choices[0]?.delta?.content ?? "";
             if (token) {
-              fullText += token;
-              res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              const codePattern = /[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g;
+              const sanitizedToken = token.replace(codePattern, "[REDACTED]");
+              fullText += sanitizedToken;
+              res.write(`data: ${JSON.stringify({ token: sanitizedToken })}\n\n`);
             }
           } catch {}
         }
       }
 
-      const codePattern = /[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g;
-      const sanitized = fullText.replace(codePattern, "[REDACTED]");
-      res.write(`data: ${JSON.stringify({ done: true, fullText: sanitized })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
       res.end();
     } catch (err: unknown) {
       console.error("[Aether] Error:", err instanceof Error ? err.message : String(err));

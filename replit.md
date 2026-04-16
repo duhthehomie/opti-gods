@@ -11,14 +11,21 @@ A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthet
 
 ## Key Features
 
-- **318+ optimization toggles** across 9+ tabs (Registry, FiveM, NVIDIA, AMD, AMD Integrated GPU, Intel iGPU, Laptop, Network, Startup, Debloat, Memory, Fortnite, Discord, Game Detection)
+- **437 optimization toggles** across 15+ tabs (Registry, FiveM, NVIDIA, AMD, AMD Integrated GPU, Intel iGPU, Laptop, Network, Startup, Debloat, Memory, Fortnite, Discord, Game Detection, Process Lasso)
 - **PowerShell script generation** — downloads a personalized `.ps1` file based on selected tweaks
 - **Pro paywall** (`ProGate` component) — secured server-side session token (64-char hex), unlocked via access code redeem
-- **Payment options**: CashApp `$my1ik`, PayPal `paypal.me/accountslg`, Gumroad card (with prepaid card warning banner)
+- **Payment options**: CashApp `$my1ik`, PayPal `paypal.me/accountslg`, Stripe card payments ($15 flat)
 - **Free friend unlock** via URL param `?unlock=<VITE_FREE_KEY>`
 - **Smart Game Detection** — PS1 scanner checks 14 game paths, opens `/game-detection?games=<ids>` in browser
 - **Preset save/load** — stored in PostgreSQL via `/api/presets`
-- **Admin panel analytics** — script generation history, top tweaks, recent 30 downloads with tweak IDs + heat coloring
+- **Admin panel** — 11 tabs: Codes, Friends, Activity, Email, Sessions, Updates, Analytics, Security, Preset Gen, Aether AI, Tickets
+- **Opti Gods AI** — Groq-powered AI chat (SSE streaming) with smart preset generation, image analysis, session persistence
+- **Aether Admin AI** — admin-only AI chat with live stats injection (revenue, visits, downloads, security events, user tickets)
+- **User Report System** — users submit issue reports via AI chat page, admin reviews in Tickets tab with status tracking (open/acknowledged/resolved)
+- **Mobile Showcase Mode** — mobile visitors see a marketing showcase with feature highlights, results, and CTA buttons instead of optimizer UI
+- **Smart AI Popup** — first-visit desktop popup pointing users to the AI assistant
+- **Floating AI Button** — persistent bottom-right button on optimizer pages linking to AI chat
+- **Aether Security Center** — threat monitoring, IP bans, rate-limit blocks, geo-intelligence
 - **Integrated GPU (Vega 8) tab** — AMD Ryzen 2200G/Vega 8 specific tweaks including TDR timeout, HDCP disable, audio co-processor power-gating
 
 ## Payment System

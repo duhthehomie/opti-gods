@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useProStatus } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download } from "lucide-react";
+import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
@@ -251,6 +251,154 @@ function EmptyState({ onSelect }: { onSelect: (q: string) => void }) {
   );
 }
 
+const REPORT_CATEGORIES = [
+  { value: "script_not_working", label: "Script Not Working", icon: AlertTriangle },
+  { value: "tweak_problem", label: "Tweak Caused a Problem", icon: Flag },
+  { value: "crash", label: "Crash / Error", icon: Cpu },
+  { value: "other", label: "Other Issue", icon: Flag },
+] as const;
+
+function ReportIssueModal({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast();
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!category || description.trim().length < 10) {
+      toast({ title: "More detail needed", description: "Pick a category and describe the issue (at least 10 characters).", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const systemInfo: Record<string, unknown> = {};
+      if (hw.scanned) {
+        if (hw.gpuName) systemInfo.gpu = hw.gpuName;
+        if (hw.cpuLabel) systemInfo.cpu = hw.cpuLabel;
+        if (hw.ramGB) systemInfo.ram = `${hw.ramGB} GB`;
+        if (hw.gpuVendor) systemInfo.gpuVendor = hw.gpuVendor;
+      }
+      if (os.displayName) systemInfo.os = os.displayName;
+
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, description: description.trim(), systemInfo }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Submit failed" }));
+        throw new Error(err.error || "Submit failed");
+      }
+      setSubmitted(true);
+      toast({ title: "Report submitted", description: "We'll look into it. Thank you!" });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Submit failed", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={onClose}>
+        <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+          <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+          <h3 className="text-sm font-bold text-white">Report Submitted</h3>
+          <p className="text-xs text-zinc-400">We'll review your report and work on a fix. Thank you for helping improve Opti Gods!</p>
+          <button
+            data-testid="button-report-close"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-zinc-800 border border-white/10 text-xs font-bold text-zinc-300 hover:bg-zinc-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={onClose}>
+      <div className="bg-zinc-900 border border-white/10 rounded-2xl p-5 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Flag className="w-4 h-4 text-red-400" />
+            <h3 className="text-sm font-bold text-white">Report an Issue</h3>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors" data-testid="button-report-cancel">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Category</p>
+          <div className="grid grid-cols-2 gap-2">
+            {REPORT_CATEGORIES.map(c => {
+              const CIcon = c.icon;
+              return (
+                <button
+                  key={c.value}
+                  data-testid={`button-category-${c.value}`}
+                  onClick={() => setCategory(c.value)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border",
+                    category === c.value
+                      ? "bg-red-500/15 border-red-500/30 text-red-400"
+                      : "bg-zinc-800/60 border-white/5 text-zinc-500 hover:text-zinc-300 hover:border-white/10"
+                  )}
+                >
+                  <CIcon className="w-3 h-3 shrink-0" />
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">What happened?</p>
+          <textarea
+            data-testid="input-report-description"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Describe the issue in detail — what were you doing, what went wrong, any error messages…"
+            rows={4}
+            maxLength={2000}
+            className="w-full resize-none bg-zinc-800/80 border border-white/8 rounded-xl px-3 py-2.5 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/30 leading-relaxed"
+          />
+          <p className="text-[9px] text-zinc-700 text-right">{description.length}/2000</p>
+        </div>
+
+        {hw.scanned && (
+          <div className="bg-zinc-800/40 rounded-lg px-3 py-2 flex items-center gap-2">
+            <Cpu className="w-3 h-3 text-zinc-600 shrink-0" />
+            <p className="text-[10px] text-zinc-500">
+              System info will be attached: {hw.gpuName || "GPU"} • {hw.cpuLabel || "CPU"} • {hw.ramGB || "?"}GB RAM • {os.displayName || "Windows"}
+            </p>
+          </div>
+        )}
+
+        <button
+          data-testid="button-submit-report"
+          onClick={handleSubmit}
+          disabled={submitting || !category || description.trim().length < 10}
+          className={cn(
+            "w-full py-2.5 rounded-xl text-xs font-bold transition-all",
+            submitting || !category || description.trim().length < 10
+              ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
+          )}
+        >
+          {submitting ? "Submitting…" : "Submit Report"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function OptiGodsAI() {
   const isPro = useProStatus();
   const { toast } = useToast();
@@ -260,6 +408,7 @@ export default function OptiGodsAI() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -468,6 +617,15 @@ export default function OptiGodsAI() {
                 <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Pro AI Active</span>
               </div>
             )}
+            <button
+              data-testid="button-report-issue"
+              onClick={() => setShowReport(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/60 border border-white/5 text-zinc-500 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/5 transition-all"
+              title="Report an Issue"
+            >
+              <Flag className="w-3 h-3" />
+              <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">Report</span>
+            </button>
             {messages.length > 0 && (
               <button
                 data-testid="button-clear-chat"
@@ -582,6 +740,7 @@ export default function OptiGodsAI() {
           </p>
         </div>
       </div>
+      {showReport && <ReportIssueModal onClose={() => setShowReport(false)} />}
     </AppLayout>
   );
 }

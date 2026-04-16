@@ -94,7 +94,7 @@ export interface IStorage {
   // User reports
   createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>): Promise<UserReport>;
   getUserReports(status?: ReportStatus): Promise<UserReport[]>;
-  updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport>;
+  updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -595,10 +595,14 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(userReports).orderBy(desc(userReports.createdAt));
   }
 
-  async updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport> {
+  async updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport | undefined> {
     const updates: Partial<UserReport> = { status };
     if (adminNote !== undefined) updates.adminNote = adminNote;
-    if (status === "resolved") updates.resolvedAt = new Date();
+    if (status === "resolved") {
+      updates.resolvedAt = new Date();
+    } else {
+      updates.resolvedAt = null;
+    }
     const [report] = await db.update(userReports).set(updates).where(eq(userReports.id, id)).returning();
     return report;
   }

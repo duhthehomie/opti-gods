@@ -99,7 +99,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -1210,6 +1210,424 @@ function AdminPresetGenerator({
   );
 }
 
+// ── Aether Admin AI Chat ─────────────────────────────────────────────────────
+type AetherMsg = { role: "user" | "assistant"; content: string };
+
+function AetherAdminChat({ headers }: { headers: Record<string, string> }) {
+  const [messages, setMessages] = useState<AetherMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = useCallback(async (text?: string) => {
+    const msg = (text || input).trim();
+    if (!msg || isStreaming) return;
+    setInput("");
+
+    const userMsg: AetherMsg = { role: "user", content: msg };
+    setMessages(prev => [...prev, userMsg]);
+
+    const assistantMsg: AetherMsg = { role: "assistant", content: "" };
+    setMessages(prev => [...prev, assistantMsg]);
+    setIsStreaming(true);
+
+    try {
+      const res = await fetch("/api/admin/aether-chat", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: msg,
+          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Request failed" }));
+        toast({ title: "Aether Error", description: err.error || "Failed to reach Aether", variant: "destructive" });
+        setMessages(prev => prev.slice(0, -1));
+        setIsStreaming(false);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.done && data.fullText) {
+              setMessages(prev => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "assistant") {
+                  copy[copy.length - 1] = { ...last, content: data.fullText };
+                }
+                return copy;
+              });
+            } else if (data.token) {
+              setMessages(prev => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "assistant") {
+                  copy[copy.length - 1] = { ...last, content: last.content + data.token };
+                }
+                return copy;
+              });
+            }
+          } catch {}
+        }
+      }
+    } catch (err: unknown) {
+      toast({ title: "Stream Error", description: err instanceof Error ? err.message : "Connection failed", variant: "destructive" });
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [input, isStreaming, messages, headers, toast]);
+
+  const ADMIN_STARTERS = [
+    "How's revenue looking today?",
+    "Summarize open user tickets",
+    "What tweaks should I add next?",
+    "How many scripts downloaded this week?",
+    "Any security events I should handle?",
+    "How can I boost conversion rate?",
+  ];
+
+  return (
+    <div data-testid="aether-admin-chat" className="mt-6 bg-zinc-900/50 border border-white/5 rounded-2xl overflow-hidden flex flex-col" style={{ height: "600px" }}>
+      <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+          <Bot className="w-4 h-4 text-red-400" />
+        </div>
+        <div>
+          <h3 className="text-sm font-bold text-white">Aether Admin AI</h3>
+          <p className="text-[10px] text-zinc-500">Live data • Revenue • Tickets • Analytics</p>
+        </div>
+        {messages.length > 0 && (
+          <button
+            data-testid="button-clear-aether-chat"
+            onClick={() => setMessages([])}
+            className="ml-auto text-zinc-600 hover:text-zinc-300 transition-colors p-1.5 rounded-lg hover:bg-white/5"
+            title="Clear chat"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full pb-8">
+            <Bot className="w-10 h-10 text-red-500/30 mb-4" />
+            <p className="text-sm text-zinc-500 mb-1">Ask Aether about your app</p>
+            <p className="text-[10px] text-zinc-700 mb-6">Revenue, tickets, downloads, security — all live data</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
+              {ADMIN_STARTERS.map(q => (
+                <button
+                  key={q}
+                  data-testid={`button-aether-starter-${q.slice(0, 15).replace(/\s/g, "-")}`}
+                  onClick={() => sendMessage(q)}
+                  className="text-left px-3 py-2 rounded-xl bg-zinc-800/60 border border-white/5 text-xs text-zinc-400 hover:text-zinc-200 hover:border-red-500/20 hover:bg-red-500/5 transition-all"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map((msg, i) => (
+            <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "justify-start")}>
+              {msg.role === "assistant" && (
+                <div className="w-6 h-6 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="w-3 h-3 text-red-400" />
+                </div>
+              )}
+              <div className={cn(
+                "max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+                msg.role === "user"
+                  ? "bg-red-600/20 border border-red-500/25 text-zinc-200 rounded-br-sm"
+                  : "bg-zinc-800/80 border border-white/5 text-zinc-300 rounded-bl-sm"
+              )}>
+                {msg.content || (isStreaming && i === messages.length - 1 ? (
+                  <span className="flex items-center gap-1.5 text-zinc-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" style={{ animationDelay: "0.15s" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" style={{ animationDelay: "0.3s" }} />
+                  </span>
+                ) : "")}
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="px-4 pb-4 pt-2 border-t border-white/5 shrink-0">
+        <div className="flex items-end gap-2 bg-zinc-800/80 border border-white/8 rounded-2xl px-3 py-2 focus-within:border-red-500/30 transition-colors">
+          <textarea
+            ref={inputRef}
+            data-testid="input-aether-message"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            placeholder="Ask Aether about revenue, tickets, analytics…"
+            rows={1}
+            disabled={isStreaming}
+            className="flex-1 resize-none bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none leading-relaxed max-h-24 disabled:opacity-50"
+            style={{ height: "auto", minHeight: "24px" }}
+            onInput={e => {
+              const t = e.currentTarget;
+              t.style.height = "auto";
+              t.style.height = Math.min(t.scrollHeight, 96) + "px";
+            }}
+          />
+          <button
+            data-testid="button-send-aether"
+            onClick={() => sendMessage()}
+            disabled={isStreaming || !input.trim()}
+            className={cn(
+              "p-2 rounded-xl transition-all shrink-0 mb-0.5",
+              !input.trim() || isStreaming
+                ? "text-zinc-700 bg-zinc-800/50 cursor-not-allowed"
+                : "text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20"
+            )}
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Tickets Tab ────────────────────────────────────────────────────────
+type UserReport = {
+  id: number;
+  category: string;
+  description: string;
+  systemInfo: Record<string, unknown> | null;
+  status: string;
+  adminNote: string | null;
+  createdAt: string | null;
+  resolvedAt: string | null;
+};
+
+function TicketsTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [noteInputs, setNoteInputs] = useState<Record<number, string>>({});
+
+  const reportsQuery = useQuery<UserReport[]>({
+    queryKey: ["/api/admin/reports"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/reports", { headers });
+      if (!res.ok) throw new Error("Failed to load reports");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) => {
+      const res = await fetch(`/api/admin/reports/${id}/status`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ status, adminNote }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/reports"] });
+      toast({ title: "Ticket updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const reports = reportsQuery.data || [];
+  const filtered = statusFilter === "all" ? reports : reports.filter(r => r.status === statusFilter);
+  const counts = {
+    all: reports.length,
+    open: reports.filter(r => r.status === "open").length,
+    acknowledged: reports.filter(r => r.status === "acknowledged").length,
+    resolved: reports.filter(r => r.status === "resolved").length,
+  };
+
+  const categoryLabel: Record<string, string> = {
+    script_not_working: "Script Issue",
+    tweak_problem: "Tweak Problem",
+    crash: "Crash / Error",
+    other: "Other",
+  };
+
+  const statusBadge = (s: string) => {
+    const cfg: Record<string, string> = {
+      open: "bg-red-500/20 text-red-400 border-red-500/30",
+      acknowledged: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+      resolved: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    };
+    return (
+      <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border", cfg[s] || "bg-zinc-700 text-zinc-400 border-zinc-600")}>
+        {s}
+      </span>
+    );
+  };
+
+  return (
+    <div data-testid="tickets-tab" className="mt-6 space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Flag className="w-4 h-4 text-red-400" />
+          User Reports
+        </h3>
+        <div className="flex items-center gap-1 ml-auto">
+          {(["all", "open", "acknowledged", "resolved"] as const).map(s => (
+            <button
+              key={s}
+              data-testid={`button-filter-${s}`}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                statusFilter === s
+                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                  : "text-zinc-600 hover:text-zinc-300 border border-transparent"
+              )}
+            >
+              {s} ({counts[s]})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {reportsQuery.isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <RefreshCw className="w-5 h-5 text-zinc-600 animate-spin" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-zinc-600 text-sm">
+          {reports.length === 0 ? "No user reports yet" : `No ${statusFilter} tickets`}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(r => (
+            <div
+              key={r.id}
+              data-testid={`ticket-row-${r.id}`}
+              className="bg-zinc-900/70 border border-white/5 rounded-xl overflow-hidden"
+            >
+              <button
+                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+              >
+                <span className="text-[10px] font-mono text-zinc-600">#{r.id}</span>
+                {statusBadge(r.status)}
+                <span className="text-xs font-bold text-zinc-300 truncate flex-1">
+                  {categoryLabel[r.category] || r.category}
+                </span>
+                <span className="text-[10px] text-zinc-600 shrink-0">{timeAgo(r.createdAt)}</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 text-zinc-600 transition-transform", expandedId === r.id && "rotate-180")} />
+              </button>
+
+              {expandedId === r.id && (
+                <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                  <p className="text-sm text-zinc-300 leading-relaxed pt-3">{r.description}</p>
+
+                  {r.systemInfo && Object.keys(r.systemInfo).length > 0 && (
+                    <div className="bg-zinc-950/60 rounded-lg p-3 space-y-1">
+                      <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-widest mb-1">System Info</p>
+                      {Object.entries(r.systemInfo).map(([k, v]) => (
+                        <div key={k} className="flex items-center gap-2 text-[11px]">
+                          <span className="text-zinc-600 font-mono">{k}:</span>
+                          <span className="text-zinc-400">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {r.adminNote && (
+                    <div className="bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2">
+                      <p className="text-[10px] font-bold text-amber-400 mb-0.5">Admin Note</p>
+                      <p className="text-xs text-zinc-400">{r.adminNote}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      data-testid={`input-ticket-note-${r.id}`}
+                      type="text"
+                      placeholder="Add admin note…"
+                      value={noteInputs[r.id] || ""}
+                      onChange={e => setNoteInputs(prev => ({ ...prev, [r.id]: e.target.value }))}
+                      className="flex-1 min-w-[150px] px-3 py-1.5 rounded-lg bg-zinc-800 border border-white/8 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/30"
+                    />
+                    {r.status === "open" && (
+                      <button
+                        data-testid={`button-ack-${r.id}`}
+                        onClick={() => updateStatus.mutate({ id: r.id, status: "acknowledged", adminNote: noteInputs[r.id] || undefined })}
+                        disabled={updateStatus.isPending}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-500/25 transition-colors disabled:opacity-50"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Acknowledge
+                      </button>
+                    )}
+                    {r.status !== "resolved" && (
+                      <button
+                        data-testid={`button-resolve-${r.id}`}
+                        onClick={() => updateStatus.mutate({ id: r.id, status: "resolved", adminNote: noteInputs[r.id] || undefined })}
+                        disabled={updateStatus.isPending}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Resolve
+                      </button>
+                    )}
+                    {r.status === "resolved" && (
+                      <button
+                        data-testid={`button-reopen-${r.id}`}
+                        onClick={() => updateStatus.mutate({ id: r.id, status: "open", adminNote: noteInputs[r.id] || undefined })}
+                        disabled={updateStatus.isPending}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-400 text-xs font-bold hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Reopen
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-zinc-700">
+                    Created: {fmt(r.createdAt)} {r.resolvedAt ? ` • Resolved: ${fmt(r.resolvedAt)}` : ""}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const isPro = useProStatus();
@@ -2105,7 +2523,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -2117,6 +2535,8 @@ export default function Admin() {
               analytics: TrendingUp,
               security: Shield,
               preset: Sliders,
+              aether: Bot,
+              tickets: Flag,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -2140,6 +2560,8 @@ export default function Admin() {
                    t === "analytics" ? "Analytics" :
                    t === "security" ? "Security" :
                    t === "preset" ? "Preset Gen" :
+                   t === "aether" ? "Aether AI" :
+                   t === "tickets" ? "Tickets" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -2151,6 +2573,8 @@ export default function Admin() {
                    t === "analytics" ? "" :
                    t === "security" ? "" :
                    t === "preset" ? "" :
+                   t === "aether" ? "" :
+                   t === "tickets" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -3500,6 +3924,9 @@ export default function Admin() {
             allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
           />
         )}
+
+        {tab === "aether" && <AetherAdminChat headers={headers} />}
+        {tab === "tickets" && <TicketsTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
