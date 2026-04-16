@@ -261,6 +261,7 @@ const OPTIMIZER_PAGES = ["/", "/registry", "/fivem", "/fortnite", "/nvidia", "/a
 function SmartAiPopup() {
   const [show, setShow] = useState(false);
   const [location] = useLocation();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (localStorage.getItem(AI_POPUP_KEY)) return;
@@ -273,7 +274,7 @@ function SmartAiPopup() {
     localStorage.setItem(AI_POPUP_KEY, "1");
   };
 
-  if (!show || !OPTIMIZER_PAGES.includes(location)) return null;
+  if (isMobile || !show || location !== "/") return null;
 
   return (
     <div className="fixed bottom-20 right-6 z-40 animate-in slide-in-from-bottom-4 fade-in duration-300">
@@ -315,7 +316,8 @@ function SmartAiPopup() {
 
 function FloatingAiButton() {
   const [location] = useLocation();
-  if (!OPTIMIZER_PAGES.includes(location) || location === "/ai") return null;
+  const isMobile = useIsMobile();
+  if (isMobile || !OPTIMIZER_PAGES.includes(location) || location === "/ai") return null;
 
   return (
     <Link href="/ai">
