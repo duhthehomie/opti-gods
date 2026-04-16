@@ -56,8 +56,11 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // Process Lasso tweaks (safe for all PCs)
     "ProcessLassoSmartTrim","ProcessLassoRestrain","ProcessTrimWorkingSet",
     "ProcessAutoKillHung","ProcessDisableWindowsErrorReporting",
+    "ProcessLassoInstanceBalancer","ProcessLassoProBalance",
+    // Registry — DPC latency optimization (reduces audio/input stutter on all systems)
+    "RegistryDPCLatency",
     // FiveM — universal game pack
-    "FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix",
+    "FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMHighPriority",
     "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd",
     "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
     "FiveMRenderingBoost","FiveMDisableMPO",
@@ -75,6 +78,9 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy","WinTitusConsumerFeatures",
     "WinTitusEdgeDebloat","WinTitusXboxComponents",
+    "WinTitusDisplayPerf","WinTitusEdgeRemove","WinTitusPosh7Telemetry",
+    "WinTitusShowExtensions","WinTitusShowHidden","WinTitusStorageSense","WinTitusWPBT",
+    "WinTitusClassicMenu","WinTitusAdobeBlock","WinTitusRazerBlock",
     // Fortnite — universal
     "FortniteHighPriority","FortniteDisableThrottling","FortniteDisableVSync",
     "FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableMotionBlur",
@@ -144,7 +150,9 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   if (hw.isRyzen) {
     // AmdCpuPowerPinMax pins CPU min/max performance state to 100% for all Ryzen desktops
     // = Precision Boost 2 operates without Windows frequency floor drops
-    ["FiveMGTAProcessPerfOptions","FiveMAffinityMask","AmdCpuPowerPinMax"].forEach(id => ids.add(id));
+    ["FiveMGTAProcessPerfOptions","FiveMAffinityMask","AmdCpuPowerPinMax",
+     "AmdCpuCapabilities","AmdCpuCoalescingOff","AmdCpuCStatePolicy","AmdCpuSchedulerHint",
+    ].forEach(id => ids.add(id));
     if (hw.cpuGeneration >= 5) {
       reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan + Precision Boost 2 pinned to 100%`);
     } else if (hw.cpuGeneration >= 3) {
@@ -175,8 +183,9 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "NvidiaOptimizeLatency","NvidiaPowerMizer","NvidiaReflexEnable","NvidiaTripleBufferOff",
       "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
       "NvidiaAnisoFiltering","NvidiaOpenGLOpt","NvidiaThreadedOpt","NvidiaVRAMMax",
-      "NvidiaGSyncOptimize",
+      "NvidiaGSyncOptimize","NvidiaDisableHDMIAudio","NvidiaGpuBgOptimize",
       "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap","FiveMFixNvidiaOverlay",
+      "FiveMGPUPriorityStack",
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {
@@ -194,6 +203,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     } else if (hw.nvidiaIsRTX) {
       // HAGS only benefits RTX 2000+ on Windows 11 — safe to enable
       ids.add("EnableHAGS");
+      ids.add("NvidiaRTXVideoOff");
       reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS enabled (RTX 2000+), full RTX optimization suite + DPC latency reduction`);
     } else {
       // Mid-range GTX (non-Pascal/Turing low-end, non-RTX) — enable HAGS conservatively
@@ -208,7 +218,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "AmdDisableTelemetry","AmdDisableCrashDefender","AmdShaderCache","AmdDisableVSR",
       "AmdDisableVariBright","AmdSmartAccessMemory","AmdAntiLagPlus","AmdTDRTweak",
       "AmdDisableStartupApps","AmdDisableFreeSyncCompetitive","AmdFluidMotionFrames",
-      "AmdImageSharpening",
+      "AmdImageSharpening","AmdDisableHDMIAudio","AmdDisableReLive",
     ].forEach(id => ids.add(id));
     reasons.push(`AMD discrete GPU (${hw.gpuName}) — full AMD RX optimization suite`);
   } else if (hw.isAMD || hw.isAmdApu) {
@@ -219,6 +229,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
       "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_SetTimerResolution",
       "IGpu_NetworkThrottling","IGpu_DisableSysMain","IGpu_DisableHAGSForIGpu",
+      "IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
+      "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
     ].forEach(id => ids.add(id));
     reasons.push(`AMD iGPU/APU (${hw.gpuName}) — Vega/APU tweaks, HAGS disabled`);
   } else if (hw.isIntel) {
@@ -230,6 +242,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "IGpu_MaxProcessorState","IGpu_DisableCoreParking","IGpu_GameModeOn",
       "IGpu_SetTimerResolution","IGpu_NetworkThrottling","IGpu_DisableSysMain",
       "IGpu_DisableHAGSForIGpu","IGpu_DisableMPO",
+      "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
     ].forEach(id => ids.add(id));
     reasons.push(`Intel iGPU (${hw.gpuName}) — Intel driver TDR fix, Panel Fitter off, HAGS disabled`);
   } else {
