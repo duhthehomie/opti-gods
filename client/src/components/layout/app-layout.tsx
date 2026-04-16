@@ -29,6 +29,151 @@ const MOBILE_RESULTS = [
   { game: "Integrated GPU", before: "60", after: "300+", mult: "5×", color: "text-emerald-400", border: "border-emerald-500/20" },
 ];
 
+const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount: string; highlights: string[] }> = {
+  "/registry": {
+    title: "Registry & System",
+    desc: "Deep Windows registry optimizations for timer resolution, priority scheduling, network stack, memory management, and power plan tuning.",
+    tweakCount: "45+",
+    highlights: ["Win32 Priority Separation", "Timer Resolution 0.5ms", "Nagle Algorithm Bypass", "DPC Latency Fix", "MSI Mode"],
+  },
+  "/fivem": {
+    title: "FiveM Optimization",
+    desc: "Dedicated FiveM/GTA V tweaks: priority scheduling, cache management, streaming distance, network buffers, and GPU-specific performance stacks.",
+    tweakCount: "45+",
+    highlights: ["High Priority Mode", "Cache Clear", "Network Buffer Boost", "Full Performance Stack", "GPU Priority Stack"],
+  },
+  "/fortnite": {
+    title: "Fortnite Optimization",
+    desc: "Fortnite-specific tweaks: DirectX 12 optimization, shader compilation, input lag reduction, process priority, and competitive settings.",
+    tweakCount: "25+",
+    highlights: ["DX12 Optimization", "Shader Precompile", "Input Lag Fix", "Process Priority", "Competitive Config"],
+  },
+  "/nvidia": {
+    title: "NVIDIA GPU",
+    desc: "NVIDIA Control Panel and driver-level optimizations: low latency mode, shader cache, power management, Reflex, and G-Sync tuning.",
+    tweakCount: "21",
+    highlights: ["Ultra Low Latency", "Max Performance Mode", "Shader Cache Unlimited", "Reflex Enable", "HAGS Toggle"],
+  },
+  "/amd": {
+    title: "AMD GPU",
+    desc: "AMD Radeon driver optimizations: anti-lag, shader cache, surface format optimization, and power tuning for maximum framerates.",
+    tweakCount: "15+",
+    highlights: ["Anti-Lag Enable", "Shader Cache Max", "Surface Format Opt", "Power Tuning", "Freesync Optimize"],
+  },
+  "/integrated-graphics": {
+    title: "Integrated Graphics",
+    desc: "Tweaks for Intel UHD/Iris and AMD APU integrated GPUs: VRAM allocation, power policy, media decode optimization.",
+    tweakCount: "10+",
+    highlights: ["VRAM Allocation", "Power Policy", "Media Decode Boost", "Display Optimization", "Driver Tuning"],
+  },
+  "/laptop": {
+    title: "Laptop Optimization",
+    desc: "Battery-aware tweaks for laptops: thermal management, GPU switching, display power optimization, and fan curve control.",
+    tweakCount: "10+",
+    highlights: ["Thermal Management", "GPU Switch Control", "Display Power Opt", "USB Selective Suspend", "Fan Curve Tuning"],
+  },
+  "/discord": {
+    title: "Discord Optimization",
+    desc: "Reduce Discord's CPU and RAM usage while gaming: hardware acceleration toggle, voice processing optimization, overlay disable.",
+    tweakCount: "8+",
+    highlights: ["Hardware Accel Toggle", "Voice Processing Opt", "Overlay Disable", "Bandwidth Reduce", "Startup Disable"],
+  },
+  "/memory": {
+    title: "Memory & RAM",
+    desc: "Windows memory management tweaks: pagefile optimization, kernel paging, heap termination, NTFS memory tuning, and compression control.",
+    tweakCount: "15+",
+    highlights: ["Pagefile Optimization", "Kernel Paging Off", "Heap Termination", "Memory Compression", "NTFS Optimize"],
+  },
+  "/debloat": {
+    title: "Windows Debloat",
+    desc: "Remove unnecessary Windows services, scheduled tasks, telemetry, and bloatware to free up CPU cycles and RAM for gaming.",
+    tweakCount: "20+",
+    highlights: ["Telemetry Disable", "Bloatware Remove", "Service Cleanup", "Task Scheduler Trim", "Cortana Disable"],
+  },
+  "/startup": {
+    title: "Startup Apps",
+    desc: "Manage and disable startup applications to reduce boot time and free up system resources for gaming performance.",
+    tweakCount: "Custom",
+    highlights: ["Boot Time Reduction", "Resource Freeing", "Auto-Start Control", "Service Management", "Priority Ordering"],
+  },
+  "/process-lasso": {
+    title: "Process Lasso",
+    desc: "CPU affinity, priority class, and I/O priority optimizations per-process for games and system processes.",
+    tweakCount: "10+",
+    highlights: ["CPU Affinity", "Priority Class", "I/O Priority", "ProBalance", "Core Parking"],
+  },
+  "/processes": {
+    title: "Process Manager",
+    desc: "View and manage running processes, kill unnecessary background tasks, and optimize CPU scheduling for maximum game performance.",
+    tweakCount: "System",
+    highlights: ["Background Kill", "Priority Boost", "CPU Scheduling", "Memory Trim", "Handle Cleanup"],
+  },
+  "/game-detection": {
+    title: "Game Detection",
+    desc: "Automatically detect installed games and scan your hardware (GPU, CPU, RAM) to get personalized tweak recommendations.",
+    tweakCount: "Auto",
+    highlights: ["Hardware Scanner", "Game Library Detect", "Auto-Recommendations", "GPU Detection", "System Profile"],
+  },
+};
+
+function MobilePageDescription({ pageInfo }: { pageInfo: { title: string; desc: string; tweakCount: string; highlights: string[] } }) {
+  return (
+    <div className="min-h-[60vh] space-y-5">
+      <div className="rounded-xl border border-white/5 bg-zinc-900/60 p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-red-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-display font-bold text-white" data-testid="text-mobile-page-title">{pageInfo.title}</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{pageInfo.tweakCount} tweaks</span>
+          </div>
+        </div>
+        <p className="text-sm text-zinc-400 leading-relaxed" data-testid="text-mobile-page-desc">{pageInfo.desc}</p>
+      </div>
+
+      <div className="rounded-xl border border-white/5 bg-zinc-900/40 p-4">
+        <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-3">Key Optimizations</p>
+        <div className="space-y-2">
+          {pageInfo.highlights.map((h) => (
+            <div key={h} className="flex items-center gap-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              <span className="text-xs text-zinc-300">{h}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+        <p className="text-[11px] text-amber-300 font-semibold">
+          Open Opti Gods on your Windows PC to enable and download these tweaks.
+        </p>
+      </div>
+
+      <div className="space-y-2.5">
+        <Link href="/ai">
+          <button
+            data-testid="button-mobile-page-ai"
+            className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2"
+          >
+            <MessageSquare className="w-4 h-4" />
+            Ask AI About These Tweaks
+          </button>
+        </Link>
+        <Link href="/get-code">
+          <button
+            data-testid="button-mobile-page-pro"
+            className="w-full py-3 rounded-xl bg-zinc-900 border border-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/10 transition-all flex items-center justify-center gap-2 mt-2"
+          >
+            <Zap className="w-4 h-4" />
+            Get Pro — $15
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function MobileShowcase() {
   return (
     <div className="min-h-screen bg-[#020202] text-white overflow-y-auto">
@@ -276,7 +421,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
-              {enabledCount > 0 && (
+              {!isMobile && enabledCount > 0 && (
                 <Button
                   data-testid="button-clear-all-tweaks"
                   variant="ghost"
@@ -288,26 +433,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   Unselect All
                 </Button>
               )}
-              <ProGate>
-                <Button
-                  data-testid="button-apply-optimizations"
-                  onClick={handleApply}
-                  disabled={generateScript.isPending}
-                  className={cn(
-                    "font-display tracking-wide px-6 border transition-all duration-300",
-                    enabledCount > 0
-                      ? "bg-red-600 hover:bg-red-500 text-white border-red-400/50 shadow-[0_0_20px_-3px_rgba(239,68,68,0.5)]"
-                      : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-700"
-                  )}
-                >
-                  {generateScript.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  {enabledCount > 0 ? `GET MY SCRIPT (${enabledCount})` : "GET MY SCRIPT"}
-                </Button>
-              </ProGate>
+              {!isMobile && (
+                <ProGate>
+                  <Button
+                    data-testid="button-apply-optimizations"
+                    onClick={handleApply}
+                    disabled={generateScript.isPending}
+                    className={cn(
+                      "font-display tracking-wide px-6 border transition-all duration-300",
+                      enabledCount > 0
+                        ? "bg-red-600 hover:bg-red-500 text-white border-red-400/50 shadow-[0_0_20px_-3px_rgba(239,68,68,0.5)]"
+                        : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-700"
+                    )}
+                  >
+                    {generateScript.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    {enabledCount > 0 ? `GET MY SCRIPT (${enabledCount})` : "GET MY SCRIPT"}
+                  </Button>
+                </ProGate>
+              )}
+              {isMobile && (
+                <Link href="/ai">
+                  <button data-testid="button-mobile-header-ai-main" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/15 border border-red-500/25 text-red-400 text-[10px] font-bold">
+                    <MessageSquare className="w-3 h-3" />
+                    AI
+                  </button>
+                </Link>
+              )}
             </div>
           </header>
 
@@ -315,8 +470,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10 relative">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
             <div className="max-w-5xl mx-auto w-full h-full space-y-6">
-              <HardwareDetectionBanner compact />
-              {children}
+              {!isMobile && <HardwareDetectionBanner compact />}
+              {isMobile && MOBILE_PAGE_INFO[location] ? (
+                <MobilePageDescription pageInfo={MOBILE_PAGE_INFO[location]} />
+              ) : (
+                children
+              )}
             </div>
           </main>
         </div>

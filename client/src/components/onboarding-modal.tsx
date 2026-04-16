@@ -56,7 +56,7 @@ export function OnboardingModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) dismiss(); }}>
-      <DialogContent className="sm:max-w-[460px] border-0 bg-[#080808] p-0 overflow-hidden shadow-2xl shadow-black/80">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[460px] border-0 bg-[#080808] p-0 overflow-hidden shadow-2xl shadow-black/80">
         <DialogTitle className="sr-only">Welcome to Opti Gods</DialogTitle>
         <DialogDescription className="sr-only">Setup guide for new users</DialogDescription>
 
@@ -132,7 +132,7 @@ export function OnboardingModal() {
           </AnimatePresence>
 
           {/* Actions */}
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             {step < STEPS.length - 1 ? (
               <>
                 <button
@@ -143,16 +143,16 @@ export function OnboardingModal() {
                 </button>
                 <Button
                   onClick={() => setStep(s => s + 1)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold"
+                  className="flex-1 min-w-[80px] bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold"
                 >
                   Next
                   <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
                 {step === 0 && (
-                  <Link href="/game-detection">
+                  <Link href="/game-detection" className="flex-1 min-w-[120px]">
                     <Button
                       onClick={dismiss}
-                      className="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
+                      className="w-full bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
                     >
                       <Search className="w-3.5 h-3.5 mr-1.5" />
                       Detect Now
@@ -162,7 +162,7 @@ export function OnboardingModal() {
               </>
             ) : (
               <>
-                <Link href="/game-detection" className="flex-1">
+                <Link href="/game-detection" className="flex-1 min-w-[140px]">
                   <Button
                     onClick={dismiss}
                     className="w-full bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
