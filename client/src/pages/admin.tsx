@@ -705,7 +705,17 @@ function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number
 }
 
 type PresetInitValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
-function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitValues }) {
+type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; cpuCores: number | null; cpuThreads: number | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
+
+function AdminPresetGenerator({
+  initialValues,
+  allHardware = [],
+  allCodes = [],
+}: {
+  initialValues?: PresetInitValues;
+  allHardware?: CustomerHW[];
+  allCodes?: Array<{ code: string; note: string | null }>;
+}) {
   const { toast } = useToast();
   const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">(initialValues?.gpuVendor ?? "nvidia");
   const [gpuName, setGpuName] = useState(initialValues?.gpuName ?? "");
@@ -713,13 +723,39 @@ function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitVal
   const [ramGB, setRamGB] = useState(initialValues?.ramGb?.toString() ?? "16");
   const [osVersion, setOsVersion] = useState<"win11" | "win10">(initialValues?.osVersion ?? "win11");
   const [isLaptop, setIsLaptop] = useState(initialValues?.isLaptop ?? false);
+  const [selectedUser, setSelectedUser] = useState<string | null>(initialValues ? null : null);
+  const [hwSearch, setHwSearch] = useState("");
   // Actual core counts from WMI scan (override parseCpuModel estimates when available)
-  const actualCores = initialValues?.cpuCores ?? 0;
-  const actualThreads = initialValues?.cpuThreads ?? 0;
+  const [actualCores, setActualCores] = useState(initialValues?.cpuCores ?? 0);
+  const [actualThreads, setActualThreads] = useState(initialValues?.cpuThreads ?? 0);
   const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generatingFix, setGeneratingFix] = useState(false);
+
+  const loadUser = (hw: CustomerHW) => {
+    setSelectedUser(hw.codeRef);
+    if (hw.gpuVendor && ["nvidia","amd","intel"].includes(hw.gpuVendor)) setGpuVendor(hw.gpuVendor as "nvidia"|"amd"|"intel");
+    if (hw.gpuName) setGpuName(hw.gpuName);
+    if (hw.cpuModel) setCpuModel(hw.cpuModel);
+    if (hw.ramGb) setRamGB(String(hw.ramGb));
+    if (hw.osVersion && ["win11","win10"].includes(hw.osVersion)) setOsVersion(hw.osVersion as "win11"|"win10");
+    if (hw.isLaptop !== null) setIsLaptop(hw.isLaptop);
+    setActualCores(hw.cpuCores ?? 0);
+    setActualThreads(hw.cpuThreads ?? 0);
+    setGenerated(null);
+    setFixGenerated(null);
+  };
+
+  const filteredHW = allHardware.filter(hw => {
+    if (!hwSearch.trim()) return true;
+    const q = hwSearch.toLowerCase();
+    const label = allCodes.find(c => c.code === hw.codeRef)?.note || hw.codeRef;
+    return label.toLowerCase().includes(q)
+      || (hw.gpuName || "").toLowerCase().includes(q)
+      || (hw.cpuModel || "").toLowerCase().includes(q)
+      || hw.codeRef.toLowerCase().includes(q);
+  });
 
   const buildFakeHW = (): HardwareInfo => {
     const cpu = parseCpuModel(cpuModel);
@@ -865,6 +901,123 @@ function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitVal
           <h2 className="text-sm font-bold text-white">Custom Preset Generator</h2>
           <p className="text-xs text-zinc-500">Input a user's specs → downloads a hardware-optimized .bat script</p>
         </div>
+      </div>
+
+      {/* ── Detected Users List ──────────────────────────────────────── */}
+      <div className="rounded-xl border border-white/8 bg-zinc-900/60 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-red-400" />
+            <span className="text-[11px] font-black uppercase tracking-widest text-red-400">Detected Users</span>
+            <span className="text-[10px] text-zinc-600 font-mono">({allHardware.length})</span>
+          </div>
+          {allHardware.length > 0 && selectedUser && (
+            <button
+              onClick={() => { setSelectedUser(null); }}
+              className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Clear selection
+            </button>
+          )}
+        </div>
+
+        {allHardware.length === 0 ? (
+          <div className="px-4 py-6 text-center">
+            <Cpu className="w-6 h-6 text-zinc-700 mx-auto mb-2" />
+            <p className="text-xs text-zinc-600 font-semibold">No hardware scans yet</p>
+            <p className="text-[10px] text-zinc-700 mt-0.5">Customers need to drop their sysinfo.json to scan hardware</p>
+          </div>
+        ) : (
+          <>
+            <div className="px-3 py-2 border-b border-white/5">
+              <div className="relative">
+                <Search className="w-3 h-3 text-zinc-600 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by name, GPU, CPU…"
+                  value={hwSearch}
+                  onChange={e => setHwSearch(e.target.value)}
+                  className="w-full bg-zinc-950/60 border border-zinc-800 rounded-lg pl-7 pr-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-red-500/40 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="max-h-64 overflow-y-auto divide-y divide-white/4">
+              {filteredHW.length === 0 ? (
+                <p className="text-[10px] text-zinc-600 px-4 py-3">No users match your search</p>
+              ) : filteredHW.map(hw => {
+                const codeData = allCodes.find(c => c.code === hw.codeRef);
+                const label = codeData?.note?.split(" | stripe:")[0] || hw.codeRef;
+                const isSelected = selectedUser === hw.codeRef;
+                const vendorColor = hw.gpuVendor === "nvidia" ? "bg-green-500" : hw.gpuVendor === "amd" ? "bg-red-500" : "bg-blue-500";
+                const vendorText = hw.gpuVendor === "nvidia" ? "text-green-400 border-green-500/30 bg-green-500/10" : hw.gpuVendor === "amd" ? "text-red-400 border-red-500/30 bg-red-500/10" : "text-blue-400 border-blue-500/30 bg-blue-500/10";
+                return (
+                  <button
+                    key={hw.codeRef}
+                    data-testid={`btn-load-user-${hw.codeRef}`}
+                    onClick={() => loadUser(hw)}
+                    className={cn(
+                      "w-full text-left px-4 py-3 transition-all hover:bg-white/4 group",
+                      isSelected && "bg-red-500/8 border-l-2 border-l-red-500"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* GPU dot */}
+                      <div className={cn("w-2 h-2 rounded-full mt-1.5 shrink-0", vendorColor)} />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        {/* Row 1: name + badges */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border", isSelected ? "text-red-300 bg-red-500/15 border-red-500/30" : "text-zinc-400 bg-zinc-800 border-zinc-700")}>
+                            {label.length > 22 ? label.slice(0, 22) + "…" : label}
+                          </span>
+                          {hw.isLaptop && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">LAPTOP</span>
+                          )}
+                          {hw.osVersion && (
+                            <span className="text-[9px] text-zinc-600">{hw.osVersion === "win11" ? "Win11" : "Win10"}</span>
+                          )}
+                        </div>
+                        {/* Row 2: GPU + CPU */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {hw.gpuName && (
+                            <span className={cn("text-[10px] font-bold flex items-center gap-1 px-1.5 py-0.5 rounded border", vendorText)}>
+                              <Monitor className="w-2.5 h-2.5" />{hw.gpuName.length > 20 ? hw.gpuName.slice(0,20)+"…" : hw.gpuName}
+                            </span>
+                          )}
+                          {hw.cpuModel && (
+                            <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                              <Cpu className="w-2.5 h-2.5 text-zinc-600" />{hw.cpuModel.length > 22 ? hw.cpuModel.slice(0,22)+"…" : hw.cpuModel}
+                            </span>
+                          )}
+                        </div>
+                        {/* Row 3: RAM + threads */}
+                        <div className="flex items-center gap-2">
+                          {hw.ramGb && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
+                              <MemoryStick className="w-2.5 h-2.5 inline mr-0.5" />{hw.ramGb}GB
+                            </span>
+                          )}
+                          {(hw.cpuCores || hw.cpuThreads) && (
+                            <span className="text-[9px] text-zinc-600">
+                              {hw.cpuCores ? `${hw.cpuCores}C` : ""}{hw.cpuCores && hw.cpuThreads ? "/" : ""}{hw.cpuThreads ? `${hw.cpuThreads}T` : ""}
+                            </span>
+                          )}
+                          <span className={cn(
+                            "ml-auto text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded transition-all",
+                            isSelected
+                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                              : "bg-zinc-800/0 text-zinc-700 group-hover:bg-zinc-800 group-hover:text-zinc-400 border border-transparent"
+                          )}>
+                            {isSelected ? "✓ Loaded" : "Load →"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1332,7 +1485,6 @@ export default function Admin() {
     refetchInterval: 5000,
   });
 
-  type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; cpuCores: number | null; cpuThreads: number | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
   const customerHardwareQuery = useQuery<CustomerHW[]>({
     queryKey: ["/api/admin/customer-hardware", key],
     queryFn: () => fetch("/api/admin/customer-hardware", { headers }).then(r => r.json()),
@@ -3321,7 +3473,14 @@ export default function Admin() {
         )}
 
         {tab === "security" && <SecurityTab headers={headers} />}
-        {tab === "preset" && <AdminPresetGenerator key={presetFillKey} initialValues={presetFillData ?? undefined} />}
+        {tab === "preset" && (
+          <AdminPresetGenerator
+            key={presetFillKey}
+            initialValues={presetFillData ?? undefined}
+            allHardware={customerHardwareQuery.data || []}
+            allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
+          />
+        )}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

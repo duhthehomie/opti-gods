@@ -20,14 +20,17 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
 
   // ===== CORE — every Windows gaming PC benefits from these =====
   const CORE = [
-    // Scheduler / responsiveness
+    // Scheduler / responsiveness / timer precision
+    "Win32PrioritySeparation",   // sets foreground app CPU quantum — single biggest scheduler FPS tweak
+    "SetTimerResolution",        // bcdedit useplatformtick=yes — hardware timer, tightest frame deltas
     "SetResponsiveness","GameModeTweaks",
     "DisableHungAppDetection","EnableMSIMode",
     // Network
-    "DisableNagle","SetDNSPriority","DisableNDU",
-    "EnableTCPAutoTuning","DisableIPv6",
+    "NetworkThrottling",         // NetworkThrottlingIndex=0xffffffff — disables multimedia net throttle
+    "DisableNagle","InputLagTCP","SetDNSPriority","DisableNDU",
+    "EnableTCPAutoTuning","OptimizeTCP","DisableIPv6",
     // Power / throttling
-    "DisablePowerThrottling",
+    "DisablePowerThrottling","DisablePowerThrottlingAdv",
     // Visual / gaming
     "DisableXboxGameBar","DisableGameDVR","DisablePointerPrecision","DisableAnimations",
     "SysVisualBestPerf","SysHypervisorOff",
