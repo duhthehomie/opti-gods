@@ -202,45 +202,64 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
   const resolveEvent = async (id: number) => {
     setResolving(id);
-    await fetch(`/api/admin/security/resolve/${id}`, { method: "POST", headers });
-    refresh();
-    setResolving(null);
-    toast({ title: "Event resolved" });
+    try {
+      await fetch(`/api/admin/security/resolve/${id}`, { method: "POST", headers });
+      refresh();
+      toast({ title: "Event resolved" });
+    } catch {
+      toast({ title: "Failed to resolve event", variant: "destructive" });
+    } finally {
+      setResolving(null);
+    }
   };
 
   const banIp = async (ip: string, reason: string, permanent: boolean) => {
     setBanning(ip);
-    await fetch("/api/admin/security/ban-ip", {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ ip, reason, permanent }),
-    });
-    refresh();
-    setBanning(null);
-    setBanForm(null);
-    toast({ title: `Banned ${ip}${permanent ? " (permanent)" : ""}`, variant: "destructive" });
+    try {
+      await fetch("/api/admin/security/ban-ip", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ ip, reason, permanent }),
+      });
+      refresh();
+      setBanForm(null);
+      toast({ title: `Banned ${ip}${permanent ? " (permanent)" : ""}`, variant: "destructive" });
+    } catch {
+      toast({ title: `Failed to ban ${ip}`, variant: "destructive" });
+    } finally {
+      setBanning(null);
+    }
   };
 
   const unbanIp = async (ip: string) => {
-    await fetch("/api/admin/security/ban-ip", {
-      method: "DELETE",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ ip }),
-    });
-    refresh();
-    toast({ title: `Unbanned ${ip}` });
+    try {
+      await fetch("/api/admin/security/ban-ip", {
+        method: "DELETE",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ ip }),
+      });
+      refresh();
+      toast({ title: `Unbanned ${ip}` });
+    } catch {
+      toast({ title: `Failed to unban ${ip}`, variant: "destructive" });
+    }
   };
 
   const unblockRate = async (b: BlockedIp) => {
     setUnblocking(b.key);
-    await fetch("/api/admin/blocked-ips", {
-      method: "DELETE",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ key: b.key }),
-    });
-    setBlocks(prev => prev.filter(x => x.key !== b.key));
-    setUnblocking(null);
-    toast({ title: `Unblocked ${b.ip}` });
+    try {
+      await fetch("/api/admin/blocked-ips", {
+        method: "DELETE",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ key: b.key }),
+      });
+      setBlocks(prev => prev.filter(x => x.key !== b.key));
+      toast({ title: `Unblocked ${b.ip}` });
+    } catch {
+      toast({ title: `Failed to unblock ${b.ip}`, variant: "destructive" });
+    } finally {
+      setUnblocking(null);
+    }
   };
 
   const SECTIONS = [
@@ -1216,7 +1235,7 @@ export default function Admin() {
   const [expandedCodeIps, setExpandedCodeIps] = useState<Set<number>>(new Set());
 
   // Preset generator pre-fill state (for "Gen Preset" button on each code row)
-  type PresetFillValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
+  type PresetFillValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
   const [presetFillData, setPresetFillData] = useState<PresetFillValues | null>(null);
   const [presetFillKey, setPresetFillKey] = useState("default");
 

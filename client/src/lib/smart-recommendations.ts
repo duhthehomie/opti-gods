@@ -60,7 +60,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // Registry — DPC latency optimization (reduces audio/input stutter on all systems)
     "RegistryDPCLatency",
     // FiveM — universal game pack
-    "FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMHighPriority",
+    "FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMHighPriority","FiveMFixProductId",
     "FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMGameModeAdd",
     "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
     "FiveMRenderingBoost","FiveMDisableMPO",
