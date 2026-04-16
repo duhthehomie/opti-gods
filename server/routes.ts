@@ -3179,8 +3179,13 @@ Read-Host "Press Enter to close this window"
     if (!checkAdminKey(req, res)) return;
     const status = req.query.status as string | undefined;
     const validStatuses: ("open" | "acknowledged" | "resolved")[] = ["open", "acknowledged", "resolved"];
-    const validStatus = validStatuses.find(s => s === status);
-    const reports = await storage.getUserReports(validStatus);
+    if (status) {
+      const validStatus = validStatuses.find(s => s === status);
+      if (!validStatus) return res.status(400).json({ error: "Invalid status filter" });
+      const reports = await storage.getUserReports(validStatus);
+      return res.json(reports);
+    }
+    const reports = await storage.getUserReports();
     return res.json(reports);
   });
 
@@ -3329,6 +3334,9 @@ RESPONSE STYLE:
       const decoder = new TextDecoder();
       let fullText = "";
       let sseBuffer = "";
+      let streamBuffer = "";
+      let emittedLength = 0;
+      const BUFFER_WINDOW = 60;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -3346,14 +3354,24 @@ RESPONSE STYLE:
             const token = parsed.choices[0]?.delta?.content ?? "";
             if (token) {
               fullText += token;
-              const safeToken = sanitizeAetherOutput(token);
-              res.write(`data: ${JSON.stringify({ token: safeToken })}\n\n`);
+              streamBuffer += token;
+              const sanitized = sanitizeAetherOutput(streamBuffer);
+              const safeToEmit = sanitized.length > BUFFER_WINDOW ? sanitized.slice(0, sanitized.length - BUFFER_WINDOW) : "";
+              if (safeToEmit.length > emittedLength) {
+                const newContent = safeToEmit.slice(emittedLength);
+                res.write(`data: ${JSON.stringify({ token: newContent })}\n\n`);
+                emittedLength = safeToEmit.length;
+              }
             }
           } catch {}
         }
       }
 
       const sanitized = sanitizeAetherOutput(fullText);
+      if (emittedLength < sanitized.length) {
+        const remaining = sanitized.slice(emittedLength);
+        res.write(`data: ${JSON.stringify({ token: remaining })}\n\n`);
+      }
       res.write(`data: ${JSON.stringify({ done: true, fullText: sanitized })}\n\n`);
       res.end();
     } catch (err: unknown) {
