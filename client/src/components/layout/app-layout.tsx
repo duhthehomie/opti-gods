@@ -358,11 +358,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
 
-  const MOBILE_SHOWCASE_KEY = "optigods_mobile_showcase_dismissed";
-  const showMobileShowcaseOnDashboard = isMobile && location === "/" && !localStorage.getItem(MOBILE_SHOWCASE_KEY);
-  const [showcaseDismissed, setShowcaseDismissed] = useState(false);
+  const isMobileDashboard = isMobile && location === "/";
 
-  if (showMobileShowcaseOnDashboard && !showcaseDismissed) {
+  if (isMobileDashboard) {
     return (
       <SidebarProvider>
         <div className="flex h-screen w-full bg-[#020202] text-white overflow-hidden">
@@ -373,24 +371,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarTrigger className="text-zinc-400 hover:text-white" />
                 <span className="font-display font-bold text-sm">OPTI <span className="text-red-500">GODS</span></span>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  data-testid="button-mobile-skip-showcase"
-                  onClick={() => {
-                    localStorage.setItem(MOBILE_SHOWCASE_KEY, "1");
-                    setShowcaseDismissed(true);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-800/80 border border-white/10 text-zinc-400 text-[10px] font-bold hover:text-white transition-colors"
-                >
-                  Use Optimizer
+              <Link href="/ai">
+                <button data-testid="button-mobile-header-ai" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/15 border border-red-500/25 text-red-400 text-[10px] font-bold">
+                  <MessageSquare className="w-3 h-3" />
+                  AI
                 </button>
-                <Link href="/ai">
-                  <button data-testid="button-mobile-header-ai" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/15 border border-red-500/25 text-red-400 text-[10px] font-bold">
-                    <MessageSquare className="w-3 h-3" />
-                    AI
-                  </button>
-                </Link>
-              </div>
+              </Link>
             </header>
             <main className="flex-1 overflow-y-auto overflow-x-hidden">
               <MobileShowcase />
