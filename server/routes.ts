@@ -2233,24 +2233,6 @@ Start-Sleep 2
 
   // Public — comprehensive FiveM & GTA V crash fix (no-error silent crash + known crash causes)
   app.get('/api/fivem-crash-fix-script', (req, res) => {
-    const batchHeader = [
-      `@echo off`,
-      `setlocal`,
-      `net session >nul 2>&1`,
-      `if %errorLevel% == 0 goto :run`,
-      `echo  Requesting Administrator rights...`,
-      `PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"`,
-      `exit /b`,
-      `:run`,
-      `set "TMP_PS1=%temp%\\fivem_fix_%RANDOM%.ps1"`,
-      `more +15 "%~f0" > "%TMP_PS1%"`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
-      `del "%TMP_PS1%" 2>nul`,
-      `endlocal`,
-      `exit /b`,
-      ``,
-    ].join('\r\n');
-
     const ps1Lines = [
       `\$ErrorActionPreference = 'SilentlyContinue'`,
       ``,
@@ -2404,8 +2386,15 @@ Start-Sleep 2
       `Read-Host "Press Enter to close"`,
     ];
 
-    const ps1Content = ps1Lines.join('\r\n');
-    const script = batchHeader + ps1Content;
+    const script = [
+      `@echo off`,
+      `setlocal`,
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = @'`,
+      ...ps1Lines,
+      `'@; $f = Join-Path $env:TEMP ('fivem_fix_' + [guid]::NewGuid().ToString() + '.ps1'); Set-Content -Path $f -Value $p -Encoding UTF8; & powershell -NoProfile -ExecutionPolicy Bypass -File $f; Remove-Item $f -Force -ErrorAction SilentlyContinue"`,
+      `endlocal`,
+      `exit /b`,
+    ].join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_Crash_Fix.bat"');
