@@ -2110,9 +2110,7 @@ Start-Sleep 2
 
   // Public — Rocket League crash/won't start fix (ADVANCED — resets everything)
   app.get('/api/rocket-league-fix-script', (req, res) => {
-    // The batch header (lines 1-15). PS1 content starts at line 16.
-    // more +15 skips lines 1-15 and outputs from line 16 onwards.
-    const batchHeader = [
+    const rlBatHeader = [
       `@echo off`,
       `setlocal`,
       `net session >nul 2>&1`,
@@ -2122,14 +2120,15 @@ Start-Sleep 2
       `exit /b`,
       `:run`,
       `set "TMP_PS1=%temp%\\rl_fix_%RANDOM%.ps1"`,
-      `more +15 "%~f0" > "%TMP_PS1%"`,
+      `SKIP_PLACEHOLDER`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
       `del "%TMP_PS1%" 2>nul`,
       `endlocal`,
       `exit /b`,
-      ``,
-    ].join('\r\n');
-    // ^ That's exactly 15 lines (line 15 is the blank line), PS1 starts at line 16
+    ];
+    const rlSkip = rlBatHeader.length;
+    rlBatHeader[rlBatHeader.indexOf('SKIP_PLACEHOLDER')] = `more +${rlSkip} "%~f0" > "%TMP_PS1%"`;
+    const batchHeader = rlBatHeader.join('\r\n') + '\r\n';
 
     const ps1Lines = [
       `\$ErrorActionPreference = 'SilentlyContinue'`,
@@ -2401,11 +2400,10 @@ Start-Sleep 2
       `del "%TMP_PS1%" 2>nul`,
       `endlocal`,
       `exit /b`,
-      ``,
     ];
     const skipCount = batchHeader.length;
     batchHeader[batchHeader.indexOf('SKIP_PLACEHOLDER')] = `more +${skipCount} "%~f0" > "%TMP_PS1%"`;
-    const script = batchHeader.join('\r\n') + ps1Lines.join('\r\n');
+    const script = batchHeader.join('\r\n') + '\r\n' + ps1Lines.join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_Crash_Fix.bat"');

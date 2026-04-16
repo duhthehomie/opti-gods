@@ -221,6 +221,7 @@ export default function Dashboard() {
       qc.invalidateQueries({ queryKey: [api.presets.list.path] });
       toast({ title: "Preset deleted" });
     },
+    onError: () => toast({ title: "Error", description: "Could not delete preset.", variant: "destructive" }),
   });
 
   const loadPreset = (preset: any) => {
