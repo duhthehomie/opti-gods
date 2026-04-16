@@ -180,6 +180,8 @@ export const customerHardware = pgTable("customer_hardware", {
   gpuVendor: varchar("gpu_vendor", { length: 20 }),
   gpuName: varchar("gpu_name", { length: 200 }),
   cpuModel: varchar("cpu_model", { length: 200 }),
+  cpuCores: integer("cpu_cores"),
+  cpuThreads: integer("cpu_threads"),
   ramGb: integer("ram_gb"),
   osVersion: varchar("os_version", { length: 20 }),
   isLaptop: boolean("is_laptop").default(false),

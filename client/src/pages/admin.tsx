@@ -704,7 +704,7 @@ function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number
   return { brand: "intel", threads: 8, cores: 4, generation: 0, cpuLabel: model.trim() || "Unknown CPU", isRyzen: false, isIntelCore: true };
 }
 
-type PresetInitValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
+type PresetInitValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
 function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitValues }) {
   const { toast } = useToast();
   const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">(initialValues?.gpuVendor ?? "nvidia");
@@ -713,6 +713,9 @@ function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitVal
   const [ramGB, setRamGB] = useState(initialValues?.ramGb?.toString() ?? "16");
   const [osVersion, setOsVersion] = useState<"win11" | "win10">(initialValues?.osVersion ?? "win11");
   const [isLaptop, setIsLaptop] = useState(initialValues?.isLaptop ?? false);
+  // Actual core counts from WMI scan (override parseCpuModel estimates when available)
+  const actualCores = initialValues?.cpuCores ?? 0;
+  const actualThreads = initialValues?.cpuThreads ?? 0;
   const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -720,7 +723,9 @@ function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitVal
 
   const buildFakeHW = (): HardwareInfo => {
     const cpu = parseCpuModel(cpuModel);
-    const cores = cpu.threads;
+    // Use actual WMI-scanned thread/core counts when available — far more accurate than estimates
+    const cores = actualThreads > 0 ? actualThreads : cpu.threads;
+    const physCores = actualCores > 0 ? actualCores : cpu.cores;
     const ram = parseInt(ramGB) || 16;
     const isNvidia = gpuVendor === "nvidia";
     const isAmdGpu = gpuVendor === "amd";
@@ -735,7 +740,7 @@ function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitVal
     return {
       loading: false, scanned: true,
       gpuName: gpuLabel, gpuVendor: gpuVendor,
-      cpuLabel: cpu.cpuLabel, cpuCores: cores, cpuPhysicalCores: Math.max(1, Math.ceil(cores / 2)),
+      cpuLabel: cpu.cpuLabel, cpuCores: cores, cpuPhysicalCores: physCores,
       ramGB: ram, ramLabel, ramNote: "",
       isNvidia, isAmdGpu, isAmdApu, isAMD, isIntel, isLaptop,
       nvidiaIsRTX, nvidiaIsLowEnd,
@@ -1327,7 +1332,7 @@ export default function Admin() {
     refetchInterval: 5000,
   });
 
-  type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
+  type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; cpuCores: number | null; cpuThreads: number | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
   const customerHardwareQuery = useQuery<CustomerHW[]>({
     queryKey: ["/api/admin/customer-hardware", key],
     queryFn: () => fetch("/api/admin/customer-hardware", { headers }).then(r => r.json()),
@@ -2309,6 +2314,8 @@ export default function Admin() {
                                 gpuVendor: (hw.gpuVendor as "nvidia" | "amd" | "intel") || "nvidia",
                                 gpuName: hw.gpuName || "",
                                 cpuModel: hw.cpuModel || "",
+                                cpuCores: hw.cpuCores ?? undefined,
+                                cpuThreads: hw.cpuThreads ?? undefined,
                                 ramGb: hw.ramGb || 16,
                                 osVersion: (hw.osVersion as "win11" | "win10") || "win11",
                                 isLaptop: hw.isLaptop ?? false,

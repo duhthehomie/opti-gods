@@ -1799,7 +1799,7 @@ Start-Sleep 2
 
   // Pro — save customer hardware specs so admin can pre-fill preset generator
   app.post('/api/session/hardware', async (req, res) => {
-    const { sessionToken, gpuVendor, gpuName, cpuModel, ramGb, osVersion, isLaptop } = req.body || {};
+    const { sessionToken, gpuVendor, gpuName, cpuModel, cpuCores, cpuThreads, ramGb, osVersion, isLaptop } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.status(401).json({ ok: false });
     const sessions = await storage.getAllProSessions();
     const session = sessions.find(s => s.sessionToken === sessionToken);
@@ -1808,6 +1808,8 @@ Start-Sleep 2
       gpuVendor: String(gpuVendor || "nvidia"),
       gpuName: String(gpuName || ""),
       cpuModel: String(cpuModel || ""),
+      cpuCores: cpuCores ? Number(cpuCores) : undefined,
+      cpuThreads: cpuThreads ? Number(cpuThreads) : undefined,
       ramGb: Number(ramGb) || 16,
       osVersion: String(osVersion || "win11"),
       isLaptop: !!isLaptop,

@@ -84,7 +84,7 @@ export interface IStorage {
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
   // Customer hardware snapshots
-  saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void>;
+  saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void>;
   getAllCustomerHardware(): Promise<CustomerHardware[]>;
   // IP bans
   banIp(ip: string, reason: string, permanent?: boolean): Promise<void>;
@@ -551,7 +551,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(proAccessCodes.code, codeValue));
   }
 
-  async saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void> {
+  async saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void> {
     await db.insert(customerHardware)
       .values({ codeRef, ...data, savedAt: new Date() })
       .onConflictDoUpdate({ target: customerHardware.codeRef, set: { ...data, savedAt: new Date() } });

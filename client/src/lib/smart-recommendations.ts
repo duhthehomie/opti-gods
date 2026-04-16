@@ -67,6 +67,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // Registry — safe kernel tweaks every gaming PC benefits from
     "RegistryNTFSOptimize","RegistryIOPageLock","RegistryLargePageHeap",
     "ClearPagefileOnShutdown",
+    // Scheduler precision — reduces frame time variance on all CPUs
+    "DisableDynamicTick",
     // WinUtil
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy","WinTitusConsumerFeatures",
@@ -138,20 +140,22 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
 
   // ===== CPU BRAND =====
   if (hw.isRyzen) {
-    ["FiveMGTAProcessPerfOptions","FiveMAffinityMask"].forEach(id => ids.add(id));
+    // AmdCpuPowerPinMax pins CPU min/max performance state to 100% for all Ryzen desktops
+    // = Precision Boost 2 operates without Windows frequency floor drops
+    ["FiveMGTAProcessPerfOptions","FiveMAffinityMask","AmdCpuPowerPinMax"].forEach(id => ids.add(id));
     if (hw.cpuGeneration >= 5) {
-      reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan tweaks applied`);
+      reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan + Precision Boost 2 pinned to 100%`);
     } else if (hw.cpuGeneration >= 3) {
       ["FiveM3500CoreAffinity","FiveM3500PerfPlan","FiveM5600CoreAffinity","FiveM5600PowerPlan"].forEach(id => ids.add(id));
       if (hw.cpuLabel && /3500/i.test(hw.cpuLabel)) {
-        reasons.push(`AMD Ryzen 5 3500 detected — core affinity 0x3F + Boost locked 100%`);
+        reasons.push(`AMD Ryzen 5 3500 detected — core affinity 0x3F + Boost pinned 100%`);
       } else if (hw.cpuLabel && /5600/i.test(hw.cpuLabel)) {
-        reasons.push(`AMD Ryzen 5600 detected — Zen 3 core affinity + power plan tweaks`);
+        reasons.push(`AMD Ryzen 5600 detected — Zen 3 core affinity + power plan + Boost pinned 100%`);
       } else {
-        reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series (Zen 2/3) — core + scheduler + power plan tweaks`);
+        reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — core + scheduler + Precision Boost 2 pinned 100%`);
       }
     } else {
-      reasons.push(`AMD Ryzen CPU — performance tweaks applied`);
+      reasons.push(`AMD Ryzen CPU — performance tweaks + Precision Boost pinned to 100%`);
     }
   } else if (hw.isIntelCore) {
     if (hw.cpuGeneration >= 12) {

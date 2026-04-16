@@ -25,6 +25,8 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
       gpuVendor,
       gpuName: parsed.GPU || "",
       cpuModel: parsed.CPU || "",
+      cpuCores: parsed.Cores || undefined,
+      cpuThreads: parsed.Threads || undefined,
       ramGb: parsed.RAM_GB || 16,
       osVersion: "win11",
       isLaptop: false,
