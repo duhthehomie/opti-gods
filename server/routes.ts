@@ -2120,6 +2120,7 @@ Start-Sleep 2
       `exit /b`,
       `:run`,
       `set "TMP_PS1=%temp%\\rl_fix_%RANDOM%.ps1"`,
+      `set "BAT_SELF=%~f0"`,
       `SKIP_PLACEHOLDER`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
       `del "%TMP_PS1%" 2>nul`,
@@ -2127,7 +2128,8 @@ Start-Sleep 2
       `exit /b`,
     ];
     const rlSkip = rlBatHeader.length;
-    rlBatHeader[rlBatHeader.indexOf('SKIP_PLACEHOLDER')] = `more +${rlSkip} "%~f0" > "%TMP_PS1%"`;
+    rlBatHeader[rlBatHeader.indexOf('SKIP_PLACEHOLDER')] =
+      `PowerShell -NoProfile -Command "[IO.File]::WriteAllLines($env:TMP_PS1,(([IO.File]::ReadAllLines($env:BAT_SELF))|Select-Object -Skip ${rlSkip}))"`;
     const batchHeader = rlBatHeader.join('\r\n') + '\r\n';
 
     const ps1Lines = [
@@ -2395,6 +2397,7 @@ Start-Sleep 2
       `exit /b`,
       `:run`,
       `set "TMP_PS1=%temp%\\fivem_fix_%RANDOM%.ps1"`,
+      `set "BAT_SELF=%~f0"`,
       `SKIP_PLACEHOLDER`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
       `del "%TMP_PS1%" 2>nul`,
@@ -2402,7 +2405,8 @@ Start-Sleep 2
       `exit /b`,
     ];
     const skipCount = batchHeader.length;
-    batchHeader[batchHeader.indexOf('SKIP_PLACEHOLDER')] = `more +${skipCount} "%~f0" > "%TMP_PS1%"`;
+    batchHeader[batchHeader.indexOf('SKIP_PLACEHOLDER')] =
+      `PowerShell -NoProfile -Command "[IO.File]::WriteAllLines($env:TMP_PS1,(([IO.File]::ReadAllLines($env:BAT_SELF))|Select-Object -Skip ${skipCount}))"`;
     const script = batchHeader.join('\r\n') + '\r\n' + ps1Lines.join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
