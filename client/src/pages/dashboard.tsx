@@ -398,13 +398,23 @@ export default function Dashboard() {
                   <Zap className="w-3.5 h-3.5 text-red-400" />
                   <span className="text-xs font-bold text-red-400">{smartRecs.ids.size} tweaks recommended</span>
                 </div>
-                <HardwareScanZone
-                  onScanned={handleScanned}
-                  onCleared={handleScanCleared}
-                  isScanned={hw.scanned}
-                />
+                {hw.scanned && (
+                  <HardwareScanZone
+                    onScanned={handleScanned}
+                    onCleared={handleScanCleared}
+                    isScanned={hw.scanned}
+                  />
+                )}
               </div>
             </div>
+            {/* Hardware scan — full-width below specs row so the expanded panel never overflows */}
+            {!hw.scanned && (
+              <HardwareScanZone
+                onScanned={handleScanned}
+                onCleared={handleScanCleared}
+                isScanned={hw.scanned}
+              />
+            )}
           </motion.div>
         )}
 

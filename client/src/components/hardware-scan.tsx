@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Cpu, Upload, CheckCircle2, X, Copy, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Cpu, Upload, CheckCircle2, X, Copy, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
@@ -14,14 +13,14 @@ function detectGpuVendor(gpuName: string): "nvidia" | "amd" | "intel" {
 }
 
 function uploadHardwareToServer(parsed: ScannedSysInfo) {
+  // Always upload — Pro users get linked to their code, others stored by IP.
   const token = getStoredToken();
-  if (!token) return;
   const gpuVendor = detectGpuVendor(parsed.GPU || "");
   fetch("/api/session/hardware", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      sessionToken: token,
+      sessionToken: token || undefined,
       gpuVendor,
       gpuName: parsed.GPU || "",
       cpuModel: parsed.CPU || "",
@@ -34,7 +33,7 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
   }).catch(() => {});
 }
 
-const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
+export const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
 
 interface HardwareScanZoneProps {
   onScanned: (info: ScannedSysInfo) => void;
@@ -62,6 +61,7 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
         saveScannedInfo(parsed);
         uploadHardwareToServer(parsed);
         onScanned(parsed);
+        setExpanded(false);
         toast({ title: "Hardware scan loaded!", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}` });
       } catch {
         toast({ title: "Invalid scan file", description: "Could not parse the JSON. Re-run the scan command and try again.", variant: "destructive" });
@@ -112,62 +112,100 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
   }
 
   return (
-    <div className="mt-3">
-      {!expanded ? (
-        <button
-          onClick={() => setExpanded(true)}
-          data-testid="button-hardware-scan-open"
-          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-red-400 transition-colors border border-dashed border-zinc-700 hover:border-red-500/50 rounded-lg px-3 py-2 w-full"
-        >
-          <Cpu className="w-3.5 h-3.5" />
-          <span>GPU / RAM not showing? Run hardware scan</span>
-        </button>
-      ) : (
-        <div className="border border-zinc-700/60 rounded-xl bg-black/40 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Hardware Scan</span>
-            <button onClick={() => setExpanded(false)} className="text-zinc-600 hover:text-zinc-400 transition-colors">
+    <div className="w-full">
+      {/* Collapsed trigger */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        data-testid="button-hardware-scan-open"
+        className={cn(
+          "w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all text-left",
+          expanded
+            ? "border-red-500/30 bg-red-500/5 text-red-400"
+            : "border-dashed border-zinc-700 hover:border-red-500/40 hover:bg-red-500/4 text-zinc-500 hover:text-red-400"
+        )}
+      >
+        <Cpu className="w-3.5 h-3.5 shrink-0" />
+        <span className="text-xs font-medium flex-1">GPU / RAM not showing? Run hardware scan</span>
+        <ChevronDown className={cn("w-3.5 h-3.5 shrink-0 transition-transform", expanded && "rotate-180")} />
+      </button>
+
+      {/* Expanded panel */}
+      {expanded && (
+        <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/80 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-black/40">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-zinc-300">Hardware Scan</span>
+            </div>
+            <button
+              onClick={() => setExpanded(false)}
+              className="p-1 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="text-xs text-zinc-400 leading-relaxed">
-            Open <span className="text-white font-mono">PowerShell as Admin</span>, paste and run this command, then drag the file it creates onto the box below:
-          </div>
+          <div className="p-4 space-y-4">
+            {/* Step 1 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-red-500/20 border border-red-500/40 text-[9px] font-black text-red-400 flex items-center justify-center shrink-0">1</span>
+                <p className="text-[11px] text-zinc-400">
+                  Open <span className="text-white font-semibold">PowerShell as Admin</span> → paste &amp; run → a file will appear on your Desktop
+                </p>
+              </div>
+              <div className="relative rounded-lg border border-zinc-800 bg-black overflow-hidden">
+                <div className="overflow-x-auto">
+                  <pre
+                    data-testid="pre-hardware-scan-cmd"
+                    className="text-[9px] leading-relaxed text-green-400 font-mono p-3 pr-12 whitespace-pre"
+                  >
+                    {PS1_CMD}
+                  </pre>
+                </div>
+                <button
+                  onClick={copyCmd}
+                  data-testid="button-hardware-scan-copy"
+                  className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors border border-zinc-700"
+                  title="Copy command"
+                >
+                  {copied
+                    ? <><Check className="w-3 h-3 text-green-400" /><span className="text-[9px] text-green-400">Copied</span></>
+                    : <><Copy className="w-3 h-3" /><span className="text-[9px]">Copy</span></>
+                  }
+                </button>
+              </div>
+            </div>
 
-          <div className="relative">
-            <pre className="text-[9px] leading-relaxed bg-zinc-900 border border-zinc-700 rounded-lg p-3 overflow-x-auto overflow-y-auto max-h-32 text-green-400 whitespace-pre font-mono">
-              {PS1_CMD}
-            </pre>
-            <button
-              onClick={copyCmd}
-              data-testid="button-hardware-scan-copy"
-              className="absolute top-2 right-2 p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-              title="Copy command"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-            data-testid="zone-hardware-scan-drop"
-            className={cn(
-              "border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all",
-              dragging
-                ? "border-red-500 bg-red-500/10 text-red-400"
-                : "border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-zinc-400"
-            )}
-          >
-            <Upload className="w-5 h-5 mx-auto mb-2 opacity-60" />
-            <div className="text-xs">
-              {dragging ? "Drop optigods-sysinfo.json here" : "Drag optigods-sysinfo.json here, or click to browse"}
+            {/* Step 2 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-red-500/20 border border-red-500/40 text-[9px] font-black text-red-400 flex items-center justify-center shrink-0">2</span>
+                <p className="text-[11px] text-zinc-400">Drag <span className="text-white font-semibold">optigods-sysinfo.json</span> from your Desktop into the box below</p>
+              </div>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+                data-testid="zone-hardware-scan-drop"
+                className={cn(
+                  "rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all select-none",
+                  dragging
+                    ? "border-red-500 bg-red-500/8 text-red-400"
+                    : "border-zinc-800 hover:border-zinc-600 hover:bg-white/2 text-zinc-600 hover:text-zinc-400"
+                )}
+              >
+                <Upload className={cn("w-6 h-6 mx-auto mb-2 transition-colors", dragging ? "text-red-400" : "text-zinc-700")} />
+                <p className="text-xs font-medium">
+                  {dragging ? "Drop it!" : "Drop optigods-sysinfo.json here"}
+                </p>
+                <p className="text-[10px] mt-1 opacity-60">or click to browse</p>
+              </div>
+              <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
             </div>
           </div>
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
         </div>
       )}
     </div>

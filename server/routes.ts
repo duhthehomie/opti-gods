@@ -1797,14 +1797,25 @@ Start-Sleep 2
     res.json({ valid });
   });
 
-  // Pro — save customer hardware specs so admin can pre-fill preset generator
+  // Save customer hardware specs so admin can pre-fill preset generator.
+  // Works for ANYONE who runs the scan — Pro users get linked to their code,
+  // anonymous users get stored under "scan-{ip}" so the admin still sees them.
   app.post('/api/session/hardware', async (req, res) => {
     const { sessionToken, gpuVendor, gpuName, cpuModel, cpuCores, cpuThreads, ramGb, osVersion, isLaptop } = req.body || {};
-    if (!sessionToken || typeof sessionToken !== "string") return res.status(401).json({ ok: false });
-    const sessions = await storage.getAllProSessions();
-    const session = sessions.find(s => s.sessionToken === sessionToken);
-    if (!session?.codeRef) return res.status(401).json({ ok: false });
-    await storage.saveCustomerHardware(session.codeRef, {
+    const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+
+    // Try to resolve to a Pro code so the scan shows under the customer's name
+    let codeRef: string | null = null;
+    if (sessionToken && typeof sessionToken === "string") {
+      const sessions = await storage.getAllProSessions();
+      const session = sessions.find(s => s.sessionToken === sessionToken);
+      if (session?.codeRef) codeRef = session.codeRef;
+    }
+
+    // Fall back to IP-based key so anonymous / pre-purchase scans are still captured
+    if (!codeRef) codeRef = `scan-${ip}`;
+
+    await storage.saveCustomerHardware(codeRef, {
       gpuVendor: String(gpuVendor || "nvidia"),
       gpuName: String(gpuName || ""),
       cpuModel: String(cpuModel || ""),
@@ -1814,7 +1825,7 @@ Start-Sleep 2
       osVersion: String(osVersion || "win11"),
       isLaptop: !!isLaptop,
     });
-    res.json({ ok: true });
+    res.json({ ok: true, codeRef });
   });
 
   // Admin — get all customer hardware snapshots
