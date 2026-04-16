@@ -24,6 +24,9 @@ const ALL_REGISTRY_IDS = [
   "SysVisualBestPerf","SysHibernateOff","SysHypervisorOff",
   "SetHighPerformancePlan","DisableUSBSuspend","DisableCoreParking","DisablePowerThrottlingAdv",
   "DisableDefender","DisableAutoUpdate",
+  "NetDNSCloudflare","NetDNSGoogle","NetDisableQoS","NetInterruptModeration","NetRSSQueues","NetAdapterPowerSave","NetTCPChimneyOffload",
+  "Win11DisableVBS","Win11DisableHVCI","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
+  "ProcNUMAAware","ProcAffinityFPS","ProcMMCSSGaming","ProcGPUSchedulerHigh",
 ];
 const REGISTRY_RECOMMENDED_IDS = [
   "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks","EnableMSIMode","DisableCoreParking",
@@ -32,6 +35,7 @@ const REGISTRY_RECOMMENDED_IDS = [
   "DisableXboxGameBar","DisableGameDVR","EnableHAGS",
   "SysVisualBestPerf","SysHibernateOff",
   "SetHighPerformancePlan",
+  "NetDNSCloudflare","NetDisableQoS","NetInterruptModeration","ProcMMCSSGaming","ProcGPUSchedulerHigh",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -173,6 +177,30 @@ export default function Registry() {
     { id: "RegistryLargePageHeap", title: "Set Accurate CPU Cache Hints + Disable Superfetch", desc: "Writes SecondLevelDataCache=512KB and ThirdLevelDataCache=16384KB (matching Ryzen 5 3500 L2/L3). Enables Prefetcher mode 3 (App+Boot) and disables Superfetch. Windows uses cache size hints for heap allocation alignment — accurate values reduce cache line conflicts in memory-intensive game threads.", badge: "MEMORY", impact: "LOW" },
   ];
 
+  const ADVANCED_NETWORK_TWEAKS: TweakDef[] = [
+    { id: "NetDNSCloudflare", title: "Set DNS to Cloudflare (1.1.1.1)", desc: "Sets primary DNS to 1.1.1.1 and secondary to 1.0.0.1 — faster DNS resolution, lower latency on first-connect to game servers.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "NetDNSGoogle", title: "Set DNS to Google (8.8.8.8)", desc: "Sets primary DNS to 8.8.8.8, secondary to 8.8.4.4 — reliable alternative DNS with global anycast coverage.", impact: "MED" },
+    { id: "NetDisableQoS", title: "Disable QoS Packet Scheduler", desc: "Removes the QoS Packet Scheduler protocol binding from adapters — eliminates the 20% bandwidth reservation Windows applies by default.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "NetInterruptModeration", title: "Disable Interrupt Moderation", desc: "Disables NIC interrupt coalescing — each packet triggers an immediate CPU interrupt instead of batching. Reduces ping by 0.5–2ms at the cost of slightly higher CPU usage.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "NetRSSQueues", title: "Maximize RSS Queues", desc: "Sets Receive Side Scaling queue count to maximum — distributes network interrupt processing across all CPU cores.", impact: "MED" },
+    { id: "NetAdapterPowerSave", title: "Disable Network Adapter Power Saving", desc: "Prevents the NIC from entering low-power sleep states — eliminates 50–200ms wake latency when packets arrive after idle.", impact: "MED" },
+    { id: "NetTCPChimneyOffload", title: "Disable TCP Chimney Offload", desc: "Forces TCP processing back to the OS stack instead of NIC firmware — more consistent latency on modern NICs.", impact: "LOW" },
+  ];
+
+  const WIN11_GAMING_TWEAKS: TweakDef[] = [
+    { id: "Win11DisableVBS", title: "Disable VBS (Virtualization-Based Security)", desc: "Disables VBS via registry and bcdedit — recovers 5–10% CPU overhead from hypervisor-enforced code integrity checks. Safe to disable on personal gaming PCs.", badge: "WIN11", impact: "HIGH", warning: "Disabling VBS removes memory integrity protection. Only safe on personal gaming PCs — not recommended for enterprise or shared systems." },
+    { id: "Win11DisableHVCI", title: "Disable HVCI (Memory Integrity)", desc: "Turns off Hypervisor-Enforced Code Integrity — eliminates kernel-mode validation overhead on every driver call. 3–8% FPS improvement in CPU-bound titles.", badge: "WIN11", impact: "HIGH", warning: "Disabling HVCI allows unsigned or vulnerable kernel drivers to load. Only disable on a personal gaming-only PC." },
+    { id: "Win11ParkingCoreOverride", title: "Core Parking Override (MinCores=100%)", desc: "Forces all processor cores to remain unparked via hidden power plan setting — eliminates core wake latency during sudden frame spikes.", badge: "WIN11", impact: "MED" },
+    { id: "Win11ProcessorIdleMin", title: "Minimum Processor Idle State (C0 Only)", desc: "Restricts CPU to C0 idle state only — prevents deep C-state transitions that add 2–5ms wake latency during game threads.", badge: "WIN11", impact: "MED" },
+  ];
+
+  const PROCESS_TWEAKS: TweakDef[] = [
+    { id: "ProcNUMAAware", title: "Enable NUMA-Aware Scheduling", desc: "Hints Windows scheduler to keep game threads on the same NUMA node — reduces cross-node memory latency on multi-CCX Ryzen CPUs.", badge: "RYZEN", impact: "MED" },
+    { id: "ProcAffinityFPS", title: "Set Game Affinity to Physical Cores Only", desc: "Configures IFEO to assign game processes to physical cores only (skip hyperthreaded/SMT cores) — reduces context-switch overhead in CPU-bound games.", badge: "SMT", impact: "MED" },
+    { id: "ProcMMCSSGaming", title: "MMCSS Gaming Profile: Maximum Priority", desc: "Sets MMCSS (Multimedia Class Scheduler) gaming profile to SchedulingCategory=High, Priority=8, BackgroundOnly=False — Windows reserves CPU time for game threads over all other applications.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "ProcGPUSchedulerHigh", title: "GPU Scheduler Priority: High", desc: "Sets GPU scheduling priority to 8 (High) for game processes via IFEO PerfOptions — ensures GPU work queue is serviced before background compute.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+  ];
+
   const RISKY_TWEAKS: TweakDef[] = [
     { id: "DisableAutoUpdate", title: "Disable Windows Update Service", desc: "Stops the wuauserv service permanently. Re-enable manually to get security patches. Prevents forced reboots mid-game.", badge: "RISKY", impact: "MED", warning: "This stops Windows from receiving security updates. Your system will not automatically receive patches for newly discovered vulnerabilities. Only enable this if you manually check for updates regularly, or if forced reboots mid-game are a critical issue for you." },
     { id: "DisableDefender", title: "Disable Windows Defender Real-Time Protection", desc: "Disables real-time scanning. Can free 5–15% CPU during heavy I/O loads. Only do this if you have an alternative AV.", badge: "RISKY", impact: "MED", warning: "This removes your real-time antivirus protection. Your PC will no longer actively block malware, ransomware, or malicious downloads. Only enable this if you have a third-party antivirus (such as Malwarebytes, ESET, or Bitdefender) installed and active." },
@@ -289,6 +317,12 @@ export default function Registry() {
           <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           <Section heading="Advanced Kernel Tweaks (NTFS / DPC / Memory)" tweaks={KERNEL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+
+          <Section heading="Advanced Network (DNS / QoS / RSS)" tweaks={ADVANCED_NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+
+          <Section heading="Windows 11 Gaming (VBS / HVCI / Core Parking)" tweaks={WIN11_GAMING_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+
+          <Section heading="Process Scheduling (MMCSS / GPU / Affinity)" tweaks={PROCESS_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 mb-4">

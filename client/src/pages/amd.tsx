@@ -24,6 +24,8 @@ const ALL_AMD_IDS = [
   "AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy","AmdCpuCapabilities","AmdCpuSchedulerHint",
   // AMD GPU Thermal
   "AmdDisableHDMIAudio","AmdDisableReLive",
+  // New AMD Tweaks
+  "AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync",
 ];
 
 const AMD_RECOMMENDED_IDS = [
@@ -33,6 +35,8 @@ const AMD_RECOMMENDED_IDS = [
   "AmdSmartAccessMemory","AmdAntiLagPlus",
   // AMD CPU recommended
   "AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy",
+  // New AMD recommended
+  "AmdResizableBAR","AmdRadeonBoost",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -644,6 +648,50 @@ export default function Amd() {
               checked={tweaks["AmdDisableReLive"] || false}
               onCheckedChange={(v) => setTweak("AmdDisableReLive", v)}
               delay={2}
+            />
+          </div>
+        </section>
+
+        {/* New AMD Features */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Zap className="w-4 h-4 text-green-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-green-500">AMD Advanced Features</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">Resizable BAR, Radeon Boost, and Enhanced Sync — hardware-level features that unlock extra GPU performance.</p>
+          <div className="space-y-3">
+            <TweakRow
+              id="AmdResizableBAR"
+              title="Enable Resizable BAR (Smart Access Memory)"
+              description="Enables Resizable BAR via registry — allows the CPU to access the full GPU VRAM pool instead of the default 256MB window. Requires BIOS support (Above 4G Decoding + Re-Size BAR Support). RX 6000+ and Ryzen 3000+ only. 5–15% FPS gain in GPU-bound titles."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdResizableBAR"] || false}
+              onCheckedChange={(v) => setTweak("AmdResizableBAR", v)}
+              delay={1}
+              data-testid="tweak-AmdResizableBAR"
+            />
+            <TweakRow
+              id="AmdRadeonBoost"
+              title="Enable Radeon Boost (Dynamic Resolution)"
+              description="Enables Radeon Boost via registry — dynamically lowers render resolution during fast camera movement when you wouldn't notice the difference. 10–25% FPS improvement during fast-paced action. Works best in competitive shooters and racing games."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdRadeonBoost"] || false}
+              onCheckedChange={(v) => setTweak("AmdRadeonBoost", v)}
+              delay={2}
+              data-testid="tweak-AmdRadeonBoost"
+            />
+            <TweakRow
+              id="AmdEnhancedSync"
+              title="Enable Enhanced Sync"
+              description="Enables AMD Enhanced Sync via registry — allows uncapped FPS above your monitor's refresh rate while eliminating tearing when FPS drops below the refresh rate. Alternative to V-Sync with lower input lag. Not recommended if your FPS is consistently below your refresh rate."
+              impact="MED"
+              checked={tweaks["AmdEnhancedSync"] || false}
+              onCheckedChange={(v) => setTweak("AmdEnhancedSync", v)}
+              delay={3}
+              data-testid="tweak-AmdEnhancedSync"
             />
           </div>
         </section>

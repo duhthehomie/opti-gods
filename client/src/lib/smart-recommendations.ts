@@ -74,6 +74,10 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "RegistryNTFSOptimize","RegistryIOPageLock","RegistryLargePageHeap",
     // Scheduler precision — reduces frame time variance on all CPUs
     "DisableDynamicTick",
+    // Advanced Network — safe for all PCs
+    "NetDNSCloudflare","NetDisableQoS","NetInterruptModeration","NetRSSQueues","NetAdapterPowerSave","NetTCPChimneyOffload",
+    // Process Scheduling — safe for all gaming PCs
+    "ProcMMCSSGaming","ProcGPUSchedulerHigh",
     // WinUtil
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy","WinTitusConsumerFeatures",
@@ -152,6 +156,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // = Precision Boost 2 operates without Windows frequency floor drops
     ["FiveMGTAProcessPerfOptions","FiveMAffinityMask","AmdCpuPowerPinMax",
      "AmdCpuCapabilities","AmdCpuCoalescingOff","AmdCpuCStatePolicy","AmdCpuSchedulerHint",
+     "ProcNUMAAware","ProcAffinityFPS",
     ].forEach(id => ids.add(id));
     if (hw.cpuGeneration >= 5) {
       reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan + Precision Boost 2 pinned to 100%`);
@@ -186,6 +191,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "NvidiaGSyncOptimize","NvidiaDisableHDMIAudio","NvidiaGpuBgOptimize",
       "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap","FiveMFixNvidiaOverlay",
       "FiveMGPUPriorityStack",
+      // New NVIDIA tweaks
+      "NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableShadowPlay",
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {
@@ -220,6 +227,14 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "AmdDisableStartupApps","AmdDisableFreeSyncCompetitive","AmdFluidMotionFrames",
       "AmdImageSharpening","AmdDisableHDMIAudio","AmdDisableReLive",
     ].forEach(id => ids.add(id));
+
+    // New AMD tweaks — gate by GPU generation
+    const isRX6000Plus = hw.gpuName && /RX\s*(6[0-9]{3}|7[0-9]{3}|8[0-9]{3}|9[0-9]{3})/i.test(hw.gpuName);
+    if (isRX6000Plus) {
+      ["AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync"].forEach(id => ids.add(id));
+    } else {
+      ["AmdRadeonBoost","AmdEnhancedSync"].forEach(id => ids.add(id));
+    }
     reasons.push(`AMD discrete GPU (${hw.gpuName}) — full AMD RX optimization suite`);
   } else if (hw.isAMD || hw.isAmdApu) {
     [
@@ -321,8 +336,10 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "ServiceRemoteReg","ServiceFax","ServiceRetailDemo",
       "WinTitusConsumerFeatures","WinTitusEdgeDebloat","WinTitusXboxComponents",
       "WinTitusHibernation","WinTitusDiskCleanup","WinTitusServicesManual",
+      // Win11 gaming-specific tweaks
+      "Win11DisableVBS","Win11DisableHVCI","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
     ].forEach(id => ids.add(id));
-    reasons.push("Windows 11 — Win11 debloat, privacy, and service tweaks included");
+    reasons.push("Windows 11 — Win11 debloat, VBS/HVCI disable, privacy, and service tweaks included");
   } else if (os.isWindows10) {
     [
       "DebloatCortana","DebloatOneDrive","DebloatXboxApp","DebloatXboxGameBar",

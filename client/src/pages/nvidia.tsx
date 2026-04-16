@@ -13,8 +13,8 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff"];
-const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff"];
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay"];
+const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt"];
 
 const PRESETS = [
   {
@@ -182,6 +182,50 @@ const NVIDIA_ADVANCED_TWEAKS = [
     title: "Remove VRAM Allocation Limit",
     desc: "Clears DedicatedSegmentSize (removes any VRAM cap) and sets VRAMUsage=1 — allows the driver to allocate full VRAM dynamically without hitting artificial soft caps.",
     impact: "LOW" as const,
+  },
+];
+
+const NVIDIA_NEW_TWEAKS = [
+  {
+    id: "NvidiaCUDAPriority",
+    title: "CUDA GPU Priority: High",
+    desc: "Sets CUDA scheduling priority to 0x02 (High) in the driver registry — ensures CUDA compute tasks from games and AI frame generation get GPU time ahead of background compute workloads.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaShaderCacheUnlimited",
+    title: "Unlimited Shader Cache Size",
+    desc: "Removes the 4GB default shader cache limit by setting ShaderCacheSize=0xFFFFFFFF — prevents shader recompilation in large open-world games like GTA V, Cyberpunk, and Hogwarts Legacy.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaFrameBufferOpt",
+    title: "Frame Buffer Optimization (Pre-Rendered=1)",
+    desc: "Sets MaxFramesAllowed=1 in the driver frame buffer — caps the render-ahead queue to 1 frame for minimum input-to-display latency. Best paired with NVIDIA Reflex.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaDisableAnsel",
+    title: "Disable NVIDIA Ansel",
+    desc: "Removes the Ansel photo-mode hook from game processes — eliminates the DLL injection overhead and Alt+F2 hotkey conflict in every game.",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaDisableContainerLS",
+    title: "Disable NvDisplay.Container (LocalSystem)",
+    desc: "Stops the heavy NvDisplay.ContainerLocalSystem service that handles telemetry, overlay prep, and container management. Frees 50–150MB RAM and reduces background CPU usage. WARNING: Do NOT stop this service if you use NVIDIA Overlay (Alt+Z) — it causes crash 0x80000003.",
+    badge: "ADVANCED",
+    impact: "MED" as const,
+    warning: "Stopping NvDisplay.ContainerLocalSystem breaks NVIDIA Overlay (Alt+Z / ShadowPlay). Only disable if you never use GeForce Experience overlay features.",
+  },
+  {
+    id: "NvidiaDisableShadowPlay",
+    title: "Disable ShadowPlay / Instant Replay",
+    desc: "Disables ShadowPlay background recording via registry — frees 200–400MB VRAM and 3–5% GPU encoder bandwidth that ShadowPlay reserves for instant replay.",
+    impact: "MED" as const,
   },
 ];
 
@@ -445,6 +489,48 @@ export default function Nvidia() {
                 checked={tweaks[item.id] || false}
                 onCheckedChange={(v) => setTweak(item.id, v)}
                 delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* New NVIDIA Optimizations */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-purple-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-purple-500">CUDA / Shader / Frame Buffer</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const recIds = NVIDIA_NEW_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  disabled={allOn}
+                  data-testid="button-enable-recommended-nvidia-new"
+                  className="text-[10px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">CUDA priority, unlimited shader cache, frame buffer caps, and service cleanup — deeper driver-level tuning for maximum FPS.</p>
+          <div className="space-y-3">
+            {NVIDIA_NEW_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+                warning={item.warning}
               />
             ))}
           </div>

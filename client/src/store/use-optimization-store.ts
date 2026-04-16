@@ -57,6 +57,24 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   DisableCoreParking: false,
   DisablePowerThrottlingAdv: false,
   DisableDynamicTick: false,
+  // Registry - Advanced Network
+  NetDNSCloudflare: false,
+  NetDNSGoogle: false,
+  NetDisableQoS: false,
+  NetInterruptModeration: false,
+  NetRSSQueues: false,
+  NetAdapterPowerSave: false,
+  NetTCPChimneyOffload: false,
+  // Registry - Windows 11 Gaming
+  Win11DisableVBS: false,
+  Win11DisableHVCI: false,
+  Win11ParkingCoreOverride: false,
+  Win11ProcessorIdleMin: false,
+  // Registry - Advanced Process
+  ProcNUMAAware: false,
+  ProcAffinityFPS: false,
+  ProcMMCSSGaming: false,
+  ProcGPUSchedulerHigh: false,
   // FiveM
   FiveMCacheClear: false,
   FiveMHighPriority: false,
@@ -204,6 +222,9 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   AmdSmartAccessMemory: false,
   AmdAntiLagPlus: false,
   AmdFluidMotionFrames: false,
+  AmdResizableBAR: false,
+  AmdRadeonBoost: false,
+  AmdEnhancedSync: false,
   // NVIDIA Specific
   NvidiaDisableTelemetry: false,
   NvidiaMaxPerfMode: false,
@@ -224,6 +245,12 @@ const DEFAULT_TWEAKS: Record<string, boolean> = {
   NvShaderDiskCache: false,
   NvTextureFilterPerf: false,
   NvFXAADriverOff: false,
+  NvidiaCUDAPriority: false,
+  NvidiaShaderCacheUnlimited: false,
+  NvidiaFrameBufferOpt: false,
+  NvidiaDisableAnsel: false,
+  NvidiaDisableContainerLS: false,
+  NvidiaDisableShadowPlay: false,
   // Memory
   MemFixedPagefile: false,
   MemDisablePagefile: false,

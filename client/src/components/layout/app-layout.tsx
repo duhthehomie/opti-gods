@@ -15,7 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
 
 const MOBILE_FEATURES = [
-  { icon: Zap, title: "437+ Optimizations", desc: "Registry, GPU, network, memory, and game-specific tweaks" },
+  { icon: Zap, title: "461+ Optimizations", desc: "Registry, GPU, network, memory, and game-specific tweaks" },
   { icon: Shield, title: "One-Click Script", desc: "Single PowerShell script — everything applied in seconds" },
   { icon: Monitor, title: "Hardware Aware", desc: "Auto-detects your GPU, CPU, and RAM for tailored tweaks" },
   { icon: Gamepad2, title: "Game Packs", desc: "FiveM, Fortnite, Rocket League, Valorant — and more" },
@@ -186,7 +186,7 @@ function MobileShowcase() {
         </h1>
         <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">by leaq</p>
         <p className="text-sm text-zinc-400 mt-3 max-w-xs mx-auto leading-relaxed">
-          The ultimate Windows 10/11 PC optimizer. 437+ tweaks. One script. Maximum FPS with lowest latency.
+          The ultimate Windows 10/11 PC optimizer. 461+ tweaks. One script. Maximum FPS with lowest latency.
         </p>
       </div>
 
