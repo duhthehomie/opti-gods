@@ -704,14 +704,15 @@ function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number
   return { brand: "intel", threads: 8, cores: 4, generation: 0, cpuLabel: model.trim() || "Unknown CPU", isRyzen: false, isIntelCore: true };
 }
 
-function AdminPresetGenerator() {
+type PresetInitValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
+function AdminPresetGenerator({ initialValues }: { initialValues?: PresetInitValues }) {
   const { toast } = useToast();
-  const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">("nvidia");
-  const [gpuName, setGpuName] = useState("");
-  const [cpuModel, setCpuModel] = useState("");
-  const [ramGB, setRamGB] = useState("16");
-  const [osVersion, setOsVersion] = useState<"win11" | "win10">("win11");
-  const [isLaptop, setIsLaptop] = useState(false);
+  const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">(initialValues?.gpuVendor ?? "nvidia");
+  const [gpuName, setGpuName] = useState(initialValues?.gpuName ?? "");
+  const [cpuModel, setCpuModel] = useState(initialValues?.cpuModel ?? "");
+  const [ramGB, setRamGB] = useState(initialValues?.ramGb?.toString() ?? "16");
+  const [osVersion, setOsVersion] = useState<"win11" | "win10">(initialValues?.osVersion ?? "win11");
+  const [isLaptop, setIsLaptop] = useState(initialValues?.isLaptop ?? false);
   const [generated, setGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -1056,6 +1057,11 @@ export default function Admin() {
   const [editValue, setEditValue] = useState("");
   const [expandedCodeIps, setExpandedCodeIps] = useState<Set<number>>(new Set());
 
+  // Preset generator pre-fill state (for "Gen Preset" button on each code row)
+  type PresetFillValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
+  const [presetFillData, setPresetFillData] = useState<PresetFillValues | null>(null);
+  const [presetFillKey, setPresetFillKey] = useState("default");
+
   // Manual payment logging form
   const [showLogPayment, setShowLogPayment] = useState(false);
   const [payAmount, setPayAmount] = useState("25");
@@ -1320,6 +1326,16 @@ export default function Admin() {
     retry: false,
     refetchInterval: 5000,
   });
+
+  type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
+  const customerHardwareQuery = useQuery<CustomerHW[]>({
+    queryKey: ["/api/admin/customer-hardware", key],
+    queryFn: () => fetch("/api/admin/customer-hardware", { headers }).then(r => r.json()),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 30000,
+  });
+  const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
 
   const sendEmailCode = useMutation({
     mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/send`, {
@@ -2282,6 +2298,31 @@ export default function Admin() {
                           <Ban className="w-3 h-3" /> <span className="hidden sm:inline">Kill</span>
                         </button>
                       )}
+                      {(() => {
+                        const hw = hardwareMap[c.code];
+                        if (!hw) return null;
+                        return (
+                          <button
+                            data-testid={`button-gen-preset-${c.id}`}
+                            onClick={() => {
+                              setPresetFillData({
+                                gpuVendor: (hw.gpuVendor as "nvidia" | "amd" | "intel") || "nvidia",
+                                gpuName: hw.gpuName || "",
+                                cpuModel: hw.cpuModel || "",
+                                ramGb: hw.ramGb || 16,
+                                osVersion: (hw.osVersion as "win11" | "win10") || "win11",
+                                isLaptop: hw.isLaptop ?? false,
+                              });
+                              setPresetFillKey(c.code + "-" + Date.now());
+                              setTab("preset");
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-purple-500/10 text-zinc-500 hover:text-purple-400 transition-colors border border-purple-500/20"
+                            title={`Generate preset for ${hw.gpuName || hw.gpuVendor || "this customer"}`}
+                          >
+                            <Sliders className="w-3 h-3" /> <span className="hidden sm:inline">Gen Preset</span>
+                          </button>
+                        );
+                      })()}
                       {(() => {
                         const codeLogs = (ipLogsQuery.data || []).filter(l => l.codeRef === c.code);
                         const hasNewIp = codeLogs.length > 1;
@@ -3273,7 +3314,7 @@ export default function Admin() {
         )}
 
         {tab === "security" && <SecurityTab headers={headers} />}
-        {tab === "preset" && <AdminPresetGenerator />}
+        {tab === "preset" && <AdminPresetGenerator key={presetFillKey} initialValues={presetFillData ?? undefined} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

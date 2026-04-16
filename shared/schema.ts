@@ -174,6 +174,19 @@ export const aiChatSessions = pgTable("ai_chat_sessions", {
 });
 export type AiChatSession = typeof aiChatSessions.$inferSelect;
 
+// Customer hardware snapshots — stored when a Pro user uploads their scan file
+export const customerHardware = pgTable("customer_hardware", {
+  codeRef: text("code_ref").primaryKey(),
+  gpuVendor: varchar("gpu_vendor", { length: 20 }),
+  gpuName: varchar("gpu_name", { length: 200 }),
+  cpuModel: varchar("cpu_model", { length: 200 }),
+  ramGb: integer("ram_gb"),
+  osVersion: varchar("os_version", { length: 20 }),
+  isLaptop: boolean("is_laptop").default(false),
+  savedAt: timestamp("saved_at").defaultNow(),
+});
+export type CustomerHardware = typeof customerHardware.$inferSelect;
+
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type Preset = typeof presets.$inferSelect;

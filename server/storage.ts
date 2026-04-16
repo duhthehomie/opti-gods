@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -83,6 +83,9 @@ export interface IStorage {
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
+  // Customer hardware snapshots
+  saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void>;
+  getAllCustomerHardware(): Promise<CustomerHardware[]>;
   // IP bans
   banIp(ip: string, reason: string, permanent?: boolean): Promise<void>;
   unbanIp(ip: string): Promise<void>;
@@ -546,6 +549,16 @@ export class DatabaseStorage implements IStorage {
     await db.update(proAccessCodes)
       .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
       .where(eq(proAccessCodes.code, codeValue));
+  }
+
+  async saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void> {
+    await db.insert(customerHardware)
+      .values({ codeRef, ...data, savedAt: new Date() })
+      .onConflictDoUpdate({ target: customerHardware.codeRef, set: { ...data, savedAt: new Date() } });
+  }
+
+  async getAllCustomerHardware(): Promise<CustomerHardware[]> {
+    return await db.select().from(customerHardware).orderBy(desc(customerHardware.savedAt));
   }
 
   async banIp(ip: string, reason: string, permanent = false): Promise<void> {

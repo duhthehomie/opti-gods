@@ -1797,6 +1797,31 @@ Start-Sleep 2
     res.json({ valid });
   });
 
+  // Pro — save customer hardware specs so admin can pre-fill preset generator
+  app.post('/api/session/hardware', async (req, res) => {
+    const { sessionToken, gpuVendor, gpuName, cpuModel, ramGb, osVersion, isLaptop } = req.body || {};
+    if (!sessionToken || typeof sessionToken !== "string") return res.status(401).json({ ok: false });
+    const sessions = await storage.getAllProSessions();
+    const session = sessions.find(s => s.sessionToken === sessionToken);
+    if (!session?.codeRef) return res.status(401).json({ ok: false });
+    await storage.saveCustomerHardware(session.codeRef, {
+      gpuVendor: String(gpuVendor || "nvidia"),
+      gpuName: String(gpuName || ""),
+      cpuModel: String(cpuModel || ""),
+      ramGb: Number(ramGb) || 16,
+      osVersion: String(osVersion || "win11"),
+      isLaptop: !!isLaptop,
+    });
+    res.json({ ok: true });
+  });
+
+  // Admin — get all customer hardware snapshots
+  app.get('/api/admin/customer-hardware', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const rows = await storage.getAllCustomerHardware();
+    res.json(rows);
+  });
+
   // Admin — grant themselves a real Pro session for testing (requires admin key)
   app.post('/api/admin/grant-pro-session', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

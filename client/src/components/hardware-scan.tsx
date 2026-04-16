@@ -4,6 +4,33 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
+import { getStoredToken } from "@/lib/pro-status";
+
+function detectGpuVendor(gpuName: string): "nvidia" | "amd" | "intel" {
+  const n = (gpuName || "").toLowerCase();
+  if (n.includes("nvidia") || n.includes("geforce") || n.includes("rtx") || n.includes("gtx") || n.includes("quadro")) return "nvidia";
+  if (n.includes("amd") || n.includes("radeon") || n.includes("rx ") || n.includes("vega") || n.includes("rdna")) return "amd";
+  return "intel";
+}
+
+function uploadHardwareToServer(parsed: ScannedSysInfo) {
+  const token = getStoredToken();
+  if (!token) return;
+  const gpuVendor = detectGpuVendor(parsed.GPU || "");
+  fetch("/api/session/hardware", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionToken: token,
+      gpuVendor,
+      gpuName: parsed.GPU || "",
+      cpuModel: parsed.CPU || "",
+      ramGb: parsed.RAM_GB || 16,
+      osVersion: "win11",
+      isLaptop: false,
+    }),
+  }).catch(() => {});
+}
 
 const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
 
@@ -31,6 +58,7 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
         const parsed = JSON.parse(e.target?.result as string) as ScannedSysInfo;
         if (!parsed.GPU && !parsed.CPU && !parsed.RAM_GB) throw new Error("empty");
         saveScannedInfo(parsed);
+        uploadHardwareToServer(parsed);
         onScanned(parsed);
         toast({ title: "Hardware scan loaded!", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}` });
       } catch {
