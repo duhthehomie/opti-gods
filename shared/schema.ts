@@ -189,6 +189,24 @@ export const customerHardware = pgTable("customer_hardware", {
 });
 export type CustomerHardware = typeof customerHardware.$inferSelect;
 
+// User-submitted issue reports — triaged by Aether, reviewed by admin
+export type ReportCategory = "script_not_working" | "tweak_problem" | "crash" | "other";
+export type ReportStatus = "open" | "acknowledged" | "resolved";
+
+export const userReports = pgTable("user_reports", {
+  id: serial("id").primaryKey(),
+  category: text("category").$type<ReportCategory>().notNull(),
+  description: text("description").notNull(),
+  systemInfo: jsonb("system_info").$type<Record<string, unknown>>(),
+  status: text("status").$type<ReportStatus>().notNull().default("open"),
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+export type UserReport = typeof userReports.$inferSelect;
+export const insertUserReportSchema = createInsertSchema(userReports).omit({ id: true, createdAt: true, resolvedAt: true, adminNote: true, status: true });
+export type InsertUserReport = z.infer<typeof insertUserReportSchema>;
+
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type Preset = typeof presets.$inferSelect;

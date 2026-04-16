@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -91,6 +91,10 @@ export interface IStorage {
   unbanIp(ip: string): Promise<void>;
   isIpBanned(ip: string): Promise<boolean>;
   getIpBans(): Promise<IpBan[]>;
+  // User reports
+  createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>): Promise<UserReport>;
+  getUserReports(status?: ReportStatus): Promise<UserReport[]>;
+  updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -577,6 +581,26 @@ export class DatabaseStorage implements IStorage {
 
   async getIpBans(): Promise<IpBan[]> {
     return await db.select().from(ipBans).orderBy(desc(ipBans.bannedAt));
+  }
+
+  async createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>): Promise<UserReport> {
+    const [report] = await db.insert(userReports).values({ category, description, systemInfo: systemInfo ?? null }).returning();
+    return report;
+  }
+
+  async getUserReports(status?: ReportStatus): Promise<UserReport[]> {
+    if (status) {
+      return await db.select().from(userReports).where(eq(userReports.status, status)).orderBy(desc(userReports.createdAt));
+    }
+    return await db.select().from(userReports).orderBy(desc(userReports.createdAt));
+  }
+
+  async updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport> {
+    const updates: Partial<UserReport> = { status };
+    if (adminNote !== undefined) updates.adminNote = adminNote;
+    if (status === "resolved") updates.resolvedAt = new Date();
+    const [report] = await db.update(userReports).set(updates).where(eq(userReports.id, id)).returning();
+    return report;
   }
 }
 

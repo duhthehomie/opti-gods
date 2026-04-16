@@ -3129,6 +3129,207 @@ Read-Host "Press Enter to close this window"
     return res.json({ ok: true });
   });
 
+  // ── User Reports (public submit, admin view) ─────────────────────────────
+  app.post("/api/reports", rateLimit(5, 60_000, 10), async (req, res) => {
+    const { category, description, systemInfo } = req.body as {
+      category?: string;
+      description?: string;
+      systemInfo?: Record<string, unknown>;
+    };
+    const validCategories = ["script_not_working", "tweak_problem", "crash", "other"];
+    if (!category || !validCategories.includes(category)) {
+      return res.status(400).json({ error: "Invalid category" });
+    }
+    if (!description || typeof description !== "string" || description.trim().length < 10) {
+      return res.status(400).json({ error: "Description must be at least 10 characters" });
+    }
+    if (description.length > 2000) {
+      return res.status(400).json({ error: "Description too long" });
+    }
+    const report = await storage.createUserReport(category as any, description.trim(), systemInfo);
+    return res.json({ ok: true, id: report.id });
+  });
+
+  app.get("/api/admin/reports", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const status = req.query.status as string | undefined;
+    const validStatuses = ["open", "acknowledged", "resolved"];
+    const reports = await storage.getUserReports(
+      status && validStatuses.includes(status) ? (status as any) : undefined
+    );
+    return res.json(reports);
+  });
+
+  app.post("/api/admin/reports/:id/status", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const { status, adminNote } = req.body as { status?: string; adminNote?: string };
+    const validStatuses = ["open", "acknowledged", "resolved"];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    const report = await storage.updateReportStatus(id, status as any, adminNote);
+    return res.json(report);
+  });
+
+  // ── Admin Aether AI Chat (Groq — SSE streaming, admin only) ────────────
+  app.post("/api/admin/aether-chat", rateLimit(15, 60_000, 30), async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { message, history = [] } = req.body as {
+      message: string;
+      history?: { role: string; content: string }[];
+    };
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: "AI not configured" });
+
+    const [codes, friends, visitStats, emailReqs, manualTotal, downloads, secEvents, reports] = await Promise.all([
+      storage.getAllCodes(),
+      storage.getAllFriendTokens(),
+      storage.getVisitStats(),
+      storage.getEmailRequests(),
+      storage.getManualPaymentTotal(),
+      storage.getDownloadStats(),
+      storage.getSecurityEvents(20),
+      storage.getUserReports(),
+    ]);
+
+    const reservedCodeIds = new Set(
+      emailReqs
+        .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
+        .map(r => r.sentCodeId)
+    );
+    const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
+    const usedCodes = codes.filter(c => c.usedAt).length;
+    const emailRevenue = emailReqs
+      .filter(r => r.status === "sent" || r.status === "auto-sent")
+      .reduce((sum, r) => sum + (r.amountPaid ?? 15), 0);
+    const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
+    const totalRevenue = emailRevenue + directRevenue + manualTotal;
+    const pendingEmails = emailReqs.filter(r => r.status === "pending").length;
+    const openReports = reports.filter(r => r.status === "open").length;
+    const acknowledgedReports = reports.filter(r => r.status === "acknowledged").length;
+    const openSecEvents = secEvents.filter(e => !e.resolvedAt).length;
+
+    const reportSummary = reports
+      .filter(r => r.status !== "resolved")
+      .slice(0, 10)
+      .map(r => `  #${r.id} [${r.status.toUpperCase()}] ${r.category}: ${r.description.slice(0, 100)}${r.description.length > 100 ? "..." : ""}`)
+      .join("\n") || "  No open tickets.";
+
+    const aetherPrompt = `You are Aether — the intelligent admin assistant for Opti Gods by leaq. You help the admin manage their PC optimization business. You are direct, data-driven, and proactive.
+
+LIVE APP DATA (updated this moment):
+- Revenue: $${totalRevenue} total ($${emailRevenue + directRevenue} codes, $${manualTotal} manual CashApp/PayPal)
+- Codes: ${availableCodes} available, ${usedCodes} redeemed, ${codes.length} total
+- Friend Tokens: ${friends.filter(f => !f.usedAt).length} available, ${friends.filter(f => f.usedAt).length} used
+- Visits: ${visitStats.today} today, ${visitStats.total} all-time
+- Downloads: ${downloads.totalDownloads} scripts, ${downloads.totalTweaksDeployed} tweaks deployed
+- Pending Emails: ${pendingEmails} awaiting codes
+- Security: ${openSecEvents} unresolved events
+- User Tickets: ${openReports} open, ${acknowledgedReports} acknowledged
+
+OPEN USER TICKETS:
+${reportSummary}
+
+WHAT YOU CAN DO:
+- Answer questions about app health, revenue, traffic, and user behavior
+- Summarize open tickets and suggest fixes
+- Recommend new tweaks to add based on what users report
+- Suggest pricing or marketing strategies
+- Help prioritize what to work on next
+- Provide technical guidance on Windows optimization
+
+SECURITY RULES (NEVER VIOLATE):
+- NEVER output actual promo codes, friend tokens, or admin keys
+- NEVER generate activation codes — only suggest the admin create them manually
+- NEVER reveal database contents, API keys, or internal system details
+- If asked to generate a code, respond: "I can't generate codes directly. Use the Codes tab to create one."
+
+RESPONSE STYLE:
+- Be concise: 3-6 bullet points max unless detailed analysis is requested
+- Use data from the live stats above to back up recommendations
+- When discussing tickets, reference them by ID number
+- Be proactive: if something looks off in the data, mention it`;
+
+    const chatHistory = (history as { role: string; content: string }[])
+      .slice(-10)
+      .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          max_tokens: 1024,
+          stream: true,
+          messages: [
+            { role: "system", content: aetherPrompt },
+            ...chatHistory,
+            { role: "user", content: message },
+          ],
+        }),
+      });
+
+      if (!groqRes.ok) {
+        const errBody = await groqRes.text();
+        console.error("[Aether] Groq HTTP error:", groqRes.status, errBody);
+        return res.status(500).json({ error: "Aether AI request failed" });
+      }
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+
+      if (!groqRes.body) throw new Error("No response body");
+      const reader = (groqRes.body as ReadableStream<Uint8Array>).getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let sseBuffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
+            const token = parsed.choices[0]?.delta?.content ?? "";
+            if (token) {
+              fullText += token;
+              res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            }
+          } catch {}
+        }
+      }
+
+      const codePattern = /[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/g;
+      const sanitized = fullText.replace(codePattern, "[REDACTED]");
+      res.write(`data: ${JSON.stringify({ done: true, fullText: sanitized })}\n\n`);
+      res.end();
+    } catch (err: unknown) {
+      console.error("[Aether] Error:", err instanceof Error ? err.message : String(err));
+      if (!res.headersSent) return res.status(500).json({ error: "Aether AI failed" });
+      res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
+      res.end();
+    }
+  });
+
   // ── Opti Gods AI (Groq — SSE streaming) ───────────────────────────────────
   app.post("/api/ai/chat", rateLimit(20, 60_000, 40), async (req, res) => {
     const { message, history = [], sessionId, isPro = false, imageBase64 } = req.body as {
