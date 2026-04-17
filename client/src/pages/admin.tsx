@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
-import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, IpBan } from "@shared/schema";
+import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -188,7 +188,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [unblocking, setUnblocking] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [manualFlagOpen, setManualFlagOpen] = useState(false);
-  const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: "low" | "medium" | "high" | "critical" }>({ ip: "", codeRef: "", details: "", severity: "medium" });
+  const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: SecuritySeverity }>({ ip: "", codeRef: "", details: "", severity: "medium" });
   const [flagging, setFlagging] = useState(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
