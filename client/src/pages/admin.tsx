@@ -733,7 +733,12 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                 <select
                   data-testid="select-flag-severity"
                   value={manualFlag.severity}
-                  onChange={e => setManualFlag(m => ({ ...m, severity: e.target.value as any }))}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === "low" || v === "medium" || v === "high" || v === "critical") {
+                      setManualFlag(m => ({ ...m, severity: v }));
+                    }
+                  }}
                   className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white focus:outline-none focus:border-amber-500/50"
                 >
                   <option value="low">Low</option>
