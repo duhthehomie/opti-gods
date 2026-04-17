@@ -35,6 +35,29 @@ function fmt(dateStr: string | Date | null | undefined): string {
   });
 }
 
+// Country name → ISO 3166-1 alpha-2 code → regional indicator emoji flag
+const COUNTRY_TO_ISO: Record<string, string> = {
+  "United States": "US", "USA": "US", "United Kingdom": "GB", "UK": "GB",
+  "Canada": "CA", "Germany": "DE", "France": "FR", "Spain": "ES", "Italy": "IT",
+  "Netherlands": "NL", "Belgium": "BE", "Sweden": "SE", "Norway": "NO", "Finland": "FI",
+  "Denmark": "DK", "Poland": "PL", "Russia": "RU", "Ukraine": "UA", "Turkey": "TR",
+  "Brazil": "BR", "Argentina": "AR", "Mexico": "MX", "Chile": "CL", "Colombia": "CO",
+  "Australia": "AU", "New Zealand": "NZ", "Japan": "JP", "China": "CN", "South Korea": "KR",
+  "India": "IN", "Indonesia": "ID", "Singapore": "SG", "Malaysia": "MY", "Thailand": "TH",
+  "Vietnam": "VN", "Philippines": "PH", "Pakistan": "PK", "Bangladesh": "BD",
+  "Saudi Arabia": "SA", "United Arab Emirates": "AE", "Israel": "IL", "Egypt": "EG",
+  "South Africa": "ZA", "Nigeria": "NG", "Morocco": "MA", "Kenya": "KE",
+  "Ireland": "IE", "Portugal": "PT", "Greece": "GR", "Czechia": "CZ", "Romania": "RO",
+  "Hungary": "HU", "Austria": "AT", "Switzerland": "CH", "Bulgaria": "BG",
+};
+function countryFlag(country: string | null | undefined): string {
+  if (!country) return "";
+  const iso = COUNTRY_TO_ISO[country] ?? (country.length === 2 ? country.toUpperCase() : "");
+  if (iso.length !== 2) return "";
+  const A = 0x1F1E6, base = "A".charCodeAt(0);
+  return String.fromCodePoint(A + iso.charCodeAt(0) - base, A + iso.charCodeAt(1) - base);
+}
+
 function timeAgo(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "—";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -164,6 +187,9 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [banForm, setBanForm] = useState<{ ip: string; reason: string; permanent: boolean } | null>(null);
   const [unblocking, setUnblocking] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [manualFlagOpen, setManualFlagOpen] = useState(false);
+  const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: "low" | "medium" | "high" | "critical" }>({ ip: "", codeRef: "", details: "", severity: "medium" });
+  const [flagging, setFlagging] = useState(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
@@ -360,7 +386,12 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       {severityBadge(e.severity)}
                       <span className="text-[10px] font-mono text-zinc-400">{e.ip}</span>
-                      {e.country && <span className="text-[10px] text-zinc-600">{e.country}</span>}
+                      {e.country && (
+                        <span className="text-[10px] text-zinc-600 flex items-center gap-1">
+                          {countryFlag(e.country) && <span className="text-sm leading-none">{countryFlag(e.country)}</span>}
+                          {e.country}
+                        </span>
+                      )}
                       {e.codeRef && <span className="text-[10px] font-mono text-zinc-600">· {e.codeRef}</span>}
                     </div>
                     <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">{e.details}</p>
@@ -456,7 +487,12 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-mono text-zinc-400">{e.ip}</span>
-                      {e.country && <span className="text-[10px] text-zinc-600">{e.country}</span>}
+                      {e.country && (
+                        <span className="text-[10px] text-zinc-600 flex items-center gap-1">
+                          {countryFlag(e.country) && <span className="text-sm leading-none">{countryFlag(e.country)}</span>}
+                          {e.country}
+                        </span>
+                      )}
                       {e.codeRef && <span className="text-[10px] font-mono text-zinc-600">· {e.codeRef}</span>}
                     </div>
                     {e.isp && <p className="text-[9px] text-violet-400 mt-0.5">ISP: {e.isp}</p>}
@@ -488,12 +524,22 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
       {activeSection === "bans" && (
         <div className="space-y-2">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Persistent IP bans — survive server restarts</p>
-          <button
-            onClick={() => setBanForm({ ip: "", reason: "", permanent: false })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition-colors"
-          >
-            <Plus className="w-3 h-3" />Ban IP Manually
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              data-testid="button-manual-ban-ip"
+              onClick={() => setBanForm({ ip: "", reason: "", permanent: false })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/20 transition-colors"
+            >
+              <Plus className="w-3 h-3" />Ban IP Manually
+            </button>
+            <button
+              data-testid="button-manual-flag-event"
+              onClick={() => setManualFlagOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold hover:bg-amber-500/20 transition-colors"
+            >
+              <Flag className="w-3 h-3" />Manually Flag Event
+            </button>
+          </div>
           {bans.length === 0 ? (
             <div className="p-8 text-center rounded-xl border border-white/5 bg-zinc-900/30">
               <ShieldCheck className="w-7 h-7 text-emerald-600 mx-auto mb-2" />
@@ -647,6 +693,97 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                 className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-500 transition-colors disabled:opacity-50"
               >
                 {banning === banForm.ip ? "Banning…" : "Ban IP"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Flag modal */}
+      {manualFlagOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setManualFlagOpen(false)}>
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-5 w-full max-w-sm mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <Flag className="w-4 h-4 text-amber-400" />
+              <p className="text-sm font-bold text-white">Manually Flag Security Event</p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">IP Address</label>
+                <input
+                  data-testid="input-flag-ip"
+                  value={manualFlag.ip}
+                  onChange={e => setManualFlag(m => ({ ...m, ip: e.target.value }))}
+                  placeholder="123.45.67.89"
+                  className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Code (optional)</label>
+                <input
+                  data-testid="input-flag-code"
+                  value={manualFlag.codeRef}
+                  onChange={e => setManualFlag(m => ({ ...m, codeRef: e.target.value }))}
+                  placeholder="ABCD1234"
+                  className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Severity</label>
+                <select
+                  data-testid="select-flag-severity"
+                  value={manualFlag.severity}
+                  onChange={e => setManualFlag(m => ({ ...m, severity: e.target.value as any }))}
+                  className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white focus:outline-none focus:border-amber-500/50"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Details</label>
+                <textarea
+                  data-testid="input-flag-details"
+                  value={manualFlag.details}
+                  onChange={e => setManualFlag(m => ({ ...m, details: e.target.value }))}
+                  placeholder="What happened? Why are you flagging this?"
+                  rows={3}
+                  className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setManualFlagOpen(false)}
+                className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-xs font-bold hover:bg-zinc-700 transition-colors"
+              >Cancel</button>
+              <button
+                data-testid="button-confirm-flag"
+                disabled={!manualFlag.ip || !manualFlag.details || flagging}
+                onClick={async () => {
+                  setFlagging(true);
+                  try {
+                    const r = await fetch("/api/admin/security/flag", {
+                      method: "POST",
+                      headers: { ...headers, "Content-Type": "application/json" },
+                      body: JSON.stringify(manualFlag),
+                    });
+                    if (!r.ok) throw new Error("flag failed");
+                    setManualFlagOpen(false);
+                    setManualFlag({ ip: "", codeRef: "", details: "", severity: "medium" });
+                    refresh();
+                    toast({ title: "Event flagged", description: "Added to threat feed" });
+                  } catch {
+                    toast({ title: "Failed to flag event", variant: "destructive" });
+                  } finally {
+                    setFlagging(false);
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-500 transition-colors disabled:opacity-50"
+              >
+                {flagging ? "Flagging…" : "Flag Event"}
               </button>
             </div>
           </div>
