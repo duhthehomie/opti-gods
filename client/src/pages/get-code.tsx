@@ -168,6 +168,17 @@ export default function GetCode() {
               <p className="text-[10px] text-zinc-600">We'll send your access code here</p>
             </div>
 
+            {/* Code policy — must be visible before they request a code */}
+            <div data-testid="text-code-policy-getcode" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-3 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-widest font-bold text-red-400">Important — read before requesting</p>
+              <p className="text-[11px] text-zinc-300 leading-snug">
+                If your code ever stops working, message <strong className="text-white">leaq</strong> on Discord and it'll be revived instantly — no extra cost.
+              </p>
+              <p className="text-[11px] text-zinc-300 leading-snug">
+                <strong className="text-red-300">Sharing your code with anyone else = permanent ban</strong>, and you'll have to buy a new one to get back in. One code = one person.
+              </p>
+            </div>
+
             {/* Discord username */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Your Discord Username</label>

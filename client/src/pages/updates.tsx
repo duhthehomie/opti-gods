@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery } from "@tanstack/react-query";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useProStatus } from "@/lib/pro-status";
+import { useProStatus, getStoredToken } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import {
   Bell, Tag, Clock, Megaphone, Loader2, AlertCircle,
@@ -77,10 +77,11 @@ function TweakDiffPanel({
 
     setDownloading(true);
     try {
+      const sessionToken = getStoredToken();
       const res = await fetch("/api/script/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced", sessionToken }),
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();

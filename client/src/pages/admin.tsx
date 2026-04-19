@@ -971,9 +971,10 @@ function AdminPresetGenerator({
       const tweakMap: Record<string, boolean> = {};
       tweakIds.forEach(id => { tweakMap[id] = true; });
 
+      const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
       const res = await fetch("/api/script/download-bat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
       });
 
@@ -1025,9 +1026,10 @@ function AdminPresetGenerator({
       ];
       const tweakMap: Record<string, boolean> = {};
       fixTweaks.forEach(id => { tweakMap[id] = true; });
+      const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
       const res = await fetch("/api/script/download-bat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
       });
       if (!res.ok) throw new Error("Fix generation failed");

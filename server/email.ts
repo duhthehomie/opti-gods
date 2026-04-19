@@ -46,6 +46,16 @@ export async function sendProCode(toEmail: string, code: string, siteUrl: string
       4. paste the code above and hit <strong style="color:#e4e4e7;">Activate</strong>
     </p>
 
+    <div style="background:#160808;border:1px solid #3a1414;border-left:3px solid #dc2626;border-radius:8px;padding:14px 16px;margin:0 0 24px;">
+      <p style="margin:0 0 6px;font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:2px;font-weight:bold;">important — read this</p>
+      <p style="color:#d4d4d8;font-size:12px;line-height:1.7;margin:0 0 8px;">
+        if your code ever stops working, message me on discord and i'll <strong style="color:#e4e4e7;">revive it instantly</strong> — no questions, no extra cost.
+      </p>
+      <p style="color:#d4d4d8;font-size:12px;line-height:1.7;margin:0;">
+        but if you give your code to <strong style="color:#fca5a5;">anyone else</strong>, you'll get a <strong style="color:#fca5a5;">permanent ban</strong> and you'll have to buy a brand new code to get back in. one code = one person.
+      </p>
+    </div>
+
     <p style="color:#71717a;font-size:13px;line-height:1.7;margin:0 0 24px;">
       need help or have questions? drop in the discord and i'll sort you out:<br>
       <a href="https://discord.gg/optigods" style="color:#5865f2;text-decoration:none;">discord.gg/optigods</a>
@@ -72,6 +82,10 @@ how to use it:
 2. click "Unlock Pro — $25 Lifetime"
 3. click "I Have an Access Code"
 4. paste the code and hit Activate
+
+IMPORTANT — READ THIS:
+- if your code ever stops working, message me on discord and i'll revive it instantly. no questions, no extra cost.
+- but if you give your code to anyone else, you'll get a permanent ban and you'll have to buy a brand new code to get back in. one code = one person.
 
 need help? join the discord: discord.gg/optigods
 

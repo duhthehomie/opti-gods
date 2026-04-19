@@ -7,6 +7,7 @@ import { sendProCode, isEmailConfigured } from "./email";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
+import { randomBytes } from "crypto";
 
 // ── In-memory rate limiter ─────────────────────────────────────────────────────
 // Protects auth endpoints from scanning/brute-force. No Redis needed.
@@ -831,8 +832,28 @@ function buildRestoreScript(categories: string[]): string {
   return lines.join('\n');
 }
 
-// In-memory session store: id -> { tweaks, nvidiaPreset, created }
-const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number }>();
+// In-memory script-session store: id -> { tweaks, nvidiaPreset, created, sessionToken }
+// `id` is a 32-byte cryptographically-strong capability token, only ever returned
+// to a Pro user via /api/script/generate (which itself requires Pro). Bound to the
+// originating Pro `sessionToken` so revoking the Pro session invalidates the URL.
+const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number; sessionToken?: string }>();
+const SCRIPT_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour hard TTL
+
+// Gate any tweak/script generation behind a real, admin-acknowledged Pro session.
+// Admin requests (with x-admin-key) are also allowed so the admin panel preset/fix
+// generators keep working without requiring a customer code.
+async function requirePaidPro(req: any): Promise<boolean> {
+  const adminKey = process.env.ADMIN_KEY;
+  // Header-only — never accept the admin key from a query string (prevents
+  // accidental leaks via referrers, browser history, or server access logs)
+  const provided = req.headers['x-admin-key'] as string | undefined;
+  if (adminKey && provided && provided === adminKey) return true;
+
+  const sessionToken: string | undefined = req.body?.sessionToken || req.query?.sessionToken;
+  if (!sessionToken || typeof sessionToken !== 'string' || sessionToken.length < 16) return false;
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+  return await storage.verifyProSession(sessionToken, ip);
+}
 
 // Purge sessions older than 1 hour
 function purgeOldSessions() {
@@ -842,7 +863,8 @@ function purgeOldSessions() {
 }
 
 function generateId(): string {
-  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+  // 32 bytes = 256 bits of entropy — unguessable, safe as a capability URL
+  return randomBytes(32).toString("hex");
 }
 
 function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
@@ -1400,18 +1422,28 @@ Write-Output $json
   });
 
   app.post(api.script.generate.path, async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required. Activate your code to generate the optimization script." });
+    }
     try {
       const input = api.script.generate.input.parse(req.body);
       const host = req.get('host') || 'localhost';
       const protocol = req.protocol || 'https';
 
-      // Store tweaks in session so the irm | iex URL applies the correct tweaks
+      // Store tweaks in session so the irm | iex URL applies the correct tweaks.
+      // Bind to the originating Pro sessionToken so we can revoke later if needed.
+      // Pull the token from whichever source authenticated this request (body OR
+      // query) so an attacker can't auth via query and skip the binding to bypass
+      // revocation re-checks on /api/script/session/:id.
       purgeOldSessions();
       const sessionId = generateId();
+      const bodyToken = typeof input.sessionToken === "string" ? input.sessionToken : undefined;
+      const queryToken = typeof req.query?.sessionToken === "string" ? req.query.sessionToken : undefined;
       scriptSessions.set(sessionId, {
         tweaks: input.tweaks,
         nvidiaPreset: input.nvidiaPreset || "Balanced",
         created: Date.now(),
+        sessionToken: bodyToken ?? queryToken,
       });
 
       const scriptUrl = `${protocol}://${host}/api/script/session/${sessionId}`;
@@ -1425,13 +1457,40 @@ Write-Output $json
     }
   });
 
-  // Session-based script endpoint for irm | iex
-  app.get('/api/script/session/:id', (req, res) => {
-    const session = scriptSessions.get(req.params.id);
+  // Session-based script endpoint for irm | iex.
+  // Auth model: the `:id` is a 256-bit capability token only ever issued by
+  // /api/script/generate (which itself requires a valid Pro session). We also
+  // enforce a hard TTL at read time and re-verify the originating Pro session
+  // is still active — so revoking a code instantly kills any outstanding URLs.
+  app.get('/api/script/session/:id', async (req, res) => {
+    const id = req.params.id;
+    // Reject anything that isn't a 64-char hex token (pre-empt scanning)
+    if (!/^[a-f0-9]{64}$/i.test(id)) {
+      res.status(404).setHeader('Content-Type', 'text/plain');
+      return res.send('# Session not found.');
+    }
+    const session = scriptSessions.get(id);
     if (!session) {
       res.status(404).setHeader('Content-Type', 'text/plain');
-      res.send('# Session expired or not found. Please regenerate your script from the Opti Gods dashboard.');
-      return;
+      return res.send('# Session expired or not found. Please regenerate your script from the Opti Gods dashboard.');
+    }
+    // Hard TTL — even if purgeOldSessions hasn't run yet
+    if (Date.now() - session.created > SCRIPT_SESSION_TTL_MS) {
+      scriptSessions.delete(id);
+      res.status(410).setHeader('Content-Type', 'text/plain');
+      return res.send('# Session expired. Please regenerate your script from the Opti Gods dashboard.');
+    }
+    // If this session was bound to a Pro sessionToken, re-verify it.
+    // Admin-issued sessions (no sessionToken) are allowed since they only come
+    // from the gated /api/script/generate which already checked x-admin-key.
+    if (session.sessionToken) {
+      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+      const stillValid = await storage.verifyProSession(session.sessionToken, ip);
+      if (!stillValid) {
+        scriptSessions.delete(id);
+        res.status(403).setHeader('Content-Type', 'text/plain');
+        return res.send('# Your Pro access was revoked. Please re-activate your code in the dashboard.');
+      }
     }
     const enabledTweaks = Object.entries(session.tweaks).filter(([, v]) => v).map(([k]) => k);
     const content = buildScript(enabledTweaks, session.nvidiaPreset);
@@ -1441,6 +1500,9 @@ Write-Output $json
 
   // POST version for direct download with tweaks body
   app.post('/api/script/download', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required. Activate your code to download the optimization script." });
+    }
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const sessionToken: string | undefined = req.body?.sessionToken || undefined;
@@ -1455,6 +1517,9 @@ Write-Output $json
 
   // .bat download — double-click to run, no right-click needed
   app.post('/api/script/download-bat', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required. Activate your code to download the optimization script." });
+    }
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const sessionToken: string | undefined = req.body?.sessionToken || undefined;
@@ -2638,6 +2703,7 @@ Start-Sleep 2
       const existingCode = await storage.findCodeByStripeRef(sessionId);
 
       let codeValue: string;
+      let isNewCode = false;
       if (existingCode) {
         // Customer revisited payment/success — just issue a new session for the same code
         codeValue = existingCode.code;
@@ -2649,18 +2715,38 @@ Start-Sleep 2
         const noteValue = `${customerEmail} | stripe:${sessionId}`;
         await storage.createCode(codeValue, noteValue);
         await storage.claimStripeCode(codeValue, clientIp);
+        isNewCode = true;
+      }
+
+      // Email the code to the buyer so they have a permanent record + the policy notice.
+      // Only send on the first verification with a real email — not on refreshes or unknown@card.
+      let emailSent = false;
+      const hasRealEmail = customerEmail && customerEmail !== 'unknown@card' && customerEmail.includes('@');
+      if (isNewCode && hasRealEmail && isEmailConfigured()) {
+        try {
+          const protoForEmail = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+          const hostForEmail = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
+          await sendProCode(customerEmail, codeValue, `${protoForEmail}://${hostForEmail}`);
+          emailSent = true;
+        } catch (mailErr: any) {
+          console.error('Failed to email Stripe buyer their code:', mailErr?.message || mailErr);
+        }
       }
 
       // Issue a server-side Pro session linked to the real code (not the raw Stripe session ID)
       const sessionToken = await storage.createProSession(codeValue);
-      res.json({ paid: true, sessionToken });
+      res.json({ paid: true, sessionToken, emailSent, email: hasRealEmail ? customerEmail : null });
     } catch (err: any) {
       console.error('Stripe verify error:', err.message);
       res.status(500).json({ paid: false, error: 'Could not verify payment.' });
     }
   });
 
-  app.get('/api/script/download', (req, res) => {
+  app.get('/api/script/download', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      res.status(403).setHeader('Content-Type', 'text/plain');
+      return res.send('# Pro access required. Activate your code in the Opti Gods dashboard to download the script.');
+    }
     // Parse tweaks from query if provided
     const rawTweaks = req.query.tweaks;
     let tweaks: Record<string, boolean> = {};

@@ -12,7 +12,8 @@ type Status = "verifying" | "success" | "error";
 export default function PaymentSuccess() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<Status>("verifying");
-  const [countdown, setCountdown] = useState(4);
+  const [countdown, setCountdown] = useState(8);
+  const [emailInfo, setEmailInfo] = useState<{ sent: boolean; email: string | null }>({ sent: false, email: null });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -31,6 +32,7 @@ export default function PaymentSuccess() {
         if (data.paid) {
           if (data.sessionToken) setProSession(data.sessionToken);
           setProStatus(true);
+          setEmailInfo({ sent: !!data.emailSent, email: data.email ?? null });
           setStatus("success");
         } else {
           setStatus("error");
@@ -112,6 +114,40 @@ export default function PaymentSuccess() {
                   {item.text}
                 </div>
               ))}
+            </div>
+
+            {/* Email confirmation */}
+            <div
+              data-testid="text-email-confirmation"
+              className={`rounded-xl border p-4 text-left ${
+                emailInfo.sent
+                  ? "border-emerald-500/25 bg-emerald-500/[0.06]"
+                  : "border-amber-500/25 bg-amber-500/[0.06]"
+              }`}
+            >
+              <p className={`text-[10px] uppercase tracking-widest font-bold mb-1.5 ${emailInfo.sent ? "text-emerald-400" : "text-amber-400"}`}>
+                {emailInfo.sent ? "Code Sent" : "Code Delivery"}
+              </p>
+              {emailInfo.sent && emailInfo.email ? (
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Your access code was just emailed to <strong className="text-white break-all">{emailInfo.email}</strong>. Check your inbox (and spam folder) — it usually arrives within a minute.
+                </p>
+              ) : (
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Your Pro is active on this device. If you also want the code emailed to you, message <strong className="text-white">leaq</strong> on Discord with your Stripe receipt and it'll be sent right over.
+                </p>
+              )}
+            </div>
+
+            {/* Code policy — same notice every buyer must see */}
+            <div data-testid="text-code-policy-success" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-4 text-left space-y-1.5">
+              <p className="text-[10px] uppercase tracking-widest font-bold text-red-400">Important — Code Policy</p>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                If your code ever stops working, message <strong className="text-white">leaq</strong> on Discord and it'll be revived instantly — no questions, no extra cost.
+              </p>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                <strong className="text-red-300">Sharing your code with anyone else = permanent ban</strong>, and you'll have to buy a new one to get back in. One code = one person.
+              </p>
             </div>
 
 

@@ -193,6 +193,20 @@ function ProPaymentDialog({
             </p>
           </div>
 
+          {/* Code policy notice — shown to every buyer before they pay */}
+          <div data-testid="text-code-policy" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-3 space-y-1.5">
+            <p className="text-[10px] uppercase tracking-widest font-bold text-red-400">Code Policy — read before buying</p>
+            <p className="text-[11px] text-zinc-300 leading-snug">
+              Card buyers: you'll enter your <strong className="text-white">email</strong> at checkout — your code is sent there automatically.
+            </p>
+            <p className="text-[11px] text-zinc-300 leading-snug">
+              If your code ever stops working, message <strong className="text-white">leaq</strong> on Discord and it'll be revived instantly.
+            </p>
+            <p className="text-[11px] text-zinc-300 leading-snug">
+              <strong className="text-red-300">Sharing your code with anyone else = permanent ban.</strong> You'll have to buy a brand-new code to get back in. One code = one person.
+            </p>
+          </div>
+
           {success ? (
             <div className="flex flex-col items-center gap-3 justify-center py-8">
               <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">

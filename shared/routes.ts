@@ -92,6 +92,7 @@ export const api = {
       input: z.object({
         tweaks: z.record(z.boolean()),
         nvidiaPreset: z.string().optional(),
+        sessionToken: z.string().optional(),
       }),
       responses: {
         200: z.object({

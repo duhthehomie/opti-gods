@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { getTweakRelevance } from "@/lib/hardware-optimization";
 import { useHardwareInfo } from "./use-hardware-info";
+import { getStoredToken } from "@/lib/pro-status";
 
 type GenerateScriptInput = {
   tweaks: Record<string, boolean>;
@@ -23,8 +24,9 @@ export function useGenerateScript() {
           }
         }
       }
-      
-      const validated = api.script.generate.input.parse({ ...data, tweaks: filteredTweaks });
+
+      const sessionToken = getStoredToken() ?? undefined;
+      const validated = api.script.generate.input.parse({ ...data, tweaks: filteredTweaks, sessionToken });
       const res = await fetch(api.script.generate.path, {
         method: api.script.generate.method,
         headers: { "Content-Type": "application/json" },
