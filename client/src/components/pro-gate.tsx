@@ -30,6 +30,7 @@ function ProPaymentDialog({
   const [cryptoCopied, setCryptoCopied] = useState(false);
   const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [manualLoading, setManualLoading] = useState(false);
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -86,13 +87,13 @@ function ProPaymentDialog({
     } catch {}
   };
 
-  const handleStripeCheckout = async () => {
-    setStripeLoading(true);
+  const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
+    if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
     try {
       const res = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ tier }),
       });
       const data = await res.json();
       if (data.url) {
@@ -103,7 +104,7 @@ function ProPaymentDialog({
     } catch {
       setError("Connection error. Please try again.");
     } finally {
-      setStripeLoading(false);
+      if (tier === "manual") setManualLoading(false); else setStripeLoading(false);
     }
   };
 
@@ -252,8 +253,8 @@ function ProPaymentDialog({
 
                   <button
                     data-testid="button-pay-stripe"
-                    onClick={handleStripeCheckout}
-                    disabled={stripeLoading}
+                    onClick={() => handleStripeCheckout("pro")}
+                    disabled={stripeLoading || manualLoading}
                     className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed border border-red-500 text-white text-sm font-black tracking-wide transition-all shadow-lg shadow-red-900/30"
                   >
                     {stripeLoading ? (
@@ -269,6 +270,29 @@ function ProPaymentDialog({
                     )}
                   </button>
 
+                  {/* $25 Manual Opti — paid directly via Stripe (done-for-you service) */}
+                  <button
+                    data-testid="button-pay-stripe-manual"
+                    onClick={() => handleStripeCheckout("manual")}
+                    disabled={stripeLoading || manualLoading}
+                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed border border-red-500/40 hover:border-red-500/70 text-white text-sm font-black tracking-wide transition-all"
+                  >
+                    {manualLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading Stripe...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4 text-red-400" />
+                        Pay $25 — Manual Opti (Done-For-You)
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10px] text-zinc-500 text-center -mt-1 px-2 leading-snug">
+                    leaq personally optimizes your PC. After paying, open a Discord ticket to schedule.
+                  </p>
+
                   <a
                     href={`https://discord.com/channels/@me?text=${SUPPORT_TICKET_TEXT}`}
                     target="_blank"
@@ -277,7 +301,7 @@ function ProPaymentDialog({
                     className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 hover:bg-[#5865F2]/20 hover:border-[#5865F2]/50 text-white text-sm font-black tracking-wide transition-all"
                   >
                     <Ticket className="w-4 h-4 text-[#5865F2]" />
-                    $25 Manual Card — Open Discord Ticket
+                    Manual Opti — Discord Ticket (other payment)
                   </a>
 
                   {COINBASE_LINK && (

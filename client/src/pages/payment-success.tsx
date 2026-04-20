@@ -14,6 +14,7 @@ export default function PaymentSuccess() {
   const [status, setStatus] = useState<Status>("verifying");
   const [countdown, setCountdown] = useState(8);
   const [emailInfo, setEmailInfo] = useState<{ sent: boolean; email: string | null }>({ sent: false, email: null });
+  const [tier, setTier] = useState<"pro" | "manual">("pro");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -30,8 +31,13 @@ export default function PaymentSuccess() {
         const data = await res.json();
 
         if (data.paid) {
-          if (data.sessionToken) setProSession(data.sessionToken);
-          setProStatus(true);
+          const t: "pro" | "manual" = data.tier === "manual" ? "manual" : "pro";
+          setTier(t);
+          // Manual Opti is a done-for-you service — no Pro session is granted on this device.
+          if (t === "pro") {
+            if (data.sessionToken) setProSession(data.sessionToken);
+            setProStatus(true);
+          }
           setEmailInfo({ sent: !!data.emailSent, email: data.email ?? null });
           setStatus("success");
         } else {
@@ -46,7 +52,8 @@ export default function PaymentSuccess() {
   }, []);
 
   useEffect(() => {
-    if (status !== "success") return;
+    // Don't auto-redirect manual buyers — they need to read the next-steps panel.
+    if (status !== "success" || tier === "manual") return;
     const interval = setInterval(() => {
       setCountdown((n) => {
         if (n <= 1) {
@@ -58,7 +65,7 @@ export default function PaymentSuccess() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [status, setLocation]);
+  }, [status, tier, setLocation]);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white flex items-center justify-center p-6">
@@ -96,74 +103,128 @@ export default function PaymentSuccess() {
             </div>
 
             <div>
-              <h1 className="text-3xl font-display font-bold mb-3">You're In.</h1>
+              <h1 className="text-3xl font-display font-bold mb-3" data-testid="text-success-heading">
+                {tier === "manual" ? "Order Confirmed." : "You're In."}
+              </h1>
               <p className="text-zinc-400 text-sm leading-relaxed">
-                Payment confirmed. Your Pro access is active — all {TOTAL_TWEAKS_LABEL} tweaks and every game pack are unlocked.
+                {tier === "manual"
+                  ? "Your $25 Manual Opti payment is confirmed. leaq will optimize your PC personally — open a Discord ticket below so we can schedule your session."
+                  : `Payment confirmed. Your Pro access is active — all ${TOTAL_TWEAKS_LABEL} tweaks and every game pack are unlocked.`}
               </p>
             </div>
 
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2">
-              {[
-                { text: "Download your personalized .PS1 script", color: "text-red-500" },
-                { text: `${TOTAL_TWEAKS_LABEL} system, network, GPU, and memory tweaks`, color: "text-red-500" },
-                { text: "FiveM, Fortnite, CS2, Valorant, Apex packs", color: "text-red-500" },
-                { text: "Lifetime access — never expires", color: "text-red-500" },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-zinc-300">
-                  <CheckCircle2 className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
-                  {item.text}
+            {tier === "manual" ? (
+              <>
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2" data-testid="panel-manual-next-steps">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-red-400 mb-2">Next Steps</p>
+                  {[
+                    "Open a Discord ticket in info → ✉️・support",
+                    "Send your Stripe receipt + your timezone",
+                    "leaq schedules a session with you (1-on-1)",
+                    "Sit back — your PC gets optimized for you",
+                  ].map((text, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                      <span className="text-red-500 font-bold shrink-0 leading-tight">{i + 1}.</span>
+                      <span className="leading-snug">{text}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Email confirmation */}
-            <div
-              data-testid="text-email-confirmation"
-              className={`rounded-xl border p-4 text-left ${
-                emailInfo.sent
-                  ? "border-emerald-500/25 bg-emerald-500/[0.06]"
-                  : "border-amber-500/25 bg-amber-500/[0.06]"
-              }`}
-            >
-              <p className={`text-[10px] uppercase tracking-widest font-bold mb-1.5 ${emailInfo.sent ? "text-emerald-400" : "text-amber-400"}`}>
-                {emailInfo.sent ? "Code Sent" : "Code Delivery"}
-              </p>
-              {emailInfo.sent && emailInfo.email ? (
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Your access code was just emailed to <strong className="text-white break-all">{emailInfo.email}</strong>. Check your inbox (and spam folder) — it usually arrives within a minute.
-                </p>
-              ) : (
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Your Pro is active on this device. If you also want the code emailed to you, message <strong className="text-white">leaq</strong> on Discord with your Stripe receipt and it'll be sent right over.
-                </p>
-              )}
-            </div>
+                {emailInfo.email && (
+                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 text-left">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-400 mb-1.5">Receipt</p>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      Stripe just emailed your $25 receipt to <strong className="text-white break-all">{emailInfo.email}</strong>. Use it when you open your ticket.
+                    </p>
+                  </div>
+                )}
 
-            {/* Code policy — same notice every buyer must see */}
-            <div data-testid="text-code-policy-success" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-4 text-left space-y-1.5">
-              <p className="text-[10px] uppercase tracking-widest font-bold text-red-400">Important — Code Policy</p>
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                If your code ever stops working, message <strong className="text-white">leaq</strong> on Discord and it'll be revived instantly — no questions, no extra cost.
-              </p>
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                <strong className="text-red-300">Sharing your code with anyone else = permanent ban</strong>, and you'll have to buy a new one to get back in. One code = one person.
-              </p>
-            </div>
+                <div className="space-y-3">
+                  <a
+                    href={DISCORD_LINK}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-open-discord-ticket"
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white border border-[#5865F2] font-display font-bold transition-all"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Open Discord — Start Ticket
+                  </a>
+                  <Button
+                    data-testid="button-back-to-dashboard-manual"
+                    onClick={() => setLocation("/")}
+                    variant="outline"
+                    className="w-full border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5"
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2">
+                  {[
+                    { text: "Download your personalized .PS1 script", color: "text-red-500" },
+                    { text: `${TOTAL_TWEAKS_LABEL} system, network, GPU, and memory tweaks`, color: "text-red-500" },
+                    { text: "FiveM, Fortnite, CS2, Valorant, Apex packs", color: "text-red-500" },
+                    { text: "Lifetime access — never expires", color: "text-red-500" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle2 className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
+                      {item.text}
+                    </div>
+                  ))}
+                </div>
 
+                {/* Email confirmation */}
+                <div
+                  data-testid="text-email-confirmation"
+                  className={`rounded-xl border p-4 text-left ${
+                    emailInfo.sent
+                      ? "border-emerald-500/25 bg-emerald-500/[0.06]"
+                      : "border-amber-500/25 bg-amber-500/[0.06]"
+                  }`}
+                >
+                  <p className={`text-[10px] uppercase tracking-widest font-bold mb-1.5 ${emailInfo.sent ? "text-emerald-400" : "text-amber-400"}`}>
+                    {emailInfo.sent ? "Code Sent" : "Code Delivery"}
+                  </p>
+                  {emailInfo.sent && emailInfo.email ? (
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      Your access code was just emailed to <strong className="text-white break-all">{emailInfo.email}</strong>. Check your inbox (and spam folder) — it usually arrives within a minute.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      Your Pro is active on this device. If you also want the code emailed to you, message <strong className="text-white">leaq</strong> on Discord with your Stripe receipt and it'll be sent right over.
+                    </p>
+                  )}
+                </div>
 
-            <div className="space-y-3">
-              <Button
-                data-testid="button-go-to-dashboard"
-                onClick={() => setLocation("/")}
-                className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/30 font-display font-bold py-3"
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Open Dashboard
-              </Button>
-              <p className="text-xs text-zinc-600">
-                Redirecting automatically in {countdown}s...
-              </p>
-            </div>
+                {/* Code policy — same notice every buyer must see */}
+                <div data-testid="text-code-policy-success" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-4 text-left space-y-1.5">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-red-400">Important — Code Policy</p>
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    If your code ever stops working, message <strong className="text-white">leaq</strong> on Discord and it'll be revived instantly — no questions, no extra cost.
+                  </p>
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    <strong className="text-red-300">Sharing your code with anyone else = permanent ban</strong>, and you'll have to buy a new one to get back in. One code = one person.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <Button
+                    data-testid="button-go-to-dashboard"
+                    onClick={() => setLocation("/")}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-500/30 font-display font-bold py-3"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Open Dashboard
+                  </Button>
+                  <p className="text-xs text-zinc-600">
+                    Redirecting automatically in {countdown}s...
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         )}
 

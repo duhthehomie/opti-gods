@@ -2637,8 +2637,13 @@ Start-Sleep 2
       return res.status(503).json({ error: 'Stripe not configured on this server.' });
     }
 
+    // Two tiers: 'pro' = the standard $15 one-time Pro access (uses STRIPE_PRICE_ID),
+    // 'manual' = the $25 done-for-you Manual Opti service (priced inline so it
+    // doesn't need a separate Price object in Stripe).
+    const tier: 'pro' | 'manual' = req.body?.tier === 'manual' ? 'manual' : 'pro';
+
     const priceId = process.env.STRIPE_PRICE_ID;
-    if (!priceId) {
+    if (tier === 'pro' && !priceId) {
       return res.status(503).json({ error: 'STRIPE_PRICE_ID not set. Run the seed script first.' });
     }
 
@@ -2650,15 +2655,32 @@ Start-Sleep 2
       const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
       const origin = `${protocol}://${host}`;
 
+      const lineItems = tier === 'manual'
+        ? [{
+            price_data: {
+              currency: 'usd',
+              unit_amount: 2500, // $25.00
+              product_data: {
+                name: 'Opti Gods — Manual Opti (Done-For-You)',
+                description: 'leaq personally optimizes your PC. After payment, open a Discord ticket so we can schedule your session.',
+              },
+            },
+            quantity: 1,
+          }]
+        : [{ price: priceId!, quantity: 1 }];
+
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        line_items: lineItems as any,
+        success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}&tier=${tier}`,
         cancel_url: `${origin}/payment/cancel`,
-        metadata: { product: 'optigods_pro' },
+        metadata: {
+          product: tier === 'manual' ? 'optigods_manual_opti' : 'optigods_pro',
+          tier,
+        },
       });
 
-      res.json({ url: session.url });
+      res.json({ url: session.url, tier });
     } catch (err: any) {
       console.error('Stripe checkout error:', err.message);
       res.status(500).json({ error: 'Failed to create checkout session.' });
@@ -2682,12 +2704,23 @@ Start-Sleep 2
       });
 
       // Validate this session was created by us (correct product + mode + price)
-      const isOurProduct = session.metadata?.product === 'optigods_pro';
+      const product = session.metadata?.product;
+      const isProTier = product === 'optigods_pro';
+      const isManualTier = product === 'optigods_manual_opti';
+      const isOurProduct = isProTier || isManualTier;
       const isPaymentMode = session.mode === 'payment';
       const expectedPriceId = process.env.STRIPE_PRICE_ID;
       const lineItems = (session as any).line_items?.data ?? [];
-      const priceMatches = !expectedPriceId ||
-        lineItems.some((item: any) => item.price?.id === expectedPriceId);
+      // For Pro tier, require the price to match our seeded Price ID. Manual tier
+      // uses inline price_data so there's nothing to match — we trust the metadata
+      // (which we set ourselves) + the live $25.00 amount on the line item.
+      const priceMatches = isManualTier
+        ? lineItems.length === 1 && lineItems.some((item: any) =>
+            Number(item.amount_total) === 2500 &&
+            Number(item.quantity) === 1 &&
+            (item.currency || item.price?.currency) === 'usd'
+          )
+        : (!expectedPriceId || lineItems.some((item: any) => item.price?.id === expectedPriceId));
       const paid = session.payment_status === 'paid' && isOurProduct && isPaymentMode && priceMatches;
 
       if (!paid) return res.json({ paid: false });
@@ -2698,6 +2731,22 @@ Start-Sleep 2
         || 'unknown@card';
 
       const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+
+      // ── Manual Opti tier ──────────────────────────────────────────────────────
+      // Done-for-you service: NO Pro code is auto-issued (leaq does the work
+      // personally). We just confirm the payment and notify the buyer to open
+      // a Discord ticket so we can schedule the session.
+      if (isManualTier) {
+        const hasRealEmail = customerEmail && customerEmail !== 'unknown@card' && customerEmail.includes('@');
+        // Log loud + clear so the admin sees fresh $25 manual orders in server logs.
+        // (Stripe dashboard is the source of truth; this just makes it skim-able.)
+        console.log(`[MANUAL-OPTI] $25 PAID — buyer=${hasRealEmail ? customerEmail : 'card-only'} stripe_session=${sessionId}`);
+        return res.json({
+          paid: true,
+          tier: 'manual',
+          email: hasRealEmail ? customerEmail : null,
+        });
+      }
 
       // Check if we already created a code for this Stripe session (idempotent — handles page refresh)
       const existingCode = await storage.findCodeByStripeRef(sessionId);
