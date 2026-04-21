@@ -2149,6 +2149,19 @@ export default function Admin() {
     },
   });
 
+  const sweepOrphans = useMutation({
+    mutationFn: () => fetch("/api/admin/sessions/orphans", { method: "DELETE", headers }).then(r => r.json()),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions", key] });
+      toast({
+        title: data.swept > 0 ? `Swept ${data.swept} orphan session${data.swept !== 1 ? "s" : ""}` : "No orphans found",
+        description: data.swept > 0
+          ? "All sessions with no matching code have been deleted. Those users lost Pro access instantly."
+          : "Every session already has a valid matching code.",
+      });
+    },
+  });
+
   // System status (auto-send)
   const systemStatusQuery = useQuery<{
     autoSend: {
@@ -3645,8 +3658,46 @@ export default function Admin() {
             s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 15 * 60_000 : false;
           const onlineCount = sessions.filter(isOnline).length;
 
+          // Orphan sessions: codeRef doesn't start with admin-/friend: AND doesn't match any real code
+          const validCodeSet = new Set((codesQuery.data ?? []).map(c => c.code));
+          const orphanSessions = sessions.filter(s => {
+            const ref = s.codeRef ?? "";
+            if (!ref || ref.startsWith("admin-") || ref.startsWith("friend:")) return false;
+            return !validCodeSet.has(ref);
+          });
+
           return (
             <div className="space-y-4">
+              {/* Orphan warning — shown whenever there are unmatched sessions */}
+              {orphanSessions.length > 0 && (
+                <div
+                  data-testid="banner-orphan-sessions"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-500/40 bg-red-500/8"
+                >
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-red-300">
+                      {orphanSessions.length} orphan session{orphanSessions.length !== 1 ? "s" : ""} detected
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      These sessions have no matching code in the database. They may be from deleted codes or old data —
+                      anyone holding them currently has free Pro access.
+                    </p>
+                  </div>
+                  <button
+                    data-testid="button-sweep-orphans"
+                    onClick={() => {
+                      if (confirm(`Delete all ${orphanSessions.length} orphan session${orphanSessions.length !== 1 ? "s" : ""}?\n\nThose users will lose Pro access immediately on their next page load. This cannot be undone.`))
+                        sweepOrphans.mutate();
+                    }}
+                    disabled={sweepOrphans.isPending}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    {sweepOrphans.isPending ? "Sweeping…" : "Sweep Now"}
+                  </button>
+                </div>
+              )}
+
               {/* Summary bar */}
               <div className="flex items-center gap-3 p-3 bg-zinc-900/40 border border-white/5 rounded-xl">
                 <Users className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -3658,6 +3709,15 @@ export default function Admin() {
                       : "Nobody active in the last 15 minutes"}
                   </p>
                 </div>
+                <button
+                  data-testid="button-sweep-orphans-quiet"
+                  onClick={() => sweepOrphans.mutate()}
+                  disabled={sweepOrphans.isPending}
+                  title="Sweep orphan sessions (sessions with no matching code)"
+                  className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
                 <button
                   data-testid="button-refresh-sessions"
                   onClick={() => sessionsQuery.refetch()}
@@ -3689,12 +3749,14 @@ export default function Admin() {
                       const online = isOnline(s);
                       const isFriend = s.codeRef?.startsWith("friend:");
                       const isAdminTest = s.codeRef?.startsWith("admin-");
+                      const isOrphan = !isFriend && !isAdminTest && !!s.codeRef && !validCodeSet.has(s.codeRef);
                       return (
                         <div
                           key={s.id}
                           data-testid={`row-session-${s.id}`}
                           className={cn(
                             "px-3 py-3 transition-colors",
+                            isOrphan ? "bg-red-950/20 border-l-2 border-l-red-500/60" :
                             online ? "hover:bg-emerald-950/10" : "opacity-60 hover:opacity-80"
                           )}
                         >
@@ -3710,8 +3772,8 @@ export default function Admin() {
                               {s.email ? (
                                 <p className="text-xs font-semibold text-white truncate">{s.email}</p>
                               ) : (
-                                <p className="text-xs font-semibold text-zinc-500 italic">
-                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : "Unknown (code not matched)"}
+                                <p className={cn("text-xs font-semibold italic", isOrphan ? "text-red-400" : "text-zinc-500")}>
+                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : isOrphan ? "⚠ ORPHAN — code deleted" : "Unknown (code not matched)"}
                                 </p>
                               )}
                               {s.discordUsername && (

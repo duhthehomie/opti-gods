@@ -1983,6 +1983,15 @@ Start-Sleep 2
     return res.json({ ok: true });
   });
 
+  // Admin — sweep all orphan sessions (sessions whose codeRef has no matching code in pro_access_codes)
+  // This permanently denies Pro access to anyone holding an orphan token.
+  app.delete('/api/admin/sessions/orphans', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const count = await storage.deleteOrphanSessions();
+    log(`[admin] Swept ${count} orphan session(s) with no matching code`, "admin");
+    return res.json({ ok: true, swept: count });
+  });
+
   // Admin — revoke ALL sessions tied to a specific code (kill everyone who used a leaked code)
   app.delete('/api/admin/sessions/by-code/:codeRef', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

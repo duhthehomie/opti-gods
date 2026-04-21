@@ -47,6 +47,7 @@ export interface IStorage {
   revokeProSessionsByCode(codeRef: string): Promise<number>;
   touchProSession(token: string): Promise<void>;
   getAllProSessions(): Promise<ProSession[]>;
+  deleteOrphanSessions(): Promise<number>; // delete sessions with no matching code
   // Script download tracking
   recordScriptDownload(tweakIds: string[], sessionToken?: string): Promise<void>;
   getCustomerDeployStats(): Promise<{
@@ -191,6 +192,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCode(id: number): Promise<void> {
+    // Cascade: revoke all active sessions tied to this code before deleting
+    const [row] = await db.select({ code: proAccessCodes.code }).from(proAccessCodes).where(eq(proAccessCodes.id, id));
+    if (row?.code) {
+      await db.delete(proSessions).where(eq(proSessions.codeRef, row.code));
+    }
     await db.delete(proAccessCodes).where(eq(proAccessCodes.id, id));
   }
 
@@ -434,6 +440,26 @@ export class DatabaseStorage implements IStorage {
     if (!token || token.length < 16) return false;
     const rows = await db.select().from(proSessions).where(eq(proSessions.sessionToken, token));
     if (!rows.length) return false;
+    const session = rows[0];
+
+    // Cross-validate the codeRef against the live codes table.
+    // Exempt: admin-test sessions and friend tokens — they're admin-controlled.
+    // Everything else MUST match a real, existing code in pro_access_codes.
+    // This means deleting a code instantly kills all sessions tied to it,
+    // and any orphan session (no matching code) is automatically blocked.
+    const codeRef = session.codeRef ?? "";
+    const isSystemRef = codeRef.startsWith("admin-") || codeRef.startsWith("friend:");
+    if (!isSystemRef) {
+      const codeRows = await db.select({ id: proAccessCodes.id })
+        .from(proAccessCodes)
+        .where(eq(proAccessCodes.code, codeRef));
+      if (!codeRows.length) {
+        // Orphan session — no matching code. Delete it and deny access.
+        await db.delete(proSessions).where(eq(proSessions.sessionToken, token));
+        return false;
+      }
+    }
+
     const update: Partial<typeof proSessions.$inferInsert> = { lastCheckedAt: new Date() };
     if (ip) update.ipAddress = ip;
     await db.update(proSessions).set(update).where(eq(proSessions.sessionToken, token));
@@ -455,6 +481,29 @@ export class DatabaseStorage implements IStorage {
 
   async getAllProSessions(): Promise<ProSession[]> {
     return db.select().from(proSessions).orderBy(proSessions.lastCheckedAt);
+  }
+
+  async deleteOrphanSessions(): Promise<number> {
+    // Fetch all sessions and all valid code values.
+    // Delete any session whose codeRef is not a real code AND not a system ref (admin-/friend:).
+    const [allSessions, allCodes] = await Promise.all([
+      db.select({ id: proSessions.id, sessionToken: proSessions.sessionToken, codeRef: proSessions.codeRef })
+        .from(proSessions),
+      db.select({ code: proAccessCodes.code }).from(proAccessCodes),
+    ]);
+    const validCodes = new Set(allCodes.map(c => c.code));
+    const orphanIds = allSessions
+      .filter(s => {
+        const ref = s.codeRef ?? "";
+        if (ref.startsWith("admin-") || ref.startsWith("friend:")) return false;
+        return !validCodes.has(ref);
+      })
+      .map(s => s.id);
+    if (!orphanIds.length) return 0;
+    for (const id of orphanIds) {
+      await db.delete(proSessions).where(eq(proSessions.id, id));
+    }
+    return orphanIds.length;
   }
 
   async createManualPayment(amount: number, method: string, note: string | null): Promise<ManualPayment> {
