@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startAutoSendScheduler } from "./auto-send";
 import { seedAnnouncements } from "./seed";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,6 +68,13 @@ app.use((req, res, next) => {
 
 (async () => {
   await seedAnnouncements();
+
+  // On every startup / deploy: auto-sweep any orphan Pro sessions whose
+  // codeRef no longer exists in pro_access_codes. This ensures no one
+  // retains free Pro access across server restarts.
+  const swept = await storage.deleteOrphanSessions();
+  if (swept > 0) log(`[startup] Auto-swept ${swept} orphan Pro session(s) with no matching code`, "security");
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

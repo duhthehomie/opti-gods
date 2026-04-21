@@ -3728,8 +3728,31 @@ export default function Admin() {
                 </button>
               </div>
 
+              {/* Session breakdown — shows exactly where all sessions come from */}
+              {sessions.length > 0 && (() => {
+                const fromCodes   = sessions.filter(s => s.codeRef && !s.codeRef.startsWith("admin-") && !s.codeRef.startsWith("friend:") && validCodeSet.has(s.codeRef)).length;
+                const fromFriends = sessions.filter(s => s.codeRef?.startsWith("friend:")).length;
+                const fromAdmin   = sessions.filter(s => s.codeRef?.startsWith("admin-")).length;
+                const fromOrphans = orphanSessions.length;
+                return (
+                  <div className="grid grid-cols-4 gap-2" data-testid="session-breakdown">
+                    {[
+                      { label: "Real codes",    count: fromCodes,   color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+                      { label: "Friend links",  count: fromFriends, color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/20" },
+                      { label: "Admin test",    count: fromAdmin,   color: "text-violet-400",  bg: "bg-violet-500/10 border-violet-500/20" },
+                      { label: "Orphans",       count: fromOrphans, color: fromOrphans > 0 ? "text-red-400" : "text-zinc-600", bg: fromOrphans > 0 ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900 border-zinc-800" },
+                    ].map(({ label, count, color, bg }) => (
+                      <div key={label} className={cn("rounded-lg border px-3 py-2 text-center", bg)}>
+                        <p className={cn("text-base font-bold", color)}>{count}</p>
+                        <p className="text-[9px] text-zinc-600 uppercase tracking-wider mt-0.5">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
               <div className="text-[10px] text-zinc-600 leading-relaxed">
-                Each row is a device that redeemed a Pro code or friend link. "Online" means they loaded the app in the last 15 min. Revoking kills their session immediately — they're locked out on next page load.
+                Each row is a device that redeemed a Pro code or friend link. "Online" means they loaded the app in the last 15 min. Revoking kills their session immediately — they're locked out on next page load. Sessions = codes (1 active session per code — re-entering a code on a new device replaces the old session).
               </div>
 
               {sessionsQuery.isLoading ? (
