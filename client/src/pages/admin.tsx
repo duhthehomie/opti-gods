@@ -135,6 +135,9 @@ type SecurityStats = {
   countriesSeen: number;
   topCountries: { country: string; count: number }[];
   openEvents: number;
+  lastAutoResolved: number;
+  lastAutoResolvedAt: string | null;
+  autoResolveWindowDays: number;
 };
 
 function severityBadge(severity: string) {
@@ -369,6 +372,15 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
       {activeSection === "feed" && (
         <div className="space-y-2">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Recent security events — newest first</p>
+          {stats && stats.lastAutoResolved > 0 && (
+            <div data-testid="text-auto-resolved-notice" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/8 border border-emerald-500/15 text-emerald-500 text-[10px]">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                Auto-resolved <strong>{stats.lastAutoResolved}</strong> stale low/medium event{stats.lastAutoResolved !== 1 ? "s" : ""} older than {stats.autoResolveWindowDays} days
+                {stats.lastAutoResolvedAt ? ` · ${timeAgo(stats.lastAutoResolvedAt)}` : ""}
+              </span>
+            </div>
+          )}
           {eventsQ.isLoading ? (
             <div className="p-8 text-center text-xs text-zinc-600 animate-pulse">Loading threat feed…</div>
           ) : feedEvents.length === 0 ? (

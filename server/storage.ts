@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus } from "@shared/schema";
-import { eq, and, isNotNull, isNull, gte, sql, desc } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
 export interface IStorage {
@@ -81,6 +81,7 @@ export interface IStorage {
   logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void>;
   getSecurityEvents(limit?: number): Promise<SecurityEvent[]>;
   resolveSecurityEvent(id: number): Promise<void>;
+  autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -595,6 +596,22 @@ export class DatabaseStorage implements IStorage {
 
   async resolveSecurityEvent(id: number): Promise<void> {
     await db.update(securityEvents).set({ resolvedAt: new Date() }).where(eq(securityEvents.id, id));
+  }
+
+  async autoResolveOldSecurityEvents(daysOld = 30): Promise<number> {
+    const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .update(securityEvents)
+      .set({ resolvedAt: new Date() })
+      .where(
+        and(
+          isNull(securityEvents.resolvedAt),
+          lt(securityEvents.createdAt, cutoff),
+          inArray(securityEvents.severity, ["low", "medium"])
+        )
+      )
+      .returning({ id: securityEvents.id });
+    return rows.length;
   }
 
   async findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null> {

@@ -45,6 +45,31 @@ setInterval(() => {
   rateBuckets.forEach((w, k) => { if (now > w.resetAt) rateBuckets.delete(k); });
 }, 10 * 60 * 1000);
 
+// Number of days after which unresolved low/medium security events are auto-resolved.
+// Also used as the window for threat score calculation so stale events don't inflate the score.
+const SECURITY_EVENT_WINDOW_DAYS = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
+
+// Track last daily auto-resolve count for the admin feed notice
+let lastAutoResolvedCount = 0;
+let lastAutoResolvedAt: Date | null = null;
+
+// Auto-resolve old low/medium security events once per day
+async function runAutoResolve() {
+  try {
+    const count = await storage.autoResolveOldSecurityEvents(SECURITY_EVENT_WINDOW_DAYS);
+    lastAutoResolvedCount = count;
+    lastAutoResolvedAt = new Date();
+    if (count > 0) {
+      console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${SECURITY_EVENT_WINDOW_DAYS} days`);
+    }
+  } catch (err) {
+    console.error("[security] Auto-resolve job failed:", err);
+  }
+}
+// Run once shortly after startup, then every 24 hours
+setTimeout(runAutoResolve, 30_000);
+setInterval(runAutoResolve, 24 * 60 * 60 * 1000);
+
 const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
   Win32PrioritySeparation: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26`,
@@ -3112,14 +3137,18 @@ Read-Host "Press Enter to close this window"
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(Date.now() - SECURITY_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
     const flagsToday = events.filter(e => e.createdAt && new Date(e.createdAt) >= today && !e.resolvedAt).length;
     const openEvents = events.filter(e => !e.resolvedAt);
-    const criticalCount = openEvents.filter(e => e.severity === "critical").length;
-    const highCount = openEvents.filter(e => e.severity === "high").length;
+    // Threat score only considers unresolved events from the last 30 days
+    const recentOpenEvents = openEvents.filter(e => e.createdAt && new Date(e.createdAt) >= thirtyDaysAgo);
+    const criticalCount = recentOpenEvents.filter(e => e.severity === "critical").length;
+    const highCount = recentOpenEvents.filter(e => e.severity === "high").length;
     const suspiciousCodes = new Set(events.filter(e => e.type === "code_sharing" && !e.resolvedAt).map(e => e.codeRef)).size;
 
-    // Threat score 0-100
-    const threatScore = Math.min(100, criticalCount * 25 + highCount * 10 + openEvents.length * 2);
+    // Threat score 0-100 (based on last 30 days only)
+    const threatScore = Math.min(100, criticalCount * 25 + highCount * 10 + recentOpenEvents.length * 2);
 
     // Country breakdown from IP logs
     const countryCounts: Record<string, number> = {};
@@ -3139,6 +3168,9 @@ Read-Host "Press Enter to close this window"
       countriesSeen: Object.keys(countryCounts).length,
       topCountries,
       openEvents: openEvents.length,
+      lastAutoResolved: lastAutoResolvedCount,
+      lastAutoResolvedAt: lastAutoResolvedAt?.toISOString() ?? null,
+      autoResolveWindowDays: SECURITY_EVENT_WINDOW_DAYS,
     });
   });
 
