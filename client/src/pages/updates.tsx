@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery } from "@tanstack/react-query";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useProStatus, getStoredToken } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { getAnnouncementRelevance } from "@/lib/announcement-relevance";
 import {
   Bell, Tag, Clock, Megaphone, Loader2, AlertCircle,
   Zap, CheckCircle2, Download, Lock, ChevronDown, ChevronUp,
-  RefreshCw, Sparkles,
+  RefreshCw, Sparkles, Cpu, MonitorSmartphone, Target, Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -300,11 +303,39 @@ export default function Updates() {
   });
   const { tweaks, setTweak } = useOptimizationStore();
   const isPro = useProStatus();
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const [filter, setFilter] = useState<"system" | "all">("system");
 
-  const totalNewTweaks = announcements.reduce((acc, ann) => {
+  // Compute relevance per-announcement once.
+  const relevanceById = useMemo(() => {
+    const m: Record<number, ReturnType<typeof getAnnouncementRelevance>> = {};
+    for (const a of announcements) m[a.id] = getAnnouncementRelevance(a, hw, os);
+    return m;
+  }, [announcements, hw, os]);
+
+  const systemAnnouncements = useMemo(
+    () => announcements.filter(a => relevanceById[a.id]?.isRelevant),
+    [announcements, relevanceById],
+  );
+  const visibleAnnouncements = filter === "system" ? systemAnnouncements : announcements;
+
+  const totalNewTweaks = systemAnnouncements.reduce((acc, ann) => {
     if (!ann.tweakIds?.length) return acc;
     return acc + ann.tweakIds.filter(id => !tweaks[id]).length;
   }, 0);
+
+  const criticalCount = systemAnnouncements.filter(
+    a => relevanceById[a.id]?.isCritical && (a.tweakIds || []).some(id => !tweaks[id]),
+  ).length;
+
+  const detectedLine = hw.loading
+    ? "Detecting your system..."
+    : [
+        os.isWindows11 ? "Windows 11" : os.isWindows10 ? "Windows 10" : os.isWindows ? "Windows" : os.os,
+        hw.isLaptop ? "Laptop" : null,
+        hw.isNvidia ? "NVIDIA GPU" : hw.isAMD ? "AMD GPU" : hw.isAmdApu ? "AMD APU" : hw.isIntel ? "Intel Graphics" : null,
+      ].filter(Boolean).join(" · ");
 
   return (
     <AppLayout>
@@ -312,7 +343,7 @@ export default function Updates() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-start justify-between gap-4 mb-6"
+          className="flex items-start justify-between gap-4 mb-2"
         >
           <div className="flex items-center gap-3">
             <div className="p-3 bg-zinc-900 rounded-lg border border-white/5 relative">
@@ -325,13 +356,14 @@ export default function Updates() {
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold">Live Updates</h1>
-              <p className="text-zinc-500 text-sm">Latest patches, new tweaks, and announcements from the Opti Gods team</p>
+              <p className="text-zinc-500 text-sm">Detection-based — only the patches and tweaks that match your system.</p>
             </div>
           </div>
 
           <button
             onClick={() => refetch()}
             disabled={isFetching}
+            data-testid="button-refresh-updates"
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-zinc-500 hover:text-zinc-300 text-xs transition-colors disabled:opacity-40"
           >
             <RefreshCw className={cn("w-3 h-3", isFetching && "animate-spin")} />
@@ -339,16 +371,82 @@ export default function Updates() {
           </button>
         </motion.div>
 
+        {/* Detected-system panel */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          data-testid="panel-detected-system"
+          className="rounded-xl border border-white/5 bg-zinc-950/40 p-4 flex flex-wrap items-center gap-x-5 gap-y-2"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <MonitorSmartphone className="w-4 h-4 text-red-500 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Detected</p>
+              <p className="text-xs font-semibold text-white truncate" data-testid="text-detected-system">{detectedLine}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-red-500 shrink-0" />
+            <div>
+              <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Matched updates</p>
+              <p className="text-xs font-semibold text-white" data-testid="text-matched-count">
+                {systemAnnouncements.length} of {announcements.length}
+              </p>
+            </div>
+          </div>
+          {criticalCount > 0 && (
+            <div className="flex items-center gap-2 ml-auto px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-red-300 uppercase tracking-wider">
+                {criticalCount} critical for your PC
+              </span>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Filter toggle */}
+        {announcements.length > systemAnnouncements.length && (
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-zinc-600" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold mr-2">View</span>
+            <button
+              data-testid="button-filter-system"
+              onClick={() => setFilter("system")}
+              className={cn(
+                "px-3 py-1 rounded-lg text-xs font-bold transition-colors",
+                filter === "system"
+                  ? "bg-red-500/15 text-red-300 border border-red-500/30"
+                  : "bg-white/[0.02] text-zinc-500 border border-white/5 hover:text-zinc-300"
+              )}
+            >
+              For My System ({systemAnnouncements.length})
+            </button>
+            <button
+              data-testid="button-filter-all"
+              onClick={() => setFilter("all")}
+              className={cn(
+                "px-3 py-1 rounded-lg text-xs font-bold transition-colors",
+                filter === "all"
+                  ? "bg-red-500/15 text-red-300 border border-red-500/30"
+                  : "bg-white/[0.02] text-zinc-500 border border-white/5 hover:text-zinc-300"
+              )}
+            >
+              Show All ({announcements.length})
+            </button>
+          </div>
+        )}
+
         {/* Pro banner if there are pending tweaks */}
         {isPro && totalNewTweaks > 0 && !isLoading && (
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
+            data-testid="banner-pending-tweaks"
             className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/5"
           >
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
             <p className="text-sm text-red-300 font-medium flex-1">
-              <span className="font-bold text-white">{totalNewTweaks} new tweak{totalNewTweaks !== 1 ? "s" : ""}</span> across recent updates haven't been applied to your build yet.
+              <span className="font-bold text-white">{totalNewTweaks} new tweak{totalNewTweaks !== 1 ? "s" : ""}</span> match your system and haven't been applied to your build yet.
             </p>
           </motion.div>
         )}
@@ -380,29 +478,51 @@ export default function Updates() {
           </div>
         )}
 
-        {!isLoading && !isError && announcements.length === 0 && (
+        {!isLoading && !isError && visibleAnnouncements.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-20"
           >
-            <Bell className="w-10 h-10 text-zinc-700 mx-auto mb-4" />
-            <p className="text-zinc-500 text-sm">No announcements yet.</p>
-            <p className="text-zinc-700 text-xs mt-1">Check back soon for updates, hotfixes, and new tweaks.</p>
+            <Cpu className="w-10 h-10 text-zinc-700 mx-auto mb-4" />
+            <p className="text-zinc-400 text-sm">You're up to date.</p>
+            <p className="text-zinc-600 text-xs mt-1">No outstanding updates match your detected system right now.</p>
+            {announcements.length > 0 && (
+              <button
+                onClick={() => setFilter("all")}
+                data-testid="button-show-all-empty"
+                className="mt-4 text-[11px] text-red-400 hover:text-red-300 underline"
+              >
+                Show all {announcements.length} updates anyway
+              </button>
+            )}
           </motion.div>
         )}
 
-        {!isLoading && announcements.length > 0 && (
+        {!isLoading && visibleAnnouncements.length > 0 && (
           <div className="space-y-3">
-            {announcements.map((ann, i) => (
-              <AnnouncementCard
-                key={ann.id}
-                ann={ann}
-                index={i}
-                tweaks={tweaks}
-                setTweak={setTweak}
-              />
-            ))}
+            {visibleAnnouncements.map((ann, i) => {
+              const rel = relevanceById[ann.id];
+              return (
+                <div key={ann.id} className="relative">
+                  {rel?.isCritical && (
+                    <div className="absolute -left-2 top-5 bottom-5 w-1 rounded-full bg-red-500/70 animate-pulse" data-testid={`bar-critical-${ann.id}`} />
+                  )}
+                  <AnnouncementCard
+                    ann={ann}
+                    index={i}
+                    tweaks={tweaks}
+                    setTweak={setTweak}
+                  />
+                  {rel && rel.reasons.length > 0 && (
+                    <div className="mt-1 ml-14 flex items-center gap-1.5 text-[10px] text-zinc-500">
+                      <Target className="w-2.5 h-2.5 text-red-500/70" />
+                      <span>Targets: <span className="text-red-400 font-semibold">{rel.reasons.join(", ")}</span></span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

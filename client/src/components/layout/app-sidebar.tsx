@@ -43,6 +43,8 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useProStatus } from "@/lib/pro-status";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { countActionableForSystem, type AnnouncementLite } from "@/lib/announcement-relevance";
 
 type NavItem = {
   title: string;
@@ -115,6 +117,18 @@ export function AppSidebar() {
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
   const isPro = useProStatus();
+
+  // Detection-based update flash: when a Pro user has system-relevant
+  // announcements with new tweaks they haven't applied, flash the Updates
+  // nav red. Critical (hotfix/warning) updates pulse harder.
+  const { data: announcements = [] } = useQuery<AnnouncementLite[]>({
+    queryKey: ["/api/announcements"],
+    refetchInterval: 60000,
+    enabled: isPro,
+  });
+  const updateAttention = isPro
+    ? countActionableForSystem(announcements, tweaks, hw, osInfo)
+    : { total: 0, critical: 0 };
 
   // Sidebar filtering: hide GPU tabs that don't match detected hardware
   // Only hide if we have confident GPU detection (not just loading/unknown)
@@ -211,15 +225,26 @@ export function AppSidebar() {
                 const isAiAccent = item.aiAccent;
                 const isLast = idx === filteredItems.length - 1;
                 const sectionCount = countForSection(tweaks, item.url);
+                const isUpdatesNav = item.url === "/updates";
+                const updatesFlashing = isUpdatesNav && updateAttention.total > 0 && !isActive;
+                const updatesCritical = isUpdatesNav && updateAttention.critical > 0;
                 return (
                   <SidebarMenuItem key={item.title} className={isLast ? "mt-1 pt-1 border-t border-white/5" : ""}>
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
+                      data-testid={isUpdatesNav ? "nav-updates" : undefined}
                       className={cn(
                         "h-auto rounded-md transition-all",
                         isActive
                           ? "bg-red-500/10 text-red-400 hover:bg-red-500/15 hover:text-red-300 font-medium"
+                          : updatesFlashing
+                          ? cn(
+                              "text-red-300 hover:text-red-200 font-semibold",
+                              updatesCritical
+                                ? "bg-red-500/15 hover:bg-red-500/20 ring-1 ring-red-500/40 animate-pulse"
+                                : "bg-red-500/10 hover:bg-red-500/15"
+                            )
                           : isAiAccent
                           ? "text-red-400 hover:text-red-300 hover:bg-red-500/10 font-semibold"
                           : isAccent
@@ -253,6 +278,20 @@ export function AppSidebar() {
                           isBoostAccent ? "text-amber-400" : ""
                         )} />
                         <span className="text-sm flex-1">{item.title}</span>
+                        {/* Updates flash badge — detection-based attention */}
+                        {isUpdatesNav && updateAttention.total > 0 && (
+                          <span
+                            data-testid="badge-updates-attention"
+                            className={cn(
+                              "text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0",
+                              updatesCritical
+                                ? "bg-red-600 text-white animate-pulse"
+                                : "bg-red-500/20 text-red-300 border border-red-500/30"
+                            )}
+                          >
+                            {updateAttention.total > 9 ? "9+" : updateAttention.total}
+                          </span>
+                        )}
                         {/* Active tweak count badge for sections */}
                         {sectionCount > 0 && !isProAccent && (
                           <span className={cn(
