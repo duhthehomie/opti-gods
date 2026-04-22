@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -78,10 +78,14 @@ export interface IStorage {
   getAiSession(sessionId: string): Promise<AiChatSession | null>;
   upsertAiSession(sessionId: string, messages: AiChatMessage[]): Promise<void>;
   // Security events
-  logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void>;
+  logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<SecurityEvent>;
   getSecurityEvents(limit?: number): Promise<SecurityEvent[]>;
   resolveSecurityEvent(id: number): Promise<void>;
+  markSecurityEventAlertSent(id: number): Promise<void>;
   autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
+  // Admin settings
+  getAdminSettings(): Promise<AdminSettings | null>;
+  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null }): Promise<AdminSettings>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -586,8 +590,13 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<void> {
-    await db.insert(securityEvents).values(event);
+  async logSecurityEvent(event: { type: SecurityEventType; codeRef?: string; ip: string; country?: string; isp?: string; details: string; severity: SecuritySeverity }): Promise<SecurityEvent> {
+    const [row] = await db.insert(securityEvents).values(event).returning();
+    return row;
+  }
+
+  async markSecurityEventAlertSent(id: number): Promise<void> {
+    await db.update(securityEvents).set({ alertSentAt: new Date() }).where(eq(securityEvents.id, id));
   }
 
   async getSecurityEvents(limit = 100): Promise<SecurityEvent[]> {
@@ -676,6 +685,25 @@ export class DatabaseStorage implements IStorage {
     }
     const [report] = await db.update(userReports).set(updates).where(eq(userReports.id, id)).returning();
     return report;
+  }
+
+  async getAdminSettings(): Promise<AdminSettings | null> {
+    const [row] = await db.select().from(adminSettings).limit(1);
+    return row ?? null;
+  }
+
+  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null }): Promise<AdminSettings> {
+    const existing = await this.getAdminSettings();
+    if (existing) {
+      const [row] = await db.update(adminSettings)
+        .set(settings)
+        .where(eq(adminSettings.id, existing.id))
+        .returning();
+      return row;
+    } else {
+      const [row] = await db.insert(adminSettings).values(settings).returning();
+      return row;
+    }
   }
 }
 

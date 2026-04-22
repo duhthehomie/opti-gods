@@ -184,7 +184,7 @@ function ThreatGauge({ score }: { score: number }) {
 
 function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const { toast } = useToast();
-  const [activeSection, setActiveSection] = useState<"feed" | "sharing" | "vpn" | "bans" | "rate">("feed");
+  const [activeSection, setActiveSection] = useState<"feed" | "sharing" | "vpn" | "bans" | "rate" | "alerts">("feed");
   const [resolving, setResolving] = useState<number | null>(null);
   const [banning, setBanning] = useState<string | null>(null);
   const [banForm, setBanForm] = useState<{ ip: string; reason: string; permanent: boolean } | null>(null);
@@ -193,6 +193,8 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [manualFlagOpen, setManualFlagOpen] = useState(false);
   const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: SecuritySeverity }>({ ip: "", codeRef: "", details: "", severity: "medium" });
   const [flagging, setFlagging] = useState(false);
+  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string } | null>(null);
+  const [savingAlerts, setSavingAlerts] = useState(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
@@ -220,6 +222,11 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
     fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setBlocksLoading(false));
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
+
+  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null }>({
+    queryKey: ["/api/admin/settings"],
+    queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
+  });
 
   const events = eventsQ.data ?? [];
   const stats = statsQ.data;
@@ -291,12 +298,16 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
     }
   };
 
+  const alertSettings = alertSettingsQ.data;
+  const hasAlertConfig = !!(alertSettings?.discordWebhookUrl || alertSettings?.alertEmail);
+
   const SECTIONS = [
     { id: "feed",    label: "Threat Feed",    icon: ShieldAlert, badge: events.filter(e => !e.resolvedAt).length },
     { id: "sharing", label: "Code Sharing",   icon: Network,     badge: codeSharingEvents.length },
     { id: "vpn",     label: "VPN Flags",      icon: ServerCrash, badge: vpnEvents.length },
     { id: "bans",    label: "IP Bans",        icon: Ban,         badge: bans.length },
     { id: "rate",    label: "Rate Blocks",    icon: ShieldOff,   badge: blocks.length },
+    { id: "alerts",  label: "Alert Config",   icon: Bell,        badge: hasAlertConfig ? 1 : 0 },
   ] as const;
 
   return (
@@ -624,6 +635,148 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Alert Config ── */}
+      {activeSection === "alerts" && (
+        <div className="space-y-4">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Critical event notifications — push alerts when severity=critical is logged</p>
+
+          {alertSettingsQ.isLoading ? (
+            <div className="p-6 text-center text-xs text-zinc-600 animate-pulse">Loading settings…</div>
+          ) : (
+            <div className="space-y-4">
+              {/* Current config display */}
+              <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bell className="w-3.5 h-3.5 text-amber-400" />
+                  <p className="text-xs font-bold text-white">Active Alert Channels</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", alertSettings?.discordWebhookUrl ? "bg-emerald-500" : "bg-zinc-700")} />
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Discord Webhook</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {alertSettings?.discordWebhookUrl ? alertSettings.discordWebhookUrl.replace(/\/[^/]+$/, "/…") : "not configured"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", alertSettings?.alertEmail ? "bg-emerald-500" : "bg-zinc-700")} />
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Alert Email</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {alertSettings?.alertEmail || "not configured"}
+                    </span>
+                  </div>
+                </div>
+                {!hasAlertConfig && (
+                  <div className="flex items-start gap-2 pt-1 mt-1 border-t border-white/5">
+                    <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-400/80">No alert channels configured. Critical events will only appear in this panel.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Edit form */}
+              {alertForm === null ? (
+                <button
+                  data-testid="button-edit-alert-settings"
+                  onClick={() => setAlertForm({
+                    discordWebhookUrl: alertSettings?.discordWebhookUrl ?? "",
+                    alertEmail: alertSettings?.alertEmail ?? "",
+                  })}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  Edit Alert Settings
+                </button>
+              ) : (
+                <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-4 space-y-3">
+                  <p className="text-[10px] font-bold text-white uppercase tracking-wider mb-2">Configure Alerts</p>
+
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Discord Webhook URL</label>
+                    <input
+                      data-testid="input-discord-webhook"
+                      value={alertForm.discordWebhookUrl}
+                      onChange={e => setAlertForm(f => f ? { ...f, discordWebhookUrl: e.target.value } : f)}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-violet-500/50"
+                    />
+                    <p className="text-[9px] text-zinc-600 mt-1">Go to Discord channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy URL</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Alert Email Address</label>
+                    <input
+                      data-testid="input-alert-email"
+                      value={alertForm.alertEmail}
+                      onChange={e => setAlertForm(f => f ? { ...f, alertEmail: e.target.value } : f)}
+                      placeholder="you@example.com"
+                      type="email"
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50"
+                    />
+                    <p className="text-[9px] text-zinc-600 mt-1">Requires EMAIL_USER and EMAIL_PASS env vars configured for email delivery</p>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => setAlertForm(null)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-xs font-bold hover:bg-zinc-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      data-testid="button-save-alert-settings"
+                      disabled={savingAlerts}
+                      onClick={async () => {
+                        setSavingAlerts(true);
+                        try {
+                          const body: Record<string, string | null> = {};
+                          body.discordWebhookUrl = alertForm.discordWebhookUrl.trim() || null;
+                          body.alertEmail = alertForm.alertEmail.trim() || null;
+                          const r = await fetch("/api/admin/settings", {
+                            method: "POST",
+                            headers: { ...headers, "Content-Type": "application/json" },
+                            body: JSON.stringify(body),
+                          });
+                          if (!r.ok) {
+                            const err = await r.json().catch(() => ({}));
+                            throw new Error(err?.error ? JSON.stringify(err.error) : "Save failed");
+                          }
+                          await alertSettingsQ.refetch();
+                          setAlertForm(null);
+                          toast({ title: "Alert settings saved" });
+                        } catch (e: unknown) {
+                          toast({ title: "Failed to save", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+                        } finally {
+                          setSavingAlerts(false);
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-500 transition-colors disabled:opacity-50"
+                    >
+                      {savingAlerts ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Info about deduplication */}
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-blue-500/8 border border-blue-500/15">
+                <Shield className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] text-blue-300 font-bold">De-duplicated alerts</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+                    Each security event only triggers one alert — re-detection of the same event will not send a second notification. Alerts fire on severity=critical events only.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
+import { notifyCriticalEvent } from "./alerts";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
@@ -1791,8 +1792,34 @@ Start-Sleep 2
   // Apply IP ban check to sensitive routes
   app.use(["/api/pro/verify", "/api/generate-script", "/api/redeem"], checkIpBan);
 
+  // Helper — build admin panel URL from request or env
+  function getAdminPanelUrl(req?: { protocol: string; get(h: string): string | undefined }): string {
+    const base = process.env.SITE_URL || (req ? `${req.protocol}://${req.get("host")}` : "");
+    return base ? `${base}/admin` : "/admin";
+  }
+
+  // Fire-and-forget alert helper — sends notification and marks event only on successful delivery
+  async function maybeAlert(event: Awaited<ReturnType<typeof storage.logSecurityEvent>>, adminPanelUrl: string): Promise<void> {
+    if (event.severity !== "critical" || event.alertSentAt) return;
+    try {
+      const settings = await storage.getAdminSettings();
+      const discordWebhookUrl = settings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
+      const alertEmail = settings?.alertEmail ?? process.env.ALERT_EMAIL ?? null;
+      if (!discordWebhookUrl && !alertEmail) return;
+      const result = await notifyCriticalEvent(event, { discordWebhookUrl, alertEmail, adminPanelUrl });
+      // Only deduplicate (mark alertSentAt) when at least one channel actually delivered.
+      // If all configured channels failed, leave alertSentAt null so the next run can retry.
+      if (result.sentAny) {
+        await storage.markSecurityEventAlertSent(event.id);
+      }
+    } catch (e) {
+      console.error("[alerts] maybeAlert failed:", e);
+    }
+  }
+
   // Fire-and-forget security analysis — runs after successful code redemption
-  async function runSecurityChecks(codeRef: string, ip: string): Promise<void> {
+  async function runSecurityChecks(codeRef: string, ip: string, siteUrl?: string): Promise<void> {
+    const adminPanelUrl = siteUrl ? `${siteUrl}/admin` : getAdminPanelUrl();
     try {
       // Fetch geo for this IP
       const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,isp`);
@@ -1808,7 +1835,7 @@ Start-Sleep 2
 
       // VPN detection
       if (isp && isVpnIsp(isp)) {
-        await storage.logSecurityEvent({
+        const event = await storage.logSecurityEvent({
           type: "vpn_detected",
           codeRef,
           ip,
@@ -1817,6 +1844,7 @@ Start-Sleep 2
           details: `Code ${codeRef} redeemed via suspected VPN/datacenter ISP: ${isp}`,
           severity: "medium",
         });
+        await maybeAlert(event, adminPanelUrl);
       }
 
       // Code sharing detection — check for multiple distinct IPs on this code
@@ -1825,7 +1853,7 @@ Start-Sleep 2
       if (distinctIps.size >= 2) {
         const countries = Array.from(new Set(ipLogs.map(l => l.country).filter(Boolean)));
         const severity = distinctIps.size >= 4 ? "critical" : distinctIps.size >= 3 ? "high" : "medium";
-        await storage.logSecurityEvent({
+        const event = await storage.logSecurityEvent({
           type: "code_sharing",
           codeRef,
           ip,
@@ -1834,6 +1862,7 @@ Start-Sleep 2
           details: `Code ${codeRef} has been used from ${distinctIps.size} distinct IPs across ${countries.length} countries: ${Array.from(distinctIps).join(", ")}`,
           severity,
         });
+        await maybeAlert(event, adminPanelUrl);
       }
     } catch {
       // Security checks are best-effort — never block the main flow
@@ -1867,7 +1896,7 @@ Start-Sleep 2
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
-      runSecurityChecks(normalizedCode, clientIp).catch(() => {});
+      runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
       return res.json({ valid: true, sessionToken });
     }
 
@@ -3213,8 +3242,29 @@ Read-Host "Press Enter to close this window"
     if (!checkAdminKey(req, res)) return;
     const { ip, codeRef, details, severity = "medium" } = req.body || {};
     if (!ip || !details) return res.status(400).json({ error: "ip and details required" });
-    await storage.logSecurityEvent({ type: "manual_flag", codeRef, ip, details, severity });
+    const event = await storage.logSecurityEvent({ type: "manual_flag", codeRef, ip, details, severity });
+    maybeAlert(event, getAdminPanelUrl(req)).catch(() => {});
     return res.json({ ok: true });
+  });
+
+  // GET /api/admin/settings — fetch configurable admin settings
+  app.get("/api/admin/settings", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const settings = await storage.getAdminSettings();
+    return res.json(settings ?? { discordWebhookUrl: null, alertEmail: null });
+  });
+
+  // POST /api/admin/settings — update configurable admin settings
+  app.post("/api/admin/settings", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const schema = z.object({
+      discordWebhookUrl: z.string().url().nullable().optional(),
+      alertEmail: z.string().email().nullable().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const updated = await storage.upsertAdminSettings(parsed.data);
+    return res.json(updated);
   });
 
   // --- Announcements (public read) ---

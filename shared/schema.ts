@@ -144,9 +144,18 @@ export const securityEvents = pgTable("security_events", {
   details: text("details").notNull(),
   severity: text("severity").$type<SecuritySeverity>().notNull().default("medium"),
   resolvedAt: timestamp("resolved_at"),
+  alertSentAt: timestamp("alert_sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export type SecurityEvent = typeof securityEvents.$inferSelect;
+
+// Admin settings — single-row config table (id always = 1)
+export const adminSettings = pgTable("admin_settings", {
+  id: serial("id").primaryKey(),
+  discordWebhookUrl: text("discord_webhook_url"),
+  alertEmail: text("alert_email"),
+});
+export type AdminSettings = typeof adminSettings.$inferSelect;
 
 // IP bans — persistent bans that survive server restarts
 export const ipBans = pgTable("ip_bans", {

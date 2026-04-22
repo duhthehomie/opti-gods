@@ -26,6 +26,7 @@ A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthet
 - **Smart AI Popup** — first-visit desktop popup pointing users to the AI assistant
 - **Floating AI Button** — persistent bottom-right button on optimizer pages linking to AI chat
 - **Aether Security Center** — threat monitoring, IP bans, rate-limit blocks, geo-intelligence
+- **Critical Event Alerts** — Discord webhook + email notifications for critical security events; configurable via admin panel Alert Config tab; per-event deduplication via `alertSentAt` column
 - **Integrated GPU (Vega 8) tab** — AMD Ryzen 2200G/Vega 8 specific tweaks including TDR timeout, HDCP disable, audio co-processor power-gating
 
 ## Payment System
@@ -49,6 +50,16 @@ When `STRIPE_SECRET_KEY` is not set, Stripe endpoints gracefully return 503. The
 ### Free Friend Unlock
 - `VITE_FREE_KEY` — the secret URL param value (e.g. `friends2024`)
 - Share: `https://yourapp.replit.app/?unlock=friends2024`
+
+## Critical Event Alerts
+
+Optional env vars for alert delivery (can also be set via Admin Panel → Security → Alert Config):
+- `DISCORD_WEBHOOK_URL` — Discord channel webhook URL for critical security alerts
+- `ALERT_EMAIL` — recipient email for critical security event notifications (requires EMAIL_USER + EMAIL_PASS)
+- `SITE_URL` — base URL used in deep links within alerts (e.g. `https://optigods.replit.app`)
+
+New files: `server/alerts.ts` — Discord + email notification helpers.
+New DB: `admin_settings` table (single-row config), `alertSentAt` column on `security_events`.
 
 ## Important Files
 
