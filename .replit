@@ -44,11 +44,11 @@ waitForPort = 5000
 [userenv.shared]
 VITE_CASHAPP_TAG = "$my1ik"
 VITE_PAYPAL_LINK = "https://paypal.me/accountslg"
-ADMIN_KEY = "sKm9FyxuTnQjBsP72Xf6"
 EMAIL_USER = "tastymemes53@gmail.com"
 VITE_GUMROAD_LINK = "https://duhthehomie.gumroad.com/l/esizt"
 STRIPE_SECRET_KEY = "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"
 STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
+ADMIN_KEY = "leaqy"
 
 [postMerge]
 path = "scripts/post-merge.sh"
