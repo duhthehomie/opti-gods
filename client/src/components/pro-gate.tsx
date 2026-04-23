@@ -369,7 +369,7 @@ function ProPaymentDialog({
                       Tap here to submit your email — your code arrives in your inbox within 5 minutes.
                     </p>
                     <p className="text-[10px] text-red-400 font-bold mt-1 group-hover:text-red-300 transition-colors">
-                      optigods.replit.app/get-code →
+                      optigods.com/get-code →
                     </p>
                   </div>
                 </a>

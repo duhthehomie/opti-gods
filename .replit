@@ -49,6 +49,7 @@ VITE_GUMROAD_LINK = "https://duhthehomie.gumroad.com/l/esizt"
 STRIPE_SECRET_KEY = "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"
 STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
 ADMIN_KEY = "leaqy"
+SITE_URL = "https://optigods.com"
 
 [postMerge]
 path = "scripts/post-merge.sh"

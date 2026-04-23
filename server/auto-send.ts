@@ -16,7 +16,7 @@ function getSiteUrl(): string {
   const domains = process.env.REPLIT_DOMAINS || "";
   const first = domains.split(",")[0]?.trim();
   if (first) return `https://${first}`;
-  return "https://optigods.replit.app";
+  return "https://optigods.com";
 }
 
 export async function runAutoSend(): Promise<number> {

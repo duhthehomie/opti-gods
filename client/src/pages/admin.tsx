@@ -2519,7 +2519,7 @@ export default function Admin() {
               <Shield className="w-4 h-4 mr-2" /> Unlock Admin
             </Button>
           </div>
-          <p className="text-center text-[10px] text-zinc-700">by leaq · optigods.replit.app</p>
+          <p className="text-center text-[10px] text-zinc-700">by leaq · optigods.com</p>
         </div>
       </div>
     );
