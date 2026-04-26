@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
-import { notifyCriticalEvent } from "./alerts";
+import { notifyCriticalEvent, notifySale } from "./alerts";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
@@ -2804,6 +2804,24 @@ Start-Sleep 2
         // Log loud + clear so the admin sees fresh $25 manual orders in server logs.
         // (Stripe dashboard is the source of truth; this just makes it skim-able.)
         console.log(`[MANUAL-OPTI] $25 PAID — buyer=${hasRealEmail ? customerEmail : 'card-only'} stripe_session=${sessionId}`);
+        // Notify Discord of a new Manual Opti sale
+        try {
+          const manualSettings = await storage.getAdminSettings();
+          const manualWebhook = manualSettings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
+          const proto = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+          const host = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
+          await notifySale({
+            tier: 'manual',
+            email: hasRealEmail ? customerEmail : null,
+            code: null,
+            amount: 2500,
+            stripeSessionId: sessionId,
+            adminPanelUrl: `${proto}://${host}/admin`,
+            discordWebhookUrl: manualWebhook,
+          });
+        } catch (notifyErr: any) {
+          console.error('[alerts] Manual Opti sale notify failed:', notifyErr?.message || notifyErr);
+        }
         return res.json({
           paid: true,
           tier: 'manual',
@@ -2842,6 +2860,27 @@ Start-Sleep 2
           emailSent = true;
         } catch (mailErr: any) {
           console.error('Failed to email Stripe buyer their code:', mailErr?.message || mailErr);
+        }
+      }
+
+      // Notify Discord of a new Pro sale (only on first verification, not refreshes)
+      if (isNewCode) {
+        try {
+          const proSettings = await storage.getAdminSettings();
+          const proWebhook = proSettings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
+          const protoForNotify = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+          const hostForNotify = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
+          await notifySale({
+            tier: 'pro',
+            email: hasRealEmail ? customerEmail : null,
+            code: codeValue,
+            amount: 1500,
+            stripeSessionId: sessionId,
+            adminPanelUrl: `${protoForNotify}://${hostForNotify}/admin`,
+            discordWebhookUrl: proWebhook,
+          });
+        } catch (notifyErr: any) {
+          console.error('[alerts] Pro sale notify failed:', notifyErr?.message || notifyErr);
         }
       }
 

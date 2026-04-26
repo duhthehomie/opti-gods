@@ -132,6 +132,50 @@ View in admin panel: ${adminPanelUrl}
   });
 }
 
+export async function notifySale(opts: {
+  tier: "pro" | "manual";
+  email: string | null;
+  code: string | null;
+  amount: number;
+  stripeSessionId: string;
+  adminPanelUrl: string;
+  discordWebhookUrl?: string | null;
+}): Promise<void> {
+  const { tier, email, code, amount, stripeSessionId, adminPanelUrl, discordWebhookUrl } = opts;
+  const label = tier === "manual" ? "Manual Opti ($25)" : "Pro ($15)";
+  const amountStr = `$${(amount / 100).toFixed(2)}`;
+
+  if (discordWebhookUrl) {
+    const payload = {
+      embeds: [
+        {
+          title: `💰 New Sale — ${label}`,
+          color: tier === "manual" ? 0xf59e0b : 0x22c55e,
+          fields: [
+            { name: "Tier", value: label, inline: true },
+            { name: "Amount", value: amountStr, inline: true },
+            { name: "Email", value: email || "card-only (no email)", inline: false },
+            ...(code ? [{ name: "Pro Code", value: `\`${code}\``, inline: false }] : []),
+            { name: "Stripe Session", value: `\`${stripeSessionId}\``, inline: false },
+            { name: "Admin Panel", value: `[View Codes](${adminPanelUrl})`, inline: false },
+          ],
+          footer: { text: "Opti Gods · Stripe Payment" },
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+    try {
+      await fetch(discordWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      console.error("[alerts] Sale Discord notification failed:", e);
+    }
+  }
+}
+
 export interface NotifyResult {
   sentAny: boolean;
   discord: "sent" | "skipped" | "failed";
