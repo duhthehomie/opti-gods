@@ -196,6 +196,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [flagging, setFlagging] = useState(false);
   const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string } | null>(null);
   const [savingAlerts, setSavingAlerts] = useState(false);
+  const [runningAutoResolve, setRunningAutoResolve] = useState(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
@@ -695,18 +696,52 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
               {/* Edit form */}
               {alertForm === null ? (
-                <button
-                  data-testid="button-edit-alert-settings"
-                  onClick={() => setAlertForm({
-                    discordWebhookUrl: alertSettings?.discordWebhookUrl ?? "",
-                    alertEmail: alertSettings?.alertEmail ?? "",
-                    autoResolveDays: String(alertSettings?.autoResolveDays ?? 30),
-                  })}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  Edit Alert Settings
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    data-testid="button-edit-alert-settings"
+                    onClick={() => setAlertForm({
+                      discordWebhookUrl: alertSettings?.discordWebhookUrl ?? "",
+                      alertEmail: alertSettings?.alertEmail ?? "",
+                      autoResolveDays: String(alertSettings?.autoResolveDays ?? 30),
+                    })}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    Edit Alert Settings
+                  </button>
+                  <button
+                    data-testid="button-run-auto-resolve"
+                    disabled={runningAutoResolve}
+                    onClick={async () => {
+                      setRunningAutoResolve(true);
+                      try {
+                        const r = await fetch("/api/admin/security/auto-resolve", {
+                          method: "POST",
+                          headers,
+                        });
+                        if (!r.ok) throw new Error("Request failed");
+                        const data: { resolved: number; days: number } = await r.json();
+                        refresh();
+                        if (data.resolved > 0) {
+                          toast({
+                            title: `Auto-resolve complete`,
+                            description: `Resolved ${data.resolved} stale low/medium event${data.resolved !== 1 ? "s" : ""} older than ${data.days} days.`,
+                          });
+                        } else {
+                          toast({ title: "Auto-resolve complete", description: "No events matched the auto-resolve threshold." });
+                        }
+                      } catch {
+                        toast({ title: "Auto-resolve failed", description: "Could not run the job. Try again.", variant: "destructive" });
+                      } finally {
+                        setRunningAutoResolve(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs font-bold hover:bg-blue-600/30 transition-colors disabled:opacity-50"
+                  >
+                    <PlayCircle className="w-3.5 h-3.5" />
+                    {runningAutoResolve ? "Running…" : "Run Auto-resolve Now"}
+                  </button>
+                </div>
               ) : (
                 <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-4 space-y-3">
                   <p className="text-[10px] font-bold text-white uppercase tracking-wider mb-2">Configure Alerts</p>

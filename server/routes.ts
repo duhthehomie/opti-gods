@@ -51,22 +51,27 @@ setInterval(() => {
 const SECURITY_EVENT_WINDOW_DAYS_DEFAULT = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
 
 // Auto-resolve old low/medium security events once per day
-async function runAutoResolve() {
+async function runAutoResolve(): Promise<{ resolved: number; days: number }> {
+  const adminCfg = await storage.getAdminSettings();
+  const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
+  const count = await storage.autoResolveOldSecurityEvents(days);
+  await storage.recordAutoResolveRun(count);
+  if (count > 0) {
+    console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${days} days`);
+  }
+  return { resolved: count, days };
+}
+
+async function runAutoResolveSafe() {
   try {
-    const adminCfg = await storage.getAdminSettings();
-    const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
-    const count = await storage.autoResolveOldSecurityEvents(days);
-    await storage.recordAutoResolveRun(count);
-    if (count > 0) {
-      console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${days} days`);
-    }
+    await runAutoResolve();
   } catch (err) {
     console.error("[security] Auto-resolve job failed:", err);
   }
 }
 // Run once shortly after startup, then every 24 hours
-setTimeout(runAutoResolve, 30_000);
-setInterval(runAutoResolve, 24 * 60 * 60 * 1000);
+setTimeout(runAutoResolveSafe, 30_000);
+setInterval(runAutoResolveSafe, 24 * 60 * 60 * 1000);
 
 const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
@@ -3333,6 +3338,18 @@ Read-Host "Press Enter to close this window"
       lastAutoResolvedAt: adminCfg?.lastAutoResolvedAt?.toISOString() ?? null,
       autoResolveWindowDays: autoResolveDays,
     });
+  });
+
+  // POST /api/admin/security/auto-resolve — trigger the daily auto-resolve job immediately
+  app.post("/api/admin/security/auto-resolve", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const result = await runAutoResolve();
+      return res.json(result);
+    } catch (err) {
+      console.error("[security] Manual auto-resolve failed:", err);
+      return res.status(500).json({ error: "Auto-resolve failed" });
+    }
   });
 
   // POST /api/admin/security/ban-ip — persistent ban
