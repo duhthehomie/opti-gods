@@ -193,7 +193,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [manualFlagOpen, setManualFlagOpen] = useState(false);
   const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: SecuritySeverity }>({ ip: "", codeRef: "", details: "", severity: "medium" });
   const [flagging, setFlagging] = useState(false);
-  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string } | null>(null);
+  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string } | null>(null);
   const [savingAlerts, setSavingAlerts] = useState(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
@@ -223,7 +223,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
-  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null }>({
+  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null }>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
   });
@@ -674,6 +674,15 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                       {alertSettings?.alertEmail || "not configured"}
                     </span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Auto-resolve After</span>
+                    </div>
+                    <span data-testid="text-auto-resolve-days" className="text-[10px] text-zinc-500 font-mono">
+                      {alertSettings?.autoResolveDays ?? 30} days
+                    </span>
+                  </div>
                 </div>
                 {!hasAlertConfig && (
                   <div className="flex items-start gap-2 pt-1 mt-1 border-t border-white/5">
@@ -690,6 +699,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                   onClick={() => setAlertForm({
                     discordWebhookUrl: alertSettings?.discordWebhookUrl ?? "",
                     alertEmail: alertSettings?.alertEmail ?? "",
+                    autoResolveDays: String(alertSettings?.autoResolveDays ?? 30),
                   })}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
                 >
@@ -725,6 +735,21 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     <p className="text-[9px] text-zinc-600 mt-1">Requires EMAIL_USER and EMAIL_PASS env vars configured for email delivery</p>
                   </div>
 
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Auto-resolve After (days)</label>
+                    <input
+                      data-testid="input-auto-resolve-days"
+                      value={alertForm.autoResolveDays}
+                      onChange={e => setAlertForm(f => f ? { ...f, autoResolveDays: e.target.value } : f)}
+                      placeholder="30"
+                      type="number"
+                      min={1}
+                      max={365}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-blue-500/50"
+                    />
+                    <p className="text-[9px] text-zinc-600 mt-1">Unresolved low/medium severity events older than this will be resolved automatically by the daily job (1–365 days)</p>
+                  </div>
+
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => setAlertForm(null)}
@@ -738,9 +763,16 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                       onClick={async () => {
                         setSavingAlerts(true);
                         try {
-                          const body: Record<string, string | null> = {};
+                          const parsedDays = parseInt(alertForm.autoResolveDays, 10);
+                          if (isNaN(parsedDays) || parsedDays < 1 || parsedDays > 365) {
+                            toast({ title: "Invalid value", description: "Auto-resolve days must be between 1 and 365.", variant: "destructive" });
+                            setSavingAlerts(false);
+                            return;
+                          }
+                          const body: Record<string, string | number | null> = {};
                           body.discordWebhookUrl = alertForm.discordWebhookUrl.trim() || null;
                           body.alertEmail = alertForm.alertEmail.trim() || null;
+                          body.autoResolveDays = parsedDays;
                           const r = await fetch("/api/admin/settings", {
                             method: "POST",
                             headers: { ...headers, "Content-Type": "application/json" },

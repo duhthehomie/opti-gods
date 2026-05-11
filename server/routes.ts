@@ -46,9 +46,9 @@ setInterval(() => {
   rateBuckets.forEach((w, k) => { if (now > w.resetAt) rateBuckets.delete(k); });
 }, 10 * 60 * 1000);
 
-// Number of days after which unresolved low/medium security events are auto-resolved.
-// Also used as the window for threat score calculation so stale events don't inflate the score.
-const SECURITY_EVENT_WINDOW_DAYS = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
+// Default number of days after which unresolved low/medium security events are auto-resolved.
+// The admin panel can override this via the admin_settings table.
+const SECURITY_EVENT_WINDOW_DAYS_DEFAULT = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
 
 // Track last daily auto-resolve count for the admin feed notice
 let lastAutoResolvedCount = 0;
@@ -57,11 +57,13 @@ let lastAutoResolvedAt: Date | null = null;
 // Auto-resolve old low/medium security events once per day
 async function runAutoResolve() {
   try {
-    const count = await storage.autoResolveOldSecurityEvents(SECURITY_EVENT_WINDOW_DAYS);
+    const adminCfg = await storage.getAdminSettings();
+    const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
+    const count = await storage.autoResolveOldSecurityEvents(days);
     lastAutoResolvedCount = count;
     lastAutoResolvedAt = new Date();
     if (count > 0) {
-      console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${SECURITY_EVENT_WINDOW_DAYS} days`);
+      console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${days} days`);
     }
   } catch (err) {
     console.error("[security] Auto-resolve job failed:", err);
@@ -3197,20 +3199,22 @@ Read-Host "Press Enter to close this window"
   // GET /api/admin/security/stats — threat score, counters, country breakdown
   app.get("/api/admin/security/stats", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [events, bans, ipLogs] = await Promise.all([
+    const [events, bans, ipLogs, adminCfg] = await Promise.all([
       storage.getSecurityEvents(500),
       storage.getIpBans(),
       storage.getIpLogs(),
+      storage.getAdminSettings(),
     ]);
+    const autoResolveDays = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(Date.now() - SECURITY_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const windowCutoff = new Date(Date.now() - autoResolveDays * 24 * 60 * 60 * 1000);
 
     const flagsToday = events.filter(e => e.createdAt && new Date(e.createdAt) >= today && !e.resolvedAt).length;
     const openEvents = events.filter(e => !e.resolvedAt);
-    // Threat score only considers unresolved events from the last 30 days
-    const recentOpenEvents = openEvents.filter(e => e.createdAt && new Date(e.createdAt) >= thirtyDaysAgo);
+    // Threat score only considers unresolved events within the configured auto-resolve window
+    const recentOpenEvents = openEvents.filter(e => e.createdAt && new Date(e.createdAt) >= windowCutoff);
     const criticalCount = recentOpenEvents.filter(e => e.severity === "critical").length;
     const highCount = recentOpenEvents.filter(e => e.severity === "high").length;
     const suspiciousCodes = new Set(events.filter(e => e.type === "code_sharing" && !e.resolvedAt).map(e => e.codeRef)).size;
@@ -3238,7 +3242,7 @@ Read-Host "Press Enter to close this window"
       openEvents: openEvents.length,
       lastAutoResolved: lastAutoResolvedCount,
       lastAutoResolvedAt: lastAutoResolvedAt?.toISOString() ?? null,
-      autoResolveWindowDays: SECURITY_EVENT_WINDOW_DAYS,
+      autoResolveWindowDays: autoResolveDays,
     });
   });
 
@@ -3290,7 +3294,7 @@ Read-Host "Press Enter to close this window"
   app.get("/api/admin/settings", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     const settings = await storage.getAdminSettings();
-    return res.json(settings ?? { discordWebhookUrl: null, alertEmail: null });
+    return res.json(settings ?? { discordWebhookUrl: null, alertEmail: null, autoResolveDays: SECURITY_EVENT_WINDOW_DAYS_DEFAULT });
   });
 
   // POST /api/admin/settings — update configurable admin settings
@@ -3299,6 +3303,7 @@ Read-Host "Press Enter to close this window"
     const schema = z.object({
       discordWebhookUrl: z.string().url().nullable().optional(),
       alertEmail: z.string().email().nullable().optional(),
+      autoResolveDays: z.number().int().min(1).max(365).nullable().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });

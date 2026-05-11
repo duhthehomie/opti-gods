@@ -85,7 +85,7 @@ export interface IStorage {
   autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
-  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null }): Promise<AdminSettings>;
+  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -692,7 +692,7 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
-  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null }): Promise<AdminSettings> {
+  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings> {
     const existing = await this.getAdminSettings();
     if (existing) {
       const [row] = await db.update(adminSettings)

@@ -154,6 +154,7 @@ export const adminSettings = pgTable("admin_settings", {
   id: serial("id").primaryKey(),
   discordWebhookUrl: text("discord_webhook_url"),
   alertEmail: text("alert_email"),
+  autoResolveDays: integer("auto_resolve_days").default(30),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 
