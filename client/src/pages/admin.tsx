@@ -1770,13 +1770,19 @@ function DiscountsTab({ headers }: { headers: Record<string, string> }) {
   const q = useQuery<any[]>({ queryKey: ["/api/admin/discount-codes"], queryFn: () => fetch("/api/admin/discount-codes", { headers }).then(r => r.json()) });
 
   const create = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/discount-codes", { code, percentOff: Number(percentOff), maxUses: maxUses ? Number(maxUses) : null, note: note || null }, headers),
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/discount-codes", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ code, percentOff: Number(percentOff), maxUses: maxUses ? Number(maxUses) : null, note: note || null }) });
+      if (!res.ok) throw new Error(await res.text());
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/discount-codes"] }); setCode(""); setPercentOff(""); setMaxUses(""); setNote(""); toast({ title: "Discount code created" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message || "Failed", variant: "destructive" }),
   });
 
   const del = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/discount-codes/${id}`, undefined, headers),
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/discount-codes/${id}`, { method: "DELETE", headers });
+      if (!res.ok) throw new Error(await res.text());
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/discount-codes"] }); toast({ title: "Deleted" }); },
   });
 
