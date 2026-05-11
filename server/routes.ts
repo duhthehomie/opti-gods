@@ -2761,10 +2761,10 @@ Start-Sleep 2
       return res.status(503).json({ error: 'STRIPE_PRICE_ID not set. Run the seed script first.' });
     }
 
-    // Validate discount code if provided (pro tier only)
+    // Validate discount code if provided (both pro and manual tiers)
     const rawDiscountCode = req.body?.discountCode ? String(req.body.discountCode).trim() : null;
     let appliedDiscount: { percentOff: number; code: string } | null = null;
-    if (rawDiscountCode && tier === 'pro') {
+    if (rawDiscountCode) {
       const dc = await storage.validateDiscountCode(rawDiscountCode);
       if (dc) appliedDiscount = { percentOff: dc.percentOff, code: dc.code };
     }
@@ -2792,13 +2792,21 @@ Start-Sleep 2
           }]
         : [{ price: priceId!, quantity: 1 }];
 
+      const BASE_MANUAL_CENTS = 2500; // $25.00
+      const manualUnitAmount = appliedDiscount
+        ? Math.max(100, Math.round(BASE_MANUAL_CENTS * (1 - appliedDiscount.percentOff / 100)))
+        : BASE_MANUAL_CENTS;
+      const manualName = appliedDiscount
+        ? `Opti Gods — Manual Opti (Done-For-You) (${appliedDiscount.percentOff}% discount)`
+        : 'Opti Gods — Manual Opti (Done-For-You)';
+
       const lineItems = tier === 'manual'
         ? [{
             price_data: {
               currency: 'usd',
-              unit_amount: 2500, // $25.00
+              unit_amount: manualUnitAmount,
               product_data: {
-                name: 'Opti Gods — Manual Opti (Done-For-You)',
+                name: manualName,
                 description: 'leaq personally optimizes your PC. After payment, open a Discord ticket so we can schedule your session.',
               },
             },
