@@ -50,18 +50,13 @@ setInterval(() => {
 // The admin panel can override this via the admin_settings table.
 const SECURITY_EVENT_WINDOW_DAYS_DEFAULT = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
 
-// Track last daily auto-resolve count for the admin feed notice
-let lastAutoResolvedCount = 0;
-let lastAutoResolvedAt: Date | null = null;
-
 // Auto-resolve old low/medium security events once per day
 async function runAutoResolve() {
   try {
     const adminCfg = await storage.getAdminSettings();
     const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
     const count = await storage.autoResolveOldSecurityEvents(days);
-    lastAutoResolvedCount = count;
-    lastAutoResolvedAt = new Date();
+    await storage.recordAutoResolveRun(count);
     if (count > 0) {
       console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${days} days`);
     }
@@ -3326,8 +3321,8 @@ Read-Host "Press Enter to close this window"
       countriesSeen: Object.keys(countryCounts).length,
       topCountries,
       openEvents: openEvents.length,
-      lastAutoResolved: lastAutoResolvedCount,
-      lastAutoResolvedAt: lastAutoResolvedAt?.toISOString() ?? null,
+      lastAutoResolved: adminCfg?.lastAutoResolvedCount ?? 0,
+      lastAutoResolvedAt: adminCfg?.lastAutoResolvedAt?.toISOString() ?? null,
       autoResolveWindowDays: autoResolveDays,
     });
   });

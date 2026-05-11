@@ -83,6 +83,7 @@ export interface IStorage {
   resolveSecurityEvent(id: number): Promise<void>;
   markSecurityEventAlertSent(id: number): Promise<void>;
   autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
+  recordAutoResolveRun(count: number): Promise<void>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
   upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings>;
@@ -627,6 +628,16 @@ export class DatabaseStorage implements IStorage {
       )
       .returning({ id: securityEvents.id });
     return rows.length;
+  }
+
+  async recordAutoResolveRun(count: number): Promise<void> {
+    const existing = await this.getAdminSettings();
+    const updates = { lastAutoResolvedCount: count, lastAutoResolvedAt: new Date() };
+    if (existing) {
+      await db.update(adminSettings).set(updates).where(eq(adminSettings.id, existing.id));
+    } else {
+      await db.insert(adminSettings).values(updates);
+    }
   }
 
   async findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null> {
