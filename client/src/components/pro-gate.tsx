@@ -31,6 +31,10 @@ function ProPaymentDialog({
   const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
   const [manualLoading, setManualLoading] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
+  const [discountValidating, setDiscountValidating] = useState(false);
+  const [discountData, setDiscountData] = useState<{ percentOff: number; discountedPrice: number; code: string } | null>(null);
+  const [discountError, setDiscountError] = useState("");
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -87,13 +91,37 @@ function ProPaymentDialog({
     } catch {}
   };
 
+  const handleApplyDiscount = async () => {
+    if (!discountInput.trim()) return;
+    setDiscountValidating(true);
+    setDiscountError("");
+    setDiscountData(null);
+    try {
+      const res = await fetch("/api/discount/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: discountInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setDiscountData(data);
+      } else {
+        setDiscountError(data.error || "Invalid discount code.");
+      }
+    } catch {
+      setDiscountError("Connection error. Please try again.");
+    } finally {
+      setDiscountValidating(false);
+    }
+  };
+
   const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
     if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
     try {
       const res = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({ tier, ...(tier === "pro" && discountData ? { discountCode: discountData.code } : {}) }),
       });
       const data = await res.json();
       if (data.url) {
@@ -251,6 +279,47 @@ function ProPaymentDialog({
                     </a>
                   )}
 
+                  {/* Discount code input */}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
+                    {discountData ? (
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <span className="text-[11px] text-green-400 font-bold flex-1">
+                          {discountData.percentOff}% discount applied — <span className="text-white">${discountData.discountedPrice} total</span>
+                        </span>
+                        <button
+                          onClick={() => { setDiscountData(null); setDiscountInput(""); setDiscountError(""); }}
+                          className="text-zinc-600 hover:text-zinc-400 text-[10px] font-bold transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-0">
+                        <input
+                          data-testid="input-discount-code"
+                          type="text"
+                          placeholder="Discount code (optional)"
+                          value={discountInput}
+                          onChange={e => { setDiscountInput(e.target.value.toUpperCase()); setDiscountError(""); }}
+                          onKeyDown={e => e.key === "Enter" && handleApplyDiscount()}
+                          className="flex-1 bg-transparent px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono"
+                        />
+                        <button
+                          data-testid="button-apply-discount"
+                          onClick={handleApplyDiscount}
+                          disabled={discountValidating || !discountInput.trim()}
+                          className="px-3 py-2 text-[11px] font-bold text-red-400 hover:text-red-300 disabled:opacity-40 transition-colors shrink-0"
+                        >
+                          {discountValidating ? <Loader2 className="w-3 h-3 animate-spin" /> : "Apply"}
+                        </button>
+                      </div>
+                    )}
+                    {discountError && (
+                      <p className="px-3 pb-2 text-[10px] text-red-400 font-medium">{discountError}</p>
+                    )}
+                  </div>
+
                   <button
                     data-testid="button-pay-stripe"
                     onClick={() => handleStripeCheckout("pro")}
@@ -261,6 +330,14 @@ function ProPaymentDialog({
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Loading Stripe...
+                      </>
+                    ) : discountData ? (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        Pay ${discountData.discountedPrice} with Card — Stripe
+                        <span className="ml-1 text-[10px] font-bold bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full border border-green-500/30">
+                          {discountData.percentOff}% OFF
+                        </span>
                       </>
                     ) : (
                       <>

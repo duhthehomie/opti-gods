@@ -229,3 +229,16 @@ export type StartupApp = typeof startupApps.$inferSelect;
 export const insertOptimizationSchema = createInsertSchema(optimizations).omit({ id: true });
 export type InsertOptimization = z.infer<typeof insertOptimizationSchema>;
 export type Optimization = typeof optimizations.$inferSelect;
+
+// Discount codes — created by admin, applied at Stripe checkout for a % off the Pro price
+export const discountCodes = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  percentOff: integer("percent_off").notNull(),
+  maxUses: integer("max_uses"),
+  usedCount: integer("used_count").notNull().default(0),
+  expiresAt: timestamp("expires_at"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type DiscountCode = typeof discountCodes.$inferSelect;

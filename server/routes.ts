@@ -2188,6 +2188,60 @@ Start-Sleep 2
     res.json(logs);
   });
 
+  // Admin — list all discount codes
+  app.get('/api/admin/discount-codes', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const codes = await storage.getAllDiscountCodes();
+    res.json(codes);
+  });
+
+  // Admin — create a discount code
+  app.post('/api/admin/discount-codes', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { code, percentOff, maxUses, expiresAt, note } = req.body || {};
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return res.status(400).json({ error: 'code is required' });
+    }
+    const pct = Number(percentOff);
+    if (!pct || pct < 1 || pct > 99) {
+      return res.status(400).json({ error: 'percentOff must be 1–99' });
+    }
+    try {
+      const row = await storage.createDiscountCode(
+        code.trim(),
+        pct,
+        maxUses != null ? Number(maxUses) || null : null,
+        expiresAt ? new Date(expiresAt) : null,
+        note || null,
+      );
+      res.json(row);
+    } catch (err: any) {
+      if (err.message?.includes('unique') || err.code === '23505') {
+        return res.status(409).json({ error: 'Discount code already exists' });
+      }
+      res.status(500).json({ error: 'Failed to create discount code' });
+    }
+  });
+
+  // Admin — delete a discount code
+  app.delete('/api/admin/discount-codes/:id', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    await storage.deleteDiscountCode(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Public — validate a discount code and return the discounted price
+  // Rate-limited to prevent brute-force
+  app.post('/api/discount/validate', rateLimit(10, 60_000, 20), async (req, res) => {
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') return res.json({ valid: false });
+    const dc = await storage.validateDiscountCode(String(code).trim());
+    if (!dc) return res.json({ valid: false, error: 'Invalid or expired discount code' });
+    const basePrice = 15;
+    const discountedPrice = Math.max(1, Math.round(basePrice * (1 - dc.percentOff / 100) * 100) / 100);
+    res.json({ valid: true, percentOff: dc.percentOff, discountedPrice, code: dc.code });
+  });
+
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
   app.get('/api/stability-fix-script', (req, res) => {
     const lines = [
@@ -2712,6 +2766,14 @@ Start-Sleep 2
       return res.status(503).json({ error: 'STRIPE_PRICE_ID not set. Run the seed script first.' });
     }
 
+    // Validate discount code if provided (pro tier only)
+    const rawDiscountCode = req.body?.discountCode ? String(req.body.discountCode).trim() : null;
+    let appliedDiscount: { percentOff: number; code: string } | null = null;
+    if (rawDiscountCode && tier === 'pro') {
+      const dc = await storage.validateDiscountCode(rawDiscountCode);
+      if (dc) appliedDiscount = { percentOff: dc.percentOff, code: dc.code };
+    }
+
     try {
       const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
@@ -2719,6 +2781,21 @@ Start-Sleep 2
       const host = (req.get('host') || 'localhost').replace(/[^a-zA-Z0-9\-.:]/g, '');
       const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
       const origin = `${protocol}://${host}`;
+
+      const BASE_PRO_CENTS = 1500; // $15.00
+      const proLineItem = appliedDiscount
+        ? [{
+            price_data: {
+              currency: 'usd',
+              unit_amount: Math.max(100, Math.round(BASE_PRO_CENTS * (1 - appliedDiscount.percentOff / 100))),
+              product_data: {
+                name: `Opti Gods Pro Access (${appliedDiscount.percentOff}% discount)`,
+                description: 'All tweaks · custom script · lifetime access',
+              },
+            },
+            quantity: 1,
+          }]
+        : [{ price: priceId!, quantity: 1 }];
 
       const lineItems = tier === 'manual'
         ? [{
@@ -2732,7 +2809,7 @@ Start-Sleep 2
             },
             quantity: 1,
           }]
-        : [{ price: priceId!, quantity: 1 }];
+        : proLineItem;
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -2742,10 +2819,11 @@ Start-Sleep 2
         metadata: {
           product: tier === 'manual' ? 'optigods_manual_opti' : 'optigods_pro',
           tier,
+          ...(appliedDiscount ? { discounted: 'true', discountCode: appliedDiscount.code } : {}),
         },
       });
 
-      res.json({ url: session.url, tier });
+      res.json({ url: session.url, tier, appliedDiscount });
     } catch (err: any) {
       console.error('Stripe checkout error:', err.message);
       res.status(500).json({ error: 'Failed to create checkout session.' });
@@ -2776,16 +2854,19 @@ Start-Sleep 2
       const isPaymentMode = session.mode === 'payment';
       const expectedPriceId = process.env.STRIPE_PRICE_ID;
       const lineItems = (session as any).line_items?.data ?? [];
-      // For Pro tier, require the price to match our seeded Price ID. Manual tier
-      // uses inline price_data so there's nothing to match — we trust the metadata
-      // (which we set ourselves) + the live $25.00 amount on the line item.
+      // For Pro tier, require the price to match our seeded Price ID — unless this
+      // was a discounted session (metadata.discounted === 'true'), in which case
+      // it used price_data so there's no Price ID to match. We trust our own metadata.
+      const isDiscounted = session.metadata?.discounted === 'true';
       const priceMatches = isManualTier
         ? lineItems.length === 1 && lineItems.some((item: any) =>
             Number(item.amount_total) === 2500 &&
             Number(item.quantity) === 1 &&
             (item.currency || item.price?.currency) === 'usd'
           )
-        : (!expectedPriceId || lineItems.some((item: any) => item.price?.id === expectedPriceId));
+        : isDiscounted
+          ? true // discount sessions use price_data — trust metadata (set server-side)
+          : (!expectedPriceId || lineItems.some((item: any) => item.price?.id === expectedPriceId));
       const paid = session.payment_status === 'paid' && isOurProduct && isPaymentMode && priceMatches;
 
       if (!paid) return res.json({ paid: false });
@@ -2844,9 +2925,14 @@ Start-Sleep 2
         const { randomBytes } = await import('crypto');
         const shortId = randomBytes(3).toString('hex').toUpperCase(); // e.g. A3F92C
         codeValue = `STRIPE-${shortId}`;
-        const noteValue = `${customerEmail} | stripe:${sessionId}`;
+        const discountNote = session.metadata?.discountCode ? ` | discount:${session.metadata.discountCode}` : '';
+        const noteValue = `${customerEmail} | stripe:${sessionId}${discountNote}`;
         await storage.createCode(codeValue, noteValue);
         await storage.claimStripeCode(codeValue, clientIp);
+        // Track discount code usage on first-time verification
+        if (session.metadata?.discountCode) {
+          storage.useDiscountCode(session.metadata.discountCode).catch(() => {});
+        }
         isNewCode = true;
       }
 

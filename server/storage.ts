@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -101,6 +101,12 @@ export interface IStorage {
   createUserReport(category: ReportCategory, description: string, systemInfo?: Record<string, unknown>, sessionId?: string): Promise<UserReport>;
   getUserReports(status?: ReportStatus): Promise<UserReport[]>;
   updateReportStatus(id: number, status: ReportStatus, adminNote?: string): Promise<UserReport | undefined>;
+  // Discount codes
+  getAllDiscountCodes(): Promise<DiscountCode[]>;
+  createDiscountCode(code: string, percentOff: number, maxUses?: number | null, expiresAt?: Date | null, note?: string | null): Promise<DiscountCode>;
+  validateDiscountCode(code: string): Promise<DiscountCode | null>;
+  useDiscountCode(code: string): Promise<void>;
+  deleteDiscountCode(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -704,6 +710,41 @@ export class DatabaseStorage implements IStorage {
       const [row] = await db.insert(adminSettings).values(settings).returning();
       return row;
     }
+  }
+
+  async getAllDiscountCodes(): Promise<DiscountCode[]> {
+    return db.select().from(discountCodes).orderBy(desc(discountCodes.createdAt));
+  }
+
+  async createDiscountCode(code: string, percentOff: number, maxUses?: number | null, expiresAt?: Date | null, note?: string | null): Promise<DiscountCode> {
+    const [row] = await db.insert(discountCodes).values({
+      code: code.toUpperCase().trim(),
+      percentOff,
+      ...(maxUses != null ? { maxUses } : {}),
+      ...(expiresAt != null ? { expiresAt } : {}),
+      ...(note != null ? { note } : {}),
+    }).returning();
+    return row;
+  }
+
+  async validateDiscountCode(code: string): Promise<DiscountCode | null> {
+    const rows = await db.select().from(discountCodes)
+      .where(eq(discountCodes.code, code.toUpperCase().trim()));
+    if (!rows.length) return null;
+    const dc = rows[0];
+    if (dc.expiresAt && new Date(dc.expiresAt) < new Date()) return null;
+    if (dc.maxUses != null && dc.usedCount >= dc.maxUses) return null;
+    return dc;
+  }
+
+  async useDiscountCode(code: string): Promise<void> {
+    await db.update(discountCodes)
+      .set({ usedCount: sql`${discountCodes.usedCount} + 1` })
+      .where(eq(discountCodes.code, code.toUpperCase().trim()));
+  }
+
+  async deleteDiscountCode(id: number): Promise<void> {
+    await db.delete(discountCodes).where(eq(discountCodes.id, id));
   }
 }
 

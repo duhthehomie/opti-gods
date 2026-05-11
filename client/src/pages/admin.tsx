@@ -13,6 +13,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -122,7 +123,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -1758,6 +1759,66 @@ function AetherAdminChat({ headers }: { headers: Record<string, string> }) {
   );
 }
 
+// ── Admin Discounts Tab ───────────────────────────────────────────────────────
+function DiscountsTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const [code, setCode] = useState("");
+  const [percentOff, setPercentOff] = useState("");
+  const [maxUses, setMaxUses] = useState("");
+  const [note, setNote] = useState("");
+
+  const q = useQuery<any[]>({ queryKey: ["/api/admin/discount-codes"], queryFn: () => fetch("/api/admin/discount-codes", { headers }).then(r => r.json()) });
+
+  const create = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/discount-codes", { code, percentOff: Number(percentOff), maxUses: maxUses ? Number(maxUses) : null, note: note || null }, headers),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/discount-codes"] }); setCode(""); setPercentOff(""); setMaxUses(""); setNote(""); toast({ title: "Discount code created" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message || "Failed", variant: "destructive" }),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/discount-codes/${id}`, undefined, headers),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/discount-codes"] }); toast({ title: "Deleted" }); },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-4 space-y-3">
+        <p className="text-[11px] text-zinc-500">Create a discount code for card (Stripe) payments. Users enter it in the payment modal to get a % off the $15 Pro price.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input data-testid="input-discount-code-admin" value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="e.g. SUMMER20" className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 font-mono focus:outline-none focus:border-red-500/50" />
+          <input data-testid="input-discount-percent" value={percentOff} onChange={e => setPercentOff(e.target.value)} placeholder="% Off (e.g. 20)" type="number" min="1" max="99" className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50" />
+          <input data-testid="input-discount-max-uses" value={maxUses} onChange={e => setMaxUses(e.target.value)} placeholder="Max uses (blank = ∞)" type="number" min="1" className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50" />
+          <input data-testid="input-discount-note" value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50" />
+        </div>
+        <button data-testid="button-create-discount" onClick={() => create.mutate()} disabled={create.isPending || !code.trim() || !percentOff} className="w-full py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold transition-all">
+          {create.isPending ? "Creating..." : "Create Discount Code"}
+        </button>
+      </div>
+      <div className="space-y-2">
+        {q.isLoading && <p className="text-xs text-zinc-500 text-center py-4">Loading...</p>}
+        {!q.isLoading && (!q.data || q.data.length === 0) && <p className="text-xs text-zinc-600 text-center py-8">No discount codes yet.</p>}
+        {(q.data || []).map((dc: any) => (
+          <div key={dc.id} className="flex items-center gap-3 bg-zinc-900/40 border border-white/5 rounded-xl p-3">
+            <Percent className="w-4 h-4 text-red-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-bold text-white">{dc.code}</span>
+                <span className="px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-bold">{dc.percentOff}% OFF</span>
+                <span className="text-[10px] text-zinc-500">{dc.usedCount}{dc.maxUses != null ? `/${dc.maxUses}` : ""} used</span>
+                {dc.expiresAt && <span className="text-[10px] text-zinc-600">expires {new Date(dc.expiresAt).toLocaleDateString()}</span>}
+              </div>
+              {dc.note && <p className="text-[11px] text-zinc-500 mt-0.5">{dc.note}</p>}
+            </div>
+            <button data-testid={`button-delete-discount-${dc.id}`} onClick={() => del.mutate(dc.id)} disabled={del.isPending} className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Admin Tickets Tab ────────────────────────────────────────────────────────
 type UserReport = {
   id: number;
@@ -2877,7 +2938,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -2891,6 +2952,7 @@ export default function Admin() {
               preset: Sliders,
               aether: Bot,
               tickets: Flag,
+              discounts: Percent,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -2916,6 +2978,7 @@ export default function Admin() {
                    t === "preset" ? "Preset Gen" :
                    t === "aether" ? "Aether AI" :
                    t === "tickets" ? "Tickets" :
+                   t === "discounts" ? "Discounts" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -2929,6 +2992,7 @@ export default function Admin() {
                    t === "preset" ? "" :
                    t === "aether" ? "" :
                    t === "tickets" ? "" :
+                   t === "discounts" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -4353,6 +4417,7 @@ export default function Admin() {
 
         {tab === "aether" && <AetherAdminChat headers={headers} />}
         {tab === "tickets" && <TicketsTab headers={headers} />}
+        {tab === "discounts" && <DiscountsTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
