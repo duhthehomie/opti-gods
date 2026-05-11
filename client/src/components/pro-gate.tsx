@@ -35,6 +35,10 @@ function ProPaymentDialog({
   const [discountValidating, setDiscountValidating] = useState(false);
   const [discountData, setDiscountData] = useState<{ percentOff: number; discountedPrice: number; code: string } | null>(null);
   const [discountError, setDiscountError] = useState("");
+  const [manualDiscountInput, setManualDiscountInput] = useState("");
+  const [manualDiscountValidating, setManualDiscountValidating] = useState(false);
+  const [manualDiscountData, setManualDiscountData] = useState<{ percentOff: number; discountedPrice: number; code: string } | null>(null);
+  const [manualDiscountError, setManualDiscountError] = useState("");
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -115,13 +119,38 @@ function ProPaymentDialog({
     }
   };
 
+  const handleApplyManualDiscount = async () => {
+    if (!manualDiscountInput.trim()) return;
+    setManualDiscountValidating(true);
+    setManualDiscountError("");
+    setManualDiscountData(null);
+    try {
+      const res = await fetch("/api/discount/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: manualDiscountInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setManualDiscountData(data);
+      } else {
+        setManualDiscountError(data.error || "Invalid discount code.");
+      }
+    } catch {
+      setManualDiscountError("Connection error. Please try again.");
+    } finally {
+      setManualDiscountValidating(false);
+    }
+  };
+
   const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
     if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
+    const activeDiscount = tier === "pro" ? discountData : manualDiscountData;
     try {
       const res = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, ...(tier === "pro" && discountData ? { discountCode: discountData.code } : {}) }),
+        body: JSON.stringify({ tier, ...(activeDiscount ? { discountCode: activeDiscount.code } : {}) }),
       });
       const data = await res.json();
       if (data.url) {
@@ -348,6 +377,46 @@ function ProPaymentDialog({
                   </button>
 
                   {/* $25 Manual Opti — paid directly via Stripe (done-for-you service) */}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
+                    {manualDiscountData ? (
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <span className="text-[11px] text-green-400 font-bold flex-1">
+                          {manualDiscountData.percentOff}% discount applied — <span className="text-white">${manualDiscountData.discountedPrice} total</span>
+                        </span>
+                        <button
+                          onClick={() => { setManualDiscountData(null); setManualDiscountInput(""); setManualDiscountError(""); }}
+                          className="text-zinc-600 hover:text-zinc-400 text-[10px] font-bold transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-0">
+                        <input
+                          data-testid="input-manual-discount-code"
+                          type="text"
+                          placeholder="Discount code (optional)"
+                          value={manualDiscountInput}
+                          onChange={e => { setManualDiscountInput(e.target.value.toUpperCase()); setManualDiscountError(""); }}
+                          onKeyDown={e => e.key === "Enter" && handleApplyManualDiscount()}
+                          className="flex-1 bg-transparent px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono"
+                        />
+                        <button
+                          data-testid="button-apply-manual-discount"
+                          onClick={handleApplyManualDiscount}
+                          disabled={manualDiscountValidating || !manualDiscountInput.trim()}
+                          className="px-3 py-2 text-[11px] font-bold text-red-400 hover:text-red-300 disabled:opacity-40 transition-colors shrink-0"
+                        >
+                          {manualDiscountValidating ? <Loader2 className="w-3 h-3 animate-spin" /> : "Apply"}
+                        </button>
+                      </div>
+                    )}
+                    {manualDiscountError && (
+                      <p className="px-3 pb-2 text-[10px] text-red-400 font-medium">{manualDiscountError}</p>
+                    )}
+                  </div>
+
                   <button
                     data-testid="button-pay-stripe-manual"
                     onClick={() => handleStripeCheckout("manual")}
@@ -358,6 +427,14 @@ function ProPaymentDialog({
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Loading Stripe...
+                      </>
+                    ) : manualDiscountData ? (
+                      <>
+                        <CreditCard className="w-4 h-4 text-red-400" />
+                        Pay ${manualDiscountData.discountedPrice} — Manual Opti (Done-For-You)
+                        <span className="ml-1 text-[10px] font-bold bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full border border-green-500/30">
+                          {manualDiscountData.percentOff}% OFF
+                        </span>
                       </>
                     ) : (
                       <>
