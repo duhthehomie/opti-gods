@@ -50,6 +50,11 @@ setInterval(() => {
 // The admin panel can override this via the admin_settings table.
 const SECURITY_EVENT_WINDOW_DAYS_DEFAULT = Number(process.env.SECURITY_EVENT_WINDOW_DAYS) || 30;
 
+// Tracks the precise time the next scheduled auto-resolve run will fire.
+// Updated after every run (scheduled or manual) and initialised to the first
+// startup-delayed run so the admin panel always shows an accurate value.
+let nextAutoResolveAt: Date = new Date(Date.now() + 30_000);
+
 // Auto-resolve old low/medium security events once per day
 async function runAutoResolve(): Promise<{ resolved: number; days: number }> {
   const adminCfg = await storage.getAdminSettings();
@@ -68,6 +73,8 @@ async function runAutoResolveSafe() {
   } catch (err) {
     console.error("[security] Auto-resolve job failed:", err);
   }
+  // Re-anchor the next scheduled time after every run
+  nextAutoResolveAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 }
 // Run once shortly after startup, then every 24 hours
 setTimeout(runAutoResolveSafe, 30_000);
@@ -3337,6 +3344,7 @@ Read-Host "Press Enter to close this window"
       lastAutoResolved: adminCfg?.lastAutoResolvedCount ?? 0,
       lastAutoResolvedAt: adminCfg?.lastAutoResolvedAt?.toISOString() ?? null,
       autoResolveWindowDays: autoResolveDays,
+      nextAutoResolveAt: nextAutoResolveAt.toISOString(),
     });
   });
 
@@ -3345,6 +3353,8 @@ Read-Host "Press Enter to close this window"
     if (!checkAdminKey(req, res)) return;
     try {
       const result = await runAutoResolve();
+      // Re-anchor the next scheduled time after a manual run
+      nextAutoResolveAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       return res.json(result);
     } catch (err) {
       console.error("[security] Manual auto-resolve failed:", err);

@@ -70,6 +70,18 @@ function timeAgo(dateStr: string | Date | null | undefined): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function timeUntil(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const diff = new Date(dateStr).getTime() - Date.now();
+  if (diff <= 0) return "soon";
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "< 1 min";
+  if (m < 60) return `in ${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `in ${h}h ${m % 60}m`;
+  return `in ${Math.floor(h / 24)}d`;
+}
+
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -139,6 +151,7 @@ type SecurityStats = {
   lastAutoResolved: number;
   lastAutoResolvedAt: string | null;
   autoResolveWindowDays: number;
+  nextAutoResolveAt: string | null;
 };
 
 function severityBadge(severity: string) {
@@ -683,6 +696,15 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     </div>
                     <span data-testid="text-auto-resolve-days" className="text-[10px] text-zinc-500 font-mono">
                       {alertSettings?.autoResolveDays ?? 30} days
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Next Auto-resolve</span>
+                    </div>
+                    <span data-testid="text-next-auto-resolve" className="text-[10px] text-zinc-500 font-mono">
+                      {stats ? timeUntil(stats.nextAutoResolveAt) : "—"}
                     </span>
                   </div>
                 </div>
