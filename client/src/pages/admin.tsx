@@ -248,10 +248,55 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
-  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null }>({
+  const alertSettingsQ = useQuery<{
+    discordWebhookUrl: string | null;
+    alertEmail: string | null;
+    autoResolveDays: number | null;
+    currentVersion: string | null;
+    latestVersion: string | null;
+    updaterCmdUrl: string | null;
+    updatePageUrl: string | null;
+  }>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
   });
+
+  // ─── Version & Updates form state (Task #27) ─────────────────────────
+  const [verCurrent, setVerCurrent] = useState("");
+  const [verLatest, setVerLatest] = useState("");
+  const [verCmdUrl, setVerCmdUrl] = useState("");
+  const [verPageUrl, setVerPageUrl] = useState("");
+  const [verSaving, setVerSaving] = useState(false);
+  useEffect(() => {
+    if (!alertSettingsQ.data) return;
+    setVerCurrent(alertSettingsQ.data.currentVersion ?? "2.00");
+    setVerLatest(alertSettingsQ.data.latestVersion ?? "2.00");
+    setVerCmdUrl(alertSettingsQ.data.updaterCmdUrl ?? "");
+    setVerPageUrl(alertSettingsQ.data.updatePageUrl ?? "");
+  }, [alertSettingsQ.data]);
+  const saveVersionSettings = async () => {
+    setVerSaving(true);
+    try {
+      const r = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentVersion: verCurrent.trim() || "2.00",
+          latestVersion: verLatest.trim() || verCurrent.trim() || "2.00",
+          updaterCmdUrl: verCmdUrl.trim() || null,
+          updatePageUrl: verPageUrl.trim() || null,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/version"] });
+      toast({ title: "Version settings saved" });
+    } catch (e: any) {
+      toast({ title: "Failed to save version settings", description: String(e?.message ?? e), variant: "destructive" });
+    } finally {
+      setVerSaving(false);
+    }
+  };
 
   const events = eventsQ.data ?? [];
   const stats = statsQ.data;
@@ -4313,6 +4358,68 @@ export default function Admin() {
         {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
         {tab === "announcements" && (
           <div className="space-y-5">
+            {/* ─── Version & Updates config (Task #27) ───────────────── */}
+            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-4 space-y-3" data-testid="section-version-updates">
+              <h3 className="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5" /> Version &amp; Updates
+              </h3>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Bump <span className="text-zinc-300 font-mono">Latest version</span> above <span className="text-zinc-300 font-mono">Current version</span> to trigger the auto-update popup for all signed-in users. They can download &amp; run the .cmd updater, or open the update page in their browser.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Current version (installed)</label>
+                  <input
+                    data-testid="input-version-current"
+                    value={verCurrent}
+                    onChange={e => setVerCurrent(e.target.value)}
+                    placeholder="2.00"
+                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Latest version (available)</label>
+                  <input
+                    data-testid="input-version-latest"
+                    value={verLatest}
+                    onChange={e => setVerLatest(e.target.value)}
+                    placeholder="2.10"
+                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Updater .cmd URL</label>
+                  <input
+                    data-testid="input-version-cmd-url"
+                    value={verCmdUrl}
+                    onChange={e => setVerCmdUrl(e.target.value)}
+                    placeholder="https://yourhost.com/optigods-update.cmd"
+                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Update page URL (changelog / release notes)</label>
+                  <input
+                    data-testid="input-version-page-url"
+                    value={verPageUrl}
+                    onChange={e => setVerPageUrl(e.target.value)}
+                    placeholder="https://yourhost.com/release-notes"
+                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  data-testid="button-save-version-settings"
+                  onClick={saveVersionSettings}
+                  disabled={verSaving}
+                  className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
+                >
+                  {verSaving ? "Saving…" : "Save version settings"}
+                </Button>
+              </div>
+            </div>
+
             <div className="text-[10px] text-zinc-600 leading-relaxed">
               Post update notes, hotfixes, and announcements that appear on the public <span className="text-zinc-400 font-mono">/updates</span> page. Visible to all users — no Pro required.
             </div>

@@ -5,6 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale } from "./alerts";
+import { registerAuthRoutes } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
@@ -1095,6 +1096,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // ── Discord OAuth + /api/me + /api/logout + /api/version (Task #27) ────────
+  registerAuthRoutes(app);
 
   app.get(api.system.stats.path, async (req, res) => {
     const ua = req.get("user-agent") || "";
@@ -3463,10 +3467,19 @@ Read-Host "Press Enter to close this window"
       discordWebhookUrl: z.string().url().nullable().optional(),
       alertEmail: z.string().email().nullable().optional(),
       autoResolveDays: z.number().int().min(1).max(365).nullable().optional(),
+      // App version + auto-update config (Task #27)
+      currentVersion: z.string().min(1).max(32).nullable().optional(),
+      latestVersion: z.string().min(1).max(32).nullable().optional(),
+      updaterCmdUrl: z.string().url().nullable().optional().or(z.literal("")),
+      updatePageUrl: z.string().url().nullable().optional().or(z.literal("")),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const updated = await storage.upsertAdminSettings(parsed.data);
+    // Normalise empty strings to null
+    const data = { ...parsed.data };
+    if (data.updaterCmdUrl === "") data.updaterCmdUrl = null;
+    if (data.updatePageUrl === "") data.updatePageUrl = null;
+    const updated = await storage.upsertAdminSettings(data);
     return res.json(updated);
   });
 

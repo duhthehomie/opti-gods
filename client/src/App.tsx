@@ -7,6 +7,9 @@ import { useEffect } from "react";
 import { setProStatus } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { OnboardingModal } from "@/components/onboarding-modal";
+import { AuthGate } from "@/components/auth-gate";
+import { UpdateModal } from "@/components/update-modal";
+import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -128,9 +131,13 @@ function App() {
       <TooltipProvider>
         <VisitTracker />
         <FriendUnlockHandler />
-        <OnboardingModal />
-        <Toaster />
-        <Router />
+        <AuthGate>
+          <OnboardingModal />
+          <Toaster />
+          <Router />
+          <UpdateModal />
+          <VersionPin />
+        </AuthGate>
       </TooltipProvider>
     </QueryClientProvider>
   );

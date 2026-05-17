@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import createMemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -11,6 +13,32 @@ const httpServer = createServer(app);
 
 // Trust the Replit/reverse-proxy X-Forwarded-* headers for correct HTTPS origin detection
 app.set("trust proxy", 1);
+
+// ── Session middleware (used for Discord OAuth login wall) ───────────────────
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;          // Discord user id once authenticated
+    oauthState?: string;      // CSRF token for the OAuth round-trip
+    returnTo?: string;        // Path to send user back to after login
+  }
+}
+
+const MemoryStore = createMemoryStore(session);
+const SESSION_SECRET = process.env.SESSION_SECRET || "optigods-dev-secret-change-me";
+app.use(session({
+  name: "optigods.sid",
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  store: new MemoryStore({ checkPeriod: 24 * 60 * 60 * 1000 }),
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  },
+}));
 
 // Explicitly allow indexing — overrides any noindex headers injected by the hosting platform
 app.use((_req, res, next) => {

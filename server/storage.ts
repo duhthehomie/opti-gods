@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -88,7 +88,10 @@ export interface IStorage {
   getAutoResolveRunHistory(limit?: number): Promise<import("@shared/schema").AutoResolveRun[]>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
-  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings>;
+  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null }): Promise<AdminSettings>;
+  // Discord-authenticated users
+  upsertUser(data: InsertUser): Promise<User>;
+  getUser(discordId: string): Promise<User | null>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -731,7 +734,29 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
-  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings> {
+  async upsertUser(data: InsertUser): Promise<User> {
+    const [row] = await db.insert(users)
+      .values({ ...data, lastLoginAt: new Date() })
+      .onConflictDoUpdate({
+        target: users.discordId,
+        set: {
+          username: data.username,
+          globalName: data.globalName ?? null,
+          avatarUrl: data.avatarUrl ?? null,
+          email: data.email ?? null,
+          lastLoginAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async getUser(discordId: string): Promise<User | null> {
+    const [row] = await db.select().from(users).where(eq(users.discordId, discordId)).limit(1);
+    return row ?? null;
+  }
+
+  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null }): Promise<AdminSettings> {
     const existing = await this.getAdminSettings();
     if (existing) {
       const [row] = await db.update(adminSettings)

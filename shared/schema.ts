@@ -166,8 +166,26 @@ export const adminSettings = pgTable("admin_settings", {
   autoResolveDays: integer("auto_resolve_days").default(30),
   lastAutoResolvedCount: integer("last_auto_resolved_count").default(0),
   lastAutoResolvedAt: timestamp("last_auto_resolved_at"),
+  // App version + auto-update config (Task #27)
+  currentVersion: text("current_version").default("2.00"),
+  latestVersion: text("latest_version").default("2.00"),
+  updaterCmdUrl: text("updater_cmd_url"),
+  updatePageUrl: text("update_page_url"),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
+
+// Discord-authenticated users — drives the login wall (Task #27)
+export const users = pgTable("users", {
+  discordId: text("discord_id").primaryKey(),
+  username: text("username").notNull(),
+  globalName: text("global_name"),
+  avatarUrl: text("avatar_url"),
+  email: text("email"),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastLoginAt: timestamp("last_login_at").defaultNow(),
+});
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
 
 // IP bans — persistent bans that survive server restarts
 export const ipBans = pgTable("ip_bans", {

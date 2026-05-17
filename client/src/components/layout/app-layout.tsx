@@ -10,6 +10,7 @@ import { ScriptDialog } from "../script-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
+import { UserChip } from "@/components/user-chip";
 import { HardwareDetectionBanner } from "@/components/hardware-detection-banner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -452,6 +453,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   </button>
                 </Link>
               )}
+              <div className="h-6 w-px bg-white/10 mx-1 hidden sm:block" />
+              <UserChip />
             </div>
           </header>
 
