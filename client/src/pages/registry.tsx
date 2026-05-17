@@ -361,7 +361,7 @@ export default function Registry() {
             heading="Security Tradeoffs"
             accent="amber"
             testIdSuffix="security-tradeoffs"
-            description="These weaken Windows hardening to claw back FPS. Each is gated automatically when a known-incompatible anti-cheat is detected."
+            description="These weaken Windows hardening to claw back FPS. On the desktop (Tauri) build, they're gated automatically when a known-incompatible anti-cheat is detected. On the web build, gating depends on which AC-diagnostic toggles you've enabled below."
             ids={["SecDetectVBSStatus","Win11DisableVBS","SecDisableMemoryIntegrity","SecDisableCredentialGuard","SecDisableMitigationsForGames"]}
           />
 
