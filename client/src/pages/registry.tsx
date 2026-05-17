@@ -354,7 +354,7 @@ export default function Registry() {
             heading="Network — Advanced Tuning"
             accent="blue"
             testIdSuffix="net-advanced"
-            ids={["NetMTUAutotune","NetTCPAutotuneAggressive","NetRSSTuning","NetDNSQuad9","NetDisableLargeSendOffload"]}
+            ids={["NetDNSCloudflare","NetDNSGoogle","NetDNSQuad9","NetMTUAutotune","NetTCPAutotuneAggressive","NetRSSTuning","NetDisableLargeSendOffload"]}
           />
 
           <V2TweakSection
@@ -362,7 +362,7 @@ export default function Registry() {
             accent="amber"
             testIdSuffix="security-tradeoffs"
             description="These weaken Windows hardening to claw back FPS. Each is gated automatically when a known-incompatible anti-cheat is detected."
-            ids={["SecDetectVBSStatus","SecDisableMemoryIntegrity","SecDisableCredentialGuard","SecDisableMitigationsForGames"]}
+            ids={["SecDetectVBSStatus","Win11DisableVBS","SecDisableMemoryIntegrity","SecDisableCredentialGuard","SecDisableMitigationsForGames"]}
           />
 
           <V2TweakSection
