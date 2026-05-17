@@ -458,9 +458,15 @@ export default function Fixes() {
           <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm font-bold text-white leading-snug">
-                FiveM crashing? Silent exits, "memory could not be written", or "Assertion failure: status == MH_OK"?
+                FiveM crashing? Silent exits, "memory could not be written", "Assertion failure: status == MH_OK", or <span className="text-red-300">productId != ProductID::INVALID</span>?
               </p>
               <div className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <span className="text-white font-semibold">Fixes productId != ProductID::INVALID (CfxState.h:88)</span> — clears IFEO MitigationOptions + Debugger keys from Rockstar/FiveM executables, purges stale CfxState priv cache, re-enables Rockstar Service if disabled → <span className="text-red-300">cfxline assertion crash fixed</span>
+                  </p>
+                </div>
                 <div className="flex items-start gap-2">
                   <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-300 leading-snug">
@@ -487,7 +493,7 @@ export default function Fixes() {
                 </div>
               </div>
               <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Universal fix — safe for all systems. Covers all 13 FiveM build numbers. Takes ~5 seconds. All crashes now also permanently fixed in the optimizer.
+                Universal fix — safe for all systems. Covers all 13 FiveM build numbers. Takes ~5 seconds.
               </p>
             </div>
 
