@@ -5,6 +5,7 @@ import { AppSidebar } from "./app-sidebar";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { Loader2, Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight } from "lucide-react";
+import { BRAND } from "@/components/branding/assets";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useGenerateScript } from "@/hooks/use-script";
 import { ScriptDialog } from "../script-dialog";
@@ -124,8 +125,8 @@ function MobilePageDescription({ pageInfo }: { pageInfo: { title: string; desc: 
     <div className="min-h-[60vh] space-y-5">
       <div className="rounded-xl border border-white/5 bg-zinc-900/60 p-5">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-            <Zap className="w-5 h-5 text-red-400" />
+          <div className="w-10 h-10 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden">
+            <img src={BRAND.goldPng} alt="Opti Gods" className="w-9 h-9 object-contain" />
           </div>
           <div>
             <h2 className="text-base font-display font-bold text-white" data-testid="text-mobile-page-title">{pageInfo.title}</h2>
@@ -181,8 +182,8 @@ function MobileShowcase() {
   return (
     <div className="min-h-screen bg-[#020202] text-white overflow-y-auto">
       <div className="px-5 pt-8 pb-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-          <Zap className="w-7 h-7 text-red-400" />
+        <div className="w-16 h-16 rounded-2xl bg-black border border-red-500/30 flex items-center justify-center mx-auto mb-4 overflow-hidden shadow-[0_0_24px_-6px_rgba(239,68,68,0.55)]">
+          <img src={BRAND.goldPng} alt="Opti Gods" className="w-14 h-14 object-contain" />
         </div>
         <h1 className="text-2xl font-display font-bold tracking-tight">
           OPTI <span className="text-red-500">GODS</span>

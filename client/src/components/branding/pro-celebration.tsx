@@ -65,7 +65,7 @@ export function ProCelebration() {
           autoPlay
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           className="w-80 h-80 object-contain drop-shadow-[0_0_80px_rgba(250,204,21,0.55)]"
         />
       )}

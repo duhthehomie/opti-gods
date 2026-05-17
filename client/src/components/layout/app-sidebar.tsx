@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Home, Activity, Settings2, Wrench, Crown, Zap, Download, ChevronRight } from "lucide-react";
+import { BRAND } from "@/components/branding/assets";
 import {
   Sidebar,
   SidebarContent,
@@ -75,8 +76,8 @@ export function AppSidebar() {
       <SidebarHeader className="p-5 border-b border-white/5">
         <Link href="/" data-testid="link-home-logo">
           <div className="flex items-center gap-2.5 cursor-pointer">
-            <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-red-400" />
+            <div className="w-9 h-9 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_12px_-4px_rgba(239,68,68,0.5)]">
+              <img src={BRAND.goldPng} alt="Opti Gods" className="w-8 h-8 object-contain" />
             </div>
             <div>
               <p className="font-display font-black text-base leading-tight text-white">

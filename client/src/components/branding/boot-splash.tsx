@@ -50,7 +50,7 @@ export function BootSplash() {
           autoPlay
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           className="w-64 h-64 object-contain drop-shadow-[0_0_50px_rgba(239,68,68,0.55)]"
         />
       )}
