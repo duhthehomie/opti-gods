@@ -2335,27 +2335,7 @@ Start-Sleep 2
 
   // Public — Rocket League crash/won't start fix (ADVANCED — resets everything)
   app.get('/api/rocket-league-fix-script', (req, res) => {
-    const rlBatHeader = [
-      `@echo off`,
-      `setlocal`,
-      `net session >nul 2>&1`,
-      `if %errorLevel% == 0 goto :run`,
-      `echo  Requesting Administrator rights...`,
-      `PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"`,
-      `exit /b`,
-      `:run`,
-      `set "TMP_PS1=%temp%\\rl_fix_%RANDOM%.ps1"`,
-      `set "BAT_SELF=%~f0"`,
-      `SKIP_PLACEHOLDER`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
-      `del "%TMP_PS1%" 2>nul`,
-      `endlocal`,
-      `exit /b`,
-    ];
-    const rlSkip = rlBatHeader.length;
-    rlBatHeader[rlBatHeader.indexOf('SKIP_PLACEHOLDER')] =
-      `PowerShell -NoProfile -Command "[IO.File]::WriteAllLines($env:TMP_PS1,(([IO.File]::ReadAllLines($env:BAT_SELF))|Select-Object -Skip ${rlSkip}))"`;
-    const batchHeader = rlBatHeader.join('\r\n') + '\r\n';
+    const RL_MARKER = '##PS1_START##';
 
     const ps1Lines = [
       `\$ErrorActionPreference = 'SilentlyContinue'`,
@@ -2449,8 +2429,38 @@ Start-Sleep 2
       `Read-Host "Press Enter to close"`,
     ];
 
-    const ps1Content = ps1Lines.join('\r\n');
-    const script = batchHeader + ps1Content;
+    const rlPs1Content = ps1Lines.join('\r\n');
+    const rlBatLines = [
+      `@echo off`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-RLFix.ps1"`,
+      ``,
+      `title Opti Gods by leaq  --  Rocket League Fix`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  --  Rocket League Fix`,
+      `echo  ==========================================`,
+      `echo.`,
+      `echo  [1/2] Extracting fix script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo.`,
+      `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
+      `  echo.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] A Windows security prompt will appear.`,
+      `echo      Click "Yes" to apply the fix as Administrator.`,
+      `echo.`,
+      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled or launch failed: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      RL_MARKER,
+      rlPs1Content,
+    ];
+    const script = rlBatLines.join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-RocketLeagueFix-by-leaq.bat"');
@@ -2612,27 +2622,39 @@ Start-Sleep 2
       `Read-Host "Press Enter to close"`,
     ];
 
-    const batchHeader = [
+    const FIVEM_MARKER = '##PS1_START##';
+    const ps1Content = ps1Lines.join('\r\n');
+    const batLines = [
       `@echo off`,
       `setlocal`,
-      `net session >nul 2>&1`,
-      `if %errorLevel% == 0 goto :run`,
-      `echo  Requesting Administrator rights...`,
-      `PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"`,
-      `exit /b`,
-      `:run`,
-      `set "TMP_PS1=%temp%\\fivem_fix_%RANDOM%.ps1"`,
-      `set "BAT_SELF=%~f0"`,
-      `SKIP_PLACEHOLDER`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"`,
-      `del "%TMP_PS1%" 2>nul`,
-      `endlocal`,
-      `exit /b`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-FiveMFix.ps1"`,
+      ``,
+      `title Opti Gods by leaq  --  FiveM Crash Fix`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  --  FiveM Crash Fix`,
+      `echo  ==========================================`,
+      `echo.`,
+      `echo  [1/2] Extracting fix script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo.`,
+      `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
+      `  echo.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] A Windows security prompt will appear.`,
+      `echo      Click "Yes" to apply the fix as Administrator.`,
+      `echo.`,
+      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled or launch failed: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      FIVEM_MARKER,
+      ps1Content,
     ];
-    const skipCount = batchHeader.length;
-    batchHeader[batchHeader.indexOf('SKIP_PLACEHOLDER')] =
-      `PowerShell -NoProfile -Command "[IO.File]::WriteAllLines($env:TMP_PS1,(([IO.File]::ReadAllLines($env:BAT_SELF))|Select-Object -Skip ${skipCount}))"`;
-    const script = batchHeader.join('\r\n') + '\r\n' + ps1Lines.join('\r\n');
+    const script = batLines.join('\r\n');
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_Crash_Fix.bat"');
