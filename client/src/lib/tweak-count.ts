@@ -1,5 +1,5 @@
-import { DEFAULT_TWEAKS } from "@/store/use-optimization-store";
+import { TOTAL_TWEAK_COUNT } from "@/lib/tweak-registry";
 
-export const TOTAL_TWEAKS: number = Object.keys(DEFAULT_TWEAKS).length;
+export const TOTAL_TWEAKS: number = TOTAL_TWEAK_COUNT;
 
 export const TOTAL_TWEAKS_LABEL: string = `${TOTAL_TWEAKS}+`;
