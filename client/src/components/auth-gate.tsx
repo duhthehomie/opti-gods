@@ -9,6 +9,7 @@ import { useLocation } from "wouter";
 // optimizer, AI chat, admin, and code-redeem flows require auth.
 const PUBLIC_PATHS = new Set<string>([
   "/",
+  "/ai",
   "/showcase",
   "/payment/success",
   "/payment/cancel",

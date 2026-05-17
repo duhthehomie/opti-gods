@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
-  Download, Zap, Cpu, Wifi, Shield, Gamepad2, Sparkles, Bot,
-  Check, ChevronDown, Star, ExternalLink, MessageCircle, CreditCard,
+  Download, Zap, Cpu, Shield, Sparkles, Bot,
+  Check, Star, ExternalLink, CreditCard,
 } from "lucide-react";
-import { SiDiscord, SiCashapp, SiPaypal, SiStripe } from "react-icons/si";
+import { SiDiscord, SiCashapp, SiPaypal } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
@@ -15,7 +15,6 @@ import { ProUnlockButton } from "@/components/pro-gate";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Showcase from "@/pages/showcase";
-import { cn } from "@/lib/utils";
 
 const DISCORD_INVITE = "https://discord.gg/optigods";
 const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || "$my1ik";
@@ -52,8 +51,16 @@ const REVIEWS = [
 
 const FAQS = [
   {
+    q: "What does Opti Gods actually do?",
+    a: `Opti Gods is a Windows 10/11 desktop app with ${TOTAL_TWEAKS_LABEL} hardware-aware optimizations across registry, network, GPU (NVIDIA/AMD/Intel), memory, power, and per-game packs (FiveM, Fortnite, CS2, Valorant, Apex, Warzone). You pick what to apply, hit "Full Optimize", and the app does the rest — boosting FPS and shredding input latency.`,
+  },
+  {
     q: "Is this safe for my PC?",
-    a: "Every tweak is reversible and Opti Gods always prompts you to create a Windows Restore Point first. Nothing is hidden — you can preview the PowerShell script before running it.",
+    a: "Yes. Every tweak is reversible and Opti Gods always prompts you to create a Windows Restore Point first. Nothing is hidden — you can preview the exact PowerShell commands before they run, and undo any individual tweak from the dashboard.",
+  },
+  {
+    q: "Why does Windows SmartScreen show a warning when I run the installer?",
+    a: "Brand-new installers always trigger SmartScreen until they build up enough downloads with Microsoft's reputation system — even after they're code-signed. Click \"More info\" → \"Run anyway\". The installer is signed and the hash matches what's published in our Discord #releases channel.",
   },
   {
     q: "Does it work on Windows 11?",
@@ -61,19 +68,19 @@ const FAQS = [
   },
   {
     q: "Is this a one-time purchase?",
-    a: "Yes. $15 one-time gets you lifetime Pro access — all current and future tweaks, presets, and the AI assistant. No subscription, ever.",
+    a: "Yes. $15 one-time gets you lifetime Pro access — all current and future tweaks, presets, AI assistant, and updates. No subscription, ever.",
+  },
+  {
+    q: "What's the refund policy?",
+    a: "If Opti Gods doesn't deliver real, measurable FPS gains on your PC within 7 days, message leaq directly in Discord for a full refund. We'd rather give your money back than have an unhappy customer.",
   },
   {
     q: "How do I get support?",
-    a: "Join the Discord (discord.gg/optigods) for instant help from leaq and the community. Verified reviews and tickets handled within hours.",
-  },
-  {
-    q: "What if it doesn't work for me?",
-    a: "Every tweak can be undone individually or all-at-once via the Restore Point. If you're still unhappy, message leaq directly in Discord.",
+    a: "Join the Discord (discord.gg/optigods) for instant help from leaq and the community. Verified reviews, dedicated tickets channel, and most issues resolved within hours.",
   },
   {
     q: "Do I need to be technical?",
-    a: "No. Hit \"Full Optimize\", review the suggested tweaks, click GET MY SCRIPT, and run the .bat file. The AI assistant walks you through anything confusing.",
+    a: "No. Hit \"Full Optimize\", review the suggested tweaks, click apply, and reboot. The built-in AI assistant walks you through anything confusing — and you can ask it questions before you even buy, right here on the website.",
   },
 ];
 
@@ -152,7 +159,11 @@ function DownloadButton() {
   const onClick = async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/download/latest", { method: "GET", redirect: "manual" });
+      const res = await fetch("/api/download/latest", {
+        method: "GET",
+        redirect: "manual",
+        headers: { Accept: "application/json" },
+      });
       // If server returns JSON (no installer), show "coming soon"
       const ct = res.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
