@@ -3326,12 +3326,13 @@ Read-Host "Press Enter to close this window"
   // GET /api/admin/security/stats — threat score, counters, country breakdown
   app.get("/api/admin/security/stats", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [events, bans, ipLogs, adminCfg, autoResolveHistory] = await Promise.all([
+    const [events, bans, ipLogs, adminCfg, autoResolveHistory, autoResolveTotals] = await Promise.all([
       storage.getSecurityEvents(500),
       storage.getIpBans(),
       storage.getIpLogs(),
       storage.getAdminSettings(),
       storage.getAutoResolveRunHistory(10),
+      storage.getTotalAutoResolved(),
     ]);
     const autoResolveDays = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
 
@@ -3378,6 +3379,8 @@ Read-Host "Press Enter to close this window"
         windowDays: r.windowDays,
         ranAt: r.ranAt?.toISOString() ?? null,
       })),
+      totalAutoResolved: autoResolveTotals.totalResolved,
+      autoResolveRunCount: autoResolveTotals.runCount,
     });
   });
 

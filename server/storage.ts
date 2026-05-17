@@ -86,6 +86,7 @@ export interface IStorage {
   previewAutoResolveCount(daysOld?: number): Promise<number>;
   recordAutoResolveRun(count: number, windowDays?: number): Promise<void>;
   getAutoResolveRunHistory(limit?: number): Promise<import("@shared/schema").AutoResolveRun[]>;
+  getTotalAutoResolved(): Promise<{ totalResolved: number; runCount: number }>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
   upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null }): Promise<AdminSettings>;
@@ -663,6 +664,23 @@ export class DatabaseStorage implements IStorage {
 
   async getAutoResolveRunHistory(limit = 10): Promise<AutoResolveRun[]> {
     return await db.select().from(autoResolveRuns).orderBy(desc(autoResolveRuns.ranAt)).limit(limit);
+  }
+
+  async getTotalAutoResolved(): Promise<{ totalResolved: number; runCount: number }> {
+    const rows = await db
+      .select({
+        totalResolved: sql<number>`COALESCE(SUM(${autoResolveRuns.resolvedCount}), 0)::int`,
+        runCount: sql<number>`COUNT(*)::int`,
+      })
+      .from(autoResolveRuns);
+    const row = rows[0];
+    if (!row) {
+      throw new Error("getTotalAutoResolved: aggregate query returned no rows");
+    }
+    return {
+      totalResolved: Number(row.totalResolved ?? 0),
+      runCount: Number(row.runCount ?? 0),
+    };
   }
 
   async findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null> {

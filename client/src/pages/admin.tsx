@@ -160,6 +160,8 @@ type SecurityStats = {
   autoResolveWindowDays: number;
   nextAutoResolveAt: string | null;
   autoResolveHistory: AutoResolveRunEntry[];
+  totalAutoResolved: number;
+  autoResolveRunCount: number;
 };
 
 function severityBadge(severity: string) {
@@ -362,12 +364,19 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
           <ThreatGauge score={stats.threatScore} />
           <div className="grid grid-cols-2 gap-2 sm:col-span-2">
             {[
-              { label: "Flags Today",     value: stats.flagsToday,       icon: Flag,         color: "text-red-400" },
-              { label: "Active Bans",     value: stats.activeBans,       icon: Ban,          color: "text-orange-400" },
-              { label: "Suspicious Codes",value: stats.suspiciousCodes,  icon: AlertTriangle,color: "text-amber-400" },
-              { label: "Countries",       value: stats.countriesSeen,    icon: Globe,        color: "text-blue-400" },
+              { label: "Flags Today",     value: stats.flagsToday,       icon: Flag,         color: "text-red-400",     testId: "stat-flags-today" },
+              { label: "Active Bans",     value: stats.activeBans,       icon: Ban,          color: "text-orange-400",  testId: "stat-active-bans" },
+              { label: "Suspicious Codes",value: stats.suspiciousCodes,  icon: AlertTriangle,color: "text-amber-400",   testId: "stat-suspicious-codes" },
+              { label: "Countries",       value: stats.countriesSeen,    icon: Globe,        color: "text-blue-400",    testId: "stat-countries" },
+              {
+                label: `Total Auto-Resolved${stats.autoResolveRunCount > 0 ? ` · ${stats.autoResolveRunCount} run${stats.autoResolveRunCount !== 1 ? "s" : ""}` : ""}`,
+                value: stats.totalAutoResolved,
+                icon: CheckCircle2,
+                color: "text-emerald-400",
+                testId: "stat-total-auto-resolved",
+              },
             ].map(s => (
-              <div key={s.label} className="bg-zinc-900/70 border border-white/5 rounded-xl p-3 flex items-center gap-2.5">
+              <div key={s.label} data-testid={s.testId} className="bg-zinc-900/70 border border-white/5 rounded-xl p-3 flex items-center gap-2.5">
                 <s.icon className={cn("w-4 h-4 shrink-0", s.color)} />
                 <div>
                   <p className="text-lg font-bold font-display text-white">{s.value}</p>
