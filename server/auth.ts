@@ -43,7 +43,6 @@ export function registerAuthRoutes(app: Express): void {
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", "identify email");
     url.searchParams.set("state", state);
-    url.searchParams.set("prompt", "none");
 
     req.session.save(() => res.redirect(url.toString()));
   });

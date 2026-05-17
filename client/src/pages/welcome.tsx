@@ -32,15 +32,13 @@ export default function Welcome() {
     }
   }, []);
 
-  // If we land on /welcome but the user is already logged in, bounce home
-  useEffect(() => {
-    if (isAuthenticated) navigate("/");
-  }, [isAuthenticated, navigate]);
-
   const handleLogin = () => {
     setSigningIn(true);
     setLoginError(null);
-    loginWithDiscord("/");
+    // Preserve the route the user originally requested so they land back on it
+    // after the Discord round-trip. loginWithDiscord defaults to current path
+    // when no argument is provided.
+    loginWithDiscord();
   };
 
   const displayVersion = version.data?.currentVersion ?? "2.00";

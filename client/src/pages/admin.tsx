@@ -248,55 +248,10 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
-  const alertSettingsQ = useQuery<{
-    discordWebhookUrl: string | null;
-    alertEmail: string | null;
-    autoResolveDays: number | null;
-    currentVersion: string | null;
-    latestVersion: string | null;
-    updaterCmdUrl: string | null;
-    updatePageUrl: string | null;
-  }>({
+  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null }>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
   });
-
-  // ─── Version & Updates form state (Task #27) ─────────────────────────
-  const [verCurrent, setVerCurrent] = useState("");
-  const [verLatest, setVerLatest] = useState("");
-  const [verCmdUrl, setVerCmdUrl] = useState("");
-  const [verPageUrl, setVerPageUrl] = useState("");
-  const [verSaving, setVerSaving] = useState(false);
-  useEffect(() => {
-    if (!alertSettingsQ.data) return;
-    setVerCurrent(alertSettingsQ.data.currentVersion ?? "2.00");
-    setVerLatest(alertSettingsQ.data.latestVersion ?? "2.00");
-    setVerCmdUrl(alertSettingsQ.data.updaterCmdUrl ?? "");
-    setVerPageUrl(alertSettingsQ.data.updatePageUrl ?? "");
-  }, [alertSettingsQ.data]);
-  const saveVersionSettings = async () => {
-    setVerSaving(true);
-    try {
-      const r = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentVersion: verCurrent.trim() || "2.00",
-          latestVersion: verLatest.trim() || verCurrent.trim() || "2.00",
-          updaterCmdUrl: verCmdUrl.trim() || null,
-          updatePageUrl: verPageUrl.trim() || null,
-        }),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      await queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/version"] });
-      toast({ title: "Version settings saved" });
-    } catch (e: any) {
-      toast({ title: "Failed to save version settings", description: String(e?.message ?? e), variant: "destructive" });
-    } finally {
-      setVerSaving(false);
-    }
-  };
 
   const events = eventsQ.data ?? [];
   const stats = statsQ.data;
@@ -2681,6 +2636,53 @@ export default function Admin() {
   const [annBody, setAnnBody] = useState("");
   const [annTag, setAnnTag] = useState("update");
   const [annTweakIds, setAnnTweakIds] = useState("");
+
+  // ── Version & Updates form state (Task #27) ────────────────────────────
+  const versionSettingsQ = useQuery<{
+    currentVersion: string | null;
+    latestVersion: string | null;
+    updaterCmdUrl: string | null;
+    updatePageUrl: string | null;
+  }>({
+    queryKey: ["/api/admin/settings", key],
+    queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
+    enabled: authed,
+  });
+  const [verCurrent, setVerCurrent] = useState("");
+  const [verLatest, setVerLatest] = useState("");
+  const [verCmdUrl, setVerCmdUrl] = useState("");
+  const [verPageUrl, setVerPageUrl] = useState("");
+  const [verSaving, setVerSaving] = useState(false);
+  useEffect(() => {
+    if (!versionSettingsQ.data) return;
+    setVerCurrent(versionSettingsQ.data.currentVersion ?? "2.00");
+    setVerLatest(versionSettingsQ.data.latestVersion ?? "2.00");
+    setVerCmdUrl(versionSettingsQ.data.updaterCmdUrl ?? "");
+    setVerPageUrl(versionSettingsQ.data.updatePageUrl ?? "");
+  }, [versionSettingsQ.data]);
+  const saveVersionSettings = async () => {
+    setVerSaving(true);
+    try {
+      const r = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentVersion: verCurrent.trim() || "2.00",
+          latestVersion: verLatest.trim() || verCurrent.trim() || "2.00",
+          updaterCmdUrl: verCmdUrl.trim() || null,
+          updatePageUrl: verPageUrl.trim() || null,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/version"] });
+      toast({ title: "Version settings saved" });
+    } catch (e: any) {
+      toast({ title: "Failed to save version settings", description: String(e?.message ?? e), variant: "destructive" });
+    } finally {
+      setVerSaving(false);
+    }
+  };
 
   const announcementsQuery = useQuery<{ id: number; title: string; body: string; tag: string | null; tweakIds: string[] | null; createdAt: string }[]>({
     queryKey: ["/api/announcements"],

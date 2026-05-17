@@ -24,6 +24,14 @@ declare module "express-session" {
 }
 
 const MemoryStore = createMemoryStore(session);
+const IS_PROD = process.env.NODE_ENV === "production";
+if (IS_PROD && !process.env.SESSION_SECRET) {
+  // Fail closed — never sign production sessions with a known default secret.
+  // Configure SESSION_SECRET in Replit Secrets before deploying.
+  // eslint-disable-next-line no-console
+  console.error("[fatal] SESSION_SECRET is required in production. Refusing to start.");
+  process.exit(1);
+}
 const SESSION_SECRET = process.env.SESSION_SECRET || "optigods-dev-secret-change-me";
 app.use(session({
   name: "optigods.sid",
