@@ -186,6 +186,10 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   }
 
   // ===== GPU =====
+  // Hybrid-aware: each vendor branch runs in parallel and is gated by the
+  // corresponding flag (instead of an else-if chain). A laptop with Intel
+  // iGPU + NVIDIA dGPU now gets BOTH bundles applied so the user is covered
+  // whether the game runs on the iGPU or the dGPU.
   if (hw.isNvidia) {
     [
       "NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
@@ -225,7 +229,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       ["NvShaderDiskCache","NvFXAADriverOff"].forEach(id => ids.add(id));
       reasons.push(`NVIDIA GPU (${hw.gpuName}) — NVIDIA optimization suite enabled`);
     }
-  } else if (hw.isAmdGpu) {
+  }
+  if (hw.isAmdGpu) {
     [
       "EnableHAGS","AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency",
       "AmdMaxClockState","AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag",
@@ -236,14 +241,17 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     ].forEach(id => ids.add(id));
 
     // New AMD tweaks — gate by GPU generation
-    const isRX6000Plus = hw.gpuName && /RX\s*(6[0-9]{3}|7[0-9]{3}|8[0-9]{3}|9[0-9]{3})/i.test(hw.gpuName);
+    const amdDiscreteName = hw.gpus.find(g => g.vendor === "amd" && !g.isIntegrated)?.name || hw.gpuName;
+    const isRX6000Plus = amdDiscreteName && /RX\s*(6[0-9]{3}|7[0-9]{3}|8[0-9]{3}|9[0-9]{3})/i.test(amdDiscreteName);
     if (isRX6000Plus) {
       ["AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync"].forEach(id => ids.add(id));
     } else {
       ["AmdRadeonBoost","AmdEnhancedSync"].forEach(id => ids.add(id));
     }
-    reasons.push(`AMD discrete GPU (${hw.gpuName}) — full AMD RX optimization suite`);
-  } else if (hw.isAMD || hw.isAmdApu) {
+    reasons.push(`AMD discrete GPU (${amdDiscreteName}) — full AMD RX optimization suite`);
+  }
+  if (hw.isAmdApu) {
+    const apuName = hw.gpus.find(g => g.vendor === "amd" && g.isIntegrated)?.name || hw.gpuName;
     [
       "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
       "IGpu_AmdAntiLag","IGpu_SharedMemoryHint","IGpu_DisableMPO","IGpu_AmdTdrLevel",
@@ -254,20 +262,28 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
       "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
     ].forEach(id => ids.add(id));
-    reasons.push(`AMD iGPU/APU (${hw.gpuName}) — Vega/APU tweaks, HAGS disabled`);
-  } else if (hw.isIntel) {
-    [
-      "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling",
-      "IGpu_Intel_TDR","IGpu_Intel_PanelFitter","IGpu_Intel_QSVOff",
-      "IGpu_ForcePerformancePower","IGpu_DisableTransparency","IGpu_DisableAnimations",
-      "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan",
-      "IGpu_MaxProcessorState","IGpu_DisableCoreParking","IGpu_GameModeOn",
-      "IGpu_SetTimerResolution","IGpu_NetworkThrottling","IGpu_DisableSysMain",
-      "IGpu_DisableHAGSForIGpu","IGpu_DisableMPO",
-      "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
-    ].forEach(id => ids.add(id));
-    reasons.push(`Intel iGPU (${hw.gpuName}) — Intel driver TDR fix, Panel Fitter off, HAGS disabled`);
-  } else {
+    reasons.push(`AMD iGPU/APU (${apuName}) — Vega/APU tweaks, HAGS disabled`);
+  }
+  if (hw.isIntel) {
+    // Only apply the Intel iGPU bundle when an Intel iGPU is actually present
+    // (an Arc dGPU would also set isIntel but those tweaks would be wrong for it).
+    const intelIntegrated = hw.gpus.find(g => g.vendor === "intel" && g.isIntegrated);
+    if (intelIntegrated || hw.gpus.length === 0) {
+      [
+        "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling",
+        "IGpu_Intel_TDR","IGpu_Intel_PanelFitter","IGpu_Intel_QSVOff",
+        "IGpu_ForcePerformancePower","IGpu_DisableTransparency","IGpu_DisableAnimations",
+        "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan",
+        "IGpu_MaxProcessorState","IGpu_DisableCoreParking","IGpu_GameModeOn",
+        "IGpu_SetTimerResolution","IGpu_NetworkThrottling","IGpu_DisableSysMain",
+        "IGpu_DisableHAGSForIGpu","IGpu_DisableMPO",
+        "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
+      ].forEach(id => ids.add(id));
+      const intelName = intelIntegrated?.name || hw.gpuName;
+      reasons.push(`Intel iGPU (${intelName}) — Intel driver TDR fix, Panel Fitter off, HAGS disabled${hw.isHybridGpu ? " (hybrid — applied alongside discrete GPU tweaks)" : ""}`);
+    }
+  }
+  if (!hw.isNvidia && !hw.isAmdGpu && !hw.isAmdApu && !hw.isIntel) {
     ids.add("EnableHAGS");
     reasons.push("GPU unknown — safe defaults applied");
   }
@@ -318,13 +334,17 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "Lap_DisableFullscreenOpt","Lap_MMCSS_Games","Lap_DisableMPO","Lap_VisualPerformance",
       "Lap_DisableHAGS","Lap_DisableHibernate","Lap_DisableTurboOnBattery",
     ].forEach(id => ids.add(id));
+    // Parallel branches — a hybrid laptop (Intel iGPU + NVIDIA dGPU) gets BOTH
+    // vendor packs so the right tweaks apply whichever GPU each game uses.
     if (hw.isNvidia) {
       ["Lap_NVIDIA_MaxPerformance","Lap_NVIDIA_DisableVsync","Lap_NVIDIA_LowLatency",
        "Lap_NVIDIA_ThreadedOpt","Lap_NVIDIA_DisableMaxQThrottle"].forEach(id => ids.add(id));
-    } else if (hw.isAMD || hw.isAmdApu) {
+    }
+    if (hw.isAmd) {
       ["Lap_AMD_DisableULPS","Lap_AMD_DisableVariBright","Lap_AMD_DisableDeepSleep",
        "Lap_AMD_DisableDynamicVoltage","Lap_AMD_ForcePerformance"].forEach(id => ids.add(id));
-    } else if (hw.isIntel) {
+    }
+    if (hw.isIntel) {
       ["Lap_Intel_DisableTurboLimits","Lap_Intel_DisableSpeedShift",
        "Lap_Intel_DisableECores"].forEach(id => ids.add(id));
     }

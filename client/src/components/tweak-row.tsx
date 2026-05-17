@@ -136,17 +136,53 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     }
   };
 
+  // Full-row click / keyboard toggle. Children that have their own
+  // interactive behaviour (info tooltip button, undo button, the visible
+  // switch, the safety/badge tooltips) carry `data-no-row-toggle` so the
+  // row click handler ignores them.
+  const onRowActivate = () => {
+    if (acBlocked) return;
+    handleChange(!checked);
+  };
+  const onRowClick: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    if (acBlocked) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-no-row-toggle]")) return;
+    if (target?.closest?.("button,a,input,textarea,select,[role='button']")) return;
+    onRowActivate();
+  };
+  const onRowKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+    if (acBlocked) return;
+    if (e.key === " " || e.key === "Enter") {
+      const target = e.target as HTMLElement | null;
+      // Don't intercept Space/Enter on inner buttons.
+      if (target?.closest?.("button,a,input,textarea,select,[role='button']") && target !== e.currentTarget) return;
+      e.preventDefault();
+      onRowActivate();
+    }
+  };
+
   return (
     <>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, delay: delay * 0.04 }}
+        role="switch"
+        aria-checked={checked}
+        aria-disabled={acBlocked || undefined}
+        aria-label={title}
+        tabIndex={acBlocked ? -1 : 0}
+        onClick={onRowClick}
+        onKeyDown={onRowKeyDown}
+        data-testid={`row-tweak-${id}`}
         className={cn(
           "flex flex-row items-center justify-between rounded-lg border p-4 transition-all duration-200 group",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
+          acBlocked ? "cursor-not-allowed" : "cursor-pointer",
           checked
-            ? "bg-red-500/5 border-red-500/25 shadow-[inset_0_0_12px_-6px_rgba(239,68,68,0.15)]"
-            : "bg-black/40 border-white/5 hover:border-white/10 hover:bg-black/60"
+            ? "bg-red-500/8 border-red-500/40 shadow-[inset_0_0_14px_-6px_rgba(239,68,68,0.25)] hover:border-red-500/55 hover:bg-red-500/10"
+            : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/60"
         )}
       >
         <div className="space-y-1 w-[80%]">
@@ -166,6 +202,8 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                 <TooltipTrigger asChild>
                   <span
                     data-testid={`safety-${safetyVal}-${id}`}
+                    data-no-row-toggle
+                    onClick={(e) => e.stopPropagation()}
                     className={cn(
                       "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide cursor-help",
                       safetyStyle.bg, safetyStyle.text
@@ -188,8 +226,9 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                   <button
                     type="button"
                     data-testid={`info-${id}`}
+                    data-no-row-toggle
                     className="inline-flex items-center justify-center w-4 h-4 rounded-full text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors"
-                    onClick={(e) => e.preventDefault()}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     aria-label="Plain-English explanation"
                   >
                     <Info className="w-3 h-3" />
@@ -253,14 +292,14 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             </TooltipContent>
           </Tooltip>
         ) : (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0" data-no-row-toggle onClick={(e) => e.stopPropagation()}>
             {appliedAt && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
                     data-testid={`button-undo-${id}`}
-                    onClick={handleUndo}
+                    onClick={(e) => { e.stopPropagation(); handleUndo(); }}
                     disabled={undoing}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-50"
                   >

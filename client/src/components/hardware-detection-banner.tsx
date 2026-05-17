@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Monitor, Cpu, MemoryStick, HardDrive, ChevronDown, ChevronUp, Zap, AlertCircle, CheckCircle2, ScanLine } from "lucide-react";
+import { Monitor, Cpu, MemoryStick, HardDrive, ChevronDown, ChevronUp, Zap, AlertCircle, CheckCircle2, ScanLine, Layers } from "lucide-react";
+import type { GpuEntry, GpuVendor, GpuTier } from "@/hooks/use-hardware-info";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
@@ -17,17 +18,33 @@ export function HardwareDetectionBanner({ compact = false }: HardwareDetectionBa
   const recs = computeSmartRecs(hw, os);
   const [expanded, setExpanded] = useState(false);
 
-  const isFullyDetected = hw.scanned || (hw.isNvidia || hw.isAMD || hw.isIntel);
+  const isFullyDetected = hw.scanned || (hw.isNvidia || hw.isAmd || hw.isIntel);
   const gpuKnown = hw.gpuName && hw.gpuName !== "Unknown GPU" && hw.gpuName !== "Detecting...";
 
-  const gpuBadge = hw.isNvidia
-    ? { label: "NVIDIA", cls: "bg-green-500/15 border-green-500/25 text-green-400" }
-    : hw.isAmdGpu
-    ? { label: "AMD", cls: "bg-red-500/15 border-red-500/25 text-red-400" }
-    : hw.isAmdApu
-    ? { label: "AMD APU", cls: "bg-orange-500/15 border-orange-500/25 text-orange-400" }
-    : hw.isIntel
-    ? { label: "INTEL", cls: "bg-blue-500/15 border-blue-500/25 text-blue-400" }
+  const vendorBadgeCls: Record<GpuVendor, string> = {
+    nvidia: "bg-green-500/15 border-green-500/25 text-green-400",
+    amd: "bg-red-500/15 border-red-500/25 text-red-400",
+    intel: "bg-blue-500/15 border-blue-500/25 text-blue-400",
+    unknown: "bg-zinc-700/30 border-zinc-700 text-zinc-400",
+  };
+  const vendorBadgeLabel: Record<GpuVendor, string> = {
+    nvidia: "NVIDIA",
+    amd: "AMD",
+    intel: "INTEL",
+    unknown: "GPU",
+  };
+  const tierLabel: Record<GpuTier, string> = {
+    low: "Low",
+    mid: "Mid",
+    high: "High",
+    pro: "Pro",
+    unknown: "?",
+  };
+
+  const primaryGpu: GpuEntry | undefined =
+    hw.gpus.find((g) => !g.isIntegrated) ?? hw.gpus[0];
+  const primaryBadge = primaryGpu
+    ? { label: vendorBadgeLabel[primaryGpu.vendor], cls: vendorBadgeCls[primaryGpu.vendor] }
     : null;
 
   const statusColor = hw.loading
@@ -109,9 +126,15 @@ export function HardwareDetectionBanner({ compact = false }: HardwareDetectionBa
             ) : (
               <span className="text-xs text-zinc-600 italic">GPU unknown</span>
             )}
-            {gpuBadge && (
-              <span className={cn("shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider", gpuBadge.cls)}>
-                {gpuBadge.label}
+            {primaryBadge && (
+              <span className={cn("shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider", primaryBadge.cls)}>
+                {primaryBadge.label}
+              </span>
+            )}
+            {hw.isHybridGpu && (
+              <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider bg-amber-500/15 border-amber-500/30 text-amber-300 flex items-center gap-1">
+                <Layers className="w-2.5 h-2.5" />
+                Hybrid
               </span>
             )}
           </div>
@@ -180,6 +203,44 @@ export function HardwareDetectionBanner({ compact = false }: HardwareDetectionBa
             className="overflow-hidden border-t border-white/5"
           >
             <div className="px-5 py-4 space-y-3">
+              {/* Detected GPU list — hybrid laptops show every classified entry */}
+              {hw.gpus.length > 0 && (
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600 mb-2">Detected hardware:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {hw.gpus.map((g, i) => (
+                      <div
+                        key={`${g.name}-${i}`}
+                        data-testid={`gpu-entry-${i}`}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-950/60 border border-white/5"
+                      >
+                        <Monitor className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                        <span className="text-[11px] text-zinc-200 font-medium flex-1 min-w-0 truncate">
+                          {g.name}
+                        </span>
+                        <span className={cn(
+                          "shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider",
+                          vendorBadgeCls[g.vendor]
+                        )}>
+                          {vendorBadgeLabel[g.vendor]}
+                        </span>
+                        <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded border bg-zinc-900 border-zinc-800 text-zinc-400 uppercase tracking-wider">
+                          {g.isIntegrated ? "iGPU" : "dGPU"} · {tierLabel[g.tier]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hybrid badge */}
+              {hw.isHybridGpu && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/15">
+                  <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <p className="text-[10px] text-amber-300">Hybrid GPU setup detected — tweaks for both your integrated and discrete GPU will be included so you're covered whether the game runs on the iGPU or the dGPU.</p>
+                </div>
+              )}
+
               {/* Laptop badge */}
               {hw.isLaptop && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/15">
@@ -202,12 +263,14 @@ export function HardwareDetectionBanner({ compact = false }: HardwareDetectionBa
               </div>
 
               {/* Incompatible note */}
-              {(hw.isNvidia || hw.isAmdGpu || hw.isIntel) && (
+              {(hw.isNvidia || hw.isAmd || hw.isIntel) && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/60 border border-white/5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <p className="text-[10px] text-zinc-400">
-                    Incompatible GPU tabs are hidden from the sidebar. Only tweaks that benefit your
-                    {hw.isNvidia ? " NVIDIA" : hw.isAmdGpu ? " AMD" : " Intel"} setup are shown.
+                    Tweaks are gated per vendor so they only apply to GPUs you actually have.
+                    {hw.isHybridGpu
+                      ? " Your hybrid setup gets both iGPU and discrete GPU optimizations."
+                      : ` Optimizations target your ${[hw.isNvidia && "NVIDIA", hw.isAmd && "AMD", hw.isIntel && "Intel"].filter(Boolean).join(" / ")} hardware.`}
                   </p>
                 </div>
               )}
