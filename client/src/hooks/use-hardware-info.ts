@@ -150,7 +150,7 @@ function detectGPUViaWebGL(): { gpuName: string; gpuVendor: string } {
  * "NVIDIA GeForce RTX 3060 Laptop GPU" stays in one piece while a real run-on
  * like "Intel(R) UHD Graphics 630 NVIDIA GeForce RTX 3060" splits correctly.
  */
-function splitGpuList(raw: string): string[] {
+export function splitGpuList(raw: string): string[] {
   if (!raw) return [];
   const initial = raw
     .split(/[\r\n;|]+/g)

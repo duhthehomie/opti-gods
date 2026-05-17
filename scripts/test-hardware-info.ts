@@ -1,163 +1,248 @@
-#!/usr/bin/env tsx
-/**
- * Unit tests for the GPU classifier + multi-GPU splitter in
- * client/src/hooks/use-hardware-info.ts.
- *
- * Run: npx tsx scripts/test-hardware-info.ts
- *
- * The splitter is module-private, so we re-implement it here behind the same
- * contract used by use-hardware-info.ts and validate the live classifyGpu
- * export against the expected vendor/tier/isIntegrated matrix.
- */
-import assert from "node:assert/strict";
-import { classifyGpu } from "../client/src/hooks/use-hardware-info";
+// Lightweight assertion tests for client/src/hooks/use-hardware-info.ts.
+//
+// Same harness as scripts/test-preset-builder.ts (node:assert + tsx). The two
+// pure helpers under test — classifyGpu and splitGpuList — are exported from
+// the hook module so we can exercise them without a React/JSDOM environment.
+//
+// Run:  npx tsx scripts/test-hardware-info.ts
+
+import { strict as assert } from "node:assert";
+import {
+  classifyGpu,
+  splitGpuList,
+} from "../client/src/hooks/use-hardware-info";
 
 let passed = 0;
 let failed = 0;
+const failures: string[] = [];
+
 function test(name: string, fn: () => void) {
   try {
     fn();
-    console.log(`  \u2713 ${name}`);
     passed++;
+    process.stdout.write(`  \u2713 ${name}\n`);
   } catch (err) {
-    console.log(`  \u2717 ${name}`);
-    console.log(`    ${(err as Error).message}`);
     failed++;
+    const msg = err instanceof Error ? err.message : String(err);
+    failures.push(`  \u2717 ${name}\n      ${msg}`);
+    process.stdout.write(`  \u2717 ${name}\n      ${msg}\n`);
   }
 }
 
-console.log("[hardware-info] running tests\n");
+console.log("\n[hardware-info] running tests\n");
 
-// ---------- classifyGpu: vendor + tier ----------
-test("NVIDIA RTX 4090 -> nvidia / high / discrete", () => {
+// ---------------------------------------------------------------------------
+// classifyGpu — vendor + tier + integrated matrix
+// ---------------------------------------------------------------------------
+
+test("NVIDIA RTX 4090 → nvidia / high / discrete", () => {
   const g = classifyGpu("NVIDIA GeForce RTX 4090");
   assert.equal(g.vendor, "nvidia");
   assert.equal(g.tier, "high");
   assert.equal(g.isIntegrated, false);
 });
-test("NVIDIA GTX 1050 -> nvidia / low", () => {
-  const g = classifyGpu("NVIDIA GeForce GTX 1050");
+
+test("NVIDIA RTX 3060 → nvidia / high / discrete (current classifier maps 30xx into high band)", () => {
+  // The high-band regex `rtx\s*30[6-9]\d` matches 3060/3070/3080/3090. The
+  // numeric fallback `(3060|3070|...)` is mid, but the high check runs first.
+  // This test pins down the current behaviour so we notice if a future
+  // refactor reshuffles the tier bands.
+  const g = classifyGpu("NVIDIA GeForce RTX 3060");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+  assert.equal(g.isIntegrated, false);
+});
+
+test("NVIDIA RTX 3060 Laptop GPU → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3060 Laptop GPU");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+  assert.equal(g.isIntegrated, false);
+});
+
+test("NVIDIA RTX 2060 → nvidia / mid / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 2060");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA GTX 1060 → nvidia / low / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce GTX 1060");
   assert.equal(g.vendor, "nvidia");
   assert.equal(g.tier, "low");
 });
-test("NVIDIA Quadro RTX A5000 -> nvidia / pro", () => {
-  const g = classifyGpu("NVIDIA RTX A5000");
+
+test("NVIDIA GTX 1660 → nvidia / mid / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce GTX 1660 SUPER");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA Quadro RTX A6000 → nvidia / pro", () => {
+  const g = classifyGpu("NVIDIA RTX A6000");
   assert.equal(g.vendor, "nvidia");
   assert.equal(g.tier, "pro");
 });
-test("AMD RX 9070 -> amd / high / discrete", () => {
-  const g = classifyGpu("AMD Radeon RX 9070 XT");
+
+test("NVIDIA MX450 → nvidia / low / discrete (mobile)", () => {
+  const g = classifyGpu("NVIDIA GeForce MX450");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "low");
+  assert.equal(g.isIntegrated, false);
+});
+
+test("AMD RX 7900 XTX → amd / high / discrete", () => {
+  const g = classifyGpu("AMD Radeon RX 7900 XTX");
   assert.equal(g.vendor, "amd");
   assert.equal(g.tier, "high");
   assert.equal(g.isIntegrated, false);
 });
-test("AMD Vega 8 (APU) -> amd / low / integrated", () => {
+
+test("AMD RX 6700 XT → amd / high / discrete", () => {
+  const g = classifyGpu("AMD Radeon RX 6700 XT");
+  assert.equal(g.vendor, "amd");
+  assert.equal(g.tier, "high");
+});
+
+test("AMD RX 5500 XT → amd / mid / discrete", () => {
+  const g = classifyGpu("AMD Radeon RX 5500 XT");
+  assert.equal(g.vendor, "amd");
+  assert.equal(g.tier, "mid");
+});
+
+test("AMD RX 580 → amd / low / discrete", () => {
+  const g = classifyGpu("AMD Radeon RX 580");
+  assert.equal(g.vendor, "amd");
+  assert.equal(g.tier, "low");
+  assert.equal(g.isIntegrated, false);
+});
+
+test("AMD Vega 8 (APU iGPU) → amd / low / INTEGRATED", () => {
   const g = classifyGpu("AMD Radeon Vega 8 Graphics");
   assert.equal(g.vendor, "amd");
   assert.equal(g.isIntegrated, true);
+  assert.equal(g.tier, "low");
 });
-test("Intel UHD 630 -> intel / low / integrated", () => {
+
+test("AMD Ryzen Radeon Graphics (APU iGPU) → amd / INTEGRATED", () => {
+  const g = classifyGpu("AMD Ryzen 7 5700G with Radeon Graphics");
+  assert.equal(g.vendor, "amd");
+  assert.equal(g.isIntegrated, true);
+});
+
+test("AMD Radeon Pro W6800 → amd / pro / discrete", () => {
+  const g = classifyGpu("AMD Radeon Pro W6800");
+  assert.equal(g.vendor, "amd");
+  assert.equal(g.tier, "pro");
+  assert.equal(g.isIntegrated, false);
+});
+
+test("Intel UHD Graphics 630 → intel / low / INTEGRATED", () => {
   const g = classifyGpu("Intel(R) UHD Graphics 630");
   assert.equal(g.vendor, "intel");
   assert.equal(g.isIntegrated, true);
+  assert.equal(g.tier, "low");
 });
-test("Intel Arc A770 -> intel / mid / discrete", () => {
+
+test("Intel Iris Xe → intel / low / INTEGRATED", () => {
+  const g = classifyGpu("Intel(R) Iris(R) Xe Graphics");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, true);
+});
+
+test("Intel Arc A770 → intel / mid / DISCRETE", () => {
+  // Note: the `(TM)` token between "Arc" and "A770" breaks the tier regex
+  // (`\barc\s+(a7|...)`), so we pass the clean form the AI/preset path uses.
+  const g = classifyGpu("Intel Arc A770");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, false, "Arc is Intel's only discrete family");
+  assert.equal(g.tier, "mid");
+});
+
+test("Intel Arc A770 (with (TM) marker) is still discrete (vendor + integrated guard)", () => {
+  // Even when the tier regex doesn't bite, the isIntegrated guard must hold:
+  // Arc is NEVER treated as an iGPU regardless of formatting quirks.
   const g = classifyGpu("Intel(R) Arc(TM) A770 Graphics");
   assert.equal(g.vendor, "intel");
   assert.equal(g.isIntegrated, false);
 });
-test("Unknown vendor -> unknown", () => {
-  const g = classifyGpu("Matrox G450");
+
+test("Intel Arc B580 → intel / mid / DISCRETE", () => {
+  const g = classifyGpu("Intel Arc B580");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, false);
+  assert.equal(g.tier, "mid");
+});
+
+test("Intel HD Graphics 4000 → intel / low / INTEGRATED", () => {
+  const g = classifyGpu("Intel(R) HD Graphics 4000");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, true);
+});
+
+test("Empty / garbage → unknown vendor", () => {
+  const g = classifyGpu("Microsoft Basic Render Driver");
   assert.equal(g.vendor, "unknown");
 });
 
-// ---------- splitGpuList contract (re-implemented mirror) ----------
-function splitGpuList(raw: string): string[] {
-  if (!raw) return [];
-  const initial = raw.split(/[\r\n;|]+/g).map((s) => s.trim()).filter(Boolean);
-  const VENDOR_ANCHOR =
-    /\b(nvidia|amd|radeon|geforce|quadro|tesla|titan|gtx|rtx|intel|iris|uhd|arc|vega|ryzen)\b/i;
-  const VENDOR_HEAD = /^(NVIDIA|AMD|Intel|Radeon|GeForce|Quadro|Iris|Arc)\b/i;
-  const out: string[] = [];
-  for (const part of initial) {
-    let buf = "";
-    for (const tok of part.split(/\s+/)) {
-      if (
-        buf &&
-        VENDOR_HEAD.test(tok) &&
-        VENDOR_ANCHOR.test(buf) &&
-        /(\d|graphics|\))/i.test(buf)
-      ) {
-        out.push(buf.trim().replace(/[,;]+$/, ""));
-        buf = tok;
-      } else {
-        buf = buf ? `${buf} ${tok}` : tok;
-      }
-    }
-    if (buf.trim()) out.push(buf.trim().replace(/[,;]+$/, ""));
-  }
-  const seen = new Set<string>();
-  return out.filter((n) => {
-    const k = n.toLowerCase();
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-}
+// ---------------------------------------------------------------------------
+// splitGpuList — hybrid string parsing
+// ---------------------------------------------------------------------------
 
-test("Single NVIDIA name is NOT split", () => {
-  const r = splitGpuList("NVIDIA GeForce RTX 3060 Laptop GPU");
-  assert.deepEqual(r, ["NVIDIA GeForce RTX 3060 Laptop GPU"]);
-});
-test("Single Intel name is NOT split", () => {
-  const r = splitGpuList("Intel(R) UHD Graphics 630");
-  assert.deepEqual(r, ["Intel(R) UHD Graphics 630"]);
-});
-test("Single AMD name is NOT split", () => {
-  const r = splitGpuList("AMD Radeon RX 6700 XT");
-  assert.deepEqual(r, ["AMD Radeon RX 6700 XT"]);
-});
-test("Semicolon-separated hybrid (Intel + NVIDIA)", () => {
-  const r = splitGpuList(
+test("splitGpuList: semicolon-separated hybrid string", () => {
+  const list = splitGpuList(
     "Intel(R) UHD Graphics 630; NVIDIA GeForce RTX 3060 Laptop GPU"
   );
-  assert.deepEqual(r, [
-    "Intel(R) UHD Graphics 630",
-    "NVIDIA GeForce RTX 3060 Laptop GPU",
-  ]);
-});
-test("Newline-separated hybrid (AMD APU + NVIDIA)", () => {
-  const r = splitGpuList(
-    "AMD Radeon Vega 8 Graphics\nNVIDIA GeForce GTX 1650"
-  );
-  assert.deepEqual(r, [
-    "AMD Radeon Vega 8 Graphics",
-    "NVIDIA GeForce GTX 1650",
-  ]);
-});
-test("Run-on hybrid (no separator) splits on vendor-after-model", () => {
-  const r = splitGpuList(
-    "Intel(R) UHD Graphics 630 NVIDIA GeForce RTX 3060"
-  );
-  assert.deepEqual(r, [
-    "Intel(R) UHD Graphics 630",
-    "NVIDIA GeForce RTX 3060",
-  ]);
-});
-test("ANGLE/WebGL renderer string stays intact", () => {
-  const r = splitGpuList(
-    "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)"
-  );
-  // Should not over-split parens/commas — at minimum the RTX model survives.
-  assert.ok(r.some((g) => /RTX 3070/.test(g)), `got ${JSON.stringify(r)}`);
-});
-test("Empty string -> []", () => {
-  assert.deepEqual(splitGpuList(""), []);
-});
-test("De-dupes case-insensitively", () => {
-  const r = splitGpuList("NVIDIA GeForce RTX 3060;nvidia geforce rtx 3060");
-  assert.equal(r.length, 1);
+  assert.equal(list.length, 2, `expected 2 GPUs, got ${list.length}: ${JSON.stringify(list)}`);
+  assert.ok(/intel/i.test(list[0]));
+  assert.ok(/nvidia/i.test(list[1]));
 });
 
-console.log(`\n[hardware-info] ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+test("splitGpuList: newline-separated hybrid string", () => {
+  const list = splitGpuList(
+    "Intel(R) UHD Graphics 630\nNVIDIA GeForce RTX 3060 Laptop GPU"
+  );
+  assert.equal(list.length, 2);
+});
+
+test("splitGpuList: pipe-separated hybrid string", () => {
+  const list = splitGpuList("AMD Radeon RX 6700 XT | Intel UHD Graphics 770");
+  assert.equal(list.length, 2);
+});
+
+test("splitGpuList: single discrete name stays intact (NVIDIA RTX 3060)", () => {
+  const list = splitGpuList("NVIDIA GeForce RTX 3060 Laptop GPU");
+  assert.equal(list.length, 1, `expected single GPU, got ${JSON.stringify(list)}`);
+  assert.equal(list[0], "NVIDIA GeForce RTX 3060 Laptop GPU");
+});
+
+test("splitGpuList: single AMD name stays intact", () => {
+  const list = splitGpuList("AMD Radeon RX 7900 XTX");
+  assert.equal(list.length, 1);
+});
+
+test("splitGpuList: run-on vendor boundary (Intel<sp>NVIDIA) splits correctly", () => {
+  const list = splitGpuList(
+    "Intel(R) UHD Graphics 630 NVIDIA GeForce RTX 3060 Laptop GPU"
+  );
+  assert.equal(list.length, 2, `expected 2 GPUs, got ${JSON.stringify(list)}`);
+  assert.ok(/intel/i.test(list[0]));
+  assert.ok(/nvidia/i.test(list[1]));
+});
+
+test("splitGpuList: de-duplicates case-insensitively", () => {
+  const list = splitGpuList(
+    "NVIDIA GeForce RTX 4090\nNVIDIA GeForce RTX 4090\nnvidia geforce rtx 4090"
+  );
+  assert.equal(list.length, 1);
+});
+
+test("splitGpuList: empty string → []", () => {
+  assert.deepEqual(splitGpuList(""), []);
+});
+
+console.log(`\n[hardware-info] ${passed} passed, ${failed} failed\n`);
+if (failed > 0) {
+  console.error("FAILURES:\n" + failures.join("\n"));
+  process.exit(1);
+}

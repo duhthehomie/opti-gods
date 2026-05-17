@@ -77,6 +77,26 @@ jobs:
       - name: Sync version → tauri.conf.json
         run: npx tsx scripts/sync-version.ts
 
+      # V2.2 — preset-builder unit tests. Pins vendor filtering, FORBIDDEN
+      # gating, opt-in escape paths, hardware-mismatch blocking.
+      - name: Preset builder tests
+        shell: pwsh
+        run: npx tsx scripts/test-preset-builder.ts
+
+      # V2.2 — hardware-info unit tests. Pins classifyGpu vendor/tier matrix
+      # and the splitGpuList hybrid-string parser. Guards against silent
+      # regressions in GPU classification used by the AI preset path.
+      - name: Hardware info tests
+        shell: pwsh
+        run: npx tsx scripts/test-hardware-info.ts
+
+      # V2.2 — smart-recs hybrid tests. Confirms a hybrid laptop pulls BOTH
+      # Lap_NVIDIA_* and Lap_Intel_*, and that an Arc-only Intel rig does
+      # NOT pull iGPU tweaks.
+      - name: Smart recommendations hybrid tests
+        shell: pwsh
+        run: npx tsx scripts/test-smart-recs-hybrid.ts
+
       # V2.2 — PS1 smoke test. Generates representative reapply scripts
       # (NVIDIA all / AMD all / Custom FPS prompt / Safe MSI Mode) and runs
       # them through the PowerShell AST parser. Any syntax error in
