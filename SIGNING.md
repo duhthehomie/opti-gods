@@ -28,7 +28,37 @@ If money is tight, **Sectigo OV** is the standard choice — works fine and
 users still get the right brand name in the UAC prompt; they just see a
 SmartScreen banner for the first few weeks until enough people install it.
 
-## 2. Put the cert into GitHub Secrets
+## 1b. Updater signing (separate from Authenticode)
+
+The Tauri auto-updater inside the desktop app refuses to install any update
+whose `latest.json` doesn't carry a valid signature against the `pubkey`
+baked into `src-tauri/tauri.conf.json`. That signature is produced by a
+**different** key pair from the Authenticode cert above — it never leaves
+your machine and doesn't cost anything.
+
+One-time setup:
+
+1. Install the Tauri CLI (if you haven't already): `npm install --global @tauri-apps/cli@latest`
+2. Generate the key pair:
+   ```powershell
+   tauri signer generate -w optigods-updater.key
+   ```
+   This writes two files:
+   - `optigods-updater.key` — the **private key**. Treat like a password.
+   - `optigods-updater.key.pub` — the **public key**.
+3. Paste the contents of `optigods-updater.key.pub` (a single base64 line)
+   into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`,
+   replacing the `REPLACE_WITH_BASE64_PUBKEY_BEFORE_RELEASE` placeholder.
+4. Add the private key + its password to GitHub Secrets:
+   - `TAURI_SIGNING_PRIVATE_KEY` — full contents of `optigods-updater.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password you set when generating it
+
+Until those two secrets exist, CI prints a warning, the build still
+succeeds, but the `signature` field in `latest.json` is empty and the
+desktop app's auto-updater will skip every release. Set them once and
+forget — they only have to be rotated if the private key leaks.
+
+## 2. Put the Authenticode cert into GitHub Secrets
 
 > Skip this section entirely if you're using EV cloud-signing (eSigner /
 > DigiCert KeyLocker) — those need their own workflow steps that the vendor

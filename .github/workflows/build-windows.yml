@@ -79,15 +79,22 @@ jobs:
       - name: Build Vite frontend
         run: npm run build
 
-      - name: Build Tauri installer (unsigned)
+      - name: Build Tauri installer
+        # `tauri build` does TWO different signing operations:
+        #   1. Updater signing (TAURI_SIGNING_PRIVATE_KEY) — produces a
+        #      `.sig` file alongside the installer that the in-app
+        #      updater verifies against the `pubkey` baked into
+        #      tauri.conf.json. This is REQUIRED for the auto-updater
+        #      to accept the new build; without it the desktop app
+        #      refuses to install the download.
+        #   2. Authenticode / SmartScreen signing (signtool) — that's
+        #      the separate step below.
         run: tauri build --bundles nsis
         env:
-          # Disables Tauri's built-in signing — we hand the .exe to signtool
-          # below ourselves so leaq's cert never has to live in
-          # TAURI_SIGNING_PRIVATE_KEY format.
-          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Locate built installer
+      - name: Locate built installer + updater signature
         id: artifact
         shell: pwsh
         run: |
@@ -96,11 +103,26 @@ jobs:
           $dest = "OptiGods-Setup-${{ steps.version.outputs.version }}.exe"
           Copy-Item $exe.FullName $dest -Force
           echo "exe_path=$dest" >> $env:GITHUB_OUTPUT
+          # Tauri writes the updater signature next to the installer when
+          # TAURI_SIGNING_PRIVATE_KEY is set. It looks like `<name>.exe.sig`
+          # and is a tiny base64 blob that goes into latest.json.
+          $sigFile = "$($exe.FullName).sig"
+          $sig = ""
+          if (Test-Path $sigFile) {
+            $sig = (Get-Content -Raw $sigFile).Trim()
+            Write-Host "Updater signature: $($sig.Length) chars"
+          } else {
+            Write-Host "::warning::No .sig file produced — TAURI_SIGNING_PRIVATE_KEY likely missing. The desktop app's auto-updater will REJECT this release. Set the TAURI_SIGNING_PRIVATE_KEY repo secret (generate via 'tauri signer generate') to enable trusted updates."
+          }
+          echo "updater_signature=$sig" >> $env:GITHUB_OUTPUT
           Write-Host "Installer at $dest ($((Get-Item $dest).Length / 1MB) MB)"
 
-      - name: Sign installer (only if secrets present)
+      # Authenticode / SmartScreen signing — separate from updater signing.
+      # Gated directly on `secrets.*` (NOT `env.*`) so the condition
+      # evaluates correctly at job-plan time.
+      - name: Sign installer with Authenticode (only when secrets are present)
         id: sign
-        if: ${{ env.SIGNING_CERT_BASE64 != '' }}
+        if: ${{ secrets.SIGNING_CERT_BASE64 != '' && secrets.SIGNING_CERT_PASSWORD != '' }}
         shell: pwsh
         env:
           SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
@@ -147,7 +169,12 @@ jobs:
             platforms = @{
               "windows-x86_64" = @{
                 url       = $url
-                signature = ""
+                # `signature` is the base64 blob produced by Tauri's updater
+                # signer (see "Locate built installer" step). Empty = the
+                # desktop app's auto-updater will refuse this build. The
+                # warning printed in that step explains how to set the
+                # TAURI_SIGNING_PRIVATE_KEY repo secret.
+                signature = "${{ steps.artifact.outputs.updater_signature }}"
               }
             }
           }

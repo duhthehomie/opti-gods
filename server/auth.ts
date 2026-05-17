@@ -151,14 +151,37 @@ export function registerAuthRoutes(app: Express): void {
     });
   });
 
-  // GET /api/version — public version info for the auto-update modal
+  // GET /api/version — public version info for the auto-update modal.
+  //
+  // Source of truth = /version.json at repo root (loaded once at boot).
+  // Admin overrides still apply, so leaq can pin `latestVersion` to a
+  // different number from the admin panel during a staged rollout.
   app.get("/api/version", async (_req: Request, res: Response) => {
     const settings = await storage.getAdminSettings();
+    const fileVersion = readVersionFromFile();
     res.json({
-      currentVersion: settings?.currentVersion ?? "2.00",
-      latestVersion: settings?.latestVersion ?? "2.00",
+      currentVersion: settings?.currentVersion ?? fileVersion ?? "2.00",
+      latestVersion: settings?.latestVersion ?? fileVersion ?? "2.00",
       updaterCmdUrl: settings?.updaterCmdUrl ?? null,
       updatePageUrl: settings?.updatePageUrl ?? null,
     });
   });
+}
+
+// Cached read of /version.json — the file is committed so this never throws
+// in normal operation; the try/catch just means we degrade gracefully if
+// someone deletes it from a fork.
+let _cachedFileVersion: string | null | undefined;
+function readVersionFromFile(): string | null {
+  if (_cachedFileVersion !== undefined) return _cachedFileVersion;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const raw = fs.readFileSync(path.resolve(process.cwd(), "version.json"), "utf8");
+    _cachedFileVersion = (JSON.parse(raw) as { version?: string }).version ?? null;
+  } catch {
+    _cachedFileVersion = null;
+  }
+  return _cachedFileVersion;
 }
