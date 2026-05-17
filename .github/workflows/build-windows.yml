@@ -1,0 +1,167 @@
+name: Build Windows installer
+
+# Produces the OptiGods-Setup-<version>.exe on every push to main and on
+# manual dispatch. When SIGNING_CERT_BASE64 + SIGNING_CERT_PASSWORD repo
+# secrets are present, the installer is Authenticode-signed before being
+# attached to the GitHub Release. Otherwise the run uploads an "unsigned
+# preview" build that SmartScreen will warn on.
+#
+# The auto-updater in the desktop app reads
+#   https://github.com/<owner>/<repo>/releases/latest/download/latest.json
+# so this workflow also writes a `latest.json` next to the installer.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (leave blank to auto-derive from version.json)"
+        required: false
+        default: ""
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write  # required to create the release + upload assets
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from version.json
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content -Raw version.json | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($v)) { throw "version.json missing 'version'" }
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          $tag = if ('${{ inputs.release_tag }}' -ne '') { '${{ inputs.release_tag }}' } else { "v$v" }
+          echo "tag=$tag"     >> $env:GITHUB_OUTPUT
+          Write-Host "Building OptiGods v$v (tag $tag)"
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
+
+      - name: Install Tauri CLI
+        run: npm install --global @tauri-apps/cli@latest
+
+      - name: npm install
+        run: npm install
+
+      - name: Sync version → tauri.conf.json
+        run: npx tsx scripts/sync-version.ts
+
+      - name: Build Vite frontend
+        run: npm run build
+
+      - name: Build Tauri installer (unsigned)
+        run: tauri build --bundles nsis
+        env:
+          # Disables Tauri's built-in signing — we hand the .exe to signtool
+          # below ourselves so leaq's cert never has to live in
+          # TAURI_SIGNING_PRIVATE_KEY format.
+          TAURI_SIGNING_PRIVATE_KEY: ""
+
+      - name: Locate built installer
+        id: artifact
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Path src-tauri/target/release/bundle/nsis -Filter "*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "NSIS installer not produced" }
+          $dest = "OptiGods-Setup-${{ steps.version.outputs.version }}.exe"
+          Copy-Item $exe.FullName $dest -Force
+          echo "exe_path=$dest" >> $env:GITHUB_OUTPUT
+          Write-Host "Installer at $dest ($((Get-Item $dest).Length / 1MB) MB)"
+
+      - name: Sign installer (only if secrets present)
+        id: sign
+        if: ${{ env.SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          $pfxBytes = [Convert]::FromBase64String($env:SIGNING_CERT_BASE64)
+          $pfxPath = Join-Path $env:RUNNER_TEMP "optigods-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          # signtool ships with the Windows 10 SDK preinstalled on windows-latest.
+          $signtool = (Get-ChildItem "C:/Program Files (x86)/Windows Kits/10/bin" -Recurse -Filter signtool.exe |
+                       Where-Object { $_.FullName -like "*x64*" } |
+                       Select-Object -First 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found in Windows SDK" }
+          & $signtool sign `
+              /f $pfxPath /p $env:SIGNING_CERT_PASSWORD `
+              /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+              "${{ steps.artifact.outputs.exe_path }}"
+          if ($LASTEXITCODE -ne 0) { throw "signtool sign failed (exit $LASTEXITCODE)" }
+          & $signtool verify /pa "${{ steps.artifact.outputs.exe_path }}"
+          Remove-Item $pfxPath -Force
+          echo "signed=true" >> $env:GITHUB_OUTPUT
+
+      - name: Compute installer SHA-256 + size
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash -Algorithm SHA256 "${{ steps.artifact.outputs.exe_path }}").Hash.ToLower()
+          $size = (Get-Item "${{ steps.artifact.outputs.exe_path }}").Length
+          echo "sha256=$h" >> $env:GITHUB_OUTPUT
+          echo "size=$size" >> $env:GITHUB_OUTPUT
+
+      - name: Write latest.json (auto-updater manifest)
+        shell: pwsh
+        run: |
+          $notes = (Get-Content -Raw version.json | ConvertFrom-Json).notes
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/${{ steps.artifact.outputs.exe_path }}"
+          $obj = [ordered]@{
+            version   = "${{ steps.version.outputs.version }}"
+            notes     = $notes
+            pub_date  = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ" -AsUTC)
+            signed    = ('${{ steps.sign.outputs.signed }}' -eq 'true')
+            sha256    = "${{ steps.hash.outputs.sha256 }}"
+            size      = [int]"${{ steps.hash.outputs.size }}"
+            platforms = @{
+              "windows-x86_64" = @{
+                url       = $url
+                signature = ""
+              }
+            }
+          }
+          $obj | ConvertTo-Json -Depth 6 | Out-File latest.json -Encoding utf8
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.sign.outputs.signed == 'true' && format('OptiGods v{0}', steps.version.outputs.version) || format('OptiGods v{0} (unsigned-preview)', steps.version.outputs.version) }}
+          prerelease: ${{ steps.sign.outputs.signed != 'true' }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifact.outputs.exe_path }}
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
