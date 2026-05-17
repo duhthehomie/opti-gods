@@ -571,6 +571,43 @@ export const SAFETY_LABEL: Record<TweakSafety, string> = {
     expert: "Expert",
 };
 
+// ── V2.2 reapplicable driver tweaks (Task #50) ────────────────────────────
+// Registered here so they pick up the same plain-English / safety / tooltip
+// metadata pipeline the rest of the app uses through TweakRow + smart-rec.
+const V22_DRIVER_TWEAKS: Array<{ id: string; category: TweakCategory; title: string; description: string; badge?: string; impact: TweakImpact }> = [
+    { id: "NvTextureFilterHighPerf", category: "nvidia", title: "NVIDIA Texture Filtering = High Performance", description: "Writes PS_TexFilterQuality=0 etc. to NVIDIA Corporation\\Global\\NVTweak. Equivalent to NVCP 'Texture Filtering Quality: High Performance'.", badge: "RECOMMENDED", impact: "MED" },
+    { id: "NvLowLatencyUltra",       category: "nvidia", title: "NVIDIA Low Latency Mode = Ultra",            description: "RmLowLatencyMode=2 + FlipQueueSize=1. Lowest possible input-to-photon latency via global profile.", badge: "RECOMMENDED", impact: "HIGH" },
+    { id: "NvThreadedOptOn",         category: "nvidia", title: "NVIDIA Threaded Optimization = ON",          description: "Forces OGL_ThreadControl/D3D_ThreadControl=1 globally — driver-side thread offload.", badge: "RECOMMENDED", impact: "MED" },
+    { id: "NvPowerMgmtMax",          category: "nvidia", title: "NVIDIA Power Management = Max Performance",  description: "Locks PowerMizer to P0 — no per-frame power-state stutter.", badge: "RECOMMENDED", impact: "HIGH" },
+    { id: "NvFrameLimitOff",         category: "nvidia", title: "NVIDIA Frame Cap = OFF",                     description: "Uncaps the driver-level FPS limiter.", badge: "OFF",     impact: "LOW" },
+    { id: "NvFrameLimit30",          category: "nvidia", title: "NVIDIA Frame Cap = 30 FPS",                  description: "Battery/handheld profile — 30 FPS driver cap.", badge: "30",      impact: "MED" },
+    { id: "NvFrameLimit60",          category: "nvidia", title: "NVIDIA Frame Cap = 60 FPS",                  description: "60 FPS driver cap for 60Hz displays.", badge: "60Hz",  impact: "MED" },
+    { id: "NvFrameLimit120",         category: "nvidia", title: "NVIDIA Frame Cap = 120 FPS",                 description: "120 FPS driver cap for 120Hz displays.", badge: "120Hz", impact: "MED" },
+    { id: "NvFrameLimit144",         category: "nvidia", title: "NVIDIA Frame Cap = 144 FPS",                 description: "144 FPS driver cap — high-refresh sweet spot.", badge: "144Hz", impact: "MED" },
+    { id: "NvFrameLimit240",         category: "nvidia", title: "NVIDIA Frame Cap = 240 FPS",                 description: "240 FPS driver cap for competitive monitors.", badge: "240Hz", impact: "MED" },
+    { id: "NvFrameLimitCustom",      category: "nvidia", title: "NVIDIA Frame Cap = Custom (PS1 prompts)",    description: "PS1 prompts for any FPS 10–1000 via Read-Host. Validated by the script.", badge: "CUSTOM", impact: "MED" },
+    { id: "AmdTextureFilterPerf",    category: "amd",    title: "AMD Texture Filtering = Performance",        description: "CatalystAI=0/TFQ=0/TextureOpt=1 — Adrenalin 'Performance' texture quality.", badge: "RECOMMENDED", impact: "MED" },
+    { id: "AmdSurfaceFormatOpt",     category: "amd",    title: "AMD Surface Format Optimization = ON",       description: "EnableSurfaceFormatReplacements=1 + KMD_EnableSFR=1.", badge: "RECOMMENDED", impact: "MED" },
+    { id: "AmdTessOverride16x",      category: "amd",    title: "AMD Tessellation = AMD Optimized (16x cap)", description: "Caps tessellation at 16x on legacy titles where game-side tessellation is wasteful.", badge: "RECOMMENDED", impact: "MED" },
+    { id: "AmdRadeonBoostOff",       category: "amd",    title: "AMD Radeon Boost = OFF (force disable)",     description: "Disables Radeon Boost via registry. Use when Boost causes texture pop in competitive shooters.", badge: "OPTIONAL", impact: "LOW" },
+    { id: "AmdFRTC60",               category: "amd",    title: "AMD Frame Rate Target Control = 60 FPS",     description: "Adrenalin FRTC capped at 60.", badge: "60Hz",  impact: "MED" },
+    { id: "AmdFRTC144",              category: "amd",    title: "AMD Frame Rate Target Control = 144 FPS",    description: "Adrenalin FRTC capped at 144.", badge: "144Hz", impact: "MED" },
+    { id: "AmdFRTC240",              category: "amd",    title: "AMD Frame Rate Target Control = 240 FPS",    description: "Adrenalin FRTC capped at 240.", badge: "240Hz", impact: "MED" },
+    { id: "EnableMSIMode_Safe",      category: "registry", title: "Safe MSI Mode (multi-device, BSOD-safe)",  description: "Pure-PowerShell MSI enabler for GPU + active NICs + NVMe controllers. Explicitly WIPES DevicePolicy/DevicePriority/AssignmentSetOverride (the V1 BSOD trigger) and skips dGPU on hybrid systems.", badge: "V2.2 SAFE", impact: "HIGH" },
+];
+{
+    const existingIds = new Set(TWEAK_REGISTRY.map(m => m.id));
+    for (const t of V22_DRIVER_TWEAKS) {
+        if (existingIds.has(t.id)) continue;
+        TWEAK_REGISTRY.push({
+            id: t.id, category: t.category, safety: "safe",
+            plainEnglish: t.description, verifiedOn: { win10: true, win11: true },
+            title: t.title, description: t.description,
+            badge: t.badge as any, impact: t.impact,
+        } as TweakMeta);
+    }
+}
+
 export const SAFETY_DESCRIPTION: Record<TweakSafety, string> = {
     safe: "Reversible, broadly compatible. Safe defaults.",
     aggressive: "Bigger gains, but touches services/features some users want. Read the description.",

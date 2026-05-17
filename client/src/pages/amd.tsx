@@ -369,7 +369,7 @@ export default function Amd() {
         <PageGuide pageName="AMD Optimizer" />
 
         <TabSmartBar
-          tweakIds={ALL_AMD_IDS}
+          tweakIds={[...ALL_AMD_IDS]}
           recommendedIds={AMD_RECOMMENDED_IDS}
           label="AMD"
           context="These tweaks target AMD Radeon driver registry keys under {4d36e968-e325-11ce-bfc1-08002be10318} — the GPU device class. They apply to RX 400 series and newer. HAGS requires RX 6000+. All changes are reversible via Device Manager > Rollback or by re-running the script with restore values."
@@ -727,8 +727,8 @@ export default function Amd() {
           </div>
         </section>
 
-        {/* V2.2 Reapplicable Driver Tweaks */}
-        <section data-testid="section-amd-driver-reapply">
+        {/* V2.2 Reapplicable Driver Tweaks — kept right above the V2TweakSection */}
+        <section data-testid="section-amd-driver-reapply" id="amd-driver-reapply-section" className="-mt-2">
           <div className="flex items-center gap-2 mb-4 px-1">
             <Layers className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>

@@ -448,6 +448,49 @@ export default function Nvidia() {
           ]}
         />
 
+        {/* V2.2 Reapplicable Driver Tweaks — placed at top so users can re-run them in one click after a driver update. */}
+        <section data-testid="section-nvidia-driver-reapply">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const selected = NVIDIA_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  data-testid="button-reapply-nvidia-driver"
+                  disabled={selected.length === 0}
+                  onClick={async () => {
+                    try { await downloadDriverReapply('nvidia', selected); }
+                    catch (e) { console.error(e); alert('Reapply download failed — make sure your Pro session is active.'); }
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {selected.length === 0 ? "Select tweaks first" : `Reapply driver tweaks (${selected.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks write to the NVIDIA <code className="text-red-400">Global\NVTweak</code> profile hive. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every driver update to re-write only these keys (no full preset rerun needed).</p>
+          <div className="space-y-3">
+            {NVIDIA_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
         {/* Registry Tweaks Section */}
         <section>
           <div className="flex items-center gap-2 mb-4 px-1">
@@ -712,49 +755,6 @@ export default function Nvidia() {
               onCheckedChange={(v) => setTweak("NvidiaGpuBgOptimize", v)}
               delay={3}
             />
-          </div>
-        </section>
-
-        {/* V2.2 Reapplicable Driver Tweaks */}
-        <section data-testid="section-nvidia-driver-reapply">
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <Layers className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>
-            <div className="flex-1 h-px bg-white/5 ml-2" />
-            {(() => {
-              const selected = NVIDIA_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);
-              return (
-                <Button
-                  variant="ghost" size="sm"
-                  data-testid="button-reapply-nvidia-driver"
-                  disabled={selected.length === 0}
-                  onClick={async () => {
-                    try { await downloadDriverReapply('nvidia', selected); }
-                    catch (e) { console.error(e); alert('Reapply download failed — make sure your Pro session is active.'); }
-                  }}
-                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {selected.length === 0 ? "Select tweaks first" : `Reapply driver tweaks (${selected.length})`}
-                </Button>
-              );
-            })()}
-          </div>
-          <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks are written under the NVIDIA GPU device class. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every driver update to re-write only these keys (no full preset rerun needed).</p>
-          <div className="space-y-3">
-            {NVIDIA_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
-              <TweakRow
-                key={item.id}
-                id={item.id}
-                title={item.title}
-                description={item.desc}
-                badge={item.badge}
-                impact={item.impact}
-                checked={tweaks[item.id] || false}
-                onCheckedChange={(v) => setTweak(item.id, v)}
-                delay={i + 1}
-              />
-            ))}
           </div>
         </section>
 
