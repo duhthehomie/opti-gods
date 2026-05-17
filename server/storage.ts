@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 
 export interface IStorage {
   getPresets(): Promise<Preset[]>;
@@ -114,6 +114,31 @@ export interface IStorage {
   validateDiscountCode(code: string): Promise<DiscountCode | null>;
   useDiscountCode(code: string): Promise<void>;
   deleteDiscountCode(id: number): Promise<void>;
+  // Hardware rigs / tweak suggestions / NVIDIA drivers (V2 Hardware DB)
+  upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }>;
+  getRigByHash(hash: string): Promise<HardwareRig | null>;
+  getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null>;
+  listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]>;
+  addTweakSuggestion(data: InsertTweakSuggestion): Promise<TweakSuggestion>;
+  listSuggestions(status?: SuggestionStatus): Promise<TweakSuggestion[]>;
+  updateSuggestionStatus(id: number, status: SuggestionStatus): Promise<TweakSuggestion | null>;
+  upsertNvidiaDriver(data: InsertNvidiaDriver): Promise<NvidiaDriver>;
+  listNvidiaDrivers(): Promise<NvidiaDriver[]>;
+}
+
+// Deterministic SHA-256 dedup hash for a hardware rig.
+// Normalises CPU + GPU + RAM + chassis so trivial casing/whitespace doesn't fork the row.
+export function computeRigHash(p: { cpu: string; gpu: string; vramMb?: number | null; ramGb?: number | null; ramMhz?: number | null; chassis?: string | null }): string {
+  const norm = (v: unknown) => String(v ?? "").toLowerCase().trim().replace(/\s+/g, " ");
+  const parts = [
+    norm(p.cpu),
+    norm(p.gpu),
+    String(p.vramMb ?? ""),
+    String(p.ramGb ?? ""),
+    String(p.ramMhz ?? ""),
+    norm(p.chassis),
+  ].join("|");
+  return createHash("sha256").update(parts).digest("hex");
 }
 
 export class DatabaseStorage implements IStorage {
@@ -833,6 +858,115 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDiscountCode(id: number): Promise<void> {
     await db.delete(discountCodes).where(eq(discountCodes.id, id));
+  }
+
+  async upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }> {
+    const hash = computeRigHash(payload);
+    const existing = await db.select().from(hardwareRigs).where(eq(hardwareRigs.hash, hash)).limit(1);
+    if (existing.length) {
+      const [updated] = await db.update(hardwareRigs)
+        .set({
+          lastSeenAt: new Date(),
+          seenCount: sql`${hardwareRigs.seenCount} + 1`,
+          ...(discordUserId !== undefined ? { discordUserId: discordUserId ?? null } : {}),
+          cpu: payload.cpu,
+          gpu: payload.gpu,
+          vramMb: payload.vramMb ?? null,
+          ramGb: payload.ramGb ?? null,
+          ramMhz: payload.ramMhz ?? null,
+          motherboard: payload.motherboard ?? null,
+          chassis: payload.chassis ?? null,
+          coolingType: payload.coolingType ?? null,
+          refreshHz: payload.refreshHz ?? null,
+          nicVendor: payload.nicVendor ?? null,
+          storageSummary: payload.storageSummary ?? null,
+          anticheats: payload.anticheats ?? [],
+        })
+        .where(eq(hardwareRigs.hash, hash))
+        .returning();
+      return { rig: updated, isNew: false };
+    }
+    const [rig] = await db.insert(hardwareRigs).values({
+      hash,
+      discordUserId: discordUserId ?? null,
+      cpu: payload.cpu,
+      gpu: payload.gpu,
+      vramMb: payload.vramMb ?? null,
+      ramGb: payload.ramGb ?? null,
+      ramMhz: payload.ramMhz ?? null,
+      motherboard: payload.motherboard ?? null,
+      chassis: payload.chassis ?? null,
+      coolingType: payload.coolingType ?? null,
+      refreshHz: payload.refreshHz ?? null,
+      nicVendor: payload.nicVendor ?? null,
+      storageSummary: payload.storageSummary ?? null,
+      anticheats: payload.anticheats ?? [],
+    }).returning();
+    return { rig, isNew: true };
+  }
+
+  async getRigByHash(hash: string): Promise<HardwareRig | null> {
+    const [row] = await db.select().from(hardwareRigs).where(eq(hardwareRigs.hash, hash)).limit(1);
+    return row ?? null;
+  }
+
+  async getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null> {
+    const [row] = await db.select().from(hardwareRigs)
+      .where(eq(hardwareRigs.discordUserId, discordUserId))
+      .orderBy(desc(hardwareRigs.lastSeenAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]> {
+    const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+    const offset = Math.max(opts?.offset ?? 0, 0);
+    const sortCol = opts?.sort === "seenCount" ? hardwareRigs.seenCount
+      : opts?.sort === "firstSeenAt" ? hardwareRigs.firstSeenAt
+      : hardwareRigs.lastSeenAt;
+    return await db.select().from(hardwareRigs).orderBy(desc(sortCol)).limit(limit).offset(offset);
+  }
+
+  async addTweakSuggestion(data: InsertTweakSuggestion): Promise<TweakSuggestion> {
+    const [row] = await db.insert(tweakSuggestions).values(data).returning();
+    return row;
+  }
+
+  async listSuggestions(status?: SuggestionStatus): Promise<TweakSuggestion[]> {
+    if (status) {
+      return await db.select().from(tweakSuggestions)
+        .where(eq(tweakSuggestions.status, status))
+        .orderBy(desc(tweakSuggestions.createdAt));
+    }
+    return await db.select().from(tweakSuggestions).orderBy(desc(tweakSuggestions.createdAt));
+  }
+
+  async updateSuggestionStatus(id: number, status: SuggestionStatus): Promise<TweakSuggestion | null> {
+    const [row] = await db.update(tweakSuggestions)
+      .set({ status })
+      .where(eq(tweakSuggestions.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async upsertNvidiaDriver(data: InsertNvidiaDriver): Promise<NvidiaDriver> {
+    const [row] = await db.insert(nvidiaDrivers)
+      .values({ ...data, lastSeenAt: new Date() })
+      .onConflictDoUpdate({
+        target: nvidiaDrivers.version,
+        set: {
+          releasedAt: data.releasedAt ?? null,
+          branch: data.branch ?? null,
+          tweaksValidated: data.tweaksValidated ?? false,
+          lastSeenAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async listNvidiaDrivers(): Promise<NvidiaDriver[]> {
+    return await db.select().from(nvidiaDrivers).orderBy(desc(nvidiaDrivers.releasedAt));
   }
 }
 

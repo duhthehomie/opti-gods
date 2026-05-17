@@ -247,6 +247,81 @@ export type UserReport = typeof userReports.$inferSelect;
 export const insertUserReportSchema = createInsertSchema(userReports).omit({ id: true, createdAt: true, resolvedAt: true, adminNote: true, status: true });
 export type InsertUserReport = z.infer<typeof insertUserReportSchema>;
 
+// Hardware rigs — deduplicated by stable hash, ingested by the desktop scanner
+export const hardwareRigs = pgTable("hardware_rigs", {
+  id: serial("id").primaryKey(),
+  hash: varchar("hash", { length: 64 }).notNull().unique(),
+  discordUserId: text("discord_user_id"),
+  cpu: text("cpu").notNull(),
+  gpu: text("gpu").notNull(),
+  vramMb: integer("vram_mb"),
+  ramGb: integer("ram_gb"),
+  ramMhz: integer("ram_mhz"),
+  motherboard: text("motherboard"),
+  chassis: text("chassis"),
+  coolingType: text("cooling_type"),
+  refreshHz: integer("refresh_hz"),
+  nicVendor: text("nic_vendor"),
+  storageSummary: jsonb("storage_summary").$type<Record<string, unknown>>(),
+  anticheats: text("anticheats").array().default([]),
+  firstSeenAt: timestamp("first_seen_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  seenCount: integer("seen_count").notNull().default(1),
+});
+export type HardwareRig = typeof hardwareRigs.$inferSelect;
+export const insertHardwareRigSchema = createInsertSchema(hardwareRigs).omit({
+  id: true, hash: true, firstSeenAt: true, lastSeenAt: true, seenCount: true,
+});
+export type InsertHardwareRig = z.infer<typeof insertHardwareRigSchema>;
+
+// Hardware scan payload submitted by the desktop client
+export const hardwareScanPayloadSchema = z.object({
+  cpu: z.string().min(1).max(200),
+  gpu: z.string().min(1).max(200),
+  vramMb: z.number().int().nonnegative().optional(),
+  ramGb: z.number().int().nonnegative().optional(),
+  ramMhz: z.number().int().nonnegative().optional(),
+  motherboard: z.string().max(200).optional(),
+  chassis: z.string().max(50).optional(),
+  coolingType: z.string().max(50).optional(),
+  refreshHz: z.number().int().nonnegative().optional(),
+  nicVendor: z.string().max(100).optional(),
+  storageSummary: z.record(z.unknown()).optional(),
+  anticheats: z.array(z.string().max(50)).optional(),
+});
+export type HardwareScanPayload = z.infer<typeof hardwareScanPayloadSchema>;
+
+// Tweak suggestions — community/AI-generated tweak ideas tied to a rig
+export type SuggestionStatus = "open" | "triaged" | "written" | "declined";
+export const tweakSuggestions = pgTable("tweak_suggestions", {
+  id: serial("id").primaryKey(),
+  rigHash: varchar("rig_hash", { length: 64 }).notNull().references(() => hardwareRigs.hash, { onDelete: "cascade" }),
+  suggestion: text("suggestion").notNull(),
+  category: text("category").notNull(),
+  status: text("status").$type<SuggestionStatus>().notNull().default("open"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type TweakSuggestion = typeof tweakSuggestions.$inferSelect;
+export const insertTweakSuggestionSchema = createInsertSchema(tweakSuggestions).omit({
+  id: true, status: true, createdAt: true,
+});
+export type InsertTweakSuggestion = z.infer<typeof insertTweakSuggestionSchema>;
+
+// NVIDIA drivers — version registry with adoption tracking
+export const nvidiaDrivers = pgTable("nvidia_drivers", {
+  version: text("version").primaryKey(),
+  releasedAt: timestamp("released_at"),
+  branch: text("branch"),
+  detectedOnRigsCount: integer("detected_on_rigs_count").notNull().default(0),
+  tweaksValidated: boolean("tweaks_validated").notNull().default(false),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+});
+export type NvidiaDriver = typeof nvidiaDrivers.$inferSelect;
+export const insertNvidiaDriverSchema = createInsertSchema(nvidiaDrivers).omit({
+  detectedOnRigsCount: true, lastSeenAt: true,
+});
+export type InsertNvidiaDriver = z.infer<typeof insertNvidiaDriverSchema>;
+
 export const insertPresetSchema = createInsertSchema(presets).omit({ id: true, createdAt: true });
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type Preset = typeof presets.$inferSelect;

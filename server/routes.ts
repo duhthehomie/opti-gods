@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { hardwareScanPayloadSchema, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale } from "./alerts";
 import { registerAuthRoutes } from "./auth";
@@ -4089,6 +4090,71 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
       res.end();
     }
+  });
+
+  // ============================================
+  // Hardware Database (V2) — desktop scan ingestion + admin review
+  // ============================================
+  app.post("/api/hardware/scan", rateLimit(10, 60_000, 30), async (req, res) => {
+    const parsed = hardwareScanPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid scan payload", fieldErrors: parsed.error.flatten().fieldErrors });
+    }
+    try {
+      const discordUserId = req.session.userId ?? null;
+      const { rig, isNew } = await storage.upsertRig(parsed.data, discordUserId);
+      return res.json({ rigHash: rig.hash, isNew });
+    } catch (err) {
+      console.error("[hardware] upsert failed:", err);
+      return res.status(500).json({ error: "Failed to record scan" });
+    }
+  });
+
+  app.get("/api/hardware/me", async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+    const rig = await storage.getLatestRigForUser(req.session.userId);
+    if (!rig) return res.status(404).json({ error: "No scans found" });
+    return res.json({ rig });
+  });
+
+  app.get("/api/admin/rigs", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 100;
+    const offset = req.query.offset ? parseInt(String(req.query.offset), 10) : 0;
+    const sortParam = String(req.query.sort ?? "lastSeenAt");
+    const sort = (["lastSeenAt", "seenCount", "firstSeenAt"] as const).includes(sortParam as any)
+      ? (sortParam as "lastSeenAt" | "seenCount" | "firstSeenAt") : "lastSeenAt";
+    const rigs = await storage.listRigs({ limit, offset, sort });
+    return res.json({ rigs });
+  });
+
+  app.get("/api/admin/suggestions", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const status = req.query.status ? String(req.query.status) as SuggestionStatus : undefined;
+    if (status && !["open", "triaged", "written", "declined"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    const suggestions = await storage.listSuggestions(status);
+    return res.json({ suggestions });
+  });
+
+  app.patch("/api/admin/suggestions/:id", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    const status = req.body?.status as SuggestionStatus | undefined;
+    if (!status || !["open", "triaged", "written", "declined"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status", fieldErrors: { status: ["must be open|triaged|written|declined"] } });
+    }
+    const updated = await storage.updateSuggestionStatus(id, status);
+    if (!updated) return res.status(404).json({ error: "Suggestion not found" });
+    return res.json({ suggestion: updated });
+  });
+
+  app.get("/api/admin/nvidia-drivers", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const drivers = await storage.listNvidiaDrivers();
+    return res.json({ drivers });
   });
 
   // Load AI chat session history
