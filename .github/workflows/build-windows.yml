@@ -77,6 +77,35 @@ jobs:
       - name: Sync version → tauri.conf.json
         run: npx tsx scripts/sync-version.ts
 
+      # V2.2 — PS1 smoke test. Generates representative reapply scripts
+      # (NVIDIA all / AMD all / Custom FPS prompt / Safe MSI Mode) and runs
+      # them through the PowerShell AST parser. Any syntax error in
+      # TWEAK_COMMANDS fails the build BEFORE the expensive Tauri compile.
+      # Non-destructive — we only parse, never invoke.
+      - name: Smoke-test generated PowerShell scripts
+        shell: pwsh
+        run: |
+          npx tsx scripts/smoke-test-ps1.ts
+          $dir = Join-Path (Get-Location) ".local/ps1-smoke"
+          $fixtures = Get-ChildItem -Path $dir -Filter *.ps1
+          if ($fixtures.Count -eq 0) { throw "no PS1 fixtures generated" }
+          $fail = 0
+          foreach ($f in $fixtures) {
+            $tokens = $null; $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              $fail++
+              Write-Host "::error file=$($f.Name)::PS1 parse error(s) in $($f.Name)"
+              foreach ($e in $errors) {
+                Write-Host "  L$($e.Extent.StartLineNumber):$($e.Extent.StartColumnNumber) — $($e.Message)"
+              }
+            } else {
+              Write-Host "[OK] $($f.Name) parsed cleanly"
+            }
+          }
+          if ($fail -gt 0) { throw "$fail PS1 fixture(s) failed parse — TWEAK_COMMANDS contains invalid PowerShell" }
+
       - name: Build Vite frontend
         run: npm run build
 
