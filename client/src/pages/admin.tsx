@@ -219,7 +219,8 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [manualFlagOpen, setManualFlagOpen] = useState(false);
   const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: SecuritySeverity }>({ ip: "", codeRef: "", details: "", severity: "medium" });
   const [flagging, setFlagging] = useState(false);
-  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string } | null>(null);
+  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string; alertOnNewRig: boolean; alertOnNewNvidiaDriver: boolean } | null>(null);
+  const [pollingDrivers, setPollingDrivers] = useState(false);
   const [savingAlerts, setSavingAlerts] = useState(false);
   const [runningAutoResolve, setRunningAutoResolve] = useState(false);
   const [autoResolvePreview, setAutoResolvePreview] = useState<{ count: number; days: number } | null>(null);
@@ -252,7 +253,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
-  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null }>({
+  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null; alertOnNewRig: boolean | null; alertOnNewNvidiaDriver: boolean | null }>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
   });
@@ -746,6 +747,8 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                       discordWebhookUrl: alertSettings?.discordWebhookUrl ?? "",
                       alertEmail: alertSettings?.alertEmail ?? "",
                       autoResolveDays: String(alertSettings?.autoResolveDays ?? 30),
+                      alertOnNewRig: alertSettings?.alertOnNewRig ?? true,
+                      alertOnNewNvidiaDriver: alertSettings?.alertOnNewNvidiaDriver ?? true,
                     })}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
                   >
@@ -772,6 +775,30 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                   >
                     <PlayCircle className="w-3.5 h-3.5" />
                     {loadingAutoResolvePreview ? "Checking…" : "Run Auto-resolve Now"}
+                  </button>
+                  <button
+                    data-testid="button-poll-nvidia-drivers"
+                    disabled={pollingDrivers}
+                    onClick={async () => {
+                      setPollingDrivers(true);
+                      try {
+                        const r = await fetch("/api/admin/nvidia-drivers/poll", { method: "POST", headers });
+                        if (!r.ok) throw new Error("Poll failed");
+                        const data: { fetched: number; inserted: number; alerted: number; errors: string[] } = await r.json();
+                        toast({
+                          title: "NVIDIA poll complete",
+                          description: `${data.fetched} fetched · ${data.inserted} new · ${data.alerted} alert${data.alerted !== 1 ? "s" : ""} sent${data.errors.length ? ` · ${data.errors.length} error(s)` : ""}`,
+                        });
+                      } catch (e) {
+                        toast({ title: "NVIDIA poll failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+                      } finally {
+                        setPollingDrivers(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", pollingDrivers && "animate-spin")} />
+                    {pollingDrivers ? "Polling…" : "Poll NVIDIA Drivers Now"}
                   </button>
                 </div>
               )}
@@ -908,6 +935,29 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     <p className="text-[9px] text-zinc-600 mt-1">Unresolved low/medium severity events older than this will be resolved automatically by the daily job (1–365 days)</p>
                   </div>
 
+                  {/* Aether intelligence toggles (Task #36) */}
+                  <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
+                    <p className="text-[10px] font-bold text-white uppercase tracking-wider">Aether Intelligence Alerts</p>
+                    {[
+                      { key: "alertOnNewRig" as const, label: "Alert on new rig", help: "Discord + email ping when a fresh hardware scan posts a never-seen rig" },
+                      { key: "alertOnNewNvidiaDriver" as const, label: "Alert on new NVIDIA driver", help: "Daily poller fires once per newly-released NVIDIA driver version" },
+                    ].map(t => (
+                      <label key={t.key} className="flex items-start gap-3 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 cursor-pointer hover:bg-zinc-900/60 transition-colors">
+                        <input
+                          data-testid={`toggle-${t.key}`}
+                          type="checkbox"
+                          checked={alertForm[t.key]}
+                          onChange={e => setAlertForm(f => f ? { ...f, [t.key]: e.target.checked } : f)}
+                          className="mt-0.5 accent-violet-500 w-4 h-4 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-zinc-200">{t.label}</p>
+                          <p className="text-[9px] text-zinc-500 mt-0.5">{t.help}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => setAlertForm(null)}
@@ -927,10 +977,12 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                             setSavingAlerts(false);
                             return;
                           }
-                          const body: Record<string, string | number | null> = {};
+                          const body: Record<string, string | number | boolean | null> = {};
                           body.discordWebhookUrl = alertForm.discordWebhookUrl.trim() || null;
                           body.alertEmail = alertForm.alertEmail.trim() || null;
                           body.autoResolveDays = parsedDays;
+                          body.alertOnNewRig = alertForm.alertOnNewRig;
+                          body.alertOnNewNvidiaDriver = alertForm.alertOnNewNvidiaDriver;
                           const r = await fetch("/api/admin/settings", {
                             method: "POST",
                             headers: { ...headers, "Content-Type": "application/json" },

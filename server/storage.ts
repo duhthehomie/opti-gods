@@ -116,6 +116,7 @@ export interface IStorage {
   deleteDiscountCode(id: number): Promise<void>;
   // Hardware rigs / tweak suggestions / NVIDIA drivers (V2 Hardware DB)
   upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }>;
+  markRigAlertSent(hash: string): Promise<void>;
   getRigByHash(hash: string): Promise<HardwareRig | null>;
   getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null>;
   listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]>;
@@ -811,7 +812,7 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
-  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null }): Promise<AdminSettings> {
+  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean }): Promise<AdminSettings> {
     const existing = await this.getAdminSettings();
     if (existing) {
       const [row] = await db.update(adminSettings)
@@ -903,6 +904,10 @@ export class DatabaseStorage implements IStorage {
       anticheats: payload.anticheats ?? [],
     }).returning();
     return { rig, isNew: true };
+  }
+
+  async markRigAlertSent(hash: string): Promise<void> {
+    await db.update(hardwareRigs).set({ alertSentAt: new Date() }).where(eq(hardwareRigs.hash, hash));
   }
 
   async getRigByHash(hash: string): Promise<HardwareRig | null> {

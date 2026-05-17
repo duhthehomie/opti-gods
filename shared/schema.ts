@@ -171,6 +171,9 @@ export const adminSettings = pgTable("admin_settings", {
   latestVersion: text("latest_version").default("2.00"),
   updaterCmdUrl: text("updater_cmd_url"),
   updatePageUrl: text("update_page_url"),
+  // Aether Intelligence alert toggles (Task #36)
+  alertOnNewRig: boolean("alert_on_new_rig").notNull().default(true),
+  alertOnNewNvidiaDriver: boolean("alert_on_new_nvidia_driver").notNull().default(true),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 
@@ -267,6 +270,7 @@ export const hardwareRigs = pgTable("hardware_rigs", {
   firstSeenAt: timestamp("first_seen_at").defaultNow(),
   lastSeenAt: timestamp("last_seen_at").defaultNow(),
   seenCount: integer("seen_count").notNull().default(1),
+  alertSentAt: timestamp("alert_sent_at"),
 });
 export type HardwareRig = typeof hardwareRigs.$inferSelect;
 export const insertHardwareRigSchema = createInsertSchema(hardwareRigs).omit({

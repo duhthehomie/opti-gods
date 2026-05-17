@@ -5,7 +5,8 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
-import { notifyCriticalEvent, notifySale } from "./alerts";
+import { notifyCriticalEvent, notifySale, sendNewRigAlert, sendNewDriverAlert } from "./alerts";
+import { pollNvidiaDrivers } from "./nvidia-poller";
 import { registerAuthRoutes } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
@@ -3476,6 +3477,8 @@ Read-Host "Press Enter to close this window"
       latestVersion: z.string().min(1).max(32).nullable().optional(),
       updaterCmdUrl: z.string().url().nullable().optional().or(z.literal("")),
       updatePageUrl: z.string().url().nullable().optional().or(z.literal("")),
+      alertOnNewRig: z.boolean().optional(),
+      alertOnNewNvidiaDriver: z.boolean().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -4103,6 +4106,22 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     try {
       const discordUserId = req.session.userId ?? null;
       const { rig, isNew } = await storage.upsertRig(parsed.data, discordUserId);
+      if (isNew && !rig.alertSentAt) {
+        const adminPanelUrl = getAdminPanelUrl(req);
+        (async () => {
+          try {
+            const settings = await storage.getAdminSettings();
+            if (settings?.alertOnNewRig === false) return;
+            const discordWebhookUrl = settings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
+            const alertEmail = settings?.alertEmail ?? process.env.ALERT_EMAIL ?? null;
+            if (!discordWebhookUrl && !alertEmail) return;
+            const result = await sendNewRigAlert(rig, { discordWebhookUrl, alertEmail, adminPanelUrl });
+            if (result.sentAny) await storage.markRigAlertSent(rig.hash);
+          } catch (e) {
+            console.error("[alerts] new-rig alert failed:", e);
+          }
+        })();
+      }
       return res.json({ rigHash: rig.hash, isNew });
     } catch (err) {
       console.error("[hardware] upsert failed:", err);
@@ -4179,6 +4198,17 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     if (!checkAdminKey(req, res)) return;
     const drivers = await storage.listNvidiaDrivers();
     return res.json({ drivers });
+  });
+
+  app.post("/api/admin/nvidia-drivers/poll", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const result = await pollNvidiaDrivers({ adminPanelUrl: getAdminPanelUrl(req) });
+      return res.json(result);
+    } catch (e) {
+      console.error("[nvidia-poller] manual trigger failed:", e);
+      return res.status(500).json({ error: "Driver poll failed", message: e instanceof Error ? e.message : String(e) });
+    }
   });
 
   app.post("/api/admin/nvidia-drivers", async (req, res) => {

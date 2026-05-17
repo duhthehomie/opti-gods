@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startAutoSendScheduler } from "./auto-send";
+import { startNvidiaDriverPoller } from "./nvidia-poller";
 import { seedAnnouncements } from "./seed";
 import { storage } from "./storage";
 
@@ -156,6 +157,7 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
       startAutoSendScheduler();
+      startNvidiaDriverPoller();
     },
   );
 })();

@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import type { SecurityEvent } from "@shared/schema";
+import type { SecurityEvent, HardwareRig, NvidiaDriver } from "@shared/schema";
 
 function getTransporter() {
   const user = process.env.EMAIL_USER;
@@ -229,4 +229,208 @@ export async function notifyCriticalEvent(
   }
 
   return { sentAny, discord: discordResult, email: emailResult, errors: errs };
+}
+
+// ── Hardware rig + NVIDIA driver alerts (Task #36) ────────────────────────────
+
+/** Heuristic — suggest up to 3 tweak categories worth offering for a new rig. */
+export function suggestTweakCategories(rig: HardwareRig): string[] {
+  const gpu = (rig.gpu || "").toLowerCase();
+  const cpu = (rig.cpu || "").toLowerCase();
+  const chassis = (rig.chassis || "").toLowerCase();
+  const out: string[] = [];
+
+  if (gpu.includes("nvidia") || gpu.includes("geforce") || gpu.includes("rtx") || gpu.includes("gtx")) {
+    out.push("NVIDIA Control Panel + driver tweaks");
+  } else if (gpu.includes("radeon") || gpu.includes("amd") || gpu.includes("vega") || gpu.includes("rx ")) {
+    if (gpu.includes("vega") || cpu.includes("ryzen 3 2") || cpu.includes("ryzen 5 2400") || cpu.includes("2200g") || cpu.includes("2400g")) {
+      out.push("AMD Integrated GPU (Vega) tweaks");
+    } else {
+      out.push("AMD Adrenalin + Radeon tweaks");
+    }
+  } else if (gpu.includes("intel") || gpu.includes("uhd") || gpu.includes("iris")) {
+    out.push("Intel iGPU tweaks");
+  }
+
+  if (chassis.includes("laptop") || chassis.includes("notebook")) {
+    out.push("Laptop power-plan + thermal tweaks");
+  }
+
+  if ((rig.vramMb ?? 0) > 0 && (rig.vramMb ?? 0) < 4096) {
+    out.push("Low-VRAM memory tweaks");
+  } else if ((rig.ramGb ?? 0) > 0 && (rig.ramGb ?? 0) <= 8) {
+    out.push("Memory pressure / pagefile tweaks");
+  }
+
+  if ((rig.anticheats ?? []).length > 0) {
+    out.push(`Anti-cheat safe baseline (${(rig.anticheats ?? []).join(", ")})`);
+  }
+
+  if (out.length < 3) out.push("Registry baseline + Debloat");
+  if (out.length < 3) out.push("Network + latency tweaks");
+
+  return out.slice(0, 3);
+}
+
+export async function sendNewRigAlert(
+  rig: HardwareRig,
+  opts: { discordWebhookUrl?: string | null; alertEmail?: string | null; adminPanelUrl: string }
+): Promise<NotifyResult> {
+  const { discordWebhookUrl, alertEmail, adminPanelUrl } = opts;
+  const errs: string[] = [];
+  let discordResult: NotifyResult["discord"] = "skipped";
+  let emailResult: NotifyResult["email"] = "skipped";
+
+  const cats = suggestTweakCategories(rig);
+  const rigUrl = `${adminPanelUrl.replace(/\/$/, "")}/admin?tab=rigs&hash=${encodeURIComponent(rig.hash)}`;
+  const specLine = [
+    rig.cpu,
+    rig.gpu + (rig.vramMb ? ` (${Math.round(rig.vramMb / 1024)}GB VRAM)` : ""),
+    rig.ramGb ? `${rig.ramGb}GB RAM${rig.ramMhz ? ` @ ${rig.ramMhz}MHz` : ""}` : null,
+    rig.chassis,
+  ].filter(Boolean).join(" · ");
+
+  if (discordWebhookUrl) {
+    try {
+      const payload = {
+        embeds: [{
+          title: "🧠 New Rig Detected — Aether",
+          color: 0x8b5cf6,
+          fields: [
+            { name: "CPU", value: rig.cpu || "—", inline: true },
+            { name: "GPU", value: rig.gpu || "—", inline: true },
+            { name: "Chassis", value: rig.chassis || "—", inline: true },
+            { name: "RAM", value: rig.ramGb ? `${rig.ramGb}GB${rig.ramMhz ? ` @ ${rig.ramMhz}MHz` : ""}` : "—", inline: true },
+            { name: "VRAM", value: rig.vramMb ? `${Math.round(rig.vramMb / 1024)}GB` : "—", inline: true },
+            { name: "Anti-cheats", value: (rig.anticheats ?? []).join(", ") || "—", inline: true },
+            { name: "Suggested tweak categories", value: cats.map(c => `• ${c}`).join("\n"), inline: false },
+            { name: "Hash", value: `\`${rig.hash.slice(0, 16)}…\``, inline: false },
+            { name: "Aether Rig Profile", value: `[Open in Admin → Hardware DB](${rigUrl})`, inline: false },
+          ],
+          footer: { text: `Rig #${rig.id} · Opti Gods Aether` },
+          timestamp: (rig.firstSeenAt ? new Date(rig.firstSeenAt) : new Date()).toISOString(),
+        }],
+      };
+      const res = await fetch(discordWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`Discord webhook failed: ${res.status} — ${await res.text()}`);
+      discordResult = "sent";
+    } catch (e) {
+      discordResult = "failed";
+      errs.push(`Discord: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  if (alertEmail) {
+    const transporter = getTransporter();
+    if (!transporter) {
+      emailResult = "unconfigured";
+      errs.push("Email: EMAIL_USER/EMAIL_PASS not set — skipped email delivery");
+    } else {
+      try {
+        await transporter.sendMail({
+          from: `"Opti Gods Aether" <${process.env.EMAIL_USER}>`,
+          to: alertEmail,
+          subject: `🧠 New Rig — ${rig.cpu} · ${rig.gpu}`,
+          html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0c0c0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div style="max-width:520px;margin:40px auto;padding:20px;">
+  <div style="background:#0c0820;border:1px solid #2a1a4a;border-left:4px solid #8b5cf6;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+    <p style="margin:0 0 4px;font-size:10px;color:#a78bfa;text-transform:uppercase;letter-spacing:2px;font-weight:bold;">New Rig Detected · Aether</p>
+    <p style="margin:0;font-size:16px;font-weight:900;color:#fff;">${specLine || rig.cpu}</p>
+  </div>
+  <div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin:0 0 20px;">
+    <p style="margin:0 0 8px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:2px;">Suggested tweak categories</p>
+    ${cats.map(c => `<p style="margin:4px 0;font-size:13px;color:#d4d4d8;">• ${c}</p>`).join("")}
+  </div>
+  <a href="${rigUrl}" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:10px 20px;border-radius:6px;letter-spacing:0.5px;">Open Rig Profile</a>
+  <div style="border-top:1px solid #1c1c1c;padding-top:16px;margin-top:24px;"><p style="color:#3f3f46;font-size:11px;margin:0;">Rig #${rig.id} · hash ${rig.hash.slice(0,16)}…</p></div>
+</div></body></html>`,
+          text: `New rig: ${specLine}\n\nSuggested:\n${cats.map(c => `- ${c}`).join("\n")}\n\n${rigUrl}`,
+        });
+        emailResult = "sent";
+      } catch (e) {
+        emailResult = "failed";
+        errs.push(`Email: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+
+  if (errs.length) console.error("[alerts] sendNewRigAlert errors:", errs.join(" | "));
+  return { sentAny: discordResult === "sent" || emailResult === "sent", discord: discordResult, email: emailResult, errors: errs };
+}
+
+export async function sendNewDriverAlert(
+  driver: NvidiaDriver,
+  opts: { discordWebhookUrl?: string | null; alertEmail?: string | null; adminPanelUrl: string }
+): Promise<NotifyResult> {
+  const { discordWebhookUrl, alertEmail, adminPanelUrl } = opts;
+  const errs: string[] = [];
+  let discordResult: NotifyResult["discord"] = "skipped";
+  let emailResult: NotifyResult["email"] = "skipped";
+  const driverUrl = `${adminPanelUrl.replace(/\/$/, "")}/admin?tab=drivers`;
+
+  if (discordWebhookUrl) {
+    try {
+      const payload = {
+        embeds: [{
+          title: `🟢 New NVIDIA Driver — ${driver.version}`,
+          color: 0x22c55e,
+          fields: [
+            { name: "Version", value: driver.version, inline: true },
+            { name: "Branch", value: driver.branch || "—", inline: true },
+            { name: "Released", value: driver.releasedAt ? new Date(driver.releasedAt).toISOString().slice(0, 10) : "—", inline: true },
+            { name: "Action", value: `[Validate tweaks in Admin → NVIDIA Tracker](${driverUrl})`, inline: false },
+          ],
+          footer: { text: "Opti Gods Aether · Driver Poller" },
+          timestamp: new Date().toISOString(),
+        }],
+      };
+      const res = await fetch(discordWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`Discord webhook failed: ${res.status} — ${await res.text()}`);
+      discordResult = "sent";
+    } catch (e) {
+      discordResult = "failed";
+      errs.push(`Discord: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  if (alertEmail) {
+    const transporter = getTransporter();
+    if (!transporter) {
+      emailResult = "unconfigured";
+      errs.push("Email: EMAIL_USER/EMAIL_PASS not set — skipped email delivery");
+    } else {
+      try {
+        await transporter.sendMail({
+          from: `"Opti Gods Aether" <${process.env.EMAIL_USER}>`,
+          to: alertEmail,
+          subject: `🟢 New NVIDIA Driver — ${driver.version}`,
+          html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0c0c0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div style="max-width:520px;margin:40px auto;padding:20px;">
+  <div style="background:#06170c;border:1px solid #14401f;border-left:4px solid #22c55e;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+    <p style="margin:0 0 4px;font-size:10px;color:#4ade80;text-transform:uppercase;letter-spacing:2px;font-weight:bold;">New NVIDIA Driver</p>
+    <p style="margin:0;font-size:20px;font-weight:900;color:#fff;">v${driver.version}</p>
+    ${driver.branch ? `<p style="margin:4px 0 0;font-size:11px;color:#a1a1aa;">Branch ${driver.branch}</p>` : ""}
+  </div>
+  <a href="${driverUrl}" style="display:inline-block;background:#22c55e;color:#000;text-decoration:none;font-size:12px;font-weight:700;padding:10px 20px;border-radius:6px;letter-spacing:0.5px;">Open NVIDIA Tracker</a>
+</div></body></html>`,
+          text: `New NVIDIA driver: v${driver.version}${driver.branch ? ` (branch ${driver.branch})` : ""}\n\n${driverUrl}`,
+        });
+        emailResult = "sent";
+      } catch (e) {
+        emailResult = "failed";
+        errs.push(`Email: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+
+  if (errs.length) console.error("[alerts] sendNewDriverAlert errors:", errs.join(" | "));
+  return { sentAny: discordResult === "sent" || emailResult === "sent", discord: discordResult, email: emailResult, errors: errs };
 }
