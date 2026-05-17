@@ -126,6 +126,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   FiveMMMCSSAudio: false,
   FiveMDisableMPO: false,
   FiveMFixNvidiaOverlay: false,
+  FiveMFixProductId: false,
   // Process Lasso
   ProcessLassoProBalance: false,
   ProcessLassoSmartTrim: false,
