@@ -284,6 +284,11 @@ export async function sendNewRigAlert(
   const cats = suggestTweakCategories(rig);
   // adminPanelUrl already ends in /admin — append query params directly
   const rigUrl = `${adminPanelUrl.replace(/\/$/, "")}?tab=rigs&hash=${encodeURIComponent(rig.hash)}`;
+
+  if (!discordWebhookUrl && !alertEmail) {
+    console.info(`[alerts] sendNewRigAlert: no channels configured — skipping rig #${rig.id}`);
+    return { sentAny: false, discord: "skipped", email: "skipped", errors: [] };
+  }
   const specLine = [
     rig.cpu,
     rig.gpu + (rig.vramMb ? ` (${Math.round(rig.vramMb / 1024)}GB VRAM)` : ""),
@@ -381,6 +386,11 @@ export async function sendNewDriverAlert(
   let emailResult: NotifyResult["email"] = "skipped";
   // adminPanelUrl already ends in /admin
   const driverUrl = `${adminPanelUrl.replace(/\/$/, "")}?tab=drivers`;
+
+  if (!discordWebhookUrl && !alertEmail) {
+    console.info(`[alerts] sendNewDriverAlert: no channels configured — skipping v${driver.version}`);
+    return { sentAny: false, discord: "skipped", email: "skipped", errors: [] };
+  }
   const rigLines = recentRigs.slice(0, 5).map(r =>
     `• ${r.cpu} · ${r.gpu}${r.vramMb ? ` ${Math.round(r.vramMb / 1024)}GB` : ""}${r.chassis ? ` · ${r.chassis}` : ""}`
   );

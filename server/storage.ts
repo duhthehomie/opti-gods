@@ -124,6 +124,7 @@ export interface IStorage {
   listSuggestions(status?: SuggestionStatus): Promise<TweakSuggestion[]>;
   updateSuggestionStatus(id: number, status: SuggestionStatus): Promise<TweakSuggestion | null>;
   upsertNvidiaDriver(data: InsertNvidiaDriver): Promise<NvidiaDriver>;
+  markDriverAlertSent(version: string): Promise<void>;
   listNvidiaDrivers(): Promise<NvidiaDriver[]>;
 }
 
@@ -975,6 +976,10 @@ export class DatabaseStorage implements IStorage {
 
   async listNvidiaDrivers(): Promise<NvidiaDriver[]> {
     return await db.select().from(nvidiaDrivers).orderBy(desc(nvidiaDrivers.releasedAt));
+  }
+
+  async markDriverAlertSent(version: string): Promise<void> {
+    await db.update(nvidiaDrivers).set({ alertSentAt: new Date() }).where(eq(nvidiaDrivers.version, version));
   }
 }
 

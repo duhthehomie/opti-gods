@@ -321,10 +321,11 @@ export const nvidiaDrivers = pgTable("nvidia_drivers", {
   detectedOnRigsCount: integer("detected_on_rigs_count").notNull().default(0),
   tweaksValidated: boolean("tweaks_validated").notNull().default(false),
   lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  alertSentAt: timestamp("alert_sent_at"),
 });
 export type NvidiaDriver = typeof nvidiaDrivers.$inferSelect;
 export const insertNvidiaDriverSchema = createInsertSchema(nvidiaDrivers).omit({
-  detectedOnRigsCount: true, lastSeenAt: true,
+  detectedOnRigsCount: true, lastSeenAt: true, alertSentAt: true,
 });
 export type InsertNvidiaDriver = z.infer<typeof insertNvidiaDriverSchema>;
 

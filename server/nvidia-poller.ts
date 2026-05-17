@@ -87,10 +87,18 @@ export async function pollNvidiaDrivers(opts: { adminPanelUrl: string }): Promis
   const discordWebhookUrl = settings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
   const alertEmail = settings?.alertEmail ?? process.env.ALERT_EMAIL ?? null;
 
-  // Recent rigs context for driver alerts — top 10 most-recently-seen rigs.
+  // Recent rigs context for driver alerts. Rigs don't currently store the
+  // active NVIDIA driver version, so we surface the top-10 most-recently-seen
+  // rigs as a proxy — gives the admin a sense of the install base that will
+  // potentially upgrade to this version next.
   const recentRigs = allowAlerts && (discordWebhookUrl || alertEmail)
     ? await storage.listRigs({ limit: 10, sort: "lastSeenAt" })
     : [];
+
+  // In-batch dedup guard — a single feed response can theoretically list a
+  // version more than once. Track which versions we've already alerted on this
+  // run so we don't double-fire even before the DB marker is persisted.
+  const alertedThisRun = new Set<string>();
 
   for (const d of drivers) {
     const isNew = !known.has(d.version);
@@ -107,12 +115,25 @@ export async function pollNvidiaDrivers(opts: { adminPanelUrl: string }): Promis
         // the admin can begin building one.
         const exceedsBaseline = validatedBaseline === null
           || compareDriverVersions(d.version, validatedBaseline) > 0;
-        if (allowAlerts && exceedsBaseline && (discordWebhookUrl || alertEmail)) {
+        const alreadyAlerted = row.alertSentAt != null || alertedThisRun.has(d.version);
+        if (!allowAlerts) {
+          console.info(`[nvidia-poller] alert toggle off — skipping alert for v${d.version}`);
+        } else if (!exceedsBaseline) {
+          console.info(`[nvidia-poller] v${d.version} <= validated baseline v${validatedBaseline} — skipping alert`);
+        } else if (!discordWebhookUrl && !alertEmail) {
+          console.info(`[nvidia-poller] no Discord/email channels configured — skipping alert for v${d.version}`);
+        } else if (alreadyAlerted) {
+          console.info(`[nvidia-poller] v${d.version} already alerted — skipping`);
+        } else {
           const result = await sendNewDriverAlert(row, {
             discordWebhookUrl, alertEmail, adminPanelUrl: opts.adminPanelUrl,
             recentRigs, validatedBaseline,
           });
-          if (result.sentAny) alerted++;
+          if (result.sentAny) {
+            alerted++;
+            alertedThisRun.add(d.version);
+            await storage.markDriverAlertSent(d.version);
+          }
         }
       }
     } catch (e) {
