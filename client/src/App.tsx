@@ -103,7 +103,6 @@ function Router() {
       <Route path="/process-lasso">{() => <Redirect to="/tweaks#process-lasso" />}</Route>
       <Route path="/processes">{() => <Redirect to="/tweaks#processes" />}</Route>
       <Route path="/wintitus">{() => <Redirect to="/tweaks#wintitus" />}</Route>
-      <Route path="/boost">{() => <Redirect to="/tweaks" />}</Route>
 
       {/* Redirects into Tools & Fixes tabs */}
       <Route path="/fixes">{() => <Redirect to="/tools#fixes" />}</Route>
