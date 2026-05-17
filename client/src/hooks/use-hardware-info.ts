@@ -142,25 +142,52 @@ function detectGPUViaWebGL(): { gpuName: string; gpuVendor: string } {
  * "Intel(R) UHD Graphics 630; NVIDIA GeForce RTX 3060 Laptop GPU" or split
  * over newlines.
  */
+/**
+ * Split a raw GPU string into individual GPU names.
+ * Only splits on explicit separators (newline, CR, semicolon, pipe) and on a
+ * conservative vendor-after-vendor boundary that requires the prior chunk to
+ * already contain a vendor anchor — so a normal single name like
+ * "NVIDIA GeForce RTX 3060 Laptop GPU" stays in one piece while a real run-on
+ * like "Intel(R) UHD Graphics 630 NVIDIA GeForce RTX 3060" splits correctly.
+ */
 function splitGpuList(raw: string): string[] {
   if (!raw) return [];
-  // Primary separators: newline, semicolon, pipe, " | ", " / " (uncommon)
-  const parts = raw
+  const initial = raw
     .split(/[\r\n;|]+/g)
     .map((s) => s.trim())
     .filter(Boolean);
-  // Detect a "Vendor X then another Vendor" run-on (no separator) and split it.
+
+  const VENDOR_ANCHOR = /\b(nvidia|amd|radeon|geforce|quadro|tesla|titan|gtx|rtx|intel|iris|uhd|arc|vega|ryzen)\b/i;
+  const VENDOR_HEAD = /^(NVIDIA|AMD|Intel|Radeon|GeForce|Quadro|Iris|Arc)\b/i;
   const out: string[] = [];
-  for (const part of parts) {
-    const splits = part.split(
-      /\s+(?=(?:NVIDIA|GeForce|Quadro|AMD|Radeon|Intel|Iris|UHD|HD\s+Graphics|Arc\b)\b)/gi
-    );
-    for (const s of splits) {
-      const cleaned = s.replace(/^[\s,]+|[\s,]+$/g, "");
-      if (cleaned) out.push(cleaned);
+
+  for (const part of initial) {
+    // Walk through the string; only split when we hit a vendor head word
+    // AND the text before it already mentions a vendor (so we don't split
+    // a single model name like "NVIDIA GeForce RTX 3060").
+    let buf = "";
+    const tokens = part.split(/\s+/);
+    for (const tok of tokens) {
+      if (
+        buf &&
+        VENDOR_HEAD.test(tok) &&
+        VENDOR_ANCHOR.test(buf) &&
+        // The vendor anchor in buf must be a *different* vendor — splitting
+        // "NVIDIA NVIDIA …" is still fine because the second one is a new GPU.
+        // We approximate this with: a model-like token (digit, "Graphics",
+        // ")") appears in buf, suggesting the prior GPU's name is complete.
+        /(\d|graphics|\))/i.test(buf)
+      ) {
+        out.push(buf.trim().replace(/[,;]+$/, ""));
+        buf = tok;
+      } else {
+        buf = buf ? `${buf} ${tok}` : tok;
+      }
     }
+    if (buf.trim()) out.push(buf.trim().replace(/[,;]+$/, ""));
   }
-  // De-dupe by case-insensitive name
+
+  // De-dupe by case-insensitive name.
   const seen = new Set<string>();
   return out.filter((n) => {
     const k = n.toLowerCase();
@@ -188,7 +215,8 @@ export function classifyGpu(rawName: string): GpuEntry {
   // ---------- Integrated? ----------
   let isIntegrated = false;
   if (vendor === "intel") {
-    isIntegrated = !/\barc\s+a?\d{3,}|arc\s+(a|b)\d|\barc\s+pro\b/.test(n); // Arc dGPU is the only Intel discrete family
+    // Arc dGPU is the only Intel discrete family. Allow "(tm)" / "(r)" between "arc" and the model.
+    isIntegrated = !/\barc\b(?:\([^)]*\))?[\s\-]*[ab]?\d{3,}|\barc\s+pro\b/.test(n);
   } else if (vendor === "amd") {
     isIntegrated = /vega\s*[368]\b|vega\s*11\b|radeon\s+graphics(?!\s+pro)|radeon\s+\d+m?\s+graphics|ryzen.*graphics|\bapu\b|integrated/.test(n);
   } else if (vendor === "nvidia") {
