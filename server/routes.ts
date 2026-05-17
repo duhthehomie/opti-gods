@@ -465,6 +465,33 @@ const TWEAK_COMMANDS: Record<string, string> = {
   AmdRadeonBoost: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_RadeonBoostEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_RadeonBoostMinRes' -Value 75 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Radeon Boost enabled (min resolution 75%) — dynamic resolution scaling during fast camera movement" -ForegroundColor Green`,
   AmdEnhancedSync: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_EnhancedSyncEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Enhanced Sync enabled — uncapped FPS above refresh rate with tear-free fallback below it" -ForegroundColor Green`,
 
+  // ── V2.2 Reapplicable driver tweaks (NVIDIA) ─────────────────────────────────
+  // These are written under the GPU device class so they survive game restarts
+  // but are wiped on driver reinstall. The "Reapply driver tweaks" button on the
+  // tab re-emits these as a focused PS1 the user can run after a driver update.
+  NvTextureFilterHighPerf: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'PS_TexFilterAnisoOptOn' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PS_TexFilterLODBiasAllow' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PS_TexFilterNoNeg' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PS_TexFilterQuality' -Value 0 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Texture Filtering Quality = High Performance (driver class registry, persists across game restarts)" -ForegroundColor Green`,
+  NvLowLatencyUltra: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'RmLowLatencyMode' -Value 2 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'FlipQueueSize' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Low Latency Mode = Ultra (RmLowLatencyMode=2, FlipQueueSize=1) — equivalent to NVCP 'Ultra' setting" -ForegroundColor Green`,
+  NvThreadedOptOn: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'OGL_ThreadControl' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'D3D_ThreadControl' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Threaded Optimization = ON globally (OpenGL + D3D thread offload to driver thread)" -ForegroundColor Green`,
+  NvPowerMgmtMax: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'PowerMizerEnable' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PerfLevelSrc' -Value 0x2222 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PowerMizerLevel' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'PowerMizerLevelAC' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Power Management Mode = Prefer Maximum Performance (PowerMizer locked to P0)" -ForegroundColor Green`,
+  NvFrameLimit60: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'FrameRateLimit' -Value 60 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'FrameRateLimitEnable' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Driver-level frame rate cap = 60 FPS" -ForegroundColor Green`,
+  NvFrameLimit144: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'FrameRateLimit' -Value 144 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'FrameRateLimitEnable' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Driver-level frame rate cap = 144 FPS" -ForegroundColor Green`,
+  NvFrameLimit240: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'FrameRateLimit' -Value 240 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'FrameRateLimitEnable' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[NVIDIA] Driver-level frame rate cap = 240 FPS" -ForegroundColor Green`,
+
+  // ── V2.2 Reapplicable driver tweaks (AMD) ────────────────────────────────────
+  AmdTextureFilterPerf: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'CatalystAI' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'TFQ' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'TextureOpt' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Texture Filtering Quality = Performance (CatalystAI=0, TFQ=0, TextureOpt=1) — recovers ~3-5% texture fill rate" -ForegroundColor Green`,
+  AmdSurfaceFormatOpt: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'EnableSurfaceFormatReplacements' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_EnableSFR' -Value 1 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Surface Format Optimization ON — driver substitutes lower-precision render targets where safe, ~1-3% bandwidth saved" -ForegroundColor Green`,
+  AmdTessOverride16x: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'TessellationMode' -Value 2 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'MaxTessellation' -Value 16 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Tessellation capped at 16x — eliminates wasteful over-tessellation in Witcher 3 / Crysis 3 / GTA V with no visible loss" -ForegroundColor Green`,
+  AmdRadeonBoostOff: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_RadeonBoostEnabled' -Value 0 -Type DWord -Force -EA SilentlyContinue }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'EnableBoost' -Value 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[AMD] Radeon Boost OFF — prevents dynamic resolution scaling (use this if Boost is causing texture pop / blur in competitive titles)" -ForegroundColor Green`,
+  AmdFRTC60: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_FRTCEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_FRTCMaxFPS' -Value 60 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Frame Rate Target Control = 60 FPS (Adrenalin FRTC)" -ForegroundColor Green`,
+  AmdFRTC144: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_FRTCEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_FRTCMaxFPS' -Value 144 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Frame Rate Target Control = 144 FPS (Adrenalin FRTC)" -ForegroundColor Green`,
+  AmdFRTC240: `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Set-ItemProperty $_.PSPath -Name 'KMD_FRTCEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty $_.PSPath -Name 'KMD_FRTCMaxFPS' -Value 240 -Type DWord -Force -EA SilentlyContinue }; Write-Host "[AMD] Frame Rate Target Control = 240 FPS (Adrenalin FRTC)" -ForegroundColor Green`,
+
+  // ── V2.2 Safe MSI mode (multi-device, NEVER touches Affinity Policy) ─────────
+  // Replaces the legacy msiutilv3 GUI tool with a pure-registry equivalent that
+  // explicitly wipes the DevicePolicy / DevicePriority / AssignmentSetOverride
+  // keys (the V1 BSOD trigger). Targets GPU + NIC + NVMe controllers.
+  EnableMSIMode_Safe: `Write-Host "[MSI-Safe] Enabling MSI mode on GPU + NIC + NVMe controllers (BSOD-safe — never writes DevicePolicy/DevicePriority)..." -ForegroundColor Cyan; $targets = @(); $gpus = @(Get-PnpDevice -Class Display -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' }); If ($gpus.Count -eq 1) { $targets += $gpus } ElseIf ($gpus.Count -gt 1) { Write-Host "[MSI-Safe] Skipping GPU — multiple display adapters detected (hybrid iGPU+dGPU). Hybrid configs can BSOD with forced MSI." -ForegroundColor Yellow }; $targets += @(Get-PnpDevice -Class Net -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.FriendlyName -notmatch 'Virtual|Loopback|Bluetooth|WAN|Tunnel|Hyper-V' }); $targets += @(Get-PnpDevice -Class SCSIAdapter -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.FriendlyName -match 'NVMe|Standard NVM' }); ForEach ($d in $targets) { $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($d.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; $affPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($d.InstanceId)\\Device Parameters\\Interrupt Management\\Affinity Policy"; New-Item -Path $msiPath -Force -EA SilentlyContinue | Out-Null; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -EA SilentlyContinue; If (Test-Path $affPath) { Remove-ItemProperty -Path $affPath -Name 'DevicePolicy' -EA SilentlyContinue; Remove-ItemProperty -Path $affPath -Name 'DevicePriority' -EA SilentlyContinue; Remove-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -EA SilentlyContinue }; Write-Host "[MSI-Safe] $($d.FriendlyName) → MSI enabled, Affinity Policy wiped" -ForegroundColor Green }; Write-Host "[MSI-Safe] Done on $($targets.Count) device(s). Reboot required." -ForegroundColor Cyan`,
+
   // ── FiveM: GTX 1650 SUPER specific tweaks ────────────────────────────────────
   FiveM1650DisableHAGS: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[GTX 1650 SUPER] HAGS disabled (HwSchMode=1). Turing-gen GTX 16xx cards have the same HAGS scheduler overhead as Pascal — frame-time variance drops noticeably in populated FiveM servers. Reboot required." -ForegroundColor Green`,
 
@@ -767,6 +794,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (Test-Path $gamePath) { Remove-ItemProperty $gamePath 'MaximumPreRenderedFrames' -EA SilentlyContinue; Set-ItemProperty $gamePath 'GPU Priority' 2 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] Pre-rendered frames limit removed (back to driver default)" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] HAGS disabled" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'PlatformSupportMiracast' -EA SilentlyContinue; Write-Host "[OK] GraphicsDrivers registry hints cleared" -ForegroundColor Green`,
+      `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $nvNames = @('FrameRateLimit','FrameRateLimitEnable','PS_TexFilterAnisoOptOn','PS_TexFilterLODBiasAllow','PS_TexFilterNoNeg','PS_TexFilterQuality','RmLowLatencyMode','FlipQueueSize','OGL_ThreadControl','D3D_ThreadControl','PowerMizerEnable','PerfLevelSrc','PowerMizerLevel','PowerMizerLevelAC'); Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { $p = $_.PSPath; foreach ($n in $nvNames) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }; Write-Host "[OK] V2.2 NVIDIA driver-class tweaks (Frame Limit / Tex Filter / Low Latency Ultra / Threaded Opt / Power Mgmt Max) cleared" -ForegroundColor Green`,
     ],
   },
   amd: {
@@ -777,6 +805,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'UseChill' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Radeon Chill re-enabled" -ForegroundColor Green`,
       `$gpuPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon|ATI' } | ForEach-Object { Set-ItemProperty $_.PSPath 'PP_PowerProfile' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisableDrmdmaPowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisableGmcPowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'DisablePowerGating' 0 -Type DWord -EA SilentlyContinue; Set-ItemProperty $_.PSPath 'PP_DpmForceHighestDpmTable' 0 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] AMD power profile and power gating restored to defaults" -ForegroundColor Green`,
       `@('AMD External Events Utility','amdfendrsr','AmdCVSDiagService') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] AMD telemetry services re-enabled" -ForegroundColor Green`,
+      `$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $amdNames = @('CatalystAI','TFQ','TextureOpt','EnableSurfaceFormatReplacements','KMD_EnableSFR','TessellationMode','MaxTessellation','KMD_FRTCEnabled','KMD_FRTCMaxFPS','KMD_RadeonBoostEnabled','KMD_RadeonBoostMinRes'); Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { $p = $_.PSPath; foreach ($n in $amdNames) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }; Write-Host "[OK] V2.2 AMD driver-class tweaks (Tex Filter / Surface Fmt / Tess 16x / FRTC / Radeon Boost) cleared" -ForegroundColor Green`,
     ],
   },
   process: {
@@ -1920,6 +1949,66 @@ Write-Output $json
     // State" — the client MUST NOT mark the tweak as reverted.
     res.setHeader('X-Undo-Available', hasGranularUndo ? 'true' : 'false');
     res.setHeader('Access-Control-Expose-Headers', 'X-Undo-Available');
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+  });
+
+  // ── V2.2 Reapply driver tweaks ─────────────────────────────────────────────
+  // After a driver update wipes the GPU device-class registry, the user clicks
+  // "Reapply driver tweaks" on the NVIDIA or AMD tab and downloads a focused
+  // PS1 that only re-emits the driver-class commands they selected.
+  app.post('/api/script/driver-reapply', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required." });
+    }
+    const tab = req.body?.tab;
+    const ids: unknown = req.body?.tweakIds;
+    if (tab !== 'nvidia' && tab !== 'amd') {
+      return res.status(400).json({ message: 'tab must be "nvidia" or "amd"' });
+    }
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 64
+        || ids.some((id: unknown) => typeof id !== 'string' || !/^[A-Za-z0-9_]{2,64}$/.test(id))) {
+      return res.status(400).json({ message: 'Invalid tweakIds' });
+    }
+    // Strict per-tab allowlist — only the V2.2 reapplicable driver tweaks may
+    // be emitted through this endpoint. Prevents abuse of the focused-script
+    // path to generate arbitrary tweak PS1s (those go through /api/script/generate).
+    const NVIDIA_REAPPLY_ALLOWLIST = new Set([
+      'NvTextureFilterHighPerf','NvLowLatencyUltra','NvThreadedOptOn','NvPowerMgmtMax',
+      'NvFrameLimit60','NvFrameLimit144','NvFrameLimit240','EnableMSIMode_Safe',
+    ]);
+    const AMD_REAPPLY_ALLOWLIST = new Set([
+      'AmdTextureFilterPerf','AmdSurfaceFormatOpt','AmdTessOverride16x','AmdRadeonBoostOff',
+      'AmdFRTC60','AmdFRTC144','AmdFRTC240','EnableMSIMode_Safe',
+    ]);
+    const allow = tab === 'nvidia' ? NVIDIA_REAPPLY_ALLOWLIST : AMD_REAPPLY_ALLOWLIST;
+    const rejected = (ids as string[]).filter(id => !allow.has(id));
+    if (rejected.length > 0) {
+      return res.status(400).json({ message: `Tweak id(s) not in ${tab} driver-reapply allowlist: ${rejected.slice(0, 5).join(', ')}` });
+    }
+    const cmds: string[] = [];
+    for (const id of ids as string[]) {
+      const cmd = TWEAK_COMMANDS[id];
+      if (cmd) cmds.push(`# --- ${id} ---\r\n${cmd}`);
+    }
+    if (cmds.length === 0) {
+      return res.status(400).json({ message: 'No known driver tweaks in the supplied id list.' });
+    }
+    const label = tab === 'nvidia' ? 'NVIDIA' : 'AMD';
+    const header = [
+      `# Opti Gods by leaq — Reapply ${label} driver tweaks`,
+      `# Generated: ${new Date().toISOString()}`,
+      `# Run after a driver update has wiped the GPU device-class registry tweaks.`,
+      `# This script ONLY re-emits the ${cmds.length} tweak(s) you currently have selected on the ${label} tab.`,
+      ``,
+      `If (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Host "[ERROR] Run this script as Administrator." -ForegroundColor Red; exit 1 }`,
+      `Write-Host "[Reapply] Re-writing ${cmds.length} ${label} driver tweak(s)..." -ForegroundColor Cyan`,
+      ``,
+    ].join('\r\n');
+    const footer = `\r\n\r\nWrite-Host "[Reapply] Done. Reboot to fully activate driver registry changes." -ForegroundColor Green\r\n`;
+    const script = header + cmds.join('\r\n\r\n') + footer;
+    fireAuditLog("apply", ids as string[], req.body?.sessionToken, { format: "ps1", kind: "driver-reapply", tab }).catch(() => {});
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Reapply-${label}.ps1"`);
     res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 

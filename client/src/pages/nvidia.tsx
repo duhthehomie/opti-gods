@@ -14,7 +14,37 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay"];
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimit60","NvFrameLimit144","NvFrameLimit240","EnableMSIMode_Safe"];
+
+// V2.2 — driver-class tweaks that survive game restarts but are wiped on driver
+// reinstall. The "Reapply driver tweaks" button re-emits ONLY these as a focused
+// PS1 so the user doesn't have to re-download a full preset after a driver update.
+const NVIDIA_DRIVER_REAPPLY_TWEAKS = [
+  { id: "NvTextureFilterHighPerf", title: "Texture Filtering Quality = High Performance", desc: "Writes PS_TexFilterQuality=0 and aniso optimization flags directly to the NVIDIA GPU class registry — equivalent to setting Texture Filtering Quality to 'High Performance' in NVCP, but persists driver-side. Recovers ~3-5% texture fill rate.", badge: "RECOMMENDED", impact: "MED" as const },
+  { id: "NvLowLatencyUltra",       title: "Low Latency Mode = Ultra",                       desc: "Sets RmLowLatencyMode=2 (Ultra) and FlipQueueSize=1 — equivalent to NVCP 'Low Latency Mode: Ultra'. Reduces render-queue depth to 1 frame for the lowest possible input-to-photon latency.", badge: "RECOMMENDED", impact: "HIGH" as const },
+  { id: "NvThreadedOptOn",         title: "Threaded Optimization = ON (Global)",            desc: "Sets OGL_ThreadControl=1 and D3D_ThreadControl=1 — forces driver to offload OpenGL/D3D work to a dedicated thread. Default is 'Auto' which the driver sometimes guesses wrong on — forcing ON is correct for ~95% of modern titles.", badge: "RECOMMENDED", impact: "MED" as const },
+  { id: "NvPowerMgmtMax",          title: "Power Management Mode = Prefer Max Performance", desc: "Locks PowerMizer to P0 state (PerfLevelSrc=0x2222) so the GPU never drops to lower power states between frames. Eliminates the ~1-2 frame stutter that happens when the GPU upclocks during a transition.", badge: "RECOMMENDED", impact: "HIGH" as const },
+  { id: "NvFrameLimit60",          title: "Driver Frame Rate Cap = 60 FPS",                 desc: "Driver-level FPS cap at 60. Best for 60Hz monitors — eliminates screen tearing without input-lag cost of V-Sync. Only enable ONE of the frame-limit toggles.", badge: "60Hz",        impact: "MED" as const },
+  { id: "NvFrameLimit144",         title: "Driver Frame Rate Cap = 144 FPS",                desc: "Driver-level FPS cap at 144. Best for 144Hz monitors. Only enable ONE of the frame-limit toggles.", badge: "144Hz",  impact: "MED" as const },
+  { id: "NvFrameLimit240",         title: "Driver Frame Rate Cap = 240 FPS",                desc: "Driver-level FPS cap at 240. Best for 240Hz competitive monitors. Only enable ONE of the frame-limit toggles.", badge: "240Hz", impact: "MED" as const },
+  { id: "EnableMSIMode_Safe",      title: "Safe MSI Mode (multi-device, BSOD-safe)",        desc: "V2.2 replacement for the V1 EnableMSIMode toggle that BSOD'd users on next boot. Enables Message Signaled Interrupts on GPU + active NICs + NVMe controllers, while explicitly WIPING the dangerous DevicePolicy/DevicePriority/AssignmentSetOverride keys. Skips GPU on hybrid iGPU+dGPU systems.", badge: "V2.2 SAFE", impact: "HIGH" as const },
+];
+
+async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) {
+  const res = await fetch('/api/script/driver-reapply', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tab, tweakIds }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `OptiGods-Reapply-${tab.toUpperCase()}.ps1`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt"];
 
 const PRESETS = [
@@ -678,6 +708,49 @@ export default function Nvidia() {
               onCheckedChange={(v) => setTweak("NvidiaGpuBgOptimize", v)}
               delay={3}
             />
+          </div>
+        </section>
+
+        {/* V2.2 Reapplicable Driver Tweaks */}
+        <section data-testid="section-nvidia-driver-reapply">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const selected = NVIDIA_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  data-testid="button-reapply-nvidia-driver"
+                  disabled={selected.length === 0}
+                  onClick={async () => {
+                    try { await downloadDriverReapply('nvidia', selected); }
+                    catch (e) { console.error(e); alert('Reapply download failed — make sure your Pro session is active.'); }
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {selected.length === 0 ? "Select tweaks first" : `Reapply driver tweaks (${selected.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks are written under the NVIDIA GPU device class. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every driver update to re-write only these keys (no full preset rerun needed).</p>
+          <div className="space-y-3">
+            {NVIDIA_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
           </div>
         </section>
 

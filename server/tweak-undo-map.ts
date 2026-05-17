@@ -357,6 +357,81 @@ export const TWEAK_UNDO_MAP: Record<string, UndoEntry> = {
     ],
   },
 
+  // ── V2.2 NVIDIA driver-class undos ────────────────────────────────────────
+  NvTextureFilterHighPerf: {
+    label: "NVIDIA Texture Filtering → driver default",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $names=@('PS_TexFilterAnisoOptOn','PS_TexFilterLODBiasAllow','PS_TexFilterNoNeg','PS_TexFilterQuality'); Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { $p=$_.PSPath; foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }`,
+      OK("NVIDIA texture filtering keys removed (driver default restored)"),
+    ],
+  },
+  NvLowLatencyUltra: {
+    label: "NVIDIA Low Latency Mode → driver default",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'RmLowLatencyMode' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FlipQueueSize' -EA SilentlyContinue }`,
+      OK("Low Latency Mode reset"),
+    ],
+  },
+  NvThreadedOptOn: {
+    label: "NVIDIA Threaded Optimization → driver default",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'OGL_ThreadControl' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'D3D_ThreadControl' -EA SilentlyContinue }`,
+      OK("Threaded Optimization reset"),
+    ],
+  },
+  NvPowerMgmtMax: {
+    label: "NVIDIA Power Management → adaptive (default)",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $names=@('PowerMizerEnable','PerfLevelSrc','PowerMizerLevel','PowerMizerLevelAC'); Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { $p=$_.PSPath; foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }`,
+      OK("PowerMizer keys removed (adaptive restored)"),
+    ],
+  },
+  NvFrameLimit60:  { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
+  NvFrameLimit144: { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
+  NvFrameLimit240: { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
+
+  // ── V2.2 AMD driver-class undos ───────────────────────────────────────────
+  AmdTextureFilterPerf: {
+    label: "AMD Texture Filtering → driver default",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $names=@('CatalystAI','TFQ','TextureOpt'); Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { $p=$_.PSPath; foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }`,
+      OK("AMD texture filtering keys removed"),
+    ],
+  },
+  AmdSurfaceFormatOpt: {
+    label: "AMD Surface Format Optimization → off",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'EnableSurfaceFormatReplacements' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'KMD_EnableSFR' -EA SilentlyContinue }`,
+      OK("Surface Format Optimization keys removed"),
+    ],
+  },
+  AmdTessOverride16x: {
+    label: "AMD Tessellation → application controlled",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'TessellationMode' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'MaxTessellation' -EA SilentlyContinue }`,
+      OK("Tessellation override removed"),
+    ],
+  },
+  AmdRadeonBoostOff: {
+    label: "AMD Radeon Boost → driver default",
+    commands: [
+      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'KMD_RadeonBoostEnabled' -EA SilentlyContinue }`,
+      `Remove-ItemProperty -Path 'HKCU:\\SOFTWARE\\AMD\\CN' -Name 'EnableBoost' -EA SilentlyContinue`,
+      OK("Radeon Boost override removed"),
+    ],
+  },
+  AmdFRTC60:  { label: "AMD FRTC removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'KMD_FRTCEnabled' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'KMD_FRTCMaxFPS' -EA SilentlyContinue }`, OK("FRTC keys cleared")] },
+  AmdFRTC144: { label: "AMD FRTC removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'KMD_FRTCEnabled' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'KMD_FRTCMaxFPS' -EA SilentlyContinue }`, OK("FRTC keys cleared")] },
+  AmdFRTC240: { label: "AMD FRTC removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'KMD_FRTCEnabled' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'KMD_FRTCMaxFPS' -EA SilentlyContinue }`, OK("FRTC keys cleared")] },
+
+  EnableMSIMode_Safe: {
+    label: "Safe MSI mode → disabled on all targeted devices (GPU + NIC + NVMe)",
+    commands: [
+      `Get-PnpDevice -EA SilentlyContinue | Where-Object { $_.Class -in @('Display','Net','SCSIAdapter') -and $_.Status -eq 'OK' } | ForEach-Object { $msi = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($_.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; If (Test-Path $msi) { Set-ItemProperty $msi 'MSISupported' 0 -Type DWord -EA SilentlyContinue }; $aff = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($_.InstanceId)\\Device Parameters\\Interrupt Management\\Affinity Policy"; If (Test-Path $aff) { Remove-ItemProperty $aff 'DevicePolicy' -EA SilentlyContinue; Remove-ItemProperty $aff 'DevicePriority' -EA SilentlyContinue; Remove-ItemProperty $aff 'AssignmentSetOverride' -EA SilentlyContinue } }`,
+      OK("MSI disabled on GPU + NICs + NVMe; Affinity Policy keys wiped (reboot required)"),
+    ],
+  },
+
   // ── Process Lasso family ──────────────────────────────────────────────────
   ProcessLassoProBalance: {
     label: "Per-process priority overrides cleared (Image File Execution Options)",

@@ -27,7 +27,35 @@ const ALL_AMD_IDS = [
   "AmdDisableHDMIAudio","AmdDisableReLive",
   // New AMD Tweaks
   "AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync",
+  // V2.2 driver reapply tweaks
+  "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff","AmdFRTC60","AmdFRTC144","AmdFRTC240",
 ];
+
+const AMD_DRIVER_REAPPLY_TWEAKS = [
+  { id: "AmdTextureFilterPerf", title: "Texture Filtering Quality = Performance",     desc: "Writes CatalystAI=0, TFQ=0, TextureOpt=1 to the AMD GPU class — equivalent to Adrenalin 'Texture Filtering Quality: Performance'. Recovers ~3-5% texture fill rate.", badge: "RECOMMENDED", impact: "MED" as const },
+  { id: "AmdSurfaceFormatOpt",  title: "Surface Format Optimization = ON",            desc: "Sets EnableSurfaceFormatReplacements=1 + KMD_EnableSFR=1. Lets the driver substitute lower-precision render targets where the game won't visibly suffer — saves ~1-3% memory bandwidth.", badge: "RECOMMENDED", impact: "MED" as const },
+  { id: "AmdTessOverride16x",   title: "Tessellation Mode = AMD Optimized (16x cap)", desc: "Caps tessellation at 16x on legacy titles (Witcher 3, Crysis 3, GTA V) where game-side tessellation is wastefully high. Big FPS win on RDNA1/Polaris, no visible quality loss.", badge: "RECOMMENDED", impact: "MED" as const },
+  { id: "AmdRadeonBoostOff",    title: "Radeon Boost = OFF (force disable)",          desc: "Force-disables Radeon Boost via registry. Use this if Boost is causing texture pop / blur in competitive shooters where you want consistent image quality. Overrides the 'Enable Radeon Boost' toggle above.", badge: "OPTIONAL",    impact: "LOW" as const },
+  { id: "AmdFRTC60",            title: "Frame Rate Target Control = 60 FPS",          desc: "Adrenalin FRTC capped at 60. Best for 60Hz panels. Only enable ONE FRTC toggle.", badge: "60Hz",  impact: "MED" as const },
+  { id: "AmdFRTC144",           title: "Frame Rate Target Control = 144 FPS",         desc: "Adrenalin FRTC capped at 144. Best for 144Hz panels. Only enable ONE FRTC toggle.", badge: "144Hz", impact: "MED" as const },
+  { id: "AmdFRTC240",           title: "Frame Rate Target Control = 240 FPS",         desc: "Adrenalin FRTC capped at 240. Best for 240Hz competitive panels. Only enable ONE FRTC toggle.", badge: "240Hz", impact: "MED" as const },
+];
+
+async function downloadDriverReapplyAmd(tweakIds: string[]) {
+  const res = await fetch('/api/script/driver-reapply', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tab: 'amd', tweakIds }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'OptiGods-Reapply-AMD.ps1';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 
 const AMD_RECOMMENDED_IDS = [
   "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState",
@@ -694,6 +722,49 @@ export default function Amd() {
               delay={3}
               data-testid="tweak-AmdEnhancedSync"
             />
+          </div>
+        </section>
+
+        {/* V2.2 Reapplicable Driver Tweaks */}
+        <section data-testid="section-amd-driver-reapply">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const selected = AMD_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  data-testid="button-reapply-amd-driver"
+                  disabled={selected.length === 0}
+                  onClick={async () => {
+                    try { await downloadDriverReapplyAmd(selected); toast({ title: "Reapply script downloaded", description: `${selected.length} AMD driver tweak(s) ready to run.` }); }
+                    catch (e) { console.error(e); toast({ title: "Reapply failed", description: "Pro session may have expired — re-enter your code.", variant: "destructive" }); }
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {selected.length === 0 ? "Select tweaks first" : `Reapply driver tweaks (${selected.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks are written under the AMD GPU device class. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every Adrenalin update to re-write only these keys.</p>
+          <div className="space-y-3">
+            {AMD_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
           </div>
         </section>
 
