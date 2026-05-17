@@ -259,7 +259,7 @@ function MobileShowcase() {
 }
 
 const AI_POPUP_KEY = "optigods_ai_popup_dismissed";
-const OPTIMIZER_PAGES = ["/", "/registry", "/fivem", "/fortnite", "/nvidia", "/amd", "/integrated-graphics", "/laptop", "/discord", "/game-detection", "/startup", "/memory", "/debloat", "/process-lasso", "/processes"];
+const OPTIMIZER_PAGES = ["/tweaks", "/tools"];
 
 function SmartAiPopup() {
   const [show, setShow] = useState(false);

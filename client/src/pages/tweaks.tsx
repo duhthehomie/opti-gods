@@ -20,19 +20,21 @@ const Memory = lazy(() => import("@/pages/memory"));
 const Debloat = lazy(() => import("@/pages/debloat"));
 const WinTitus = lazy(() => import("@/pages/wintitus"));
 
+type GroupId = "windows" | "network" | "gpu" | "games" | "system";
+
 type Section = {
   id: string;
   title: string;
   desc: string;
   icon: React.ComponentType<{ className?: string }>;
-  group: "windows" | "gpu" | "games" | "system" | "other";
+  group: GroupId;
   Component: React.ComponentType;
 };
 
 const SECTIONS: Section[] = [
-  { id: "registry", title: "Registry & Windows Core", desc: "Timer resolution, priority scheduling, network stack, MSI mode", icon: Settings2, group: "windows", Component: Registry },
   { id: "debloat", title: "Debloat Win10/11", desc: "Remove bloatware, telemetry, background services", icon: Trash2, group: "windows", Component: Debloat },
   { id: "wintitus", title: "WinUtil + OO ShutUp", desc: "Bundled WinUtil tasks and privacy hardening", icon: Wrench, group: "windows", Component: WinTitus },
+  { id: "registry", title: "Registry, Network & Latency", desc: "TCP/IP stack, MSI mode, timer resolution, priority scheduling", icon: Settings2, group: "network", Component: Registry },
   { id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS", icon: MonitorPlay, group: "gpu", Component: Nvidia },
   { id: "amd", title: "AMD Radeon", desc: "Anti-lag, shader cache, surface format", icon: Flame, group: "gpu", Component: Amd },
   { id: "intgpu", title: "Intel iGPU & AMD Vega", desc: "Integrated GPU tweaks (UHD / Iris / Vega 8)", icon: Monitor, group: "gpu", Component: IntegratedGraphics },
@@ -46,8 +48,9 @@ const SECTIONS: Section[] = [
   { id: "processes", title: "Process Reduction", desc: "Disable services & idle processes", icon: Server, group: "system", Component: ProcessesPage },
 ];
 
-const GROUPS: { id: Section["group"]; label: string }[] = [
+const GROUPS: { id: GroupId; label: string }[] = [
   { id: "windows", label: "Windows" },
+  { id: "network", label: "Network" },
   { id: "gpu", label: "GPU" },
   { id: "games", label: "Game-Specific" },
   { id: "system", label: "System" },

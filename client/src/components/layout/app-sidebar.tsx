@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Bot, Bell, Zap, Download, ChevronRight } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Zap, Download, ChevronRight } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +20,7 @@ type NavItem = {
   title: string;
   url: string;
   icon: React.ComponentType<{ className?: string }>;
-  accent?: "ai" | "pro";
+  accent?: "pro";
 };
 
 const PRIMARY: NavItem[] = [
@@ -29,11 +29,6 @@ const PRIMARY: NavItem[] = [
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
   { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
-];
-
-const SECONDARY: NavItem[] = [
-  { title: "Opti Gods AI", url: "/ai", icon: Bot, accent: "ai" },
-  { title: "Updates", url: "/updates", icon: Bell },
 ];
 
 export function AppSidebar() {
@@ -51,7 +46,6 @@ export function AppSidebar() {
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
     const active = isActive(item.url);
-    const isAI = item.accent === "ai";
     const isProAccent = item.accent === "pro";
     return (
       <SidebarMenuItem key={item.url}>
@@ -61,12 +55,11 @@ export function AppSidebar() {
           className={cn(
             "h-10 transition-all",
             active && "bg-red-500/10 text-red-300 border-l-2 border-red-500",
-            isAI && !active && "text-violet-300 hover:text-violet-200",
             isProAccent && !active && !isPro && "text-amber-300 hover:text-amber-200",
           )}
         >
           <Link href={item.url} data-testid={`nav-${item.title.replace(/\s+/g, "-").toLowerCase()}`}>
-            <Icon className={cn("w-4 h-4", active ? "text-red-400" : isAI ? "text-violet-400" : isProAccent && !isPro ? "text-amber-400" : "text-zinc-500")} />
+            <Icon className={cn("w-4 h-4", active ? "text-red-400" : isProAccent && !isPro ? "text-amber-400" : "text-zinc-500")} />
             <span className="text-sm font-semibold">{item.title}</span>
             {isProAccent && isPro && (
               <span className="ml-auto text-[8px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-1.5 py-0.5 rounded uppercase tracking-wider">ON</span>
@@ -100,17 +93,6 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {PRIMARY.map(renderItem)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="px-3 pt-4 pb-2">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 font-bold">Extras</p>
-        </div>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {SECONDARY.map(renderItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
