@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
+import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -2883,8 +2884,8 @@ export default function Admin() {
             {/* Brand */}
             <div className="flex items-center gap-3 flex-1">
               <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-red-600/30 to-red-900/20 border border-red-500/40 rounded-xl flex items-center justify-center shadow-[0_0_20px_-6px_rgba(239,68,68,0.5)]">
-                  <Shield className="w-6 h-6 text-red-400" />
+                <div className="w-12 h-12 bg-gradient-to-br from-zinc-800/60 to-black border border-red-500/40 rounded-xl flex items-center justify-center overflow-hidden shadow-[0_0_20px_-6px_rgba(239,68,68,0.5)]">
+                  <AdminSilverMark className="w-11 h-11" />
                 </div>
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
               </div>

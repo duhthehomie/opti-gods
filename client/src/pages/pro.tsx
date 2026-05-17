@@ -4,6 +4,7 @@ import { useProStatus } from "@/lib/pro-status";
 import { Button } from "@/components/ui/button";
 import { Crown, Check, Sparkles, ShieldCheck, Zap, MessageSquare, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
 
 const PERKS = [
   { icon: Zap, title: "Full PowerShell Script Generator", desc: "Download personalized .ps1 with all your selected tweaks" },
@@ -23,9 +24,12 @@ export default function ProPage() {
         <div className="relative rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-zinc-950 to-black p-8 overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/10 rounded-full blur-[120px] pointer-events-none" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <Crown className="w-5 h-5 text-red-400" />
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods Pro</span>
+            </div>
+            <div className="mb-5">
+              <OptiGodsWordmark variant="inline" />
             </div>
             <h1 className="text-4xl font-display font-black text-white">
               Unlock Every Tweak.{" "}

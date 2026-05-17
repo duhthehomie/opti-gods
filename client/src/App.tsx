@@ -12,6 +12,8 @@ import { UpdateModal } from "@/components/update-modal";
 import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
 import { Redirect } from "@/components/redirect";
+import { BootSplash } from "@/components/branding/boot-splash";
+import { ProCelebration } from "@/components/branding/pro-celebration";
 
 import Home from "@/pages/home";
 import SystemScan from "@/pages/system-scan";
@@ -127,6 +129,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <BootSplash />
+        <ProCelebration />
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>

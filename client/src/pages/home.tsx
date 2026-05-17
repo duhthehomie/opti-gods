@@ -6,6 +6,7 @@ import { useProStatus } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { Activity, Settings2, Wrench, Crown, Sparkles, Cpu, MonitorPlay, MemoryStick, Zap, ArrowRight, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
 
 function Card({ href, icon: Icon, title, desc, accent = "red", testid }: { href: string; icon: React.ComponentType<{ className?: string }>; title: string; desc: string; accent?: "red" | "violet" | "amber"; testid?: string }) {
   const color = accent === "violet" ? "text-violet-400 border-violet-500/20 bg-violet-500/5" : accent === "amber" ? "text-amber-400 border-amber-500/20 bg-amber-500/5" : "text-red-400 border-red-500/20 bg-red-500/5";
@@ -39,9 +40,12 @@ export default function HomePage() {
         <div className="relative rounded-2xl border border-white/5 bg-gradient-to-br from-red-500/10 via-zinc-950 to-black p-8 overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/10 rounded-full blur-[120px] pointer-events-none" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-4">
               <Zap className="w-4 h-4 text-red-400" />
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v2</span>
+            </div>
+            <div className="mb-6">
+              <OptiGodsWordmark variant="hero" />
             </div>
             <h1 className="text-3xl md:text-4xl font-display font-black text-white leading-tight">
               Welcome back. <span className="text-red-500">Your rig is waiting.</span>
