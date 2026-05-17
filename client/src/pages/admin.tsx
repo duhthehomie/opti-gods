@@ -22,6 +22,7 @@ import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
+import { HardwareDbTab, SuggestionsInboxTab, NvidiaTrackerTab } from "@/components/admin/hardware-db-tabs";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -136,7 +137,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -3181,7 +3182,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -3196,6 +3197,9 @@ export default function Admin() {
               aether: Bot,
               tickets: Flag,
               discounts: Percent,
+              rigs: Cpu,
+              suggestions: Inbox,
+              drivers: Monitor,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -3222,6 +3226,9 @@ export default function Admin() {
                    t === "aether" ? "Aether AI" :
                    t === "tickets" ? "Tickets" :
                    t === "discounts" ? "Discounts" :
+                   t === "rigs" ? "Hardware DB" :
+                   t === "suggestions" ? "Suggestions" :
+                   t === "drivers" ? "NVIDIA Drivers" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -3236,6 +3243,9 @@ export default function Admin() {
                    t === "aether" ? "" :
                    t === "tickets" ? "" :
                    t === "discounts" ? "" :
+                   t === "rigs" ? "" :
+                   t === "suggestions" ? "" :
+                   t === "drivers" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -4723,6 +4733,9 @@ export default function Admin() {
         {tab === "aether" && <AetherAdminChat headers={headers} />}
         {tab === "tickets" && <TicketsTab headers={headers} />}
         {tab === "discounts" && <DiscountsTab headers={headers} />}
+        {tab === "rigs" && <HardwareDbTab headers={headers} />}
+        {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}
+        {tab === "drivers" && <NvidiaTrackerTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

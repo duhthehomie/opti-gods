@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { hardwareScanPayloadSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
+import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale } from "./alerts";
 import { registerAuthRoutes } from "./auth";
@@ -4163,10 +4163,32 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     return res.json({ suggestion: updated });
   });
 
+  app.post("/api/admin/suggestions", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const parsed = insertTweakSuggestionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid suggestion", fieldErrors: parsed.error.flatten().fieldErrors });
+    }
+    const rig = await storage.getRigByHash(parsed.data.rigHash);
+    if (!rig) return res.status(404).json({ error: "Rig not found", fieldErrors: { rigHash: ["no rig matches this hash"] } });
+    const suggestion = await storage.addTweakSuggestion(parsed.data);
+    return res.status(201).json({ suggestion });
+  });
+
   app.get("/api/admin/nvidia-drivers", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     const drivers = await storage.listNvidiaDrivers();
     return res.json({ drivers });
+  });
+
+  app.post("/api/admin/nvidia-drivers", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const parsed = insertNvidiaDriverSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid driver", fieldErrors: parsed.error.flatten().fieldErrors });
+    }
+    const driver = await storage.upsertNvidiaDriver(parsed.data);
+    return res.json({ driver });
   });
 
   // Load AI chat session history
