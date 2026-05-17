@@ -13,6 +13,7 @@ import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
+import { bootstrapNative } from "@/lib/native-bootstrap";
 
 import Landing from "@/pages/landing";
 import PaymentSuccess from "@/pages/payment-success";
@@ -94,12 +95,23 @@ function Router() {
   );
 }
 
+function NativeBootstrap() {
+  // Fire-and-forget on mount. In the browser this no-ops; in the Tauri
+  // shell it loads envInfo(), starts ProBalance, and closes the splash
+  // window once React has flushed.
+  useEffect(() => {
+    bootstrapNative().catch((err) => console.warn("[native] bootstrap", err));
+  }, []);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <BootSplash />
         <ProCelebration />
+        <NativeBootstrap />
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>

@@ -98,7 +98,12 @@ export async function applyTweak(id: string, powershell?: string): Promise<Nativ
   if (!isNative()) {
     return webFallbackTweak(id, "apply");
   }
-  return invoke<NativeTweakResult>("apply_tweak", { args: { id, powershell: powershell ?? null } });
+  // Tauri 2 binds the JS arg object to the Rust command's #[serde] struct
+  // param by matching the parameter NAME (`args`). Use snake_case inside the
+  // struct to match Rust field names exactly — no camelCase auto-conversion.
+  return invoke<NativeTweakResult>("apply_tweak", {
+    args: { id, powershell: powershell ?? null },
+  });
 }
 
 export async function undoTweak(
@@ -149,7 +154,8 @@ export async function listRestorePoints(): Promise<NativeRestorePoint[]> {
 
 export async function restoreToPoint(sequenceNumber: number): Promise<void> {
   if (!isNative()) return;
-  await invoke<void>("restore_to_point", { sequenceNumber });
+  // Rust command param is `sequence_number` — pass snake_case explicitly.
+  await invoke<void>("restore_to_point", { sequence_number: sequenceNumber });
 }
 
 // ─── process lasso ──────────────────────────────────────────────────────────
@@ -185,9 +191,10 @@ export async function discordLogin(clientId: string): Promise<NativeDiscordSessi
     window.location.href = "/api/auth/discord/start";
     return new Promise(() => { /* navigation */ });
   }
+  // Rust command param is `client_id` — pass snake_case explicitly.
   // Note: exchange endpoint is pinned in Rust (commands::discord::EXCHANGE_URL)
   // so a compromised renderer can't redirect the OAuth code to an attacker host.
-  return invoke<NativeDiscordSession>("discord_login", { clientId });
+  return invoke<NativeDiscordSession>("discord_login", { client_id: clientId });
 }
 
 export async function discordLogout(): Promise<void> {

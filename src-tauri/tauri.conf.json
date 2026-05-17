@@ -23,7 +23,7 @@
         "skipTaskbar": true,
         "center": true,
         "visible": true,
-        "url": "splash.html"
+        "url": "/splash.html"
       },
       {
         "label": "main",

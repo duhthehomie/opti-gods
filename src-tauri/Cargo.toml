@@ -13,6 +13,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Embeds app.manifest into the final .exe so UAC requireAdministrator + DPI
+# awareness directives are honoured by Windows.
+winresource = "0.1"
 
 [dependencies]
 # Tauri core
