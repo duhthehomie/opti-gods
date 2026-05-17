@@ -938,6 +938,20 @@ async function requirePaidPro(req: any): Promise<boolean> {
   const provided = req.headers['x-admin-key'] as string | undefined;
   if (adminKey && provided && provided === adminKey) return true;
 
+  // Task #41: prefer the Discord-keyed entitlement. If the user is logged in
+  // and has an active entitlement, they're Pro on any device. If their
+  // entitlement was explicitly revoked, we deny access even if they still
+  // hold a valid legacy session token — admin revoke must be authoritative.
+  const userId: string | undefined = req.session?.userId;
+  if (userId) {
+    const ent = await storage.isPro(userId);
+    if (ent) return true;
+    // Check if there's a *revoked* row — if so, hard-deny (bypasses legacy token).
+    const rows = await storage.listProUsers();
+    const revoked = rows.find(r => r.discordUserId === userId && r.revokedAt);
+    if (revoked) return false;
+  }
+
   const sessionToken: string | undefined = req.body?.sessionToken || req.query?.sessionToken;
   if (!sessionToken || typeof sessionToken !== 'string' || sessionToken.length < 16) return false;
   const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
@@ -2079,7 +2093,8 @@ Start-Sleep 2
       res.status(503).json({ error: 'ADMIN_KEY not configured. Set it in your environment secrets.' });
       return false;
     }
-    const provided = req.headers['x-admin-key'] || req.query.key;
+    // Header-only — query-string admin keys leak via logs/referrers/history.
+    const provided = req.headers['x-admin-key'];
     if (provided !== adminKey) {
       res.status(401).json({ error: 'Unauthorized' });
       return false;
@@ -2220,6 +2235,15 @@ Start-Sleep 2
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
+      // Task #41: if a Discord user is logged in, also grant a lifetime
+      // entitlement so they're Pro on every future device.
+      if (req.session?.userId) {
+        storage.grantPro({
+          discordUserId: req.session.userId,
+          source: "code",
+          notes: `code:${normalizedCode}`,
+        }).catch((err) => console.error("[pro/verify] grantPro failed:", err?.message || err));
+      }
       return res.json({ valid: true, sessionToken });
     }
 
@@ -2246,6 +2270,13 @@ Start-Sleep 2
         await storage.redeemCode(normalizedCode, clientIp);
         const sessionToken = await storage.createProSession(normalizedCode);
         storage.logProIp(normalizedCode, clientIp).catch(() => {});
+        if (req.session?.userId) {
+          storage.grantPro({
+            discordUserId: req.session.userId,
+            source: "code",
+            notes: `code:${normalizedCode} (email-linked)`,
+          }).catch((err) => console.error("[pro/verify] grantPro failed:", err?.message || err));
+        }
         return res.json({ valid: true, sessionToken });
       }
       // Code exists in DB but has no email link and was already redeemed — reject.
@@ -2257,9 +2288,61 @@ Start-Sleep 2
     res.json({ valid: false });
   });
 
-  // Pro status check — client calls this on load to verify their stored session token
-  // If someone manually set localStorage to "true", this will return false (no session in DB)
-  // Rate limit: 30 per minute (covers normal page loads + polling), hard-block at 60
+  // Pro status check — session-aware (Task #41).
+  // For a logged-in Discord user, looks up their entitlement. Falls back to
+  // checking the legacy localStorage session token so guests still work.
+  // GET version: keyed off the authenticated Discord session cookie.
+  app.get('/api/pro/status', rateLimit(60, 60_000, 120), async (req, res) => {
+    const userId = req.session?.userId;
+    if (userId) {
+      const ent = await storage.isPro(userId);
+      if (ent) {
+        return res.json({
+          isPro: true,
+          source: ent.source,
+          grantedAt: ent.grantedAt,
+          revoked: false,
+        });
+      }
+      // Surface explicit revocation so the frontend can stop honoring any
+      // lingering legacy session token for this user.
+      const rows = await storage.listProUsers();
+      const revoked = rows.find(r => r.discordUserId === userId && r.revokedAt);
+      if (revoked) {
+        return res.json({ isPro: false, source: revoked.source, grantedAt: null, revoked: true });
+      }
+    }
+    res.json({ isPro: false, source: null, grantedAt: null, revoked: false });
+  });
+
+  // Legacy migration (Task #41): a guest with a valid localStorage session
+  // token logs in via Discord. Their old session is upgraded to a permanent
+  // entitlement so they're Pro on every future device.
+  app.post('/api/pro/migrate-legacy', rateLimit(5, 60_000, 10), async (req, res) => {
+    const userId = req.session?.userId;
+    if (!userId) return res.status(401).json({ migrated: false });
+    const { sessionToken } = req.body || {};
+    if (!sessionToken || typeof sessionToken !== "string") {
+      return res.json({ migrated: false });
+    }
+    const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const valid = await storage.verifyProSession(sessionToken, ip);
+    if (!valid) return res.json({ migrated: false });
+    // Find the codeRef so we can record it as the migration source/note.
+    const sessions = await storage.getAllProSessions();
+    const session = sessions.find(s => s.sessionToken === sessionToken);
+    const codeRef = session?.codeRef ?? "unknown";
+    await storage.grantPro({
+      discordUserId: userId,
+      source: "legacy",
+      notes: `migrated from session token (codeRef=${codeRef})`,
+    });
+    res.json({ migrated: true, source: "legacy" });
+  });
+
+  // Legacy POST /api/pro/status — kept for backward compat with any client
+  // still using the localStorage session-token flow (e.g. the Tauri webview
+  // before it picks up the new build).
   app.post('/api/pro/status', rateLimit(30, 60_000, 60), async (req, res) => {
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
@@ -2389,9 +2472,53 @@ Start-Sleep 2
       const codeRef = `friend:${String(token)}`;
       const sessionToken = await storage.createProSession(codeRef);
       storage.logProIp(codeRef, clientIp).catch(() => {});
+      // Task #41: friend unlocks also grant a permanent Discord-keyed
+      // entitlement when the user is signed in.
+      if (req.session?.userId) {
+        storage.grantPro({
+          discordUserId: req.session.userId,
+          source: "friend",
+          notes: `friend token:${String(token).slice(0, 8)}…`,
+        }).catch((err) => console.error("[pro/friend] grantPro failed:", err?.message || err));
+      }
       return res.json({ valid: true, sessionToken });
     }
     res.json({ valid: false });
+  });
+
+  // ── Admin — Pro entitlements (Task #41) ───────────────────────────────────
+  // List every Discord-keyed Pro grant, manually grant by ID, or revoke.
+  app.get('/api/admin/pro-entitlements', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const rows = await storage.listProUsers();
+    res.json(rows);
+  });
+
+  app.post('/api/admin/pro-entitlements', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { discordUserId, source, notes } = req.body || {};
+    const id = String(discordUserId || "").trim();
+    if (!/^\d{15,25}$/.test(id)) {
+      return res.status(400).json({ error: "Invalid Discord user ID (must be 15-25 digit snowflake)." });
+    }
+    const grantedBy = req.session?.userId ?? null;
+    const row = await storage.grantPro({
+      discordUserId: id,
+      source: typeof source === "string" && source ? source : "admin",
+      grantedBy,
+      notes: typeof notes === "string" ? notes : null,
+    });
+    log(`[admin] Pro granted to ${id} (source=${row.source})`, "admin");
+    res.json(row);
+  });
+
+  app.delete('/api/admin/pro-entitlements/:discordUserId', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const id = String(req.params.discordUserId || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing Discord user ID." });
+    await storage.revokePro(id);
+    log(`[admin] Pro revoked for ${id}`, "admin");
+    res.json({ ok: true });
   });
 
   // Admin — list all codes (enriched with last session IP for tracking)
@@ -3170,6 +3297,9 @@ Start-Sleep 2
         metadata: {
           product: tier === 'manual' ? 'optigods_manual_opti' : 'optigods_pro',
           tier,
+          // Task #41: capture the buyer's Discord ID so /api/verify-payment
+          // (and any future webhook) can grant a lifetime entitlement.
+          ...(req.session?.userId ? { discordUserId: req.session.userId } : {}),
           ...(appliedDiscount ? { discounted: 'true', discountCode: appliedDiscount.code } : {}),
         },
       });
@@ -3320,6 +3450,22 @@ Start-Sleep 2
           });
         } catch (notifyErr: any) {
           console.error('[alerts] Pro sale notify failed:', notifyErr?.message || notifyErr);
+        }
+      }
+
+      // Task #41: if the buyer was logged in at checkout time (Discord ID
+      // captured in metadata) OR is logged in now, grant a permanent
+      // Discord-keyed entitlement so Pro follows them across devices.
+      const buyerDiscordId = session.metadata?.discordUserId || req.session?.userId;
+      if (buyerDiscordId) {
+        try {
+          await storage.grantPro({
+            discordUserId: buyerDiscordId,
+            source: "stripe",
+            notes: `stripe:${sessionId} | code:${codeValue}`,
+          });
+        } catch (grantErr: any) {
+          console.error('[pro] grantPro (stripe) failed:', grantErr?.message || grantErr);
         }
       }
 

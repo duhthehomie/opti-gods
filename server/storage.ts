@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
@@ -126,6 +126,11 @@ export interface IStorage {
   upsertNvidiaDriver(data: InsertNvidiaDriver): Promise<NvidiaDriver>;
   markDriverAlertSent(version: string): Promise<void>;
   listNvidiaDrivers(): Promise<NvidiaDriver[]>;
+  // Pro entitlements — Discord-user-keyed lifetime Pro (Task #41)
+  grantPro(args: { discordUserId: string; source: string; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement>;
+  revokePro(discordUserId: string): Promise<void>;
+  isPro(discordUserId: string): Promise<ProEntitlement | null>;
+  listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -980,6 +985,63 @@ export class DatabaseStorage implements IStorage {
 
   async markDriverAlertSent(version: string): Promise<void> {
     await db.update(nvidiaDrivers).set({ alertSentAt: new Date() }).where(eq(nvidiaDrivers.version, version));
+  }
+
+  // ── Pro entitlements (Task #41) ─────────────────────────────────────────────
+  async grantPro(args: { discordUserId: string; source: string; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement> {
+    const [row] = await db.insert(proEntitlements)
+      .values({
+        discordUserId: args.discordUserId,
+        source: args.source,
+        grantedBy: args.grantedBy ?? null,
+        notes: args.notes ?? null,
+        // revokedAt left null so the user is immediately Pro
+      })
+      .onConflictDoUpdate({
+        target: proEntitlements.discordUserId,
+        // Re-granting a previously revoked entitlement clears revokedAt and
+        // refreshes the source / notes so admins can see the latest grant path.
+        set: {
+          source: args.source,
+          grantedBy: args.grantedBy ?? null,
+          notes: args.notes ?? null,
+          grantedAt: new Date(),
+          revokedAt: null,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async revokePro(discordUserId: string): Promise<void> {
+    await db.update(proEntitlements)
+      .set({ revokedAt: new Date() })
+      .where(eq(proEntitlements.discordUserId, discordUserId));
+  }
+
+  async isPro(discordUserId: string): Promise<ProEntitlement | null> {
+    if (!discordUserId) return null;
+    const rows = await db.select().from(proEntitlements)
+      .where(and(eq(proEntitlements.discordUserId, discordUserId), isNull(proEntitlements.revokedAt)));
+    return rows[0] ?? null;
+  }
+
+  async listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]> {
+    const rows = await db
+      .select({
+        discordUserId: proEntitlements.discordUserId,
+        source: proEntitlements.source,
+        grantedAt: proEntitlements.grantedAt,
+        grantedBy: proEntitlements.grantedBy,
+        notes: proEntitlements.notes,
+        revokedAt: proEntitlements.revokedAt,
+        username: users.username,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(proEntitlements)
+      .leftJoin(users, eq(users.discordId, proEntitlements.discordUserId))
+      .orderBy(desc(proEntitlements.grantedAt));
+    return rows;
   }
 }
 

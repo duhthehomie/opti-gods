@@ -13,7 +13,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
-  Percent,
+  Percent, Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -137,7 +137,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -2107,6 +2107,229 @@ function DiscountsTab({ headers }: { headers: Record<string, string> }) {
   );
 }
 
+// ── Admin Pro Users Tab (Task #41) ───────────────────────────────────────────
+type ProEntitlementRow = {
+  discordUserId: string;
+  source: string;
+  grantedAt: string | null;
+  grantedBy: string | null;
+  notes: string | null;
+  revokedAt: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+};
+
+function ProUsersTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const [grantId, setGrantId] = useState("");
+  const [grantNotes, setGrantNotes] = useState("");
+
+  const entQuery = useQuery<ProEntitlementRow[]>({
+    queryKey: ["/api/admin/pro-entitlements"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/pro-entitlements", { headers });
+      if (!res.ok) throw new Error("Failed to load Pro entitlements");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const grantMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/pro-entitlements", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ discordUserId: grantId.trim(), source: "admin", notes: grantNotes || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Grant failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pro-entitlements"] });
+      setGrantId("");
+      setGrantNotes("");
+      toast({ title: "Pro granted" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (discordUserId: string) => {
+      const res = await fetch(`/api/admin/pro-entitlements/${encodeURIComponent(discordUserId)}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!res.ok) throw new Error("Revoke failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pro-entitlements"] });
+      toast({ title: "Pro revoked" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const rows = entQuery.data || [];
+  const active = rows.filter(r => !r.revokedAt);
+  const revoked = rows.filter(r => r.revokedAt);
+
+  const sourceBadge = (s: string) => {
+    const cfg: Record<string, string> = {
+      stripe:   "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      code:     "bg-red-500/20 text-red-400 border-red-500/30",
+      friend:   "bg-amber-500/20 text-amber-400 border-amber-500/30",
+      legacy:   "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+      admin:    "bg-purple-500/20 text-purple-400 border-purple-500/30",
+      cashapp:  "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      paypal:   "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    };
+    return (
+      <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border", cfg[s] || "bg-zinc-700 text-zinc-400 border-zinc-600")}>
+        {s}
+      </span>
+    );
+  };
+
+  return (
+    <div data-testid="pro-users-tab" className="mt-6 space-y-4">
+      <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-4 space-y-3">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Crown className="w-4 h-4 text-amber-400" />
+          Manual Pro Grant (by Discord ID)
+        </h3>
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          Paste a Discord user ID (15–25 digit snowflake) to grant a lifetime Pro
+          entitlement. The user will be Pro on every device they sign into.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            data-testid="input-grant-discord-id"
+            type="text"
+            placeholder="Discord user ID (e.g. 188739918734802944)"
+            value={grantId}
+            onChange={(e) => setGrantId(e.target.value)}
+            className="flex-1 bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-red-500 focus:outline-none"
+          />
+          <input
+            data-testid="input-grant-notes"
+            type="text"
+            placeholder="Notes (optional)"
+            value={grantNotes}
+            onChange={(e) => setGrantNotes(e.target.value)}
+            className="flex-1 bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-red-500 focus:outline-none"
+          />
+          <Button
+            data-testid="button-grant-pro"
+            onClick={() => grantMutation.mutate()}
+            disabled={grantMutation.isPending || !/^\d{15,25}$/.test(grantId.trim())}
+            className="bg-red-600 hover:bg-red-500 text-white"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Grant Pro
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Crown className="w-4 h-4 text-amber-400" />
+          Active Entitlements ({active.length})
+        </h3>
+      </div>
+
+      {entQuery.isLoading && (
+        <div className="text-xs text-zinc-500">Loading entitlements…</div>
+      )}
+
+      {!entQuery.isLoading && active.length === 0 && (
+        <div className="text-xs text-zinc-600 bg-zinc-900/40 border border-white/5 rounded-xl p-6 text-center">
+          No active Pro entitlements yet.
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {active.map((row) => (
+          <div
+            key={row.discordUserId}
+            data-testid={`row-pro-${row.discordUserId}`}
+            className="bg-zinc-900/40 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-3 hover:border-white/10 transition-colors"
+          >
+            {row.avatarUrl ? (
+              <img src={row.avatarUrl} alt="" className="w-8 h-8 rounded-full shrink-0" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-600">
+                <Users className="w-4 h-4" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white truncate" data-testid={`text-pro-username-${row.discordUserId}`}>
+                {row.username || "(unknown user)"}
+              </div>
+              <div className="text-[10px] text-zinc-600 font-mono truncate">
+                {row.discordUserId}{row.notes ? ` · ${row.notes}` : ""}
+              </div>
+            </div>
+            {sourceBadge(row.source)}
+            <div className="text-[10px] text-zinc-600 hidden md:block tabular-nums">
+              {row.grantedAt ? new Date(row.grantedAt).toLocaleDateString() : "—"}
+            </div>
+            <button
+              data-testid={`button-revoke-pro-${row.discordUserId}`}
+              onClick={() => {
+                if (window.confirm(`Revoke Pro for ${row.username || row.discordUserId}? They will lose access on every device.`)) {
+                  revokeMutation.mutate(row.discordUserId);
+                }
+              }}
+              disabled={revokeMutation.isPending}
+              className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors"
+              title="Revoke Pro"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {revoked.length > 0 && (
+        <>
+          <h3 className="text-sm font-bold text-zinc-500 flex items-center gap-2 pt-4">
+            <ShieldOff className="w-4 h-4 text-zinc-600" />
+            Revoked ({revoked.length})
+          </h3>
+          <div className="space-y-1.5 opacity-60">
+            {revoked.map((row) => (
+              <div
+                key={row.discordUserId}
+                data-testid={`row-pro-revoked-${row.discordUserId}`}
+                className="bg-zinc-900/20 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-zinc-400 truncate">{row.username || "(unknown)"}</div>
+                  <div className="text-[10px] text-zinc-600 font-mono truncate">{row.discordUserId}</div>
+                </div>
+                {sourceBadge(row.source)}
+                <button
+                  data-testid={`button-regrant-pro-${row.discordUserId}`}
+                  onClick={() => {
+                    setGrantId(row.discordUserId);
+                    setGrantNotes(`re-grant of ${row.source}`);
+                  }}
+                  className="text-[10px] text-zinc-500 hover:text-amber-400 font-bold uppercase tracking-wider"
+                >
+                  Re-grant
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Admin Tickets Tab ────────────────────────────────────────────────────────
 type UserReport = {
   id: number;
@@ -3273,7 +3496,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -3281,6 +3504,7 @@ export default function Admin() {
               activity: Activity,
               email: Mail,
               sessions: Users,
+              pro: Crown,
               announcements: Bell,
               analytics: TrendingUp,
               security: Shield,
@@ -3310,6 +3534,7 @@ export default function Admin() {
                    t === "friends" ? `Friends (${stats?.totalFriends ?? 0})` :
                    t === "email" ? "Email" :
                    t === "sessions" ? "Sessions" :
+                   t === "pro" ? "Pro Users" :
                    t === "announcements" ? "Updates" :
                    t === "analytics" ? "Analytics" :
                    t === "security" ? "Security" :
@@ -4823,6 +5048,7 @@ export default function Admin() {
 
         {tab === "aether" && <AetherAdminChat headers={headers} />}
         {tab === "tickets" && <TicketsTab headers={headers} />}
+        {tab === "pro" && <ProUsersTab headers={headers} />}
         {tab === "discounts" && <DiscountsTab headers={headers} />}
         {tab === "rigs" && <HardwareDbTab headers={headers} />}
         {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}

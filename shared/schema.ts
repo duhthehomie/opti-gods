@@ -181,6 +181,23 @@ export const adminSettings = pgTable("admin_settings", {
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 
+// Pro entitlements (Task #41) — Discord-user-keyed lifetime Pro grants.
+// Replaces localStorage-only Pro status. One row per Discord user; once a
+// user is in this table (and revokedAt is null), they are Pro on every
+// device they sign into. Legacy localStorage tokens still work for guests
+// but are auto-migrated to an entitlement on first authenticated visit.
+export const proEntitlements = pgTable("pro_entitlements", {
+  discordUserId: text("discord_user_id").primaryKey(),
+  source: text("source").notNull(), // stripe | cashapp | paypal | code | friend | legacy | admin
+  grantedAt: timestamp("granted_at").defaultNow(),
+  grantedBy: text("granted_by"),    // admin discord ID (manual grants), null otherwise
+  notes: text("notes"),             // free-form context: stripe session id, code value, etc.
+  revokedAt: timestamp("revoked_at"),
+});
+export type ProEntitlement = typeof proEntitlements.$inferSelect;
+export const insertProEntitlementSchema = createInsertSchema(proEntitlements).omit({ grantedAt: true, revokedAt: true });
+export type InsertProEntitlement = z.infer<typeof insertProEntitlementSchema>;
+
 // Discord-authenticated users — drives the login wall (Task #27)
 export const users = pgTable("users", {
   discordId: text("discord_id").primaryKey(),
