@@ -2,13 +2,14 @@ import { useState, useEffect, lazy, Suspense, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { Wrench, RotateCcw, Search, HardDrive, HelpCircle, Loader2 } from "lucide-react";
+import { Wrench, RotateCcw, Search, HardDrive, HelpCircle, Loader2, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Fixes = lazy(() => import("@/pages/fixes"));
 const CustomOS = lazy(() => import("@/pages/custom-os"));
 const GameDetection = lazy(() => import("@/pages/game-detection"));
 const Help = lazy(() => import("@/pages/help"));
+const DPCLatency = lazy(() => import("@/pages/dpc-latency"));
 
 type Tab = {
   id: string;
@@ -20,6 +21,7 @@ type Tab = {
 const TABS: Tab[] = [
   { id: "fixes", label: "Fixes & Restore", icon: RotateCcw, Component: Fixes },
   { id: "game-detection", label: "Game Detection", icon: Search, Component: GameDetection },
+  { id: "dpc-latency", label: "DPC Latency", icon: Activity, Component: DPCLatency },
   { id: "custom-os", label: "Custom OS", icon: HardDrive, Component: CustomOS },
   { id: "help", label: "Help", icon: HelpCircle, Component: Help },
 ];

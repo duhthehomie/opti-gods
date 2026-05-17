@@ -4,10 +4,96 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
-import { Cpu, Pin, Download, ChevronDown, ChevronUp, CheckCircle2, Zap, AlertCircle, Shield } from "lucide-react";
+import { Cpu, Pin, Download, ChevronDown, ChevronUp, CheckCircle2, Zap, AlertCircle, Shield, Gamepad2 } from "lucide-react";
+import { GAME_WHITELIST, GAME_WHITELIST_COUNT } from "@/lib/game-whitelist";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
+function GameWhitelistSection() {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const filtered = query
+    ? GAME_WHITELIST.filter(g =>
+        g.title.toLowerCase().includes(query.toLowerCase()) ||
+        g.exe.toLowerCase().includes(query.toLowerCase()))
+    : GAME_WHITELIST;
+  const byGenre: Record<string, typeof GAME_WHITELIST> = {};
+  for (const g of filtered) (byGenre[g.genre] ||= []).push(g);
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <Gamepad2 className="w-4 h-4 text-red-400" />
+        <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">
+          Auto-ProBalance Game Whitelist
+        </h2>
+        <span className="text-[10px] text-zinc-500 font-mono">({GAME_WHITELIST_COUNT} games)</span>
+        <div className="flex-1 h-px bg-white/5 ml-2" />
+        <button
+          data-testid="button-toggle-game-whitelist"
+          onClick={() => setOpen(v => !v)}
+          className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all"
+        >
+          {open ? <ChevronUp className="w-3 h-3 inline mr-1" /> : <ChevronDown className="w-3 h-3 inline mr-1" />}
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p className="text-xs text-zinc-500 mb-3 px-1">
+        These {GAME_WHITELIST_COUNT}+ game executables are auto-pinned to High CPU priority and exempted from ProBalance throttling whenever they run. Ships as data, applied by the generated PowerShell script.
+      </p>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <input
+              data-testid="input-search-game-whitelist"
+              type="text"
+              placeholder="Filter by game name or .exe..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full mb-4 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-red-500/40"
+            />
+            <div className="space-y-4">
+              {Object.entries(byGenre).map(([genre, games]) => (
+                <div key={genre}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{genre}</span>
+                    <span className="text-[10px] text-zinc-700 font-mono">({games.length})</span>
+                    <div className="flex-1 h-px bg-white/5" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {games.map(g => (
+                      <div
+                        key={g.exe}
+                        data-testid={`game-whitelist-${g.exe}`}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/5 bg-black/30 hover:border-red-500/20 hover:bg-black/50 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500/70 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-zinc-200 truncate">{g.title}</p>
+                          <p className="text-[10px] font-mono text-zinc-600 truncate">{g.exe}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <p className="text-xs text-zinc-600 text-center py-6">No games match "{query}".</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
 
 const FIVEM_PROCESSES = [
   { name: "FiveM_b3323_GTAProcess.exe", role: "GTA5 game process (FiveM)", priority: "High", io: "High", gpu: "High", pinned: true, critical: true },
@@ -400,6 +486,9 @@ REM #PS1END`;
             )}
           </AnimatePresence>
         </div>
+
+        {/* ─── Auto-ProBalance Game Whitelist (V2) ─── */}
+        <GameWhitelistSection />
 
         {/* ─── ProBalance Rules ─── */}
         <section>

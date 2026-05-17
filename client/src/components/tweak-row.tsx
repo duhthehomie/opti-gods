@@ -3,9 +3,11 @@ import { CustomSwitch } from "./ui/custom-switch";
 import { Label } from "./ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ShieldAlert, X, Info } from "lucide-react";
+import { AlertTriangle, ShieldAlert, X, Info, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getTweakMeta, SAFETY_LABEL, SAFETY_DESCRIPTION, type TweakSafety } from "@/lib/tweak-registry";
+import { useDetectedAntiCheats } from "@/hooks/use-detected-anti-cheats";
+import { useOptimizationStore } from "@/store/use-optimization-store";
 
 interface TweakRowProps {
   id: string;
@@ -44,7 +46,18 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const safetyStyle = safetyVal ? SAFETY_STYLES[safetyVal] : null;
   const [pendingEnable, setPendingEnable] = useState(false);
 
+  // Anti-cheat awareness: grey out tweaks that an installed AC bans.
+  const tweaks = useOptimizationStore((s) => s.tweaks);
+  const detectedACs = useDetectedAntiCheats({
+    vanguard: tweaks.ACDetectVanguard,
+    eac: tweaks.ACDetectEAC,
+    battleye: tweaks.ACDetectBattlEyeFACEIT,
+  });
+  const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac as never));
+  const acBlocked = Boolean(blockingAC) && !checked;
+
   const handleChange = (val: boolean) => {
+    if (acBlocked && val) return;
     if (val && warning && !checked) {
       setPendingEnable(true);
     } else {
@@ -162,12 +175,29 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             <p className="text-[11px] text-zinc-600 mt-1 italic">💡 {relevanceWarning}</p>
           )}
         </div>
-        <CustomSwitch
-          id={id}
-          checked={checked}
-          onCheckedChange={handleChange}
-          data-testid={`toggle-tweak-${id}`}
-        />
+        {acBlocked ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`ac-blocked-${id}`}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold bg-zinc-900 text-zinc-500 border border-zinc-800 cursor-not-allowed"
+              >
+                <Lock className="w-3 h-3" />
+                BLOCKED BY {blockingAC?.toUpperCase()}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-xs text-xs leading-snug">
+              {blockingAC} is installed. Enabling this would get you kicked or banned, so the toggle is disabled. Uninstall {blockingAC} (or turn off the matching <code>ACDetect…</code> diagnostic toggle) to re-enable.
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <CustomSwitch
+            id={id}
+            checked={checked}
+            onCheckedChange={handleChange}
+            data-testid={`toggle-tweak-${id}`}
+          />
+        )}
       </motion.div>
 
       {/* Warning confirmation dialog */}
