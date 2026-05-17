@@ -1,4 +1,4 @@
-import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -292,13 +292,15 @@ export const hardwareScanPayloadSchema = z.object({
 export type HardwareScanPayload = z.infer<typeof hardwareScanPayloadSchema>;
 
 // Tweak suggestions — community/AI-generated tweak ideas tied to a rig
-export type SuggestionStatus = "open" | "triaged" | "written" | "declined";
+export const SUGGESTION_STATUSES = ["open", "triaged", "written", "declined"] as const;
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
+export const suggestionStatusEnum = pgEnum("suggestion_status", SUGGESTION_STATUSES);
 export const tweakSuggestions = pgTable("tweak_suggestions", {
   id: serial("id").primaryKey(),
   rigHash: varchar("rig_hash", { length: 64 }).notNull().references(() => hardwareRigs.hash, { onDelete: "cascade" }),
   suggestion: text("suggestion").notNull(),
   category: text("category").notNull(),
-  status: text("status").$type<SuggestionStatus>().notNull().default("open"),
+  status: suggestionStatusEnum("status").notNull().default("open"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export type TweakSuggestion = typeof tweakSuggestions.$inferSelect;

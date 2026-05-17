@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { hardwareScanPayloadSchema, type SuggestionStatus } from "@shared/schema";
+import { hardwareScanPayloadSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale } from "./alerts";
 import { registerAuthRoutes } from "./auth";
@@ -4117,22 +4117,34 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     return res.json({ rig });
   });
 
+  const RIG_SORT_FIELDS = ["lastSeenAt", "seenCount", "firstSeenAt"] as const;
+  type RigSortField = (typeof RIG_SORT_FIELDS)[number];
+  function isRigSortField(value: string): value is RigSortField {
+    return (RIG_SORT_FIELDS as readonly string[]).includes(value);
+  }
+  function isSuggestionStatus(value: string): value is SuggestionStatus {
+    return (SUGGESTION_STATUSES as readonly string[]).includes(value);
+  }
+
   app.get("/api/admin/rigs", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
     const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 100;
     const offset = req.query.offset ? parseInt(String(req.query.offset), 10) : 0;
     const sortParam = String(req.query.sort ?? "lastSeenAt");
-    const sort = (["lastSeenAt", "seenCount", "firstSeenAt"] as const).includes(sortParam as any)
-      ? (sortParam as "lastSeenAt" | "seenCount" | "firstSeenAt") : "lastSeenAt";
+    const sort: RigSortField = isRigSortField(sortParam) ? sortParam : "lastSeenAt";
     const rigs = await storage.listRigs({ limit, offset, sort });
     return res.json({ rigs });
   });
 
   app.get("/api/admin/suggestions", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const status = req.query.status ? String(req.query.status) as SuggestionStatus : undefined;
-    if (status && !["open", "triaged", "written", "declined"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
+    let status: SuggestionStatus | undefined;
+    if (req.query.status !== undefined) {
+      const raw = String(req.query.status);
+      if (!isSuggestionStatus(raw)) {
+        return res.status(400).json({ error: "Invalid status", fieldErrors: { status: [`must be one of ${SUGGESTION_STATUSES.join("|")}`] } });
+      }
+      status = raw;
     }
     const suggestions = await storage.listSuggestions(status);
     return res.json({ suggestions });
@@ -4142,11 +4154,11 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     if (!checkAdminKey(req, res)) return;
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
-    const status = req.body?.status as SuggestionStatus | undefined;
-    if (!status || !["open", "triaged", "written", "declined"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status", fieldErrors: { status: ["must be open|triaged|written|declined"] } });
+    const rawStatus = typeof req.body?.status === "string" ? req.body.status : "";
+    if (!isSuggestionStatus(rawStatus)) {
+      return res.status(400).json({ error: "Invalid status", fieldErrors: { status: [`must be one of ${SUGGESTION_STATUSES.join("|")}`] } });
     }
-    const updated = await storage.updateSuggestionStatus(id, status);
+    const updated = await storage.updateSuggestionStatus(id, rawStatus);
     if (!updated) return res.status(404).json({ error: "Suggestion not found" });
     return res.json({ suggestion: updated });
   });
