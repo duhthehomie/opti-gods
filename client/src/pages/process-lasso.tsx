@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -7,12 +7,37 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { Cpu, Pin, Download, ChevronDown, ChevronUp, CheckCircle2, Zap, AlertCircle, Shield, Gamepad2 } from "lucide-react";
 import { GAME_WHITELIST, GAME_WHITELIST_COUNT } from "@/lib/game-whitelist";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
+// Persist per-game whitelist toggles in localStorage so the user's choices
+// survive page reloads + show up in the generated PS1.
+const WHITELIST_STORAGE_KEY = "optiGods.gameWhitelistEnabled.v1";
+
+function loadWhitelistState(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(WHITELIST_STORAGE_KEY);
+    if (!raw) return Object.fromEntries(GAME_WHITELIST.map(g => [g.exe, true]));
+    const parsed = JSON.parse(raw) as Record<string, boolean>;
+    // Ensure every known game has an entry (default new ones to ON)
+    for (const g of GAME_WHITELIST) if (!(g.exe in parsed)) parsed[g.exe] = true;
+    return parsed;
+  } catch {
+    return Object.fromEntries(GAME_WHITELIST.map(g => [g.exe, true]));
+  }
+}
+
 function GameWhitelistSection() {
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => loadWhitelistState());
+
+  useEffect(() => {
+    try { localStorage.setItem(WHITELIST_STORAGE_KEY, JSON.stringify(enabled)); } catch {}
+  }, [enabled]);
+
   const filtered = query
     ? GAME_WHITELIST.filter(g =>
         g.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -21,6 +46,27 @@ function GameWhitelistSection() {
   const byGenre: Record<string, typeof GAME_WHITELIST> = {};
   for (const g of filtered) (byGenre[g.genre] ||= []).push(g);
 
+  const enabledCount = useMemo(
+    () => GAME_WHITELIST.reduce((n, g) => n + (enabled[g.exe] ? 1 : 0), 0),
+    [enabled]
+  );
+  const allOn = enabledCount === GAME_WHITELIST.length;
+  const allOff = enabledCount === 0;
+
+  const setAll = (value: boolean) => {
+    setEnabled(Object.fromEntries(GAME_WHITELIST.map(g => [g.exe, value])));
+    toast({
+      title: value ? "Whitelist: all games enabled" : "Whitelist: all games disabled",
+      description: value
+        ? `${GAME_WHITELIST_COUNT} game executables will be auto-pinned to High priority.`
+        : "No games will be auto-pinned. Use this to start a custom whitelist.",
+    });
+  };
+
+  const toggleOne = (exe: string) => {
+    setEnabled(prev => ({ ...prev, [exe]: !prev[exe] }));
+  };
+
   return (
     <section>
       <div className="flex items-center gap-2 mb-3 px-1">
@@ -28,7 +74,12 @@ function GameWhitelistSection() {
         <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">
           Auto-ProBalance Game Whitelist
         </h2>
-        <span className="text-[10px] text-zinc-500 font-mono">({GAME_WHITELIST_COUNT} games)</span>
+        <span
+          className="text-[10px] text-zinc-500 font-mono"
+          data-testid="text-whitelist-count"
+        >
+          ({enabledCount}/{GAME_WHITELIST_COUNT} enabled)
+        </span>
         <div className="flex-1 h-px bg-white/5 ml-2" />
         <button
           data-testid="button-toggle-game-whitelist"
@@ -40,8 +91,53 @@ function GameWhitelistSection() {
         </button>
       </div>
       <p className="text-xs text-zinc-500 mb-3 px-1">
-        These {GAME_WHITELIST_COUNT}+ game executables are auto-pinned to High CPU priority and exempted from ProBalance throttling whenever they run. Ships as data, applied by the generated PowerShell script.
+        These {GAME_WHITELIST_COUNT}+ game executables are auto-pinned to High CPU priority and exempted from ProBalance throttling whenever they run. Toggle individual games — or use the master switch — to control which ones get included in your generated PowerShell script.
       </p>
+
+      {/* Master toggle — always visible */}
+      <div
+        className="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-xl border border-red-500/25 bg-gradient-to-r from-red-500/10 to-black/40"
+        data-testid="game-whitelist-master"
+      >
+        <Switch
+          checked={allOn}
+          onCheckedChange={(v) => setAll(!!v)}
+          data-testid="switch-whitelist-master"
+          aria-label="Toggle every game in whitelist"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-white">
+            Master toggle{" "}
+            <span className="font-mono text-[10px] text-zinc-500">
+              ({allOn ? "all on" : allOff ? "all off" : "mixed"})
+            </span>
+          </p>
+          <p className="text-[10px] text-zinc-500">
+            Flip every game in the whitelist on or off at once.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAll(false)}
+          disabled={allOff}
+          data-testid="button-whitelist-clear"
+          className="h-7 text-[10px] border-white/10 text-zinc-300"
+        >
+          Clear
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAll(true)}
+          disabled={allOn}
+          data-testid="button-whitelist-select-all"
+          className="h-7 text-[10px] border-red-500/30 text-red-300 hover:bg-red-500/10"
+        >
+          Select all
+        </Button>
+      </div>
+
       <AnimatePresence>
         {open && (
           <motion.div
@@ -64,23 +160,40 @@ function GameWhitelistSection() {
                 <div key={genre}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{genre}</span>
-                    <span className="text-[10px] text-zinc-700 font-mono">({games.length})</span>
+                    <span className="text-[10px] text-zinc-700 font-mono">
+                      ({games.filter(g => enabled[g.exe]).length}/{games.length})
+                    </span>
                     <div className="flex-1 h-px bg-white/5" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {games.map(g => (
-                      <div
-                        key={g.exe}
-                        data-testid={`game-whitelist-${g.exe}`}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/5 bg-black/30 hover:border-red-500/20 hover:bg-black/50 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500/70 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-zinc-200 truncate">{g.title}</p>
-                          <p className="text-[10px] font-mono text-zinc-600 truncate">{g.exe}</p>
-                        </div>
-                      </div>
-                    ))}
+                    {games.map(g => {
+                      const on = !!enabled[g.exe];
+                      return (
+                        <label
+                          key={g.exe}
+                          data-testid={`game-whitelist-${g.exe}`}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-2 rounded-lg border bg-black/30 hover:bg-black/50 transition-colors cursor-pointer",
+                            on ? "border-red-500/25" : "border-white/5 opacity-60"
+                          )}
+                        >
+                          <Switch
+                            checked={on}
+                            onCheckedChange={() => toggleOne(g.exe)}
+                            data-testid={`switch-whitelist-${g.exe}`}
+                            aria-label={`Toggle ${g.title}`}
+                            className="scale-75 shrink-0 origin-left"
+                          />
+                          {on
+                            ? <CheckCircle2 className="w-3 h-3 text-emerald-500/70 shrink-0" />
+                            : <CheckCircle2 className="w-3 h-3 text-zinc-700 shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-zinc-200 truncate">{g.title}</p>
+                            <p className="text-[10px] font-mono text-zinc-600 truncate">{g.exe}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

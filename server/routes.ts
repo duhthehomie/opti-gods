@@ -6,6 +6,7 @@ import { z } from "zod";
 import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale, sendNewRigAlert, postAuditLog } from "./alerts";
+import { getTweakUndoEntry } from "./tweak-undo-map";
 import { pollNvidiaDrivers } from "./nvidia-poller";
 import { registerAuthRoutes } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
@@ -977,27 +978,12 @@ async function fireAuditLog(
   }
 }
 
-// Category prefix → restore block key (see RESTORE_BLOCKS above). Ordering
-// matters: more specific prefixes must come first. Returns null when no
-// reversal block fits, in which case the undo PS1 directs users to
-// "Restore Last Working State".
-function categoryForTweak(id: string): keyof typeof RESTORE_BLOCKS | null {
-  // Memory family
-  if (/^Mem|EnableLargeSystemCache|DisableMemoryCompression|DisablePrefetch|ClearPagefile|OptimizeRAM/.test(id)) return "memory";
-  // Network family (includes Net*, Lap_Net*, FiveM network buffers, DNS, TCP/IP, RSS, MTU)
-  if (/^Net|^Lap_Net|FiveMNetwork|FiveMDNS|FiveMDisableLSO|FiveMEnableRSS|TCP|DNS|Nagle|RSS|MTU|IPv6|QoS|InterruptModeration|TcpChimney|DisableNDU|Quad9/.test(id)) return "network";
-  // Visual / gaming-shell / HAGS / Xbox / animations / fullscreen-opt
-  if (/Visual|Animation|GameDVR|GameBar|Xbox|^IGpu_Disable(Transparency|Animations|HDR|NightLight|DWMColorSpace|MPO)|HAGS|Pointer|FastStartup|ErrorReport|MotionBlur|Lumen|Recording|FullscreenOpt|MPO|Notif|StartMenu|Widgets|Copilot|TeamsChat|EdgeSidebar|ChatIcon/.test(id)) return "visual";
-  // Power / plans / suspend / parking / processor state
-  if (/Power|PerfPlan|^Lap_Ultimate|HighPerformance|UltimatePerformance|USBSuspend|USBSelSuspend|USBPowerSave|CoreParking|MaxProcessorState|TurboOn|ThrottleStates|AdaptiveBrightness|Hibernate|HibernateOff|DeepSleep|CStatePolicy|PowerThrottling|PBOScalarLock|^Zen5|^ArrowEcoreParkPolicy|^ArrowLunarLake/.test(id)) return "power";
-  // CPU scheduling, MSI mode, MMCSS, process/affinity, NUMA, timer res, anti-cheat detectors, security
-  if (/^Win32Priority|^Set(Timer|Responsive)|MSIMode|MMCSS|DynamicTick|GameModeTweaks|^Proc(SvcOff)?|^ProcAffinity|^ProcNUMA|^ProcGPUScheduler|^ProcessLasso|^Process(Trim|Auto|Disable)|TimerResolution|^Sec[A-Z]|^AC[A-Z]|InputUSB|InputRawAccel|InputMousePoll|^Win11(DisableVBS|DisableHVCI|ParkingCoreOverride|ProcessorIdleMin)|ArrowAPOOptIn|ArrowThreadDirector|ArrowITDTelemetryOff|Zen5CurveOptimizer|Zen5SMTSchedulerHint|Zen5AGESACStatePolicy|Zen5X3DCachePin|ToolDPCLatencyCheck/.test(id)) return "cpu";
-  return null;
-}
-
 function buildSingleTweakUndoScript(tweakId: string): string {
-  const category = categoryForTweak(tweakId);
-  const restoreBlock = category ? RESTORE_BLOCKS[category] : null;
+  // Per-tweak reversal is sourced from an explicit registry (server/tweak-undo-map.ts).
+  // If the tweak ID is not in that map, we DO NOT run a category-restore block
+  // (that would over-revert sibling tweaks). Instead, we direct users to
+  // "Restore Last Working State", which uses their Windows restore point.
+  const entry = getTweakUndoEntry(tweakId);
   const lines: string[] = [
     `# ============================================`,
     `# OPTI GODS — Single-Tweak Undo`,
@@ -1019,13 +1005,14 @@ function buildSingleTweakUndoScript(tweakId: string): string {
     `Write-Host "=====================================" -ForegroundColor Yellow`,
     ``,
   ];
-  if (restoreBlock) {
-    lines.push(`Write-Host "[INFO] No per-tweak reversal available — running the '${restoreBlock.label}' category restore block." -ForegroundColor DarkYellow`);
+  if (entry) {
+    lines.push(`Write-Host "[INFO] ${entry.label}" -ForegroundColor Cyan`);
     lines.push(`Write-Host ""`);
-    lines.push(...restoreBlock.commands);
+    lines.push(...entry.commands);
   } else {
-    lines.push(`Write-Host "[INFO] This tweak has no automated reversal." -ForegroundColor DarkYellow`);
-    lines.push(`Write-Host "       Use 'Restore Last Working State' on the Tools & Fixes page to roll back to the last OptiGods Windows restore point." -ForegroundColor DarkYellow`);
+    lines.push(`Write-Host "[INFO] This tweak has no granular automated reversal." -ForegroundColor DarkYellow`);
+    lines.push(`Write-Host "       The safest way to back it out is to roll back to your last OptiGods Windows restore point." -ForegroundColor DarkYellow`);
+    lines.push(`Write-Host "       Open Tools and Fixes -> 'Restore Last Working State'." -ForegroundColor DarkYellow`);
   }
   lines.push(``);
   lines.push(`Write-Host ""`);
