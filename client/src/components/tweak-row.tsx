@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle, ShieldAlert, X, Info, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getTweakMeta, SAFETY_LABEL, SAFETY_DESCRIPTION, type TweakSafety } from "@/lib/tweak-registry";
-import { useDetectedAntiCheats } from "@/hooks/use-detected-anti-cheats";
+import { useDetectedAntiCheats, type AntiCheatId } from "@/hooks/use-detected-anti-cheats";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 
 interface TweakRowProps {
@@ -53,7 +53,10 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     eac: tweaks.ACDetectEAC,
     battleye: tweaks.ACDetectBattlEyeFACEIT,
   });
-  const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac as never));
+  const blockingAC = meta?.incompatibleWith?.find((ac): ac is AntiCheatId =>
+    (["Vanguard", "EAC", "BattlEye", "FACEIT"] as const).includes(ac as AntiCheatId) &&
+    detectedACs.has(ac as AntiCheatId),
+  );
   const acBlocked = Boolean(blockingAC) && !checked;
 
   const handleChange = (val: boolean) => {
