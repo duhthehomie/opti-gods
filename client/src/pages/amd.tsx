@@ -389,6 +389,49 @@ export default function Amd() {
           </p>
         </div>
 
+        {/* V2.2 Reapplicable Driver Tweaks — at top of tab so users can re-run them in one click after every Adrenalin update. */}
+        <section data-testid="section-amd-driver-reapply-top">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-red-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const selected = AMD_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);
+              return (
+                <Button
+                  variant="ghost" size="sm"
+                  data-testid="button-reapply-amd-driver-top"
+                  disabled={selected.length === 0}
+                  onClick={async () => {
+                    try { await downloadDriverReapplyAmd(selected); toast({ title: "Reapply script downloaded", description: `${selected.length} AMD driver tweak(s) ready to run.` }); }
+                    catch (e) { console.error(e); toast({ title: "Reapply failed", description: "Pro session may have expired — re-enter your code.", variant: "destructive" }); }
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {selected.length === 0 ? "Select tweaks first" : `Reapply driver tweaks (${selected.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks write to the AMD GPU device class. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every Adrenalin update to re-write only these keys (no full preset rerun needed).</p>
+          <div className="space-y-3">
+            {AMD_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
         {/* Presets */}
         <section>
           <div className="flex items-center gap-2 mb-4 px-1">
@@ -727,8 +770,8 @@ export default function Amd() {
           </div>
         </section>
 
-        {/* V2.2 Reapplicable Driver Tweaks — kept right above the V2TweakSection */}
-        <section data-testid="section-amd-driver-reapply" id="amd-driver-reapply-section" className="-mt-2">
+        {/* DEPRECATED: V2.2 Reapplicable section moved to top of tab. Kept here hidden as a no-op marker for the audit log; the top-of-tab section is the source of truth. */}
+        <section data-testid="section-amd-driver-reapply" className="hidden">
           <div className="flex items-center gap-2 mb-4 px-1">
             <Layers className="w-4 h-4 text-red-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V2.2)</h2>

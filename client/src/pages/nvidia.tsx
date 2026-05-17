@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { V2TweakSection } from "@/components/v2-tweak-section";
 import { TabSmartBar } from "@/components/tab-smart-bar";
+import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, CheckCircle2, X, Thermometer } from "lucide-react";
@@ -275,6 +276,7 @@ function NvidiaBadge({ text }: { text: string }) {
 
 export default function Nvidia() {
   const { tweaks, setTweak, nvidiaPreset, setNvidiaPreset } = useOptimizationStore();
+  const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
@@ -462,8 +464,8 @@ export default function Nvidia() {
                   data-testid="button-reapply-nvidia-driver"
                   disabled={selected.length === 0}
                   onClick={async () => {
-                    try { await downloadDriverReapply('nvidia', selected); }
-                    catch (e) { console.error(e); alert('Reapply download failed — make sure your Pro session is active.'); }
+                    try { await downloadDriverReapply('nvidia', selected); toast({ title: "Reapply script downloaded", description: `${selected.length} NVIDIA driver tweak(s) ready to run.` }); }
+                    catch (e) { console.error(e); toast({ title: "Reapply failed", description: "Pro session may have expired — re-enter your code.", variant: "destructive" }); }
                   }}
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
