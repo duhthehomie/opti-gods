@@ -950,16 +950,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertNvidiaDriver(data: InsertNvidiaDriver): Promise<NvidiaDriver> {
+    // Only overwrite columns explicitly provided on the input. This makes
+    // partial updates (e.g. toggling tweaksValidated from the admin UI) safe
+    // and prevents wiping out releasedAt/branch with nulls.
+    const setOnConflict: Record<string, unknown> = { lastSeenAt: new Date() };
+    if (data.releasedAt !== undefined) setOnConflict.releasedAt = data.releasedAt;
+    if (data.branch !== undefined) setOnConflict.branch = data.branch;
+    if (data.tweaksValidated !== undefined) setOnConflict.tweaksValidated = data.tweaksValidated;
+
     const [row] = await db.insert(nvidiaDrivers)
       .values({ ...data, lastSeenAt: new Date() })
       .onConflictDoUpdate({
         target: nvidiaDrivers.version,
-        set: {
-          releasedAt: data.releasedAt ?? null,
-          branch: data.branch ?? null,
-          tweaksValidated: data.tweaksValidated ?? false,
-          lastSeenAt: new Date(),
-        },
+        set: setOnConflict,
       })
       .returning();
     return row;
