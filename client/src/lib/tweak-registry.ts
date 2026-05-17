@@ -603,8 +603,8 @@ const V22_DRIVER_TWEAKS: Array<{ id: string; category: TweakCategory; title: str
             id: t.id, category: t.category, safety: "safe",
             plainEnglish: t.description, verifiedOn: { win10: true, win11: true },
             title: t.title, description: t.description,
-            badge: t.badge as any, impact: t.impact,
-        } as TweakMeta);
+            badge: t.badge, impact: t.impact,
+        });
     }
 }
 
