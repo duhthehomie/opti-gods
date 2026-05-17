@@ -3,11 +3,13 @@ import { CustomSwitch } from "./ui/custom-switch";
 import { Label } from "./ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ShieldAlert, X, Info, Lock } from "lucide-react";
+import { AlertTriangle, ShieldAlert, X, Info, Lock, Undo2, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getTweakMeta, SAFETY_LABEL, SAFETY_DESCRIPTION, type TweakSafety } from "@/lib/tweak-registry";
 import { useDetectedAntiCheats, type AntiCheatId } from "@/hooks/use-detected-anti-cheats";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { getStoredToken } from "@/lib/pro-status";
+import { useToast } from "@/hooks/use-toast";
 
 interface TweakRowProps {
   id: string;
@@ -45,6 +47,15 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const plainText = plainEnglish ?? meta?.plainEnglish ?? null;
   const safetyStyle = safetyVal ? SAFETY_STYLES[safetyVal] : null;
   const [pendingEnable, setPendingEnable] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const { toast } = useToast();
+
+  // Task #39 — per-tweak undo. Applied state is set after the user downloads
+  // the install script (see script-dialog `markApplied`). Click "Undo" to
+  // download a single-tweak reversal PS1 (Pro-gated, server-generated).
+  const appliedAt = useOptimizationStore((s) => s.appliedAt[id]);
+  const clearApplied = useOptimizationStore((s) => s.clearApplied);
+  const setTweakStore = useOptimizationStore((s) => s.setTweak);
 
   // Anti-cheat awareness: grey out tweaks that an installed AC bans.
   const tweaks = useOptimizationStore((s) => s.tweaks);
@@ -72,6 +83,41 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
 
   const cancelEnable = () => {
     setPendingEnable(false);
+  };
+
+  const handleUndo = async () => {
+    if (undoing) return;
+    setUndoing(true);
+    try {
+      const sessionToken = getStoredToken();
+      const res = await fetch("/api/script/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, sessionToken }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || `Undo failed (${res.status})`);
+      }
+      const text = await res.text();
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `OptiGods-Undo-${id}.ps1`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      // Optimistically: untoggle locally + clear applied marker.
+      setTweakStore(id, false);
+      clearApplied(id);
+      toast({ title: "Undo script downloaded", description: "Run as Administrator to reverse this tweak. A restart may be required." });
+    } catch (e) {
+      toast({ title: "Undo failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setUndoing(false);
+    }
   };
 
   return (
@@ -191,12 +237,33 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             </TooltipContent>
           </Tooltip>
         ) : (
-          <CustomSwitch
-            id={id}
-            checked={checked}
-            onCheckedChange={handleChange}
-            data-testid={`toggle-tweak-${id}`}
-          />
+          <div className="flex items-center gap-2 shrink-0">
+            {appliedAt && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid={`button-undo-${id}`}
+                    onClick={handleUndo}
+                    disabled={undoing}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-50"
+                  >
+                    {undoing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Undo2 className="w-3 h-3" />}
+                    UNDO
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-xs text-xs leading-snug">
+                  Download a one-tweak reversal script. Applied at {new Date(appliedAt).toLocaleString()}.
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <CustomSwitch
+              id={id}
+              checked={checked}
+              onCheckedChange={handleChange}
+              data-testid={`toggle-tweak-${id}`}
+            />
+          </div>
         )}
       </motion.div>
 

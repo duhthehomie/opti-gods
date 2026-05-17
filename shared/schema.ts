@@ -174,6 +174,10 @@ export const adminSettings = pgTable("admin_settings", {
   // Aether Intelligence alert toggles (Task #36)
   alertOnNewRig: boolean("alert_on_new_rig").notNull().default(true),
   alertOnNewNvidiaDriver: boolean("alert_on_new_nvidia_driver").notNull().default(true),
+  // Audit log toggle (Task #39) — when enabled, every applied/undone tweak posts
+  // to auditWebhookUrl (separate Discord channel from security alerts).
+  auditLogEnabled: boolean("audit_log_enabled").notNull().default(false),
+  auditWebhookUrl: text("audit_webhook_url"),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 

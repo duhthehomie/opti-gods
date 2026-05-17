@@ -2,8 +2,12 @@ import { useState, useEffect, lazy, Suspense, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { Wrench, RotateCcw, Search, HardDrive, HelpCircle, Loader2, Activity } from "lucide-react";
+import { Wrench, RotateCcw, Search, HardDrive, HelpCircle, Loader2, Activity, History, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { getStoredToken } from "@/lib/pro-status";
+import { useOptimizationStore } from "@/store/use-optimization-store";
 
 const Fixes = lazy(() => import("@/pages/fixes"));
 const CustomOS = lazy(() => import("@/pages/custom-os"));
@@ -35,6 +39,42 @@ function readHashTab(): string {
 export default function ToolsFixesPage() {
   const [location] = useLocation();
   const [active, setActive] = useState<string>(readHashTab);
+  const [restoring, setRestoring] = useState(false);
+  const { toast } = useToast();
+  const clearAllApplied = useOptimizationStore((s) => s.clearAllApplied);
+
+  const handleRestoreLast = async () => {
+    if (restoring) return;
+    if (!window.confirm("Download the 'Restore Last Working State' script? This script reverts your PC to the most recent OptiGods restore point. A reboot is required.")) {
+      return;
+    }
+    setRestoring(true);
+    try {
+      const sessionToken = getStoredToken();
+      const url = `/api/restore-points/latest/restore${sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || `Failed (${res.status})`);
+      }
+      const text = await res.text();
+      const blob = new Blob([text], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "OptiGods-Restore-Last-Working-State.ps1";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      // Wipe local appliedAt — assume rollback is in flight.
+      clearAllApplied();
+      toast({ title: "Restore script downloaded", description: "Run as Administrator. Windows will reboot to roll back to the last OptiGods restore point." });
+    } catch (e) {
+      toast({ title: "Restore failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   // Re-sync when the route/hash changes (e.g. arriving via a Redirect).
   useEffect(() => {
@@ -59,6 +99,34 @@ export default function ToolsFixesPage() {
           </div>
           <p className="text-sm text-zinc-500">One-click fixes, game scanner, custom Windows images, and help.</p>
         </header>
+
+        {/* Task #39 — Restore Last Working State banner */}
+        <section
+          data-testid="banner-restore-last"
+          className="rounded-xl border border-violet-500/25 bg-gradient-to-r from-violet-500/10 via-violet-500/5 to-transparent p-4 flex flex-wrap items-center gap-4"
+        >
+          <div className="shrink-0 w-10 h-10 rounded-lg bg-violet-500/15 border border-violet-500/30 flex items-center justify-center">
+            <History className="w-5 h-5 text-violet-300" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm font-bold text-white">Restore Last Working State</p>
+            <p className="text-xs text-zinc-400 leading-snug mt-0.5">
+              Rolls back to the most recent OptiGods Windows restore point — undoes every applied tweak in one shot. Requires Pro · reboots your PC.
+            </p>
+          </div>
+          <Button
+            data-testid="button-restore-last-working"
+            onClick={handleRestoreLast}
+            disabled={restoring}
+            className="bg-violet-600 hover:bg-violet-500 text-white shrink-0"
+          >
+            {restoring ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Preparing…</>
+            ) : (
+              <><Download className="w-4 h-4 mr-2" /> Get Restore Script</>
+            )}
+          </Button>
+        </section>
 
         <div className="flex gap-1 border-b border-white/5 overflow-x-auto">
           {TABS.map(t => {

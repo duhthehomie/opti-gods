@@ -89,7 +89,7 @@ export interface IStorage {
   getTotalAutoResolved(): Promise<{ totalResolved: number; runCount: number }>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
-  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null }): Promise<AdminSettings>;
+  upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean; auditLogEnabled?: boolean; auditWebhookUrl?: string | null }): Promise<AdminSettings>;
   // Discord-authenticated users
   upsertUser(data: InsertUser): Promise<User>;
   getUser(discordId: string): Promise<User | null>;
@@ -813,7 +813,7 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
-  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean }): Promise<AdminSettings> {
+  async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean; auditLogEnabled?: boolean; auditWebhookUrl?: string | null }): Promise<AdminSettings> {
     const existing = await this.getAdminSettings();
     if (existing) {
       const [row] = await db.update(adminSettings)

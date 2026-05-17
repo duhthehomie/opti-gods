@@ -132,6 +132,59 @@ View in admin panel: ${adminPanelUrl}
   });
 }
 
+/**
+ * Task #39 — Audit log webhook.
+ * Fires fire-and-forget to a configured Discord channel whenever a user
+ * downloads / undoes / restores a tweak script. Schema:
+ *   { user, tweakId | tweakIds, action, success }
+ *
+ * Errors are logged but never thrown — the user's script download must not
+ * fail because the admin's audit channel webhook is down.
+ */
+export async function postAuditLog(opts: {
+  webhookUrl: string;
+  user: string | null;
+  action: "apply" | "undo" | "restore";
+  tweakIds: string[];
+  success: boolean;
+  meta?: Record<string, string | number | null>;
+}): Promise<void> {
+  const { webhookUrl, user, action, tweakIds, success, meta } = opts;
+  if (!webhookUrl) return;
+  const colorByAction = { apply: 0x3b82f6, undo: 0xf59e0b, restore: 0x8b5cf6 } as const;
+  const tweakSummary =
+    tweakIds.length === 0 ? "—"
+    : tweakIds.length === 1 ? `\`${tweakIds[0]}\``
+    : `${tweakIds.length} tweaks · \`${tweakIds.slice(0, 5).join(", ")}\`${tweakIds.length > 5 ? `, +${tweakIds.length - 5} more` : ""}`;
+  const payload = {
+    embeds: [{
+      title: `📜 Audit · ${action.toUpperCase()}`,
+      color: success ? colorByAction[action] : 0xef4444,
+      fields: [
+        { name: "User", value: user || "anonymous", inline: true },
+        { name: "Action", value: action, inline: true },
+        { name: "Success", value: success ? "✅ yes" : "❌ no", inline: true },
+        { name: "Tweaks", value: tweakSummary, inline: false },
+        ...(meta ? Object.entries(meta).map(([k, v]) => ({ name: k, value: String(v ?? "—"), inline: true })) : []),
+      ],
+      footer: { text: "Opti Gods · Audit Log" },
+      timestamp: new Date().toISOString(),
+    }],
+  };
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.error(`[alerts] Audit webhook failed: ${res.status} — ${await res.text()}`);
+    }
+  } catch (e) {
+    console.error("[alerts] Audit webhook error:", e);
+  }
+}
+
 export async function notifySale(opts: {
   tier: "pro" | "manual";
   email: string | null;

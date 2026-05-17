@@ -5,11 +5,16 @@ interface OptimizationState {
   tweaks: Record<string, boolean>;
   nvidiaPreset: string;
   systemRamGB: number | null;
+  /** Task #39 — per-tweak applied timestamp (ms epoch). Used to render the inline Undo button. */
+  appliedAt: Record<string, number>;
   setSystemRamGB: (gb: number) => void;
   toggleTweak: (key: string) => void;
   setTweak: (key: string, value: boolean) => void;
   setNvidiaPreset: (preset: string) => void;
   setAllTweaks: (tweaks: Record<string, boolean>) => void;
+  markApplied: (ids: string[]) => void;
+  clearApplied: (id: string) => void;
+  clearAllApplied: () => void;
   reset: () => void;
 }
 
@@ -561,6 +566,7 @@ export const useOptimizationStore = create<OptimizationState>()(
       tweaks: { ...DEFAULT_TWEAKS },
       nvidiaPreset: '',
       systemRamGB: null,
+      appliedAt: {},
 
       setSystemRamGB: (gb) => set({ systemRamGB: gb }),
 
@@ -576,11 +582,27 @@ export const useOptimizationStore = create<OptimizationState>()(
 
       setAllTweaks: (tweaks) => set({ tweaks }),
 
-      reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: '' }),
+      markApplied: (ids) => set((state) => {
+        const now = Date.now();
+        const next = { ...state.appliedAt };
+        for (const id of ids) next[id] = now;
+        return { appliedAt: next };
+      }),
+
+      clearApplied: (id) => set((state) => {
+        if (!(id in state.appliedAt)) return state;
+        const next = { ...state.appliedAt };
+        delete next[id];
+        return { appliedAt: next };
+      }),
+
+      clearAllApplied: () => set({ appliedAt: {} }),
+
+      reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: '', appliedAt: {} }),
     }),
     {
       name: 'optigods-tweaks-v1',
-      partialize: (state: OptimizationState) => ({ tweaks: state.tweaks, nvidiaPreset: state.nvidiaPreset }),
+      partialize: (state: OptimizationState) => ({ tweaks: state.tweaks, nvidiaPreset: state.nvidiaPreset, appliedAt: state.appliedAt }),
     }
   )
 );

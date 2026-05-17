@@ -5,7 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
-import { notifyCriticalEvent, notifySale, sendNewRigAlert } from "./alerts";
+import { notifyCriticalEvent, notifySale, sendNewRigAlert, postAuditLog } from "./alerts";
 import { pollNvidiaDrivers } from "./nvidia-poller";
 import { registerAuthRoutes } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
@@ -953,6 +953,131 @@ function generateId(): string {
   return randomBytes(32).toString("hex");
 }
 
+// ── Task #39 — fire-and-forget Discord audit log ──────────────────────────
+async function fireAuditLog(
+  action: "apply" | "undo" | "restore",
+  tweakIds: string[],
+  sessionToken: string | undefined,
+  meta?: Record<string, string | number | null>,
+): Promise<void> {
+  try {
+    const settings = await storage.getAdminSettings();
+    if (!settings?.auditLogEnabled || !settings.auditWebhookUrl) return;
+    const userLabel = sessionToken ? `pro:${sessionToken.slice(0, 8)}…` : "anonymous";
+    await postAuditLog({
+      webhookUrl: settings.auditWebhookUrl,
+      user: userLabel,
+      action,
+      tweakIds,
+      success: true,
+      meta,
+    });
+  } catch (e) {
+    console.error("[audit] fireAuditLog error:", e);
+  }
+}
+
+// Category prefix → restore block key (see RESTORE_BLOCKS above). Ordering
+// matters: more specific prefixes must come first. Returns null when no
+// reversal block fits, in which case the undo PS1 directs users to
+// "Restore Last Working State".
+function categoryForTweak(id: string): keyof typeof RESTORE_BLOCKS | null {
+  // Memory family
+  if (/^Mem|EnableLargeSystemCache|DisableMemoryCompression|DisablePrefetch|ClearPagefile|OptimizeRAM/.test(id)) return "memory";
+  // Network family (includes Net*, Lap_Net*, FiveM network buffers, DNS, TCP/IP, RSS, MTU)
+  if (/^Net|^Lap_Net|FiveMNetwork|FiveMDNS|FiveMDisableLSO|FiveMEnableRSS|TCP|DNS|Nagle|RSS|MTU|IPv6|QoS|InterruptModeration|TcpChimney|DisableNDU|Quad9/.test(id)) return "network";
+  // Visual / gaming-shell / HAGS / Xbox / animations / fullscreen-opt
+  if (/Visual|Animation|GameDVR|GameBar|Xbox|^IGpu_Disable(Transparency|Animations|HDR|NightLight|DWMColorSpace|MPO)|HAGS|Pointer|FastStartup|ErrorReport|MotionBlur|Lumen|Recording|FullscreenOpt|MPO|Notif|StartMenu|Widgets|Copilot|TeamsChat|EdgeSidebar|ChatIcon/.test(id)) return "visual";
+  // Power / plans / suspend / parking / processor state
+  if (/Power|PerfPlan|^Lap_Ultimate|HighPerformance|UltimatePerformance|USBSuspend|USBSelSuspend|USBPowerSave|CoreParking|MaxProcessorState|TurboOn|ThrottleStates|AdaptiveBrightness|Hibernate|HibernateOff|DeepSleep|CStatePolicy|PowerThrottling|PBOScalarLock|^Zen5|^ArrowEcoreParkPolicy|^ArrowLunarLake/.test(id)) return "power";
+  // CPU scheduling, MSI mode, MMCSS, process/affinity, NUMA, timer res, anti-cheat detectors, security
+  if (/^Win32Priority|^Set(Timer|Responsive)|MSIMode|MMCSS|DynamicTick|GameModeTweaks|^Proc(SvcOff)?|^ProcAffinity|^ProcNUMA|^ProcGPUScheduler|^ProcessLasso|^Process(Trim|Auto|Disable)|TimerResolution|^Sec[A-Z]|^AC[A-Z]|InputUSB|InputRawAccel|InputMousePoll|^Win11(DisableVBS|DisableHVCI|ParkingCoreOverride|ProcessorIdleMin)|ArrowAPOOptIn|ArrowThreadDirector|ArrowITDTelemetryOff|Zen5CurveOptimizer|Zen5SMTSchedulerHint|Zen5AGESACStatePolicy|Zen5X3DCachePin|ToolDPCLatencyCheck/.test(id)) return "cpu";
+  return null;
+}
+
+function buildSingleTweakUndoScript(tweakId: string): string {
+  const category = categoryForTweak(tweakId);
+  const restoreBlock = category ? RESTORE_BLOCKS[category] : null;
+  const lines: string[] = [
+    `# ============================================`,
+    `# OPTI GODS — Single-Tweak Undo`,
+    `# Tweak: ${tweakId}`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# ============================================`,
+    ``,
+    `$ErrorActionPreference = 'SilentlyContinue'`,
+    ``,
+    `if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
+    `    Write-Host ""`,
+    `    Write-Host "  !! Run as Administrator (right-click -> Run with PowerShell as Admin) !!" -ForegroundColor Red`,
+    `    Read-Host "  Press Enter to close"; exit 1`,
+    `}`,
+    ``,
+    `Write-Host "=====================================" -ForegroundColor Yellow`,
+    `Write-Host " OPTI GODS - UNDO" -ForegroundColor Yellow`,
+    `Write-Host " Reversing tweak: ${tweakId}" -ForegroundColor White`,
+    `Write-Host "=====================================" -ForegroundColor Yellow`,
+    ``,
+  ];
+  if (restoreBlock) {
+    lines.push(`Write-Host "[INFO] No per-tweak reversal available — running the '${restoreBlock.label}' category restore block." -ForegroundColor DarkYellow`);
+    lines.push(`Write-Host ""`);
+    lines.push(...restoreBlock.commands);
+  } else {
+    lines.push(`Write-Host "[INFO] This tweak has no automated reversal." -ForegroundColor DarkYellow`);
+    lines.push(`Write-Host "       Use 'Restore Last Working State' on the Tools & Fixes page to roll back to the last OptiGods Windows restore point." -ForegroundColor DarkYellow`);
+  }
+  lines.push(``);
+  lines.push(`Write-Host ""`);
+  lines.push(`Write-Host " Undo complete. A restart is recommended." -ForegroundColor Green`);
+  lines.push(`Read-Host " Press Enter to close"`);
+  return lines.join("\r\n");
+}
+
+function buildRestoreLastWorkingScript(): string {
+  return [
+    `# ============================================`,
+    `# OPTI GODS — Restore Last Working State`,
+    `# Rolls back to the most recent OptiGods Windows restore point`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# ============================================`,
+    ``,
+    `$ErrorActionPreference = 'Stop'`,
+    ``,
+    `if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
+    `    Write-Host ""`,
+    `    Write-Host "  !! Run as Administrator !!" -ForegroundColor Red`,
+    `    Read-Host "  Press Enter to close"; exit 1`,
+    `}`,
+    ``,
+    `Write-Host "=====================================" -ForegroundColor Magenta`,
+    `Write-Host " OPTI GODS - RESTORE LAST WORKING STATE" -ForegroundColor Magenta`,
+    `Write-Host "=====================================" -ForegroundColor Magenta`,
+    `Write-Host ""`,
+    ``,
+    `try {`,
+    `    $points = Get-ComputerRestorePoint -ErrorAction Stop | Where-Object { $_.Description -like '*OptiGods*' -or $_.Description -like '*Opti Gods*' }`,
+    `    if (-not $points) {`,
+    `        Write-Host "[ERROR] No OptiGods restore points found." -ForegroundColor Red`,
+    `        Write-Host "        Open Control Panel -> Recovery -> System Restore to pick one manually." -ForegroundColor Yellow`,
+    `        Read-Host " Press Enter to close"; exit 1`,
+    `    }`,
+    `    $latest = $points | Sort-Object SequenceNumber -Descending | Select-Object -First 1`,
+    `    Write-Host ("[INFO] Latest OptiGods restore point: #" + $latest.SequenceNumber + " - " + $latest.Description) -ForegroundColor Cyan`,
+    `    Write-Host ("[INFO] Created: " + $latest.ConvertToDateTime($latest.CreationTime)) -ForegroundColor Cyan`,
+    `    Write-Host ""`,
+    `    $confirm = Read-Host " Type YES to roll back and reboot now"`,
+    `    if ($confirm -ne 'YES') { Write-Host " Cancelled." -ForegroundColor Yellow; exit 0 }`,
+    `    Write-Host "[ACTION] Calling Restore-Computer -RestorePoint $($latest.SequenceNumber) ..." -ForegroundColor Magenta`,
+    `    Restore-Computer -RestorePoint $latest.SequenceNumber -Confirm:$false`,
+    `} catch {`,
+    `    Write-Host ("[ERROR] " + $_.Exception.Message) -ForegroundColor Red`,
+    `    Read-Host " Press Enter to close"; exit 1`,
+    `}`,
+    ``,
+  ].join("\r\n");
+}
+
 function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   const scriptLines: string[] = [
     `# ============================================`,
@@ -1599,6 +1724,7 @@ Write-Output $json
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
+    fireAuditLog("apply", enabledTweaks, sessionToken, { format: "ps1", nvidiaPreset }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
     res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(scriptContent, 'utf8')]));
@@ -1615,6 +1741,7 @@ Write-Output $json
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
+    fireAuditLog("apply", enabledTweaks, sessionToken, { format: "bat", nvidiaPreset }).catch(() => {});
     const ps1Content = buildScript(enabledTweaks, nvidiaPreset);
     // BAT flow — race-condition-free, guaranteed window stays open:
     //   1. CMD opens, extracts embedded PS1 to %TEMP%\OptiGods-leaq.ps1
@@ -1661,6 +1788,35 @@ Write-Output $json
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
     res.end(Buffer.from(batContent, 'utf8'));
+  });
+
+  // ── Task #39 — Per-tweak Undo + Restore Last Working State ───────────────
+  app.post('/api/script/undo', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required. Activate your code to download undo scripts." });
+    }
+    const id: unknown = req.body?.id;
+    const sessionToken: string | undefined = req.body?.sessionToken;
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_]{2,64}$/.test(id)) {
+      return res.status(400).json({ message: "Invalid tweak id." });
+    }
+    const script = buildSingleTweakUndoScript(id);
+    fireAuditLog("undo", [id], sessionToken, { format: "ps1" }).catch(() => {});
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Undo-${id}.ps1"`);
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+  });
+
+  app.get('/api/restore-points/latest/restore', async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ message: "Pro access required." });
+    }
+    const sessionToken: string | undefined = (req.query?.sessionToken as string) || undefined;
+    const script = buildRestoreLastWorkingScript();
+    fireAuditLog("restore", [], sessionToken, { kind: "latest" }).catch(() => {});
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Restore-Last-Working-State.ps1"');
+    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
   // Game detection scanner script download
@@ -3527,6 +3683,9 @@ Read-Host "Press Enter to close this window"
       updatePageUrl: z.string().url().nullable().optional().or(z.literal("")),
       alertOnNewRig: z.boolean().optional(),
       alertOnNewNvidiaDriver: z.boolean().optional(),
+      // Task #39 — Discord audit log
+      auditLogEnabled: z.boolean().optional(),
+      auditWebhookUrl: z.string().url().nullable().optional().or(z.literal("")),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -3534,6 +3693,27 @@ Read-Host "Press Enter to close this window"
     const data = { ...parsed.data };
     if (data.updaterCmdUrl === "") data.updaterCmdUrl = null;
     if (data.updatePageUrl === "") data.updatePageUrl = null;
+    if (data.auditWebhookUrl === "") data.auditWebhookUrl = null;
+    // Task #39 — audit log invariants (enforced server-side, not just in the UI).
+    if (data.auditWebhookUrl != null) {
+      try {
+        const host = new URL(data.auditWebhookUrl).hostname.toLowerCase();
+        const allowed = host === "discord.com" || host === "discordapp.com" || host.endsWith(".discord.com") || host.endsWith(".discordapp.com");
+        if (!allowed) {
+          return res.status(400).json({ message: "auditWebhookUrl must be a Discord webhook (discord.com / discordapp.com)." });
+        }
+      } catch {
+        return res.status(400).json({ message: "auditWebhookUrl is not a valid URL." });
+      }
+    }
+    if (data.auditLogEnabled === true) {
+      // Either the request must set a webhook URL, or one must already be persisted.
+      const current = await storage.getAdminSettings();
+      const finalUrl = data.auditWebhookUrl !== undefined ? data.auditWebhookUrl : current?.auditWebhookUrl ?? null;
+      if (!finalUrl) {
+        return res.status(400).json({ message: "auditWebhookUrl is required when auditLogEnabled is true." });
+      }
+    }
     const updated = await storage.upsertAdminSettings(data);
     return res.json(updated);
   });

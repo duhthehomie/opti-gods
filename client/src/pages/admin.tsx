@@ -219,7 +219,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const [manualFlagOpen, setManualFlagOpen] = useState(false);
   const [manualFlag, setManualFlag] = useState<{ ip: string; codeRef: string; details: string; severity: SecuritySeverity }>({ ip: "", codeRef: "", details: "", severity: "medium" });
   const [flagging, setFlagging] = useState(false);
-  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string; alertOnNewRig: boolean; alertOnNewNvidiaDriver: boolean } | null>(null);
+  const [alertForm, setAlertForm] = useState<{ discordWebhookUrl: string; alertEmail: string; autoResolveDays: string; alertOnNewRig: boolean; alertOnNewNvidiaDriver: boolean; auditLogEnabled: boolean; auditWebhookUrl: string } | null>(null);
   const [pollingDrivers, setPollingDrivers] = useState(false);
   const [savingAlerts, setSavingAlerts] = useState(false);
   const [runningAutoResolve, setRunningAutoResolve] = useState(false);
@@ -253,7 +253,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
-  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null; alertOnNewRig: boolean | null; alertOnNewNvidiaDriver: boolean | null }>({
+  const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null; alertOnNewRig: boolean | null; alertOnNewNvidiaDriver: boolean | null; auditLogEnabled: boolean | null; auditWebhookUrl: string | null }>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
   });
@@ -749,6 +749,8 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                       autoResolveDays: String(alertSettings?.autoResolveDays ?? 30),
                       alertOnNewRig: alertSettings?.alertOnNewRig ?? true,
                       alertOnNewNvidiaDriver: alertSettings?.alertOnNewNvidiaDriver ?? true,
+                      auditLogEnabled: alertSettings?.auditLogEnabled ?? false,
+                      auditWebhookUrl: alertSettings?.auditWebhookUrl ?? "",
                     })}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-zinc-300 text-xs font-bold hover:bg-white/10 transition-colors"
                   >
@@ -935,6 +937,36 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     <p className="text-[9px] text-zinc-600 mt-1">Unresolved low/medium severity events older than this will be resolved automatically by the daily job (1–365 days)</p>
                   </div>
 
+                  {/* Audit log toggle (Task #39) */}
+                  <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
+                    <p className="text-[10px] font-bold text-white uppercase tracking-wider">Discord Audit Log</p>
+                    <label className="flex items-start gap-3 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 cursor-pointer hover:bg-zinc-900/60 transition-colors">
+                      <input
+                        data-testid="toggle-auditLogEnabled"
+                        type="checkbox"
+                        checked={alertForm.auditLogEnabled}
+                        onChange={e => setAlertForm(f => f ? { ...f, auditLogEnabled: e.target.checked } : f)}
+                        className="mt-0.5 accent-violet-500 w-4 h-4 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-zinc-200">Post every applied tweak to Discord</p>
+                        <p className="text-[9px] text-zinc-500 mt-0.5">When enabled, every script download / undo / restore fires a webhook to the channel below. Separate from the security alerts channel.</p>
+                      </div>
+                    </label>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Audit Webhook URL</label>
+                      <input
+                        data-testid="input-audit-webhook"
+                        value={alertForm.auditWebhookUrl}
+                        onChange={e => setAlertForm(f => f ? { ...f, auditWebhookUrl: e.target.value } : f)}
+                        placeholder="https://discord.com/api/webhooks/..."
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:border-violet-500/50 disabled:opacity-50"
+                        disabled={!alertForm.auditLogEnabled}
+                      />
+                      <p className="text-[9px] text-zinc-600 mt-1">Required when audit log is enabled. Use a separate Discord channel to avoid spamming your security alerts.</p>
+                    </div>
+                  </div>
+
                   {/* Aether intelligence toggles (Task #36) */}
                   <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
                     <p className="text-[10px] font-bold text-white uppercase tracking-wider">Aether Intelligence Alerts</p>
@@ -983,6 +1015,13 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                           body.autoResolveDays = parsedDays;
                           body.alertOnNewRig = alertForm.alertOnNewRig;
                           body.alertOnNewNvidiaDriver = alertForm.alertOnNewNvidiaDriver;
+                          body.auditLogEnabled = alertForm.auditLogEnabled;
+                          body.auditWebhookUrl = alertForm.auditWebhookUrl.trim() || null;
+                          if (alertForm.auditLogEnabled && !alertForm.auditWebhookUrl.trim()) {
+                            toast({ title: "Audit webhook required", description: "Provide a Discord webhook URL when enabling the audit log.", variant: "destructive" });
+                            setSavingAlerts(false);
+                            return;
+                          }
                           const r = await fetch("/api/admin/settings", {
                             method: "POST",
                             headers: { ...headers, "Content-Type": "application/json" },
