@@ -3220,6 +3220,60 @@ Start-Sleep 2
   // Activates only when STRIPE_SECRET_KEY is present in env vars.
   // The user sets STRIPE_SECRET_KEY + STRIPE_PRICE_ID from their Stripe dashboard.
 
+  // ── Stripe webhook (Task #41) ─────────────────────────────────────────────
+  // Authoritative source-of-truth for Pro grants on Stripe purchases. Stripe
+  // POSTs `checkout.session.completed` here; we verify the signature, pull
+  // the Discord user ID from session metadata, and call grantPro(). This is
+  // idempotent — re-delivery just upserts the existing entitlement row.
+  // Activates only when STRIPE_WEBHOOK_SECRET is configured.
+  app.post('/api/stripe/webhook', async (req, res) => {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!secretKey || !webhookSecret) {
+      return res.status(503).json({ error: 'Stripe webhook not configured.' });
+    }
+    const sig = req.headers['stripe-signature'] as string | undefined;
+    if (!sig) return res.status(400).json({ error: 'Missing stripe-signature header.' });
+    const rawBody = (req as any).rawBody;
+    if (!rawBody) return res.status(400).json({ error: 'Missing raw body for signature verification.' });
+
+    let event: any;
+    try {
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (err: any) {
+      console.error('[stripe/webhook] signature verification failed:', err?.message || err);
+      return res.status(400).json({ error: `Webhook signature failed: ${err?.message || 'unknown'}` });
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const sess = event.data.object as any;
+      const discordUserId: string | undefined = sess?.metadata?.discordUserId;
+      const tier = sess?.metadata?.tier;
+      const stripeSessionId: string = sess?.id;
+      // Only Pro tier triggers an entitlement — the Manual Opti tier is a
+      // done-for-you service that doesn't unlock the dashboard itself.
+      if (tier !== 'manual' && discordUserId) {
+        try {
+          await storage.grantPro({
+            discordUserId,
+            source: 'stripe',
+            notes: `stripe webhook | session:${stripeSessionId}`,
+          });
+          log(`[stripe/webhook] Pro granted to ${discordUserId} (session=${stripeSessionId})`, 'stripe');
+        } catch (err: any) {
+          console.error('[stripe/webhook] grantPro failed:', err?.message || err);
+        }
+      } else if (tier !== 'manual') {
+        log(`[stripe/webhook] Skipping grant — no Discord user ID in metadata (session=${stripeSessionId}). Buyer wasn't signed in at checkout; /api/verify-payment will still mint a code.`, 'stripe');
+      }
+    }
+
+    // Always 200 — Stripe retries on non-2xx and we don't want loops.
+    res.json({ received: true });
+  });
+
   app.post('/api/create-checkout', async (req, res) => {
     const secretKey = process.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
@@ -4022,8 +4076,11 @@ Read-Host "Press Enter to close this window"
       });
     }
 
-    const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef, discordUsername, amountPaid);
-    log(`[request-code] New verified request: ${email} | discord=${discordUsername} | $${amountPaid} via ${paymentMethod} | ref=${paymentRef}`, "email");
+    // Task #41: capture the authenticated Discord ID so admin "Send Code"
+    // can also grant a permanent Pro entitlement for CashApp/PayPal buyers.
+    const discordUserId = req.session?.userId ?? null;
+    const emailReq = await storage.createEmailRequest(email, paymentMethod, paymentRef, discordUsername, amountPaid, discordUserId);
+    log(`[request-code] New verified request: ${email} | discord=${discordUsername} (${discordUserId ?? "no-id"}) | $${amountPaid} via ${paymentMethod} | ref=${paymentRef}`, "email");
 
     return res.json({ ok: true, id: emailReq.id });
   });
@@ -4070,7 +4127,22 @@ Read-Host "Press Enter to close this window"
     await sendProCode(emailReq.email, available.code, siteUrl);
     await storage.updateEmailRequestStatus(id, "sent", available.id);
 
-    return res.json({ ok: true, code: available.code });
+    // Task #41: if the buyer was signed in when they submitted the proof,
+    // also bind a lifetime Pro entitlement to their Discord ID. This is the
+    // CashApp/PayPal "proof → grant" wiring that closes the loop without
+    // requiring the customer to redeem the code on every device.
+    const buyerDiscordId = (emailReq as any).discordUserId as string | null | undefined;
+    if (buyerDiscordId) {
+      const source = emailReq.paymentMethod === "paypal" ? "paypal" : "cashapp";
+      storage.grantPro({
+        discordUserId: buyerDiscordId,
+        source,
+        grantedBy: req.session?.userId ?? null,
+        notes: `${emailReq.paymentMethod} | ref:${emailReq.paymentRef} | code:${available.code}`,
+      }).catch((err) => console.error("[admin/email-requests/send] grantPro failed:", err?.message || err));
+    }
+
+    return res.json({ ok: true, code: available.code, proGranted: !!buyerDiscordId });
   });
 
   app.post("/api/admin/email-requests/:id/reject", async (req, res) => {

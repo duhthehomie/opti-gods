@@ -32,7 +32,7 @@ export interface IStorage {
   recordVisit(referrer?: string): Promise<void>;
   getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }>;
   // Email code requests
-  createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number): Promise<EmailRequest>;
+  createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number, discordUserId?: string | null): Promise<EmailRequest>;
   getEmailRequests(): Promise<EmailRequest[]>;
   updateEmailRequestStatus(id: number, status: string, sentCodeId?: number, note?: string): Promise<EmailRequest>;
   deleteEmailRequest(id: number): Promise<void>;
@@ -127,7 +127,7 @@ export interface IStorage {
   markDriverAlertSent(version: string): Promise<void>;
   listNvidiaDrivers(): Promise<NvidiaDriver[]>;
   // Pro entitlements — Discord-user-keyed lifetime Pro (Task #41)
-  grantPro(args: { discordUserId: string; source: string; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement>;
+  grantPro(args: { discordUserId: string; source: import("@shared/schema").ProSource; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement>;
   revokePro(discordUserId: string): Promise<void>;
   isPro(discordUserId: string): Promise<ProEntitlement | null>;
   listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
@@ -323,10 +323,11 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number): Promise<EmailRequest> {
+  async createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number, discordUserId?: string | null): Promise<EmailRequest> {
     const [row] = await db.insert(emailRequests).values({
       email, paymentMethod, paymentRef,
       ...(discordUsername ? { discordUsername } : {}),
+      ...(discordUserId ? { discordUserId } : {}),
       ...(amountPaid !== undefined ? { amountPaid } : {}),
     }).returning();
     return row;
@@ -988,7 +989,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ── Pro entitlements (Task #41) ─────────────────────────────────────────────
-  async grantPro(args: { discordUserId: string; source: string; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement> {
+  async grantPro(args: { discordUserId: string; source: import("@shared/schema").ProSource; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement> {
     const [row] = await db.insert(proEntitlements)
       .values({
         discordUserId: args.discordUserId,

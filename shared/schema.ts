@@ -119,6 +119,10 @@ export const emailRequests = pgTable("email_requests", {
   paymentMethod: text("payment_method").notNull(),
   paymentRef: text("payment_ref").notNull(),
   discordUsername: text("discord_username"),
+  // Task #41: capture the buyer's Discord user ID so admin "Send Code"
+  // can also call grantPro() and bind the manual CashApp/PayPal purchase
+  // to a lifetime entitlement.
+  discordUserId: text("discord_user_id"),
   amountPaid: integer("amount_paid"),
   status: text("status").notNull().default("pending"),
   sentCodeId: integer("sent_code_id"),
@@ -186,9 +190,14 @@ export type AdminSettings = typeof adminSettings.$inferSelect;
 // user is in this table (and revokedAt is null), they are Pro on every
 // device they sign into. Legacy localStorage tokens still work for guests
 // but are auto-migrated to an entitlement on first authenticated visit.
+// Constrained provenance values — enforced at the DB level so admin tooling
+// and webhooks can only record one of the documented sources.
+export const PRO_SOURCES = ["stripe", "cashapp", "paypal", "code", "friend", "legacy", "admin"] as const;
+export type ProSource = (typeof PRO_SOURCES)[number];
+export const proSourceEnum = pgEnum("pro_source", PRO_SOURCES);
 export const proEntitlements = pgTable("pro_entitlements", {
   discordUserId: text("discord_user_id").primaryKey(),
-  source: text("source").notNull(), // stripe | cashapp | paypal | code | friend | legacy | admin
+  source: proSourceEnum("source").notNull(),
   grantedAt: timestamp("granted_at").defaultNow(),
   grantedBy: text("granted_by"),    // admin discord ID (manual grants), null otherwise
   notes: text("notes"),             // free-form context: stripe session id, code value, etc.
