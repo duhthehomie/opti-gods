@@ -26,7 +26,13 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
   const a = ACCENTS[accent];
 
   const items = ids
-    .map(id => TWEAK_REGISTRY.find(t => t.id === id))
+    .map(id => {
+      const found = TWEAK_REGISTRY.find(t => t.id === id);
+      if (!found && import.meta.env.DEV) {
+        console.warn(`[V2TweakSection:${testIdSuffix}] Unknown tweak id "${id}" — missing from TWEAK_REGISTRY.`);
+      }
+      return found;
+    })
     .filter((t): t is NonNullable<typeof t> => Boolean(t));
 
   if (items.length === 0) return null;

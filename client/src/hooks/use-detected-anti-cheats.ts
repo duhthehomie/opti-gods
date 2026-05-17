@@ -29,8 +29,11 @@ export function useDetectedAntiCheats(
     if (bridge?.detectAntiCheats) {
       try {
         setDetected(new Set(bridge.detectAntiCheats()));
-      } catch {
-        // bridge not ready — leave empty
+      } catch (err) {
+        // Don't crash — but surface in dev so integration regressions are visible.
+        if (import.meta.env.DEV) {
+          console.warn("[useDetectedAntiCheats] Tauri bridge threw:", err);
+        }
       }
     }
   }, []);
