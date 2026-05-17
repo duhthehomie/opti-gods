@@ -4845,13 +4845,15 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
       res.end();
 
-      // Telemetry: warn loudly if the model ever emits a hand-rolled SAVE_PRESET
-      // (with explicit IDs) — that means the prompt drifted and the V2.1
-      // forbidden trio could slip back in. The client-side SavePresetCard
-      // resolves [SAVE_PRESET:AUTO] via /api/ai/preset using the detected
-      // hardware, which is the only safe path.
+      // Telemetry + drift defence: if the model ever emits a hand-rolled
+      // [SAVE_PRESET:id1,id2,...] (not the safe [SAVE_PRESET:AUTO]), that's
+      // prompt drift and the V2.1 forbidden trio could slip back in. We
+      // rewrite the saved-history version to [SAVE_PRESET:AUTO] so the
+      // canonical buildSafePreset path is the ONLY way preset IDs ever
+      // reach the user — no marker variants are accepted.
       if (fullText && /\[SAVE_PRESET:(?!AUTO\])/i.test(fullText)) {
-        console.warn("[AI] Model emitted hand-rolled SAVE_PRESET — prompt drift?", { sessionId });
+        console.warn("[AI] Model emitted hand-rolled SAVE_PRESET — prompt drift, rewriting to AUTO", { sessionId });
+        fullText = fullText.replace(/\[SAVE_PRESET:[^\]]*\]/gi, "[SAVE_PRESET:AUTO]");
       }
 
       if (sessionId && typeof sessionId === "string" && sessionId.length <= 64 && fullText) {
