@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
+import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus, PRO_SOURCES, type ProSource } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale, sendNewRigAlert, postAuditLog } from "./alerts";
 import { getTweakUndoEntry } from "./tweak-undo-map";
@@ -2501,10 +2501,13 @@ Start-Sleep 2
     if (!/^\d{15,25}$/.test(id)) {
       return res.status(400).json({ error: "Invalid Discord user ID (must be 15-25 digit snowflake)." });
     }
+    // Constrain `source` against PRO_SOURCES so untrusted admin input can
+    // never write an arbitrary provenance string into the entitlement row.
+    const safeSource: ProSource = (PRO_SOURCES as readonly string[]).includes(source) ? source : "admin";
     const grantedBy = req.session?.userId ?? null;
     const row = await storage.grantPro({
       discordUserId: id,
-      source: typeof source === "string" && source ? source : "admin",
+      source: safeSource,
       grantedBy,
       notes: typeof notes === "string" ? notes : null,
     });
