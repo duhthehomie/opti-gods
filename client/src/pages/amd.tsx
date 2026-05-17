@@ -29,6 +29,7 @@ const ALL_AMD_IDS = [
   "AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync",
   // V2.2 driver reapply tweaks
   "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff","AmdFRTC60","AmdFRTC144","AmdFRTC240",
+  "EnableMSIMode_Safe",
 ];
 
 const AMD_DRIVER_REAPPLY_TWEAKS = [
@@ -39,6 +40,7 @@ const AMD_DRIVER_REAPPLY_TWEAKS = [
   { id: "AmdFRTC60",            title: "Frame Rate Target Control = 60 FPS",          desc: "Adrenalin FRTC capped at 60. Best for 60Hz panels. Only enable ONE FRTC toggle.", badge: "60Hz",  impact: "MED" as const },
   { id: "AmdFRTC144",           title: "Frame Rate Target Control = 144 FPS",         desc: "Adrenalin FRTC capped at 144. Best for 144Hz panels. Only enable ONE FRTC toggle.", badge: "144Hz", impact: "MED" as const },
   { id: "AmdFRTC240",           title: "Frame Rate Target Control = 240 FPS",         desc: "Adrenalin FRTC capped at 240. Best for 240Hz competitive panels. Only enable ONE FRTC toggle.", badge: "240Hz", impact: "MED" as const },
+  { id: "EnableMSIMode_Safe",   title: "Safe MSI Mode (multi-device, BSOD-safe)",     desc: "V2.2 replacement for the V1 EnableMSIMode toggle that BSOD'd users. Enables Message Signaled Interrupts on AMD GPU + active NICs + NVMe controllers, while explicitly WIPING the dangerous DevicePolicy/DevicePriority/AssignmentSetOverride keys. Skips GPU on hybrid iGPU+dGPU systems.", badge: "V2.2 SAFE", impact: "HIGH" as const },
 ];
 
 async function downloadDriverReapplyAmd(tweakIds: string[]) {

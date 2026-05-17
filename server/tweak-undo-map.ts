@@ -357,38 +357,46 @@ export const TWEAK_UNDO_MAP: Record<string, UndoEntry> = {
     ],
   },
 
-  // ── V2.2 NVIDIA driver-class undos ────────────────────────────────────────
+  // ── V2.2 NVIDIA driver global-profile undos ──────────────────────────────
+  // All target the NVIDIA Corporation\Global\NVTweak hive (HKLM + HKCU) where
+  // the corresponding apply commands write.
   NvTextureFilterHighPerf: {
     label: "NVIDIA Texture Filtering → driver default",
     commands: [
-      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $names=@('PS_TexFilterAnisoOptOn','PS_TexFilterLODBiasAllow','PS_TexFilterNoNeg','PS_TexFilterQuality'); Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { $p=$_.PSPath; foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }`,
+      `$names=@('PS_TexFilterAnisoOptOn','PS_TexFilterLODBiasAllow','PS_TexFilterNoNeg','PS_TexFilterQuality'); @('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { $p=$_; If (Test-Path $p) { foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } } }`,
       OK("NVIDIA texture filtering keys removed (driver default restored)"),
     ],
   },
   NvLowLatencyUltra: {
     label: "NVIDIA Low Latency Mode → driver default",
     commands: [
-      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'RmLowLatencyMode' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FlipQueueSize' -EA SilentlyContinue }`,
+      `@('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { If (Test-Path $_) { Remove-ItemProperty -Path $_ -Name 'RmLowLatencyMode' -EA SilentlyContinue; Remove-ItemProperty -Path $_ -Name 'FlipQueueSize' -EA SilentlyContinue } }`,
       OK("Low Latency Mode reset"),
     ],
   },
   NvThreadedOptOn: {
     label: "NVIDIA Threaded Optimization → driver default",
     commands: [
-      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { Remove-ItemProperty $_.PSPath 'OGL_ThreadControl' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'D3D_ThreadControl' -EA SilentlyContinue }`,
+      `@('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { If (Test-Path $_) { Remove-ItemProperty -Path $_ -Name 'OGL_ThreadControl' -EA SilentlyContinue; Remove-ItemProperty -Path $_ -Name 'D3D_ThreadControl' -EA SilentlyContinue } }`,
       OK("Threaded Optimization reset"),
     ],
   },
   NvPowerMgmtMax: {
     label: "NVIDIA Power Management → adaptive (default)",
     commands: [
-      `$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $names=@('PowerMizerEnable','PerfLevelSrc','PowerMizerLevel','PowerMizerLevelAC'); Get-ChildItem $c -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA|GeForce' } | ForEach-Object { $p=$_.PSPath; foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } }`,
+      `$names=@('PowerMizerEnable','PerfLevelSrc','PowerMizerLevel','PowerMizerLevelAC'); @('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { $p=$_; If (Test-Path $p) { foreach ($n in $names) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } } }`,
       OK("PowerMizer keys removed (adaptive restored)"),
     ],
   },
-  NvFrameLimit60:  { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
-  NvFrameLimit144: { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
-  NvFrameLimit240: { label: "NVIDIA frame rate cap removed", commands: [`$c='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; Get-ChildItem $c -EA SilentlyContinue | ForEach-Object { Remove-ItemProperty $_.PSPath 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty $_.PSPath 'FrameRateLimitEnable' -EA SilentlyContinue }`, OK("Frame rate cap cleared")] },
+  ...((): Record<string, { label: string; commands: string[] }> => {
+    const clearFps = `@('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { If (Test-Path $_) { Remove-ItemProperty -Path $_ -Name 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty -Path $_ -Name 'FrameRateLimitEnable' -EA SilentlyContinue } }`;
+    const entry = { label: "NVIDIA frame rate cap removed", commands: [clearFps, OK("Frame rate cap cleared")] };
+    return {
+      NvFrameLimitOff: entry, NvFrameLimit30: entry, NvFrameLimit60: entry,
+      NvFrameLimit120: entry, NvFrameLimit144: entry, NvFrameLimit240: entry,
+      NvFrameLimitCustom: entry,
+    };
+  })(),
 
   // ── V2.2 AMD driver-class undos ───────────────────────────────────────────
   AmdTextureFilterPerf: {
