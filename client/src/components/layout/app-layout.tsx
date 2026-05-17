@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
+import { useIsEmbedded } from "@/lib/embedded-context";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
@@ -335,6 +336,12 @@ function FloatingAiButton() {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const embedded = useIsEmbedded();
+  if (embedded) return <>{children}</>;
+  return <AppLayoutInner>{children}</AppLayoutInner>;
+}
+
+function AppLayoutInner({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);

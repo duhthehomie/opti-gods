@@ -11,33 +11,19 @@ import { AuthGate } from "@/components/auth-gate";
 import { UpdateModal } from "@/components/update-modal";
 import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
+import { Redirect } from "@/components/redirect";
 
-import Dashboard from "@/pages/dashboard";
-import Registry from "@/pages/registry";
-import Fivem from "@/pages/fivem";
-import Nvidia from "@/pages/nvidia";
-import Amd from "@/pages/amd";
-import ProcessLasso from "@/pages/process-lasso";
-import ProcessesPage from "@/pages/processes";
-import StartupApps from "@/pages/startup-apps";
-import Debloat from "@/pages/debloat";
-import Memory from "@/pages/memory";
-import Fortnite from "@/pages/fortnite";
-import GameDetection from "@/pages/game-detection";
+import Home from "@/pages/home";
+import SystemScan from "@/pages/system-scan";
+import Tweaks from "@/pages/tweaks";
+import ToolsFixes from "@/pages/tools-fixes";
+import Pro from "@/pages/pro";
 import PaymentSuccess from "@/pages/payment-success";
 import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
-import Help from "@/pages/help";
-import Fixes from "@/pages/fixes";
-import WinTitus from "@/pages/wintitus";
-import CustomOS from "@/pages/custom-os";
 import Updates from "@/pages/updates";
-import DiscordPage from "@/pages/discord";
-import IntegratedGraphics from "@/pages/integrated-graphics";
 import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
-import LaptopPage from "@/pages/laptop";
-import BoostPage from "@/pages/boost";
 import OptiGodsAI from "@/pages/opti-gods-ai";
 
 function VisitTracker() {
@@ -93,33 +79,45 @@ function FriendUnlockHandler() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/registry" component={Registry} />
-      <Route path="/fivem" component={Fivem} />
-      <Route path="/nvidia" component={Nvidia} />
-      <Route path="/amd" component={Amd} />
-      <Route path="/process-lasso" component={ProcessLasso} />
-      <Route path="/startup" component={StartupApps} />
-      <Route path="/debloat" component={Debloat} />
-      <Route path="/memory" component={Memory} />
-      <Route path="/fortnite" component={Fortnite} />
-      <Route path="/game-detection" component={GameDetection} />
+      {/* V2: 5-tab IA */}
+      <Route path="/" component={Home} />
+      <Route path="/system-scan" component={SystemScan} />
+      <Route path="/tweaks" component={Tweaks} />
+      <Route path="/tools" component={ToolsFixes} />
+      <Route path="/pro" component={Pro} />
+
+      {/* Redirects from legacy optimizer routes into Tweaks accordion anchors */}
+      <Route path="/registry">{() => <Redirect to="/tweaks#registry" />}</Route>
+      <Route path="/fivem">{() => <Redirect to="/tweaks#fivem" />}</Route>
+      <Route path="/fortnite">{() => <Redirect to="/tweaks#fortnite" />}</Route>
+      <Route path="/nvidia">{() => <Redirect to="/tweaks#nvidia" />}</Route>
+      <Route path="/amd">{() => <Redirect to="/tweaks#amd" />}</Route>
+      <Route path="/integrated-graphics">{() => <Redirect to="/tweaks#intgpu" />}</Route>
+      <Route path="/laptop">{() => <Redirect to="/tweaks#laptop" />}</Route>
+      <Route path="/discord">{() => <Redirect to="/tweaks#discord" />}</Route>
+      <Route path="/memory">{() => <Redirect to="/tweaks#memory" />}</Route>
+      <Route path="/startup">{() => <Redirect to="/tweaks#startup" />}</Route>
+      <Route path="/debloat">{() => <Redirect to="/tweaks#debloat" />}</Route>
+      <Route path="/process-lasso">{() => <Redirect to="/tweaks#process-lasso" />}</Route>
+      <Route path="/processes">{() => <Redirect to="/tweaks#processes" />}</Route>
+      <Route path="/wintitus">{() => <Redirect to="/tweaks#wintitus" />}</Route>
+      <Route path="/boost">{() => <Redirect to="/tweaks" />}</Route>
+
+      {/* Redirects into Tools & Fixes tabs */}
+      <Route path="/fixes">{() => <Redirect to="/tools#fixes" />}</Route>
+      <Route path="/game-detection">{() => <Redirect to="/tools#game-detection" />}</Route>
+      <Route path="/custom-os">{() => <Redirect to="/tools#custom-os" />}</Route>
+      <Route path="/help">{() => <Redirect to="/tools#help" />}</Route>
+
+      {/* Standalone routes preserved */}
+      <Route path="/ai" component={OptiGodsAI} />
+      <Route path="/updates" component={Updates} />
+      <Route path="/admin" component={Admin} />
+      <Route path="/showcase" component={Showcase} />
+      <Route path="/get-code" component={GetCode} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/cancel" component={PaymentCancel} />
-      <Route path="/admin" component={Admin} />
-      <Route path="/fixes" component={Fixes} />
-      <Route path="/wintitus" component={WinTitus} />
-      <Route path="/custom-os" component={CustomOS} />
-      <Route path="/updates" component={Updates} />
-      <Route path="/discord" component={DiscordPage} />
-      <Route path="/integrated-graphics" component={IntegratedGraphics} />
-      <Route path="/laptop" component={LaptopPage} />
-      <Route path="/showcase" component={Showcase} />
-      <Route path="/help" component={Help} />
-      <Route path="/get-code" component={GetCode} />
-      <Route path="/boost" component={BoostPage} />
-      <Route path="/processes" component={ProcessesPage} />
-      <Route path="/ai" component={OptiGodsAI} />
+
       <Route component={NotFound} />
     </Switch>
   );
