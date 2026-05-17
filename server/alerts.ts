@@ -282,12 +282,14 @@ export async function sendNewRigAlert(
   let emailResult: NotifyResult["email"] = "skipped";
 
   const cats = suggestTweakCategories(rig);
-  const rigUrl = `${adminPanelUrl.replace(/\/$/, "")}/admin?tab=rigs&hash=${encodeURIComponent(rig.hash)}`;
+  // adminPanelUrl already ends in /admin — append query params directly
+  const rigUrl = `${adminPanelUrl.replace(/\/$/, "")}?tab=rigs&hash=${encodeURIComponent(rig.hash)}`;
   const specLine = [
     rig.cpu,
     rig.gpu + (rig.vramMb ? ` (${Math.round(rig.vramMb / 1024)}GB VRAM)` : ""),
     rig.ramGb ? `${rig.ramGb}GB RAM${rig.ramMhz ? ` @ ${rig.ramMhz}MHz` : ""}` : null,
     rig.chassis,
+    rig.coolingType ? `${rig.coolingType} cooling` : null,
   ].filter(Boolean).join(" · ");
 
   if (discordWebhookUrl) {
@@ -300,6 +302,7 @@ export async function sendNewRigAlert(
             { name: "CPU", value: rig.cpu || "—", inline: true },
             { name: "GPU", value: rig.gpu || "—", inline: true },
             { name: "Chassis", value: rig.chassis || "—", inline: true },
+            { name: "Cooling", value: rig.coolingType || "—", inline: true },
             { name: "RAM", value: rig.ramGb ? `${rig.ramGb}GB${rig.ramMhz ? ` @ ${rig.ramMhz}MHz` : ""}` : "—", inline: true },
             { name: "VRAM", value: rig.vramMb ? `${Math.round(rig.vramMb / 1024)}GB` : "—", inline: true },
             { name: "Anti-cheats", value: (rig.anticheats ?? []).join(", ") || "—", inline: true },
@@ -364,13 +367,26 @@ export async function sendNewRigAlert(
 
 export async function sendNewDriverAlert(
   driver: NvidiaDriver,
-  opts: { discordWebhookUrl?: string | null; alertEmail?: string | null; adminPanelUrl: string }
+  opts: {
+    discordWebhookUrl?: string | null;
+    alertEmail?: string | null;
+    adminPanelUrl: string;
+    recentRigs?: HardwareRig[];
+    validatedBaseline?: string | null;
+  }
 ): Promise<NotifyResult> {
-  const { discordWebhookUrl, alertEmail, adminPanelUrl } = opts;
+  const { discordWebhookUrl, alertEmail, adminPanelUrl, recentRigs = [], validatedBaseline = null } = opts;
   const errs: string[] = [];
   let discordResult: NotifyResult["discord"] = "skipped";
   let emailResult: NotifyResult["email"] = "skipped";
-  const driverUrl = `${adminPanelUrl.replace(/\/$/, "")}/admin?tab=drivers`;
+  // adminPanelUrl already ends in /admin
+  const driverUrl = `${adminPanelUrl.replace(/\/$/, "")}?tab=drivers`;
+  const rigLines = recentRigs.slice(0, 5).map(r =>
+    `• ${r.cpu} · ${r.gpu}${r.vramMb ? ` ${Math.round(r.vramMb / 1024)}GB` : ""}${r.chassis ? ` · ${r.chassis}` : ""}`
+  );
+  const rigsField = recentRigs.length
+    ? `${rigLines.join("\n")}${recentRigs.length > 5 ? `\n…and ${recentRigs.length - 5} more` : ""}`
+    : "No recent rigs on record yet";
 
   if (discordWebhookUrl) {
     try {
@@ -382,6 +398,8 @@ export async function sendNewDriverAlert(
             { name: "Version", value: driver.version, inline: true },
             { name: "Branch", value: driver.branch || "—", inline: true },
             { name: "Released", value: driver.releasedAt ? new Date(driver.releasedAt).toISOString().slice(0, 10) : "—", inline: true },
+            { name: "Last validated baseline", value: validatedBaseline ? `v${validatedBaseline}` : "none yet", inline: true },
+            { name: `Recent rigs (${recentRigs.length})`, value: rigsField.slice(0, 1000), inline: false },
             { name: "Action", value: `[Validate tweaks in Admin → NVIDIA Tracker](${driverUrl})`, inline: false },
           ],
           footer: { text: "Opti Gods Aether · Driver Poller" },
@@ -418,10 +436,15 @@ export async function sendNewDriverAlert(
     <p style="margin:0 0 4px;font-size:10px;color:#4ade80;text-transform:uppercase;letter-spacing:2px;font-weight:bold;">New NVIDIA Driver</p>
     <p style="margin:0;font-size:20px;font-weight:900;color:#fff;">v${driver.version}</p>
     ${driver.branch ? `<p style="margin:4px 0 0;font-size:11px;color:#a1a1aa;">Branch ${driver.branch}</p>` : ""}
+    <p style="margin:6px 0 0;font-size:11px;color:#a1a1aa;">Last validated baseline: ${validatedBaseline ? `v${validatedBaseline}` : "none yet"}</p>
+  </div>
+  <div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin:0 0 20px;">
+    <p style="margin:0 0 8px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:2px;">Recent rigs (${recentRigs.length})</p>
+    ${rigLines.length ? rigLines.map(l => `<p style="margin:3px 0;font-size:12px;color:#d4d4d8;">${l}</p>`).join("") : `<p style="margin:0;font-size:12px;color:#71717a;">No recent rigs on record yet</p>`}
   </div>
   <a href="${driverUrl}" style="display:inline-block;background:#22c55e;color:#000;text-decoration:none;font-size:12px;font-weight:700;padding:10px 20px;border-radius:6px;letter-spacing:0.5px;">Open NVIDIA Tracker</a>
 </div></body></html>`,
-          text: `New NVIDIA driver: v${driver.version}${driver.branch ? ` (branch ${driver.branch})` : ""}\n\n${driverUrl}`,
+          text: `New NVIDIA driver: v${driver.version}${driver.branch ? ` (branch ${driver.branch})` : ""}\nLast validated baseline: ${validatedBaseline ?? "none yet"}\n\nRecent rigs:\n${rigLines.join("\n") || "—"}\n\n${driverUrl}`,
         });
         emailResult = "sent";
       } catch (e) {

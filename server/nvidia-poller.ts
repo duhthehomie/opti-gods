@@ -1,6 +1,19 @@
 import { storage } from "./storage";
 import { sendNewDriverAlert } from "./alerts";
 
+/** Compare two NVIDIA driver version strings (e.g. "555.85" vs "552.44"). */
+function compareDriverVersions(a: string, b: string): number {
+  const pa = a.split(".").map(n => parseInt(n, 10) || 0);
+  const pb = b.split(".").map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da !== db) return da - db;
+  }
+  return 0;
+}
+
 const DEFAULT_FEED_URL =
   process.env.NVIDIA_DRIVER_FEED_URL ||
   // GeForce Game Ready lookup — RTX 4090 / Win11-64 / DCH / WHQL — returns recent drivers.
@@ -61,10 +74,23 @@ export async function pollNvidiaDrivers(opts: { adminPanelUrl: string }): Promis
   const existing = await storage.listNvidiaDrivers();
   const known = new Set(existing.map(d => d.version));
 
+  // Determine the highest currently-validated driver version. Alerts only fire
+  // for newly-detected versions that exceed this baseline — i.e. drivers that
+  // the tweak library hasn't yet been audited against.
+  const validatedVersions = existing.filter(d => d.tweaksValidated).map(d => d.version);
+  const validatedBaseline = validatedVersions.length
+    ? validatedVersions.reduce((max, v) => compareDriverVersions(v, max) > 0 ? v : max, validatedVersions[0])
+    : null;
+
   const settings = await storage.getAdminSettings();
   const allowAlerts = settings?.alertOnNewNvidiaDriver !== false;
   const discordWebhookUrl = settings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
   const alertEmail = settings?.alertEmail ?? process.env.ALERT_EMAIL ?? null;
+
+  // Recent rigs context for driver alerts — top 10 most-recently-seen rigs.
+  const recentRigs = allowAlerts && (discordWebhookUrl || alertEmail)
+    ? await storage.listRigs({ limit: 10, sort: "lastSeenAt" })
+    : [];
 
   for (const d of drivers) {
     const isNew = !known.has(d.version);
@@ -76,9 +102,15 @@ export async function pollNvidiaDrivers(opts: { adminPanelUrl: string }): Promis
       });
       if (isNew) {
         inserted++;
-        if (allowAlerts && (discordWebhookUrl || alertEmail)) {
+        // Only alert when the new version exceeds the validated tweak baseline.
+        // If no baseline is set yet, treat every new version as alert-worthy so
+        // the admin can begin building one.
+        const exceedsBaseline = validatedBaseline === null
+          || compareDriverVersions(d.version, validatedBaseline) > 0;
+        if (allowAlerts && exceedsBaseline && (discordWebhookUrl || alertEmail)) {
           const result = await sendNewDriverAlert(row, {
             discordWebhookUrl, alertEmail, adminPanelUrl: opts.adminPanelUrl,
+            recentRigs, validatedBaseline,
           });
           if (result.sentAny) alerted++;
         }
