@@ -1,5 +1,6 @@
 import { Activity, Download, Info, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { V2TweakSection } from "@/components/v2-tweak-section";
 
 /**
  * DPC Latency tab — Tools & Fixes shell.
@@ -53,6 +54,14 @@ Read-Host " Press ENTER to close"
           </p>
         </div>
       </header>
+
+      <V2TweakSection
+        heading="DPC Latency Tool"
+        accent="red"
+        testIdSuffix="dpc-tool"
+        description="Enable to include the DPC probe entry in your generated PowerShell script."
+        ids={["ToolDPCLatencyCheck"]}
+      />
 
       <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-2">
         <div className="flex items-center gap-2">

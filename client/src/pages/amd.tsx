@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { V2TweakSection } from "@/components/v2-tweak-section";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
@@ -695,6 +696,14 @@ export default function Amd() {
             />
           </div>
         </section>
+
+        <V2TweakSection
+          heading="RX 9000-Series / RDNA 4"
+          accent="red"
+          testIdSuffix="rx9000"
+          description="AFMF 2, Hypr-RX one-click, Anti-Lag 2 NextGen, power-slider headroom, and Adrenalin 2025 telemetry off. Most settings silently skip on older RDNA hardware."
+          ids={["RX9000RDNA4AFMF2","RX9000HyprRX","RX9000AntiLag2NextGen","RX9000PowerSlider","RX9000Adrenalin2025TelemetryOff","RX9000SAMVerify"]}
+        />
 
         {/* Info panel */}
         <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800">

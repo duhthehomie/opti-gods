@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { V2TweakSection } from "@/components/v2-tweak-section";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
@@ -679,6 +680,14 @@ export default function Nvidia() {
             />
           </div>
         </section>
+
+        <V2TweakSection
+          heading="RTX 50-Series / Blackwell"
+          accent="purple"
+          testIdSuffix="rtx50"
+          description="DLSS 4 multi-frame-gen, Reflex 2, sm_120 compute, and Blackwell-specific power & shader-cache tuning. Safe to leave off on older RTX cards."
+          ids={["RTX50DLSS4FrameGen","RTX50Reflex2","RTX50PowerModeLock","RTX50ShaderCacheBump","RTX50BlackwellDriverOpt","RTX50ComputeSm120","RTX50NVCPSettings","RTX50NvidiaAppTelemetryOff"]}
+        />
 
         {/* Info panel */}
         <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800">

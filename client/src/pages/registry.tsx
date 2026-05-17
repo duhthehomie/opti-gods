@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
+import { V2TweakSection } from "@/components/v2-tweak-section";
 import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
@@ -348,6 +349,52 @@ export default function Registry() {
               ))}
             </div>
           </section>
+
+          <V2TweakSection
+            heading="Network — Advanced Tuning"
+            accent="blue"
+            testIdSuffix="net-advanced"
+            ids={["NetMTUAutotune","NetTCPAutotuneAggressive","NetRSSTuning","NetDNSQuad9","NetDisableLargeSendOffload"]}
+          />
+
+          <V2TweakSection
+            heading="Security Tradeoffs"
+            accent="amber"
+            testIdSuffix="security-tradeoffs"
+            description="These weaken Windows hardening to claw back FPS. Each is gated automatically when a known-incompatible anti-cheat is detected."
+            ids={["SecDetectVBSStatus","SecDisableMemoryIntegrity","SecDisableCredentialGuard","SecDisableMitigationsForGames"]}
+          />
+
+          <V2TweakSection
+            heading="Anti-Cheat Awareness (Diagnostics)"
+            accent="purple"
+            testIdSuffix="ac-diagnostics"
+            description="Run these once to mark which anti-cheats are installed on this rig. Other tweaks then auto-disable to keep you ban-safe."
+            ids={["ACDetectVanguard","ACDetectEAC","ACDetectBattlEyeFACEIT"]}
+          />
+
+          <V2TweakSection
+            heading="Input & Mouse Polling"
+            accent="emerald"
+            testIdSuffix="input-polling"
+            ids={["InputUSBPollingCheck","InputRawAccelBanner","InputMousePollHzVerify"]}
+          />
+
+          <V2TweakSection
+            heading="AMD Zen 5 (Ryzen 9000-Series)"
+            accent="red"
+            testIdSuffix="zen5"
+            description="Curve Optimizer guidance, V-Cache pinning, and AGESA C-state policy for Ryzen 9000 / 9000X3D."
+            ids={["Zen5CurveOptimizer","Zen5PBOScalarLock","Zen5SMTSchedulerHint","Zen5AGESACStatePolicy","Zen5X3DCachePin"]}
+          />
+
+          <V2TweakSection
+            heading="Intel Arrow Lake / Lunar Lake (Core Ultra 200)"
+            accent="blue"
+            testIdSuffix="arrow-lake"
+            description="APO opt-in, Thread Director hints, and E-core park policy for Core Ultra 200-series."
+            ids={["ArrowAPOOptIn","ArrowThreadDirectorHint","ArrowEcoreParkPolicy","ArrowLunarLakePowerPlan","ArrowITDTelemetryOff"]}
+          />
         </div>
       </div>
     </AppLayout>
