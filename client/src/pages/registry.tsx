@@ -369,7 +369,7 @@ export default function Registry() {
             heading="Anti-Cheat Awareness (Diagnostics)"
             accent="purple"
             testIdSuffix="ac-diagnostics"
-            description="Run these once to mark which anti-cheats are installed on this rig. Other tweaks then auto-disable to keep you ban-safe. Coverage today: Vanguard blocks 5 kernel-level tweaks (VBS, HVCI, Credential Guard, Memory Integrity, kernel paging). EAC additionally blocks kernel paging. BattlEye and FACEIT detection is wired but no tweaks in V2 trip their gates yet — entries will be added as community reports come in."
+            description="Web build: these toggles are manual self-reports — flip the ones that match what you actually have installed, and other risky tweaks auto-disable to keep you ban-safe. Desktop (Tauri) build: real anti-cheat services are detected automatically via the kernel bridge. Coverage today: Vanguard blocks 5 kernel-level tweaks (VBS, HVCI, Credential Guard, Memory Integrity, kernel paging). EAC additionally blocks kernel paging. BattlEye and FACEIT detection is wired but no tweaks in V2 trip their gates yet — entries will be added as community reports come in."
             ids={["ACDetectVanguard","ACDetectEAC","ACDetectBattlEyeFACEIT"]}
           />
 
