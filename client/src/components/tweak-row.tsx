@@ -99,6 +99,10 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.message || `Undo failed (${res.status})`);
       }
+      // Server signals (via X-Undo-Available) whether this PS1 truly reverses
+      // the tweak. When false, the script only points the user to "Restore
+      // Last Working State" — we must NOT mark the tweak as reverted.
+      const granular = res.headers.get("X-Undo-Available") === "true";
       const text = await res.text();
       const blob = new Blob([text], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
@@ -109,10 +113,22 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      // Optimistically: untoggle locally + clear applied marker.
-      setTweakStore(id, false);
-      clearApplied(id);
-      toast({ title: "Undo script downloaded", description: "Run as Administrator to reverse this tweak. A restart may be required." });
+      if (granular) {
+        // Real per-tweak reversal: optimistically untoggle + clear applied marker.
+        setTweakStore(id, false);
+        clearApplied(id);
+        toast({
+          title: "Undo script downloaded",
+          description: "Run as Administrator to reverse this tweak. A restart may be required.",
+        });
+      } else {
+        // Fallback PS1 only — leave applied state intact so the Undo button stays visible.
+        toast({
+          title: "No automated undo for this tweak",
+          description:
+            "The downloaded script will guide you to use Restore Last Working State (Tools & Fixes). This tweak is still marked as applied.",
+        });
+      }
     } catch (e) {
       toast({ title: "Undo failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
     } finally {

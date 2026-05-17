@@ -1788,9 +1788,15 @@ Write-Output $json
       return res.status(400).json({ message: "Invalid tweak id." });
     }
     const script = buildSingleTweakUndoScript(id);
-    fireAuditLog("undo", [id], sessionToken, { format: "ps1" }).catch(() => {});
+    const hasGranularUndo = getTweakUndoEntry(id) != null;
+    fireAuditLog("undo", [id], sessionToken, { format: "ps1", granular: hasGranularUndo ? "true" : "false" }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Undo-${id}.ps1"`);
+    // Signal to the client whether this PS1 actually reverses the tweak.
+    // When false, the script only directs the user to "Restore Last Working
+    // State" — the client MUST NOT mark the tweak as reverted.
+    res.setHeader('X-Undo-Available', hasGranularUndo ? 'true' : 'false');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Undo-Available');
     res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
   });
 
