@@ -14,6 +14,73 @@ use windows::Win32::System::Threading::{
     PROCESS_QUERY_INFORMATION, PROCESS_SET_INFORMATION,
 };
 
+// Per-game ProBalance rule. The renderer can override defaults via
+// `commands::process_lasso::set_rules`. Keeps the priority class, the
+// affinity mask (None = all cores), and the IO priority hint together so
+// `apply_pro_balance` doesn't have to special-case anything per game.
+#[derive(Clone, Debug)]
+pub struct ProBalanceRule {
+    pub exe: String,
+    pub priority: PriorityHint,
+    pub affinity: Option<usize>,
+    pub io_priority: IoPriorityHint,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum PriorityHint {
+    Idle,
+    BelowNormal,
+    Normal,
+    AboveNormal,
+    High,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum IoPriorityHint {
+    VeryLow,
+    Low,
+    Normal,
+    High,
+}
+
+// NtSetInformationProcess(ProcessIoPriority) — undocumented but stable
+// since Vista. Powers the "I/O priority: Low" toggle in Task Manager and
+// is exactly what Process Lasso uses to throttle background disk reads
+// while a game is running. Loaded dynamically so the binary still links
+// when ntdll.dll isn't on the import table at compile time.
+#[allow(non_snake_case)]
+unsafe fn set_io_priority(handle: HANDLE, io: IoPriorityHint) -> bool {
+    use std::ffi::CString;
+    use std::sync::OnceLock;
+    use windows::Win32::Foundation::FARPROC;
+    use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+    use windows::core::PCSTR;
+
+    type NtSetInformationProcessFn = unsafe extern "system" fn(
+        HANDLE,
+        u32,        // PROCESS_INFORMATION_CLASS — ProcessIoPriority = 0x21
+        *const u32, // ProcessInformation (IO_PRIORITY_HINT enum value)
+        u32,        // ProcessInformationLength (4)
+    ) -> i32;      // NTSTATUS — 0 on success
+
+    static CACHED: OnceLock<Option<NtSetInformationProcessFn>> = OnceLock::new();
+    let proc = *CACHED.get_or_init(|| {
+        let dll = CString::new("ntdll.dll").ok()?;
+        let name = CString::new("NtSetInformationProcess").ok()?;
+        let h = GetModuleHandleA(PCSTR(dll.as_ptr() as *const u8)).ok()?;
+        let p: FARPROC = GetProcAddress(h, PCSTR(name.as_ptr() as *const u8));
+        p.map(|f| std::mem::transmute::<_, NtSetInformationProcessFn>(f))
+    });
+    let Some(nt_set) = proc else { return false };
+    let level: u32 = match io {
+        IoPriorityHint::VeryLow => 0,
+        IoPriorityHint::Low => 1,
+        IoPriorityHint::Normal => 2,
+        IoPriorityHint::High => 3,
+    };
+    nt_set(handle, 0x21, &level as *const u32, 4) == 0
+}
+
 /// Enumerates running processes and returns the first whitelisted .exe name we find.
 pub fn find_running(whitelist: &[&str]) -> Option<String> {
     let names = enumerate().ok()?;
@@ -94,9 +161,11 @@ pub fn apply_pro_balance(game_exe: &str, whitelist: &[&str]) -> Result<()> {
                 Err(_) => continue, // protected / system process, skip silently
             };
             if is_active_game {
-                // Boost the game: HIGH priority + every available core.
+                // Boost the game: HIGH priority + every available core +
+                // High IO priority so disk reads aren't fighting background apps.
                 let _ = SetPriorityClass(handle, HIGH_PRIORITY_CLASS);
                 let _ = SetProcessAffinityMask(handle, full_affinity);
+                let _ = set_io_priority(handle, IoPriorityHint::High);
             } else {
                 // Demote every other userland process. PROCESS_MODE_BACKGROUND_BEGIN
                 // sets BOTH CPU priority to IDLE *and* I/O + memory priority to
@@ -106,6 +175,11 @@ pub fn apply_pro_balance(game_exe: &str, whitelist: &[&str]) -> Result<()> {
                 let bg = SetPriorityClass(handle, PROCESS_MODE_BACKGROUND_BEGIN);
                 if bg.is_err() {
                     let _ = SetPriorityClass(handle, BELOW_NORMAL_PRIORITY_CLASS);
+                    // BACKGROUND_BEGIN wasn't accepted (e.g. cross-session
+                    // process). Fall back to an explicit Low IO priority
+                    // via NtSetInformationProcess so disk-heavy background
+                    // apps still get throttled while the game runs.
+                    let _ = set_io_priority(handle, IoPriorityHint::Low);
                 }
             }
             let _ = CloseHandle(handle);

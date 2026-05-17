@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback } from "react";
-import { Cpu, Upload, CheckCircle2, X, Copy, Check, ChevronDown } from "lucide-react";
+import { Cpu, Upload, CheckCircle2, X, Copy, Check, ChevronDown, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredToken } from "@/lib/pro-status";
+import { isNative, scanHardware } from "@/lib/tauri-bridge";
 
 function detectGpuVendor(gpuName: string): "nvidia" | "amd" | "intel" {
   const n = (gpuName || "").toLowerCase();
@@ -90,6 +91,28 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
     });
   };
 
+  // Tauri desktop shell: skip the copy-and-paste dance entirely and call
+  // the Rust WMI scan command directly. The render path still uses the
+  // exact same ScannedSysInfo shape, so all downstream code is unchanged.
+  const runNativeScan = useCallback(async () => {
+    try {
+      const native = await scanHardware();
+      if (!native) throw new Error("Native scan returned no data");
+      const parsed: ScannedSysInfo = {
+        GPU: native.gpu,
+        CPU: native.cpu,
+        RAM_GB: native.ram_gb ?? undefined,
+      };
+      saveScannedInfo(parsed);
+      uploadHardwareToServer(parsed);
+      onScanned(parsed);
+      setExpanded(false);
+      toast({ title: "Native scan complete", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}` });
+    } catch (err: any) {
+      toast({ title: "Native scan failed", description: String(err?.message || err), variant: "destructive" });
+    }
+  }, [onScanned, toast]);
+
   const handleClear = () => {
     clearScannedInfo();
     onCleared();
@@ -147,6 +170,16 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareSc
           </div>
 
           <div className="p-4 space-y-4">
+            {isNative() && (
+              <button
+                onClick={runNativeScan}
+                data-testid="button-hardware-scan-native"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 hover:text-red-200 text-xs font-bold uppercase tracking-wider transition-colors"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Run instant native scan
+              </button>
+            )}
             {/* Step 1 */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
