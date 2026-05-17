@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Crown, Check, Sparkles, ShieldCheck, Zap, MessageSquare, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
+import { TOTAL_TWEAK_COUNT } from "@/lib/tweak-registry";
 
 const PERKS = [
   { icon: Zap, title: "Full PowerShell Script Generator", desc: "Download personalized .ps1 with all your selected tweaks" },
-  { icon: ShieldCheck, title: "Every Tweak Unlocked", desc: "Access all 437+ optimization toggles, no gates" },
+  { icon: ShieldCheck, title: "Every Tweak Unlocked", desc: `Access all ${TOTAL_TWEAK_COUNT}+ optimization toggles, no gates` },
   { icon: Sparkles, title: "Opti Gods AI — Unlimited", desc: "Unlimited prompts, image analysis, smart preset gen" },
   { icon: MessageSquare, title: "Priority Discord Support", desc: "Direct access to the Pro channel" },
   { icon: Crown, title: "Lifetime Updates", desc: "One payment, every future tweak forever" },

@@ -3,7 +3,9 @@ import { CustomSwitch } from "./ui/custom-switch";
 import { Label } from "./ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, ShieldAlert, X, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { getTweakMeta, SAFETY_LABEL, SAFETY_DESCRIPTION, type TweakSafety } from "@/lib/tweak-registry";
 
 interface TweakRowProps {
   id: string;
@@ -15,7 +17,11 @@ interface TweakRowProps {
   badge?: string;
   impact?: "HIGH" | "MED" | "LOW";
   warning?: string;
-  relevanceWarning?: string; // e.g., "GPU-specific: NVIDIA GPU not detected"
+  relevanceWarning?: string;
+  /** Safety classification. If not passed, looked up in TWEAK_REGISTRY by id. */
+  safety?: TweakSafety;
+  /** Short ≤140-char plain-English explanation. If not passed, looked up by id. */
+  plainEnglish?: string;
 }
 
 const IMPACT_STYLES = {
@@ -24,8 +30,18 @@ const IMPACT_STYLES = {
   LOW:  { dot: "bg-zinc-500",  label: "LOW",  text: "text-zinc-500",  bg: "bg-zinc-800 border-zinc-700" },
 };
 
-export function TweakRow({ id, title, description, checked, onCheckedChange, delay = 0, badge, impact, warning, relevanceWarning }: TweakRowProps) {
+const SAFETY_STYLES: Record<TweakSafety, { dot: string; text: string; bg: string }> = {
+  safe:       { dot: "bg-emerald-500", text: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/25" },
+  aggressive: { dot: "bg-amber-400",   text: "text-amber-400",   bg: "bg-amber-400/10 border-amber-400/25" },
+  expert:     { dot: "bg-red-500",     text: "text-red-400",     bg: "bg-red-500/10 border-red-500/30" },
+};
+
+export function TweakRow({ id, title, description, checked, onCheckedChange, delay = 0, badge, impact, warning, relevanceWarning, safety, plainEnglish }: TweakRowProps) {
   const imp = impact ? IMPACT_STYLES[impact] : null;
+  const meta = getTweakMeta(id);
+  const safetyVal: TweakSafety | null = safety ?? meta?.safety ?? null;
+  const plainText = plainEnglish ?? meta?.plainEnglish ?? null;
+  const safetyStyle = safetyVal ? SAFETY_STYLES[safetyVal] : null;
   const [pendingEnable, setPendingEnable] = useState(false);
 
   const handleChange = (val: boolean) => {
@@ -69,6 +85,46 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             >
               {title}
             </Label>
+
+            {safetyStyle && safetyVal && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-testid={`safety-${safetyVal}-${id}`}
+                    className={cn(
+                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide cursor-help",
+                      safetyStyle.bg, safetyStyle.text
+                    )}
+                  >
+                    <span className={cn("w-1.5 h-1.5 rounded-full", safetyStyle.dot)} />
+                    {SAFETY_LABEL[safetyVal]}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+                  <span className="font-bold">{SAFETY_LABEL[safetyVal]}: </span>
+                  {SAFETY_DESCRIPTION[safetyVal]}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {plainText && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid={`info-${id}`}
+                    className="inline-flex items-center justify-center w-4 h-4 rounded-full text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="Plain-English explanation"
+                  >
+                    <Info className="w-3 h-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+                  {plainText}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {warning && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25 uppercase tracking-wide">
@@ -134,11 +190,9 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-zinc-950 shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header stripe */}
               <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-500" />
 
               <div className="p-6 space-y-4">
-                {/* Icon + title */}
                 <div className="flex items-start gap-4">
                   <div className="shrink-0 w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
                     <ShieldAlert className="w-6 h-6 text-amber-400" />
@@ -158,17 +212,14 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                   </button>
                 </div>
 
-                {/* Warning text */}
                 <div className="ml-16 px-4 py-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
                   <p className="text-sm text-zinc-300 leading-relaxed">{warning}</p>
                 </div>
 
-                {/* Fine print */}
                 <p className="ml-16 text-xs text-zinc-600 leading-relaxed">
                   This tweak will only take effect after you download and run the PowerShell script as Administrator. You can turn it back off at any time before downloading.
                 </p>
 
-                {/* Action buttons */}
                 <div className="ml-16 flex items-center gap-3 pt-1">
                   <button
                     data-testid={`button-enable-anyway-${id}`}
