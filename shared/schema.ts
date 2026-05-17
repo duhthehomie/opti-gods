@@ -149,6 +149,15 @@ export const securityEvents = pgTable("security_events", {
 });
 export type SecurityEvent = typeof securityEvents.$inferSelect;
 
+// Auto-resolve run history — one row per job execution
+export const autoResolveRuns = pgTable("auto_resolve_runs", {
+  id: serial("id").primaryKey(),
+  resolvedCount: integer("resolved_count").notNull().default(0),
+  windowDays: integer("window_days").notNull().default(30),
+  ranAt: timestamp("ran_at").defaultNow(),
+});
+export type AutoResolveRun = typeof autoResolveRuns.$inferSelect;
+
 // Admin settings — single-row config table (id always = 1)
 export const adminSettings = pgTable("admin_settings", {
   id: serial("id").primaryKey(),

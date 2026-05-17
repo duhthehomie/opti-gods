@@ -140,6 +140,13 @@ type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "announceme
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
 
+type AutoResolveRunEntry = {
+  id: number;
+  resolvedCount: number;
+  windowDays: number;
+  ranAt: string | null;
+};
+
 type SecurityStats = {
   threatScore: number;
   flagsToday: number;
@@ -152,6 +159,7 @@ type SecurityStats = {
   lastAutoResolvedAt: string | null;
   autoResolveWindowDays: number;
   nextAutoResolveAt: string | null;
+  autoResolveHistory: AutoResolveRunEntry[];
 };
 
 function severityBadge(severity: string) {
@@ -717,7 +725,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
               </div>
 
               {/* Edit form */}
-              {alertForm === null ? (
+              {alertForm === null && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     data-testid="button-edit-alert-settings"
@@ -764,7 +772,39 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     {runningAutoResolve ? "Running…" : "Run Auto-resolve Now"}
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {/* Auto-resolve run history */}
+              {stats && stats.autoResolveHistory && stats.autoResolveHistory.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/5">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Run History (last {stats.autoResolveHistory.length})</p>
+                  <div className="space-y-1" data-testid="list-auto-resolve-history">
+                    {stats.autoResolveHistory.map((run, i) => (
+                      <div
+                        key={run.id}
+                        data-testid={`row-auto-resolve-run-${run.id}`}
+                        className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-zinc-900/50 border border-white/5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${i === 0 ? "bg-emerald-500" : "bg-zinc-600"}`} />
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {run.resolvedCount > 0
+                              ? <><span className="text-emerald-400 font-bold">{run.resolvedCount}</span> resolved</>
+                              : <span className="text-zinc-600">0 resolved</span>
+                            }
+                          </span>
+                          <span className="text-[9px] text-zinc-600 font-mono">· {run.windowDays}d window</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-600 font-mono">
+                          {run.ranAt ? timeAgo(run.ranAt) : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {alertForm !== null && (
                 <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-4 space-y-3">
                   <p className="text-[10px] font-bold text-white uppercase tracking-wider mb-2">Configure Alerts</p>
 

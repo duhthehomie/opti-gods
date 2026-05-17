@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -83,7 +83,8 @@ export interface IStorage {
   resolveSecurityEvent(id: number): Promise<void>;
   markSecurityEventAlertSent(id: number): Promise<void>;
   autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
-  recordAutoResolveRun(count: number): Promise<void>;
+  recordAutoResolveRun(count: number, windowDays?: number): Promise<void>;
+  getAutoResolveRunHistory(limit?: number): Promise<import("@shared/schema").AutoResolveRun[]>;
   // Admin settings
   getAdminSettings(): Promise<AdminSettings | null>;
   upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null }): Promise<AdminSettings>;
@@ -630,7 +631,7 @@ export class DatabaseStorage implements IStorage {
     return rows.length;
   }
 
-  async recordAutoResolveRun(count: number): Promise<void> {
+  async recordAutoResolveRun(count: number, windowDays = 30): Promise<void> {
     const existing = await this.getAdminSettings();
     const updates = { lastAutoResolvedCount: count, lastAutoResolvedAt: new Date() };
     if (existing) {
@@ -638,6 +639,11 @@ export class DatabaseStorage implements IStorage {
     } else {
       await db.insert(adminSettings).values(updates);
     }
+    await db.insert(autoResolveRuns).values({ resolvedCount: count, windowDays, ranAt: new Date() });
+  }
+
+  async getAutoResolveRunHistory(limit = 10): Promise<AutoResolveRun[]> {
+    return await db.select().from(autoResolveRuns).orderBy(desc(autoResolveRuns.ranAt)).limit(limit);
   }
 
   async findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null> {

@@ -60,7 +60,7 @@ async function runAutoResolve(): Promise<{ resolved: number; days: number }> {
   const adminCfg = await storage.getAdminSettings();
   const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
   const count = await storage.autoResolveOldSecurityEvents(days);
-  await storage.recordAutoResolveRun(count);
+  await storage.recordAutoResolveRun(count, days);
   if (count > 0) {
     console.log(`[security] Auto-resolved ${count} stale low/medium event(s) older than ${days} days`);
   }
@@ -3322,11 +3322,12 @@ Read-Host "Press Enter to close this window"
   // GET /api/admin/security/stats — threat score, counters, country breakdown
   app.get("/api/admin/security/stats", async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [events, bans, ipLogs, adminCfg] = await Promise.all([
+    const [events, bans, ipLogs, adminCfg, autoResolveHistory] = await Promise.all([
       storage.getSecurityEvents(500),
       storage.getIpBans(),
       storage.getIpLogs(),
       storage.getAdminSettings(),
+      storage.getAutoResolveRunHistory(10),
     ]);
     const autoResolveDays = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
 
@@ -3363,10 +3364,16 @@ Read-Host "Press Enter to close this window"
       countriesSeen: Object.keys(countryCounts).length,
       topCountries,
       openEvents: openEvents.length,
-      lastAutoResolved: adminCfg?.lastAutoResolvedCount ?? 0,
-      lastAutoResolvedAt: adminCfg?.lastAutoResolvedAt?.toISOString() ?? null,
+      lastAutoResolved: autoResolveHistory[0]?.resolvedCount ?? adminCfg?.lastAutoResolvedCount ?? 0,
+      lastAutoResolvedAt: autoResolveHistory[0]?.ranAt?.toISOString() ?? adminCfg?.lastAutoResolvedAt?.toISOString() ?? null,
       autoResolveWindowDays: autoResolveDays,
       nextAutoResolveAt: nextAutoResolveAt.toISOString(),
+      autoResolveHistory: autoResolveHistory.map(r => ({
+        id: r.id,
+        resolvedCount: r.resolvedCount,
+        windowDays: r.windowDays,
+        ranAt: r.ranAt?.toISOString() ?? null,
+      })),
     });
   });
 
