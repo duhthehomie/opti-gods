@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions exposed to the main app window.",
+  "windows": ["main", "splash"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:webview:allow-create-webview-window",
+    "shell:allow-open",
+    "dialog:default",
+    "process:default",
+    "http:default",
+    "fs:default",
+    "os:default",
+    "notification:default",
+    "updater:default"
+  ]
+}
