@@ -435,8 +435,12 @@ export const TWEAK_UNDO_MAP: Record<string, UndoEntry> = {
   EnableMSIMode_Safe: {
     label: "Safe MSI mode → disabled on all targeted devices (GPU + NIC + NVMe)",
     commands: [
-      `Get-PnpDevice -EA SilentlyContinue | Where-Object { $_.Class -in @('Display','Net','SCSIAdapter') -and $_.Status -eq 'OK' } | ForEach-Object { $msi = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($_.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; If (Test-Path $msi) { Set-ItemProperty $msi 'MSISupported' 0 -Type DWord -EA SilentlyContinue }; $aff = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($_.InstanceId)\\Device Parameters\\Interrupt Management\\Affinity Policy"; If (Test-Path $aff) { Remove-ItemProperty $aff 'DevicePolicy' -EA SilentlyContinue; Remove-ItemProperty $aff 'DevicePriority' -EA SilentlyContinue; Remove-ItemProperty $aff 'AssignmentSetOverride' -EA SilentlyContinue } }`,
-      OK("MSI disabled on GPU + NICs + NVMe; Affinity Policy keys wiped (reboot required)"),
+      // Mirror the apply scope EXACTLY: only hit devices the apply command
+      // could have touched. Display only if there's a single (non-hybrid) GPU;
+      // Net filtered to physical adapters (no Virtual/Loopback/Bluetooth/WAN/
+      // Tunnel/Hyper-V); SCSIAdapter filtered to NVMe controllers only.
+      `$targets = @(); $gpus = @(Get-PnpDevice -Class Display -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' }); If ($gpus.Count -eq 1) { $targets += $gpus } ElseIf ($gpus.Count -gt 1) { Write-Host "[Undo] Skipping GPU — hybrid display config detected (apply skipped it too)." -ForegroundColor Yellow }; $targets += @(Get-PnpDevice -Class Net -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.FriendlyName -notmatch 'Virtual|Loopback|Bluetooth|WAN|Tunnel|Hyper-V' }); $targets += @(Get-PnpDevice -Class SCSIAdapter -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.FriendlyName -match 'NVMe|Standard NVM' }); ForEach ($d in $targets) { $msi = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($d.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; If (Test-Path $msi) { Set-ItemProperty $msi 'MSISupported' 0 -Type DWord -EA SilentlyContinue }; $aff = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($d.InstanceId)\\Device Parameters\\Interrupt Management\\Affinity Policy"; If (Test-Path $aff) { Remove-ItemProperty $aff 'DevicePolicy' -EA SilentlyContinue; Remove-ItemProperty $aff 'DevicePriority' -EA SilentlyContinue; Remove-ItemProperty $aff 'AssignmentSetOverride' -EA SilentlyContinue } }`,
+      OK("MSI disabled on apply-scope devices only (GPU + filtered NICs + NVMe); Affinity Policy keys wiped (reboot required)"),
     ],
   },
 
