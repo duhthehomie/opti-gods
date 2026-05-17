@@ -22,13 +22,15 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   const CORE = [
     // Scheduler / responsiveness / timer precision
     "Win32PrioritySeparation",   // sets foreground app CPU quantum — single biggest scheduler FPS tweak
-    "SetTimerResolution",        // bcdedit useplatformtick=yes — hardware timer, tightest frame deltas
     "SetResponsiveness","GameModeTweaks",
-    "DisableHungAppDetection","EnableMSIMode",
+    "DisableHungAppDetection",
+    // SetTimerResolution + EnableMSIMode + DisableIPv6 are NOT in CORE anymore (V2 stability pass).
+    // They caused SYSTEM_THREAD_EXCEPTION_NOT_HANDLED BSOD + FiveM productId::INVALID assertion in V1.
+    // Now they are opt-in only via their tab — generator no longer auto-applies them on every PC.
     // Network
     "NetworkThrottling",         // NetworkThrottlingIndex=0xffffffff — disables multimedia net throttle
     "DisableNagle","InputLagTCP","SetDNSPriority","DisableNDU",
-    "EnableTCPAutoTuning","OptimizeTCP","DisableIPv6",
+    "EnableTCPAutoTuning","OptimizeTCP",
     // Power / throttling
     "DisablePowerThrottling","DisablePowerThrottlingAdv",
     // Visual / gaming

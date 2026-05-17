@@ -2,6 +2,18 @@
 
 A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthetic.
 
+## V2.1 (2026-05-17) — Stability Surgery
+
+Fixed the V1 publish-blocking crashes:
+- **BSOD (`SYSTEM_THREAD_EXCEPTION_NOT_HANDLED`)** — `EnableMSIMode` no longer writes `DevicePolicy=4` / `DevicePriority=3` to GPU Affinity Policy (invalid IRQ config without an `AssignmentSetOverride` CPU mask); also skips on multi-GPU/hybrid hosts.
+- **FiveM `productId != ProductID::INVALID`** — `DisableIPv6` now uses the supported registry method (`DisabledComponents=0x20`, prefer-IPv4) instead of `Disable-NetAdapterBinding`, so Rockstar entitlement / Discord voice / Xbox party chat keep working.
+- **Boot hang on Ryzen APUs / Intel chipsets** — `SetTimerResolution` + `IGpu_SetTimerResolution` switched from `bcdedit /set useplatformtick yes` to the safer `bcdedit /set disabledynamictick yes`.
+- **TCP stack break on modern Win10/11** — removed deprecated `netsh int tcp set global netdma=enabled` from `OptimizeTCP`.
+- **CORE auto-preset hardened** — `EnableMSIMode`, `DisableIPv6`, `SetTimerResolution` removed from the default auto-applied set in `client/src/lib/smart-recommendations.ts`. They're still available but opt-in only.
+- **Recovery for existing victims** — the Fixes tab "CPU Scheduling & Timer" restore block now proactively wipes `DevicePolicy` / `DevicePriority` / `AssignmentSetOverride` on every display device.
+
+Versioned `2.1.0` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
+
 ## Architecture
 
 - **Frontend**: React + Vite + TypeScript, Tailwind CSS + shadcn/ui, wouter routing, TanStack Query v5
