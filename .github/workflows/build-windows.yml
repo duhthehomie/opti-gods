@@ -13,6 +13,7 @@ name: Build Windows installer
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       release_tag:
@@ -78,6 +79,12 @@ jobs:
 
       - name: Build Vite frontend
         run: npm run build
+
+      - name: Guard — updater key required for tagged releases
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_SIGNING_PRIVATE_KEY == '' }}
+        shell: pwsh
+        run: |
+          throw "TAURI_SIGNING_PRIVATE_KEY secret is missing. Tagged releases MUST be signed by the updater key or the desktop app will refuse to install them. Add the secret in Settings -> Secrets and variables -> Actions, then re-run."
 
       - name: Build Tauri installer
         # `tauri build` does TWO different signing operations:

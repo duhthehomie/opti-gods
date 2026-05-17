@@ -46,12 +46,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "leaq",
-    "copyright": "© 2026 leaq. All rights reserved.",
+    "copyright": "\u00a9 2026 leaq. All rights reserved.",
     "category": "Utility",
     "shortDescription": "Windows 10/11 PC optimizer.",
-    "longDescription": "Opti Gods is a Windows tuning toolkit for competitive gamers — registry, network, GPU, and process-priority tweaks with one-click apply and undo.",
+    "longDescription": "Opti Gods is a Windows tuning toolkit for competitive gamers \u2014 registry, network, GPU, and process-priority tweaks with one-click apply and undo.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -62,11 +64,15 @@
     "resources": [],
     "externalBin": [],
     "windows": {
-      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installMode": "perMachine",
-        "languages": ["English"],
+        "languages": [
+          "English"
+        ],
         "displayLanguageSelector": false,
         "compression": "lzma"
       }
@@ -75,7 +81,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "REPLACE_WITH_BASE64_PUBKEY_BEFORE_RELEASE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyNTg3NTIwNDlFNjdBNkIKUldScmV1WkpJSFZZNHVxTlp0ZVNLSUJsVTl2SXJKQUJHcm5iNG5ZVU1WbWhnYVJNenNvSk56NVoK",
       "endpoints": [
         "https://github.com/leaq/optigods/releases/latest/download/latest.json"
       ],

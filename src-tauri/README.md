@@ -97,9 +97,10 @@ works inside the native window exactly like in the browser.
   Discord app should be `http://127.0.0.1` (Discord accepts any 127.0.0.1 port).
 - `STRIPE_*` / `EMAIL_*` — server-side only, never embedded.
 
-## Signing key (set per release)
+## Signing key
 
-`tauri.conf.json` ships `pubkey: "REPLACE_WITH_BASE64_PUBKEY_BEFORE_RELEASE"`.
-The Windows build job in the next task generates a real keypair, embeds the
-public half here, and stores the private half in the GitHub Actions secret
-`TAURI_PRIVATE_KEY` for signing the updater bundle.
+`tauri.conf.json` already has a real updater public key baked in. The
+matching private key lives in `.local/UPDATER_KEYS.md` (gitignored) and
+needs to be pasted into the GitHub Actions secret
+`TAURI_SIGNING_PRIVATE_KEY` once. See `SIGNING.md` §1b for full
+instructions, including how to rotate the key.

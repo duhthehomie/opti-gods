@@ -36,27 +36,48 @@ baked into `src-tauri/tauri.conf.json`. That signature is produced by a
 **different** key pair from the Authenticode cert above — it never leaves
 your machine and doesn't cost anything.
 
+**The keypair has already been generated for you.** The public key is
+already baked into `src-tauri/tauri.conf.json`. You just need to paste the
+private key into GitHub Secrets — once — and you're done.
+
 One-time setup:
 
-1. Install the Tauri CLI (if you haven't already): `npm install --global @tauri-apps/cli@latest`
-2. Generate the key pair:
-   ```powershell
-   tauri signer generate -w optigods-updater.key
-   ```
-   This writes two files:
-   - `optigods-updater.key` — the **private key**. Treat like a password.
-   - `optigods-updater.key.pub` — the **public key**.
-3. Paste the contents of `optigods-updater.key.pub` (a single base64 line)
-   into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`,
-   replacing the `REPLACE_WITH_BASE64_PUBKEY_BEFORE_RELEASE` placeholder.
-4. Add the private key + its password to GitHub Secrets:
-   - `TAURI_SIGNING_PRIVATE_KEY` — full contents of `optigods-updater.key`
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password you set when generating it
+1. Open `.local/UPDATER_KEYS.md` (this file is gitignored so it never
+   leaves your machine). It contains the private key contents.
+2. In your GitHub repo, go to
+   *Settings → Secrets and variables → Actions → New repository secret*
+   and add:
+   - `TAURI_SIGNING_PRIVATE_KEY` — paste the full private key contents
+     (the whole block between the ``` fences, including the
+     `untrusted comment:` header line)
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — leave the value empty (the
+     key was generated with no password). You can also skip adding this
+     secret entirely; the workflow handles both cases.
+3. Push to `main` (or create a tag like `v2.0.0`). The build will produce
+   a properly signed installer and a `latest.json` whose `signature`
+   field is populated, which is what the in-app auto-updater verifies
+   against the public key baked into `tauri.conf.json`.
 
-Until those two secrets exist, CI prints a warning, the build still
-succeeds, but the `signature` field in `latest.json` is empty and the
-desktop app's auto-updater will skip every release. Set them once and
-forget — they only have to be rotated if the private key leaks.
+Tagged releases (anything pushed as `refs/tags/v*`) **fail fast** if
+`TAURI_SIGNING_PRIVATE_KEY` is missing — that's the guard step at the
+top of the build job, and it exists so you can't accidentally ship an
+unsignable update to production users. Pushes to `main` without the
+secret still succeed but are marked `(unsigned-preview)` and the
+auto-updater will skip them.
+
+### Rotating the updater key
+
+You only need to rotate if the private key leaks. To do it:
+
+```powershell
+npx -y @tauri-apps/cli@latest signer generate -w optigods-updater.key -p ""
+```
+
+Then paste the new `.pub` contents into `tauri.conf.json` → `plugins.updater.pubkey`
+and overwrite the `TAURI_SIGNING_PRIVATE_KEY` secret. **Note:** rotating
+the key means every existing installed copy of the app will refuse the
+next update (because the public key changed). Users will have to download
+the new installer manually one time. Don't rotate casually.
 
 ## 2. Put the Authenticode cert into GitHub Secrets
 
