@@ -18,7 +18,7 @@ const CustomSwitch = React.forwardRef<
   <SwitchPrimitives.Root
     className={cn(
       "peer relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent",
-      "transition-all duration-150 ease-out",
+      "transition-all duration-[120ms] ease-out",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
       "disabled:cursor-not-allowed disabled:opacity-50",
       // OFF — neutral gray, subtle hover lift
@@ -34,7 +34,7 @@ const CustomSwitch = React.forwardRef<
     <SwitchPrimitives.Thumb
       className={cn(
         "pointer-events-none block h-6 w-6 rounded-full shadow-lg ring-0",
-        "transition-transform duration-150 ease-out",
+        "transition-transform duration-[120ms] ease-out",
         "data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0",
         // Slightly dimmer thumb when off, pure white when on
         "data-[state=unchecked]:bg-zinc-200 data-[state=checked]:bg-white"
