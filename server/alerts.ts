@@ -409,7 +409,7 @@ export async function sendNewDriverAlert(
             { name: "Branch", value: driver.branch || "—", inline: true },
             { name: "Released", value: driver.releasedAt ? new Date(driver.releasedAt).toISOString().slice(0, 10) : "—", inline: true },
             { name: "Last validated baseline", value: validatedBaseline ? `v${validatedBaseline}` : "none yet", inline: true },
-            { name: `Recent rigs (${recentRigs.length})`, value: rigsField.slice(0, 1000), inline: false },
+            { name: `Recent rigs — latest scans (${recentRigs.length})`, value: rigsField.slice(0, 1000), inline: false },
             { name: "Action", value: `[Validate tweaks in Admin → NVIDIA Tracker](${driverUrl})`, inline: false },
           ],
           footer: { text: "Opti Gods Aether · Driver Poller" },
@@ -449,7 +449,7 @@ export async function sendNewDriverAlert(
     <p style="margin:6px 0 0;font-size:11px;color:#a1a1aa;">Last validated baseline: ${validatedBaseline ? `v${validatedBaseline}` : "none yet"}</p>
   </div>
   <div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin:0 0 20px;">
-    <p style="margin:0 0 8px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:2px;">Recent rigs (${recentRigs.length})</p>
+    <p style="margin:0 0 8px;font-size:10px;color:#52525b;text-transform:uppercase;letter-spacing:2px;">Recent rigs — latest scans (${recentRigs.length})</p>
     ${rigLines.length ? rigLines.map(l => `<p style="margin:3px 0;font-size:12px;color:#d4d4d8;">${l}</p>`).join("") : `<p style="margin:0;font-size:12px;color:#71717a;">No recent rigs on record yet</p>`}
   </div>
   <a href="${driverUrl}" style="display:inline-block;background:#22c55e;color:#000;text-decoration:none;font-size:12px;font-weight:700;padding:10px 20px;border-radius:6px;letter-spacing:0.5px;">Open NVIDIA Tracker</a>

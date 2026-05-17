@@ -5,7 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { hardwareScanPayloadSchema, insertTweakSuggestionSchema, insertNvidiaDriverSchema, SUGGESTION_STATUSES, type SuggestionStatus } from "@shared/schema";
 import { sendProCode, isEmailConfigured } from "./email";
-import { notifyCriticalEvent, notifySale, sendNewRigAlert, sendNewDriverAlert } from "./alerts";
+import { notifyCriticalEvent, notifySale, sendNewRigAlert } from "./alerts";
 import { pollNvidiaDrivers } from "./nvidia-poller";
 import { registerAuthRoutes } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
@@ -4111,10 +4111,13 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
         (async () => {
           try {
             const settings = await storage.getAdminSettings();
-            if (settings?.alertOnNewRig === false) return;
+            if (settings?.alertOnNewRig === false) {
+              console.info(`[alerts] new-rig alert toggle off — skipping rig #${rig.id}`);
+              return;
+            }
             const discordWebhookUrl = settings?.discordWebhookUrl ?? process.env.DISCORD_WEBHOOK_URL ?? null;
             const alertEmail = settings?.alertEmail ?? process.env.ALERT_EMAIL ?? null;
-            if (!discordWebhookUrl && !alertEmail) return;
+            // Let sendNewRigAlert log + no-op when no channels are configured.
             const result = await sendNewRigAlert(rig, { discordWebhookUrl, alertEmail, adminPanelUrl });
             if (result.sentAny) await storage.markRigAlertSent(rig.hash);
           } catch (e) {
