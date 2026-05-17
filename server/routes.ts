@@ -13,6 +13,8 @@ import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
 import { randomBytes } from "crypto";
+import { readdirSync, statSync, existsSync } from "fs";
+import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
@@ -1261,6 +1263,76 @@ export async function registerRoutes(
 
   // ── Discord OAuth + /api/me + /api/logout + /api/version (Task #27) ────────
   registerAuthRoutes(app);
+
+  // ── Legacy optimizer routes → 302 to landing (Task #40) ────────────────────
+  // The optimizer code is preserved as the Tauri webview source, but is no
+  // longer routed publicly on optigods.com. These server-side 302s also keep
+  // crawlers and external links pointing at the right canonical page.
+  const MOVED_PATHS = [
+    "/dashboard", "/system-scan", "/tweaks", "/tools", "/pro",
+    "/registry", "/fivem", "/fortnite", "/nvidia", "/amd",
+    "/integrated-graphics", "/laptop", "/discord", "/memory",
+    "/startup", "/debloat", "/process-lasso", "/processes", "/wintitus",
+    "/fixes", "/game-detection", "/custom-os", "/help", "/updates",
+  ];
+  for (const p of MOVED_PATHS) {
+    app.get(p, (_req, res) => res.redirect(302, "/?moved=1"));
+  }
+
+  // ── Installer download (Task #40) ──────────────────────────────────────────
+  // Serves the latest signed Windows installer from client/public/downloads/.
+  // Picks the newest file matching .exe / .msi (or admin override via
+  // adminSettings.updaterCmdUrl when present and pointing to a full URL).
+  // Graceful "coming soon" JSON if none exist yet.
+  app.get("/api/download/latest", async (_req, res) => {
+    try {
+      const settings = await storage.getAdminSettings().catch(() => null);
+      const override = settings?.updaterCmdUrl?.trim();
+      // HTTPS-only + must point at a real installer. Admin-controlled, but we
+      // refuse to bounce visitors through arbitrary http/javascript URLs.
+      if (override && /^https:\/\//i.test(override) && /\.(exe|msi|zip)(\?|$)/i.test(override)) {
+        try {
+          // Parse to confirm it's a valid absolute URL with a real host.
+          const u = new URL(override);
+          if (u.host && (u.protocol === "https:")) {
+            return res.redirect(302, u.toString());
+          }
+        } catch {
+          // fall through to local-disk lookup
+        }
+      }
+
+      const dir = join(process.cwd(), "client", "public", "downloads");
+      if (existsSync(dir)) {
+        const entries = readdirSync(dir)
+          .filter((f) => /\.(exe|msi)$/i.test(f))
+          .map((f) => {
+            const full = join(dir, f);
+            try {
+              return { name: f, mtime: statSync(full).mtimeMs };
+            } catch {
+              return null;
+            }
+          })
+          .filter((x): x is { name: string; mtime: number } => x !== null)
+          .sort((a, b) => b.mtime - a.mtime);
+        if (entries.length > 0) {
+          return res.redirect(302, `/downloads/${encodeURIComponent(entries[0].name)}`);
+        }
+      }
+
+      // No installer present yet — graceful response so the UI can show a
+      // "coming soon" message instead of a broken redirect loop.
+      res.status(200).json({
+        status: "coming_soon",
+        message: "Installer is being signed. Join the Discord for early access.",
+        discord: "https://discord.gg/optigods",
+      });
+    } catch (e) {
+      console.error("[/api/download/latest] failed:", e);
+      res.status(500).json({ status: "error", message: "Could not resolve installer" });
+    }
+  });
 
   app.get(api.system.stats.path, async (req, res) => {
     const ua = req.get("user-agent") || "";

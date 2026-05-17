@@ -11,19 +11,13 @@ import { AuthGate } from "@/components/auth-gate";
 import { UpdateModal } from "@/components/update-modal";
 import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
-import { Redirect } from "@/components/redirect";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 
-import Home from "@/pages/home";
-import SystemScan from "@/pages/system-scan";
-import Tweaks from "@/pages/tweaks";
-import ToolsFixes from "@/pages/tools-fixes";
-import Pro from "@/pages/pro";
+import Landing from "@/pages/landing";
 import PaymentSuccess from "@/pages/payment-success";
 import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
-import Updates from "@/pages/updates";
 import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
 import OptiGodsAI from "@/pages/opti-gods-ai";
@@ -79,40 +73,16 @@ function FriendUnlockHandler() {
 }
 
 function Router() {
+  // Note: legacy optimizer paths (/dashboard, /tweaks, /tools, /system-scan,
+  // /pro, /registry, /fivem, etc.) are 302'd server-side in server/routes.ts
+  // — they never reach the SPA, so we don't list them here.
   return (
     <Switch>
-      {/* V2: 5-tab IA */}
-      <Route path="/" component={Home} />
-      <Route path="/system-scan" component={SystemScan} />
-      <Route path="/tweaks" component={Tweaks} />
-      <Route path="/tools" component={ToolsFixes} />
-      <Route path="/pro" component={Pro} />
-
-      {/* Redirects from legacy optimizer routes into Tweaks accordion anchors */}
-      <Route path="/registry">{() => <Redirect to="/tweaks#registry" />}</Route>
-      <Route path="/fivem">{() => <Redirect to="/tweaks#fivem" />}</Route>
-      <Route path="/fortnite">{() => <Redirect to="/tweaks#fortnite" />}</Route>
-      <Route path="/nvidia">{() => <Redirect to="/tweaks#nvidia" />}</Route>
-      <Route path="/amd">{() => <Redirect to="/tweaks#amd" />}</Route>
-      <Route path="/integrated-graphics">{() => <Redirect to="/tweaks#intgpu" />}</Route>
-      <Route path="/laptop">{() => <Redirect to="/tweaks#laptop" />}</Route>
-      <Route path="/discord">{() => <Redirect to="/tweaks#discord" />}</Route>
-      <Route path="/memory">{() => <Redirect to="/tweaks#memory" />}</Route>
-      <Route path="/startup">{() => <Redirect to="/tweaks#startup" />}</Route>
-      <Route path="/debloat">{() => <Redirect to="/tweaks#debloat" />}</Route>
-      <Route path="/process-lasso">{() => <Redirect to="/tweaks#process-lasso" />}</Route>
-      <Route path="/processes">{() => <Redirect to="/tweaks#processes" />}</Route>
-      <Route path="/wintitus">{() => <Redirect to="/tweaks#wintitus" />}</Route>
-
-      {/* Redirects into Tools & Fixes tabs */}
-      <Route path="/fixes">{() => <Redirect to="/tools#fixes" />}</Route>
-      <Route path="/game-detection">{() => <Redirect to="/tools#game-detection" />}</Route>
-      <Route path="/custom-os">{() => <Redirect to="/tools#custom-os" />}</Route>
-      <Route path="/help">{() => <Redirect to="/tools#help" />}</Route>
+      {/* V2 landing — public */}
+      <Route path="/" component={Landing} />
 
       {/* Standalone routes preserved */}
       <Route path="/ai" component={OptiGodsAI} />
-      <Route path="/updates" component={Updates} />
       <Route path="/admin" component={Admin} />
       <Route path="/showcase" component={Showcase} />
       <Route path="/get-code" component={GetCode} />

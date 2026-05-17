@@ -4,9 +4,12 @@ import Welcome from "@/pages/welcome";
 import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 
-// Paths that must remain reachable without a Discord session
-// (Stripe redirects to these, and they have their own internal handling.)
+// Paths that must remain reachable without a Discord session.
+// V2: landing page and marketing/payment surfaces are public — only the
+// optimizer, AI chat, admin, and code-redeem flows require auth.
 const PUBLIC_PATHS = new Set<string>([
+  "/",
+  "/showcase",
   "/payment/success",
   "/payment/cancel",
 ]);
@@ -15,7 +18,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  // Stripe and other "callback-style" paths always render
+  // Public landing/marketing/callback paths always render
   if (PUBLIC_PATHS.has(location)) {
     return <>{children}</>;
   }
