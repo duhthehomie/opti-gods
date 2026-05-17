@@ -1245,6 +1245,17 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 }
 
 // ── Admin Preset Generator ─────────────────────────────────────────────────
+// V2.2 — response shape from /api/ai/preset (canonical buildSafePreset).
+type SafePresetResponse = {
+  profile: string;
+  goal: string;
+  hardwareSummary: string;
+  core: string[];
+  expert: string[];
+  blocked: { id: string; reason: string }[];
+  reasons: string[];
+};
+
 // Infer CPU brand, thread count, generation, and Ryzen model from a typed CPU name
 function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number; cores: number; generation: number; cpuLabel: string; isRyzen: boolean; isIntelCore: boolean } {
   const m = model.trim().toLowerCase();
@@ -1339,6 +1350,9 @@ function AdminPresetGenerator({
   const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generatingFix, setGeneratingFix] = useState(false);
+  // V2.2 — server-resolved preset preview + admin opt-in selections
+  const [safePreset, setSafePreset] = useState<SafePresetResponse | null>(null);
+  const [adminOptInIds, setAdminOptInIds] = useState<Set<string>>(new Set());
 
   const loadUser = (hw: CustomerHW) => {
     setSelectedUser(hw.codeRef);
@@ -1405,17 +1419,38 @@ function AdminPresetGenerator({
     } as OsInfo;
   };
 
+  // V2.2 — buildSafePreset is the single canonical preset path. Admin previews
+  // the structured response (core + red opt-in expert section) before downloading.
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const fakeHW = buildFakeHW();
-      const fakeOS = buildFakeOS();
-      const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakIds = Array.from(recs.ids);
+      const safePresetRes = await fetch("/api/ai/preset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hardware: {
+            gpuVendor,
+            gpuName,
+            cpuBrand: parseCpuModel(cpuModel).brand,
+            cpuLabel: cpuModel,
+            cpuCores: actualThreads > 0 ? actualThreads : parseCpuModel(cpuModel).threads,
+            ramGB: parseInt(ramGB) || 16,
+            osVersion,
+            isLaptop,
+            hasDiscreteGpu: gpuVendor === "nvidia" || gpuVendor === "amd",
+          },
+          goal: "balanced",
+          optInFlags: Array.from(adminOptInIds),
+        }),
+      });
+      if (!safePresetRes.ok) throw new Error("Safe preset build failed");
+      const preset = (await safePresetRes.json()) as SafePresetResponse;
+      setSafePreset(preset);
 
-      // Build the .bat / PS1 content by calling the existing generate endpoint
       const tweakMap: Record<string, boolean> = {};
-      tweakIds.forEach(id => { tweakMap[id] = true; });
+      preset.core.forEach(id => { tweakMap[id] = true; });
+      preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
+      const tweakIds = Object.keys(tweakMap);
 
       const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
       const res = await fetch("/api/script/download-bat", {
@@ -1435,7 +1470,7 @@ function AdminPresetGenerator({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
+      setGenerated({ name: preset.profile, tweakCount: tweakIds.length });
       toast({
         title: `Preset generated — ${tweakIds.length} tweaks`,
         description: `Send the .bat file to the user — they just double-click it.`,
@@ -1757,6 +1792,80 @@ function AdminPresetGenerator({
           </div>
         );
       })()}
+
+      {/* V2.2 — Structured safe preset preview (rendered after first generate). */}
+      {safePreset && (
+        <div data-testid="safe-preset-preview" className="rounded-xl border border-red-500/20 bg-zinc-900/60 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Resolved by buildSafePreset</p>
+              <p className="text-xs text-zinc-300 mt-0.5">{safePreset.profile} <span className="text-zinc-600">— {safePreset.hardwareSummary}</span></p>
+            </div>
+            <span className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+              {safePreset.core.length} CORE
+            </span>
+          </div>
+
+          {/* Core tweaks chip list */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 mb-1">Core (auto-applied)</p>
+            <div className="flex flex-wrap gap-1">
+              {safePreset.core.map(id => (
+                <span key={id} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-zinc-800 border border-zinc-700 text-zinc-400">{id}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Red opt-in section */}
+          {safePreset.expert.length > 0 && (
+            <div className="rounded-lg border border-red-500/40 bg-red-950/30 p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
+                  Advanced — Opt-in Required ({safePreset.expert.length})
+                </span>
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                V1 stability casualties — BSOD / FiveM crash / boot hang. Tick to include. Re-click <strong>Generate</strong> to rebuild the script.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {safePreset.expert.map(id => (
+                  <button
+                    key={id}
+                    data-testid={`button-admin-optin-${id}`}
+                    onClick={() => setAdminOptInIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id); else next.add(id);
+                      return next;
+                    })}
+                    className={cn(
+                      "px-2 py-1 rounded text-[10px] font-mono border transition-all",
+                      adminOptInIds.has(id)
+                        ? "bg-red-600 text-white border-red-500"
+                        : "bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-red-500/40 hover:text-zinc-200"
+                    )}
+                  >
+                    {adminOptInIds.has(id) ? "✓ " : ""}{id}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {safePreset.blocked.length > 0 && (
+            <details className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
+              <summary className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 cursor-pointer">
+                Blocked ({safePreset.blocked.length}) — hardware mismatch / forbidden
+              </summary>
+              <div className="mt-2 space-y-1 max-h-28 overflow-y-auto">
+                {safePreset.blocked.map((b, i) => (
+                  <p key={i} className="text-[10px] text-zinc-500"><span className="font-mono text-zinc-400">{b.id}</span> — {b.reason}</p>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       {/* Generate button */}
       <button

@@ -16,6 +16,7 @@ import { randomBytes } from "crypto";
 import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
+import { buildSafePreset, hardwareFromRig, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
 const GAME_WHITELIST_PS_ARRAY = GAME_WHITELIST
@@ -4398,6 +4399,74 @@ Read-Host "Press Enter to close this window"
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) return res.status(503).json({ error: "AI not configured" });
 
+    // V2.2 — "Generate preset for rig N" intercept. Resolves the rig from the
+    // hardware_rigs table and runs the canonical `buildSafePreset` rather than
+    // letting Groq hand-roll a preset (it used to confidently emit AMD tweaks
+    // on NVIDIA boxes plus the V2.1-forbidden EnableMSIMode/SetTimerResolution
+    // /DisableIPv6 trio). Streamed back over SSE so the chat UI renders it
+    // exactly like a normal Aether response.
+    // Tweak IDs are PascalCase with digits/underscores (EnableMSIMode,
+    // Win11DisableVBS, Lap_Intel_DisableECores). Match `[A-Za-z0-9_,\s]+` so
+    // they survive the regex intact — earlier `[a-z,\s]+` truncated them.
+    const rigMatch = message.match(/(?:generate|build|make|create)\s+(?:a\s+)?preset\s+(?:for\s+)?(?:customer\s+)?rig\s*#?\s*(\d+)(?:\s+(?:for|with)\s+([A-Za-z0-9_,\s]+))?/i);
+    if (rigMatch) {
+      const rigId = parseInt(rigMatch[1], 10);
+      const optInRaw = (rigMatch[2] ?? "").trim();
+      // Comma- or whitespace-separated tweak IDs; case-insensitive matched
+      // against FORBIDDEN_AUTO_TWEAKS / EXPERT_TWEAK_IDS server-side.
+      const optInFlags = optInRaw
+        ? optInRaw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+        : [];
+      const rig = await storage.getRigById(rigId);
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+      if (!rig) {
+        const body = `**Rig #${rigId} not found.** Use the Hardware tab to find the rig ID, or run \`listRigs\` to see recent submissions.`;
+        res.write(`data: ${JSON.stringify({ token: body })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, fullText: body })}\n\n`);
+        return res.end();
+      }
+      const hw = hardwareFromRig(rig);
+      const preset = buildSafePreset(hw, "balanced", optInFlags);
+      const lines: string[] = [];
+      lines.push(`**Preset for Rig #${rigId} — ${preset.profile}**`);
+      lines.push(`Hardware: ${preset.hardwareSummary}`);
+      lines.push("");
+      lines.push(`**Core (${preset.core.length} tweaks)** — safe to auto-apply:`);
+      lines.push("```");
+      lines.push(preset.core.join(", "));
+      lines.push("```");
+      if (preset.expert.length > 0) {
+        lines.push("");
+        lines.push(`**⚠️ Advanced (opt-in only — ${preset.expert.length} tweaks)** — NOT auto-applied:`);
+        lines.push("```");
+        lines.push(preset.expert.join(", "));
+        lines.push("```");
+        lines.push("To include one, re-run: `Generate preset for rig " + rigId + " with <TweakId,TweakId>`");
+      }
+      if (preset.blocked.length > 0) {
+        lines.push("");
+        lines.push(`**Blocked (${preset.blocked.length})** — hardware mismatch or forbidden auto-include:`);
+        for (const b of preset.blocked.slice(0, 8)) {
+          lines.push(`- \`${b.id}\`: ${b.reason}`);
+        }
+      }
+      lines.push("");
+      lines.push("**Why these tweaks:**");
+      for (const r of preset.reasons) lines.push(`- ${r}`);
+      // Machine-readable block for the admin tab to parse if it wants to
+      // hand-off to .bat generation directly. Strictly an opaque JSON blob.
+      lines.push("");
+      lines.push(`[PRESET_JSON]${JSON.stringify({ rigId, ...preset })}[/PRESET_JSON]`);
+      const fullText = lines.join("\n");
+      res.write(`data: ${JSON.stringify({ token: fullText })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
+      return res.end();
+    }
+
     const [codes, friends, visitStats, emailReqs, manualTotal, downloads, secEvents, reports, activeSessions] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
@@ -4601,9 +4670,13 @@ RESPONSE STYLE (ALWAYS FOLLOW):
 - Skip filler phrases like "Great question!" or "Certainly!" — jump straight to the answer.
 ${visionNote}
 SMART PRESET COMMAND:
-When a user asks for a smart preset, FPS preset, or AI-generated preset, give a 2-3 line summary of what it does, then output this EXACT line (no changes):
-[SAVE_PRESET:Win32PrioritySeparation,SetTimerResolution,SetResponsiveness,NetworkThrottling,DisableNagle,InputLagTCP,EnableMSIMode,GameModeTweaks,OptimizeTCP,DisableXboxGameBar,DisableGameDVR,DisableAnimations,DisablePointerPrecision]
-This creates a clickable "Save to Dashboard" button for the user. Always include it when a preset is requested.
+When a user asks for a smart preset, FPS preset, or AI-generated preset:
+1. Give a 2-3 line summary of what the preset does for their hardware.
+2. Then output this EXACT marker on its own line — DO NOT list the tweak IDs yourself:
+[SAVE_PRESET:AUTO]
+The dashboard intercepts this marker and resolves the preset server-side using the user's detected hardware (NVIDIA vs AMD vs Intel iGPU, RTX vs GTX, laptop vs desktop, Win10 vs Win11). It uses the canonical safe-preset builder — so the resulting "Save to Dashboard" button always installs only tweaks compatible with that exact rig.
+3. NEVER manually emit \`EnableMSIMode\`, \`DisableIPv6\`, or \`SetTimerResolution\` in a preset. These are gated behind explicit opt-in (post-V2.1 stability surgery: they caused BSODs / FiveM crashes / boot hangs on a meaningful percentage of rigs). If a Pro user explicitly asks for one of those, explain the risk, then tell them to toggle it manually in the relevant tab.
+4. Expert-only tweaks (Defender off, VBS/HVCI off, hypervisor off, memory compression off, pagefile encryption off, Intel E-cores disabled) are opt-in only — never auto-include them.
 
 CUSTOM OS / REVIOS SETUP (when user asks about setting up Custom OS or ReviOS):
 1. Go to → Custom OS tab in the dashboard for full info
@@ -4764,6 +4837,15 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       res.write(`data: ${JSON.stringify({ done: true, fullText })}\n\n`);
       res.end();
 
+      // Telemetry: warn loudly if the model ever emits a hand-rolled SAVE_PRESET
+      // (with explicit IDs) — that means the prompt drifted and the V2.1
+      // forbidden trio could slip back in. The client-side SavePresetCard
+      // resolves [SAVE_PRESET:AUTO] via /api/ai/preset using the detected
+      // hardware, which is the only safe path.
+      if (fullText && /\[SAVE_PRESET:(?!AUTO\])/i.test(fullText)) {
+        console.warn("[AI] Model emitted hand-rolled SAVE_PRESET — prompt drift?", { sessionId });
+      }
+
       if (sessionId && typeof sessionId === "string" && sessionId.length <= 64 && fullText) {
         const historyMsgs = (history as { role: string; content: string; timestamp?: string }[])
           .slice(-38)
@@ -4787,6 +4869,58 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       }
       res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
       res.end();
+    }
+  });
+
+  // ── V2.2 Safe Preset Builder (single canonical path) ──────────────────────
+  // Both AI chats and the Admin Preset Generator tab go through this endpoint
+  // to produce a hardware-filtered, expert-gated preset. Implementation lives
+  // in `shared/preset-builder.ts` — see that file for the rules.
+  app.post("/api/ai/preset", rateLimit(30, 60_000, 60), async (req, res) => {
+    try {
+      const body = req.body as {
+        hardware?: Partial<PresetHardware>;
+        goal?: PresetGoal;
+        optInFlags?: string[];
+        rigId?: number;
+      };
+      let hw: PresetHardware;
+      if (body.rigId && Number.isInteger(body.rigId)) {
+        const rig = await storage.getRigById(body.rigId);
+        if (!rig) return res.status(404).json({ error: `Rig #${body.rigId} not found` });
+        hw = hardwareFromRig(rig);
+      } else if (body.hardware && typeof body.hardware === "object") {
+        // Sanitise: only known PresetHardware shape passes through.
+        const h = body.hardware;
+        const allowedVendors = ["nvidia", "amd", "intel", "unknown"] as const;
+        const allowedOs = ["win11", "win10", "unknown"] as const;
+        const allowedCpu = ["intel", "amd", "unknown"] as const;
+        hw = {
+          gpuVendor: allowedVendors.includes(h.gpuVendor as PresetGpuVendor) ? (h.gpuVendor as PresetGpuVendor) : "unknown",
+          gpuName: typeof h.gpuName === "string" ? h.gpuName.slice(0, 120) : undefined,
+          cpuBrand: allowedCpu.includes(h.cpuBrand as "intel" | "amd" | "unknown") ? (h.cpuBrand as "intel" | "amd" | "unknown") : "unknown",
+          cpuLabel: typeof h.cpuLabel === "string" ? h.cpuLabel.slice(0, 120) : undefined,
+          cpuCores: typeof h.cpuCores === "number" && h.cpuCores > 0 && h.cpuCores < 256 ? Math.floor(h.cpuCores) : undefined,
+          cpuGeneration: typeof h.cpuGeneration === "number" && h.cpuGeneration > 0 && h.cpuGeneration < 50 ? Math.floor(h.cpuGeneration) : undefined,
+          ramGB: typeof h.ramGB === "number" && h.ramGB > 0 && h.ramGB < 4096 ? Math.floor(h.ramGB) : undefined,
+          osVersion: allowedOs.includes(h.osVersion as PresetOsVersion) ? (h.osVersion as PresetOsVersion) : "unknown",
+          isLaptop: Boolean(h.isLaptop),
+          hasDiscreteGpu: typeof h.hasDiscreteGpu === "boolean" ? h.hasDiscreteGpu : undefined,
+        };
+      } else {
+        return res.status(400).json({ error: "hardware or rigId is required" });
+      }
+      const allowedGoals = ["balanced", "fps", "latency", "stability"] as const;
+      const goal: PresetGoal = allowedGoals.includes(body.goal as PresetGoal) ? (body.goal as PresetGoal) : "balanced";
+      // Cap opt-in array length to avoid abuse via huge arrays
+      const optInFlags: string[] = Array.isArray(body.optInFlags)
+        ? body.optInFlags.filter((s): s is string => typeof s === "string" && /^[A-Za-z0-9_]{1,64}$/.test(s)).slice(0, 50)
+        : [];
+      const preset = buildSafePreset(hw, goal, optInFlags);
+      return res.json(preset);
+    } catch (err) {
+      console.error("[buildSafePreset]", err);
+      return res.status(500).json({ error: "Preset build failed" });
     }
   });
 

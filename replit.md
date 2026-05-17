@@ -2,6 +2,27 @@
 
 A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthetic.
 
+## V2.2 — AI Preset Generator Overhaul (Task #51, 2026-05-17)
+
+Single canonical preset path: `buildSafePreset(hardware, goal, optInFlags)` in `shared/preset-builder.ts`, called by both Aether (admin chat), Opti Gods AI (user chat) and the Admin Preset Generator tab via the new `POST /api/ai/preset` endpoint.
+
+**Hard rules enforced server-side (no model can override):**
+- `EnableMSIMode`, `DisableIPv6`, `SetTimerResolution` — the V2.1 forbidden trio — are NEVER auto-included. They land in `blocked` unless their exact ID appears in `optInFlags`, and even then they're surfaced under "Advanced (opt-in)" in red, never in `core`.
+- All `safety: "expert"` tweaks (DisableDefender, Win11DisableVBS/HVCI, SysHypervisorOff, DisableMemoryCompression, DisablePagefileEncryption, Lap_Intel_DisableECores) are routed to `expert` only — opt-in surfaces them but they still render in the red section, never in `core`.
+- GPU-vendor cross-contamination is impossible: `Nvidia*` tweaks blocked on AMD/Intel boxes, `Amd*` on NVIDIA, `IGpu_*` on systems with `hasDiscreteGpu: true`, `Lap_*` only on laptops, `Win11*` only on Windows 11.
+
+**Aether admin slash command:** `Generate preset for rig #42` (optional `with EnableMSIMode,DisableDefender`) — pulls the rig from `hardware_rigs`, runs `buildSafePreset`, streams a structured response with Core / Advanced opt-in / Blocked sections plus a machine-readable `[PRESET_JSON]…[/PRESET_JSON]` block. New `storage.getRigById(id)` helper.
+
+**Opti Gods AI prompt rewrite:** the model no longer hand-rolls preset arrays. It emits `[SAVE_PRESET:AUTO]` and the dashboard resolves it via `/api/ai/preset` using detected hardware. Telemetry warns in server logs if the model ever drifts back to hand-rolled lists.
+
+**Admin Preset Generator tab:** preview now renders the buildSafePreset output — emerald "Core" chip list, **red "Advanced — Opt-in Required" section** with toggle buttons that re-bias the next generate, and a collapsible "Blocked" details panel.
+
+**Tests:** `scripts/test-preset-builder.ts` runs under `npx tsx` (no vitest infra change — package.json is forbidden territory) and covers vendor filtering, FORBIDDEN gating, opt-in escape paths, hardware-mismatch blocking, and `hardwareFromRig` translation. Add to CI alongside `scripts/smoke-test-ps1.ts`.
+
+**Intentional deviations from original task spec:**
+- Tests use `tsx + node:assert` rather than vitest because adding vitest requires editing `package.json` (forbidden by the fullstack-js skill in this repo). The shape is vitest-portable — `test()` blocks can be one-line-replaced with `it()` once vitest is installed.
+- Did not replace `computeSmartRecs` in the in-browser dashboard UI (would break hundreds of toggle bindings and was out of scope). The dashboard's manual tweak surface still uses `computeSmartRecs` for in-UI recommendations; only the AI-generated preset path is centralised through `buildSafePreset`.
+
 ## V2.2 (2026-05-17) — Reapplicable Driver Tweaks (Task #50)
 
 Adds 19 driver-level tweaks that survive game restarts but get wiped on driver reinstall — plus a dedicated "Reapply driver tweaks" button at the top of NVIDIA + AMD tabs that downloads a focused PS1 hitting ONLY the selected driver-class keys (no full preset rerun needed after each Adrenalin / GeForce update).

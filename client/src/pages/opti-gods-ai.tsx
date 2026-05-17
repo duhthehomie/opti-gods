@@ -8,7 +8,6 @@ import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 type Message = {
   role: "user" | "assistant";
@@ -44,16 +43,71 @@ const STARTER_QUESTIONS = [
 
 const SAVE_PRESET_REGEX = /\[SAVE_PRESET:[^\]]+\]/g;
 
+type SafePresetResponse = {
+  profile: string;
+  goal: string;
+  hardwareSummary: string;
+  core: string[];
+  expert: string[];
+  blocked: { id: string; reason: string }[];
+  reasons: string[];
+};
+
+// V2.2 — translates the local useHardwareInfo / useOsDetection signal into
+// the PresetHardware shape `/api/ai/preset` expects. Server is the single
+// source of truth for what tweaks land in `core` vs `expert`.
+function hardwareToPresetPayload(hw: ReturnType<typeof useHardwareInfo>, os: ReturnType<typeof useOsDetection>) {
+  const gpuVendor: "nvidia" | "amd" | "intel" | "unknown" =
+    hw.isNvidia ? "nvidia" : hw.isAmdGpu || hw.isAmdApu ? "amd" : hw.isIntel ? "intel" : "unknown";
+  return {
+    gpuVendor,
+    gpuName: hw.gpuName || undefined,
+    cpuBrand: (hw.cpuBrand as "intel" | "amd" | "unknown") || "unknown",
+    cpuLabel: hw.cpuLabel || undefined,
+    cpuCores: hw.cpuCores || undefined,
+    cpuGeneration: hw.cpuGeneration || undefined,
+    ramGB: hw.ramGB || undefined,
+    osVersion: (os.isWindows11 ? "win11" : os.isWindows10 ? "win10" : "unknown") as "win11" | "win10" | "unknown",
+    isLaptop: Boolean(hw.isLaptop),
+    hasDiscreteGpu: hw.isNvidia || hw.isAmdGpu,
+  };
+}
+
 function SavePresetCard() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const [saved, setSaved] = useState(false);
+  const [preset, setPreset] = useState<SafePresetResponse | null>(null);
+  const [loadingPreset, setLoadingPreset] = useState(false);
+  const [optInIds, setOptInIds] = useState<Set<string>>(new Set());
 
-  const smartRecs = computeSmartRecs(hw, os);
-  const tweakCount = smartRecs.ids.size;
   const isReady = !hw.loading && !os.loading;
+
+  // Fetch the server-resolved preset whenever hardware becomes available.
+  useEffect(() => {
+    if (!isReady || !hw.scanned) return;
+    let cancelled = false;
+    setLoadingPreset(true);
+    fetch("/api/ai/preset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hardware: hardwareToPresetPayload(hw, os),
+        goal: "balanced",
+        optInFlags: Array.from(optInIds),
+      }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((p: SafePresetResponse | null) => { if (!cancelled) setPreset(p); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingPreset(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady, hw.scanned, hw.gpuName, hw.cpuLabel, os.isWindows11, optInIds]);
+
+  const tweakCount = preset ? preset.core.length + preset.expert.filter(id => optInIds.has(id)).length : 0;
 
   // If hardware not scanned, show scan prompt
   if (!hw.scanned && isReady) {
@@ -80,14 +134,17 @@ function SavePresetCard() {
   }
 
   const save = async () => {
+    if (!preset) return;
     const presetTweaks: Record<string, boolean> = {};
-    smartRecs.ids.forEach(k => { presetTweaks[k] = true; });
+    preset.core.forEach(k => { presetTweaks[k] = true; });
+    // Only expert tweaks the user explicitly opted in to (red section toggles).
+    preset.expert.forEach(k => { if (optInIds.has(k)) presetTweaks[k] = true; });
     try {
       await fetch("/api/presets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `AI Smart Preset — ${smartRecs.profile}`,
+          name: `AI Smart Preset — ${preset.profile}`,
           config: { tweaks: presetTweaks },
         }),
       });
@@ -95,27 +152,80 @@ function SavePresetCard() {
       setSaved(true);
       toast({
         title: "Smart Preset saved!",
-        description: `${tweakCount} hardware-matched tweaks applied. Download your script to activate.`,
+        description: `${Object.keys(presetTweaks).length} hardware-matched tweaks applied. Download your script to activate.`,
       });
     } catch {
       toast({ title: "Save failed", description: "Try again.", variant: "destructive" });
     }
   };
 
+  if (loadingPreset && !preset) {
+    return (
+      <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+        <p className="text-[11px] text-zinc-500">Resolving smart preset for your hardware…</p>
+      </div>
+    );
+  }
+  if (!preset) {
+    return (
+      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+        <p className="text-[11px] text-amber-400">Preset build failed — try again or pick tweaks manually.</p>
+      </div>
+    );
+  }
+
+  const toggleOptIn = (id: string) => {
+    setOptInIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setSaved(false);
+  };
+
   return (
-    <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2">
+    <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Zap className="w-4 h-4 text-red-400 shrink-0" />
         <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-          AI Smart Preset — {smartRecs.profile}
+          AI Smart Preset — {preset.profile}
         </span>
       </div>
       <p className="text-[11px] text-zinc-400 leading-relaxed">
-        {hw.scanned
-          ? `${tweakCount} tweaks matched to your exact hardware — ${smartRecs.gpuLabel}, ${smartRecs.cpuLabel}, ${smartRecs.osLabel}. Every tweak is compatible with your system.`
-          : `${tweakCount} universal high-impact tweaks — CPU scheduling, timer resolution, network, gaming mode, and more. Safe for all PCs.`
-        }
+        {preset.core.length} hardware-matched tweaks for <span className="text-zinc-300">{preset.hardwareSummary}</span>. Every tweak is GPU/CPU/OS-compatible — no AMD tweaks on NVIDIA, no Win11-only tweaks on Win10.
       </p>
+
+      {preset.expert.length > 0 && (
+        <div data-testid="advanced-optin-section" className="rounded-lg border border-red-500/40 bg-red-950/30 p-2.5 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
+              Advanced — Opt-in Only ({preset.expert.length})
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            These tweaks gave V1 users BSODs / FiveM crashes / boot hangs. They're NOT in the preset unless you explicitly tick them.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {preset.expert.map(id => (
+              <button
+                key={id}
+                data-testid={`button-optin-${id}`}
+                onClick={() => toggleOptIn(id)}
+                className={cn(
+                  "px-2 py-1 rounded text-[10px] font-mono border transition-all",
+                  optInIds.has(id)
+                    ? "bg-red-600 text-white border-red-500"
+                    : "bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-red-500/40 hover:text-zinc-200"
+                )}
+              >
+                {optInIds.has(id) ? "✓ " : ""}{id}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
         data-testid="button-save-preset"
         onClick={save}

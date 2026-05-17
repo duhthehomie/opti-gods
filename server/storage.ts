@@ -925,6 +925,11 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
+  async getRigById(id: number): Promise<HardwareRig | null> {
+    const [row] = await db.select().from(hardwareRigs).where(eq(hardwareRigs.id, id)).limit(1);
+    return row ?? null;
+  }
+
   async getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null> {
     const [row] = await db.select().from(hardwareRigs)
       .where(eq(hardwareRigs.discordUserId, discordUserId))
