@@ -11,6 +11,12 @@ export type TweakCategory =
     | "laptop" | "memory" | "fortnite" | "discord" | "debloat" | "wintitus"
     | "startup" | "processes" | "process-lasso" | "game-detection";
 
+/**
+ * Anti-cheat IDs that may appear in `TweakMeta.incompatibleWith`.
+ * Kept in lock-step with `AntiCheatId` in `use-detected-anti-cheats.ts`.
+ */
+export type AntiCheatIdLiteral = "Vanguard" | "EAC" | "BattlEye" | "FACEIT";
+
 export interface NativeAction {
     /** PowerShell snippet used by the current web "download .ps1" flow. */
     powershell?: string;
@@ -34,7 +40,7 @@ export interface TweakMeta {
     warning?: string;
     recommended?: boolean;
     /** Anti-cheats that ban this tweak. TweakRow disables the toggle when one is detected. */
-    incompatibleWith?: string[];
+    incompatibleWith?: AntiCheatIdLiteral[];
     /** PS1 snippet + native exec descriptor (powers script-download today, Tauri later). */
     nativeAction?: NativeAction;
 }

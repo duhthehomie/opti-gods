@@ -7,6 +7,18 @@ import { useState, useEffect, useMemo } from "react";
 export type AntiCheatId = "Vanguard" | "EAC" | "BattlEye" | "FACEIT";
 
 /**
+ * Optional native bridge exposed by the future Tauri build. Declaring it on the
+ * global Window keeps consumers free of `window as unknown as {...}` casts.
+ */
+declare global {
+  interface Window {
+    optigods?: {
+      detectAntiCheats?: () => AntiCheatId[];
+    };
+  }
+}
+
+/**
  * Returns the set of anti-cheats currently detected on the user's machine.
  *
  * Web flow: always returns an empty Set (real detection requires kernel access).
@@ -23,9 +35,7 @@ export function useDetectedAntiCheats(
   const [detected, setDetected] = useState<Set<AntiCheatId>>(() => new Set());
 
   useEffect(() => {
-    const bridge = (window as unknown as {
-      optigods?: { detectAntiCheats?: () => AntiCheatId[] };
-    }).optigods;
+    const bridge = window.optigods;
     if (bridge?.detectAntiCheats) {
       try {
         setDetected(new Set(bridge.detectAntiCheats()));

@@ -53,10 +53,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     eac: tweaks.ACDetectEAC,
     battleye: tweaks.ACDetectBattlEyeFACEIT,
   });
-  const blockingAC = meta?.incompatibleWith?.find((ac): ac is AntiCheatId =>
-    (["Vanguard", "EAC", "BattlEye", "FACEIT"] as const).includes(ac as AntiCheatId) &&
-    detectedACs.has(ac as AntiCheatId),
-  );
+  const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac));
   const acBlocked = Boolean(blockingAC) && !checked;
 
   const handleChange = (val: boolean) => {
