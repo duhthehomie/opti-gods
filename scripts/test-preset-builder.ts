@@ -228,6 +228,23 @@ test("hardwareFromRig: detects laptop chassis", () => {
   assert.equal(hw.hasDiscreteGpu, false);
 });
 
+test("AMD discrete laptop gets full Radeon suite + Lap_ additions (not iGPU path)", () => {
+  const amdLaptop: PresetHardware = {
+    gpuVendor: "amd",
+    gpuName: "Radeon RX 6800M",
+    cpuBrand: "amd",
+    cpuLabel: "Ryzen 9 5900HX",
+    ramGB: 16,
+    osVersion: "win11",
+    isLaptop: true,
+    hasDiscreteGpu: true,
+  };
+  const p = buildSafePreset(amdLaptop);
+  assert.ok(p.core.some(id => id.startsWith("Amd")), "AMD laptop with dGPU MUST get Amd* tweaks");
+  assert.ok(p.core.some(id => id.startsWith("Lap_")), "AMD laptop MUST also get Lap_ tweaks");
+  assert.ok(!p.core.some(id => id.startsWith("IGpu_")), "AMD discrete laptop must NOT get iGPU tweaks");
+});
+
 test("Goal=stability drops aggressive scheduler tweaks", () => {
   const balanced = buildSafePreset(nvidiaRtxHw, "balanced");
   const stable = buildSafePreset(nvidiaRtxHw, "stability");

@@ -195,6 +195,35 @@ function SavePresetCard() {
         {preset.core.length} hardware-matched tweaks for <span className="text-zinc-300">{preset.hardwareSummary}</span>. Every tweak is GPU/CPU/OS-compatible — no AMD tweaks on NVIDIA, no Win11-only tweaks on Win10.
       </p>
 
+      {preset.blocked.length > 0 && (
+        <div data-testid="blocked-section" className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-2.5 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+              Withheld for safety ({preset.blocked.length})
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            These tweaks were refused for your system. Hover to see why.
+          </p>
+          <ul className="space-y-0.5">
+            {preset.blocked.slice(0, 8).map(b => (
+              <li
+                key={b.id}
+                data-testid={`blocked-${b.id}`}
+                title={b.reason}
+                className="text-[10px] font-mono text-zinc-400 truncate"
+              >
+                <span className="text-amber-400">✗</span> {b.id} <span className="text-zinc-600">— {b.reason.length > 70 ? b.reason.slice(0, 70) + "…" : b.reason}</span>
+              </li>
+            ))}
+            {preset.blocked.length > 8 && (
+              <li className="text-[10px] text-zinc-600 italic">+ {preset.blocked.length - 8} more</li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {preset.expert.length > 0 && (
         <div data-testid="advanced-optin-section" className="rounded-lg border border-red-500/40 bg-red-950/30 p-2.5 space-y-2">
           <div className="flex items-center gap-1.5">

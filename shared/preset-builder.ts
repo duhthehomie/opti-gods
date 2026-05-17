@@ -284,9 +284,12 @@ export function buildSafePreset(
       NVIDIA_GTX_EXTRA.forEach(id => candidates.add(id));
       reasons.push(`NVIDIA GTX-class detected (${hw.gpuName ?? "GTX"}) — HAGS skipped (causes stutters on Pascal/Turing)`);
     }
-  } else if (hw.gpuVendor === "amd" && hw.hasDiscreteGpu !== false && !hw.isLaptop) {
+  } else if (hw.gpuVendor === "amd" && hw.hasDiscreteGpu !== false) {
+    // AMD discrete Radeon — desktop OR laptop. Gaming laptops with discrete
+    // Radeon (e.g. RX 6800M) still want the full Radeon optimisation suite;
+    // laptop-specific power/Wi-Fi tweaks compose cleanly via LAPTOP_CORE below.
     AMD_DGPU_CORE.forEach(id => candidates.add(id));
-    reasons.push(`AMD discrete GPU detected (${hw.gpuName ?? "Radeon"}) — full Radeon optimisation suite`);
+    reasons.push(`AMD discrete GPU detected (${hw.gpuName ?? "Radeon"})${hw.isLaptop ? " on laptop" : ""} — full Radeon optimisation suite`);
   } else if (hw.gpuVendor === "amd") {
     AMD_IGPU_CORE.forEach(id => candidates.add(id));
     reasons.push(`AMD APU/iGPU detected (${hw.gpuName ?? "Vega"}) — Vega/APU tweaks, HAGS disabled`);

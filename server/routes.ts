@@ -4894,6 +4894,15 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       };
       let hw: PresetHardware;
       if (body.rigId && Number.isInteger(body.rigId)) {
+        // SECURITY: rig lookup is admin-only — exposes hardware summaries of
+        // other users' saved rigs. Requires the same x-admin-key the rest of
+        // the admin surface uses (see /api/admin/* routes). Non-admin clients
+        // must pass `hardware` directly instead.
+        const adminKey = process.env.ADMIN_KEY;
+        const provided = req.headers["x-admin-key"];
+        if (!adminKey || provided !== adminKey) {
+          return res.status(403).json({ error: "rigId lookup is admin-only — pass `hardware` instead" });
+        }
         const rig = await storage.getRigById(body.rigId);
         if (!rig) return res.status(404).json({ error: `Rig #${body.rigId} not found` });
         hw = hardwareFromRig(rig);
