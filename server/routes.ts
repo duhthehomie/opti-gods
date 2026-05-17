@@ -944,12 +944,10 @@ async function requirePaidPro(req: any): Promise<boolean> {
   // hold a valid legacy session token — admin revoke must be authoritative.
   const userId: string | undefined = req.session?.userId;
   if (userId) {
-    const ent = await storage.isPro(userId);
-    if (ent) return true;
-    // Check if there's a *revoked* row — if so, hard-deny (bypasses legacy token).
-    const rows = await storage.listProUsers();
-    const revoked = rows.find(r => r.discordUserId === userId && r.revokedAt);
-    if (revoked) return false;
+    // Single indexed PK lookup — covers both active and revoked rows.
+    const ent = await storage.getProEntitlement(userId);
+    if (ent && !ent.revokedAt) return true;
+    if (ent && ent.revokedAt) return false; // hard-deny revoked, bypass legacy token
   }
 
   const sessionToken: string | undefined = req.body?.sessionToken || req.query?.sessionToken;
@@ -2238,11 +2236,18 @@ Start-Sleep 2
       // Task #41: if a Discord user is logged in, also grant a lifetime
       // entitlement so they're Pro on every future device.
       if (req.session?.userId) {
-        storage.grantPro({
-          discordUserId: req.session.userId,
-          source: "code",
-          notes: `code:${normalizedCode}`,
-        }).catch((err) => console.error("[pro/verify] grantPro failed:", err?.message || err));
+        // Await so the durable entitlement is committed before we respond
+        // — "forever unlock" must not be best-effort.
+        try {
+          await storage.grantPro({
+            discordUserId: req.session.userId,
+            source: "code",
+            notes: `code:${normalizedCode}`,
+          });
+        } catch (err: any) {
+          console.error("[pro/verify] grantPro failed:", err?.message || err);
+          return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
+        }
       }
       return res.json({ valid: true, sessionToken });
     }
@@ -2271,11 +2276,16 @@ Start-Sleep 2
         const sessionToken = await storage.createProSession(normalizedCode);
         storage.logProIp(normalizedCode, clientIp).catch(() => {});
         if (req.session?.userId) {
-          storage.grantPro({
-            discordUserId: req.session.userId,
-            source: "code",
-            notes: `code:${normalizedCode} (email-linked)`,
-          }).catch((err) => console.error("[pro/verify] grantPro failed:", err?.message || err));
+          try {
+            await storage.grantPro({
+              discordUserId: req.session.userId,
+              source: "code",
+              notes: `code:${normalizedCode} (email-linked)`,
+            });
+          } catch (err: any) {
+            console.error("[pro/verify] grantPro failed:", err?.message || err);
+            return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
+          }
         }
         return res.json({ valid: true, sessionToken });
       }
@@ -2295,8 +2305,10 @@ Start-Sleep 2
   app.get('/api/pro/status', rateLimit(60, 60_000, 120), async (req, res) => {
     const userId = req.session?.userId;
     if (userId) {
-      const ent = await storage.isPro(userId);
-      if (ent) {
+      // Single PK lookup returns the entitlement row (active or revoked) so
+      // we never scan the full table on this hot path.
+      const ent = await storage.getProEntitlement(userId);
+      if (ent && !ent.revokedAt) {
         return res.json({
           isPro: true,
           source: ent.source,
@@ -2304,12 +2316,10 @@ Start-Sleep 2
           revoked: false,
         });
       }
-      // Surface explicit revocation so the frontend can stop honoring any
-      // lingering legacy session token for this user.
-      const rows = await storage.listProUsers();
-      const revoked = rows.find(r => r.discordUserId === userId && r.revokedAt);
-      if (revoked) {
-        return res.json({ isPro: false, source: revoked.source, grantedAt: null, revoked: true });
+      if (ent && ent.revokedAt) {
+        // Surface explicit revocation so the frontend can stop honoring any
+        // lingering legacy session token for this user.
+        return res.json({ isPro: false, source: ent.source, grantedAt: null, revoked: true });
       }
     }
     res.json({ isPro: false, source: null, grantedAt: null, revoked: false });
@@ -2475,11 +2485,16 @@ Start-Sleep 2
       // Task #41: friend unlocks also grant a permanent Discord-keyed
       // entitlement when the user is signed in.
       if (req.session?.userId) {
-        storage.grantPro({
-          discordUserId: req.session.userId,
-          source: "friend",
-          notes: `friend token:${String(token).slice(0, 8)}…`,
-        }).catch((err) => console.error("[pro/friend] grantPro failed:", err?.message || err));
+        try {
+          await storage.grantPro({
+            discordUserId: req.session.userId,
+            source: "friend",
+            notes: `friend token:${String(token).slice(0, 8)}…`,
+          });
+        } catch (err: any) {
+          console.error("[pro/friend] grantPro failed:", err?.message || err);
+          return res.status(500).json({ valid: false, error: "Friend token redeemed but entitlement save failed." });
+        }
       }
       return res.json({ valid: true, sessionToken });
     }
@@ -3237,13 +3252,15 @@ Start-Sleep 2
     }
     const sig = req.headers['stripe-signature'] as string | undefined;
     if (!sig) return res.status(400).json({ error: 'Missing stripe-signature header.' });
-    const rawBody = (req as any).rawBody;
-    if (!rawBody) return res.status(400).json({ error: 'Missing raw body for signature verification.' });
+    const rawBody = req.rawBody;
+    if (!rawBody || !(rawBody instanceof Buffer)) {
+      return res.status(400).json({ error: 'Missing raw body for signature verification.' });
+    }
 
-    let event: any;
+    const { default: Stripe } = await import('stripe');
+    const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
+    let event: import('stripe').Stripe.Event;
     try {
-      const { default: Stripe } = await import('stripe');
-      const stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' as any });
       event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err: any) {
       console.error('[stripe/webhook] signature verification failed:', err?.message || err);
@@ -3251,10 +3268,10 @@ Start-Sleep 2
     }
 
     if (event.type === 'checkout.session.completed') {
-      const sess = event.data.object as any;
-      const discordUserId: string | undefined = sess?.metadata?.discordUserId;
-      const tier = sess?.metadata?.tier;
-      const stripeSessionId: string = sess?.id;
+      const sess = event.data.object as import('stripe').Stripe.Checkout.Session;
+      const discordUserId = sess.metadata?.discordUserId;
+      const tier = sess.metadata?.tier;
+      const stripeSessionId = sess.id;
       // Only Pro tier triggers an entitlement — the Manual Opti tier is a
       // done-for-you service that doesn't unlock the dashboard itself.
       if (tier !== 'manual' && discordUserId) {
@@ -4134,18 +4151,27 @@ Read-Host "Press Enter to close this window"
     // also bind a lifetime Pro entitlement to their Discord ID. This is the
     // CashApp/PayPal "proof → grant" wiring that closes the loop without
     // requiring the customer to redeem the code on every device.
-    const buyerDiscordId = (emailReq as any).discordUserId as string | null | undefined;
+    const buyerDiscordId = emailReq.discordUserId;
+    let proGranted = false;
     if (buyerDiscordId) {
-      const source = emailReq.paymentMethod === "paypal" ? "paypal" : "cashapp";
-      storage.grantPro({
-        discordUserId: buyerDiscordId,
-        source,
-        grantedBy: req.session?.userId ?? null,
-        notes: `${emailReq.paymentMethod} | ref:${emailReq.paymentRef} | code:${available.code}`,
-      }).catch((err) => console.error("[admin/email-requests/send] grantPro failed:", err?.message || err));
+      const source: ProSource = emailReq.paymentMethod === "paypal" ? "paypal" : "cashapp";
+      try {
+        await storage.grantPro({
+          discordUserId: buyerDiscordId,
+          source,
+          grantedBy: req.session?.userId ?? null,
+          notes: `${emailReq.paymentMethod} | ref:${emailReq.paymentRef} | code:${available.code}`,
+        });
+        proGranted = true;
+      } catch (err: any) {
+        console.error("[admin/email-requests/send] grantPro failed:", err?.message || err);
+        // Code already sent — surface the failure so admin can retry the
+        // grant from the Pro Users tab instead of silently dropping it.
+        return res.json({ ok: true, code: available.code, proGranted: false, grantError: err?.message || "Pro entitlement save failed — grant manually from Pro Users tab." });
+      }
     }
 
-    return res.json({ ok: true, code: available.code, proGranted: !!buyerDiscordId });
+    return res.json({ ok: true, code: available.code, proGranted });
   });
 
   app.post("/api/admin/email-requests/:id/reject", async (req, res) => {

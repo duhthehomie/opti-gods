@@ -130,6 +130,9 @@ export interface IStorage {
   grantPro(args: { discordUserId: string; source: import("@shared/schema").ProSource; grantedBy?: string | null; notes?: string | null }): Promise<ProEntitlement>;
   revokePro(discordUserId: string): Promise<void>;
   isPro(discordUserId: string): Promise<ProEntitlement | null>;
+  // Single-row lookup INCLUDING revoked entitlements — used by hot-path
+  // gating (requirePaidPro, GET /api/pro/status) to avoid full-table scans.
+  getProEntitlement(discordUserId: string): Promise<ProEntitlement | null>;
   listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
 }
 
@@ -1024,6 +1027,13 @@ export class DatabaseStorage implements IStorage {
     if (!discordUserId) return null;
     const rows = await db.select().from(proEntitlements)
       .where(and(eq(proEntitlements.discordUserId, discordUserId), isNull(proEntitlements.revokedAt)));
+    return rows[0] ?? null;
+  }
+
+  async getProEntitlement(discordUserId: string): Promise<ProEntitlement | null> {
+    if (!discordUserId) return null;
+    const rows = await db.select().from(proEntitlements)
+      .where(eq(proEntitlements.discordUserId, discordUserId));
     return rows[0] ?? null;
   }
 
