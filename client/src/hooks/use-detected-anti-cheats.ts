@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 /**
  * Known anti-cheat product identifiers. Used by tweak-registry `incompatibleWith`
@@ -38,13 +38,20 @@ export function useDetectedAntiCheats(
     }
   }, []);
 
-  // Union with the user-asserted toggles (web fallback)
-  const out = new Set(detected);
-  if (manualToggles?.vanguard) out.add("Vanguard");
-  if (manualToggles?.eac) out.add("EAC");
-  if (manualToggles?.battleye) {
-    out.add("BattlEye");
-    out.add("FACEIT");
-  }
-  return out;
+  // Union with the user-asserted toggles (web fallback). Memoized so every
+  // TweakRow that consumes this hook gets a stable Set reference per render
+  // batch — keeps row re-renders cheap when AC state hasn't changed.
+  const vanguard = !!manualToggles?.vanguard;
+  const eac = !!manualToggles?.eac;
+  const battleye = !!manualToggles?.battleye;
+  return useMemo(() => {
+    const out = new Set(detected);
+    if (vanguard) out.add("Vanguard");
+    if (eac) out.add("EAC");
+    if (battleye) {
+      out.add("BattlEye");
+      out.add("FACEIT");
+    }
+    return out;
+  }, [detected, vanguard, eac, battleye]);
 }
