@@ -2,6 +2,22 @@
 
 A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthetic.
 
+## V2.2 (2026-05-17) — Reapplicable Driver Tweaks (Task #50)
+
+Adds 19 driver-level tweaks that survive game restarts but get wiped on driver reinstall — plus a dedicated "Reapply driver tweaks" button at the top of NVIDIA + AMD tabs that downloads a focused PS1 hitting ONLY the selected driver-class keys (no full preset rerun needed after each Adrenalin / GeForce update).
+
+**NVIDIA (12)**: Texture Filter HighPerf, Low Latency Ultra, Threaded Opt ON, Power Mgmt Max, Frame Cap (Off / 30 / 60 / 120 / 144 / 240 / Custom-via-Read-Host 10–1000), EnableMSIMode_Safe.
+**AMD (8)**: Texture Filter Perf, Surface Format Opt, Tess 16x cap, Radeon Boost Off, FRTC 60 / 144 / 240, EnableMSIMode_Safe.
+
+New endpoint `/api/script/driver-reapply` is Pro-gated with strict per-tab allowlists, regex-validated IDs, and bounded list length. CI now runs `scripts/smoke-test-ps1.ts` + PowerShell AST parsing on every push to catch syntax errors in `TWEAK_COMMANDS` before the expensive Tauri build.
+
+**Intentional deviations from original task spec:**
+- `EnableMSIMode_Safe` ships as a pure-PowerShell registry helper (multi-device MSI enable + Affinity Policy wipe to prevent the V1 BSOD) rather than vendoring the third-party msiutilv3 GUI binary. Functionally equivalent, no supply-chain risk, **no interactive device picker** — selection is automatic (GPU only on non-hybrid hosts + filtered physical NICs + NVMe controllers).
+- `AmdAntiLag` is **NOT** part of the V2.2 driver-reapply allowlist — it already lives in the AMD registry tweaks section and the RX 9000 V2TweakSection's `AntiLag2NextGen`. Support docs should not claim it's in the reapply set.
+- Legacy `EnableMSIMode` is **kept alongside** `EnableMSIMode_Safe` for saved-preset back-compat. Users should prefer `_Safe` on new installs.
+
+Versioned `2.2.0` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
+
 ## V2.1 (2026-05-17) — Stability Surgery
 
 Fixed the V1 publish-blocking crashes:
