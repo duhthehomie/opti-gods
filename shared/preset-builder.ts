@@ -318,13 +318,39 @@ export function buildSafePreset(
   }
 
   // 3. Apply opt-in expert tweaks (verify hardware compat first)
+  //    SAFETY: optInFlags can ONLY contain known EXPERT or FORBIDDEN IDs.
+  //    Arbitrary IDs (typos, model hallucinations, malicious payloads) are
+  //    rejected — they must never reach `core`.
+  const FORBIDDEN_LIST = FORBIDDEN_AUTO_TWEAKS as readonly string[];
   for (const optedId of Array.from(optIn)) {
+    const isExpert = EXPERT_TWEAK_IDS.has(optedId);
+    const isForbidden = FORBIDDEN_LIST.includes(optedId);
+    if (!isExpert && !isForbidden) {
+      blocked.push({
+        id: optedId,
+        reason: "unknown opt-in flag — only expert or forbidden tweak IDs may be opted in",
+      });
+      continue;
+    }
     const compat = isHardwareCompatible(optedId, hw);
     if (!compat.ok) {
       blocked.push({ id: optedId, reason: compat.reason ?? "hardware-incompatible" });
       continue;
     }
     candidates.add(optedId);
+  }
+
+  // 3b. Seed expert[] with hardware-compatible EXPERT tweaks that the user
+  //     has NOT opted in yet — these render as red toggle suggestions in the
+  //     "Advanced — Opt-in Required" UI section so the user can flip them.
+  //     Forbidden trio is intentionally NOT seeded here (they only ever
+  //     appear via explicit opt-in; non-opted ones live in `blocked`).
+  for (const eid of Array.from(EXPERT_TWEAK_IDS)) {
+    if (candidates.has(eid)) continue; // already going through partition
+    if (FORBIDDEN_LIST.includes(eid)) continue; // forbidden surfaced via blocked
+    const compat = isHardwareCompatible(eid, hw);
+    if (!compat.ok) continue; // silently skip hw-incompatible expert suggestions
+    candidates.add(eid); // partition step will route them to expert[]
   }
 
   // 4. Always surface forbidden trio in `blocked` when not opted in, so the

@@ -4539,7 +4539,15 @@ RESPONSE STYLE:
 - Be concise: 3-6 bullet points max unless detailed analysis is requested
 - Use data from the live stats above to back up recommendations
 - When discussing tickets, reference them by ID number
-- Be proactive: if something looks off in the data, mention it`;
+- Be proactive: if something looks off in the data, mention it
+
+SAFE PRESET GENERATION (V2.2):
+- To generate a personalised preset for any saved customer rig, tell the admin to use the EXACT command format:
+    Generate preset for rig #<ID>
+  Optional opt-ins (case-sensitive tweak IDs, comma-separated):
+    Generate preset for rig #42 with EnableMSIMode,Win11DisableVBS
+- That command is intercepted by the server (NOT routed through you) and runs the canonical buildSafePreset() pipeline — hardware-filtered, expert-gated, V2.1-forbidden-trio (EnableMSIMode / DisableIPv6 / SetTimerResolution) refused unless explicitly opted-in.
+- NEVER hand-roll preset arrays yourself. NEVER list tweak IDs as a recommendation. If the admin wants a preset, instruct them to run the rig command above.`;
 
     const chatHistory = (history as { role: string; content: string }[])
       .slice(-10)

@@ -118,14 +118,55 @@ test("FORBIDDEN tweaks move to expert when explicitly opted in", () => {
 });
 
 test("FORBIDDEN tweaks land in blocked[] with reason when not opted in", () => {
-  // FORBIDDEN aren't in any of our candidate lists by default, so they won't
-  // appear in blocked unless someone (e.g. AI) tries to opt them in.
-  // Verify: when the AI sends EnableMSIMode as opt-in WITHOUT it being in
-  // the candidate set, it still goes through expert path (opt-in honoured).
-  // When NOT opted in and NOT in candidates, it simply isn't generated.
-  // This test documents the contract.
-  const p = buildSafePreset(nvidiaRtxHw);
-  assert.equal(p.core.includes("EnableMSIMode"), false);
+  // V2.2 contract: forbidden trio MUST be visible in blocked[] so the UI
+  // can show users WHY they were withheld (not silently absent).
+  const p = buildSafePreset(nvidiaRtxHw, "balanced", []);
+  for (const fid of FORBIDDEN_AUTO_TWEAKS) {
+    const entry = p.blocked.find(b => b.id === fid);
+    assert.ok(entry, `forbidden tweak ${fid} should be in blocked[]`);
+    assert.match(entry!.reason, /V2\.1 stability rule/i);
+  }
+});
+
+test("expert[] is populated by default with hw-compatible expert tweaks (UI toggles)", () => {
+  // The red "Advanced — Opt-in Required" UI section needs visible toggles.
+  // buildSafePreset must seed expert[] with eligible expert tweaks even
+  // when nothing is opted in.
+  const p = buildSafePreset(nvidiaRtxHw, "balanced", []);
+  assert.ok(p.expert.length > 0, "expert[] must surface opt-in suggestions");
+  // None of those suggestions may be in core
+  for (const eid of p.expert) {
+    assert.ok(!p.core.includes(eid), `expert ${eid} must NOT also be in core`);
+  }
+});
+
+test("Unknown opt-in IDs are rejected — never reach core", () => {
+  const p = buildSafePreset(nvidiaRtxHw, "balanced", [
+    "NotARealTweak",
+    "FormatCDrive",
+    "DisableAnimations", // valid core tweak — must NOT be smuggled via opt-in
+  ]);
+  assert.ok(!p.core.includes("FormatCDrive"));
+  assert.ok(!p.core.includes("NotARealTweak"));
+  // DisableAnimations is a normal core tweak and is in candidates anyway,
+  // but the opt-in path itself should reject it as "unknown opt-in flag"
+  const rej1 = p.blocked.find(b => b.id === "NotARealTweak");
+  const rej2 = p.blocked.find(b => b.id === "FormatCDrive");
+  assert.ok(rej1, "NotARealTweak should be in blocked[]");
+  assert.ok(rej2, "FormatCDrive should be in blocked[]");
+  assert.match(rej1!.reason, /unknown opt-in flag/i);
+});
+
+test("Opt-in IDs with digits/underscores survive parsing (Win11DisableVBS, Lap_Intel_DisableECores)", () => {
+  const laptopHw: PresetHardware = {
+    ...intelIgpuLaptopHw,
+  };
+  const p = buildSafePreset(laptopHw, "balanced", [
+    "Win11DisableVBS",
+    "Lap_Intel_DisableECores",
+  ]);
+  assert.ok(p.expert.includes("Win11DisableVBS"), "Win11DisableVBS should reach expert");
+  assert.ok(p.expert.includes("Lap_Intel_DisableECores"), "Lap_Intel_DisableECores should reach expert");
 });
 
 test("EXPERT tweaks land in expert section, not core", () => {
