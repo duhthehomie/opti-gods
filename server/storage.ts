@@ -660,6 +660,18 @@ export class DatabaseStorage implements IStorage {
       await db.insert(adminSettings).values(updates);
     }
     await db.insert(autoResolveRuns).values({ resolvedCount: count, windowDays, ranAt: new Date() });
+
+    // Prune older rows so the history table stays lean. Keeps the most recent
+    // MAX_AUTO_RESOLVE_RUNS rows (by ran_at desc); older rows are deleted.
+    const MAX_AUTO_RESOLVE_RUNS = 1000;
+    await db.execute(sql`
+      DELETE FROM ${autoResolveRuns}
+      WHERE id NOT IN (
+        SELECT id FROM ${autoResolveRuns}
+        ORDER BY ${autoResolveRuns.ranAt} DESC
+        LIMIT ${MAX_AUTO_RESOLVE_RUNS}
+      )
+    `);
   }
 
   async getAutoResolveRunHistory(limit = 10): Promise<AutoResolveRun[]> {
