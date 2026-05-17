@@ -3377,6 +3377,20 @@ Read-Host "Press Enter to close this window"
     });
   });
 
+  // GET /api/admin/security/auto-resolve/preview — dry-run count without resolving
+  app.get("/api/admin/security/auto-resolve/preview", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    try {
+      const adminCfg = await storage.getAdminSettings();
+      const days = adminCfg?.autoResolveDays ?? SECURITY_EVENT_WINDOW_DAYS_DEFAULT;
+      const count = await storage.previewAutoResolveCount(days);
+      return res.json({ count, days });
+    } catch (err) {
+      console.error("[security] Auto-resolve preview failed:", err);
+      return res.status(500).json({ error: "Preview failed" });
+    }
+  });
+
   // POST /api/admin/security/auto-resolve — trigger the daily auto-resolve job immediately
   app.post("/api/admin/security/auto-resolve", async (req, res) => {
     if (!checkAdminKey(req, res)) return;

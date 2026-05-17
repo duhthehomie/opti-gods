@@ -83,6 +83,7 @@ export interface IStorage {
   resolveSecurityEvent(id: number): Promise<void>;
   markSecurityEventAlertSent(id: number): Promise<void>;
   autoResolveOldSecurityEvents(daysOld?: number): Promise<number>;
+  previewAutoResolveCount(daysOld?: number): Promise<number>;
   recordAutoResolveRun(count: number, windowDays?: number): Promise<void>;
   getAutoResolveRunHistory(limit?: number): Promise<import("@shared/schema").AutoResolveRun[]>;
   // Admin settings
@@ -628,6 +629,21 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .returning({ id: securityEvents.id });
+    return rows.length;
+  }
+
+  async previewAutoResolveCount(daysOld = 30): Promise<number> {
+    const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({ id: securityEvents.id })
+      .from(securityEvents)
+      .where(
+        and(
+          isNull(securityEvents.resolvedAt),
+          lt(securityEvents.createdAt, cutoff),
+          inArray(securityEvents.severity, ["low", "medium"])
+        )
+      );
     return rows.length;
   }
 
