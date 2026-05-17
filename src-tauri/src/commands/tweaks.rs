@@ -41,17 +41,12 @@ pub struct TweakDescriptor {
 #[derive(Deserialize)]
 pub struct ApplyArgs {
     pub id: String,
-    /// Optional PowerShell snippet — when the registry doesn't have a native
-    /// impl, the React app passes the canonical `.ps1` snippet from
-    /// `client/src/lib/tweak-registry.ts` and Rust shells out.
-    pub powershell: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UndoArgs {
     pub id: String,
     pub undo_token: Option<String>,
-    pub powershell_undo: Option<String>,
 }
 
 #[tauri::command]
@@ -88,13 +83,17 @@ pub fn apply_tweak(args: ApplyArgs) -> TweakResult {
                 via_powershell: false,
             },
         }
-    } else if let Some(snippet) = args.powershell {
-        run_powershell(&snippet, &args.id, false)
+    } else if let Some(snippet) = trusted_ps_snippet(&args.id, false) {
+        // SECURITY: PowerShell snippets MUST come from this hard-coded
+        // table — never from the renderer. The desktop shell runs
+        // elevated under `requireAdministrator`, so accepting arbitrary
+        // script text from the WebView would be a one-line XSS→RCE.
+        run_powershell(snippet, &args.id, false)
     } else {
         TweakResult {
             ok: false,
             id: args.id,
-            message: "No native impl and no PowerShell fallback supplied.".into(),
+            message: "Unknown tweak id: no native impl and no trusted PowerShell fallback.".into(),
             undo_token: None,
             requires_reboot: false,
             via_powershell: false,
@@ -123,18 +122,47 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
                 via_powershell: false,
             },
         }
-    } else if let Some(snippet) = args.powershell_undo {
-        run_powershell(&snippet, &args.id, true)
+    } else if let Some(snippet) = trusted_ps_snippet(&args.id, true) {
+        run_powershell(snippet, &args.id, true)
     } else {
         TweakResult {
             ok: false,
             id: args.id,
-            message: "No native undo and no PowerShell fallback supplied.".into(),
+            message: "Unknown tweak id: no native undo and no trusted PowerShell fallback.".into(),
             undo_token: None,
             requires_reboot: false,
             via_powershell: false,
         }
     }
+}
+
+/// Trusted PowerShell fallback map. Intentionally tiny in V2 — the
+/// 20 native impls above cover the high-impact tweaks. Shipping
+/// arbitrary text from the renderer would be RCE-as-a-service under
+/// the elevated manifest, so the only PS commands the desktop shell
+/// will ever run are the literals embedded directly in this table.
+fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
+    const TABLE: &[(&str, &str, &str)] = &[
+        (
+            "ClearDnsCache",
+            "ipconfig /flushdns | Out-Null",
+            "ipconfig /flushdns | Out-Null",
+        ),
+        (
+            "DisableMMAgentMemoryCompression",
+            "Disable-MMAgent -MemoryCompression",
+            "Enable-MMAgent -MemoryCompression",
+        ),
+        (
+            "ResetTcpAutotune",
+            "netsh int tcp set global autotuninglevel=disabled | Out-Null",
+            "netsh int tcp set global autotuninglevel=normal | Out-Null",
+        ),
+    ];
+    TABLE
+        .iter()
+        .find(|(t_id, _, _)| *t_id == id)
+        .map(|(_, ap, un)| if undo { *un } else { *ap })
 }
 
 // ─── PowerShell fallback ────────────────────────────────────────────────────

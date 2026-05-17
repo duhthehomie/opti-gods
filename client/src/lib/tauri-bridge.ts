@@ -94,28 +94,26 @@ export async function envInfo(): Promise<NativeEnvInfo> {
 
 // ─── tweak engine ───────────────────────────────────────────────────────────
 
-export async function applyTweak(id: string, powershell?: string): Promise<NativeTweakResult> {
+// SECURITY: The renderer can no longer pass a PowerShell snippet — the
+// trusted ID→script map lives entirely in Rust (`trusted_ps_snippet`).
+// Anything not in the native registry or that map returns an explicit
+// "unknown tweak id" error.
+export async function applyTweak(id: string): Promise<NativeTweakResult> {
   if (!isNative()) {
     return webFallbackTweak(id, "apply");
   }
-  // Tauri 2 binds the JS arg object to the Rust command's #[serde] struct
-  // param by matching the parameter NAME (`args`). Use snake_case inside the
-  // struct to match Rust field names exactly — no camelCase auto-conversion.
-  return invoke<NativeTweakResult>("apply_tweak", {
-    args: { id, powershell: powershell ?? null },
-  });
+  return invoke<NativeTweakResult>("apply_tweak", { args: { id } });
 }
 
 export async function undoTweak(
   id: string,
   undoToken?: string | null,
-  powershellUndo?: string,
 ): Promise<NativeTweakResult> {
   if (!isNative()) {
     return webFallbackTweak(id, "undo");
   }
   return invoke<NativeTweakResult>("undo_tweak", {
-    args: { id, undo_token: undoToken ?? null, powershell_undo: powershellUndo ?? null },
+    args: { id, undo_token: undoToken ?? null },
   });
 }
 
