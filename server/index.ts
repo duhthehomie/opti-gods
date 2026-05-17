@@ -12,6 +12,12 @@ const httpServer = createServer(app);
 // Trust the Replit/reverse-proxy X-Forwarded-* headers for correct HTTPS origin detection
 app.set("trust proxy", 1);
 
+// Explicitly allow indexing — overrides any noindex headers injected by the hosting platform
+app.use((_req, res, next) => {
+  res.setHeader("X-Robots-Tag", "index, follow");
+  next();
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
