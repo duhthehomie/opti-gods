@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api-base";
 
 // Task #41 — Pro tied to Discord user ID (lifetime entitlement).
 //
@@ -53,7 +54,7 @@ async function verifyLegacyWithServer(): Promise<boolean> {
   const token = getStoredToken();
   if (!token) return false;
   try {
-    const res = await fetch("/api/pro/status", {
+    const res = await fetch(apiUrl("/api/pro/status"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionToken: token }),
@@ -80,7 +81,7 @@ async function attemptLegacyMigration(): Promise<void> {
   if (!token) return;
   _migrationAttempted = true;
   try {
-    const res = await fetch("/api/pro/migrate-legacy", {
+    const res = await fetch(apiUrl("/api/pro/migrate-legacy"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionToken: token }),

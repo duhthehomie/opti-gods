@@ -15,6 +15,41 @@ const httpServer = createServer(app);
 // Trust the Replit/reverse-proxy X-Forwarded-* headers for correct HTTPS origin detection
 app.set("trust proxy", 1);
 
+// ── CORS for the Tauri desktop shell ─────────────────────────────────────────
+// The desktop app loads its HTML from `tauri://localhost` (Windows: `http://tauri.localhost`)
+// and calls the production API at https://optigods.replit.app. WebView2 enforces
+// CORS the same as Chromium, so we must explicitly echo allowed origins.
+//
+// We DO NOT use a wildcard — credentials require an exact-match origin. The
+// allowlist covers both the Tauri scheme and any extra hosts set via
+// EXTRA_ALLOWED_ORIGINS (comma-separated) for staging / preview builds.
+const NATIVE_ALLOWED_ORIGINS = new Set<string>([
+  "tauri://localhost",
+  "http://tauri.localhost",
+  "https://tauri.localhost",
+  ...(process.env.EXTRA_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean),
+]);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && NATIVE_ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Admin-Key, X-Pro-Session",
+    );
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+  }
+  next();
+});
+
 // ── Session middleware (used for Discord OAuth login wall) ───────────────────
 declare module "express-session" {
   interface SessionData {

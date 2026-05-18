@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { setProStatus } from "@/lib/pro-status";
+import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { AuthGate } from "@/components/auth-gate";
@@ -14,6 +15,7 @@ import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
+import { isNative } from "@/lib/tauri-bridge";
 
 import Landing from "@/pages/landing";
 import PaymentSuccess from "@/pages/payment-success";
@@ -29,7 +31,7 @@ function VisitTracker() {
     if (sessionStorage.getItem(SESSION_KEY)) return;
     sessionStorage.setItem(SESSION_KEY, "1");
     const referrer = document.referrer || undefined;
-    fetch("/api/track-visit", {
+    fetch(apiUrl("/api/track-visit"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ referrer }),
@@ -49,7 +51,7 @@ function FriendUnlockHandler() {
     url.searchParams.delete("friend");
     window.history.replaceState({}, "", url.toString());
 
-    fetch("/api/pro/friend", {
+    fetch(apiUrl("/api/pro/friend"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
@@ -77,10 +79,14 @@ function Router() {
   // Note: legacy optimizer paths (/dashboard, /tweaks, /tools, /system-scan,
   // /pro, /registry, /fivem, etc.) are 302'd server-side in server/routes.ts
   // — they never reach the SPA, so we don't list them here.
+  //
+  // Native shell: "/" sends straight to the AI/tweaks workspace — the
+  // marketing landing page (with its ".exe download" CTA) is web-only.
+  const HomeComponent = isNative() ? OptiGodsAI : Landing;
   return (
     <Switch>
-      {/* V2 landing — public */}
-      <Route path="/" component={Landing} />
+      {/* V2 landing — public on web, AI workspace in native */}
+      <Route path="/" component={HomeComponent} />
 
       {/* Standalone routes preserved */}
       <Route path="/ai" component={OptiGodsAI} />

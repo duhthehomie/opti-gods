@@ -2338,10 +2338,27 @@ Start-Sleep 2
     if (!code) return res.json({ valid: false });
     const normalizedCode = String(code).toUpperCase().trim();
     const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-    // Strict format: only XXXX-XXXX-XXXX (4 alphanumeric groups separated by dashes)
-    // Rejects anything that doesn't match a real Opti Gods code — stops all non-code probing
-    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(normalizedCode)) {
+    // Format gate: accept either the canonical XXXX-XXXX-XXXX (auto-generated)
+    // or a 3-32 char alphanumeric (with optional dashes/underscores) so the
+    // admin's custom-named codes — "LEAQ", "GODMODE-2026", etc. — still work.
+    // Anything outside that range is obvious probing junk; reject early.
+    if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(normalizedCode)) {
       return res.json({ valid: false });
+    }
+
+    // Path 0: PRO_CODES env-var fallback — owner-managed comp codes that
+    // don't need to be in the DB. First successful redemption seeds them
+    // into the codes table so all downstream logic (revoke / reset / IP
+    // logging) keeps working uniformly.
+    const envCodes = (process.env.PRO_CODES || "")
+      .split(",")
+      .map(c => c.trim().toUpperCase())
+      .filter(Boolean);
+    if (envCodes.includes(normalizedCode)) {
+      const existing = (await storage.getAllCodes()).find(c => c.code === normalizedCode);
+      if (!existing) {
+        await storage.createCode(normalizedCode, "PRO_CODES env-var seed").catch(() => {});
+      }
     }
 
     // Path 1: Fresh single-use code (marks usedAt on first use, enforces 2-session cap)

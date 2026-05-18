@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useProStatus } from "@/lib/pro-status";
+import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -90,7 +91,7 @@ function SavePresetCard() {
     if (!isReady || !hw.scanned) return;
     let cancelled = false;
     setLoadingPreset(true);
-    fetch("/api/ai/preset", {
+    fetch(apiUrl("/api/ai/preset"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -140,7 +141,7 @@ function SavePresetCard() {
     // Only expert tweaks the user explicitly opted in to (red section toggles).
     preset.expert.forEach(k => { if (optInIds.has(k)) presetTweaks[k] = true; });
     try {
-      await fetch("/api/presets", {
+      await fetch(apiUrl("/api/presets"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -423,7 +424,7 @@ function ReportIssueModal({ onClose }: { onClose: () => void }) {
       if (os.displayName) systemInfo.os = os.displayName;
 
       const chatSessionId = localStorage.getItem("optigods_ai_session_id") || undefined;
-      const res = await fetch("/api/reports", {
+      const res = await fetch(apiUrl("/api/reports"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category, description: description.trim(), systemInfo, sessionId: chatSessionId }),
@@ -648,7 +649,7 @@ export default function OptiGodsAI() {
 
     try {
       const historyForApi = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
-      const res = await fetch("/api/ai/chat", {
+      const res = await fetch(apiUrl("/api/ai/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

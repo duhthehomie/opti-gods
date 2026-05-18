@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
+import { apiUrl } from "@/lib/api-base";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -54,13 +55,22 @@ function ProPaymentDialog({
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/pro/verify", {
+      const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.trim() }),
       });
-      const data = await res.json();
-      if (data.valid) {
+      // Read body once, parse defensively — a rate-limit or IP-ban response
+      // is still JSON, but we want a clear message instead of a generic
+      // "connection error" if parsing fails.
+      const raw = await res.text();
+      let data: { valid?: boolean; sessionToken?: string; error?: string } = {};
+      try { data = JSON.parse(raw); } catch { /* non-JSON body */ }
+      if (res.status === 429) {
+        setError("Too many attempts. Please wait a minute and try again.");
+      } else if (res.status === 403) {
+        setError(data.error || "Your IP is blocked from redeeming codes. Contact support.");
+      } else if (data.valid) {
         if (data.sessionToken) {
           setProSession(data.sessionToken);
         } else {
@@ -79,8 +89,12 @@ function ProPaymentDialog({
             : "Invalid code. If you already paid, contact support to get your code registered."
         );
       }
-    } catch {
-      setError("Connection error. Please try again.");
+    } catch (err) {
+      // Real network failure (DNS, CORS, offline). The Tauri shell has no
+      // backend of its own, so this most often means the production API
+      // host is unreachable.
+      console.error("[pro/verify] network error", err);
+      setError("Couldn't reach the Opti Gods server. Check your internet and try again.");
     } finally {
       setLoading(false);
     }
@@ -101,7 +115,7 @@ function ProPaymentDialog({
     setDiscountError("");
     setDiscountData(null);
     try {
-      const res = await fetch("/api/discount/validate", {
+      const res = await fetch(apiUrl("/api/discount/validate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: discountInput.trim() }),
@@ -125,7 +139,7 @@ function ProPaymentDialog({
     setManualDiscountError("");
     setManualDiscountData(null);
     try {
-      const res = await fetch("/api/discount/validate", {
+      const res = await fetch(apiUrl("/api/discount/validate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: manualDiscountInput.trim() }),
@@ -147,7 +161,7 @@ function ProPaymentDialog({
     if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
     const activeDiscount = tier === "pro" ? discountData : manualDiscountData;
     try {
-      const res = await fetch("/api/create-checkout", {
+      const res = await fetch(apiUrl("/api/create-checkout"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier, ...(activeDiscount ? { discountCode: activeDiscount.code } : {}) }),

@@ -56,7 +56,7 @@ export function ProCelebration() {
         <img
           src={BRAND.goldPng}
           alt="Opti Gods Pro Unlocked"
-          className="w-56 h-56 object-contain drop-shadow-[0_0_50px_rgba(250,204,21,0.6)]"
+          className="relative z-10 w-56 h-56 object-contain drop-shadow-[0_0_50px_rgba(250,204,21,0.6)]"
         />
       ) : (
         <video
@@ -66,10 +66,10 @@ export function ProCelebration() {
           muted
           playsInline
           preload="metadata"
-          className="w-80 h-80 object-contain drop-shadow-[0_0_80px_rgba(250,204,21,0.55)]"
+          className="absolute inset-0 w-full h-full object-cover"
         />
       )}
-      <div className="mt-6 text-center space-y-1 px-6">
+      <div className="relative z-10 mt-6 text-center space-y-1 px-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-amber-300/80">
           Welcome to
         </p>
