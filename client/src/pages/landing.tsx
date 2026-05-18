@@ -203,7 +203,10 @@ function DownloadButton() {
           data-testid="text-coming-soon"
           className="text-xs text-amber-400 mt-1"
         >
-          Installer is being signed — drop into the Discord for early access.
+          Desktop app coming soon —{" "}
+          <a href={DISCORD_INVITE} target="_blank" rel="noreferrer" className="underline hover:text-amber-300">
+            join the Discord for early access
+          </a>.
         </p>
       )}
     </div>
@@ -234,9 +237,7 @@ function LandingDesktop() {
 
       {/* Top nav */}
       <header className="relative z-10 max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <OptiGodsWordmark variant="inline" />
-        </div>
+        <div className="flex items-center gap-2" />
         <nav className="flex items-center gap-2 md:gap-4 text-sm">
           <a
             href="#features"
@@ -356,13 +357,26 @@ function LandingDesktop() {
 
       {/* Reviews */}
       <section id="reviews" className="relative z-10 max-w-6xl mx-auto px-6 py-16">
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-400">Verified Reviews</span>
           <h2 className="text-2xl md:text-3xl font-display font-black text-white mt-2">
             Real PCs. Real FPS gains.
           </h2>
+          <p className="text-sm text-zinc-400 mt-3">
+            See real reviews from the community in our Discord.
+          </p>
         </div>
-        <ReviewsCarousel />
+        <div className="flex justify-center">
+          <a
+            href="https://discord.com/channels/1489905883692667051/1489905885567385742"
+            target="_blank"
+            rel="noreferrer"
+            data-testid="link-reviews-discord"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#5865F2]/20 border border-[#5865F2]/40 hover:bg-[#5865F2]/30 text-[#a5adff] font-bold text-sm transition-colors"
+          >
+            <SiDiscord className="w-4 h-4" /> See verified reviews in Discord
+          </a>
+        </div>
       </section>
 
       {/* Pricing / Payments */}
@@ -457,7 +471,7 @@ function LandingDesktop() {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-display font-black text-white">
-                Join 200+ optimized PCs in Discord
+                We have optimized over 200 PCs
               </h3>
               <p className="text-sm text-zinc-400 mt-1">
                 Live support from leaq, build advice, free preset drops, and verified review channel.
