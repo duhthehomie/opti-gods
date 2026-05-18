@@ -216,7 +216,7 @@ export function classifyGpu(rawName: string): GpuEntry {
   let isIntegrated = false;
   if (vendor === "intel") {
     // Arc dGPU is the only Intel discrete family. Allow "(tm)" / "(r)" between "arc" and the model.
-    isIntegrated = !/\barc\b(?:\([^)]*\))?[\s\-]*[ab]?\d{3,}|\barc\s+pro\b/.test(n);
+    isIntegrated = !/\barc\b(?:\([^)]*\))?[\s\-]*(?:pro\s+)?[ab]?\d{2,}|\barc\b(?:\([^)]*\))?\s*pro\b/.test(n);
   } else if (vendor === "amd") {
     isIntegrated = /vega\s*[368]\b|vega\s*11\b|radeon\s+graphics(?!\s+pro)|radeon\s+\d+m?\s+graphics|ryzen.*graphics|\bapu\b|integrated/.test(n);
   } else if (vendor === "nvidia") {
@@ -259,7 +259,9 @@ export function classifyGpu(rawName: string): GpuEntry {
       tier = "mid";
     }
   } else if (vendor === "intel") {
-    if (/\barc\s+(a7|a5|a3|b5|b3)\d{2}|arc\s+pro/.test(n)) {
+    // Allow "Arc(TM) A770" / "Arc(R) B580" — Windows DXDiag/WMI inserts trademark markers
+    // between the family name and the model. Same tolerant pattern used for isIntegrated above.
+    if (/\barc\b(?:\([^)]*\))?[\s\-]*(a7|a5|a3|b7|b5|b3)\d{2}|\barc\b(?:\([^)]*\))?\s*pro\b/.test(n)) {
       tier = "mid";
     } else if (/iris\s+xe|iris\s+plus|\bxe graphics\b/.test(n)) {
       tier = "low";

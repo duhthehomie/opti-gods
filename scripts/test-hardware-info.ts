@@ -151,20 +151,33 @@ test("Intel Iris Xe → intel / low / INTEGRATED", () => {
 });
 
 test("Intel Arc A770 → intel / mid / DISCRETE", () => {
-  // Note: the `(TM)` token between "Arc" and "A770" breaks the tier regex
-  // (`\barc\s+(a7|...)`), so we pass the clean form the AI/preset path uses.
   const g = classifyGpu("Intel Arc A770");
   assert.equal(g.vendor, "intel");
   assert.equal(g.isIntegrated, false, "Arc is Intel's only discrete family");
   assert.equal(g.tier, "mid");
 });
 
-test("Intel Arc A770 (with (TM) marker) is still discrete (vendor + integrated guard)", () => {
-  // Even when the tier regex doesn't bite, the isIntegrated guard must hold:
-  // Arc is NEVER treated as an iGPU regardless of formatting quirks.
+test("Intel Arc A770 with (TM) marker → intel / mid / DISCRETE (Task #62)", () => {
+  // Windows DXDiag/WMI inserts "(TM)" between "Arc" and the model. Both the
+  // isIntegrated guard AND the tier regex must tolerate it.
   const g = classifyGpu("Intel(R) Arc(TM) A770 Graphics");
   assert.equal(g.vendor, "intel");
   assert.equal(g.isIntegrated, false);
+  assert.equal(g.tier, "mid");
+});
+
+test("Intel Arc B580 with (TM) marker → intel / mid / DISCRETE", () => {
+  const g = classifyGpu("Intel(R) Arc(TM) B580 Graphics");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, false);
+  assert.equal(g.tier, "mid");
+});
+
+test("Intel Arc Pro A60 → intel / mid / DISCRETE", () => {
+  const g = classifyGpu("Intel(R) Arc(TM) Pro A60 Graphics");
+  assert.equal(g.vendor, "intel");
+  assert.equal(g.isIntegrated, false);
+  assert.equal(g.tier, "mid");
 });
 
 test("Intel Arc B580 → intel / mid / DISCRETE", () => {
