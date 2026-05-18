@@ -1,21 +1,15 @@
 fn main() {
-    // Embed app.manifest into the final .exe so Windows reads our
-    // `requireAdministrator` UAC level + PerMonitorV2 DPI awareness on
-    // launch (instead of running unelevated with system DPI). Tauri 2
-    // does NOT do this automatically — without these directives every
-    // registry HKLM write would silently fail.
     #[cfg(windows)]
     {
-        // embed_resource takes care of generating + compiling a .rc with
-        // our manifest at link time. The manifest path is relative to
-        // this build.rs file.
-        let mut res = winresource::WindowsResource::new();
-        res.set_manifest_file("app.manifest");
-        if let Err(err) = res.compile() {
-            // Don't hard-fail the non-Windows host build; the Windows CI
-            // job will surface any real error.
-            eprintln!("cargo:warning=winresource compile failed: {err}");
-        }
+        // Embed app.manifest using MSVC linker directives so the .exe requests
+        // requireAdministrator UAC + PerMonitorV2 DPI at launch.
+        // We deliberately avoid winresource here — it auto-injects a VERSIONINFO
+        // resource from Cargo.toml which duplicates the one tauri-build already
+        // emits, causing fatal linker error LNK1123.
+        let manifest = std::fs::canonicalize("app.manifest")
+            .expect("src-tauri/app.manifest not found");
+        println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
+        println!("cargo:rustc-link-arg-bins=/MANIFESTINPUT:{}", manifest.display());
     }
 
     tauri_build::build()
