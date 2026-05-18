@@ -301,70 +301,91 @@ export default function Amd() {
           </Button>
         </motion.div>
 
-        {/* GPU compatibility banner */}
-        {!hw.loading && (
-          hw.isAMD ? (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-green-500/20 bg-green-500/5"
-            >
-              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-              <p className="text-xs text-zinc-300">
-                <span className="text-green-400 font-semibold">AMD GPU detected</span>
-                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
-                . All tweaks on this page apply to your system.
-              </p>
-            </motion.div>
-          ) : hw.isNvidia ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="relative rounded-xl overflow-hidden border-2 border-red-500/50 bg-gradient-to-r from-red-950/40 via-zinc-950 to-zinc-900/40"
-            >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-red-400 to-red-600" />
-              <div className="p-5 flex gap-4 items-start">
-                <div className="shrink-0 w-14 h-14 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
-                  <AlertTriangle className="w-7 h-7 text-red-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-black text-red-400 mb-1">WRONG TAB — NVIDIA GPU Detected</p>
-                  <p className="text-sm text-zinc-300 leading-relaxed mb-3">
-                    <span className="text-white font-semibold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is NVIDIA. The tweaks on this page write to AMD Radeon driver registry keys — <span className="text-red-400 font-semibold">they will have zero effect on your system</span> and waste your time.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <a href="/nvidia" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-all">
-                      → Go to NVIDIA Optimizer
-                    </a>
-                    <span className="inline-flex items-center px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">This page = AMD only</span>
+        {/* GPU compatibility banner — hybrid-aware: read hw.gpus instead of single-winner flags. */}
+        {!hw.loading && (() => {
+          const amdDiscrete = hw.gpus.find((g) => g.vendor === "amd" && !g.isIntegrated);
+          const amdApu = hw.gpus.find((g) => g.vendor === "amd" && g.isIntegrated);
+          const amdGpu = amdDiscrete || amdApu;
+          const nvidiaGpu = hw.gpus.find((g) => g.vendor === "nvidia");
+          const intelOrIGpu = hw.gpus.find((g) => g.vendor === "intel" || g.isIntegrated);
+          if (amdGpu) {
+            const isApuOnly = !amdDiscrete && !!amdApu;
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg border border-green-500/20 bg-green-500/5"
+                data-testid="banner-amd-detected"
+              >
+                <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                <p className="text-xs text-zinc-300">
+                  <span className="text-green-400 font-semibold">AMD GPU detected</span>
+                  {amdGpu.name && amdGpu.name !== "Unknown GPU" && <span className="text-zinc-500"> — {amdGpu.name}</span>}
+                  {hw.isHybridGpu && <span className="text-zinc-500"> (hybrid laptop — additional GPU present)</span>}
+                  {isApuOnly
+                    ? ". Ryzen APU detected — driver-class tweaks apply; for Vega iGPU-specific tweaks, also check the Integrated GPU tab."
+                    : ". All tweaks on this page apply to your system."}
+                </p>
+              </motion.div>
+            );
+          }
+          if (nvidiaGpu) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative rounded-xl overflow-hidden border-2 border-red-500/50 bg-gradient-to-r from-red-950/40 via-zinc-950 to-zinc-900/40"
+                data-testid="banner-amd-wrong-tab-nvidia"
+              >
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-red-400 to-red-600" />
+                <div className="p-5 flex gap-4 items-start">
+                  <div className="shrink-0 w-14 h-14 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                    <AlertTriangle className="w-7 h-7 text-red-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-black text-red-400 mb-1">WRONG TAB — NVIDIA GPU Detected</p>
+                    <p className="text-sm text-zinc-300 leading-relaxed mb-3">
+                      <span className="text-white font-semibold">{nvidiaGpu.name && nvidiaGpu.name !== "Unknown GPU" ? nvidiaGpu.name : "Your GPU"}</span> is NVIDIA. The tweaks on this page write to AMD Radeon driver registry keys — <span className="text-red-400 font-semibold">they will have zero effect on your system</span> and waste your time.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <a href="/nvidia" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-all">
+                        → Go to NVIDIA Optimizer
+                      </a>
+                      <span className="inline-flex items-center px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">This page = AMD only</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ) : hw.isIntel ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="relative rounded-xl overflow-hidden border-2 border-zinc-600/50 bg-gradient-to-r from-zinc-900/60 via-zinc-950 to-zinc-900/40"
-            >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-600" />
-              <div className="p-5 flex gap-4 items-start">
-                <div className="shrink-0 w-14 h-14 rounded-xl bg-zinc-700/30 border border-zinc-600/30 flex items-center justify-center">
-                  <ShieldAlert className="w-7 h-7 text-zinc-400" />
+              </motion.div>
+            );
+          }
+          if (intelOrIGpu) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative rounded-xl overflow-hidden border-2 border-zinc-600/50 bg-gradient-to-r from-zinc-900/60 via-zinc-950 to-zinc-900/40"
+                data-testid="banner-amd-wrong-tab-intel"
+              >
+                <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-600" />
+                <div className="p-5 flex gap-4 items-start">
+                  <div className="shrink-0 w-14 h-14 rounded-xl bg-zinc-700/30 border border-zinc-600/30 flex items-center justify-center">
+                    <ShieldAlert className="w-7 h-7 text-zinc-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-black text-zinc-300 mb-1">WRONG TAB — Intel GPU Detected</p>
+                    <p className="text-sm text-zinc-400 leading-relaxed mb-3">
+                      <span className="text-white font-semibold">{intelOrIGpu.name && intelOrIGpu.name !== "Unknown GPU" ? intelOrIGpu.name : "Your GPU"}</span> is Intel. AMD driver tweaks will not apply to Intel integrated graphics. Use the <span className="text-white font-semibold">Integrated GPU</span> tab which has Intel-specific optimizations.
+                    </p>
+                    <a href="/integrated-graphics" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-sm transition-all">
+                      → Go to Integrated GPU Tab
+                    </a>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-black text-zinc-300 mb-1">WRONG TAB — Intel GPU Detected</p>
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-3">
-                    <span className="text-white font-semibold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is Intel. AMD driver tweaks will not apply to Intel integrated graphics. Use the <span className="text-white font-semibold">Integrated GPU</span> tab which has Intel-specific optimizations.
-                  </p>
-                  <a href="/integrated-graphics" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-sm transition-all">
-                    → Go to Integrated GPU Tab
-                  </a>
-                </div>
-              </div>
-            </motion.div>
-          ) : null
-        )}
+              </motion.div>
+            );
+          }
+          return null;
+        })()}
 
         <PageGuide pageName="AMD Optimizer" />
 

@@ -341,13 +341,15 @@ export default function IntegratedGraphics() {
   const { toast } = useToast();
   const osInfo = useOsDetection();
 
-  const isAmdIGpu = hw?.gpuName
-    ? /vega|radeon.*integrated|ryzen.*integrated|apu/i.test(hw.gpuName)
-    : false;
-  const isIntelIGpu = hw?.gpuName
-    ? /intel.*uhd|intel.*iris|intel.*hd graphics/i.test(hw.gpuName)
-    : false;
-  const isAnyIGpu = isAmdIGpu || isIntelIGpu || (!hw?.isNvidia && !hw?.isAMD);
+  // Read the new hw.gpus list so hybrid laptops (Intel iGPU + NVIDIA dGPU,
+  // or AMD APU + NVIDIA dGPU) correctly surface the iGPU here — even when
+  // hw.gpuName resolves to the primary discrete card.
+  const intelIGpuEntry = hw?.gpus?.find((g) => g.vendor === "intel" && g.isIntegrated);
+  const amdApuEntry = hw?.gpus?.find((g) => g.vendor === "amd" && g.isIntegrated);
+  const isIntelIGpu = !!intelIGpuEntry;
+  const isAmdIGpu = !!amdApuEntry;
+  const hasBothIGpus = isIntelIGpu && isAmdIGpu; // rare but possible (e.g. Ryzen APU + Intel Arc as iGPU passthrough)
+  const isAnyIGpu = isAmdIGpu || isIntelIGpu || (!hw?.isNvidia && !hw?.isAmd);
 
   const enabledCount = ALL_IGPU_IDS.filter(id => tweaks[id]).length;
 
@@ -409,27 +411,48 @@ export default function IntegratedGraphics() {
           {hw?.gpuName ? (
             <div className={cn(
               "rounded-xl border p-4 flex items-start gap-3",
-              isAmdIGpu
+              hasBothIGpus
+                ? "bg-gradient-to-r from-purple-950/30 to-blue-950/30 border-purple-500/20"
+                : isAmdIGpu
                 ? "bg-purple-950/30 border-purple-500/20"
                 : isIntelIGpu
                 ? "bg-blue-950/30 border-blue-500/20"
                 : "bg-zinc-900/60 border-white/5"
-            )}>
-              <CheckCircle2 className={cn("w-4 h-4 mt-0.5", isAmdIGpu ? "text-purple-400" : isIntelIGpu ? "text-blue-400" : "text-zinc-500")} />
+            )} data-testid="banner-igpu-detected">
+              <CheckCircle2 className={cn("w-4 h-4 mt-0.5", hasBothIGpus ? "text-purple-300" : isAmdIGpu ? "text-purple-400" : isIntelIGpu ? "text-blue-400" : "text-zinc-500")} />
               <div>
                 <p className="text-sm font-bold text-white">
-                  {isAmdIGpu ? "AMD iGPU Detected" : isIntelIGpu ? "Intel iGPU Detected" : "GPU Detected"}
-                  <span className="ml-2 text-xs font-normal text-zinc-400">{detectedGPU}</span>
+                  {hasBothIGpus
+                    ? "Intel + AMD iGPUs Detected"
+                    : isAmdIGpu
+                    ? "AMD iGPU Detected"
+                    : isIntelIGpu
+                    ? "Intel iGPU Detected"
+                    : "GPU Detected"}
+                  <span className="ml-2 text-xs font-normal text-zinc-400">
+                    {hasBothIGpus
+                      ? `${intelIGpuEntry?.name} + ${amdApuEntry?.name}`
+                      : isAmdIGpu
+                      ? amdApuEntry?.name
+                      : isIntelIGpu
+                      ? intelIGpuEntry?.name
+                      : detectedGPU}
+                  </span>
+                  {hw?.isHybridGpu && !hasBothIGpus && (
+                    <span className="ml-2 text-[10px] font-normal text-zinc-500 uppercase tracking-wider">(hybrid — discrete GPU also present)</span>
+                  )}
                 </p>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  {isAmdIGpu
+                  {hasBothIGpus
+                    ? "Both AMD Vega and Intel UHD/Iris integrated graphics are present — both sets of tweaks apply to your system."
+                    : isAmdIGpu
                     ? "AMD Ryzen APU detected — AMD-specific tweaks are highlighted. All AMD Vega tweaks apply to your system."
                     : isIntelIGpu
                     ? "Intel integrated GPU detected — Intel UHD/Iris tweaks apply to your system."
                     : "Enable the tweaks that match your GPU type. AMD tweaks are for Ryzen APUs (Vega 8/11/Vega GFX), Intel tweaks are for UHD/Iris graphics."}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {(isAmdIGpu || !isIntelIGpu) && (
+                  {(isAmdIGpu || (!isIntelIGpu && !isAmdIGpu)) && (
                     <Button size="sm"
                       className="h-7 text-[10px] bg-purple-600 hover:bg-purple-700 text-white"
                       onClick={applyAmdRecommended}>
@@ -437,7 +460,7 @@ export default function IntegratedGraphics() {
                       Apply AMD Recommended ({AMD_RECOMMENDED.length})
                     </Button>
                   )}
-                  {(isIntelIGpu || !isAmdIGpu) && (
+                  {(isIntelIGpu || (!isAmdIGpu && !isIntelIGpu)) && (
                     <Button size="sm"
                       className="h-7 text-[10px] bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={applyIntelRecommended}>

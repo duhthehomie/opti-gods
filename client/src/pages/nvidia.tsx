@@ -318,22 +318,31 @@ export default function Nvidia() {
 
         <PageGuide pageName="NVIDIA Optimizer" />
 
-        {/* GPU compatibility banner */}
-        {!hw.loading && (
-          hw.isNvidia ? (
+        {/* GPU compatibility banner — hybrid-aware: read hw.gpus instead of single-winner flags. */}
+        {!hw.loading && (() => {
+          const nvidiaGpu = hw.gpus.find((g) => g.vendor === "nvidia");
+          const amdDiscrete = hw.gpus.find((g) => g.vendor === "amd" && !g.isIntegrated);
+          const intelOrIGpu = hw.gpus.find((g) => g.vendor === "intel" || g.isIntegrated);
+          // Show "wrong tab" only when the user genuinely owns no NVIDIA card.
+          const showWrongTab = !nvidiaGpu && (amdDiscrete || intelOrIGpu);
+          const warnAsAmd = !!amdDiscrete; // AMD discrete trumps Intel/iGPU in the warning style
+          const otherName = (amdDiscrete?.name || intelOrIGpu?.name || hw.gpuName);
+          return nvidiaGpu ? (
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-3 px-4 py-3 rounded-lg border border-green-500/20 bg-green-500/5"
+              data-testid="banner-nvidia-detected"
             >
               <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
               <p className="text-xs text-zinc-300">
                 <span className="text-green-400 font-semibold">NVIDIA GPU detected</span>
-                {hw.gpuName !== "Unknown GPU" && <span className="text-zinc-500"> — {hw.gpuName}</span>}
+                {nvidiaGpu.name && nvidiaGpu.name !== "Unknown GPU" && <span className="text-zinc-500"> — {nvidiaGpu.name}</span>}
+                {hw.isHybridGpu && <span className="text-zinc-500"> (hybrid laptop — iGPU also present)</span>}
                 . All tweaks on this page apply to your system.
               </p>
             </motion.div>
-          ) : !dismissedWarning && (hw.isAMD || hw.isIntel) ? (
+          ) : !dismissedWarning && showWrongTab ? (
             <AnimatePresence>
               <motion.div
                 key="mismatch-banner"
@@ -342,22 +351,23 @@ export default function Nvidia() {
                 exit={{ opacity: 0, scale: 0.97, y: -4 }}
                 className={cn(
                   "relative rounded-2xl overflow-hidden border-2 shadow-2xl",
-                  hw.isAMD
+                  warnAsAmd
                     ? "border-red-500/60 bg-gradient-to-br from-red-950/50 via-zinc-950 to-zinc-900/50 shadow-red-950/30"
                     : "border-zinc-500/50 bg-gradient-to-br from-zinc-900/70 via-zinc-950 to-zinc-900/50"
                 )}
+                data-testid="banner-nvidia-wrong-tab"
               >
                 {/* Top accent bar */}
                 <div className={cn(
                   "absolute top-0 left-0 right-0 h-1.5",
-                  hw.isAMD
+                  warnAsAmd
                     ? "bg-gradient-to-r from-red-700 via-red-400 to-red-700"
                     : "bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600"
                 )} />
                 {/* Glow overlay */}
                 <div className={cn(
                   "absolute inset-0 pointer-events-none",
-                  hw.isAMD ? "bg-gradient-to-br from-red-600/8 to-transparent" : "bg-gradient-to-br from-zinc-500/5 to-transparent"
+                  warnAsAmd ? "bg-gradient-to-br from-red-600/8 to-transparent" : "bg-gradient-to-br from-zinc-500/5 to-transparent"
                 )} />
                 <div className="relative p-6 md:p-7">
                   {/* Dismiss button */}
@@ -373,11 +383,11 @@ export default function Nvidia() {
                     {/* Big icon */}
                     <div className={cn(
                       "shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center border shadow-lg",
-                      hw.isAMD
+                      warnAsAmd
                         ? "bg-red-500/15 border-red-500/40 shadow-red-900/30"
                         : "bg-zinc-700/30 border-zinc-600/40 shadow-zinc-900/30"
                     )}>
-                      {hw.isAMD
+                      {warnAsAmd
                         ? <AlertTriangle className="w-8 h-8 text-red-400" />
                         : <ShieldAlert className="w-8 h-8 text-zinc-400" />
                       }
@@ -385,27 +395,27 @@ export default function Nvidia() {
                     <div className="flex-1 min-w-0 pr-6">
                       <div className={cn(
                         "inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest mb-2",
-                        hw.isAMD ? "bg-red-500/15 text-red-400 border border-red-500/30" : "bg-zinc-700/40 text-zinc-400 border border-zinc-600/30"
+                        warnAsAmd ? "bg-red-500/15 text-red-400 border border-red-500/30" : "bg-zinc-700/40 text-zinc-400 border border-zinc-600/30"
                       )}>
                         ⚠ WRONG TAB
                       </div>
                       <h2 className={cn(
                         "text-xl font-black mb-2 leading-tight",
-                        hw.isAMD ? "text-red-300" : "text-zinc-200"
+                        warnAsAmd ? "text-red-300" : "text-zinc-200"
                       )}>
-                        {hw.isAMD ? "AMD GPU Detected — These Tweaks Won't Work" : "Intel iGPU Detected — Use the Right Tab"}
+                        {warnAsAmd ? "AMD GPU Detected — These Tweaks Won't Work" : "Integrated GPU Only — Use the Right Tab"}
                       </h2>
                       <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                        {hw.isAMD ? (
+                        {warnAsAmd ? (
                           <>
-                            <span className="text-white font-bold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is AMD.
+                            <span className="text-white font-bold">{otherName && otherName !== "Unknown GPU" ? otherName : "Your GPU"}</span> is AMD.
                             {" "}NVIDIA registry tweaks write to{" "}
                             <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded font-mono text-zinc-400">4d36e968</code> GPU class keys under the <span className="text-red-300 font-semibold">NVIDIA driver section</span> — on your system those keys don't exist.{" "}
                             <span className="text-red-400 font-bold">Every tweak on this page will silently fail.</span> HAGS and MSI Mode are GPU-agnostic — those two work.
                           </>
                         ) : (
                           <>
-                            <span className="text-white font-bold">{hw.gpuName !== "Unknown GPU" ? hw.gpuName : "Your GPU"}</span> is Intel integrated graphics.
+                            <span className="text-white font-bold">{otherName && otherName !== "Unknown GPU" ? otherName : "Your GPU"}</span> is integrated graphics only — no NVIDIA card was detected.
                             {" "}NVIDIA driver tweaks write to NVIDIA-specific registry paths — none of those apply to Intel UHD/Iris. Go to the{" "}
                             <span className="text-white font-bold">Integrated Graphics</span> tab — it has Intel-specific TDR, Panel Fitter, Quick Sync, and power state tweaks built for your GPU.
                           </>
@@ -413,15 +423,15 @@ export default function Nvidia() {
                       </p>
                       <div className="flex flex-wrap gap-3">
                         <a
-                          href={hw.isAMD ? "/amd" : "/integrated-graphics"}
+                          href={warnAsAmd ? "/amd" : "/integrated-graphics"}
                           className={cn(
                             "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg",
-                            hw.isAMD
+                            warnAsAmd
                               ? "bg-red-600 hover:bg-red-500 text-white shadow-red-900/40"
                               : "bg-zinc-700 hover:bg-zinc-600 text-white shadow-zinc-900/40"
                           )}
                         >
-                          → Go to {hw.isAMD ? "AMD Optimizer" : "Integrated GPU Tab"}
+                          → Go to {warnAsAmd ? "AMD Optimizer" : "Integrated GPU Tab"}
                         </a>
                         <button
                           onClick={() => setDismissedWarning(true)}
@@ -435,8 +445,8 @@ export default function Nvidia() {
                 </div>
               </motion.div>
             </AnimatePresence>
-          ) : null
-        )}
+          ) : null;
+        })()}
 
         <TabSmartBar
           tweakIds={ALL_NVIDIA_IDS}
