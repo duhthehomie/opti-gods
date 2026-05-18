@@ -1,0 +1,127 @@
+Skip to content
+duhthehomie
+opti-gods
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security and quality
+3
+ (3)
+Insights
+Settings
+Build Windows installer
+Fix errors when creating system restore points #5
+All jobs
+Run details
+build
+failed now in 10m 39s
+Search logs
+2s
+15s
+6s
+6s
+6s
+0s
+4s
+18s
+1s
+2s
+1s
+2s
+2s
+10s
+9m 18s
+   Compiling jiff v0.2.24
+   Compiling widestring v1.2.1
+   Compiling sys-locale v0.3.2
+   Compiling data-url v0.3.2
+   Compiling wmi v0.14.5
+   Compiling windows-service v0.7.0
+   Compiling env_logger v0.11.10
+   Compiling winreg v0.52.0
+   Compiling rand v0.8.6
+   Compiling windows v0.58.0
+   Compiling keyring v3.6.3
+   Compiling hex v0.4.3
+warning: unused import: `super::*`
+   --> src\commands\tweaks.rs:247:9
+    |
+247 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+warning: use of deprecated method `tauri_plugin_shell::Shell::<R>::open`: Use tauri-plugin-opener instead.
+   --> src\commands\discord.rs:104:10
+    |
+104 |         .open(&url, None)
+    |          ^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+warning: function `native_ids` is never used
+   --> src\commands\tweaks.rs:506:8
+    |
+506 | pub fn native_ids() -> BTreeMap<&'static str, &'static str> {
+    |        ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+warning: field `access_token` is never read
+  --> src\state.rs:20:9
+   |
+19 | pub struct DiscordSession {
+   |            -------------- field in this struct
+20 |     pub access_token: String,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `DiscordSession` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+warning: type alias `SharedState` is never used
+  --> src\state.rs:26:10
+   |
+26 | pub type SharedState = Arc<AppState>;
+   |          ^^^^^^^^^^^
+warning: struct `ProBalanceRule` is never constructed
+  --> src\win32\processes.rs:21:12
+   |
+21 | pub struct ProBalanceRule {
+   |            ^^^^^^^^^^^^^^
+warning: enum `PriorityHint` is never used
+  --> src\win32\processes.rs:29:10
+   |
+29 | pub enum PriorityHint {
+   |          ^^^^^^^^^^^^
+warning: variants `VeryLow` and `Normal` are never constructed
+  --> src\win32\processes.rs:39:5
+   |
+38 | pub enum IoPriorityHint {
+   |          -------------- variants in this enum
+39 |     VeryLow,
+   |     ^^^^^^^
+40 |     Low,
+41 |     Normal,
+   |     ^^^^^^
+   |
+   = note: `IoPriorityHint` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+warning: `opti-gods` (lib) generated 8 warnings (run `cargo fix --lib -p opti-gods` to apply 1 suggestion)
+error: linking with `link.exe` failed: exit code: 1123
+  |
+  = note: "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe" "/NOLOGO" "<1 object files omitted>" "D:\\a\\opti-gods\\opti-gods\\src-tauri\\target\\release\\deps\\rustcIRMFww/{libgethostname-eac14ba6fc02b187,libchrono-a35ea1d45ddefea3,libwindows_strings-ae6845ffd5477eec,libgetrandom-566faff2fd6cfe3d,libring-86e0b31d44a0d64a,libwindows_registry-727ab8116af71195,libwindows_strings-94bb8bd0410c1bd3,libwindows_result-0a2a8fced9d49415,libgetrandom-087101423c19d23e,libwindows_version-79934de2dc9f19b6,libparking_lot_core-f67861b5ba9b2744,libwebview2_com_sys-354c37c31aaf375d,libwindows-0d6d413adb98eb79,libwindows_future-663fc2c46271d374,libwindows_core-0ba05ecd12b78c44,libwindows_strings-51a155bd4b6c2439,libwindows_result-937c1a747864221e,libwindows_sys-40fcb4fab16fef42,libstd-0cebe7c42cd80226}.rlib" "<sysroot>\\lib\\rustlib\\x86_64-pc-windows-msvc\\lib/libcompiler_builtins-*.rlib" "kernel32.lib" "C:\\Users\\runneradmin\\.ca
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: CVTRES : fatal error CVT1100: duplicate resource.  type:VERSION, name:1, language:0x0409
+          LINK : fatal error LNK1123: failure during conversion to COFF: file invalid or corrupt
+          
+error: could not compile `opti-gods` (bin "opti-gods") due to 1 previous error
+failed to build app: failed to build app
+       Error failed to build app: failed to build app
+Error: Process completed with exit code 1.
+0s
+0s
+0s
+0s
+0s
+0s
+0s
+3s
+0s
