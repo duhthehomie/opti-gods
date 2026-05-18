@@ -42,22 +42,80 @@ test("NVIDIA RTX 4090 → nvidia / high / discrete", () => {
   assert.equal(g.isIntegrated, false);
 });
 
-test("NVIDIA RTX 3060 → nvidia / high / discrete (current classifier maps 30xx into high band)", () => {
-  // The high-band regex `rtx\s*30[6-9]\d` matches 3060/3070/3080/3090. The
-  // numeric fallback `(3060|3070|...)` is mid, but the high check runs first.
-  // This test pins down the current behaviour so we notice if a future
-  // refactor reshuffles the tier bands.
+test("NVIDIA RTX 3060 → nvidia / mid / discrete (Task #61)", () => {
+  // Regression: prior high-band regex `rtx\s*30[6-9]\d` swallowed the entire
+  // 30xx range. 3060/3060 Ti/3070 are mid-tier; only 3080/3090 are high.
   const g = classifyGpu("NVIDIA GeForce RTX 3060");
   assert.equal(g.vendor, "nvidia");
-  assert.equal(g.tier, "high");
+  assert.equal(g.tier, "mid");
   assert.equal(g.isIntegrated, false);
 });
 
-test("NVIDIA RTX 3060 Laptop GPU → nvidia / high / discrete", () => {
+test("NVIDIA RTX 3060 Laptop GPU → nvidia / mid / discrete (Task #61)", () => {
   const g = classifyGpu("NVIDIA GeForce RTX 3060 Laptop GPU");
   assert.equal(g.vendor, "nvidia");
-  assert.equal(g.tier, "high");
+  assert.equal(g.tier, "mid");
   assert.equal(g.isIntegrated, false);
+});
+
+test("NVIDIA RTX 3060 Ti → nvidia / mid / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3060 Ti");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA RTX 3070 → nvidia / mid / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3070");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA RTX 3080 → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3080");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+});
+
+test("NVIDIA RTX 3080 Ti → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3080 Ti");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+});
+
+test("NVIDIA RTX 3090 → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 3090");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+});
+
+test("NVIDIA RTX 4060 → nvidia / mid / discrete (Task #61)", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 4060");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA RTX 4070 Ti → nvidia / mid / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 4070 Ti");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA RTX 4080 → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 4080");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
+});
+
+test("NVIDIA RTX 5070 → nvidia / mid / discrete (Task #61)", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 5070");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "mid");
+});
+
+test("NVIDIA RTX 5090 → nvidia / high / discrete", () => {
+  const g = classifyGpu("NVIDIA GeForce RTX 5090");
+  assert.equal(g.vendor, "nvidia");
+  assert.equal(g.tier, "high");
 });
 
 test("NVIDIA RTX 2060 → nvidia / mid / discrete", () => {

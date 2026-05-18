@@ -228,8 +228,9 @@ export function classifyGpu(rawName: string): GpuEntry {
   if (vendor === "nvidia") {
     if (/\bquadro\b|\btesla\b|\brtx\s*a\d{4}|\bh100\b|\ba100\b|\bl40\b/.test(n)) {
       tier = "pro";
-    } else if (/\brtx\s*(30[6-9]\d|3080|3090|40[6-9]\d|4080|4090|50[6-9]\d|5080|5090)\b/.test(n) ||
-               /\b(3080|3090|4080|4090|5080|5090)\b/.test(n)) {
+    } else if (/\b(3080|3090|4080|4090|5080|5090)\b/.test(n)) {
+      // Halo cards only: x080 / x090 (and Ti/Super variants, which still
+      // contain the literal model number as a word boundary).
       tier = "high";
     } else if (/\brtx\s*(20[6-8]\d|2080|2090)\b/.test(n) ||
                /\b(2060|2070|2080|3060|3070|4060|4070|5060|5070)\b/.test(n) ||
