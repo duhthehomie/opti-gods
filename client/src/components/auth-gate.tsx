@@ -1,8 +1,8 @@
 import { ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import Welcome from "@/pages/welcome";
-import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 
 // Paths that must remain reachable without a Discord session.
 // V2: landing page and marketing/payment surfaces are public — only the
@@ -29,12 +29,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <div
         data-testid="status-auth-loading"
-        className="fixed inset-0 z-50 bg-[#050505] text-white flex items-center justify-center"
+        className="fixed inset-0 z-50 bg-black flex items-center justify-center"
       >
-        <div className="flex items-center gap-3 text-zinc-400 text-sm">
-          <Loader2 className="w-5 h-5 animate-spin text-red-400" />
-          <span>Loading Opti Gods…</span>
-        </div>
+        {prefersReducedMotion() ? (
+          <img src={BRAND.redPng} alt="Opti Gods" className="w-[80vw] h-[80vh] object-contain drop-shadow-[0_0_80px_rgba(239,68,68,0.7)]" />
+        ) : (
+          <video
+            src={BRAND.spinRed}
+            autoPlay
+            muted
+            playsInline
+            preload="metadata"
+            className="w-[80vw] h-[80vh] object-contain drop-shadow-[0_0_80px_rgba(239,68,68,0.7)]"
+          />
+        )}
       </div>
     );
   }

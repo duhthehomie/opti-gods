@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { BRAND, prefersReducedMotion } from "./assets";
 
 const SESSION_KEY = "optigods_boot_splash_shown";
-const SHOW_MS = 1500;
-const FADE_MS = 350;
+const SHOW_MS = 3500;
+const FADE_MS = 500;
 
 export function BootSplash() {
   const [phase, setPhase] = useState<"hidden" | "show" | "fade">(() => {
