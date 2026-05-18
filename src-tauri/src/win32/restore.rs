@@ -32,10 +32,12 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     let mut begin_status = STATEMGRSTATUS::default();
     let ok = unsafe { SRSetRestorePointW(&mut begin_info, &mut begin_status) };
     if !ok.as_bool() {
+        let status_code = begin_status.nStatus.0;
+        let seq = begin_status.llSequenceNumber;
         return Err(anyhow!(
             "SRSetRestorePointW(BEGIN) failed (status={:#x}, seq={})",
-            begin_status.nStatus.0,
-            begin_status.llSequenceNumber
+            status_code,
+            seq
         ));
     }
 
@@ -51,10 +53,12 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     let mut end_status = STATEMGRSTATUS::default();
     let ok = unsafe { SRSetRestorePointW(&mut end_info, &mut end_status) };
     if !ok.as_bool() {
+        let status_code = end_status.nStatus.0;
+        let seq = end_status.llSequenceNumber;
         return Err(anyhow!(
             "SRSetRestorePointW(END) failed (status={:#x}, seq={})",
-            end_status.nStatus.0,
-            end_status.llSequenceNumber
+            status_code,
+            seq
         ));
     }
 

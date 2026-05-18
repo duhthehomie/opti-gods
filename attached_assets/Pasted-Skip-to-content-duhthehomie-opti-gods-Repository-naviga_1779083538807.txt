@@ -1,0 +1,118 @@
+Skip to content
+duhthehomie
+opti-gods
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security and quality
+3
+ (3)
+Insights
+Settings
+Build Windows installer
+Fix errors in system restore and process handling functions #4
+All jobs
+Run details
+build
+failed 13 minutes ago in 6m 15s
+Search logs
+2s
+16s
+14s
+16s
+11s
+0s
+5s
+15s
+3s
+1s
+2s
+1s
+2s
+10s
+4m 32s
+   Compiling sys-locale v0.3.2
+   Compiling widestring v1.2.1
+   Compiling data-url v0.3.2
+   Compiling jiff v0.2.24
+   Compiling windows-service v0.7.0
+   Compiling wmi v0.14.5
+   Compiling env_logger v0.11.10
+   Compiling winreg v0.52.0
+   Compiling windows v0.58.0
+   Compiling rand v0.8.6
+   Compiling keyring v3.6.3
+   Compiling hex v0.4.3
+warning: unused import: `super::*`
+   --> src\commands\tweaks.rs:247:9
+    |
+247 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+warning: use of deprecated method `tauri_plugin_shell::Shell::<R>::open`: Use tauri-plugin-opener instead.
+   --> src\commands\discord.rs:104:10
+    |
+104 |         .open(&url, None)
+    |          ^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+error[E0793]: reference to field of packed struct is unaligned
+  --> src\win32\restore.rs:37:13
+   |
+37 |             begin_status.nStatus.0,
+   |             ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
+   = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
+   = help: copy the field contents to a local variable, or replace the reference with a raw pointer and use `read_unaligned`/`write_unaligned` (loads and stores via `*p` must be properly aligned even when using raw pointers)
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+error[E0793]: reference to field of packed struct is unaligned
+  --> src\win32\restore.rs:38:13
+   |
+38 |             begin_status.llSequenceNumber
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
+   = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
+   = help: copy the field contents to a local variable, or replace the reference with a raw pointer and use `read_unaligned`/`write_unaligned` (loads and stores via `*p` must be properly aligned even when using raw pointers)
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+error[E0793]: reference to field of packed struct is unaligned
+  --> src\win32\restore.rs:56:13
+   |
+56 |             end_status.nStatus.0,
+   |             ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
+   = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
+   = help: copy the field contents to a local variable, or replace the reference with a raw pointer and use `read_unaligned`/`write_unaligned` (loads and stores via `*p` must be properly aligned even when using raw pointers)
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+error[E0793]: reference to field of packed struct is unaligned
+  --> src\win32\restore.rs:57:13
+   |
+57 |             end_status.llSequenceNumber
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
+   = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
+   = help: copy the field contents to a local variable, or replace the reference with a raw pointer and use `read_unaligned`/`write_unaligned` (loads and stores via `*p` must be properly aligned even when using raw pointers)
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+For more information about this error, try `rustc --explain E0793`.
+warning: `opti-gods` (lib) generated 2 warnings
+error: could not compile `opti-gods` (lib) due to 4 previous errors; 2 warnings emitted
+failed to build app: failed to build app
+       Error failed to build app: failed to build app
+Error: Process completed with exit code 1.
+0s
+0s
+0s
+0s
+0s
+0s
+0s
+2s
+0s
