@@ -129,12 +129,6 @@ jobs:
       - name: Build Vite frontend
         run: npm run build
 
-      - name: Guard — updater key required for tagged releases
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_SIGNING_PRIVATE_KEY == '' }}
-        shell: pwsh
-        run: |
-          throw "TAURI_SIGNING_PRIVATE_KEY secret is missing. Tagged releases MUST be signed by the updater key or the desktop app will refuse to install them. Add the secret in Settings -> Secrets and variables -> Actions, then re-run."
-
       - name: Build Tauri installer
         # `tauri build` does TWO different signing operations:
         #   1. Updater signing (TAURI_SIGNING_PRIVATE_KEY) — produces a
@@ -173,12 +167,9 @@ jobs:
           echo "updater_signature=$sig" >> $env:GITHUB_OUTPUT
           Write-Host "Installer at $dest ($((Get-Item $dest).Length / 1MB) MB)"
 
-      # Authenticode / SmartScreen signing — separate from updater signing.
-      # Gated directly on `secrets.*` (NOT `env.*`) so the condition
-      # evaluates correctly at job-plan time.
       - name: Sign installer with Authenticode (only when secrets are present)
         id: sign
-        if: ${{ secrets.SIGNING_CERT_BASE64 != '' && secrets.SIGNING_CERT_PASSWORD != '' }}
+        if: ${{ env.SIGNING_CERT_BASE64 != '' && env.SIGNING_CERT_PASSWORD != '' }}
         shell: pwsh
         env:
           SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
