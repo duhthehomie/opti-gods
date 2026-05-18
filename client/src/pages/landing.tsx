@@ -197,7 +197,7 @@ function DownloadButton() {
         Download for Windows
       </Button>
       <p className="text-[11px] text-zinc-500">
-        Windows 10 / 11 · 64-bit · ~25 MB
+        Windows 10 / 11 · 64-bit · ~127 MB
       </p>
       {state === "coming-soon" && (
         <p
