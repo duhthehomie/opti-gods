@@ -13,6 +13,7 @@ const PUBLIC_PATHS = new Set<string>([
   "/showcase",
   "/payment/success",
   "/payment/cancel",
+  "/admin",
 ]);
 
 export function AuthGate({ children }: { children: ReactNode }) {
