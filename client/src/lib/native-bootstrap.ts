@@ -5,24 +5,15 @@
 //   1. Asks Rust for envInfo() so we can show the admin / non-admin banner.
 //   2. Starts the ProBalance background loop.
 //
-// IMPORTANT — the main window starts with visible:false in tauri.conf.json.
-// WebView2 blocks the Win32 message pump for 2-5 s while it initialises;
-// if the window were visible during that time Windows would mark it "Not
-// Responding".  Instead we call showMainWindow() as the very first action
-// here — by the time JS executes, WebView2 is fully initialised and the
-// window pops up immediately responsive.
+// Window visibility is handled entirely in Rust (lib.rs on_page_load).
+// JS does NOT call any show/hide window commands.
 //
-// The React BootSplash component then covers the window with the intro
-// animation for 3.5 s before fading out — so the user sees a smooth branded
-// entrance rather than a raw white flash.
-//
-// Every subsequent Rust call is wrapped in a withTimeout() guard (5 s cap)
-// so a hung IPC command can never freeze the UI.
+// Every Rust call is wrapped in withTimeout() — a hung IPC command can
+// never freeze the UI. The app is fully usable without any of these calls.
 
 import {
   envInfo,
   startProBalance,
-  showMainWindow,
   isNative,
   type NativeEnvInfo,
 } from "@/lib/tauri-bridge";
@@ -54,12 +45,7 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       return { native: false, env: null };
     }
 
-    // Show the window immediately — WebView2 is already initialised by the
-    // time this JS runs, so the window appears fully responsive with no
-    // "Not Responding" phase visible to the user.
-    await showMainWindow();
-
-    // Hard 5 s ceiling on every subsequent Rust IPC call.
+    // Hard 5 s ceiling on every Rust IPC call.
     let env: NativeEnvInfo | null = null;
     try {
       env = await withTimeout(envInfo(), 5_000, "envInfo");

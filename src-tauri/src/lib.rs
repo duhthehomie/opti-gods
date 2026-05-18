@@ -1,16 +1,4 @@
 // Opti Gods desktop — Tauri 2.x entrypoint.
-//
-// This is the Rust side of the V2 native client. It:
-//   1. Boots a transparent splash window + a hidden main window.
-//   2. Loads the existing React bundle (../dist/public) into the main window.
-//   3. Exposes a typed command surface that the React app calls via
-//      `@tauri-apps/api/core` invoke(). All of those commands live in
-//      `commands::*` modules — keep `lib.rs` thin.
-//   4. Spawns the Process Lasso ProBalance background task on launch.
-//
-// All Win32 / WMI / registry work is gated behind `#[cfg(windows)]` so
-// the rest of the codebase still type-checks on the Linux CI container
-// that builds the Vite frontend.
 
 mod commands;
 mod state;
@@ -19,10 +7,10 @@ mod state;
 mod win32;
 
 use tauri::{Manager, WindowEvent};
+use tauri::webview::PageLoadEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialise logging early so plugin init can also log.
     let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info,tauri=warn"),
     )
@@ -39,8 +27,24 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
         .setup(|app| {
-            // Kick off the ProBalance background loop in the background.
-            // It self-throttles when no whitelisted game is running.
+            // The main window starts hidden (visible:false in tauri.conf.json).
+            // WebView2 blocks the Win32 message pump for several seconds while
+            // it initialises — keeping the window invisible means the user
+            // never sees "Not Responding".
+            //
+            // on_page_load (below) shows the window the instant JS is ready.
+            // This safety timer shows it after 8 s regardless, so a broken
+            // page-load event can never leave the app permanently invisible.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+                if let Some(w) = handle.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
+
+            // ProBalance background loop — self-throttles when no game runs.
             #[cfg(windows)]
             {
                 let handle = app.handle().clone();
@@ -52,13 +56,19 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_page_load(|window, payload| {
+            // Fire when the React bundle finishes loading — WebView2 is fully
+            // initialised at this point, so showing the window here means it
+            // appears immediately responsive with no "Not Responding" title bar.
+            if payload.event() == PageLoadEvent::Finished {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        })
         .on_window_event(|window, event| {
-            // On the main window close, also tear down the splash + worker.
             if let WindowEvent::CloseRequested { .. } = event {
                 if window.label() == "main" {
-                    if let Some(splash) = window.app_handle().get_webview_window("splash") {
-                        let _ = splash.close();
-                    }
+                    // No splash window exists anymore — nothing extra to close.
                 }
             }
         })
