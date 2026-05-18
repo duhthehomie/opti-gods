@@ -5,21 +5,24 @@
 //   1. Asks Rust for envInfo() so we can show the admin / non-admin banner.
 //   2. Starts the ProBalance background loop.
 //
-// IMPORTANT — no Tauri splash window exists anymore. The React BootSplash
-// component (boot-splash.tsx) handles the full-screen intro animation by
-// itself and auto-fades after 3.5 s. Removing the separate Tauri splash
-// window eliminates the "not responding" freeze that happened when WebView2
-// tried to initialise a fullscreen window before the message pump was ready,
-// and also kills the duplicate spinning logo that appeared when the user
-// minimised during boot.
+// IMPORTANT — the main window starts with visible:false in tauri.conf.json.
+// WebView2 blocks the Win32 message pump for 2-5 s while it initialises;
+// if the window were visible during that time Windows would mark it "Not
+// Responding".  Instead we call showMainWindow() as the very first action
+// here — by the time JS executes, WebView2 is fully initialised and the
+// window pops up immediately responsive.
 //
-// Every Rust call is wrapped in a withTimeout() guard so a hung IPC command
-// can never freeze the UI. If any single call exceeds 5 s we log a warning
-// and continue — the app is fully usable without any of these optional calls.
+// The React BootSplash component then covers the window with the intro
+// animation for 3.5 s before fading out — so the user sees a smooth branded
+// entrance rather than a raw white flash.
+//
+// Every subsequent Rust call is wrapped in a withTimeout() guard (5 s cap)
+// so a hung IPC command can never freeze the UI.
 
 import {
   envInfo,
   startProBalance,
+  showMainWindow,
   isNative,
   type NativeEnvInfo,
 } from "@/lib/tauri-bridge";
@@ -51,8 +54,12 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       return { native: false, env: null };
     }
 
-    // Hard 5 s ceiling on every Rust IPC call — a hung command must never
-    // freeze the UI. The app works fine without any of these.
+    // Show the window immediately — WebView2 is already initialised by the
+    // time this JS runs, so the window appears fully responsive with no
+    // "Not Responding" phase visible to the user.
+    await showMainWindow();
+
+    // Hard 5 s ceiling on every subsequent Rust IPC call.
     let env: NativeEnvInfo | null = null;
     try {
       env = await withTimeout(envInfo(), 5_000, "envInfo");

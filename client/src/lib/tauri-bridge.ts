@@ -85,6 +85,33 @@ export async function finishSplash(): Promise<void> {
   try { await invoke<void>("finish_splash"); } catch { /* noop */ }
 }
 
+/**
+ * Show the main window.
+ *
+ * The window starts with visible:false in tauri.conf.json so that the
+ * WebView2 initialisation freeze (which blocks the Win32 message pump for
+ * 2-5 s on some machines) happens invisibly.  We call this as the very
+ * first thing in native-bootstrap.ts — by the time JS executes, WebView2
+ * is already fully initialised and the window appears instantly responsive.
+ */
+export async function showMainWindow(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    // Tauri 2 window plugin: plugin:window|set_visible
+    // The window is resolved from the caller's context (main window).
+    await invoke<void>("plugin:window|set_visible", { visible: true });
+  } catch (err) {
+    console.warn("[native] showMainWindow failed", err);
+    // Last-resort: try the legacy appWindow path some Tauri 2 builds expose
+    try {
+      const w = window as unknown as {
+        __TAURI__?: { window?: { appWindow?: { show?: () => Promise<void> } } };
+      };
+      await w.__TAURI__?.window?.appWindow?.show?.();
+    } catch { /* ignore */ }
+  }
+}
+
 export async function envInfo(): Promise<NativeEnvInfo> {
   if (!isNative()) {
     return { native: false, platform: "web", app_version: "web", is_admin: false };
