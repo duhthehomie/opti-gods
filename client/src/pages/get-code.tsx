@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Mail, Loader2, CheckCircle2, Zap, ArrowLeft, MessageCircle, AlertTriangle } from "lucide-react";
+import { apiUrl } from "@/lib/api-base";
 
 const DISCORD_LINK = "https://discord.gg/optigods";
 
@@ -19,7 +20,7 @@ export default function GetCode() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/pricing")
+    fetch(apiUrl("/api/pricing"))
       .then(r => r.json())
       .then(d => { setPrice(d.price); setIsWeekend(d.isWeekendDeal); })
       .catch(() => {});
@@ -38,7 +39,7 @@ export default function GetCode() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/request-code", {
+      const res = await fetch(apiUrl("/api/request-code"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { apiUrl } from "@/lib/api-base";
 import { motion } from "framer-motion";
 import {
   Download, Zap, Cpu, Shield, Sparkles, Bot,
@@ -159,7 +160,7 @@ function DownloadButton() {
   const onClick = async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/download/latest", {
+      const res = await fetch(apiUrl("/api/download/latest"), {
         method: "GET",
         redirect: "manual",
         headers: { Accept: "application/json" },

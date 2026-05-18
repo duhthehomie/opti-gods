@@ -1,4 +1,4 @@
 {
-  "version": "2.0.0",
-  "notes": "Initial V2 Tauri desktop release."
+  "version": "2.3.0",
+  "notes": "V2.3 — Cross-origin native API fix, Pro code redemption overhaul, CORS for Tauri shell, fullscreen splash video, native-aware routing."
 }
