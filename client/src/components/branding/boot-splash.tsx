@@ -51,7 +51,7 @@ export function BootSplash() {
           muted
           playsInline
           preload="metadata"
-          className="w-64 h-64 object-contain drop-shadow-[0_0_50px_rgba(239,68,68,0.55)]"
+          className="w-[80vw] h-[80vh] object-contain drop-shadow-[0_0_80px_rgba(239,68,68,0.7)]"
         />
       )}
     </div>
