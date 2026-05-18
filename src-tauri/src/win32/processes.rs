@@ -7,7 +7,6 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows::Win32::System::SystemInformation::GetActiveProcessorCount;
 use windows::Win32::System::Threading::{
     GetCurrentProcessId, OpenProcess, SetPriorityClass, SetProcessAffinityMask,
     BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, PROCESS_MODE_BACKGROUND_BEGIN,
@@ -131,7 +130,7 @@ pub fn apply_pro_balance(game_exe: &str, whitelist: &[&str]) -> Result<()> {
         whitelist.iter().map(|s| s.to_ascii_lowercase()).collect();
     let game_lower = game_exe.to_ascii_lowercase();
     let our_pid = unsafe { GetCurrentProcessId() };
-    let core_count = unsafe { GetActiveProcessorCount(0xFFFF) };
+    let core_count = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as u32;
     // Mask of every logical core — used to pin the game wide-open.
     let full_affinity: usize = if core_count >= usize::BITS as u32 {
         usize::MAX

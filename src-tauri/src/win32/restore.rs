@@ -17,7 +17,7 @@ use windows::Win32::System::Restore::{
 
 pub fn create(label: &str) -> Result<RestorePoint> {
     // SRSetRestorePointW expects a 64-char description in a fixed-size buffer.
-    let mut desc = [0u16; 64];
+    let mut desc = [0u16; 256];
     for (i, c) in label.encode_utf16().take(63).enumerate() {
         desc[i] = c;
     }
@@ -34,7 +34,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     if !ok.as_bool() {
         return Err(anyhow!(
             "SRSetRestorePointW(BEGIN) failed (status={:#x}, seq={})",
-            begin_status.nStatus,
+            begin_status.nStatus.0,
             begin_status.llSequenceNumber
         ));
     }
@@ -53,7 +53,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     if !ok.as_bool() {
         return Err(anyhow!(
             "SRSetRestorePointW(END) failed (status={:#x}, seq={})",
-            end_status.nStatus,
+            end_status.nStatus.0,
             end_status.llSequenceNumber
         ));
     }
