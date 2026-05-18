@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { Cpu, Upload, CheckCircle2, X, Copy, Check, ChevronDown, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
@@ -17,7 +18,7 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
   // Always upload — Pro users get linked to their code, others stored by IP.
   const token = getStoredToken();
   const gpuVendor = detectGpuVendor(parsed.GPU || "");
-  fetch("/api/session/hardware", {
+  fetch(apiUrl("/api/session/hardware"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

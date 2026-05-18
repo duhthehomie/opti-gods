@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -196,7 +197,7 @@ export default function Dashboard() {
 
   const createPreset = useMutation({
     mutationFn: async (name: string) => {
-      const res = await fetch(api.presets.create.path, {
+      const res = await fetch(apiUrl(api.presets.create.path), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, config: { tweaks, nvidiaPreset }, isDefault: false }),
@@ -215,7 +216,7 @@ export default function Dashboard() {
 
   const deletePreset = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/presets/${id}`, { method: "DELETE" });
+      const res = await fetch(apiUrl(`/api/presets/${id}`), { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {

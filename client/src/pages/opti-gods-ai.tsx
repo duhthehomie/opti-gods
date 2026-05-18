@@ -564,7 +564,7 @@ export default function OptiGodsAI() {
       } catch {}
     }
     // Also sync from DB
-    fetch(`/api/ai/session/${sessionId.current}`)
+    fetch(apiUrl(`/api/ai/session/${sessionId.current}`))
       .then(r => r.json())
       .then(data => {
         if (data.messages && data.messages.length > 0) {

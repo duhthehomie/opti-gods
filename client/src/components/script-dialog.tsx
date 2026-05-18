@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal, Download, CheckCircle2, Loader2,
@@ -108,7 +109,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
     setDownloading(true);
     try {
       const sessionToken = getStoredToken();
-      const res = await fetch("/api/script/download-bat", {
+      const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
@@ -139,7 +140,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
     setDownloadingPs1(true);
     try {
       const sessionToken = getStoredToken();
-      const res = await fetch("/api/script/download", {
+      const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
@@ -168,7 +169,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
     setCopyingPs1(true);
     try {
       const sessionToken = getStoredToken();
-      const res = await fetch("/api/script/download", {
+      const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),

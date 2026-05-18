@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { useLocation } from "wouter";
 import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
@@ -27,7 +28,7 @@ export default function PaymentSuccess() {
 
     const verify = async () => {
       try {
-        const res = await fetch(`/api/verify-payment?session_id=${encodeURIComponent(sessionId)}`);
+        const res = await fetch(apiUrl(`/api/verify-payment?session_id=${encodeURIComponent(sessionId)}`));
         const data = await res.json();
 
         if (data.paid) {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -316,7 +317,7 @@ export default function Fixes() {
   const downloadFiveMCrashFix = async () => {
     setDownloadingFiveMFix(true);
     try {
-      const res = await fetch("/api/fivem-crash-fix-script");
+      const res = await fetch(apiUrl("/api/fivem-crash-fix-script"));
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -339,7 +340,7 @@ export default function Fixes() {
   const downloadRocketLeagueFix = async () => {
     setDownloadingRLFix(true);
     try {
-      const res = await fetch("/api/rocket-league-fix-script");
+      const res = await fetch(apiUrl("/api/rocket-league-fix-script"));
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -362,7 +363,7 @@ export default function Fixes() {
   const downloadCrashFix = async () => {
     setDownloadingFix(true);
     try {
-      const res = await fetch("/api/stability-fix-script");
+      const res = await fetch(apiUrl("/api/stability-fix-script"));
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -396,7 +397,7 @@ export default function Fixes() {
   const downloadRestore = async (cats: string[]) => {
     setDownloading(true);
     try {
-      const res = await fetch("/api/generate-restore", {
+      const res = await fetch(apiUrl("/api/generate-restore"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categories: cats }),

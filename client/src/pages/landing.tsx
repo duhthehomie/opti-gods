@@ -176,7 +176,7 @@ function DownloadButton() {
         }
       }
       // Otherwise just navigate — server will 302 to the installer URL
-      window.location.href = "/api/download/latest";
+      window.location.href = apiUrl("/api/download/latest");
       setState("ok");
     } catch {
       setState("coming-soon");

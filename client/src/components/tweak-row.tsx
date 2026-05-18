@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { CustomSwitch } from "./ui/custom-switch";
 import { Label } from "./ui/label";
 import { motion, AnimatePresence } from "framer-motion";
@@ -90,7 +91,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     setUndoing(true);
     try {
       const sessionToken = getStoredToken();
-      const res = await fetch("/api/script/undo", {
+      const res = await fetch(apiUrl("/api/script/undo"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, sessionToken }),

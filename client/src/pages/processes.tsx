@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -408,7 +409,7 @@ export default function ProcessesPage() {
   const handleSmartScan = async () => {
     setScanning(true);
     try {
-      const res = await fetch('/api/processes/smart-scan');
+      const res = await fetch(apiUrl('/api/processes/smart-scan'));
       const ps1 = await res.text();
       const blob = new Blob([ps1], { type: "text/plain" });
       const url = URL.createObjectURL(blob);

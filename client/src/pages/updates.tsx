@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery } from "@tanstack/react-query";
@@ -81,7 +82,7 @@ function TweakDiffPanel({
     setDownloading(true);
     try {
       const sessionToken = getStoredToken();
-      const res = await fetch("/api/script/download", {
+      const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced", sessionToken }),
