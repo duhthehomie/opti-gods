@@ -12,21 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "splash",
-        "title": "Opti Gods",
-        "width": 1280,
-        "height": 800,
-        "fullscreen": true,
-        "resizable": false,
-        "decorations": false,
-        "transparent": false,
-        "alwaysOnTop": false,
-        "skipTaskbar": false,
-        "center": true,
-        "visible": true,
-        "url": "/splash.html"
-      },
-      {
         "label": "main",
         "title": "Opti Gods",
         "width": 1440,
@@ -38,7 +23,7 @@
         "transparent": false,
         "fullscreen": false,
         "center": true,
-        "visible": false
+        "visible": true
       }
     ],
     "security": {

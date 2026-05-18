@@ -18,9 +18,9 @@ export function useAuth(): AuthState {
   const { data, isLoading } = useQuery<{ user: AuthUser | null }>({
     queryKey: ["/api/me"],
     retry: false,
-    staleTime: 0,
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: "always",
   });
   const user = data?.user ?? null;
   return { user, isLoading, isAuthenticated: !!user };

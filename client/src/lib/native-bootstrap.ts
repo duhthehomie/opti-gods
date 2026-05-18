@@ -1,15 +1,24 @@
 // Boot-time integration of the React app with the Tauri native shell.
 //
-// Called once from App.tsx — when running inside the desktop binary this:
+// Called once from App.tsx on mount. In the browser this is a no-op.
+// In the desktop binary it:
 //   1. Asks Rust for envInfo() so we can show the admin / non-admin banner.
-//   2. Starts the ProBalance background loop (Process Lasso replacement).
-//   3. Closes the splash window and reveals the main window.
+//   2. Starts the ProBalance background loop.
 //
-// In the browser every call no-ops via the bridge's isNative() guard.
+// IMPORTANT — no Tauri splash window exists anymore. The React BootSplash
+// component (boot-splash.tsx) handles the full-screen intro animation by
+// itself and auto-fades after 3.5 s. Removing the separate Tauri splash
+// window eliminates the "not responding" freeze that happened when WebView2
+// tried to initialise a fullscreen window before the message pump was ready,
+// and also kills the duplicate spinning logo that appeared when the user
+// minimised during boot.
+//
+// Every Rust call is wrapped in a withTimeout() guard so a hung IPC command
+// can never freeze the UI. If any single call exceeds 5 s we log a warning
+// and continue — the app is fully usable without any of these optional calls.
 
 import {
   envInfo,
-  finishSplash,
   startProBalance,
   isNative,
   type NativeEnvInfo,
@@ -20,6 +29,19 @@ export interface NativeBootResult {
   env: NativeEnvInfo | null;
 }
 
+/** Race a promise against a timeout. Resolves with null on timeout. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[native] ${label} timed out after ${ms}ms — continuing`);
+        resolve(null);
+      }, ms),
+    ),
+  ]);
+}
+
 let _bootPromise: Promise<NativeBootResult> | null = null;
 
 export function bootstrapNative(): Promise<NativeBootResult> {
@@ -28,26 +50,22 @@ export function bootstrapNative(): Promise<NativeBootResult> {
     if (!isNative()) {
       return { native: false, env: null };
     }
+
+    // Hard 5 s ceiling on every Rust IPC call — a hung command must never
+    // freeze the UI. The app works fine without any of these.
     let env: NativeEnvInfo | null = null;
     try {
-      env = await envInfo();
+      env = await withTimeout(envInfo(), 5_000, "envInfo");
     } catch (err) {
       console.warn("[native] envInfo failed", err);
     }
-    // Kick off ProBalance — Rust's worker is already polling; this just
-    // flips the AtomicBool that gates the priority overrides.
+
     try {
-      await startProBalance();
+      await withTimeout(startProBalance(), 5_000, "startProBalance");
     } catch (err) {
       console.warn("[native] startProBalance failed", err);
     }
-    // Hand control to the main window. Wait a tick so React has flushed.
-    await new Promise((r) => setTimeout(r, 250));
-    try {
-      await finishSplash();
-    } catch (err) {
-      console.warn("[native] finishSplash failed", err);
-    }
+
     return { native: true, env };
   })();
   return _bootPromise;
