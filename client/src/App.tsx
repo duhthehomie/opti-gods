@@ -19,6 +19,7 @@ import { isNative } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 import Landing from "@/pages/landing";
+import Dashboard from "@/pages/dashboard";
 import PaymentSuccess from "@/pages/payment-success";
 import PaymentCancel from "@/pages/payment-cancel";
 import Admin from "@/pages/admin";
@@ -29,6 +30,13 @@ import TweaksPage from "@/pages/tweaks";
 import ToolsFixesPage from "@/pages/tools-fixes";
 import SystemScanPage from "@/pages/system-scan";
 import ProPage from "@/pages/pro";
+import { GUEST_MODE_KEY } from "@/pages/welcome";
+
+function SmartHome() {
+  const isGuest = (() => { try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; } })();
+  if (isGuest) return <Dashboard />;
+  return <Landing />;
+}
 
 function VisitTracker() {
   useEffect(() => {
@@ -81,23 +89,19 @@ function FriendUnlockHandler() {
 }
 
 function Router() {
-  // Native shell: "/" sends straight to the AI/tweaks workspace — the
-  // marketing landing page (with its ".exe download" CTA) is web-only.
-  const HomeComponent = isNative() ? OptiGodsAI : Landing;
+  // Native shell → Dashboard (the real home). Web → SmartHome (Landing for
+  // unauthenticated visitors, Dashboard when logged-in or in guest mode).
+  const HomeComponent = isNative() ? Dashboard : SmartHome;
   return (
     <Switch>
-      {/* V2 landing — public on web, AI workspace in native */}
       <Route path="/" component={HomeComponent} />
+      <Route path="/dashboard" component={Dashboard} />
 
-      {/* Optimizer hub pages — registered here for client-side routing in the
-          native Tauri shell. On the web these are 302'd server-side to /?moved=1
-          before they ever reach the SPA, but in Tauri wouter handles them. */}
       <Route path="/tweaks" component={TweaksPage} />
       <Route path="/tools" component={ToolsFixesPage} />
       <Route path="/system-scan" component={SystemScanPage} />
       <Route path="/pro" component={ProPage} />
 
-      {/* Standalone routes preserved */}
       <Route path="/ai" component={OptiGodsAI} />
       <Route path="/admin" component={Admin} />
       <Route path="/showcase" component={Showcase} />

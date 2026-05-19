@@ -64,6 +64,17 @@ const GROUPS: { id: GroupId; label: string }[] = [
 ];
 
 const STORAGE_KEY = "optigods_tweaks_open_sections";
+const TAB_STORAGE_KEY = "optigods_tweaks_active_group";
+
+type TabId = "all" | GroupId;
+const TABS: { id: TabId; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "windows", label: "Windows" },
+  { id: "network", label: "Network" },
+  { id: "gpu", label: "GPU" },
+  { id: "games", label: "Games" },
+  { id: "system", label: "System" },
+];
 
 function loadOpen(): Record<string, boolean> {
   try {
@@ -124,29 +135,48 @@ function Accordion({ section, open, onToggle }: { section: Section; open: boolea
 export default function TweaksPage() {
   const [openMap, setOpenMap] = useState<Record<string, boolean>>(loadOpen);
   const [location] = useLocation();
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(openMap));
   }, [openMap]);
 
+  useEffect(() => {
+    try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {}
+  }, [activeTab]);
+
   // Auto-open + scroll if hash is set
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (hash && SECTIONS.some(s => s.id === hash)) {
+      // Switch to the correct tab for the hash
+      const section = SECTIONS.find(s => s.id === hash);
+      if (section) setActiveTab(section.group);
       setOpenMap(prev => ({ ...prev, [hash]: true }));
       setTimeout(() => {
         document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
+      }, 150);
     }
   }, [location]);
 
   const toggle = (id: string) => setOpenMap(prev => ({ ...prev, [id]: !prev[id] }));
-  const openAll = () => setOpenMap(Object.fromEntries(SECTIONS.map(s => [s.id, true])));
-  const closeAll = () => setOpenMap({});
+
+  const visibleSections = activeTab === "all"
+    ? SECTIONS
+    : SECTIONS.filter(s => s.group === activeTab);
+
+  const openAll = () => setOpenMap(Object.fromEntries(visibleSections.map(s => [s.id, true])));
+  const closeAll = () => setOpenMap(prev => {
+    const next = { ...prev };
+    visibleSections.forEach(s => { next[s.id] = false; });
+    return next;
+  });
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
@@ -158,7 +188,11 @@ export default function TweaksPage() {
                 {TOTAL_TWEAK_COUNT} total
               </span>
             </div>
-            <p className="text-sm text-zinc-500 mt-1">All {TOTAL_TWEAK_COUNT} optimization toggles, grouped by category. Click any section to expand.</p>
+            <p className="text-sm text-zinc-500 mt-1">
+              {activeTab === "all"
+                ? `All ${TOTAL_TWEAK_COUNT} optimization toggles across ${SECTIONS.length} sections.`
+                : `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} in the ${TABS.find(t => t.id === activeTab)?.label} category.`}
+            </p>
           </div>
           <div className="flex gap-2">
             <button onClick={openAll} data-testid="button-expand-all" className="text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors">Expand All</button>
@@ -166,20 +200,42 @@ export default function TweaksPage() {
           </div>
         </header>
 
-        {GROUPS.map(group => {
-          const items = SECTIONS.filter(s => s.group === group.id);
-          if (items.length === 0) return null;
-          return (
-            <section key={group.id} className="space-y-2">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-500/70 px-1">{group.label}</h2>
-              <div className="space-y-2">
-                {items.map(s => (
-                  <Accordion key={s.id} section={s} open={!!openMap[s.id]} onToggle={() => toggle(s.id)} />
-                ))}
-              </div>
-            </section>
-          );
-        })}
+        {/* Category Tab Bar */}
+        <div className="flex gap-1.5 flex-wrap border-b border-white/5 pb-4">
+          {TABS.map(tab => {
+            const count = tab.id === "all"
+              ? SECTIONS.length
+              : SECTIONS.filter(s => s.group === tab.id).length;
+            return (
+              <button
+                key={tab.id}
+                data-testid={`tab-tweaks-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border",
+                  activeTab === tab.id
+                    ? "bg-red-500/15 border-red-500/40 text-red-300"
+                    : "bg-zinc-900/60 border-white/5 text-zinc-500 hover:text-zinc-200 hover:border-white/15"
+                )}
+              >
+                {tab.label}
+                <span className={cn(
+                  "text-[9px] px-1 py-0.5 rounded font-bold",
+                  activeTab === tab.id ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-600"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sections */}
+        <div className="space-y-2">
+          {visibleSections.map(s => (
+            <Accordion key={s.id} section={s} open={!!openMap[s.id]} onToggle={() => toggle(s.id)} />
+          ))}
+        </div>
       </div>
     </AppLayout>
   );

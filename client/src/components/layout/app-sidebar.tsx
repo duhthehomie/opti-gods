@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Zap, Download, ChevronRight } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import { BRAND } from "@/components/branding/assets";
 import {
   Sidebar,
@@ -15,6 +16,10 @@ import {
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
+import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
+import { isNative } from "@/lib/tauri-bridge";
+import { apiBase } from "@/lib/api-base";
+import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -29,19 +34,40 @@ const PRIMARY: NavItem[] = [
   { title: "System Scan", url: "/system-scan", icon: Activity },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
+  { title: "AI Assistant", url: "/ai", icon: Bot },
   { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
 ];
+
+function isGuestMode(): boolean {
+  try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; }
+}
+
+function clearGuestMode() {
+  try { localStorage.removeItem(GUEST_MODE_KEY); } catch {}
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { tweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
   const isPro = useProStatus();
+  const { user } = useAuth();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const isGuest = isGuestMode();
+  const showSignIn = isGuest && !user;
 
   const isActive = (url: string) => {
-    if (url === "/") return location === "/";
+    if (url === "/") return location === "/" || location === "/dashboard";
     return location === url || location.startsWith(url + "/");
+  };
+
+  const handleSignIn = () => {
+    clearGuestMode();
+    if (isNative()) {
+      window.location.href = `${apiBase()}/api/auth/discord/login?native=1`;
+    } else {
+      loginWithDiscord();
+    }
   };
 
   const renderItem = (item: NavItem) => {
@@ -100,6 +126,22 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3 border-t border-white/5 space-y-3">
+        {/* Guest mode sign-in CTA */}
+        {showSignIn && (
+          <button
+            data-testid="button-sidebar-signin"
+            onClick={handleSignIn}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 hover:bg-[#5865F2]/20 hover:border-[#5865F2]/50 transition-all group"
+          >
+            <SiDiscord className="w-4 h-4 text-[#5865F2] shrink-0" />
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-[11px] font-bold text-[#7289DA] leading-tight">Sign in with Discord</p>
+              <p className="text-[9px] text-zinc-600 leading-tight truncate">Save your config permanently</p>
+            </div>
+            <LogIn className="w-3 h-3 text-[#5865F2]/60 shrink-0" />
+          </button>
+        )}
+
         {enabledCount > 0 && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-3">
             <div className="flex items-center gap-2.5">

@@ -90,7 +90,7 @@ export default function ProPage() {
           <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-red-500/70 mb-4">Payment options</h2>
           <div className="rounded-xl border border-white/5 bg-zinc-950/40 divide-y divide-white/5">
             {[
-              { label: "CashApp", value: import.meta.env.VITE_CASHAPP_TAG || "$leaq" },
+              { label: "CashApp", value: import.meta.env.VITE_CASHAPP_TAG || "$my1ik" },
               { label: "PayPal", value: import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg" },
               { label: "Card (Stripe)", value: import.meta.env.VITE_STRIPE_ENABLED === "true" ? "Click Unlock Pro above" : "Not available" },
               { label: "Access Code", value: "Click Unlock Pro and enter your code" },
