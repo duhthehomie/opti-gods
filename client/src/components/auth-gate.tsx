@@ -19,6 +19,10 @@ const PUBLIC_PATHS_WEB = new Set<string>([
   "/admin",
 ]);
 const PUBLIC_PATHS_NATIVE = new Set<string>([
+  "/",
+  "/ai",
+  "/get-code",
+  "/showcase",
   "/payment/success",
   "/payment/cancel",
   "/admin",
