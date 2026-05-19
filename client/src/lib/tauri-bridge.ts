@@ -221,10 +221,10 @@ export async function discordLogin(clientId: string): Promise<NativeDiscordSessi
   }
   _discordLoginInProgress = true;
   try {
-    // Rust command param is `client_id` — pass snake_case explicitly.
+    // Tauri v2 serialises command args as camelCase — pass clientId directly.
     // Note: exchange endpoint is pinned in Rust (commands::discord::EXCHANGE_URL)
     // so a compromised renderer can't redirect the OAuth code to an attacker host.
-    return await invoke<NativeDiscordSession>("discord_login", { client_id: clientId });
+    return await invoke<NativeDiscordSession>("discord_login", { clientId });
   } finally {
     _discordLoginInProgress = false;
   }

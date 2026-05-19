@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, ExternalLink, X, Sparkles } from "lucide-react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
+import { APP_VERSION } from "@/generated/version";
 
 const SESSION_DISMISS_KEY = "optigods_update_dismissed_for";
 
@@ -11,9 +12,13 @@ export function UpdateModal() {
 
   useEffect(() => {
     if (!data) return;
-    const { currentVersion, latestVersion } = data;
-    if (!latestVersion || !currentVersion) return;
-    if (compareVersions(latestVersion, currentVersion) <= 0) return;
+    const { latestVersion } = data;
+    if (!latestVersion) return;
+    // Compare against the version burned into THIS binary — auto-clears
+    // when the user installs the new .exe. No admin panel bump needed.
+    const installedVersion = APP_VERSION || data.currentVersion;
+    if (!installedVersion) return;
+    if (compareVersions(latestVersion, installedVersion) <= 0) return;
     // Dismissed for this specific latest version?
     const dismissed = sessionStorage.getItem(SESSION_DISMISS_KEY);
     if (dismissed === latestVersion) return;
@@ -97,7 +102,7 @@ export function UpdateModal() {
 
               <p className="text-sm text-zinc-400 leading-relaxed mb-4">
                 You're currently on{" "}
-                <span className="text-zinc-200 font-mono">v{data.currentVersion}</span>
+                <span className="text-zinc-200 font-mono">v{APP_VERSION || data.currentVersion}</span>
                 . A newer version is available — install it to get the latest tweaks and fixes.
               </p>
 
