@@ -26,40 +26,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
         .setup(|app| {
-            // === Window visibility strategy ===
-            // The main window starts hidden (visible:false in tauri.conf.json).
-            // WebView2 blocks the Win32 message pump while it initialises, which
-            // makes the window appear "Not Responding" on slower machines.
-            // By keeping the window invisible during that phase and showing it
-            // once WebView2 is ready, the user only ever sees a responsive window.
-            //
-            // We use two timers so the window always appears:
-            //   • 2.5 s — enough time for WebView2 to finish initialising on
-            //             most machines; the BootSplash animation (3.5 s) covers
-            //             this so the user sees branding, not a blank wait.
-            //   • 8 s   — belt-and-suspenders: guarantees the window shows even
-            //             on very slow machines or if the first timer fires early.
-
-            // Timer 1 — primary show (2.5 s)
-            let handle1 = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
-                if let Some(w) = handle1.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            });
-
-            // Timer 2 — safety show (8 s), in case show() silently failed above
-            let handle2 = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(8)).await;
-                if let Some(w) = handle2.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            });
-
             // ProBalance background loop — self-throttles when no game runs.
             #[cfg(windows)]
             {
