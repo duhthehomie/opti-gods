@@ -26,6 +26,20 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
         .setup(|app| {
+            // Safety timer — shows the window after 10 s even if JS never runs.
+            // Normal path: native-bootstrap.ts calls showMainWindow() via
+            // plugin:window|set_visible as soon as React mounts (WebView2 is
+            // fully initialised by then, so the window appears immediately
+            // responsive). This timer is belt-and-suspenders only.
+            let handle_safety = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                if let Some(w) = handle_safety.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
+
             // ProBalance background loop — self-throttles when no game runs.
             #[cfg(windows)]
             {

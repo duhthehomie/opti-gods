@@ -14,6 +14,7 @@
 import {
   envInfo,
   startProBalance,
+  showMainWindow,
   isNative,
   type NativeEnvInfo,
 } from "@/lib/tauri-bridge";
@@ -45,7 +46,18 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       return { native: false, env: null };
     }
 
-    // Hard 5 s ceiling on every Rust IPC call.
+    // Step 1 — Show the window FIRST, before any other work.
+    // The window starts with visible:false so WebView2 initialises hidden
+    // (avoiding the Win32 "Not Responding" freeze the user would otherwise
+    // see). By the time JS executes, WebView2 is fully ready, so calling
+    // showMainWindow() here makes the window appear instantly responsive.
+    try {
+      await withTimeout(showMainWindow(), 3_000, "showMainWindow");
+    } catch (err) {
+      console.warn("[native] showMainWindow failed", err);
+    }
+
+    // Step 2 — gather env info and start ProBalance (non-blocking).
     let env: NativeEnvInfo | null = null;
     try {
       env = await withTimeout(envInfo(), 5_000, "envInfo");
