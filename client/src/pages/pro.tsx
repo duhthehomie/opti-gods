@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { ProUnlockButton } from "@/components/pro-gate";
+import { ProUnlockButton, ProPaymentDialog } from "@/components/pro-gate";
 import { useProStatus } from "@/lib/pro-status";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Crown, Check, Sparkles, ShieldCheck, Zap, MessageSquare, Lock } from "lucide-react";
+import { Crown, Check, Sparkles, ShieldCheck, Zap, MessageSquare, Lock, CreditCard, KeyRound } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import { cn } from "@/lib/utils";
 import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
 import { TOTAL_TWEAK_COUNT } from "@/lib/tweak-registry";
@@ -17,6 +20,8 @@ const PERKS = [
 
 export default function ProPage() {
   const isPro = useProStatus();
+  const { user } = useAuth();
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   return (
     <AppLayout>
@@ -89,20 +94,82 @@ export default function ProPage() {
         <section>
           <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-red-500/70 mb-4">Payment options</h2>
           <div className="rounded-xl border border-white/5 bg-zinc-950/40 divide-y divide-white/5">
-            {[
-              { label: "CashApp", value: import.meta.env.VITE_CASHAPP_TAG || "$my1ik" },
-              { label: "PayPal", value: import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg" },
-              { label: "Card (Stripe)", value: import.meta.env.VITE_STRIPE_ENABLED === "true" ? "Click Unlock Pro above" : "Not available" },
-              { label: "Access Code", value: "Click Unlock Pro and enter your code" },
-            ].map(p => (
-              <div key={p.label} className="flex items-center justify-between px-4 py-3 text-sm">
-                <span className="text-zinc-400 font-semibold">{p.label}</span>
-                <span className="text-white font-mono text-xs">{p.value}</span>
+
+            {/* CashApp */}
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <span className="text-zinc-400 font-semibold">CashApp</span>
+              <span className="text-white font-mono text-xs">{import.meta.env.VITE_CASHAPP_TAG || "$my1ik"}</span>
+            </div>
+
+            {/* PayPal */}
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <span className="text-zinc-400 font-semibold">PayPal</span>
+              <span className="text-white font-mono text-xs">{import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg"}</span>
+            </div>
+
+            {/* Card (Stripe) — opens ProPaymentDialog directly */}
+            <button
+              data-testid="button-pro-page-stripe"
+              type="button"
+              onClick={() => setPaymentOpen(true)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-white/[0.03] transition-colors group"
+            >
+              <span className="flex items-center gap-2 text-zinc-400 font-semibold group-hover:text-white transition-colors">
+                <CreditCard className="w-3.5 h-3.5" />
+                Card (Stripe)
+              </span>
+              <span className="text-red-400 font-bold text-xs group-hover:text-red-300 transition-colors">
+                $15 — Pay with Card →
+              </span>
+            </button>
+
+            {/* Access Code — dynamic by auth state */}
+            {isPro && user ? (
+              /* Pro + Discord linked */
+              <div className="flex items-center justify-between px-4 py-3 text-sm">
+                <span className="flex items-center gap-2 text-zinc-400 font-semibold">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Access Code
+                </span>
+                <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                  <SiDiscord className="w-3 h-3" />
+                  Pro Active — Discord Linked
+                </span>
               </div>
-            ))}
+            ) : isPro ? (
+              /* Pro but no Discord */
+              <div className="flex items-center justify-between px-4 py-3 text-sm">
+                <span className="flex items-center gap-2 text-zinc-400 font-semibold">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Access Code
+                </span>
+                <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                  <Check className="w-3 h-3" />
+                  Pro Active
+                </span>
+              </div>
+            ) : (
+              /* Guest / not yet pro */
+              <button
+                data-testid="button-pro-page-get-code"
+                type="button"
+                onClick={() => setPaymentOpen(true)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-white/[0.03] transition-colors group"
+              >
+                <span className="flex items-center gap-2 text-zinc-400 font-semibold group-hover:text-white transition-colors">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Access Code
+                </span>
+                <span className="text-red-400 font-bold text-xs group-hover:text-red-300 transition-colors">
+                  Click here to get a code →
+                </span>
+              </button>
+            )}
           </div>
         </section>
       </div>
+
+      <ProPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} />
     </AppLayout>
   );
 }
