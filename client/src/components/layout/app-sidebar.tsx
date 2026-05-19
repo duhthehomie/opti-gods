@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
+import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
 import {
   Sidebar,
@@ -123,7 +124,7 @@ export function AppSidebar() {
               <p className="font-display font-black text-base leading-tight text-white">
                 OPTI <span className="text-red-500">GODS</span>
               </p>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600">by leaq · v2</p>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600">by leaq · v{APP_VERSION}</p>
             </div>
           </div>
         </Link>

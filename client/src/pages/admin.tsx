@@ -3117,8 +3117,8 @@ export default function Admin() {
   const [verSaving, setVerSaving] = useState(false);
   useEffect(() => {
     if (!versionSettingsQ.data) return;
-    setVerCurrent(versionSettingsQ.data.currentVersion ?? "2.00");
-    setVerLatest(versionSettingsQ.data.latestVersion ?? "2.00");
+    setVerCurrent(versionSettingsQ.data.currentVersion ?? "");
+    setVerLatest(versionSettingsQ.data.latestVersion ?? "");
     setVerCmdUrl(versionSettingsQ.data.updaterCmdUrl ?? "");
     setVerPageUrl(versionSettingsQ.data.updatePageUrl ?? "");
   }, [versionSettingsQ.data]);
@@ -3129,8 +3129,8 @@ export default function Admin() {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
-          currentVersion: verCurrent.trim() || "2.00",
-          latestVersion: verLatest.trim() || verCurrent.trim() || "2.00",
+          currentVersion: verCurrent.trim() || null,
+          latestVersion: verLatest.trim() || null,
           updaterCmdUrl: verCmdUrl.trim() || null,
           updatePageUrl: verPageUrl.trim() || null,
         }),
