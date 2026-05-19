@@ -2,6 +2,13 @@
 
 A Windows 10/11 PC optimizer web dashboard with a strict Red/Black WinUI aesthetic.
 
+## Developer / Tester Rig (leaq)
+
+- **CPU**: AMD Ryzen 5 3500
+- **GPU**: NVIDIA GeForce GTX 1650 Super
+- **RAM**: 32 GB
+- **Games tested**: FiveM, Call of Duty, Fortnite
+
 ## V2.2 — AI Preset Generator Overhaul (Task #51, 2026-05-17)
 
 Single canonical preset path: `buildSafePreset(hardware, goal, optInFlags)` in `shared/preset-builder.ts`, called by both Aether (admin chat), Opti Gods AI (user chat) and the Admin Preset Generator tab via the new `POST /api/ai/preset` endpoint.
