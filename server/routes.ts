@@ -2333,32 +2333,17 @@ Start-Sleep 2
       return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
     }
 
-    // Path 2: Session refresh — code already used (usedAt is set), but the
-    // original buyer is re-entering it (e.g. first install of the .exe after
-    // already redeeming on the web). We issue a fresh session token WITHOUT
-    // clearing usedAt, so the code stays "used" in the admin panel.
-    //
-    // Anti-sharing: the code stays permanently marked as used — it can't be
-    // freshly redeemed by a second person. If you suspect a customer shared
-    // their code, use the "Kill" button in the admin panel to instantly revoke
-    // all their sessions. Use "Reset" if the original buyer needs a clean slate.
+    // Path 2: Code exists in DB and was already redeemed — reject.
+    // Codes are strictly single-use. The original buyer restores their Pro by
+    // logging in with Discord (their entitlement was saved to their Discord
+    // account at first redemption). If they redeemed as a guest (no Discord),
+    // admin can Reset the code so they can re-enter it.
+    // Return `reason: "already_used"` so the frontend can surface the right
+    // recovery message instead of a generic "invalid code" error.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
     if (matchingCode?.usedAt) {
-      const sessionToken = await storage.createProSession(normalizedCode);
-      storage.logProIp(normalizedCode, clientIp).catch(() => {});
-      if (req.session?.userId) {
-        try {
-          await storage.grantPro({
-            discordUserId: req.session.userId,
-            source: "code",
-            notes: `code:${normalizedCode} (session-refresh)`,
-          });
-        } catch (err: any) {
-          console.error("[pro/verify] grantPro (refresh) failed:", err?.message || err);
-        }
-      }
-      return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
+      return res.json({ valid: false, reason: "already_used" });
     }
 
     // No match at all — unknown or deleted code

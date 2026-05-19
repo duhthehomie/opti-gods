@@ -33,6 +33,7 @@ export function ProPaymentDialog({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [discordSaved, setDiscordSaved] = useState(false);
+  const [alreadyUsed, setAlreadyUsed] = useState(false);
   const [cryptoCopied, setCryptoCopied] = useState(false);
   const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -59,6 +60,7 @@ export function ProPaymentDialog({
     if (!code.trim()) return;
     setLoading(true);
     setError("");
+    setAlreadyUsed(false);
     try {
       const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
@@ -70,7 +72,7 @@ export function ProPaymentDialog({
       // is still JSON, but we want a clear message instead of a generic
       // "connection error" if parsing fails.
       const raw = await res.text();
-      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean } = {};
+      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean; reason?: string } = {};
       try { data = JSON.parse(raw); } catch { /* non-JSON body */ }
       if (res.status === 429) {
         setError("Too many attempts. Please wait a minute and try again.");
@@ -89,6 +91,10 @@ export function ProPaymentDialog({
           setSuccess(false);
           setCode("");
         }, 1400);
+      } else if (data.reason === "already_used") {
+        // Code was already redeemed — show the Discord restore path instead of
+        // a generic error. Existing buyers recover access via Discord login.
+        setAlreadyUsed(true);
       } else {
         setError(
           DISCORD_LINK
@@ -532,7 +538,7 @@ export function ProPaymentDialog({
                   type="text"
                   placeholder="XXXX-XXXX-XXXX"
                   value={code}
-                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
+                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); setAlreadyUsed(false); }}
                   onKeyDown={(e) => e.key === "Enter" && handleVerify()}
                   className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-red-500/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none font-mono transition-colors"
                 />
@@ -545,6 +551,28 @@ export function ProPaymentDialog({
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
                 </Button>
               </div>
+
+              {/* Already-used code — show Discord restore path, not a generic error */}
+              {alreadyUsed && (
+                <div data-testid="panel-already-used" className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-3.5 space-y-2.5">
+                  <p className="text-xs font-bold text-amber-300">Code already redeemed</p>
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    This code belongs to an existing customer. If that's you, log in with Discord to instantly restore your Pro access — your account is already tied to your Discord.
+                  </p>
+                  <button
+                    data-testid="button-discord-restore-pro"
+                    onClick={() => loginWithDiscord()}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/15 border border-[#5865F2]/40 hover:bg-[#5865F2]/25 hover:border-[#5865F2]/60 text-white text-xs font-black tracking-wide transition-all"
+                  >
+                    <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />
+                    Log in with Discord to restore Pro
+                  </button>
+                  <p className="text-[10px] text-zinc-500 leading-snug">
+                    Redeemed without Discord? Message <strong className="text-zinc-400">leaq</strong> on Discord — he'll reset your code so you can re-enter it.
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <p className="text-xs text-red-400">
                   {error}{" "}
