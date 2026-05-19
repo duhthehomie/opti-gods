@@ -52,11 +52,15 @@ setInterval(() => {
 const DISCORD_API = "https://discord.com/api";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
 
-function getRedirectUri(req: Request): string {
+function getRedirectUri(_req: Request): string {
+  // 1. Explicit override via env (use this for the live domain).
   if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
-  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
-  return `${proto}://${host}/api/auth/discord/callback`;
+  // 2. Derive from the canonical SITE_URL (never from proxy headers — Replit's
+  //    x-forwarded-* values are unreliable and break Discord OAuth).
+  const site = (process.env.SITE_URL || "").replace(/\/$/, "");
+  if (site) return `${site}/api/auth/discord/callback`;
+  // 3. Absolute last-resort fallback (should never hit in production).
+  return "https://optigods.com/api/auth/discord/callback";
 }
 
 function discordAvatarUrl(id: string, avatarHash: string | null): string | null {
