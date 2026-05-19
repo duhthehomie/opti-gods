@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Zap, X, Loader2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame, Ticket } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -25,10 +27,12 @@ function ProPaymentDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { isAuthenticated } = useAuth();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [discordSaved, setDiscordSaved] = useState(false);
   const [cryptoCopied, setCryptoCopied] = useState(false);
   const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -66,7 +70,7 @@ function ProPaymentDialog({
       // is still JSON, but we want a clear message instead of a generic
       // "connection error" if parsing fails.
       const raw = await res.text();
-      let data: { valid?: boolean; sessionToken?: string; error?: string } = {};
+      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean } = {};
       try { data = JSON.parse(raw); } catch { /* non-JSON body */ }
       if (res.status === 429) {
         setError("Too many attempts. Please wait a minute and try again.");
@@ -78,6 +82,7 @@ function ProPaymentDialog({
         } else {
           setProStatus(true);
         }
+        setDiscordSaved(data.discordSaved ?? false);
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
@@ -282,12 +287,29 @@ function ProPaymentDialog({
           </div>
 
           {success ? (
-            <div className="flex flex-col items-center gap-3 justify-center py-8">
-              <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-                <ShieldCheck className="w-7 h-7 text-red-400" />
+            <div className="flex flex-col items-center gap-3 justify-center py-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                <ShieldCheck className="w-7 h-7 text-emerald-400" />
               </div>
-              <p className="text-white font-bold text-base">Pro Access Granted</p>
-              <p className="text-xs text-zinc-500">All features are now unlocked.</p>
+              <p className="text-white font-bold text-base">Pro Access Granted!</p>
+              {discordSaved ? (
+                <p className="text-xs text-emerald-400 font-semibold">
+                  ✓ Saved permanently to your Discord account
+                </p>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5">
+                  <p className="text-xs text-zinc-500">Active this session.</p>
+                  {!isAuthenticated && (
+                    <button
+                      onClick={() => loginWithDiscord()}
+                      className="flex items-center gap-1.5 text-xs text-[#5865F2] hover:text-blue-300 font-semibold transition-colors"
+                    >
+                      <SiDiscord className="w-3.5 h-3.5" />
+                      Sign in with Discord to make it permanent →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

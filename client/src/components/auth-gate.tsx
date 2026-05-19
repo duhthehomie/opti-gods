@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import Welcome from "@/pages/welcome";
+import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { useLocation } from "wouter";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { isNative } from "@/lib/tauri-bridge";
@@ -23,6 +24,10 @@ const PUBLIC_PATHS_NATIVE = new Set<string>([
   "/payment/cancel",
   "/admin",
 ]);
+
+function isGuestMode(): boolean {
+  try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; }
+}
 
 // In the native shell the auth check hits the remote server over the
 // internet. If that round-trip stalls (offline, slow network, cold server)
@@ -52,6 +57,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   // Public landing/marketing/callback paths always render
   if (publicPaths.has(location)) {
+    return <>{children}</>;
+  }
+
+  // Guest mode — user explicitly chose to browse without Discord sign-in.
+  // Pro features are still gated by the ProGate component; this just allows
+  // the optimizer pages to render without a Discord session.
+  if (isGuestMode()) {
     return <>{children}</>;
   }
 

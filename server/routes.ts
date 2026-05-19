@@ -2383,7 +2383,7 @@ Start-Sleep 2
           return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
         }
       }
-      return res.json({ valid: true, sessionToken });
+      return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
     }
 
     // Path 2 (Scenario A only): Email-sent code pre-burned by admin before customer redeems.
@@ -2421,7 +2421,7 @@ Start-Sleep 2
             return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
           }
         }
-        return res.json({ valid: true, sessionToken });
+        return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
       }
       // Code exists in DB but has no email link and was already redeemed — reject.
       // This stops shared/leaked codes from granting access to multiple people.

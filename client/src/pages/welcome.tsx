@@ -1,16 +1,30 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Minus, X, Loader2, ShieldCheck } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative } from "@/lib/tauri-bridge";
-import { apiBase } from "@/lib/api-base";
+import { apiBase, apiUrl } from "@/lib/api-base";
+import { setProSession, setProStatus } from "@/lib/pro-status";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
+
+export const GUEST_MODE_KEY = "og_guest_mode";
+
+type View = "main" | "code";
 
 export default function Welcome() {
   const { isLoading } = useAuth();
   const version = useVersionInfo();
   const [signingIn, setSigningIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [view, setView] = useState<View>("main");
+
+  // Code-redemption state (used in "code" view)
+  const [code, setCode] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [codeSuccess, setCodeSuccess] = useState(false);
+  const [discordSaved, setDiscordSaved] = useState(false);
 
   // Read ?login=error&reason= from URL once
   useEffect(() => {
@@ -26,7 +40,6 @@ export default function Welcome() {
         server: "Server error during sign-in. Please try again.",
       };
       setLoginError(labels[reason] || "Sign-in failed. Please try again.");
-      // Clean URL
       const url = new URL(window.location.href);
       url.searchParams.delete("login");
       url.searchParams.delete("reason");
@@ -38,18 +51,55 @@ export default function Welcome() {
     setSigningIn(true);
     setLoginError(null);
     if (isNative()) {
-      // In the desktop app we can't use relative URLs — they resolve to
-      // tauri.localhost which has no server. Navigate the webview to the
-      // production OAuth endpoint with ?native=1 so the server returns a
-      // bearer token instead of a same-origin cookie after auth completes.
-      window.location.href =
-        `${apiBase()}/api/auth/discord/login?native=1`;
+      window.location.href = `${apiBase()}/api/auth/discord/login?native=1`;
       return;
     }
-    // Preserve the route the user originally requested so they land back on it
-    // after the Discord round-trip. loginWithDiscord defaults to current path
-    // when no argument is provided.
     loginWithDiscord();
+  };
+
+  const handleGuestMode = () => {
+    try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
+    window.location.href = "/tweaks";
+  };
+
+  const handleCodeVerify = async () => {
+    if (!code.trim()) return;
+    setCodeLoading(true);
+    setCodeError("");
+    try {
+      const res = await fetch(apiUrl("/api/pro/verify"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({ code: code.trim() }),
+        credentials: "include",
+      });
+      const raw = await res.text();
+      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean } = {};
+      try { data = JSON.parse(raw); } catch { /* non-JSON */ }
+
+      if (res.status === 429) {
+        setCodeError("Too many attempts — wait a minute and try again.");
+      } else if (res.status === 403) {
+        setCodeError(data.error || "Your IP is blocked from redeeming codes. Contact support.");
+      } else if (data.valid) {
+        if (data.sessionToken) {
+          setProSession(data.sessionToken);
+        } else {
+          setProStatus(true);
+        }
+        setDiscordSaved(data.discordSaved ?? false);
+        setCodeSuccess(true);
+        // Set guest mode so auth gate lets them through, then navigate
+        try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
+        setTimeout(() => { window.location.href = "/tweaks"; }, 1800);
+      } else {
+        setCodeError("Invalid code. If you already paid, DM leaq on Discord and it'll be fixed instantly.");
+      }
+    } catch {
+      setCodeError("Couldn't reach the server. Check your internet and try again.");
+    } finally {
+      setCodeLoading(false);
+    }
   };
 
   const displayVersion = version.data?.currentVersion ?? "2.00";
@@ -59,7 +109,7 @@ export default function Welcome() {
       data-testid="page-welcome"
       className="fixed inset-0 z-50 bg-[#050505] text-white overflow-hidden font-sans"
     >
-      {/* Ambient background — left-side faint red glow + subtle vignette */}
+      {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -left-32 top-1/4 w-[640px] h-[640px] rounded-full bg-red-600/10 blur-[140px]" />
         <div className="absolute left-1/4 bottom-0 w-[480px] h-[480px] rounded-full bg-red-900/10 blur-[120px]" />
@@ -74,7 +124,7 @@ export default function Welcome() {
         <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/80" />
       </div>
 
-      {/* Cosmetic title bar buttons (top-right) — purely visual */}
+      {/* Cosmetic title bar buttons */}
       <div className="absolute top-0 right-0 flex items-center h-9 z-20">
         <button
           type="button"
@@ -121,56 +171,214 @@ export default function Welcome() {
             Opti Gods <span className="text-red-500">Tweaking Utility</span>
           </h1>
           <p className="text-center text-xs text-zinc-500 mt-2 tracking-wider uppercase">
-            Sign in to access the dashboard
+            {view === "code" ? "Enter your premium code below" : "Sign in or redeem your code to access the dashboard"}
           </p>
 
           {/* Auth card */}
-          <div className="mt-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl p-6 shadow-2xl shadow-black/80">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 font-bold">
-                Log in
-              </span>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            </div>
+          <div className="mt-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl shadow-2xl shadow-black/80 overflow-hidden">
+            <AnimatePresence mode="wait">
 
-            {loginError && (
-              <div
-                data-testid="text-login-error"
-                className="mb-3 text-[11px] px-3 py-2 rounded-md border border-red-500/30 bg-red-500/10 text-red-300"
-              >
-                {loginError}
-              </div>
-            )}
+              {/* ─── MAIN VIEW ─── */}
+              {view === "main" && (
+                <motion.div
+                  key="main"
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.22 }}
+                  className="p-6 space-y-4"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 font-bold">
+                      Log in
+                    </span>
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                  </div>
 
-            {(signingIn || isLoading) ? (
-              <div
-                data-testid="status-establishing-session"
-                className="flex items-center justify-center gap-3 py-4 text-zinc-400 text-sm"
-              >
-                <Loader2 className="w-4 h-4 animate-spin text-red-400" />
-                <span>Establishing secure session…</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleLogin}
-                data-testid="button-login-discord"
-                className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] active:bg-[#3c45a5] text-white text-sm font-bold tracking-wide shadow-lg shadow-[#5865F2]/20 transition-colors"
-              >
-                <SiDiscord className="w-5 h-5" />
-                Log in with Discord
-              </button>
-            )}
+                  {loginError && (
+                    <div
+                      data-testid="text-login-error"
+                      className="text-[11px] px-3 py-2 rounded-md border border-red-500/30 bg-red-500/10 text-red-300"
+                    >
+                      {loginError}
+                    </div>
+                  )}
 
-            <div className="mt-5 flex items-center gap-2 text-[10px] text-zinc-600 leading-relaxed">
-              <ShieldCheck className="w-3 h-3 shrink-0 text-emerald-500/70" />
-              <span>
-                Discord OAuth · we only read your username and avatar.
-                <br />
-                No messages, servers, or other data is accessed.
-              </span>
-            </div>
+                  {(signingIn || isLoading) ? (
+                    <div
+                      data-testid="status-establishing-session"
+                      className="flex items-center justify-center gap-3 py-4 text-zinc-400 text-sm"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                      <span>Establishing secure session…</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleLogin}
+                      data-testid="button-login-discord"
+                      className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] active:bg-[#3c45a5] text-white text-sm font-bold tracking-wide shadow-lg shadow-[#5865F2]/20 transition-colors"
+                    >
+                      <SiDiscord className="w-5 h-5" />
+                      Log in with Discord
+                    </button>
+                  )}
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-white/6" />
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-700 font-bold">or</span>
+                    <div className="flex-1 h-px bg-white/6" />
+                  </div>
+
+                  {/* Redeem code button */}
+                  <button
+                    type="button"
+                    data-testid="button-redeem-code"
+                    onClick={() => { setView("code"); setCodeError(""); setCode(""); }}
+                    className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-red-500/40 bg-red-500/8 hover:bg-red-500/15 hover:border-red-500/60 text-white text-sm font-bold tracking-wide transition-all"
+                  >
+                    <Ticket className="w-4 h-4 text-red-400" />
+                    Redeem your Premium Code
+                  </button>
+
+                  {/* Guest / browse without sign-in */}
+                  <button
+                    type="button"
+                    data-testid="button-guest-browse"
+                    onClick={handleGuestMode}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-zinc-500 hover:text-zinc-300 text-xs font-semibold tracking-wide transition-colors hover:bg-white/4"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Browse tweaks without signing in
+                  </button>
+
+                  <div className="pt-1 flex items-start gap-2 text-[10px] text-zinc-600 leading-relaxed">
+                    <ShieldCheck className="w-3 h-3 shrink-0 text-emerald-500/70 mt-0.5" />
+                    <span>
+                      Discord OAuth · we only read your username and avatar.
+                      <br />
+                      No messages, servers, or other data is accessed.
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ─── CODE REDEMPTION VIEW ─── */}
+              {view === "code" && (
+                <motion.div
+                  key="code"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: 0.22 }}
+                  className="p-6"
+                >
+                  {codeSuccess ? (
+                    <div className="flex flex-col items-center gap-3 py-8 text-center">
+                      <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                        <ShieldCheck className="w-7 h-7 text-emerald-400" />
+                      </div>
+                      <p className="text-white font-bold text-base">Pro Access Granted!</p>
+                      {discordSaved ? (
+                        <p className="text-xs text-emerald-400 font-semibold">
+                          ✓ Saved permanently to your Discord account
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs text-zinc-400">Active this session.</p>
+                          <button
+                            onClick={() => { loginWithDiscord(); }}
+                            className="flex items-center gap-1.5 text-xs text-[#5865F2] hover:text-blue-300 font-semibold transition-colors mx-auto"
+                          >
+                            <SiDiscord className="w-3.5 h-3.5" />
+                            Sign in with Discord to make it permanent →
+                          </button>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-zinc-600 mt-1">Entering dashboard…</p>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="button-code-back"
+                        onClick={() => { setView("main"); setCodeError(""); setCode(""); }}
+                        className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 font-semibold mb-5 transition-colors"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Back
+                      </button>
+
+                      <p className="text-sm font-black text-white mb-1">Enter your Premium Code</p>
+                      <p className="text-[11px] text-zinc-500 mb-5 leading-snug">
+                        Purchased a code? Enter it below. If you haven't bought yet,{" "}
+                        <button
+                          type="button"
+                          onClick={() => setView("main")}
+                          className="text-red-400 hover:text-red-300 underline transition-colors"
+                        >
+                          go back
+                        </button>
+                        {" "}to see payment options.
+                      </p>
+
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          data-testid="input-welcome-code"
+                          type="text"
+                          placeholder="XXXX-XXXX-XXXX"
+                          value={code}
+                          autoFocus
+                          onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeError(""); }}
+                          onKeyDown={(e) => e.key === "Enter" && handleCodeVerify()}
+                          className="flex-1 bg-zinc-900/80 border border-zinc-700 focus:border-red-500/60 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none font-mono transition-colors"
+                        />
+                        <button
+                          type="button"
+                          data-testid="button-welcome-verify-code"
+                          onClick={handleCodeVerify}
+                          disabled={codeLoading || !code.trim()}
+                          className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold transition-all shrink-0"
+                        >
+                          {codeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
+                        </button>
+                      </div>
+
+                      {codeError && (
+                        <p className="text-xs text-red-400 mb-3 leading-snug">{codeError}</p>
+                      )}
+
+                      <div className="rounded-xl border border-white/6 bg-zinc-900/50 p-3 space-y-1.5 mb-4">
+                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">Note</p>
+                        <p className="text-[11px] text-zinc-400 leading-snug">
+                          Log in with Discord first to save your code permanently to your account — no need to re-enter it on any device.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleLogin}
+                          className="flex items-center gap-1.5 text-[11px] text-[#5865F2] hover:text-blue-300 font-semibold transition-colors pt-0.5"
+                        >
+                          <SiDiscord className="w-3.5 h-3.5" />
+                          Log in with Discord first →
+                        </button>
+                      </div>
+
+                      {/* Also allow guest browse from code view */}
+                      <button
+                        type="button"
+                        data-testid="button-code-guest-browse"
+                        onClick={handleGuestMode}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-zinc-600 hover:text-zinc-400 text-xs font-semibold transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Just browse tweaks instead →
+                      </button>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <p className="text-center text-[10px] text-zinc-700 mt-6 tracking-wider uppercase">
@@ -179,7 +387,7 @@ export default function Welcome() {
         </motion.div>
       </div>
 
-      {/* v2.00 pin (bottom-right) */}
+      {/* Version pin */}
       <div className="absolute bottom-3 right-4 z-20 text-[10px] font-mono text-zinc-700 select-none">
         v{displayVersion}
       </div>
