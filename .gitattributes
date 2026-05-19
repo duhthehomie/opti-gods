@@ -3,3 +3,4 @@ client/public/videos/clip1-fivem-400fps.mp4 filter=lfs diff=lfs merge=lfs -text
 attached_assets/Desktop_2026.03.28_-_00.05.56.07.DVR_-_Trim_1774684019654.mp4 filter=lfs diff=lfs merge=lfs -text
 client/public/videos/clip5-vanswars-speedboost.mp4 filter=lfs diff=lfs merge=lfs -text
 attached_assets/OptiGods-Setup-2.3.0_1779149195513.exe filter=lfs diff=lfs merge=lfs -text
+attached_assets/OptiGods-Setup-2.3.1_(5)_1779233795524.exe filter=lfs diff=lfs merge=lfs -text
