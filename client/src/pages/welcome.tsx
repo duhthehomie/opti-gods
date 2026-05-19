@@ -4,6 +4,7 @@ import { Minus, X, Loader2, ShieldCheck } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative } from "@/lib/tauri-bridge";
+import { apiBase } from "@/lib/api-base";
 
 export default function Welcome() {
   const { isLoading } = useAuth();
@@ -42,7 +43,7 @@ export default function Welcome() {
       // production OAuth endpoint with ?native=1 so the server returns a
       // bearer token instead of a same-origin cookie after auth completes.
       window.location.href =
-        "https://optigods.replit.app/api/auth/discord/login?native=1";
+        `${apiBase()}/api/auth/discord/login?native=1`;
       return;
     }
     // Preserve the route the user originally requested so they land back on it
