@@ -1454,6 +1454,7 @@ export async function registerRoutes(
   });
 
   app.post(api.presets.create.path, async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
     try {
       const input = api.presets.create.input.parse(req.body);
       const preset = await storage.createPreset(input);
@@ -1467,7 +1468,10 @@ export async function registerRoutes(
   });
 
   app.delete(api.presets.delete.path, async (req, res) => {
-    await storage.deletePreset(Number(req.params.id));
+    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });
+    await storage.deletePreset(id);
     res.json({ success: true });
   });
 
