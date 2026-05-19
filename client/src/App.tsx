@@ -25,6 +25,10 @@ import Admin from "@/pages/admin";
 import GetCode from "@/pages/get-code";
 import Showcase from "@/pages/showcase";
 import OptiGodsAI from "@/pages/opti-gods-ai";
+import TweaksPage from "@/pages/tweaks";
+import ToolsFixesPage from "@/pages/tools-fixes";
+import SystemScanPage from "@/pages/system-scan";
+import ProPage from "@/pages/pro";
 
 function VisitTracker() {
   useEffect(() => {
@@ -77,10 +81,6 @@ function FriendUnlockHandler() {
 }
 
 function Router() {
-  // Note: legacy optimizer paths (/dashboard, /tweaks, /tools, /system-scan,
-  // /pro, /registry, /fivem, etc.) are 302'd server-side in server/routes.ts
-  // — they never reach the SPA, so we don't list them here.
-  //
   // Native shell: "/" sends straight to the AI/tweaks workspace — the
   // marketing landing page (with its ".exe download" CTA) is web-only.
   const HomeComponent = isNative() ? OptiGodsAI : Landing;
@@ -88,6 +88,14 @@ function Router() {
     <Switch>
       {/* V2 landing — public on web, AI workspace in native */}
       <Route path="/" component={HomeComponent} />
+
+      {/* Optimizer hub pages — registered here for client-side routing in the
+          native Tauri shell. On the web these are 302'd server-side to /?moved=1
+          before they ever reach the SPA, but in Tauri wouter handles them. */}
+      <Route path="/tweaks" component={TweaksPage} />
+      <Route path="/tools" component={ToolsFixesPage} />
+      <Route path="/system-scan" component={SystemScanPage} />
+      <Route path="/pro" component={ProPage} />
 
       {/* Standalone routes preserved */}
       <Route path="/ai" component={OptiGodsAI} />

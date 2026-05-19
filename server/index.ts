@@ -8,6 +8,7 @@ import { startAutoSendScheduler } from "./auto-send";
 import { startNvidiaDriverPoller } from "./nvidia-poller";
 import { seedAnnouncements } from "./seed";
 import { storage } from "./storage";
+import { validateNativeToken } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -88,6 +89,23 @@ app.use(session({
 // Explicitly allow indexing — overrides any noindex headers injected by the hosting platform
 app.use((_req, res, next) => {
   res.setHeader("X-Robots-Tag", "index, follow");
+  next();
+});
+
+// ── Global native bearer-token injection ──────────────────────────────────────
+// The desktop app cannot send SameSite=Lax cookies cross-origin. Instead it
+// sends  X-Native-Auth: <token>  on every request. This single middleware runs
+// before ALL routes and injects req.session.userId so that every downstream
+// handler — pro/status, pro/verify, generate-script, etc. — sees an
+// authenticated user without any per-route changes.
+app.use((req, _res, next) => {
+  if (!req.session.userId) {
+    const token = req.headers["x-native-auth"];
+    if (typeof token === "string") {
+      const userId = validateNativeToken(token);
+      if (userId) req.session.userId = userId;
+    }
+  }
   next();
 });
 

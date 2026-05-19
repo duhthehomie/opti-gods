@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, getNativeAuthHeaders } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api-base";
 
 // Task #41 — Pro tied to Discord user ID (lifetime entitlement).
@@ -56,7 +56,7 @@ async function verifyLegacyWithServer(): Promise<boolean> {
   try {
     const res = await fetch(apiUrl("/api/pro/status"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
       body: JSON.stringify({ sessionToken: token }),
       credentials: "include",
     });
@@ -83,7 +83,7 @@ async function attemptLegacyMigration(): Promise<void> {
   try {
     const res = await fetch(apiUrl("/api/pro/migrate-legacy"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
       body: JSON.stringify({ sessionToken: token }),
       credentials: "include",
     });

@@ -2,7 +2,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 
 export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
-function getNativeAuthHeaders(): Record<string, string> {
+export function getNativeAuthHeaders(): Record<string, string> {
   try {
     const token = localStorage.getItem(NATIVE_TOKEN_KEY);
     if (token) return { "X-Native-Auth": token };

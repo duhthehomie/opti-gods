@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { cn } from "@/lib/utils";
 import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -57,8 +58,9 @@ function ProPaymentDialog({
     try {
       const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ code: code.trim() }),
+        credentials: "include",
       });
       // Read body once, parse defensively — a rate-limit or IP-ban response
       // is still JSON, but we want a clear message instead of a generic
