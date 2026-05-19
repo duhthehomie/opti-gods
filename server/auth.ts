@@ -2,6 +2,27 @@ import type { Express, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { storage } from "./storage";
 
+// ── Native bearer tokens ──────────────────────────────────────────────────────
+// After Discord OAuth completes for a native (desktop) client we cannot use
+// the session cookie (SameSite=Lax blocks cross-origin requests from tauri.localhost).
+// Instead we generate a short-lived bearer token, embed it in the redirect URL,
+// and the desktop app sends it as  X-Native-Auth: <token>  on every API call.
+interface NativeTokenEntry { userId: string; expiresAt: number }
+const nativeTokens = new Map<string, NativeTokenEntry>();
+
+export function validateNativeToken(token: string): string | null {
+  const entry = nativeTokens.get(token);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { nativeTokens.delete(token); return null; }
+  return entry.userId;
+}
+
+// Clean up expired tokens once per minute
+setInterval(() => {
+  const now = Date.now();
+  nativeTokens.forEach((v, k) => { if (now > v.expiresAt) nativeTokens.delete(k); });
+}, 60_000);
+
 const DISCORD_API = "https://discord.com/api";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
 
@@ -28,6 +49,9 @@ export function registerAuthRoutes(app: Express): void {
 
     const state = randomBytes(16).toString("hex");
     req.session.oauthState = state;
+
+    // Flag native (desktop) OAuth flows so the callback can return a bearer token
+    req.session.nativeFlow = req.query.native === "1";
 
     const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : "/";
     // Only store same-origin paths
@@ -112,6 +136,20 @@ export function registerAuthRoutes(app: Express): void {
       // Sign in
       req.session.userId = userJson.id;
       req.session.oauthState = undefined;
+      const isNativeFlow = req.session.nativeFlow === true;
+      req.session.nativeFlow = undefined;
+
+      if (isNativeFlow) {
+        // Generate a 30-minute bearer token and redirect back to the Tauri app.
+        // The desktop app reads ?nativeToken= from the URL and sends it as
+        // X-Native-Auth on every subsequent API call.
+        const token = randomBytes(32).toString("hex");
+        nativeTokens.set(token, { userId: userJson.id, expiresAt: Date.now() + 30 * 60_000 });
+        const dest = `https://tauri.localhost/?nativeToken=${token}`;
+        req.session.returnTo = undefined;
+        return req.session.save(() => res.redirect(dest));
+      }
+
       const dest = req.session.returnTo && req.session.returnTo.startsWith("/")
         ? req.session.returnTo
         : "/";
@@ -126,6 +164,14 @@ export function registerAuthRoutes(app: Express): void {
 
   // GET /api/me — current Discord user (used by the auth gate)
   app.get("/api/me", async (req: Request, res: Response) => {
+    // Desktop app sends X-Native-Auth bearer token (no SameSite cookie available)
+    if (!req.session.userId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") {
+        const userId = validateNativeToken(nativeToken);
+        if (userId) req.session.userId = userId;
+      }
+    }
     if (!req.session.userId) return res.status(401).json({ user: null });
     const user = await storage.getUser(req.session.userId);
     if (!user) {

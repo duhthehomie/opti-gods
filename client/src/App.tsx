@@ -16,6 +16,7 @@ import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
 import { isNative } from "@/lib/tauri-bridge";
+import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 import Landing from "@/pages/landing";
 import PaymentSuccess from "@/pages/payment-success";
@@ -101,6 +102,26 @@ function Router() {
   );
 }
 
+// Reads ?nativeToken= from the URL after Discord OAuth redirects back to the
+// Tauri app. Stores the token in localStorage so every subsequent API call
+// can send it as X-Native-Auth and bypass the SameSite=Lax cookie restriction.
+function NativeTokenHandler() {
+  useEffect(() => {
+    if (!isNative()) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("nativeToken");
+    if (!token) return;
+    try { localStorage.setItem(NATIVE_TOKEN_KEY, token); } catch { /* ignore */ }
+    // Clean the token from the URL so it isn't bookmarked or logged
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("nativeToken");
+    window.history.replaceState({}, "", clean.toString());
+    // Invalidate /api/me so it immediately re-fetches with the new token
+    queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+  }, []);
+  return null;
+}
+
 function NativeBootstrap() {
   // Fire-and-forget on mount. In the browser this no-ops; in the Tauri
   // shell it loads envInfo(), starts ProBalance, and closes the splash
@@ -117,6 +138,7 @@ function App() {
       <TooltipProvider>
         <BootSplash />
         <ProCelebration />
+        <NativeTokenHandler />
         <NativeBootstrap />
         <VisitTracker />
         <FriendUnlockHandler />

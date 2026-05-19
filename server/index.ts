@@ -41,7 +41,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Admin-Key, X-Pro-Session",
+      "Content-Type, Authorization, X-Admin-Key, X-Pro-Session, X-Native-Auth",
     );
     if (req.method === "OPTIONS") {
       return res.status(204).end();
@@ -56,6 +56,7 @@ declare module "express-session" {
     userId?: string;          // Discord user id once authenticated
     oauthState?: string;      // CSRF token for the OAuth round-trip
     returnTo?: string;        // Path to send user back to after login
+    nativeFlow?: boolean;     // True when OAuth was started from the desktop app
   }
 }
 

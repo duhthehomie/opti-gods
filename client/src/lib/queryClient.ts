@@ -1,6 +1,15 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 
+export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
+function getNativeAuthHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem(NATIVE_TOKEN_KEY);
+    if (token) return { "X-Native-Auth": token };
+  } catch { /* localStorage may not be available */ }
+  return {};
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -15,7 +24,10 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(apiUrl(url), {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...getNativeAuthHeaders(),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -33,6 +45,7 @@ export const getQueryFn: <T>(options: {
     const path = queryKey.join("/") as string;
     const res = await fetch(apiUrl(path), {
       credentials: "include",
+      headers: getNativeAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
