@@ -101,15 +101,13 @@ async fn discord_login_inner(
     #[cfg(not(debug_assertions))]
     let exchange_url = EXCHANGE_URL.to_string();
 
-    // 1. Spin up a loopback listener on an ephemeral port.
-    let listener = TcpListener::bind("127.0.0.1:0")
+    // 1. Spin up a loopback listener on a FIXED port so Discord can whitelist it.
+    // Port 25444 is arbitrary — unlikely to conflict. If it does, user can change it here.
+    let fixed_port = 25444u16;
+    let listener = TcpListener::bind(format!("127.0.0.1:{fixed_port}"))
         .await
-        .map_err(|e| format!("loopback bind failed: {e}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
-    let redirect_uri = format!("http://127.0.0.1:{port}/callback");
+        .map_err(|e| format!("loopback bind failed on port {fixed_port}: {e}. Try another port."))?;
+    let redirect_uri = format!("http://127.0.0.1:{fixed_port}/callback");
 
     // 2. Random CSRF state (URL-safe).
     let mut state_bytes = [0u8; 24];
