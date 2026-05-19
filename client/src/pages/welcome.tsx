@@ -27,6 +27,7 @@ export default function Welcome() {
   const [codeSuccess, setCodeSuccess] = useState(false);
   const [discordSaved, setDiscordSaved] = useState(false);
   const [codeAlreadyUsed, setCodeAlreadyUsed] = useState(false);
+  const [codeExited, setCodeExited] = useState(false);
 
   // Task #65 — while welcome is visible in the .exe, poll /api/me every 5 s.
   // If the user already has a session (e.g. signed in via the website), skip
@@ -135,12 +136,12 @@ export default function Welcome() {
         }
         setDiscordSaved(data.discordSaved ?? false);
         setCodeSuccess(true);
-        // Set guest mode so auth gate lets them through, then navigate.
-        // Only auto-redirect immediately if Discord was linked (permanent Pro).
-        // If not linked, give the user time to click "Link Discord" first.
         try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
-        const delay = (data.discordSaved ?? false) ? 1800 : 6000;
-        redirectTimer.current = setTimeout(() => { window.location.href = "/tweaks"; }, delay);
+        // Only auto-redirect when Discord is already linked (permanent Pro).
+        // If not linked, hold the screen so the user can link or manually skip.
+        if (data.discordSaved) {
+          redirectTimer.current = setTimeout(() => { window.location.href = "/tweaks"; }, 1800);
+        }
       } else if (data.reason === "already_used") {
         setCodeAlreadyUsed(true);
       } else {
@@ -326,44 +327,91 @@ export default function Welcome() {
                   className="p-6"
                 >
                   {codeSuccess ? (
-                    <div className="flex flex-col items-center gap-3 py-6 text-center">
-                      <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                        <ShieldCheck className="w-7 h-7 text-emerald-400" />
+                    <div className="relative flex flex-col items-center gap-3 py-6 px-2 text-center">
+                      {/* White X — only visible while not exited and Discord not auto-saved */}
+                      {!discordSaved && !codeExited && (
+                        <button
+                          type="button"
+                          data-testid="button-code-success-exit"
+                          onClick={() => { if (redirectTimer.current) clearTimeout(redirectTimer.current); setCodeExited(true); }}
+                          className="absolute top-0 right-0 w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+                          aria-label="Close without linking Discord"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Gold spinning logo */}
+                      <div className="w-16 h-16 flex items-center justify-center">
+                        <img
+                          src="/branding/optigods-gold.png"
+                          alt="Opti Gods"
+                          className="w-16 h-16 object-contain animate-spin"
+                          style={{ animationDuration: "3s" }}
+                        />
                       </div>
-                      <p className="text-white font-bold text-base">Pro Access Granted!</p>
-                      {discordSaved ? (
-                        <p className="text-xs text-emerald-400 font-semibold">
-                          ✓ Saved permanently to your Discord account
-                        </p>
+
+                      {!codeExited ? (
+                        <>
+                          <p className="text-white font-black text-lg tracking-wide">Pro Access Granted!</p>
+                          {discordSaved ? (
+                            <>
+                              <p className="text-xs text-emerald-400 font-semibold">
+                                ✓ Saved permanently to your Discord account
+                              </p>
+                              <p className="text-[11px] text-zinc-600 mt-1">Entering dashboard…</p>
+                            </>
+                          ) : (
+                            <div className="w-full space-y-3 mt-1">
+                              <div className="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-left">
+                                <p className="text-[11px] font-bold text-amber-300 mb-1">⚠ Your access is session-only right now</p>
+                                <p className="text-[11px] text-zinc-400 leading-snug">
+                                  If you switch devices or reinstall the app, your code will be dead and leaq will need to manually revive it.{" "}
+                                  <span className="text-amber-300 font-semibold">Link Discord to lock it in permanently — no revival, ever.</span>
+                                </p>
+                              </div>
+                              <button
+                                data-testid="button-code-success-link-discord"
+                                onClick={() => {
+                                  if (redirectTimer.current) clearTimeout(redirectTimer.current);
+                                  handleLogin();
+                                }}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold tracking-wide transition-colors shadow-lg shadow-[#5865F2]/20"
+                              >
+                                <SiDiscord className="w-4 h-4" />
+                                Link Discord — save permanently
+                              </button>
+                              <p className="text-[10px] text-zinc-500 leading-snug">
+                                or hit the <strong className="text-zinc-300">✕</strong> above to skip — but read the warning first
+                              </p>
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <div className="w-full space-y-3 mt-1">
-                          <div className="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-left">
-                            <p className="text-[11px] font-bold text-amber-300 mb-1">⚠ Your access is browser-only right now</p>
-                            <p className="text-[11px] text-zinc-400 leading-snug">
-                              If you clear your browser, switch devices, or reinstall the app, your code will be dead and you'll need leaq to manually revive it.{" "}
-                              <span className="text-amber-300 font-semibold">Link Discord to make it permanent on any device — no revival, ever.</span>
+                        /* Exit / revival warning screen */
+                        <div className="w-full space-y-3 mt-1 text-left">
+                          <p className="text-white font-black text-base text-center leading-snug">
+                            ⚠ You'll need your code revived to restore Pro on a new device
+                          </p>
+                          <p className="text-[11px] text-zinc-300 leading-snug text-center">
+                            Since you skipped Discord, your access only lives in this session. If you clear the app, switch devices, or reinstall — your code is dead.
+                          </p>
+                          <div className="rounded-xl border border-red-500/30 bg-red-500/8 p-3 space-y-1.5">
+                            <p className="text-[11px] font-bold text-red-300">How to get revived:</p>
+                            <p className="text-[11px] text-zinc-300 leading-snug">
+                              Make a ticket in the Opti Gods Discord server. leaq will revive your code and link it to your Discord so this never happens again.
                             </p>
                           </div>
                           <button
-                            onClick={() => {
-                              if (redirectTimer.current) clearTimeout(redirectTimer.current);
-                              handleLogin();
-                            }}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold tracking-wide transition-colors shadow-lg shadow-[#5865F2]/20"
-                          >
-                            <SiDiscord className="w-4 h-4" />
-                            Link Discord — save permanently
-                          </button>
-                          <button
+                            data-testid="button-code-success-enter-dashboard"
                             type="button"
                             onClick={() => { window.location.href = "/tweaks"; }}
-                            className="w-full text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors py-1"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600/50 text-white text-sm font-bold tracking-wide transition-colors"
                           >
-                            Skip — enter dashboard without linking →
+                            Enter Dashboard →
                           </button>
                         </div>
                       )}
-                      <p className="text-[11px] text-zinc-600 mt-1">Entering dashboard…</p>
                     </div>
                   ) : (
                     <>
