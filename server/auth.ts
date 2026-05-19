@@ -5,23 +5,48 @@ import { storage } from "./storage";
 // ── Native bearer tokens ──────────────────────────────────────────────────────
 // After Discord OAuth completes for a native (desktop) client we cannot use
 // the session cookie (SameSite=Lax blocks cross-origin requests from tauri.localhost).
-// Instead we generate a short-lived bearer token, embed it in the redirect URL,
-// and the desktop app sends it as  X-Native-Auth: <token>  on every API call.
+// We generate a 30-day bearer token, persist it to the DB, and the desktop app
+// sends it as  X-Native-Auth: <token>  on every API call.
+// The DB-backed store means .exe users stay signed in across server restarts.
 interface NativeTokenEntry { userId: string; expiresAt: number }
-const nativeTokens = new Map<string, NativeTokenEntry>();
+const tokenCache = new Map<string, NativeTokenEntry>(); // hot-path in-memory cache
 
-export function validateNativeToken(token: string): string | null {
-  const entry = nativeTokens.get(token);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { nativeTokens.delete(token); return null; }
-  return entry.userId;
+export async function validateNativeToken(token: string): Promise<string | null> {
+  // 1. Fast path — check in-memory cache
+  const cached = tokenCache.get(token);
+  if (cached) {
+    if (Date.now() > cached.expiresAt) { tokenCache.delete(token); return null; }
+    return cached.userId;
+  }
+  // 2. Slow path — check DB (handles post-restart lookups)
+  try {
+    const row = await storage.lookupNativeToken(token);
+    if (!row) return null;
+    // Re-warm the cache so subsequent calls are fast
+    tokenCache.set(token, { userId: row.userId, expiresAt: row.expiresAt });
+    return row.userId;
+  } catch {
+    return null;
+  }
 }
 
-// Clean up expired tokens once per minute
+async function issueNativeToken(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = Date.now() + 30 * 24 * 60 * 60_000;
+  tokenCache.set(token, { userId, expiresAt });
+  // Persist to DB — fire-and-forget, don't block the HTTP response
+  storage.persistNativeToken(token, userId, expiresAt).catch((err) =>
+    console.error("[auth] Failed to persist nativeToken:", err)
+  );
+  return token;
+}
+
+// Purge expired tokens from cache and DB once per hour
 setInterval(() => {
   const now = Date.now();
-  nativeTokens.forEach((v, k) => { if (now > v.expiresAt) nativeTokens.delete(k); });
-}, 60_000);
+  tokenCache.forEach((v, k) => { if (now > v.expiresAt) tokenCache.delete(k); });
+  storage.purgeExpiredNativeTokens().catch(() => {});
+}, 60 * 60_000);
 
 const DISCORD_API = "https://discord.com/api";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -149,11 +174,9 @@ export function registerAuthRoutes(app: Express): void {
       req.session.nativeFlow = undefined;
 
       if (isNativeFlow) {
-        // Generate a 30-day bearer token and redirect back to the Tauri app.
-        // The desktop app reads ?nativeToken= from the URL and sends it as
-        // X-Native-Auth on every subsequent API call.
-        const token = randomBytes(32).toString("hex");
-        nativeTokens.set(token, { userId: userJson.id, expiresAt: Date.now() + 30 * 24 * 60 * 60_000 });
+        // Generate a 30-day bearer token persisted to DB so server restarts
+        // don't log out .exe users.
+        const token = await issueNativeToken(userJson.id);
         const dest = `tauri://localhost/?nativeToken=${token}`;
         req.session.returnTo = undefined;
         return req.session.save(() => res.redirect(dest));
@@ -174,8 +197,9 @@ export function registerAuthRoutes(app: Express): void {
   // POST /api/auth/discord/exchange — Tauri desktop loopback OAuth flow.
   // The Rust binary opens Discord in the system browser with redirect_uri=http://127.0.0.1:PORT/callback,
   // catches the code via a local TCP listener, then calls this endpoint to exchange it server-side
-  // (so DISCORD_CLIENT_SECRET never ships in the binary). Returns a short-lived nativeToken that
+  // (so DISCORD_CLIENT_SECRET never ships in the binary). Returns a 30-day nativeToken that
   // the desktop frontend stores in localStorage and sends as X-Native-Auth on every API call.
+  // The token is also persisted to DB so it survives server restarts.
   app.post("/api/auth/discord/exchange", async (req: Request, res: Response) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
@@ -239,11 +263,8 @@ export function registerAuthRoutes(app: Express): void {
         email: userJson.email ?? null,
       });
 
-      // Issue a 30-day nativeToken — the Rust binary stores this in the OS keyring and
-      // the React frontend sends it as X-Native-Auth on every fetch.
-      const token = randomBytes(32).toString("hex");
-      const expiresAt = Date.now() + 30 * 24 * 60 * 60_000;
-      nativeTokens.set(token, { userId: userJson.id, expiresAt });
+      // Issue and persist a 30-day nativeToken
+      const token = await issueNativeToken(userJson.id);
 
       return res.json({
         access_token: token,
@@ -261,7 +282,7 @@ export function registerAuthRoutes(app: Express): void {
     if (!req.session.userId) {
       const nativeToken = req.headers["x-native-auth"];
       if (typeof nativeToken === "string") {
-        const userId = validateNativeToken(nativeToken);
+        const userId = await validateNativeToken(nativeToken);
         if (userId) req.session.userId = userId;
       }
     }

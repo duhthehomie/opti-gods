@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { BRAND } from "@/components/branding/assets";
 import {
@@ -16,9 +16,10 @@ import {
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
-import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
-import { isNative } from "@/lib/tauri-bridge";
-import { apiBase } from "@/lib/api-base";
+import { useAuth, useLogout, loginWithDiscord } from "@/hooks/use-auth";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { apiUrl } from "@/lib/api-base";
+import { NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,7 @@ export function AppSidebar() {
   const osInfo = useOsDetection();
   const isPro = useProStatus();
   const { user } = useAuth();
+  const logout = useLogout();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const isGuest = isGuestMode();
   const showSignIn = isGuest && !user;
@@ -61,10 +63,21 @@ export function AppSidebar() {
     return location === url || location.startsWith(url + "/");
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     clearGuestMode();
     if (isNative()) {
-      window.location.href = `${apiBase()}/api/auth/discord/login?native=1`;
+      try {
+        const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        if (!cfgRes.ok) throw new Error("not configured");
+        const { clientId } = await cfgRes.json() as { clientId: string };
+        const session = await discordLogin(clientId);
+        try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+        window.location.href = "/tweaks";
+      } catch {
+        loginWithDiscord();
+      }
     } else {
       loginWithDiscord();
     }
@@ -126,6 +139,37 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3 border-t border-white/5 space-y-3">
+        {/* Authenticated user profile card */}
+        {user && (
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-zinc-900/60 border border-white/5">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.username}
+                className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#5865F2]/20 border border-[#5865F2]/30 flex items-center justify-center shrink-0">
+                <SiDiscord className="w-4 h-4 text-[#5865F2]" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold text-white leading-tight truncate">
+                {user.globalName || user.username}
+              </p>
+              <p className="text-[9px] text-zinc-500 leading-tight truncate">@{user.username}</p>
+            </div>
+            <button
+              data-testid="button-sidebar-logout"
+              onClick={() => logout.mutate()}
+              title="Sign out"
+              className="p-1 rounded-lg hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Guest mode sign-in CTA */}
         {showSignIn && (
           <button

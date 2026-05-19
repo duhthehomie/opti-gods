@@ -102,8 +102,11 @@ app.use((req, _res, next) => {
   if (!req.session.userId) {
     const token = req.headers["x-native-auth"];
     if (typeof token === "string") {
-      const userId = validateNativeToken(token);
-      if (userId) req.session.userId = userId;
+      validateNativeToken(token).then((userId) => {
+        if (userId) req.session.userId = userId;
+        next();
+      }).catch(() => next());
+      return;
     }
   }
   next();

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery } from "@tanstack/react-query";
@@ -84,7 +85,7 @@ function TweakDiffPanel({
       const sessionToken = getStoredToken();
       const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced", sessionToken }),
       });
       if (!res.ok) throw new Error("Failed to generate script");

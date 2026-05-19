@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { V2TweakSection } from "@/components/v2-tweak-section";
@@ -47,7 +48,7 @@ const AMD_DRIVER_REAPPLY_TWEAKS = [
 async function downloadDriverReapplyAmd(tweakIds: string[]) {
   const res = await fetch(apiUrl('/api/script/driver-reapply'), {
     method: 'POST', credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getNativeAuthHeaders() },
     body: JSON.stringify({ tab: 'amd', tweakIds }),
   });
   if (!res.ok) throw new Error(await res.text());

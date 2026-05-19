@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useProStatus } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -93,7 +94,7 @@ function SavePresetCard() {
     setLoadingPreset(true);
     fetch(apiUrl("/api/ai/preset"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
       body: JSON.stringify({
         hardware: hardwareToPresetPayload(hw, os),
         goal: "balanced",
@@ -143,7 +144,7 @@ function SavePresetCard() {
     try {
       await fetch(apiUrl("/api/presets"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({
           name: `AI Smart Preset — ${preset.profile}`,
           config: { tweaks: presetTweaks },
@@ -426,7 +427,7 @@ function ReportIssueModal({ onClose }: { onClose: () => void }) {
       const chatSessionId = localStorage.getItem("optigods_ai_session_id") || undefined;
       const res = await fetch(apiUrl("/api/reports"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ category, description: description.trim(), systemInfo, sessionId: chatSessionId }),
       });
       if (!res.ok) {
@@ -564,7 +565,7 @@ export default function OptiGodsAI() {
       } catch {}
     }
     // Also sync from DB
-    fetch(apiUrl(`/api/ai/session/${sessionId.current}`))
+    fetch(apiUrl(`/api/ai/session/${sessionId.current}`), { headers: getNativeAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.messages && data.messages.length > 0) {
@@ -651,7 +652,7 @@ export default function OptiGodsAI() {
       const historyForApi = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
       const res = await fetch(apiUrl("/api/ai/chat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({
           message: msgText || "Analyze this screenshot for PC optimization advice.",
           history: historyForApi,

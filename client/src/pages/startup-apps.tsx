@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TabSmartBar } from "@/components/tab-smart-bar";
@@ -77,7 +78,7 @@ export default function StartupApps() {
   const handleScanStartupApps = async () => {
     setScanning(true);
     try {
-      const response = await fetch(apiUrl('/api/startup/scan'));
+      const response = await fetch(apiUrl('/api/startup/scan'), { headers: getNativeAuthHeaders() });
       const ps1Script = await response.text();
       
       // Download the scan script for user to run

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar, pgEnum, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -383,3 +383,15 @@ export const discountCodes = pgTable("discount_codes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 export type DiscountCode = typeof discountCodes.$inferSelect;
+
+// Persistent native bearer tokens — issued by /api/auth/discord/exchange and
+// /api/auth/discord/callback (native flow). Stored here so the server can
+// validate them after a restart (in-memory map alone would log out .exe users
+// on every Replit dyno cycle).
+export const nativeTokensTable = pgTable("native_tokens", {
+  token: text("token").primaryKey(),
+  userId: text("user_id").notNull(),
+  expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).notNull(),
+});
+export type NativeToken = typeof nativeTokensTable.$inferSelect;

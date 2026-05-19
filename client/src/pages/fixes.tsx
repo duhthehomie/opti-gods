@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -399,7 +400,7 @@ export default function Fixes() {
     try {
       const res = await fetch(apiUrl("/api/generate-restore"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ categories: cats }),
       });
       if (!res.ok) throw new Error("Failed");

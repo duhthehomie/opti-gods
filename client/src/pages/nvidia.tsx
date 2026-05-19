@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -39,7 +40,7 @@ const NVIDIA_DRIVER_REAPPLY_TWEAKS = [
 async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) {
   const res = await fetch(apiUrl('/api/script/driver-reapply'), {
     method: 'POST', credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getNativeAuthHeaders() },
     body: JSON.stringify({ tab, tweakIds }),
   });
   if (!res.ok) throw new Error(await res.text());

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
@@ -134,6 +134,10 @@ export interface IStorage {
   // gating (requirePaidPro, GET /api/pro/status) to avoid full-table scans.
   getProEntitlement(discordUserId: string): Promise<ProEntitlement | null>;
   listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
+  // Native bearer tokens — persisted so .exe users survive server restarts
+  persistNativeToken(token: string, userId: string, expiresAt: number): Promise<void>;
+  lookupNativeToken(token: string): Promise<{ userId: string; expiresAt: number } | null>;
+  purgeExpiredNativeTokens(): Promise<void>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1058,6 +1062,32 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(users.discordId, proEntitlements.discordUserId))
       .orderBy(desc(proEntitlements.grantedAt));
     return rows;
+  }
+
+  async persistNativeToken(token: string, userId: string, expiresAt: number): Promise<void> {
+    await db.insert(nativeTokensTable).values({
+      token,
+      userId,
+      expiresAt,
+      createdAt: Date.now(),
+    }).onConflictDoNothing();
+  }
+
+  async lookupNativeToken(token: string): Promise<{ userId: string; expiresAt: number } | null> {
+    const now = Date.now();
+    const rows = await db.select().from(nativeTokensTable)
+      .where(eq(nativeTokensTable.token, token));
+    const row = rows[0];
+    if (!row) return null;
+    if (now > row.expiresAt) {
+      await db.delete(nativeTokensTable).where(eq(nativeTokensTable.token, token)).catch(() => {});
+      return null;
+    }
+    return { userId: row.userId, expiresAt: row.expiresAt };
+  }
+
+  async purgeExpiredNativeTokens(): Promise<void> {
+    await db.delete(nativeTokensTable).where(lt(nativeTokensTable.expiresAt, Date.now()));
   }
 }
 

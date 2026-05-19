@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -198,7 +199,7 @@ export default function Dashboard() {
     mutationFn: async (name: string) => {
       const res = await fetch(apiUrl(api.presets.create.path), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ name, config: { tweaks, nvidiaPreset }, isDefault: false }),
       });
       if (!res.ok) throw new Error("Failed to save preset");
@@ -215,7 +216,7 @@ export default function Dashboard() {
 
   const deletePreset = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(apiUrl(`/api/presets/${id}`), { method: "DELETE" });
+      const res = await fetch(apiUrl(`/api/presets/${id}`), { method: "DELETE", headers: getNativeAuthHeaders() });
       if (!res.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {
