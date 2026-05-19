@@ -341,14 +341,19 @@ export default function Welcome() {
                         </button>
                       )}
 
-                      {/* Gold spinning logo */}
-                      <div className="w-16 h-16 flex items-center justify-center">
-                        <img
-                          src="/branding/optigods-gold.png"
-                          alt="Opti Gods"
-                          className="w-16 h-16 object-contain animate-spin"
-                          style={{ animationDuration: "3s" }}
+                      {/* Gold spin video + shield */}
+                      <div className="relative w-24 h-24 flex items-center justify-center">
+                        <video
+                          src="/branding/spin-whitegold.mp4"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="absolute inset-0 w-full h-full object-contain"
                         />
+                        <div className="relative z-10 w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                          <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                        </div>
                       </div>
 
                       {!codeExited ? (

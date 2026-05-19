@@ -319,9 +319,13 @@ export function registerAuthRoutes(app: Express): void {
   app.get("/api/version", async (_req: Request, res: Response) => {
     const settings = await storage.getAdminSettings();
     const fileVersion = readVersionFromFile();
-    const CURRENT = "2.3.0";
-    const INSTALLER_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v2.3.0/OptiGods-Setup-2.3.0.exe";
-    const RELEASE_PAGE = "https://github.com/duhthehomie/opti-gods/releases/tag/v2.3.0";
+    const CURRENT = "2.3.1";
+    // Default download always routes through the website so every future
+    // repush is automatically served without touching these constants.
+    // Admin can still override both URLs in the admin panel at any time.
+    const SITE = process.env.SITE_URL ?? "https://optigods.com";
+    const INSTALLER_URL = `${SITE}/api/download/latest`;
+    const RELEASE_PAGE = "https://optigods.com";
     res.json({
       currentVersion: settings?.currentVersion ?? fileVersion ?? CURRENT,
       latestVersion: settings?.latestVersion ?? fileVersion ?? CURRENT,
