@@ -145,7 +145,7 @@ export function registerAuthRoutes(app: Express): void {
         // X-Native-Auth on every subsequent API call.
         const token = randomBytes(32).toString("hex");
         nativeTokens.set(token, { userId: userJson.id, expiresAt: Date.now() + 30 * 60_000 });
-        const dest = `https://tauri.localhost/?nativeToken=${token}`;
+        const dest = `tauri://localhost/?nativeToken=${token}`;
         req.session.returnTo = undefined;
         return req.session.save(() => res.redirect(dest));
       }
@@ -159,6 +159,90 @@ export function registerAuthRoutes(app: Express): void {
     } catch (err) {
       console.error("[auth] Discord OAuth callback error:", err);
       res.redirect("/?login=error&reason=server");
+    }
+  });
+
+  // POST /api/auth/discord/exchange — Tauri desktop loopback OAuth flow.
+  // The Rust binary opens Discord in the system browser with redirect_uri=http://127.0.0.1:PORT/callback,
+  // catches the code via a local TCP listener, then calls this endpoint to exchange it server-side
+  // (so DISCORD_CLIENT_SECRET never ships in the binary). Returns a short-lived nativeToken that
+  // the desktop frontend stores in localStorage and sends as X-Native-Auth on every API call.
+  app.post("/api/auth/discord/exchange", async (req: Request, res: Response) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ error: "Discord login is not configured on this server." });
+    }
+
+    const { code, redirect_uri } = req.body as { code?: string; redirect_uri?: string };
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ error: "Missing code" });
+    }
+    if (!redirect_uri || typeof redirect_uri !== "string") {
+      return res.status(400).json({ error: "Missing redirect_uri" });
+    }
+    // Only allow loopback redirect URIs (security: prevent redirect to attacker-controlled servers)
+    if (!redirect_uri.startsWith("http://127.0.0.1:") && !redirect_uri.startsWith("http://localhost:")) {
+      return res.status(400).json({ error: "Invalid redirect_uri — must be a loopback address" });
+    }
+
+    try {
+      const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri,
+        }).toString(),
+      });
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        console.error("[auth/exchange] Discord token exchange failed", tokenRes.status, body);
+        return res.status(502).json({ error: "token_exchange_failed" });
+      }
+      const tokenJson = (await tokenRes.json()) as { access_token?: string };
+      if (!tokenJson.access_token) {
+        return res.status(502).json({ error: "no_access_token" });
+      }
+
+      const userRes = await fetch(`${DISCORD_API}/users/@me`, {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      });
+      if (!userRes.ok) {
+        return res.status(502).json({ error: "user_fetch_failed" });
+      }
+      const userJson = (await userRes.json()) as {
+        id: string;
+        username: string;
+        global_name?: string | null;
+        avatar?: string | null;
+        email?: string | null;
+      };
+
+      await storage.upsertUser({
+        discordId: userJson.id,
+        username: userJson.username,
+        globalName: userJson.global_name ?? null,
+        avatarUrl: discordAvatarUrl(userJson.id, userJson.avatar ?? null),
+        email: userJson.email ?? null,
+      });
+
+      // Issue a 30-day nativeToken — the Rust binary stores this in the OS keyring and
+      // the React frontend sends it as X-Native-Auth on every fetch.
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + 30 * 24 * 60 * 60_000;
+      nativeTokens.set(token, { userId: userJson.id, expiresAt });
+
+      return res.json({
+        access_token: token,
+        user: { id: userJson.id, username: userJson.username },
+      });
+    } catch (err) {
+      console.error("[auth/exchange] error:", err);
+      return res.status(500).json({ error: "server_error" });
     }
   });
 

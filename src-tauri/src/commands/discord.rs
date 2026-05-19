@@ -27,7 +27,7 @@ const DISCORD_AUTHORIZE_URL: &str = "https://discord.com/oauth2/authorize";
 // origin so a compromised React renderer can't redirect the OAuth code
 // to an attacker-controlled server. Allowing user/JS-supplied URLs here
 // would let any XSS pivot into full account takeover.
-const EXCHANGE_URL: &str = "https://optigods.replit.app/api/auth/discord/exchange";
+const EXCHANGE_URL: &str = "https://optigods.com/api/auth/discord/exchange";
 // During local `cargo tauri dev` against a Vite server on :5000, also
 // accept the loopback exchange endpoint — this is the only override
 // permitted, and only when the binary is run in debug mode.
