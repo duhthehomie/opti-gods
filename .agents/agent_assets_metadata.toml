@@ -24,3 +24,9 @@ id = "fEoahrNhJo8tR9-mHjW7X"
 uri = "file://client/public/optigods_banner.png"
 type = "image"
 title = "Opti Gods YouTube Banner"
+
+[[outputs]]
+id = "tG0WvUzZwQlDYDNWAVqcv"
+uri = "file://attached_assets/fire_icon_preview.png"
+type = "image"
+title = "New Fire Icon (256x256 preview)"

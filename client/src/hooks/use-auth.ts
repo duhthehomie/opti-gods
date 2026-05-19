@@ -15,12 +15,17 @@ export type AuthState = {
 };
 
 export function useAuth(): AuthState {
+  // placeholderData ensures isLoading is never true on first render.
+  // The UI shows "not authenticated" immediately and updates silently
+  // once the real /api/me response arrives. This eliminates any
+  // black loading-screen phase in both web and native builds.
   const { data, isLoading } = useQuery<{ user: AuthUser | null }>({
     queryKey: ["/api/me"],
     retry: false,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
+    placeholderData: { user: null },
   });
   const user = data?.user ?? null;
   return { user, isLoading, isAuthenticated: !!user };

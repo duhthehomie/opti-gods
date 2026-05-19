@@ -96,23 +96,13 @@ export async function finishSplash(): Promise<void> {
  */
 export async function showMainWindow(): Promise<void> {
   if (!isNative()) return;
+  // Use the custom `finish_splash` Rust command — it's registered directly in
+  // the invoke_handler so there's no plugin namespace uncertainty. It calls
+  // window.show() + set_focus() straight from Rust and is guaranteed to work.
   try {
-    // Tauri 2: plugin:window|set_visible requires the window label.
-    await invoke<void>("plugin:window|set_visible", { label: "main", visible: true });
+    await invoke<void>("finish_splash");
   } catch (err) {
-    console.warn("[native] showMainWindow via set_visible failed", err);
-    // Fallback: try plugin:window|show (older Tauri 2 builds)
-    try {
-      await invoke<void>("plugin:window|show", { label: "main" });
-    } catch {
-      // Last-resort: Tauri 1 appWindow path
-      try {
-        const w = window as unknown as {
-          __TAURI__?: { window?: { appWindow?: { show?: () => Promise<void> } } };
-        };
-        await w.__TAURI__?.window?.appWindow?.show?.();
-      } catch { /* ignore */ }
-    }
+    console.warn("[native] showMainWindow via finish_splash failed", err);
   }
 }
 
