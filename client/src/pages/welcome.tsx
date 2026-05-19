@@ -365,7 +365,7 @@ export default function Welcome() {
                               Log in with Discord first — or your access may go dead
                             </p>
                             <p className="text-[11px] text-zinc-400 leading-snug">
-                              Without Discord, your Pro access is saved <span className="text-white font-semibold">only in this browser</span>. Clear your browser, switch devices, or reinstall the app and your code becomes dead — leaq will need to manually revive it for you.
+                              Without Discord, your Pro access is saved <span className="text-white font-semibold">only in this session</span>. Clear your browser, switch devices, or reinstall the app and your code becomes dead — leaq will need to manually revive it for you.
                             </p>
                             <p className="text-[11px] text-zinc-400 leading-snug">
                               <span className="text-emerald-400 font-semibold">Discord login = permanent access on any device, no revival, no risk.</span>

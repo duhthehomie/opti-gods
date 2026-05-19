@@ -1352,6 +1352,11 @@ export async function registerRoutes(
   // Picks the newest file matching .exe / .msi (or admin override via
   // adminSettings.updaterCmdUrl when present and pointing to a full URL).
   // Graceful "coming soon" JSON if none exist yet.
+  // Canonical fallback — always points at the latest signed release on GitHub.
+  // Updated here whenever a new build ships; the admin panel can also override
+  // this via updaterCmdUrl in admin_settings.
+  const GITHUB_LATEST_EXE = "https://github.com/duhthehomie/opti-gods/releases/download/v2.3.0/OptiGods-Setup-2.3.0.exe";
+
   app.get("/api/download/latest", async (_req, res) => {
     try {
       const settings = await storage.getAdminSettings().catch(() => null);
@@ -1389,52 +1394,8 @@ export async function registerRoutes(
         }
       }
 
-      // No installer present yet. Content-negotiate: the landing page's fetch
-      // sets Accept: application/json and gets a JSON envelope; a direct
-      // browser hit gets a proper HTML "coming soon" page.
-      const wantsJson = (_req.get("accept") || "").includes("application/json");
-      if (wantsJson) {
-        return res.status(200).json({
-          status: "coming_soon",
-          message: "Installer is being signed. Join the Discord for early access.",
-          discord: "https://discord.gg/optigods",
-        });
-      }
-      res.status(200).type("html").send(`<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Opti Gods — Installer Coming Soon</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="robots" content="noindex" />
-<style>
-  html,body{margin:0;height:100%;background:#050505;color:#e5e5e5;font-family:-apple-system,Segoe UI,Inter,Roboto,sans-serif;}
-  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;}
-  .card{max-width:520px;text-align:center;border:1px solid rgba(239,68,68,0.3);border-radius:16px;background:#0a0a0a;padding:40px 32px;box-shadow:0 0 60px -10px rgba(239,68,68,0.35);}
-  h1{font-size:28px;margin:0 0 12px;color:#fff;letter-spacing:.02em;}
-  p{color:#a1a1aa;line-height:1.6;margin:0 0 20px;font-size:15px;}
-  .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
-  a.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;transition:transform .15s ease;}
-  a.btn:hover{transform:translateY(-1px);}
-  .primary{background:#5865F2;color:#fff;}
-  .ghost{background:transparent;color:#fca5a5;border:1px solid rgba(239,68,68,0.4);}
-  .tag{display:inline-block;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:#f87171;margin-bottom:14px;}
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <span class="tag">Opti Gods · v2</span>
-      <h1>Installer is being signed</h1>
-      <p>The signed Windows installer is almost ready. Join the Discord to get early access the moment it drops — leaq pins the link in #releases.</p>
-      <div class="row">
-        <a class="btn primary" href="https://discord.gg/optigods" rel="noopener">Join Discord</a>
-        <a class="btn ghost" href="/">Back to site</a>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`);
+      // Always fall back to the pinned GitHub release — never show "coming soon".
+      return res.redirect(302, GITHUB_LATEST_EXE);
     } catch (e) {
       console.error("[/api/download/latest] failed:", e);
       res.status(500).json({ status: "error", message: "Could not resolve installer" });

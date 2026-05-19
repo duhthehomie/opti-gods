@@ -51,10 +51,6 @@ export default function SystemScanPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200">
-          <p className="font-bold mb-1">Heads up</p>
-          <p className="leading-relaxed">The web build can only see what the browser exposes. The desktop app (coming in V2) reads real WMI data — full vendor strings, exact RAM size, drive type, monitor refresh rate, and more.</p>
-        </div>
       </div>
     </AppLayout>
   );

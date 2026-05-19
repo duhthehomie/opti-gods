@@ -85,7 +85,7 @@ export default function DPCLatencyPage() {
   const parsed = useMemo(() => parseXperfSummary(pasted), [pasted]);
 
   const downloadRunCheck = () => {
-    const ps1 = `# ============================================================
+    const ps1 = `# ==============================================================
 # Opti Gods — DPC Latency Run Check (xperf / WPR)
 #
 # Captures a 30-second DPC/ISR trace and prints a per-driver
@@ -165,11 +165,14 @@ Write-Host ""
 Read-Host " Press Enter to close"
 `;
     const blob = new Blob([ps1], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = "OptiGods-DPC-RunCheck.ps1";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const pasteFromClipboard = async () => {

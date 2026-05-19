@@ -154,35 +154,8 @@ function ReviewsCarousel() {
 }
 
 function DownloadButton() {
-  const [busy, setBusy] = useState(false);
-  const [state, setState] = useState<"idle" | "ok" | "coming-soon">("idle");
-
-  const onClick = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch(apiUrl("/api/download/latest"), {
-        method: "GET",
-        redirect: "manual",
-        headers: { Accept: "application/json" },
-      });
-      // If server returns JSON (no installer), show "coming soon"
-      const ct = res.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const data = await res.json().catch(() => ({}));
-        if (data?.status === "coming_soon") {
-          setState("coming-soon");
-          setBusy(false);
-          return;
-        }
-      }
-      // Otherwise just navigate — server will 302 to the installer URL
-      window.location.href = apiUrl("/api/download/latest");
-      setState("ok");
-    } catch {
-      setState("coming-soon");
-    } finally {
-      setBusy(false);
-    }
+  const onClick = () => {
+    window.location.href = apiUrl("/api/download/latest");
   };
 
   return (
@@ -190,7 +163,6 @@ function DownloadButton() {
       <Button
         data-testid="button-download-windows"
         onClick={onClick}
-        disabled={busy}
         className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-display font-black text-base md:text-lg px-8 md:px-10 py-6 md:py-7 rounded-xl border border-red-400/40 shadow-[0_0_40px_-4px_rgba(220,38,38,0.6)] hover:shadow-[0_0_60px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02] transition-all"
       >
         <Download className="w-5 h-5 md:w-6 md:h-6 mr-3" />
@@ -199,22 +171,6 @@ function DownloadButton() {
       <p className="text-[11px] text-zinc-500">
         Windows 10 / 11 · 64-bit · ~127 MB
       </p>
-      {state === "coming-soon" && (
-        <p
-          data-testid="text-coming-soon"
-          className="text-xs text-amber-400 mt-1"
-        >
-          Download unavailable —{" "}
-          <a
-            href="https://github.com/duhthehomie/opti-gods/releases/latest"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-amber-300"
-          >
-            grab it from GitHub releases
-          </a>.
-        </p>
-      )}
     </div>
   );
 }
