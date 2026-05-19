@@ -167,7 +167,7 @@ export default function PaymentSuccess() {
                   {[
                     { text: "Download your personalized .PS1 script", color: "text-red-500" },
                     { text: `${TOTAL_TWEAKS_LABEL} system, network, GPU, and memory tweaks`, color: "text-red-500" },
-                    { text: "FiveM, Fortnite, CS2, Valorant, Apex packs", color: "text-red-500" },
+                    { text: "FiveM, Fortnite, Call of Duty, Valorant, Apex packs", color: "text-red-500" },
                     { text: "Lifetime access — never expires", color: "text-red-500" },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm text-zinc-300">

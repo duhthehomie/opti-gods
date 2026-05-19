@@ -26,7 +26,7 @@ const FEATURE_PILLARS = [
     bg: "bg-red-500/10",
     border: "border-red-500/20",
     title: "Maximum FPS",
-    body: "Game-specific IFEO PerfOptions pre-applied for GTA5, FiveM, Fortnite, CS2, Valorant, Apex. GPU scheduling tuned. Scheduler hardened at the multimedia profile level.",
+    body: "Game-specific IFEO PerfOptions pre-applied for GTA5, FiveM, Fortnite, Call of Duty, Valorant, Apex. GPU scheduling tuned. Scheduler hardened at the multimedia profile level.",
   },
   {
     icon: Lock,
@@ -123,13 +123,13 @@ const GAMING_STACK = [
   { label: "FiveM_b*_GTAProcess.exe", values: "Version-agnostic wildcard targeting. CpuPriorityClass=3, IoPriority=3, EnergyThrottle=Off, FGBoost=On, PagePriority=5" },
   { label: "GTA5.exe", values: "CpuPriorityClass=3, IoPriority=3, DisableRenderingContextPreemption=1, DisableRenderingPreemption=1" },
   { label: "FortniteClient-Win64-Shipping.exe", values: "CpuPriorityClass=3, CpuPriorityBoost, DisableEnergyThrottling, ForceForegroundBoost, IoPriority=3, PagePriority=5" },
-  { label: "cs2.exe / VALORANT / r5apex.exe", values: "CpuPriorityClass=3, IoPriority=3 per-process IFEO keys" },
+  { label: "cod.exe / VALORANT / r5apex.exe", values: "CpuPriorityClass=3, IoPriority=3 per-process IFEO keys" },
   { label: "Games Multimedia Profile", values: "GPU Priority=8, MaximumPreRenderedFrames=1, Scheduling Category=High, SFIO Priority=High" },
 ];
 
 const COMPARE_ROWS = [
   { feature: "Safe to use on main PC", opti: true, revi: true },
-  { feature: "Game-specific PerfOptions (FiveM/Fortnite/CS2)", opti: true, revi: false },
+  { feature: "Game-specific PerfOptions (FiveM/Fortnite/CoD)", opti: true, revi: false },
   { feature: "NVIDIA + AMD specific tuning", opti: true, revi: false },
   { feature: "FiveM build-agnostic GTA process targeting", opti: true, revi: false },
   { feature: "Telemetry completely removed", opti: true, revi: true },

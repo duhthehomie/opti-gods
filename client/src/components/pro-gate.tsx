@@ -258,7 +258,7 @@ export function ProPaymentDialog({
           <div className="rounded-xl bg-zinc-900/80 border border-white/8 p-4 space-y-2.5">
             {[
               { icon: "⚡", text: `${TOTAL_TWEAKS_LABEL} registry, GPU, network & game-specific tweaks`, bold: true },
-              { icon: "🎮", text: "FiveM, Fortnite, CS2, Valorant, Apex + 10 more game packs" },
+              { icon: "🎮", text: "FiveM, Fortnite, Call of Duty, Valorant, Apex + 10 more game packs" },
               { icon: "📄", text: "Your custom PowerShell script — download in seconds" },
               { icon: "🔁", text: "14 games auto-detected · preset save/load" },
               { icon: "✅", text: "Lifetime access — pay once, never pay again", bold: true },

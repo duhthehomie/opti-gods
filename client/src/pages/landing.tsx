@@ -31,7 +31,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Game-Pack Ready",
-    desc: "FiveM, Fortnite, CS2, Valorant, Apex, Warzone packs that boost FPS and shred input latency.",
+    desc: "FiveM, Fortnite, Call of Duty, Valorant, Apex, Warzone packs that boost FPS and shred input latency.",
   },
   {
     icon: Bot,
@@ -47,13 +47,13 @@ const REVIEWS = [
   { name: "shaa", handle: "Valorant Radiant", text: "Latency dropped from 18ms to 4ms after the network pack. Aim feels different.", stars: 5 },
   { name: "kqzy", handle: "FiveM Hub Owner", text: "Ran it on 6 of our staff PCs. Zero crashes. Big FPS gain on every single one.", stars: 5 },
   { name: "ainq", handle: "Apex Predator", text: "Tweaks are real. AI assistant is the cherry on top — built me a Streamer Mode preset in 30 sec.", stars: 5 },
-  { name: "mythz", handle: "CS2 Faceit lvl 10", text: "Smooth as butter. The DPC latency tweak alone is worth the price.", stars: 5 },
+  { name: "mythz", handle: "Call of Duty Ranked", text: "Smooth as butter. The DPC latency tweak alone is worth the price.", stars: 5 },
 ];
 
 const FAQS = [
   {
     q: "What does Opti Gods actually do?",
-    a: `Opti Gods is a Windows 10/11 desktop app with ${TOTAL_TWEAKS_LABEL} hardware-aware optimizations across registry, network, GPU (NVIDIA/AMD/Intel), memory, power, and per-game packs (FiveM, Fortnite, CS2, Valorant, Apex, Warzone). You pick what to apply, hit "Full Optimize", and the app does the rest — boosting FPS and shredding input latency.`,
+    a: `Opti Gods is a Windows 10/11 desktop app with ${TOTAL_TWEAKS_LABEL} hardware-aware optimizations across registry, network, GPU (NVIDIA/AMD/Intel), memory, power, and per-game packs (FiveM, Fortnite, Call of Duty, Valorant, Apex, Warzone). You pick what to apply, hit "Full Optimize", and the app does the rest — boosting FPS and shredding input latency.`,
   },
   {
     q: "Is this safe for my PC?",
@@ -267,7 +267,7 @@ function LandingDesktop() {
             <span className="text-red-500">that actually works.</span>
           </h1>
           <p className="text-base md:text-lg text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Hardware-aware tweaks for FiveM, Fortnite, CS2, Valorant and every
+            Hardware-aware tweaks for FiveM, Fortnite, Call of Duty, Valorant and every
             major title. Built by leaq — verified PC optimizer with a 200+ member
             Discord community.
           </p>
@@ -364,7 +364,7 @@ function LandingDesktop() {
           <div className="grid sm:grid-cols-2 gap-3 mb-8 max-w-md mx-auto">
             {[
               `${TOTAL_TWEAKS_LABEL} tweaks across 15+ tabs`,
-              "FiveM, Fortnite, CS2, Valorant packs",
+              "FiveM, Fortnite, Call of Duty, Valorant packs",
               "Opti Gods AI assistant",
               "Game auto-detection",
               "Preset save / load",

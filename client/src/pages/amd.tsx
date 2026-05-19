@@ -231,7 +231,7 @@ const AMD_PRESETS = [
   {
     id: "competitive",
     title: "Competitive FPS",
-    desc: "All latency + driver tweaks. Zero visual overhead. Built for CS2, Valorant, R6, and Apex on AMD.",
+    desc: "All latency + driver tweaks. Zero visual overhead. Built for Call of Duty, Valorant, R6, and Apex on AMD.",
     features: ["ULPS Disabled", "Anti-Lag On", "Max DPM Clock State", "No FreeSync", "No Chill"],
     tweaks: ["AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState","AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag","AmdDisableTelemetry","AmdDisableCrashDefender","AmdDisableFreeSyncCompetitive","AmdShaderCache","EnableHAGS"],
   },

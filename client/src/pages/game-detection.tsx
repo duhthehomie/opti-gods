@@ -34,12 +34,17 @@ const GAMES: GameEntry[] = [
   },
   {
     id: "game_cs2",
-    name: "Counter-Strike 2",
-    publisher: "Valve",
+    name: "Call of Duty",
+    publisher: "Activision",
     accentBorder: "border-l-orange-600",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg",
-    detectPaths: ["Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe"],
-    processName: "cs2.exe",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1962663/header.jpg",
+    detectPaths: [
+      "Call of Duty\\cod.exe",
+      "Call of Duty Modern Warfare 2\\cod.exe",
+      "Call of Duty Modern Warfare III\\cod.exe",
+      "steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe",
+    ],
+    processName: "cod.exe",
     tweaks: ["Above Normal CPU priority (IFEO persistent)", "Disable TCP timestamps for lower RTT", "Set socket send/receive buffers to 256KB"],
   },
   {

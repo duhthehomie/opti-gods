@@ -93,7 +93,7 @@ const QUICK_BOOST_PRESETS = [
     id: "competitive",
     icon: Crosshair,
     title: "Competitive Shooter",
-    desc: "All Max FPS tweaks + per-game priority packs for Valorant, CS2, Apex, Warzone, and more.",
+    desc: "All Max FPS tweaks + per-game priority packs for Valorant, Call of Duty, Apex, Warzone, and more.",
     color: "text-orange-400",
     border: "border-orange-500/25 hover:border-orange-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(249,115,22,0.1)]",
@@ -156,7 +156,7 @@ const HOW_TO_STEPS = [
 // Pro pricing bullet points
 const PRO_BULLETS = [
   `${TOTAL_TWEAKS_LABEL} registry, network, memory, and GPU tweaks`,
-  "FiveM, Fortnite, CS2, Valorant, and Apex packs",
+  "FiveM, Fortnite, Call of Duty, Valorant, and Apex packs",
   "Download your personalized .PS1 script",
   "Game auto-detection for 14 titles",
   "Preset save/load for quick re-apply",
