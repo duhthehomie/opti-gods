@@ -86,11 +86,15 @@ export function ProPaymentDialog({
         }
         setDiscordSaved(data.discordSaved ?? false);
         setSuccess(true);
-        setTimeout(() => {
-          onOpenChange(false);
-          setSuccess(false);
-          setCode("");
-        }, 1400);
+        // Only auto-close if Discord is already linked — otherwise we hold
+        // the dialog open so the user sees the "link Discord NOW" warning.
+        if (data.discordSaved) {
+          setTimeout(() => {
+            onOpenChange(false);
+            setSuccess(false);
+            setCode("");
+          }, 1400);
+        }
       } else if (data.reason === "already_used") {
         // Code was already redeemed — show the Discord restore path instead of
         // a generic error. Existing buyers recover access via Discord login.
@@ -293,30 +297,61 @@ export function ProPaymentDialog({
           </div>
 
           {success ? (
-            <div className="flex flex-col items-center gap-3 justify-center py-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                <ShieldCheck className="w-7 h-7 text-emerald-400" />
-              </div>
-              <p className="text-white font-bold text-base">Pro Access Granted!</p>
-              {discordSaved ? (
+            discordSaved ? (
+              /* Discord already linked — quick green confirmation, dialog auto-closes */
+              <div className="flex flex-col items-center gap-3 justify-center py-8 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <ShieldCheck className="w-7 h-7 text-emerald-400" />
+                </div>
+                <p className="text-white font-bold text-base">Pro Access Granted!</p>
                 <p className="text-xs text-emerald-400 font-semibold">
                   ✓ Saved permanently to your Discord account
                 </p>
-              ) : (
-                <div className="flex flex-col items-center gap-1.5">
-                  <p className="text-xs text-zinc-500">Active this session.</p>
-                  {!isAuthenticated && (
-                    <button
-                      onClick={() => loginWithDiscord()}
-                      className="flex items-center gap-1.5 text-xs text-[#5865F2] hover:text-blue-300 font-semibold transition-colors"
-                    >
-                      <SiDiscord className="w-3.5 h-3.5" />
-                      Sign in with Discord to make it permanent →
-                    </button>
-                  )}
+              </div>
+            ) : (
+              /* No Discord linked — hold dialog open with a hard warning */
+              <div className="space-y-3">
+                <div className="flex flex-col items-center gap-3 pt-2 text-center">
+                  <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                    <ShieldCheck className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <p className="text-white font-bold text-base">Pro Access Granted!</p>
                 </div>
-              )}
-            </div>
+
+                {/* Hard warning — code is now permanently dead */}
+                <div data-testid="panel-link-discord-warning" className="rounded-xl border-2 border-red-500/60 bg-red-500/10 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400 text-lg">⚠️</span>
+                    <p className="text-sm font-black text-red-300 uppercase tracking-wide">Action required</p>
+                  </div>
+                  <p className="text-[12px] text-white font-semibold leading-snug">
+                    Your code is now <span className="text-red-300">permanently consumed</span>. It cannot be entered again by you or anyone else.
+                  </p>
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    Link your Discord account <strong className="text-white">right now</strong> so your Pro access is saved to your account. If you skip this and lose your session, your code is gone — you'll need to contact leaq to manually restore access.
+                  </p>
+                  <button
+                    data-testid="button-link-discord-now"
+                    onClick={() => loginWithDiscord()}
+                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-black tracking-wide transition-all"
+                  >
+                    <SiDiscord className="w-4 h-4" />
+                    Link Discord Now — Save My Pro Access
+                  </button>
+                  <button
+                    data-testid="button-skip-discord-warning"
+                    onClick={() => {
+                      onOpenChange(false);
+                      setSuccess(false);
+                      setCode("");
+                    }}
+                    className="w-full text-center text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors py-1"
+                  >
+                    I understand — skip for now (risky)
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <div className="space-y-3">
 
