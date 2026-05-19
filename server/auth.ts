@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { storage } from "./storage";
+import { getLatestGhRelease } from "./github-release";
 
 // ── Native bearer tokens ──────────────────────────────────────────────────────
 // After Discord OAuth completes for a native (desktop) client we cannot use
@@ -313,24 +314,23 @@ export function registerAuthRoutes(app: Express): void {
 
   // GET /api/version — public version info for the auto-update modal.
   //
-  // Source of truth = /version.json at repo root (loaded once at boot).
-  // Admin overrides still apply, so leaq can pin `latestVersion` to a
-  // different number from the admin panel during a staged rollout.
+  // Priority: admin override → GitHub latest release → version.json → hardcoded.
+  // GitHub is polled automatically every 10 minutes — no admin panel changes
+  // needed after a new release is published on GitHub.
   app.get("/api/version", async (_req: Request, res: Response) => {
-    const settings = await storage.getAdminSettings();
+    const [settings, gh] = await Promise.all([
+      storage.getAdminSettings(),
+      getLatestGhRelease(),
+    ]);
     const fileVersion = readVersionFromFile();
     const CURRENT = "2.3.1";
-    // Default download always routes through the website so every future
-    // repush is automatically served without touching these constants.
-    // Admin can still override both URLs in the admin panel at any time.
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
-    const RELEASE_PAGE = "https://optigods.com";
     res.json({
       currentVersion: settings?.currentVersion ?? fileVersion ?? CURRENT,
-      latestVersion: settings?.latestVersion ?? fileVersion ?? CURRENT,
-      updaterCmdUrl: settings?.updaterCmdUrl ?? INSTALLER_URL,
-      updatePageUrl: settings?.updatePageUrl ?? RELEASE_PAGE,
+      latestVersion:  settings?.latestVersion  ?? gh?.version ?? fileVersion ?? CURRENT,
+      updaterCmdUrl:  settings?.updaterCmdUrl  ?? gh?.exeUrl  ?? INSTALLER_URL,
+      updatePageUrl:  settings?.updatePageUrl  ?? gh?.pageUrl ?? "https://optigods.com",
     });
   });
 }

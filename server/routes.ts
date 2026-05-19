@@ -17,6 +17,7 @@ import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
 import { buildSafePreset, hardwareFromRig, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
+import { getLatestGhRelease, bustGhCache } from "./github-release";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
 const GAME_WHITELIST_PS_ARRAY = GAME_WHITELIST
@@ -1351,28 +1352,31 @@ export async function registerRoutes(
   // Serves the latest signed Windows installer from client/public/downloads/.
   // Picks the newest file matching .exe / .msi (or admin override via
   // adminSettings.updaterCmdUrl when present and pointing to a full URL).
-  // Graceful "coming soon" JSON if none exist yet.
-  // Canonical fallback — always points at the latest signed release on GitHub.
-  // Updated here whenever a new build ships; the admin panel can also override
-  // this via updaterCmdUrl in admin_settings.
-  const GITHUB_LATEST_EXE = "https://github.com/duhthehomie/opti-gods/releases/download/v2.3.0/OptiGods-Setup-2.3.0.exe";
-
+  // Canonical fallback — auto-fetched from GitHub releases API every 10 min.
+  // Admin override via updaterCmdUrl in admin_settings still takes priority.
   app.get("/api/download/latest", async (_req, res) => {
     try {
-      const settings = await storage.getAdminSettings().catch(() => null);
+      const [settings, gh] = await Promise.all([
+        storage.getAdminSettings().catch(() => null),
+        getLatestGhRelease(),
+      ]);
       const override = settings?.updaterCmdUrl?.trim();
       // HTTPS-only + must point at a real installer. Admin-controlled, but we
       // refuse to bounce visitors through arbitrary http/javascript URLs.
       if (override && /^https:\/\//i.test(override) && /\.(exe|msi|zip)(\?|$)/i.test(override)) {
         try {
-          // Parse to confirm it's a valid absolute URL with a real host.
           const u = new URL(override);
-          if (u.host && (u.protocol === "https:")) {
+          if (u.host && u.protocol === "https:") {
             return res.redirect(302, u.toString());
           }
         } catch {
-          // fall through to local-disk lookup
+          // fall through
         }
+      }
+
+      // Auto-resolved from GitHub releases — no manual update needed
+      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        return res.redirect(302, gh.exeUrl);
       }
 
       const dir = join(process.cwd(), "client", "public", "downloads");
@@ -1394,12 +1398,33 @@ export async function registerRoutes(
         }
       }
 
-      // Always fall back to the pinned GitHub release — never show "coming soon".
-      return res.redirect(302, GITHUB_LATEST_EXE);
+      // Hard fallback — GitHub cache miss and no local file
+      res.status(503).json({ status: "coming_soon", message: "No installer available yet. Check back soon." });
     } catch (e) {
       console.error("[/api/download/latest] failed:", e);
       res.status(500).json({ status: "error", message: "Could not resolve installer" });
     }
+  });
+
+  // GET /api/admin/github-release — live GitHub auto-detect status for admin panel
+  app.get("/api/admin/github-release", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const gh = await getLatestGhRelease();
+    res.json({
+      version: gh?.version ?? null,
+      exeUrl: gh?.exeUrl ?? null,
+      pageUrl: gh?.pageUrl ?? null,
+      fetchedAt: gh?.fetchedAt ?? null,
+      stale: gh ? Date.now() - gh.fetchedAt > 10 * 60 * 1000 : true,
+    });
+  });
+
+  // POST /api/admin/github-release/refresh — bust cache and re-fetch immediately
+  app.post("/api/admin/github-release/refresh", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    bustGhCache();
+    const gh = await getLatestGhRelease();
+    res.json({ ok: true, release: gh });
   });
 
   app.get(api.system.stats.path, async (req, res) => {

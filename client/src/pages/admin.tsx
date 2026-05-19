@@ -3087,6 +3087,29 @@ export default function Admin() {
     queryFn: () => fetch(apiUrl("/api/admin/settings"), { headers }).then(r => r.json()),
     enabled: authed,
   });
+  const ghReleaseQ = useQuery<{
+    version: string | null;
+    exeUrl: string | null;
+    pageUrl: string | null;
+    fetchedAt: number | null;
+    stale: boolean;
+  }>({
+    queryKey: ["/api/admin/github-release", key],
+    queryFn: () => fetch(apiUrl("/api/admin/github-release"), { headers }).then(r => r.json()),
+    enabled: authed,
+    refetchInterval: 60_000,
+  });
+  const [ghRefreshing, setGhRefreshing] = useState(false);
+  const refreshGhRelease = async () => {
+    setGhRefreshing(true);
+    try {
+      await fetch(apiUrl("/api/admin/github-release/refresh"), { method: "POST", headers });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/github-release"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/version"] });
+      toast({ title: "GitHub release refreshed" });
+    } catch { toast({ title: "Refresh failed", variant: "destructive" }); }
+    finally { setGhRefreshing(false); }
+  };
   const [verCurrent, setVerCurrent] = useState("");
   const [verLatest, setVerLatest] = useState("");
   const [verCmdUrl, setVerCmdUrl] = useState("");
@@ -4857,47 +4880,87 @@ export default function Admin() {
               <h3 className="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5" /> Version &amp; Updates
               </h3>
+
+              {/* GitHub Auto-Detect Status */}
+              <div className={`rounded-lg border px-3 py-2.5 text-[10px] ${ghReleaseQ.data?.version ? "border-emerald-500/30 bg-emerald-500/5" : "border-zinc-700 bg-white/[0.02]"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${ghReleaseQ.data?.version ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+                    <span className={`font-bold uppercase tracking-wider ${ghReleaseQ.data?.version ? "text-emerald-400" : "text-zinc-500"}`}>
+                      {ghReleaseQ.data?.version ? "GitHub Auto-Detect: LIVE" : "GitHub Auto-Detect: Offline"}
+                    </span>
+                  </div>
+                  <button
+                    data-testid="button-gh-refresh"
+                    onClick={refreshGhRelease}
+                    disabled={ghRefreshing}
+                    className="text-zinc-400 hover:text-white text-[10px] font-mono border border-white/10 rounded px-2 py-0.5 hover:border-white/20 transition-colors disabled:opacity-40"
+                  >
+                    {ghRefreshing ? "…" : "↺ Refresh"}
+                  </button>
+                </div>
+                {ghReleaseQ.data?.version && (
+                  <div className="mt-1.5 space-y-0.5 text-zinc-400 pl-3.5">
+                    <div>Version detected: <span className="text-white font-mono">v{ghReleaseQ.data.version}</span></div>
+                    <div className="truncate">Download: <span className="text-zinc-300 font-mono">{ghReleaseQ.data.exeUrl ?? "—"}</span></div>
+                    <div>Release page: <span className="text-zinc-300 font-mono">{ghReleaseQ.data.pageUrl ?? "—"}</span></div>
+                    {ghReleaseQ.data.fetchedAt && (
+                      <div className="text-zinc-600">Cached {Math.round((Date.now() - ghReleaseQ.data.fetchedAt) / 60000)}m ago · refreshes every 10m</div>
+                    )}
+                  </div>
+                )}
+                {!ghReleaseQ.data?.version && (
+                  <div className="mt-1 text-zinc-600 pl-3.5">Could not reach GitHub API. Use the overrides below.</div>
+                )}
+              </div>
+
               <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Bump <span className="text-zinc-300 font-mono">Latest version</span> above <span className="text-zinc-300 font-mono">Current version</span> to trigger the auto-update popup for all signed-in users. They can download &amp; run the .cmd updater, or open the update page in their browser.
+                Version, download URL, and release page are <span className="text-emerald-400 font-bold">auto-pulled from GitHub</span> every 10 minutes — no action needed after publishing a release. The fields below are <span className="text-zinc-300">optional overrides</span> only. Leave them blank to use GitHub auto-detect. Bump <span className="text-zinc-300 font-mono">Current version</span> after users install an update to clear the popup.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Current version (installed)</label>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Current version (installed) — override</label>
                   <input
                     data-testid="input-version-current"
                     value={verCurrent}
                     onChange={e => setVerCurrent(e.target.value)}
-                    placeholder="2.00"
+                    placeholder={ghReleaseQ.data?.version ?? "2.00"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Latest version (available)</label>
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Latest version — override (blank = GitHub auto)</label>
                   <input
                     data-testid="input-version-latest"
                     value={verLatest}
                     onChange={e => setVerLatest(e.target.value)}
-                    placeholder="2.10"
+                    placeholder={ghReleaseQ.data?.version ? `Auto: ${ghReleaseQ.data.version}` : "2.10"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Updater .cmd URL</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Download URL — override (blank = GitHub auto)</label>
+                    {verCmdUrl && <button onClick={() => setVerCmdUrl("")} className="text-[10px] text-zinc-500 hover:text-red-400 font-mono">× clear</button>}
+                  </div>
                   <input
                     data-testid="input-version-cmd-url"
                     value={verCmdUrl}
                     onChange={e => setVerCmdUrl(e.target.value)}
-                    placeholder="https://yourhost.com/optigods-update.cmd"
+                    placeholder={ghReleaseQ.data?.exeUrl ?? "Auto-resolved from GitHub"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Update page URL (changelog / release notes)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Release notes URL — override (blank = GitHub auto)</label>
+                    {verPageUrl && <button onClick={() => setVerPageUrl("")} className="text-[10px] text-zinc-500 hover:text-red-400 font-mono">× clear</button>}
+                  </div>
                   <input
                     data-testid="input-version-page-url"
                     value={verPageUrl}
                     onChange={e => setVerPageUrl(e.target.value)}
-                    placeholder="https://yourhost.com/release-notes"
+                    placeholder={ghReleaseQ.data?.pageUrl ?? "Auto-resolved from GitHub"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
@@ -4909,7 +4972,7 @@ export default function Admin() {
                   disabled={verSaving}
                   className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
                 >
-                  {verSaving ? "Saving…" : "Save version settings"}
+                  {verSaving ? "Saving…" : "Save overrides"}
                 </Button>
               </div>
             </div>
