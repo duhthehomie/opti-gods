@@ -2311,36 +2311,14 @@ Start-Sleep 2
       return res.json({ valid: false });
     }
 
-    // Path 0: PRO_CODES env-var fallback — owner-managed comp codes that
-    // don't need to be in the DB. First successful redemption seeds them
-    // into the codes table so all downstream logic (revoke / reset / IP
-    // logging) keeps working uniformly.
-    const envCodes = (process.env.PRO_CODES || "")
-      .split(",")
-      .map(c => c.trim().toUpperCase())
-      .filter(Boolean);
-    if (envCodes.includes(normalizedCode)) {
-      const existing = (await storage.getAllCodes()).find(c => c.code === normalizedCode);
-      if (!existing) {
-        await storage.createCode(normalizedCode, "PRO_CODES env-var seed").catch(() => {});
-      } else if (existing.usedAt) {
-        // PRO_CODES are multi-use — leaq controls the list, so auto-reset
-        // any already-used code so every customer can redeem it freely.
-        await storage.resetCode(existing.id).catch(() => {});
-      }
-    }
-
-    // Path 1: Fresh single-use code (marks usedAt on first use, enforces 2-session cap)
+    // Path 1: First-time redemption — marks usedAt, creates session, optionally
+    // links to Discord account for lifetime cross-device access.
     const redeemed = await storage.redeemCode(normalizedCode, clientIp);
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
-      // Task #41: if a Discord user is logged in, also grant a lifetime
-      // entitlement so they're Pro on every future device.
       if (req.session?.userId) {
-        // Await so the durable entitlement is committed before we respond
-        // — "forever unlock" must not be best-effort.
         try {
           await storage.grantPro({
             discordUserId: req.session.userId,
@@ -2355,49 +2333,35 @@ Start-Sleep 2
       return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
     }
 
-    // Path 2 (Scenario A only): Email-sent code pre-burned by admin before customer redeems.
-    // This is the ONLY legitimate re-entry path. The code must be linked to a real email request.
+    // Path 2: Session refresh — code already used (usedAt is set), but the
+    // original buyer is re-entering it (e.g. first install of the .exe after
+    // already redeeming on the web). We issue a fresh session token WITHOUT
+    // clearing usedAt, so the code stays "used" in the admin panel.
+    //
+    // Anti-sharing: the code stays permanently marked as used — it can't be
+    // freshly redeemed by a second person. If you suspect a customer shared
+    // their code, use the "Kill" button in the admin panel to instantly revoke
+    // all their sessions. Use "Reset" if the original buyer needs a clean slate.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
-    if (matchingCode) {
-      const emailReqs = await storage.getEmailRequests();
-      const linkedReq = emailReqs.find(r =>
-        r.sentCodeId === matchingCode.id &&
-        (r.status === "sent" || r.status === "auto-sent")
-      );
-      if (linkedReq) {
-        // Email-sent codes are also single-use — if already redeemed, reject.
-        // Admin must reset (revive) the code for the customer to use it again.
-        if (matchingCode.usedAt) {
-          return res.json({ valid: false });
+    if (matchingCode?.usedAt) {
+      const sessionToken = await storage.createProSession(normalizedCode);
+      storage.logProIp(normalizedCode, clientIp).catch(() => {});
+      if (req.session?.userId) {
+        try {
+          await storage.grantPro({
+            discordUserId: req.session.userId,
+            source: "code",
+            notes: `code:${normalizedCode} (session-refresh)`,
+          });
+        } catch (err: any) {
+          console.error("[pro/verify] grantPro (refresh) failed:", err?.message || err);
         }
-        // IP lock: if code was previously used, only the original IP can re-use it (after admin reset)
-        if (matchingCode.usedByIp && matchingCode.usedByIp !== clientIp) {
-          return res.json({ valid: false });
-        }
-        await storage.redeemCode(normalizedCode, clientIp);
-        const sessionToken = await storage.createProSession(normalizedCode);
-        storage.logProIp(normalizedCode, clientIp).catch(() => {});
-        if (req.session?.userId) {
-          try {
-            await storage.grantPro({
-              discordUserId: req.session.userId,
-              source: "code",
-              notes: `code:${normalizedCode} (email-linked)`,
-            });
-          } catch (err: any) {
-            console.error("[pro/verify] grantPro failed:", err?.message || err);
-            return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
-          }
-        }
-        return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
       }
-      // Code exists in DB but has no email link and was already redeemed — reject.
-      // This stops shared/leaked codes from granting access to multiple people.
-      return res.json({ valid: false });
+      return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
     }
 
-    // No match at all
+    // No match at all — unknown or deleted code
     res.json({ valid: false });
   });
 
