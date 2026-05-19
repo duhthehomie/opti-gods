@@ -175,8 +175,9 @@ export async function listRestorePoints(): Promise<NativeRestorePoint[]> {
 
 export async function restoreToPoint(sequenceNumber: number): Promise<void> {
   if (!isNative()) return;
-  // Rust command param is `sequence_number` — pass snake_case explicitly.
-  await invoke<void>("restore_to_point", { sequence_number: sequenceNumber });
+  // Tauri v2 auto-converts camelCase JS keys → snake_case Rust params.
+  // Rust signature: `fn restore_to_point(sequence_number: i64)` — pass camelCase.
+  await invoke<void>("restore_to_point", { sequenceNumber });
 }
 
 // ─── process lasso ──────────────────────────────────────────────────────────
