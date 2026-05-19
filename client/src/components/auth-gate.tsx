@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import Welcome from "@/pages/welcome";
 import { useLocation } from "wouter";
@@ -19,26 +19,44 @@ const PUBLIC_PATHS_WEB = new Set<string>([
   "/admin",
 ]);
 const PUBLIC_PATHS_NATIVE = new Set<string>([
-  "/",
-  "/ai",
-  "/get-code",
-  "/showcase",
   "/payment/success",
   "/payment/cancel",
   "/admin",
 ]);
 
+// In the native shell the auth check hits the remote server over the
+// internet. If that round-trip stalls (offline, slow network, cold server)
+// isLoading stays true forever → pure black screen.
+// We cap the loading phase at 4 s: after that, treat as unauthenticated
+// and show the Discord login page immediately.
+const NATIVE_AUTH_TIMEOUT_MS = 4_000;
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
+  const [authTimedOut, setAuthTimedOut] = useState(false);
   const publicPaths = isNative() ? PUBLIC_PATHS_NATIVE : PUBLIC_PATHS_WEB;
+
+  // Start a timeout whenever we enter a loading state in the native shell.
+  // The timeout is cleared if loading finishes before it fires.
+  useEffect(() => {
+    if (!isNative() || !isLoading) return;
+    const t = window.setTimeout(() => setAuthTimedOut(true), NATIVE_AUTH_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [isLoading]);
+
+  // Reset timed-out flag once loading actually completes
+  useEffect(() => {
+    if (!isLoading) setAuthTimedOut(false);
+  }, [isLoading]);
 
   // Public landing/marketing/callback paths always render
   if (publicPaths.has(location)) {
     return <>{children}</>;
   }
 
-  if (isLoading) {
+  // Show loading spinner only while genuinely loading AND not yet timed out
+  if (isLoading && !authTimedOut) {
     return (
       <div
         data-testid="status-auth-loading"
