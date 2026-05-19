@@ -23,6 +23,7 @@ import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
 import { HardwareDbTab, SuggestionsInboxTab, NvidiaTrackerTab } from "@/components/admin/hardware-db-tabs";
+import { ProPaymentDialog } from "@/components/pro-gate";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -2679,6 +2680,9 @@ export default function Admin() {
   const [presetFillData, setPresetFillData] = useState<PresetFillValues | null>(null);
   const [presetFillKey, setPresetFillKey] = useState("default");
 
+  // Pro paywall preview dialog
+  const [previewPaywallOpen, setPreviewPaywallOpen] = useState(false);
+
   // Manual payment logging form
   const [showLogPayment, setShowLogPayment] = useState(false);
   const [payAmount, setPayAmount] = useState("25");
@@ -3388,6 +3392,18 @@ export default function Admin() {
                 <Eye className="w-3 h-3" />
                 {isPro ? "PRO preview" : "Free mode"}
               </button>
+
+              {/* Open the real paywall modal for live preview */}
+              <button
+                onClick={() => setPreviewPaywallOpen(true)}
+                data-testid="button-preview-paywall"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 text-[11px] font-bold text-zinc-500 hover:text-zinc-300 transition-colors"
+                title="Open paywall modal preview"
+              >
+                <CreditCard className="w-3 h-3" />
+                Paywall
+              </button>
+              <ProPaymentDialog open={previewPaywallOpen} onOpenChange={setPreviewPaywallOpen} />
 
               {/* Refresh all */}
               <button

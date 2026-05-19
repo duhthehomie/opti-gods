@@ -20,7 +20,7 @@ const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const DISCORD_LINK = "https://discord.gg/optigods";
 const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $25 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
 
-function ProPaymentDialog({
+export function ProPaymentDialog({
   open,
   onOpenChange,
 }: {
