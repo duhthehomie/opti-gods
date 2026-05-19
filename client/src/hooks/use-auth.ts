@@ -34,11 +34,24 @@ export function useAuth(): AuthState {
 export function useLogout() {
   return useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
+      // 1. Tell the server to destroy the session cookie.
+      await apiRequest("POST", "/api/logout").catch(() => {});
+      // 2. In native mode, also clear the OS keyring and localStorage token
+      //    so the cached-session handler doesn't restore the old session.
+      try {
+        const { isNative, discordLogout } = await import("@/lib/tauri-bridge");
+        if (isNative()) {
+          await discordLogout().catch(() => {});
+          localStorage.removeItem("optigods_native_auth_token"); // NATIVE_TOKEN_KEY
+          localStorage.removeItem("og_guest_mode"); // GUEST_MODE_KEY
+        }
+      } catch {
+        // Browser build — tauri-bridge just no-ops anyway
+      }
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/me"], { user: null });
-      // Reload so any user-scoped state is cleared
+      queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
       window.location.href = "/";
     },
   });

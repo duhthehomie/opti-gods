@@ -14,11 +14,16 @@
 use crate::state::{AppState, DiscordSession};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+
+// Prevents a second discord_login invocation while one is already in flight.
+// This is the Rust-side guard; tauri-bridge.ts has a matching JS-side guard.
+static DISCORD_LOGIN_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 const KEYRING_SERVICE: &str = "optigods.desktop";
 const KEYRING_ACCOUNT: &str = "discord_session";
@@ -70,6 +75,21 @@ pub async fn discord_login(
     app: AppHandle,
     client_id: String,
 ) -> Result<PublicDiscordSession, String> {
+    // Guard: reject a second invocation while one is already in flight.
+    // This prevents the "Command discord_login not allowed by ACL" error that
+    // occurs when the user cancels the OAuth flow and immediately retries.
+    if DISCORD_LOGIN_IN_PROGRESS.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err("A Discord login is already in progress. Please wait for it to complete or time out (60 s).".to_string());
+    }
+    let result = discord_login_inner(app, client_id).await;
+    DISCORD_LOGIN_IN_PROGRESS.store(false, Ordering::SeqCst);
+    result
+}
+
+async fn discord_login_inner(
+    app: AppHandle,
+    client_id: String,
+) -> Result<PublicDiscordSession, String> {
     // Pinned at compile time — see EXCHANGE_URL comment above. Debug builds
     // also accept the loopback dev server for `cargo tauri dev`.
     #[cfg(debug_assertions)]
@@ -107,10 +127,11 @@ pub async fn discord_login(
         .open(&url, None)
         .map_err(|e| format!("shell.open failed: {e}"))?;
 
-    // 4. Wait up to 3 minutes for the redirect.
-    let accept = tokio::time::timeout(Duration::from_secs(180), listener.accept())
+    // 4. Wait up to 60 seconds for the redirect (reduced from 3 min — if the
+    //    user closes their browser without authorising, this resolves quickly).
+    let accept = tokio::time::timeout(Duration::from_secs(60), listener.accept())
         .await
-        .map_err(|_| "Discord login timed out after 3 minutes.".to_string())?
+        .map_err(|_| "Discord login timed out. Please try again.".to_string())?
         .map_err(|e| format!("loopback accept failed: {e}"))?;
 
     let (mut socket, _) = accept;
@@ -256,14 +277,24 @@ fn parse_oauth_callback(http_request: &str) -> Result<(String, String), String> 
     let query = path.split_once('?').map(|x| x.1).unwrap_or("");
     let mut code = None;
     let mut state = None;
+    let mut error: Option<String> = None;
     for pair in query.split('&') {
         if let Some((k, v)) = pair.split_once('=') {
             match k {
                 "code" => code = Some(urldecode(v)),
                 "state" => state = Some(urldecode(v)),
+                // Discord sends ?error=access_denied when the user clicks Cancel.
+                "error" => error = Some(urldecode(v)),
                 _ => {}
             }
         }
+    }
+    // User clicked Cancel on Discord's consent page — give a clear message.
+    if let Some(err) = error {
+        return Err(match err.as_str() {
+            "access_denied" => "Login cancelled. Click 'Log in with Discord' to try again.".to_string(),
+            _ => format!("Discord returned an error: {err}. Please try again."),
+        });
     }
     Ok((
         code.ok_or_else(|| "missing ?code".to_string())?,

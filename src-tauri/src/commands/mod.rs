@@ -4,6 +4,7 @@
 pub mod discord;
 pub mod env;
 pub mod hardware;
+pub mod misc;
 pub mod process_lasso;
 pub mod restore;
 pub mod splash;

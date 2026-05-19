@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { isNative, openDownloadsFolder } from "@/lib/tauri-bridge";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal, Download, CheckCircle2, Loader2,
@@ -372,6 +373,19 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                     If Windows SmartScreen says "Windows protected your PC" — click <span className="text-zinc-400">"More info"</span> then <span className="text-zinc-400">"Run anyway."</span> This is normal for unsigned batch files.
                   </p>
                 </div>
+
+                {/* Downloads folder shortcut — only useful in the desktop .exe */}
+                {isNative() && (
+                  <button
+                    type="button"
+                    data-testid="button-open-downloads-folder"
+                    onClick={() => openDownloadsFolder()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/80 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-zinc-500" />
+                    Open Downloads folder
+                  </button>
+                )}
               </div>
 
               <div className="px-6 pb-5 flex items-center gap-3">

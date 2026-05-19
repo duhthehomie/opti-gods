@@ -31,6 +31,7 @@ import ToolsFixesPage from "@/pages/tools-fixes";
 import SystemScanPage from "@/pages/system-scan";
 import ProPage from "@/pages/pro";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
+import AccountPage from "@/pages/account";
 
 function SmartHome() {
   const isGuest = (() => { try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; } })();
@@ -103,6 +104,7 @@ function Router() {
       <Route path="/pro" component={ProPage} />
 
       <Route path="/ai" component={OptiGodsAI} />
+      <Route path="/account" component={AccountPage} />
       <Route path="/admin" component={Admin} />
       <Route path="/showcase" component={Showcase} />
       <Route path="/get-code" component={GetCode} />

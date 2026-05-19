@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { Download, ExternalLink, X, Sparkles } from "lucide-react";
-import { useAuth, useVersionInfo, compareVersions } from "@/hooks/use-auth";
+import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 
 const SESSION_DISMISS_KEY = "optigods_update_dismissed_for";
 
 export function UpdateModal() {
-  const { isAuthenticated } = useAuth();
   const { data } = useVersionInfo();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !data) return;
+    if (!data) return;
     const { currentVersion, latestVersion } = data;
     if (!latestVersion || !currentVersion) return;
     if (compareVersions(latestVersion, currentVersion) <= 0) return;
@@ -19,7 +18,7 @@ export function UpdateModal() {
     const dismissed = sessionStorage.getItem(SESSION_DISMISS_KEY);
     if (dismissed === latestVersion) return;
     setOpen(true);
-  }, [isAuthenticated, data]);
+  }, [data]);
 
   if (!data) return null;
 

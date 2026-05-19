@@ -77,6 +77,7 @@ pub fn run() {
             commands::discord::discord_cached_token,
             commands::updater::check_for_update,
             commands::env::env_info,
+            commands::misc::open_downloads,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Opti Gods");

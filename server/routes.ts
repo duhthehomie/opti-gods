@@ -2323,6 +2323,10 @@ Start-Sleep 2
       const existing = (await storage.getAllCodes()).find(c => c.code === normalizedCode);
       if (!existing) {
         await storage.createCode(normalizedCode, "PRO_CODES env-var seed").catch(() => {});
+      } else if (existing.usedAt) {
+        // PRO_CODES are multi-use — leaq controls the list, so auto-reset
+        // any already-used code so every customer can redeem it freely.
+        await storage.resetCode(existing.id).catch(() => {});
       }
     }
 

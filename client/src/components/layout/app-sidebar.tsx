@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { BRAND } from "@/components/branding/assets";
 import {
@@ -37,6 +37,7 @@ const PRIMARY: NavItem[] = [
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
   { title: "AI Assistant", url: "/ai", icon: Bot },
   { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
+  { title: "Account", url: "/account", icon: UserCircle },
 ];
 
 function isGuestMode(): boolean {

@@ -206,16 +206,38 @@ export async function proBalanceStatus(): Promise<ProBalanceStatus> {
 
 // ─── Discord OAuth ──────────────────────────────────────────────────────────
 
+// JS-side guard: prevents a second discordLogin call while one is pending.
+// The Rust side has a matching AtomicBool guard as a belt-and-suspenders.
+let _discordLoginInProgress = false;
+
 export async function discordLogin(clientId: string): Promise<NativeDiscordSession> {
   if (!isNative()) {
     // Web flow — let the existing /api/auth/discord page handle it.
     window.location.href = "/api/auth/discord/start";
     return new Promise(() => { /* navigation */ });
   }
-  // Rust command param is `client_id` — pass snake_case explicitly.
-  // Note: exchange endpoint is pinned in Rust (commands::discord::EXCHANGE_URL)
-  // so a compromised renderer can't redirect the OAuth code to an attacker host.
-  return invoke<NativeDiscordSession>("discord_login", { client_id: clientId });
+  if (_discordLoginInProgress) {
+    throw new Error("A login is already in progress — please wait or try again in a moment.");
+  }
+  _discordLoginInProgress = true;
+  try {
+    // Rust command param is `client_id` — pass snake_case explicitly.
+    // Note: exchange endpoint is pinned in Rust (commands::discord::EXCHANGE_URL)
+    // so a compromised renderer can't redirect the OAuth code to an attacker host.
+    return await invoke<NativeDiscordSession>("discord_login", { client_id: clientId });
+  } finally {
+    _discordLoginInProgress = false;
+  }
+}
+
+// Opens the user's Downloads folder in Windows Explorer (native only).
+export async function openDownloadsFolder(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    await invoke<void>("open_downloads");
+  } catch {
+    // Silently fail — user can find their Downloads folder manually
+  }
 }
 
 export async function discordLogout(): Promise<void> {
