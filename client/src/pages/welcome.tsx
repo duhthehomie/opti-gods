@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket } from "lucide-react";
+import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative } from "@/lib/tauri-bridge";
@@ -275,7 +275,7 @@ export default function Welcome() {
                   className="p-6"
                 >
                   {codeSuccess ? (
-                    <div className="flex flex-col items-center gap-3 py-8 text-center">
+                    <div className="flex flex-col items-center gap-3 py-6 text-center">
                       <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
                         <ShieldCheck className="w-7 h-7 text-emerald-400" />
                       </div>
@@ -285,15 +285,22 @@ export default function Welcome() {
                           ✓ Saved permanently to your Discord account
                         </p>
                       ) : (
-                        <div className="space-y-2">
-                          <p className="text-xs text-zinc-400">Active this session.</p>
+                        <div className="w-full space-y-3 mt-1">
+                          <div className="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-left">
+                            <p className="text-[11px] font-bold text-amber-300 mb-1">⚠ Your access is browser-only right now</p>
+                            <p className="text-[11px] text-zinc-400 leading-snug">
+                              If you clear your browser, switch devices, or reinstall the app, your code will be dead and you'll need leaq to manually revive it.{" "}
+                              <span className="text-amber-300 font-semibold">Link Discord to make it permanent on any device — no revival, ever.</span>
+                            </p>
+                          </div>
                           <button
                             onClick={() => { loginWithDiscord(); }}
-                            className="flex items-center gap-1.5 text-xs text-[#5865F2] hover:text-blue-300 font-semibold transition-colors mx-auto"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold tracking-wide transition-colors shadow-lg shadow-[#5865F2]/20"
                           >
-                            <SiDiscord className="w-3.5 h-3.5" />
-                            Sign in with Discord to make it permanent →
+                            <SiDiscord className="w-4 h-4" />
+                            Link Discord — save permanently
                           </button>
+                          <p className="text-[10px] text-zinc-600">or skip — but you may need your code revived later</p>
                         </div>
                       )}
                       <p className="text-[11px] text-zinc-600 mt-1">Entering dashboard…</p>
@@ -349,19 +356,30 @@ export default function Welcome() {
                         <p className="text-xs text-red-400 mb-3 leading-snug">{codeError}</p>
                       )}
 
-                      <div className="rounded-xl border border-white/6 bg-zinc-900/50 p-3 space-y-1.5 mb-4">
-                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">Note</p>
-                        <p className="text-[11px] text-zinc-400 leading-snug">
-                          Log in with Discord first to save your code permanently to your account — no need to re-enter it on any device.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleLogin}
-                          className="flex items-center gap-1.5 text-[11px] text-[#5865F2] hover:text-blue-300 font-semibold transition-colors pt-0.5"
-                        >
-                          <SiDiscord className="w-3.5 h-3.5" />
-                          Log in with Discord first →
-                        </button>
+                      {/* Revival risk warning */}
+                      <div className="rounded-xl border border-amber-500/35 bg-amber-500/6 p-3 mb-4">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-bold text-amber-300 leading-snug">
+                              Log in with Discord first — or your access may go dead
+                            </p>
+                            <p className="text-[11px] text-zinc-400 leading-snug">
+                              Without Discord, your Pro access is saved <span className="text-white font-semibold">only in this browser</span>. Clear your browser, switch devices, or reinstall the app and your code becomes dead — leaq will need to manually revive it for you.
+                            </p>
+                            <p className="text-[11px] text-zinc-400 leading-snug">
+                              <span className="text-emerald-400 font-semibold">Discord login = permanent access on any device, no revival, no risk.</span>
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleLogin}
+                              className="flex items-center gap-1.5 text-[11px] text-[#5865F2] hover:text-blue-300 font-bold transition-colors pt-0.5"
+                            >
+                              <SiDiscord className="w-3.5 h-3.5" />
+                              Log in with Discord first (recommended) →
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Also allow guest browse from code view */}

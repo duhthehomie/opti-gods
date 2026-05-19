@@ -2665,7 +2665,7 @@ export default function Admin() {
   const [importCodeNote, setImportCodeNote] = useState("");
   const [searchCode, setSearchCode] = useState("");
   const [searchFriend, setSearchFriend] = useState("");
-  const [filterCode, setFilterCode] = useState<"all" | "available" | "used">("all");
+  const [filterCode, setFilterCode] = useState<"all" | "available" | "used" | "discord" | "no-discord">("all");
   const [filterFriend, setFilterFriend] = useState<"all" | "available" | "used">("all");
   const [confirmPurgeCodes, setConfirmPurgeCodes] = useState(false);
   const [confirmPurgeFriends, setConfirmPurgeFriends] = useState(false);
@@ -3191,14 +3191,22 @@ export default function Admin() {
   const filteredCodes = useMemo(() => {
     return (codesQuery.data || [])
       .filter(c => {
+        const cx = c as typeof c & { discordLinked?: boolean };
         if (filterCode === "available") return !c.usedAt;
         if (filterCode === "used") return !!c.usedAt;
+        if (filterCode === "discord") return !!cx.discordLinked;
+        if (filterCode === "no-discord") return !!c.usedAt && !cx.discordLinked;
         return true;
       })
       .filter(c => {
         if (!searchCode) return true;
         const q = searchCode.toLowerCase();
-        return c.code.toLowerCase().includes(q) || (c.note || "").toLowerCase().includes(q);
+        const cx = c as typeof c & { discordUsername?: string | null };
+        return (
+          c.code.toLowerCase().includes(q) ||
+          (c.note || "").toLowerCase().includes(q) ||
+          (cx.discordUsername || "").toLowerCase().includes(q)
+        );
       })
       .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
   }, [codesQuery.data, searchCode, filterCode]);
@@ -3761,25 +3769,35 @@ export default function Admin() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                 <input
                   type="text"
-                  placeholder="Search codes or labels..."
+                  placeholder="Search codes, labels, or Discord username..."
                   value={searchCode}
                   onChange={e => setSearchCode(e.target.value)}
                   className="w-full bg-zinc-900 border border-white/5 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
-              <div className="flex items-center gap-1">
-                {(["all", "available", "used"] as const).map(f => (
+              <div className="flex items-center gap-1 flex-wrap">
+                {([
+                  { id: "all", label: "All" },
+                  { id: "available", label: "Available" },
+                  { id: "used", label: "Used" },
+                  { id: "discord", label: "🔗 Discord" },
+                  { id: "no-discord", label: "⚠ No Discord" },
+                ] as const).map(f => (
                   <button
-                    key={f}
-                    onClick={() => setFilterCode(f)}
+                    key={f.id}
+                    onClick={() => setFilterCode(f.id)}
                     className={cn(
-                      "px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors",
-                      filterCode === f
-                        ? "bg-red-600/20 border border-red-500/30 text-red-400"
+                      "px-2.5 py-1.5 rounded text-[10px] font-bold tracking-wide transition-colors whitespace-nowrap",
+                      filterCode === f.id
+                        ? f.id === "no-discord"
+                          ? "bg-amber-500/15 border border-amber-500/40 text-amber-400"
+                          : f.id === "discord"
+                            ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-400"
+                            : "bg-red-600/20 border border-red-500/30 text-red-400"
                         : "bg-zinc-900 border border-white/5 text-zinc-600 hover:text-zinc-300"
                     )}
                   >
-                    {f}
+                    {f.label}
                   </button>
                 ))}
               </div>
@@ -3860,6 +3878,18 @@ export default function Admin() {
                     )}>
                       {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : "AVAILABLE"}
                     </span>
+                    {c.usedAt && (() => {
+                      const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null };
+                      return cx.discordLinked ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={`Discord: ${cx.discordUsername || "linked"}`}>
+                          🔗 {cx.discordUsername || "Discord"}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-amber-400 bg-amber-500/10 border-amber-500/30 flex items-center gap-1" title="Redeemed without Discord — revival risk if browser is cleared">
+                          ⚠ No Discord
+                        </span>
+                      );
+                    })()}
                   </div>
                   {/* Row 2: name/note + date on left, actions on right */}
                   <div className="flex items-center gap-1.5 pl-7">

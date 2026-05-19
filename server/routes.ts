@@ -2676,8 +2676,32 @@ Start-Sleep 2
   // Admin — list all codes (enriched with last session IP for tracking)
   app.get('/api/admin/codes', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const codes = await storage.getAllCodes();
-    res.json(codes);
+    const [codes, proUsers] = await Promise.all([
+      storage.getAllCodes(),
+      storage.listProUsers(),
+    ]);
+    // Build lookup: code value → Discord user info from entitlement notes
+    // When a Discord user redeems a code, grantPro() stores notes = "code:XXXX-XXXX-XXXX"
+    const codeToDiscord: Record<string, { discordUserId: string; discordUsername: string | null; discordGlobalName: string | null }> = {};
+    for (const ent of proUsers) {
+      if (ent.source === 'code' && ent.notes) {
+        const match = ent.notes.match(/^code:([A-Z0-9_-]+)/i);
+        if (match) {
+          codeToDiscord[match[1].toUpperCase()] = {
+            discordUserId: ent.discordUserId,
+            discordUsername: ent.username ?? null,
+            discordGlobalName: null,
+          };
+        }
+      }
+    }
+    const enriched = codes.map(c => ({
+      ...c,
+      discordLinked: !!codeToDiscord[c.code],
+      discordUserId: codeToDiscord[c.code]?.discordUserId ?? null,
+      discordUsername: codeToDiscord[c.code]?.discordUsername ?? null,
+    }));
+    res.json(enriched);
   });
 
   // Admin — generate new code
