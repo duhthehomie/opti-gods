@@ -44,6 +44,8 @@ export interface NativeDiscordSession {
   user_id: string;
   username: string;
   expires_at_unix: number;
+  /** nativeToken from the server — store in localStorage as X-Native-Auth */
+  native_token: string;
 }
 
 export interface NativeEnvInfo {

@@ -20,7 +20,6 @@ import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { ScanImport } from "@/components/scan-import";
-import { FpsEstimate } from "@/components/fps-estimate";
 import { HardwareScanZone } from "@/components/hardware-scan";
 
 // Feature categories
@@ -811,7 +810,7 @@ export default function Dashboard() {
           <Button
             data-testid="button-download-health-report"
             size="sm"
-            onClick={() => { const a = document.createElement('a'); a.href = '/api/scan/script'; a.download = 'OptiGods-ScanSystem.ps1'; a.click(); }}
+            onClick={() => { const a = document.createElement('a'); a.href = apiUrl('/api/scan/script'); a.download = 'OptiGods-ScanSystem.ps1'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
             variant="outline"
             className="shrink-0 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 gap-1.5 font-bold uppercase tracking-wide"
           >
@@ -870,14 +869,6 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* FPS Estimate Panel */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.34 }}
-        >
-          <FpsEstimate />
-        </motion.div>
 
         
         <motion.div

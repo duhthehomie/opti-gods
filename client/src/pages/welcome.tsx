@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
-import { isNative } from "@/lib/tauri-bridge";
-import { apiBase, apiUrl } from "@/lib/api-base";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { apiUrl } from "@/lib/api-base";
 import { setProSession, setProStatus } from "@/lib/pro-status";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 
 export const GUEST_MODE_KEY = "og_guest_mode";
 
@@ -47,11 +47,30 @@ export default function Welcome() {
     }
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setSigningIn(true);
     setLoginError(null);
     if (isNative()) {
-      window.location.href = `${apiBase()}/api/auth/discord/login?native=1`;
+      try {
+        // Fetch the Discord client ID from the server (not shipped in the binary).
+        const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        if (!cfgRes.ok) throw new Error("Discord not configured on server");
+        const { clientId } = await cfgRes.json() as { clientId: string };
+        // Opens system browser for OAuth — the Tauri WebView stays on this page.
+        // Rust loopback on 127.0.0.1 picks up the ?code=... redirect, exchanges
+        // it with the server, and returns the nativeToken here.
+        const session = await discordLogin(clientId);
+        // Store the nativeToken so all subsequent API calls are authenticated.
+        try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        // Refresh auth state so any gate that checks /api/me re-queries.
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+        window.location.href = "/tweaks";
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setLoginError(`Sign-in failed: ${msg.replace(/^Error:\s*/i, "")}`);
+        setSigningIn(false);
+      }
       return;
     }
     loginWithDiscord();

@@ -40,6 +40,9 @@ pub struct PublicDiscordSession {
     pub user_id: String,
     pub username: String,
     pub expires_at_unix: i64,
+    /// The nativeToken issued by the server — the React frontend stores this
+    /// in localStorage and sends it as X-Native-Auth on every API call.
+    pub native_token: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -175,6 +178,9 @@ pub async fn discord_login(
         user_id: cached.user_id,
         username: cached.username,
         expires_at_unix,
+        // The server's `access_token` field IS the nativeToken.  The React
+        // frontend stores it in localStorage and sends it as X-Native-Auth.
+        native_token: parsed.access_token,
     })
 }
 
@@ -199,6 +205,7 @@ pub fn discord_cached_token(app: AppHandle) -> Option<PublicDiscordSession> {
                 user_id: s.user_id,
                 username: s.username,
                 expires_at_unix: s.expires_at_unix,
+                native_token: s.access_token,
             });
         }
     }
@@ -206,7 +213,7 @@ pub fn discord_cached_token(app: AppHandle) -> Option<PublicDiscordSession> {
     if let Some(cached) = load_from_keyring() {
         if cached.expires_at_unix > now_unix() {
             *state.discord_token.lock() = Some(DiscordSession {
-                access_token: cached.access_token,
+                access_token: cached.access_token.clone(),
                 user_id: cached.user_id.clone(),
                 username: cached.username.clone(),
                 expires_at_unix: cached.expires_at_unix,
@@ -215,6 +222,7 @@ pub fn discord_cached_token(app: AppHandle) -> Option<PublicDiscordSession> {
                 user_id: cached.user_id,
                 username: cached.username,
                 expires_at_unix: cached.expires_at_unix,
+                native_token: cached.access_token,
             });
         }
     }

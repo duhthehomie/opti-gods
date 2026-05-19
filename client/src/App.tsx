@@ -15,7 +15,7 @@ import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
-import { isNative } from "@/lib/tauri-bridge";
+import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 import Landing from "@/pages/landing";
@@ -134,6 +134,23 @@ function NativeTokenHandler() {
   return null;
 }
 
+// On every cold-start inside the Tauri shell, restore the Discord session
+// from the OS keyring so the user stays signed-in without re-authorising.
+function NativeCachedTokenHandler() {
+  useEffect(() => {
+    if (!isNative()) return;
+    discordCachedToken()
+      .then((session) => {
+        if (!session?.native_token) return;
+        try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+      })
+      .catch(() => { /* keyring unavailable — user will need to log in */ });
+  }, []);
+  return null;
+}
+
 function NativeBootstrap() {
   // Fire-and-forget on mount. In the browser this no-ops; in the Tauri
   // shell it loads envInfo(), starts ProBalance, and closes the splash
@@ -151,6 +168,7 @@ function App() {
         <BootSplash />
         <ProCelebration />
         <NativeTokenHandler />
+        <NativeCachedTokenHandler />
         <NativeBootstrap />
         <VisitTracker />
         <FriendUnlockHandler />

@@ -40,6 +40,15 @@ function discordAvatarUrl(id: string, avatarHash: string | null): string | null 
 }
 
 export function registerAuthRoutes(app: Express): void {
+  // GET /api/auth/discord/config — returns the Discord client ID so the native
+  // desktop app can start the loopback OAuth flow without shipping the ID in
+  // the binary at compile time.
+  app.get("/api/auth/discord/config", (_req: Request, res: Response) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    if (!clientId) return res.status(503).json({ error: "Discord not configured" });
+    res.json({ clientId });
+  });
+
   // GET /api/auth/discord/login — kick off OAuth round-trip
   app.get("/api/auth/discord/login", (req: Request, res: Response) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
@@ -140,11 +149,11 @@ export function registerAuthRoutes(app: Express): void {
       req.session.nativeFlow = undefined;
 
       if (isNativeFlow) {
-        // Generate a 30-minute bearer token and redirect back to the Tauri app.
+        // Generate a 30-day bearer token and redirect back to the Tauri app.
         // The desktop app reads ?nativeToken= from the URL and sends it as
         // X-Native-Auth on every subsequent API call.
         const token = randomBytes(32).toString("hex");
-        nativeTokens.set(token, { userId: userJson.id, expiresAt: Date.now() + 30 * 60_000 });
+        nativeTokens.set(token, { userId: userJson.id, expiresAt: Date.now() + 30 * 24 * 60 * 60_000 });
         const dest = `tauri://localhost/?nativeToken=${token}`;
         req.session.returnTo = undefined;
         return req.session.save(() => res.redirect(dest));
