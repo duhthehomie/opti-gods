@@ -204,9 +204,14 @@ function DownloadButton() {
           data-testid="text-coming-soon"
           className="text-xs text-amber-400 mt-1"
         >
-          Desktop app coming soon —{" "}
-          <a href={DISCORD_INVITE} target="_blank" rel="noreferrer" className="underline hover:text-amber-300">
-            join the Discord for early access
+          Download unavailable —{" "}
+          <a
+            href="https://github.com/duhthehomie/opti-gods/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-amber-300"
+          >
+            grab it from GitHub releases
           </a>.
         </p>
       )}
