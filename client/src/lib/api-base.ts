@@ -15,12 +15,12 @@
 
 import { isNative } from "@/lib/tauri-bridge";
 
-const DEFAULT_PROD_HOST = "https://optigods.replit.app";
+const DEFAULT_NATIVE_HOST = "https://28415566-ef27-431a-9269-f09c9a2b3db0-00-2neu2v6wxlc50.worf.replit.dev";
 
 function rawBase(): string {
   const env = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (env) return env.replace(/\/+$/, "");
-  if (isNative()) return DEFAULT_PROD_HOST;
+  if (isNative()) return DEFAULT_NATIVE_HOST;
   return ""; // web → same-origin
 }
 
