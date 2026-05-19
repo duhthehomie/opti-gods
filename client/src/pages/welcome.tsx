@@ -26,6 +26,7 @@ export default function Welcome() {
   const [codeError, setCodeError] = useState("");
   const [codeSuccess, setCodeSuccess] = useState(false);
   const [discordSaved, setDiscordSaved] = useState(false);
+  const [codeAlreadyUsed, setCodeAlreadyUsed] = useState(false);
 
   // Task #65 — while welcome is visible in the .exe, poll /api/me every 5 s.
   // If the user already has a session (e.g. signed in via the website), skip
@@ -119,7 +120,7 @@ export default function Welcome() {
         credentials: "include",
       });
       const raw = await res.text();
-      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean } = {};
+      let data: { valid?: boolean; sessionToken?: string; error?: string; discordSaved?: boolean; reason?: string } = {};
       try { data = JSON.parse(raw); } catch { /* non-JSON */ }
 
       if (res.status === 429) {
@@ -140,6 +141,8 @@ export default function Welcome() {
         try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
         const delay = (data.discordSaved ?? false) ? 1800 : 6000;
         redirectTimer.current = setTimeout(() => { window.location.href = "/tweaks"; }, delay);
+      } else if (data.reason === "already_used") {
+        setCodeAlreadyUsed(true);
       } else {
         setCodeError("Invalid code. If you already paid, DM leaq on Discord and it'll be fixed instantly.");
       }
@@ -394,7 +397,7 @@ export default function Welcome() {
                           placeholder="XXXX-XXXX-XXXX"
                           value={code}
                           autoFocus
-                          onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeError(""); }}
+                          onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeError(""); setCodeAlreadyUsed(false); }}
                           onKeyDown={(e) => e.key === "Enter" && handleCodeVerify()}
                           className="flex-1 bg-zinc-900/80 border border-zinc-700 focus:border-red-500/60 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none font-mono transition-colors"
                         />
@@ -408,6 +411,27 @@ export default function Welcome() {
                           {codeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
                         </button>
                       </div>
+
+                      {codeAlreadyUsed && (
+                        <div data-testid="panel-welcome-already-used" className="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 mb-3 space-y-2">
+                          <p className="text-[11px] font-bold text-amber-300">Code already redeemed</p>
+                          <p className="text-[11px] text-zinc-300 leading-snug">
+                            This code was already used. If you're the original buyer, log in with Discord to instantly restore your Pro — your account is saved to your Discord.
+                          </p>
+                          <button
+                            data-testid="button-welcome-discord-restore"
+                            type="button"
+                            onClick={handleLogin}
+                            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/40 hover:bg-[#5865F2]/30 text-white text-xs font-black tracking-wide transition-all"
+                          >
+                            <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />
+                            Log in with Discord to restore Pro
+                          </button>
+                          <p className="text-[10px] text-zinc-500 leading-snug">
+                            Bought without Discord? Message <strong className="text-zinc-400">leaq</strong> — he'll reset your code so you can re-enter it.
+                          </p>
+                        </div>
+                      )}
 
                       {codeError && (
                         <p className="text-xs text-red-400 mb-3 leading-snug">{codeError}</p>

@@ -17,6 +17,23 @@
     "fs:default",
     "os:default",
     "notification:default",
-    "updater:default"
+    "updater:default",
+    "allow-finish-splash",
+    "allow-apply-tweak",
+    "allow-undo-tweak",
+    "allow-list-tweaks",
+    "allow-scan-hardware",
+    "allow-create-restore-point",
+    "allow-restore-to-point",
+    "allow-list-restore-points",
+    "allow-start-pro-balance",
+    "allow-stop-pro-balance",
+    "allow-pro-balance-status",
+    "allow-discord-login",
+    "allow-discord-logout",
+    "allow-discord-cached-token",
+    "allow-check-for-update",
+    "allow-env-info",
+    "allow-open-downloads"
   ]
 }

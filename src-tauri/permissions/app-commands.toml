@@ -1,0 +1,107 @@
+[[permission]]
+identifier = "allow-finish-splash"
+description = "Show and focus the main window."
+commands.allow = ["finish_splash"]
+
+[[permission]]
+identifier = "allow-apply-tweak"
+description = "Apply a registry/system tweak by ID."
+commands.allow = ["apply_tweak"]
+
+[[permission]]
+identifier = "allow-undo-tweak"
+description = "Undo a previously applied tweak."
+commands.allow = ["undo_tweak"]
+
+[[permission]]
+identifier = "allow-list-tweaks"
+description = "List all available tweaks."
+commands.allow = ["list_tweaks"]
+
+[[permission]]
+identifier = "allow-scan-hardware"
+description = "Scan hardware configuration."
+commands.allow = ["scan_hardware"]
+
+[[permission]]
+identifier = "allow-create-restore-point"
+description = "Create a Windows restore point."
+commands.allow = ["create_restore_point"]
+
+[[permission]]
+identifier = "allow-restore-to-point"
+description = "Restore to a Windows restore point."
+commands.allow = ["restore_to_point"]
+
+[[permission]]
+identifier = "allow-list-restore-points"
+description = "List all restore points."
+commands.allow = ["list_restore_points"]
+
+[[permission]]
+identifier = "allow-start-pro-balance"
+description = "Start ProBalance process priority manager."
+commands.allow = ["start_pro_balance"]
+
+[[permission]]
+identifier = "allow-stop-pro-balance"
+description = "Stop ProBalance process priority manager."
+commands.allow = ["stop_pro_balance"]
+
+[[permission]]
+identifier = "allow-pro-balance-status"
+description = "Query ProBalance status."
+commands.allow = ["pro_balance_status"]
+
+[[permission]]
+identifier = "allow-discord-login"
+description = "Initiate Discord OAuth login flow."
+commands.allow = ["discord_login"]
+
+[[permission]]
+identifier = "allow-discord-logout"
+description = "Clear Discord session and keyring entry."
+commands.allow = ["discord_logout"]
+
+[[permission]]
+identifier = "allow-discord-cached-token"
+description = "Read cached Discord session from keyring."
+commands.allow = ["discord_cached_token"]
+
+[[permission]]
+identifier = "allow-check-for-update"
+description = "Check GitHub releases for a newer version."
+commands.allow = ["check_for_update"]
+
+[[permission]]
+identifier = "allow-env-info"
+description = "Read runtime environment info."
+commands.allow = ["env_info"]
+
+[[permission]]
+identifier = "allow-open-downloads"
+description = "Open the Windows Downloads folder in Explorer."
+commands.allow = ["open_downloads"]
+
+[permission_set]
+identifier = "all-app-commands"
+description = "All app-level commands."
+permissions = [
+  "allow-finish-splash",
+  "allow-apply-tweak",
+  "allow-undo-tweak",
+  "allow-list-tweaks",
+  "allow-scan-hardware",
+  "allow-create-restore-point",
+  "allow-restore-to-point",
+  "allow-list-restore-points",
+  "allow-start-pro-balance",
+  "allow-stop-pro-balance",
+  "allow-pro-balance-status",
+  "allow-discord-login",
+  "allow-discord-logout",
+  "allow-discord-cached-token",
+  "allow-check-for-update",
+  "allow-env-info",
+  "allow-open-downloads",
+]
