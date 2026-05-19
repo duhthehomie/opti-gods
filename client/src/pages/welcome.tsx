@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
@@ -18,6 +18,7 @@ export default function Welcome() {
   const [signingIn, setSigningIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [view, setView] = useState<View>("main");
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Code-redemption state (used in "code" view)
   const [code, setCode] = useState("");
@@ -25,6 +26,31 @@ export default function Welcome() {
   const [codeError, setCodeError] = useState("");
   const [codeSuccess, setCodeSuccess] = useState(false);
   const [discordSaved, setDiscordSaved] = useState(false);
+
+  // Task #65 — while welcome is visible in the .exe, poll /api/me every 5 s.
+  // If the user already has a session (e.g. signed in via the website), skip
+  // the loopback flow and go straight to the dashboard.
+  useEffect(() => {
+    if (!isNative()) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(apiUrl("/api/me"), {
+          credentials: "include",
+          headers: getNativeAuthHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json() as { isAuthenticated?: boolean };
+          if (data?.isAuthenticated) {
+            clearInterval(interval);
+            window.location.href = "/tweaks";
+          }
+        }
+      } catch {
+        // network error — keep polling
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Read ?login=error&reason= from URL once
   useEffect(() => {
@@ -108,9 +134,12 @@ export default function Welcome() {
         }
         setDiscordSaved(data.discordSaved ?? false);
         setCodeSuccess(true);
-        // Set guest mode so auth gate lets them through, then navigate
+        // Set guest mode so auth gate lets them through, then navigate.
+        // Only auto-redirect immediately if Discord was linked (permanent Pro).
+        // If not linked, give the user time to click "Link Discord" first.
         try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
-        setTimeout(() => { window.location.href = "/tweaks"; }, 1800);
+        const delay = (data.discordSaved ?? false) ? 1800 : 6000;
+        redirectTimer.current = setTimeout(() => { window.location.href = "/tweaks"; }, delay);
       } else {
         setCodeError("Invalid code. If you already paid, DM leaq on Discord and it'll be fixed instantly.");
       }
@@ -313,13 +342,22 @@ export default function Welcome() {
                             </p>
                           </div>
                           <button
-                            onClick={() => { loginWithDiscord(); }}
+                            onClick={() => {
+                              if (redirectTimer.current) clearTimeout(redirectTimer.current);
+                              handleLogin();
+                            }}
                             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold tracking-wide transition-colors shadow-lg shadow-[#5865F2]/20"
                           >
                             <SiDiscord className="w-4 h-4" />
                             Link Discord — save permanently
                           </button>
-                          <p className="text-[10px] text-zinc-600">or skip — but you may need your code revived later</p>
+                          <button
+                            type="button"
+                            onClick={() => { window.location.href = "/tweaks"; }}
+                            className="w-full text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors py-1"
+                          >
+                            Skip — enter dashboard without linking →
+                          </button>
                         </div>
                       )}
                       <p className="text-[11px] text-zinc-600 mt-1">Entering dashboard…</p>

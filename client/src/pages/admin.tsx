@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api-base";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import type { HardwareInfo } from "@/hooks/use-hardware-info";
 import type { OsInfo } from "@/hooks/use-os-detection";
@@ -231,32 +232,32 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
   const statsQ = useQuery<SecurityStats>({
     queryKey: ["/api/admin/security/stats", refreshKey],
-    queryFn: () => fetch("/api/admin/security/stats", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/security/stats"), { headers }).then(r => r.json()),
     refetchInterval: 30_000,
   });
 
   const eventsQ = useQuery<SecurityEvent[]>({
     queryKey: ["/api/admin/security/events", refreshKey],
-    queryFn: () => fetch("/api/admin/security/events?limit=200", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/security/events?limit=200"), { headers }).then(r => r.json()),
     refetchInterval: 30_000,
   });
 
   const bansQ = useQuery<IpBan[]>({
     queryKey: ["/api/admin/security/bans", refreshKey],
-    queryFn: () => fetch("/api/admin/security/bans", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/security/bans"), { headers }).then(r => r.json()),
   });
 
   const [blocks, setBlocks] = useState<BlockedIp[]>([]);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const loadBlocks = () => {
     setBlocksLoading(true);
-    fetch("/api/admin/blocked-ips", { headers }).then(r => r.json()).then(setBlocks).finally(() => setBlocksLoading(false));
+    fetch(apiUrl("/api/admin/blocked-ips"), { headers }).then(r => r.json()).then(setBlocks).finally(() => setBlocksLoading(false));
   };
   useEffect(() => { loadBlocks(); }, [refreshKey]);
 
   const alertSettingsQ = useQuery<{ discordWebhookUrl: string | null; alertEmail: string | null; autoResolveDays: number | null; alertOnNewRig: boolean | null; alertOnNewNvidiaDriver: boolean | null; auditLogEnabled: boolean | null; auditWebhookUrl: string | null }>({
     queryKey: ["/api/admin/settings"],
-    queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/settings"), { headers }).then(r => r.json()),
   });
 
   const events = eventsQ.data ?? [];
@@ -270,7 +271,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const resolveEvent = async (id: number) => {
     setResolving(id);
     try {
-      await fetch(`/api/admin/security/resolve/${id}`, { method: "POST", headers });
+      await fetch(apiUrl(`/api/admin/security/resolve/${id}`), { method: "POST", headers });
       refresh();
       toast({ title: "Event resolved" });
     } catch {
@@ -283,7 +284,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const banIp = async (ip: string, reason: string, permanent: boolean) => {
     setBanning(ip);
     try {
-      await fetch("/api/admin/security/ban-ip", {
+      await fetch(apiUrl("/api/admin/security/ban-ip"), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ ip, reason, permanent }),
@@ -300,7 +301,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
 
   const unbanIp = async (ip: string) => {
     try {
-      await fetch("/api/admin/security/ban-ip", {
+      await fetch(apiUrl("/api/admin/security/ban-ip"), {
         method: "DELETE",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ ip }),
@@ -315,7 +316,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
   const unblockRate = async (b: BlockedIp) => {
     setUnblocking(b.key);
     try {
-      await fetch("/api/admin/blocked-ips", {
+      await fetch(apiUrl("/api/admin/blocked-ips"), {
         method: "DELETE",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ key: b.key }),
@@ -764,7 +765,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     onClick={async () => {
                       setLoadingAutoResolvePreview(true);
                       try {
-                        const r = await fetch("/api/admin/security/auto-resolve/preview", { headers });
+                        const r = await fetch(apiUrl("/api/admin/security/auto-resolve/preview"), { headers });
                         if (!r.ok) throw new Error("Preview failed");
                         const data: { count: number; days: number } = await r.json();
                         setAutoResolvePreview(data);
@@ -785,7 +786,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                     onClick={async () => {
                       setPollingDrivers(true);
                       try {
-                        const r = await fetch("/api/admin/nvidia-drivers/poll", { method: "POST", headers });
+                        const r = await fetch(apiUrl("/api/admin/nvidia-drivers/poll"), { method: "POST", headers });
                         if (!r.ok) throw new Error("Poll failed");
                         const data: { fetched: number; inserted: number; alerted: number; errors: string[] } = await r.json();
                         toast({
@@ -826,7 +827,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                         setAutoResolvePreview(null);
                         setRunningAutoResolve(true);
                         try {
-                          const r = await fetch("/api/admin/security/auto-resolve", {
+                          const r = await fetch(apiUrl("/api/admin/security/auto-resolve"), {
                             method: "POST",
                             headers,
                           });
@@ -1023,7 +1024,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                             setSavingAlerts(false);
                             return;
                           }
-                          const r = await fetch("/api/admin/settings", {
+                          const r = await fetch(apiUrl("/api/admin/settings"), {
                             method: "POST",
                             headers: { ...headers, "Content-Type": "application/json" },
                             body: JSON.stringify(body),
@@ -1217,7 +1218,7 @@ function SecurityTab({ headers }: { headers: Record<string, string> }) {
                 onClick={async () => {
                   setFlagging(true);
                   try {
-                    const r = await fetch("/api/admin/security/flag", {
+                    const r = await fetch(apiUrl("/api/admin/security/flag"), {
                       method: "POST",
                       headers: { ...headers, "Content-Type": "application/json" },
                       body: JSON.stringify(manualFlag),
@@ -1425,7 +1426,7 @@ function AdminPresetGenerator({
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const safePresetRes = await fetch("/api/ai/preset", {
+      const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1454,7 +1455,7 @@ function AdminPresetGenerator({
       const tweakIds = Object.keys(tweakMap);
 
       const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
-      const res = await fetch("/api/script/download-bat", {
+      const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
@@ -1509,7 +1510,7 @@ function AdminPresetGenerator({
       const tweakMap: Record<string, boolean> = {};
       fixTweaks.forEach(id => { tweakMap[id] = true; });
       const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
-      const res = await fetch("/api/script/download-bat", {
+      const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
@@ -1938,7 +1939,7 @@ function AetherAdminChat({ headers }: { headers: Record<string, string> }) {
     setIsStreaming(true);
 
     try {
-      const res = await fetch("/api/admin/aether-chat", {
+      const res = await fetch(apiUrl("/api/admin/aether-chat"), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2132,7 +2133,7 @@ function DiscountsTab({ headers }: { headers: Record<string, string> }) {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/discount-codes", { headers });
+      const res = await fetch(apiUrl("/api/admin/discount-codes"), { headers });
       if (!res.ok) throw new Error(await res.text());
       setCodes(await res.json());
     } catch (e: any) {
@@ -2148,7 +2149,7 @@ function DiscountsTab({ headers }: { headers: Record<string, string> }) {
     if (!code.trim() || !percentOff) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/discount-codes", {
+      const res = await fetch(apiUrl("/api/admin/discount-codes"), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.trim(), percentOff: Number(percentOff), maxUses: maxUses ? Number(maxUses) : null, note: note || null }),
@@ -2167,7 +2168,7 @@ function DiscountsTab({ headers }: { headers: Record<string, string> }) {
   const handleDelete = async (id: number) => {
     setDeleting(id);
     try {
-      const res = await fetch(`/api/admin/discount-codes/${id}`, { method: "DELETE", headers });
+      const res = await fetch(apiUrl(`/api/admin/discount-codes/${id}`), { method: "DELETE", headers });
       if (!res.ok) throw new Error(await res.text());
       toast({ title: "Deleted" });
       await load();
@@ -2237,7 +2238,7 @@ function ProUsersTab({ headers }: { headers: Record<string, string> }) {
   const entQuery = useQuery<ProEntitlementRow[]>({
     queryKey: ["/api/admin/pro-entitlements"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/pro-entitlements", { headers });
+      const res = await fetch(apiUrl("/api/admin/pro-entitlements"), { headers });
       if (!res.ok) throw new Error("Failed to load Pro entitlements");
       return res.json();
     },
@@ -2246,7 +2247,7 @@ function ProUsersTab({ headers }: { headers: Record<string, string> }) {
 
   const grantMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/admin/pro-entitlements", {
+      const res = await fetch(apiUrl("/api/admin/pro-entitlements"), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ discordUserId: grantId.trim(), source: "admin", notes: grantNotes || null }),
@@ -2268,7 +2269,7 @@ function ProUsersTab({ headers }: { headers: Record<string, string> }) {
 
   const revokeMutation = useMutation({
     mutationFn: async (discordUserId: string) => {
-      const res = await fetch(`/api/admin/pro-entitlements/${encodeURIComponent(discordUserId)}`, {
+      const res = await fetch(apiUrl(`/api/admin/pro-entitlements/${encodeURIComponent(discordUserId)}`), {
         method: "DELETE",
         headers,
       });
@@ -2461,7 +2462,7 @@ function TicketsTab({ headers }: { headers: Record<string, string> }) {
   const reportsQuery = useQuery<UserReport[]>({
     queryKey: ["/api/admin/reports"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/reports", { headers });
+      const res = await fetch(apiUrl("/api/admin/reports"), { headers });
       if (!res.ok) throw new Error("Failed to load reports");
       return res.json();
     },
@@ -2470,7 +2471,7 @@ function TicketsTab({ headers }: { headers: Record<string, string> }) {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) => {
-      const res = await fetch(`/api/admin/reports/${id}/status`, {
+      const res = await fetch(apiUrl(`/api/admin/reports/${id}/status`), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ status, adminNote }),
@@ -2699,7 +2700,7 @@ export default function Admin() {
     visits: { total: number; today: number; thisWeek: number };
   }>({
     queryKey: ["/api/admin/stats", key],
-    queryFn: () => fetch("/api/admin/stats", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/stats"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2717,7 +2718,7 @@ export default function Admin() {
     recentDownloads: { id: number; tweakCount: number; tweakIds: string[]; downloadedAt: string }[];
   }>({
     queryKey: ["/api/admin/download-stats", key],
-    queryFn: () => fetch("/api/admin/download-stats", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/download-stats"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2728,7 +2729,7 @@ export default function Admin() {
 
   const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null; sessionIp: string | null })[]>({
     queryKey: ["/api/admin/codes", key],
-    queryFn: () => fetch("/api/admin/codes", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/codes"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2738,7 +2739,7 @@ export default function Admin() {
 
   const friendsQuery = useQuery<ProFriendToken[]>({
     queryKey: ["/api/admin/friends", key],
-    queryFn: () => fetch("/api/admin/friends", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/friends"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2749,7 +2750,7 @@ export default function Admin() {
   type IpLog = { id: number; codeRef: string; ipAddress: string; city: string | null; region: string | null; country: string | null; isp: string | null; lat: string | null; lon: string | null; seenAt: string };
   const ipLogsQuery = useQuery<IpLog[]>({
     queryKey: ["/api/admin/ip-logs", key],
-    queryFn: () => fetch("/api/admin/ip-logs", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/ip-logs"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2759,7 +2760,7 @@ export default function Admin() {
   });
 
   const genCode = useMutation({
-    mutationFn: () => fetch("/api/admin/codes", {
+    mutationFn: () => fetch(apiUrl("/api/admin/codes"), {
       method: "POST", headers, body: JSON.stringify({ note: noteCode.trim() || null }),
     }).then(r => r.json()),
     onSuccess: () => {
@@ -2772,7 +2773,7 @@ export default function Admin() {
 
   const importCodeMut = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/admin/codes", {
+      const res = await fetch(apiUrl("/api/admin/codes"), {
         method: "POST",
         headers,
         body: JSON.stringify({ customCode: importCode.trim().toUpperCase(), note: importCodeNote.trim() || `Registered: ${importCode.trim().toUpperCase()}` }),
@@ -2794,7 +2795,7 @@ export default function Admin() {
   });
 
   const delCode = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/codes/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/codes/${id}`), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
@@ -2802,7 +2803,7 @@ export default function Admin() {
   });
 
   const resetCode = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/codes/${id}/reset`, { method: "POST", headers }).then(r => r.json()),
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/codes/${id}/reset`), { method: "POST", headers }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       toast({ title: "Code reset", description: "Code is available again — customer can re-enter it." });
@@ -2811,7 +2812,7 @@ export default function Admin() {
 
   const renameCode = useMutation({
     mutationFn: ({ id, note }: { id: number; note: string | null }) =>
-      fetch(`/api/admin/codes/${id}`, { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
+      fetch(apiUrl(`/api/admin/codes/${id}`), { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       setEditingCodeId(null);
@@ -2821,7 +2822,7 @@ export default function Admin() {
 
   const renameFriend = useMutation({
     mutationFn: ({ id, note }: { id: number; note: string | null }) =>
-      fetch(`/api/admin/friends/${id}`, { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
+      fetch(apiUrl(`/api/admin/friends/${id}`), { method: "PATCH", headers, body: JSON.stringify({ note }) }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
       setEditingFriendId(null);
@@ -2830,7 +2831,7 @@ export default function Admin() {
   });
 
   const purgeUsedCodes = useMutation({
-    mutationFn: () => fetch("/api/admin/codes/used/purge", { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/admin/codes/used/purge"), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
@@ -2840,7 +2841,7 @@ export default function Admin() {
   });
 
   const reviveDeadCodes = useMutation({
-    mutationFn: () => fetch("/api/admin/codes/revive-dead", { method: "POST", headers }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/admin/codes/revive-dead"), { method: "POST", headers }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       if (data.revived === 0) {
@@ -2852,7 +2853,7 @@ export default function Admin() {
   });
 
   const genFriend = useMutation({
-    mutationFn: () => fetch("/api/admin/friends", {
+    mutationFn: () => fetch(apiUrl("/api/admin/friends"), {
       method: "POST", headers, body: JSON.stringify({ note: noteFriend.trim() || null }),
     }).then(r => r.json()),
     onSuccess: () => {
@@ -2864,7 +2865,7 @@ export default function Admin() {
   });
 
   const delFriend = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/friends/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/friends/${id}`), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
@@ -2872,7 +2873,7 @@ export default function Admin() {
   });
 
   const purgeUsedFriends = useMutation({
-    mutationFn: () => fetch("/api/admin/friends/used/purge", { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/admin/friends/used/purge"), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/friends", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
@@ -2883,7 +2884,7 @@ export default function Admin() {
 
   const manualPaymentsQuery = useQuery<ManualPayment[]>({
     queryKey: ["/api/admin/manual-payments", key],
-    queryFn: () => fetch("/api/admin/manual-payments", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/manual-payments"), { headers }).then(r => r.json()),
     enabled: authed,
     retry: false,
     refetchInterval: 30000,
@@ -2891,7 +2892,7 @@ export default function Admin() {
 
   const logPayment = useMutation({
     mutationFn: ({ amount, method, note }: { amount: number; method: string; note: string }) =>
-      fetch("/api/admin/manual-payments", {
+      fetch(apiUrl("/api/admin/manual-payments"), {
         method: "POST", headers,
         body: JSON.stringify({ amount, method, note }),
       }).then(r => r.json()),
@@ -2907,7 +2908,7 @@ export default function Admin() {
 
   const delManualPayment = useMutation({
     mutationFn: (id: number) =>
-      fetch(`/api/admin/manual-payments/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+      fetch(apiUrl(`/api/admin/manual-payments/${id}`), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/manual-payments", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
@@ -2916,7 +2917,7 @@ export default function Admin() {
 
   const emailRequestsQuery = useQuery<EmailRequest[]>({
     queryKey: ["/api/admin/email-requests", key],
-    queryFn: () => fetch("/api/admin/email-requests", { headers }).then(r => {
+    queryFn: () => fetch(apiUrl("/api/admin/email-requests"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
       return r.json();
     }),
@@ -2927,7 +2928,7 @@ export default function Admin() {
 
   const emailConfiguredQuery = useQuery<{ configured: boolean }>({
     queryKey: ["/api/admin/email-configured", key],
-    queryFn: () => fetch("/api/admin/email-configured", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/email-configured"), { headers }).then(r => r.json()),
     enabled: authed,
     retry: false,
   });
@@ -2942,7 +2943,7 @@ export default function Admin() {
   };
   const customerDeployStatsQuery = useQuery<CustomerDeployStat[]>({
     queryKey: ["/api/admin/customer-deploy-stats", key],
-    queryFn: () => fetch("/api/admin/customer-deploy-stats", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/customer-deploy-stats"), { headers }).then(r => r.json()),
     enabled: authed,
     retry: false,
     refetchInterval: 5000,
@@ -2950,7 +2951,7 @@ export default function Admin() {
 
   const customerHardwareQuery = useQuery<CustomerHW[]>({
     queryKey: ["/api/admin/customer-hardware", key],
-    queryFn: () => fetch("/api/admin/customer-hardware", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/customer-hardware"), { headers }).then(r => r.json()),
     enabled: authed,
     retry: false,
     refetchInterval: 30000,
@@ -2958,7 +2959,7 @@ export default function Admin() {
   const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
 
   const sendEmailCode = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/send`, {
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/email-requests/${id}/send`), {
       method: "POST", headers,
     }).then(async r => {
       const data = await r.json();
@@ -2977,7 +2978,7 @@ export default function Admin() {
   });
 
   const rejectEmailReq = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}/reject`, {
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/email-requests/${id}/reject`), {
       method: "POST", headers, body: JSON.stringify({ note: "Rejected by admin" }),
     }).then(r => r.json()),
     onSuccess: () => {
@@ -2987,7 +2988,7 @@ export default function Admin() {
   });
 
   const delEmailReq = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/email-requests/${id}`, {
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/email-requests/${id}`), {
       method: "DELETE", headers,
     }).then(r => r.json()),
     onSuccess: () => {
@@ -2997,7 +2998,7 @@ export default function Admin() {
 
   // Revoke all Pro sessions tied to a code — instantly kills access for a cheater
   const revokeByCode = useMutation({
-    mutationFn: (codeRef: string) => fetch(`/api/admin/sessions/by-code/${encodeURIComponent(codeRef)}`, {
+    mutationFn: (codeRef: string) => fetch(apiUrl(`/api/admin/sessions/by-code/${encodeURIComponent(codeRef)}`), {
       method: "DELETE", headers,
     }).then(r => r.json()),
     onSuccess: (data) => {
@@ -3016,13 +3017,13 @@ export default function Admin() {
   };
   const sessionsQuery = useQuery<SessionRow[]>({
     queryKey: ["/api/admin/sessions", key],
-    queryFn: () => fetch("/api/admin/sessions", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/sessions"), { headers }).then(r => r.json()),
     enabled: authed,
     refetchInterval: 30_000, // refresh every 30s so online status stays current
   });
 
   const revokeSession = useMutation({
-    mutationFn: (token: string) => fetch(`/api/admin/sessions/${encodeURIComponent(token)}`, {
+    mutationFn: (token: string) => fetch(apiUrl(`/api/admin/sessions/${encodeURIComponent(token)}`), {
       method: "DELETE", headers,
     }).then(r => r.json()),
     onSuccess: () => {
@@ -3032,7 +3033,7 @@ export default function Admin() {
   });
 
   const sweepOrphans = useMutation({
-    mutationFn: () => fetch("/api/admin/sessions/orphans", { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/admin/sessions/orphans"), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions", key] });
       toast({
@@ -3053,14 +3054,14 @@ export default function Admin() {
     };
   }>({
     queryKey: ["/api/admin/system-status", key],
-    queryFn: () => fetch("/api/admin/system-status", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/system-status"), { headers }).then(r => r.json()),
     enabled: authed,
     retry: false,
     refetchInterval: 10000,
   });
 
   const triggerAutoSend = useMutation({
-    mutationFn: () => fetch("/api/admin/auto-send/trigger", { method: "POST", headers }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/admin/auto-send/trigger"), { method: "POST", headers }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/system-status", key] });
@@ -3083,7 +3084,7 @@ export default function Admin() {
     updatePageUrl: string | null;
   }>({
     queryKey: ["/api/admin/settings", key],
-    queryFn: () => fetch("/api/admin/settings", { headers }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/admin/settings"), { headers }).then(r => r.json()),
     enabled: authed,
   });
   const [verCurrent, setVerCurrent] = useState("");
@@ -3101,7 +3102,7 @@ export default function Admin() {
   const saveVersionSettings = async () => {
     setVerSaving(true);
     try {
-      const r = await fetch("/api/admin/settings", {
+      const r = await fetch(apiUrl("/api/admin/settings"), {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3131,7 +3132,7 @@ export default function Admin() {
   const parsedTweakIds = annTweakIds.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
 
   const createAnn = useMutation({
-    mutationFn: () => fetch("/api/admin/announcements", {
+    mutationFn: () => fetch(apiUrl("/api/admin/announcements"), {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ title: annTitle, body: annBody, tag: annTag, tweakIds: parsedTweakIds }),
     }).then(r => r.json()),
@@ -3144,7 +3145,7 @@ export default function Admin() {
   });
 
   const deleteAnn = useMutation({
-    mutationFn: (id: number) => fetch(`/api/admin/announcements/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/announcements/${id}`), { method: "DELETE", headers }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
       toast({ title: "Announcement deleted" });
@@ -3177,7 +3178,7 @@ export default function Admin() {
 
   const handleLogin = async () => {
     setAuthError("");
-    const res = await fetch("/api/admin/codes", { headers: { "x-admin-key": input } });
+    const res = await fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": input } });
     if (res.ok) {
       localStorage.setItem(ADMIN_KEY_STORAGE, input);
       setKey(input);
@@ -3369,7 +3370,7 @@ export default function Admin() {
                     toast({ title: "Preview: Free mode" });
                   } else {
                     try {
-                      const res = await fetch("/api/admin/grant-pro-session", {
+                      const res = await fetch(apiUrl("/api/admin/grant-pro-session"), {
                         method: "POST",
                         headers: { "Content-Type": "application/json", "x-admin-key": key },
                       });
@@ -3576,7 +3577,7 @@ export default function Admin() {
             <Zap className="w-3 h-3" /> paypal.me/accountslg
           </a>
           <button onClick={() => {
-            fetch("/api/create-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
+            fetch(apiUrl("/api/create-checkout"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
               .then(r => r.json())
               .then(d => { if (d.url) window.location.href = d.url; })
               .catch(() => alert("Stripe checkout failed"));
