@@ -1,4 +1,4 @@
-import { LogOut, Shield, User, Cpu, Crown } from "lucide-react";
+import { LogOut, Shield, User, Cpu, Crown, ArrowLeft } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
@@ -16,9 +16,19 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-6 max-w-lg mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-display font-black text-white">Account</h1>
-        <p className="text-sm text-zinc-500 mt-1">Manage your session and profile</p>
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          data-testid="button-account-back"
+          onClick={() => window.history.back()}
+          className="w-9 h-9 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center hover:bg-zinc-800 transition-colors"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-4 h-4 text-zinc-400" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-display font-black text-white">Account</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Manage your session and profile</p>
+        </div>
       </div>
 
       <div className="space-y-4">
