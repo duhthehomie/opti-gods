@@ -7,15 +7,12 @@
       type="win32"/>
   <description>Opti Gods desktop client</description>
 
-  <!-- Run as the invoking user — no UAC prompt on launch.
-       Admin rights are only needed when the user downloads and runs the
-       generated PowerShell script, which handles its own elevation via
-       "Run as administrator". Requesting admin here caused silent launch
-       failures on Windows 10 when the installer used currentUser mode. -->
+  <!-- Require administrator — every native tweak (registry HKLM, services,
+       SRSetRestorePointW, process priority changes) needs full admin rights. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>
