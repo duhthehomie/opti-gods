@@ -8,7 +8,7 @@ import { sendProCode, isEmailConfigured } from "./email";
 import { notifyCriticalEvent, notifySale, sendNewRigAlert, postAuditLog } from "./alerts";
 import { getTweakUndoEntry } from "./tweak-undo-map";
 import { pollNvidiaDrivers } from "./nvidia-poller";
-import { registerAuthRoutes } from "./auth";
+import { registerAuthRoutes, validateNativeToken } from "./auth";
 import { autoSendState, runAutoSend } from "./auto-send";
 import { log } from "./index";
 import type { AiChatMessage } from "@shared/schema";
@@ -2363,10 +2363,23 @@ Start-Sleep 2
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
-      if (req.session?.userId) {
+
+      // Resolve the redeemer's Discord user ID from either the session cookie
+      // (web flow) or the X-Native-Auth bearer token (.exe flow). Without this,
+      // native users always get "No Discord" in the admin panel because their
+      // req.session.userId is never populated by the cookie middleware.
+      let redeemerDiscordId: string | null = req.session?.userId ?? null;
+      if (!redeemerDiscordId) {
+        const nativeToken = req.headers["x-native-auth"];
+        if (typeof nativeToken === "string") {
+          redeemerDiscordId = await validateNativeToken(nativeToken);
+        }
+      }
+
+      if (redeemerDiscordId) {
         try {
           await storage.grantPro({
-            discordUserId: req.session.userId,
+            discordUserId: redeemerDiscordId,
             source: "code",
             notes: `code:${normalizedCode}`,
           });
@@ -2375,7 +2388,7 @@ Start-Sleep 2
           return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
         }
       }
-      return res.json({ valid: true, sessionToken, discordSaved: !!req.session?.userId });
+      return res.json({ valid: true, sessionToken, discordSaved: !!redeemerDiscordId });
     }
 
     // Path 2: Code exists in DB and was already redeemed — reject.
