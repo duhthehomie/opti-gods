@@ -2299,7 +2299,7 @@ function ProUsersTab({ headers }: { headers: Record<string, string> }) {
     };
     return (
       <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border", cfg[s] || "bg-zinc-700 text-zinc-400 border-zinc-600")}>
-        {s}
+        {s === "admin" ? "Manually Granted" : s}
       </span>
     );
   };
@@ -2675,6 +2675,8 @@ export default function Admin() {
   const [editingFriendId, setEditingFriendId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [expandedCodeIps, setExpandedCodeIps] = useState<Set<number>>(new Set());
+  const [linkingDiscordCodeId, setLinkingDiscordCodeId] = useState<number | null>(null);
+  const [linkingDiscordInput, setLinkingDiscordInput] = useState("");
 
   // Preset generator pre-fill state (for "Gen Preset" button on each code row)
   type PresetFillValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
@@ -2851,6 +2853,20 @@ export default function Admin() {
         toast({ title: `Revived ${data.revived} code${data.revived !== 1 ? "s" : ""}`, description: "Customers can now re-enter their codes to get access back." });
       }
     },
+  });
+
+  const linkDiscordToCode = useMutation({
+    mutationFn: ({ codeId, discordUserId }: { codeId: number; discordUserId: string }) =>
+      fetch(apiUrl(`/api/admin/codes/${codeId}/link-discord`), {
+        method: "POST", headers, body: JSON.stringify({ discordUserId }),
+      }).then(async r => { if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || "Link failed"); } return r.json(); }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      setLinkingDiscordCodeId(null);
+      setLinkingDiscordInput("");
+      toast({ title: "Discord linked", description: "The code now shows the Discord connection." });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const genFriend = useMutation({
@@ -3920,15 +3936,46 @@ export default function Admin() {
                       {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : "AVAILABLE"}
                     </span>
                     {c.usedAt && (() => {
-                      const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null };
-                      return cx.discordLinked ? (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={`Discord: ${cx.discordUsername || "linked"}`}>
-                          🔗 {cx.discordUsername || "Discord"}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-amber-400 bg-amber-500/10 border-amber-500/30 flex items-center gap-1" title="Redeemed without Discord — revival risk if browser is cleared">
+                      const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null; discordManuallyLinked?: boolean };
+                      if (cx.discordLinked) {
+                        return (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={cx.discordManuallyLinked ? "Manually linked by admin" : `Discord: ${cx.discordUsername || "linked"}`}>
+                            🔗 {cx.discordManuallyLinked ? "Manually Linked" : (cx.discordUsername || "Discord")}
+                          </span>
+                        );
+                      }
+                      if (linkingDiscordCodeId === c.id) {
+                        return (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Discord user ID…"
+                              value={linkingDiscordInput}
+                              onChange={e => setLinkingDiscordInput(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter" && /^\d{15,25}$/.test(linkingDiscordInput.trim())) linkDiscordToCode.mutate({ codeId: c.id, discordUserId: linkingDiscordInput.trim() });
+                                if (e.key === "Escape") { setLinkingDiscordCodeId(null); setLinkingDiscordInput(""); }
+                              }}
+                              className="bg-zinc-800 border border-red-500/30 focus:border-red-500/60 rounded px-2 py-0.5 text-[10px] text-white placeholder-zinc-600 focus:outline-none w-40"
+                            />
+                            <button
+                              onClick={() => { if (/^\d{15,25}$/.test(linkingDiscordInput.trim())) linkDiscordToCode.mutate({ codeId: c.id, discordUserId: linkingDiscordInput.trim() }); }}
+                              disabled={linkDiscordToCode.isPending || !/^\d{15,25}$/.test(linkingDiscordInput.trim())}
+                              className="p-1 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 transition-colors disabled:opacity-40"
+                            ><Check className="w-3 h-3" /></button>
+                            <button onClick={() => { setLinkingDiscordCodeId(null); setLinkingDiscordInput(""); }} className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-400 transition-colors"><X className="w-3 h-3" /></button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          onClick={() => { setLinkingDiscordCodeId(c.id); setLinkingDiscordInput(""); }}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-amber-400 bg-amber-500/10 border-amber-500/30 flex items-center gap-1 hover:bg-amber-500/20 transition-colors"
+                          title="Click to connect a Discord account to this code"
+                        >
                           ⚠ No Discord
-                        </span>
+                        </button>
                       );
                     })()}
                   </div>

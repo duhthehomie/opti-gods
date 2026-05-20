@@ -2656,17 +2656,20 @@ Start-Sleep 2
       storage.getAllCodes(),
       storage.listProUsers(),
     ]);
-    // Build lookup: code value → Discord user info from entitlement notes
-    // When a Discord user redeems a code, grantPro() stores notes = "code:XXXX-XXXX-XXXX"
-    const codeToDiscord: Record<string, { discordUserId: string; discordUsername: string | null; discordGlobalName: string | null }> = {};
+    // Build lookup: code value → Discord user info from entitlement notes.
+    // Checks ALL sources (code, admin, cashapp, etc.) for a "code:XXXX" pattern
+    // so manually-linked grants show up just like automatic ones.
+    const codeToDiscord: Record<string, { discordUserId: string; discordUsername: string | null; manuallyLinked: boolean }> = {};
     for (const ent of proUsers) {
-      if (ent.source === 'code' && ent.notes) {
-        const match = ent.notes.match(/^code:([A-Z0-9_-]+)/i);
-        if (match) {
-          codeToDiscord[match[1].toUpperCase()] = {
+      if (!ent.notes) continue;
+      const match = ent.notes.match(/(?:^|[| ])code:([A-Z0-9_-]+)/i);
+      if (match) {
+        const codeKey = match[1].toUpperCase();
+        if (!codeToDiscord[codeKey]) {
+          codeToDiscord[codeKey] = {
             discordUserId: ent.discordUserId,
             discordUsername: ent.username ?? null,
-            discordGlobalName: null,
+            manuallyLinked: ent.source === 'admin',
           };
         }
       }
@@ -2676,8 +2679,34 @@ Start-Sleep 2
       discordLinked: !!codeToDiscord[c.code],
       discordUserId: codeToDiscord[c.code]?.discordUserId ?? null,
       discordUsername: codeToDiscord[c.code]?.discordUsername ?? null,
+      discordManuallyLinked: codeToDiscord[c.code]?.manuallyLinked ?? false,
     }));
     res.json(enriched);
+  });
+
+  // Admin — manually link a Discord ID to a specific code
+  app.post('/api/admin/codes/:id/link-discord', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const codeId = parseInt(req.params.id, 10);
+    if (!codeId) return res.status(400).json({ error: "Invalid code ID." });
+    const discordUserId = String(req.body?.discordUserId || "").trim();
+    if (!/^\d{15,25}$/.test(discordUserId)) {
+      return res.status(400).json({ error: "Discord user ID must be a 15–25 digit number." });
+    }
+    const allCodes = await storage.getAllCodes();
+    const target = allCodes.find(c => c.id === codeId);
+    if (!target) return res.status(404).json({ error: "Code not found." });
+    try {
+      await storage.grantPro({
+        discordUserId,
+        source: "admin",
+        notes: `code:${target.code} | manually linked`,
+      });
+      log(`[admin] Discord ${discordUserId} manually linked to code ${target.code}`, "admin");
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Grant failed." });
+    }
   });
 
   // Admin — generate new code
