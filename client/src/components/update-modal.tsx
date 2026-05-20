@@ -4,14 +4,16 @@ import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { APP_VERSION } from "@/generated/version";
 
-const SESSION_DISMISS_KEY = "optigods_update_dismissed_for";
-
 export function UpdateModal() {
   const { data } = useVersionInfo();
   const [open, setOpen] = useState(false);
+  // Track dismiss in React state only — Tauri's WebView2 persists sessionStorage
+  // across app launches (same as localStorage), which would permanently suppress
+  // the prompt. React state resets cleanly every time the binary starts.
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || dismissed) return;
     const { latestVersion } = data;
     if (!latestVersion) return;
     // Compare against the version burned into THIS binary — auto-clears
@@ -19,16 +21,13 @@ export function UpdateModal() {
     const installedVersion = APP_VERSION || data.currentVersion;
     if (!installedVersion) return;
     if (compareVersions(latestVersion, installedVersion) <= 0) return;
-    // Dismissed for this specific latest version?
-    const dismissed = sessionStorage.getItem(SESSION_DISMISS_KEY);
-    if (dismissed === latestVersion) return;
     setOpen(true);
-  }, [data]);
+  }, [data, dismissed]);
 
   if (!data) return null;
 
   const dismiss = () => {
-    sessionStorage.setItem(SESSION_DISMISS_KEY, data.latestVersion);
+    setDismissed(true);
     setOpen(false);
   };
 
