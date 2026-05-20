@@ -29,11 +29,25 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Install dependencies
+      - name: Install Node dependencies
         run: npm ci
 
+      - name: Install Tauri CLI
+        run: npm install --save-dev @tauri-apps/cli@^2
+
+      - name: Generate Cargo.lock if missing
+        working-directory: src-tauri
+        run: |
+          if (!(Test-Path "Cargo.lock")) {
+            cargo generate-lockfile
+          }
+        shell: pwsh
+
+      - name: Build frontend
+        run: npx vite build
+
       - name: Build .exe
-        run: npx tauri build
+        run: npx tauri build --verbose
 
       - name: Upload installer to release
         uses: softprops/action-gh-release@v2
