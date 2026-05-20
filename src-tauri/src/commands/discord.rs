@@ -125,31 +125,58 @@ async fn discord_login_inner(
         .open(&url, None)
         .map_err(|e| format!("shell.open failed: {e}"))?;
 
-    // 4. Wait up to 60 seconds for the redirect (reduced from 3 min — if the
-    //    user closes their browser without authorising, this resolves quickly).
-    let accept = tokio::time::timeout(Duration::from_secs(60), listener.accept())
-        .await
-        .map_err(|_| "Discord login timed out. Please try again.".to_string())?
-        .map_err(|e| format!("loopback accept failed: {e}"))?;
+    // 4. Wait up to 90 seconds for the redirect.
+    //
+    // We loop instead of accept()-once because some browsers (Chrome, Edge)
+    // send a speculative pre-connect probe — a TCP handshake with zero bytes
+    // of data — before the real HTTP GET /callback?code=... request arrives.
+    // A single accept() call consumes that empty probe, drops the listener,
+    // and the real callback finds nothing listening → browser spins forever.
+    //
+    // The loop skips:
+    //   • zero-byte connections  (pre-connect probes)
+    //   • non-/callback paths    (favicon.ico, etc.)
+    // and breaks on the first genuine OAuth callback or cancel.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+    let (code, returned_state) = loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("Discord login timed out after 90 s. Please try again.".to_string());
+        }
+        let (mut socket, _) = tokio::time::timeout(remaining, listener.accept())
+            .await
+            .map_err(|_| "Discord login timed out. Please try again.".to_string())?
+            .map_err(|e| format!("loopback accept failed: {e}"))?;
 
-    let (mut socket, _) = accept;
-    let mut buf = vec![0u8; 8192];
-    let n = socket
-        .read(&mut buf)
-        .await
-        .map_err(|e| format!("loopback read failed: {e}"))?;
-    let req = String::from_utf8_lossy(&buf[..n]);
-    let (code, returned_state) = parse_oauth_callback(&req)?;
+        let mut buf = vec![0u8; 16384];
+        let n = match socket.read(&mut buf).await {
+            Ok(0) | Err(_) => continue, // pre-connect probe or broken socket — skip
+            Ok(n) => n,
+        };
+        let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+
+        match parse_oauth_callback(&req) {
+            Ok((code, st)) => {
+                // Friendly success page — user can close the tab.
+                let _ = socket.write_all(
+                    html_response("✅ Logged in. You can close this tab and return to Opti Gods.").as_bytes()
+                ).await;
+                break (code, st);
+            }
+            Err(e) if e.contains("cancelled") || e.contains("access_denied") => {
+                // User clicked Cancel on Discord's consent page.
+                let _ = socket.write_all(
+                    html_response("Login cancelled. Close this tab and click 'Log in with Discord' again.").as_bytes()
+                ).await;
+                return Err(e);
+            }
+            Err(_) => continue, // favicon.ico, OPTIONS, or other noise — skip
+        }
+    };
+
     if returned_state != state {
-        let _ = socket.write_all(html_response("State mismatch. Please retry login.").as_bytes()).await;
-        return Err("OAuth state mismatch (possible CSRF).".into());
+        return Err("OAuth state mismatch (possible CSRF). Please try again.".into());
     }
-    // Friendly browser landing page.
-    let _ = socket
-        .write_all(
-            html_response("✅ Logged in. You can close this tab and return to Opti Gods.").as_bytes(),
-        )
-        .await;
 
     // 5. Exchange the code server-side (CLIENT_SECRET stays on the backend).
     let client = reqwest::Client::builder()
