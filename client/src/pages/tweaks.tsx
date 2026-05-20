@@ -2,13 +2,15 @@ import { useEffect, useState, lazy, Suspense, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2 } from "lucide-react";
+import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 
 const Registry = lazy(() => import("@/pages/registry"));
 const Fivem = lazy(() => import("@/pages/fivem"));
 const Fortnite = lazy(() => import("@/pages/fortnite"));
+const RustGame = lazy(() => import("@/pages/rust-game"));
+const RobloxPage = lazy(() => import("@/pages/roblox"));
 const Nvidia = lazy(() => import("@/pages/nvidia"));
 const Amd = lazy(() => import("@/pages/amd"));
 const IntegratedGraphics = lazy(() => import("@/pages/integrated-graphics"));
@@ -44,6 +46,8 @@ const SECTIONS: Section[] = [
   { id: "laptop", title: "Laptop Optimizer", desc: "Thermal, GPU switching, USB suspend, fan curve", icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"] },
   { id: "fivem", title: "FiveM / GTA V", desc: "Priority, cache, streaming, network buffers", icon: Gamepad2, group: "games", Component: Fivem, categories: ["fivem"] },
   { id: "fortnite", title: "Fortnite", desc: "DX12, shader precompile, input lag", icon: Crosshair, group: "games", Component: Fortnite, categories: ["fortnite"] },
+  { id: "rust", title: "Rust", desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows", icon: Swords, group: "games", Component: RustGame, categories: ["rust"] },
+  { id: "roblox", title: "Roblox", desc: "FPS unlock via FFlags, process priority, post-FX off", icon: Blocks, group: "games", Component: RobloxPage, categories: ["roblox"] },
   { id: "discord", title: "Discord", desc: "CPU/RAM reduction while gaming", icon: MessageCircle, group: "games", Component: DiscordPage, categories: ["discord"] },
   { id: "memory", title: "Memory & Pagefile", desc: "Pagefile, compression, standby trim, RAM profile", icon: MemoryStick, group: "system", Component: Memory, categories: ["memory"] },
   { id: "startup", title: "Startup Apps", desc: "Disable boot-time apps", icon: Power, group: "system", Component: StartupApps, categories: ["startup"] },
