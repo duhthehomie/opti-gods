@@ -86,6 +86,14 @@ export function AppSidebar() {
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auto-unlock admin for the owner account — no code prompt needed
+  useEffect(() => {
+    if (user?.username?.toLowerCase() === "my1ik" && !adminUnlocked) {
+      storeAdminKey(ADMIN_UNLOCK_CODE);
+      setAdminUnlocked(true);
+    }
+  }, [user?.username, adminUnlocked]);
+
   const handleVersionTap = useCallback(() => {
     tapCount.current += 1;
     if (tapTimer.current) clearTimeout(tapTimer.current);

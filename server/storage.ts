@@ -221,7 +221,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(proAccessCodes.code, code.toUpperCase().trim()));
     if (!rows.length) return false;
     const row = rows[0];
-    // If code was already used, only allow the same IP (original buyer) to re-use after admin reset
+
+    // Stripe codes are pre-claimed at purchase time by verify-payment
+    // (claimStripeCode sets usedAt/usedByIp immediately after checkout).
+    // Skip the single-use guards so the buyer can still enter their emailed
+    // code on any device. The downstream createProSession call already enforces
+    // single active session per code, preventing abuse.
+    const isStripeCode = (row.note || '').includes('stripe:');
+    if (isStripeCode) return true;
+
+    // Non-Stripe: standard single-use logic
     if (row.usedByIp && ip && row.usedByIp !== ip) return false;
     if (row.usedAt) return false;
     await db.update(proAccessCodes)

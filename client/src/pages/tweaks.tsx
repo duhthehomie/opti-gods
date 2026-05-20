@@ -124,7 +124,7 @@ function Accordion({ section, open, onToggle }: { section: Section; open: boolea
         <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform shrink-0", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="bg-black/40">
+        <div className="bg-black/40 pt-2 pb-4">
           <EmbeddedProvider>
             <Suspense fallback={<div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 text-red-400 animate-spin" /></div>}>
               <section.Component />
@@ -235,7 +235,7 @@ export default function TweaksPage() {
         </div>
 
         {/* Sections */}
-        <div className="space-y-2">
+        <div className="space-y-4">
           {visibleSections.map(s => (
             <Accordion key={s.id} section={s} open={!!openMap[s.id]} onToggle={() => toggle(s.id)} />
           ))}
