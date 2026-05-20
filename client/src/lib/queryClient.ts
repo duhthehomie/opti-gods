@@ -2,12 +2,17 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 
 export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
+export const NATIVE_ADMIN_KEY = "optigods_native_admin_key";
+
 export function getNativeAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   try {
     const token = localStorage.getItem(NATIVE_TOKEN_KEY);
-    if (token) return { "X-Native-Auth": token };
+    if (token) headers["X-Native-Auth"] = token;
+    const adminKey = localStorage.getItem(NATIVE_ADMIN_KEY);
+    if (adminKey) headers["X-Admin-Key"] = adminKey;
   } catch { /* localStorage may not be available */ }
-  return {};
+  return headers;
 }
 
 async function throwIfResNotOk(res: Response) {
