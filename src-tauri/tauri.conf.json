@@ -60,7 +60,7 @@
       },
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "installMode": "perMachine",
+        "installMode": "currentUser",
         "languages": [
           "English"
         ],
