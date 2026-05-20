@@ -231,6 +231,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetCode(id: number): Promise<void> {
+    // Look up the code value first so we can also wipe its pro_sessions.
+    // Without this, the next person to enter the code hits "already redeemed".
+    const [row] = await db.select({ code: proAccessCodes.code }).from(proAccessCodes).where(eq(proAccessCodes.id, id));
+    if (row?.code) {
+      await db.delete(proSessions).where(eq(proSessions.codeRef, row.code));
+    }
     await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
   }
 

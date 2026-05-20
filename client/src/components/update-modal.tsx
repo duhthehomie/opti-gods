@@ -3,6 +3,7 @@ import { Download, ExternalLink, X, Sparkles } from "lucide-react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { APP_VERSION } from "@/generated/version";
+import { isNative } from "@/lib/tauri-bridge";
 
 export function UpdateModal() {
   const { data } = useVersionInfo();
@@ -14,6 +15,8 @@ export function UpdateModal() {
 
   useEffect(() => {
     if (!data || dismissed) return;
+    // Only show update prompt inside the .exe — never on the website
+    if (!isNative()) return;
     const { latestVersion } = data;
     if (!latestVersion) return;
     // Compare against the version burned into THIS binary — auto-clears

@@ -71,15 +71,7 @@
   },
   "plugins": {
     "updater": {
-      "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyNTg3NTIwNDlFNjdBNkIKUldScmV1WkpJSFZZNHVxTlp0ZVNLSUJsVTl2SXJKQUJHcm5iNG5ZVU1WbWhnYVJNenNvSk56NVoK",
-      "endpoints": [
-        "https://github.com/duhthehomie/opti-gods/releases/latest/download/latest.json"
-      ],
-      "dialog": false,
-      "windows": {
-        "installMode": "passive"
-      }
+      "active": false
     }
   }
 }
