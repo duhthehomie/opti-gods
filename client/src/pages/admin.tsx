@@ -2767,6 +2767,7 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
       setNoteCode("");
+      setFilterCode("all");
       toast({ title: "Code generated", description: "New access code is ready to send." });
     },
   });
