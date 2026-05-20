@@ -5,7 +5,7 @@
   "identifier": "gg.optigods.desktop",
   "build": {
     "beforeDevCommand": "",
-    "beforeBuildCommand": "",
+    "beforeBuildCommand": "npx vite build",
     "devUrl": "http://localhost:5000",
     "frontendDist": "../dist/public"
   },

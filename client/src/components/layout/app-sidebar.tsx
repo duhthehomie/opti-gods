@@ -59,6 +59,8 @@ function getStoredAdminKey(): string | null {
 }
 
 function storeAdminKey(key: string) {
+  // NATIVE_ADMIN_KEY = "optigods_admin_key" — same key the /admin page reads,
+  // so the panel is already authenticated when opened from the sidebar.
   try { localStorage.setItem(NATIVE_ADMIN_KEY, key); } catch {}
 }
 

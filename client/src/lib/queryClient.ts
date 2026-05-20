@@ -2,7 +2,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 
 export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
-export const NATIVE_ADMIN_KEY = "optigods_native_admin_key";
+export const NATIVE_ADMIN_KEY = "optigods_admin_key";
 
 export function getNativeAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
