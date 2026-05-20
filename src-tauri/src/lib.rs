@@ -33,7 +33,7 @@ pub fn run() {
             // responsive). This timer is belt-and-suspenders only.
             let handle_safety = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 if let Some(w) = handle_safety.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
