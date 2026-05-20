@@ -1,4 +1,4 @@
 {
-  "version": "2.3.1",
-  "notes": "V2.3.1 — Gold spin video on code redemption, white X + revival warning, already-used code Discord restore, Tauri ACL discord_login fix, downloads auto-route through website."
+  "version": "2.3.6",
+  "notes": "V2.3.6 — FiveM crash fixes (IoPriority=2, MitigationOptions conflict resolved), window opens instantly on launch, Stripe code redemption fix."
 }
