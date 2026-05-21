@@ -66,10 +66,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: cargo-v3-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
 
       - name: Install Tauri CLI
-        run: npm install --global @tauri-apps/cli@latest
+        run: npm install --global @tauri-apps/cli@2.1
 
       - name: npm install
         run: npm install
