@@ -65,7 +65,8 @@
           "English"
         ],
         "displayLanguageSelector": false,
-        "compression": "lzma"
+        "compression": "lzma",
+        "runAfterInstall": true
       }
     }
   },

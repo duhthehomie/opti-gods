@@ -6,7 +6,7 @@ mod state;
 #[cfg(windows)]
 mod win32;
 
-use tauri::{Manager, WindowEvent};
+use tauri::WindowEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,40 +24,8 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
-        .setup(|app| {
-            // Safety timer — shows the window after 10 s even if JS never runs.
-            // Normal path: native-bootstrap.ts calls showMainWindow() via
-            // plugin:window|set_visible as soon as React mounts (WebView2 is
-            // fully initialised by then, so the window appears immediately
-            // responsive). This timer is belt-and-suspenders only.
-            let handle_safety = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                if let Some(w) = handle_safety.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            });
-
-            // ProBalance background loop — self-throttles when no game runs.
-            #[cfg(windows)]
-            {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(err) = commands::process_lasso::run_forever(handle).await {
-                        log::error!("[process_lasso] worker exited: {err:#}");
-                    }
-                });
-            }
-
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { .. } = event {
-                if window.label() == "main" {
-                    // No splash window exists — nothing extra to close.
-                }
-            }
+        .on_window_event(|_window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::splash::finish_splash,
