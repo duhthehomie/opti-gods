@@ -56,7 +56,7 @@
     "externalBin": [],
     "windows": {
       "webviewInstallMode": {
-        "type": "embedBootstrapper"
+        "type": "skip"
       },
       "nsis": {
         "installerIcon": "icons/icon.ico",
