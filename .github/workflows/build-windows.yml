@@ -227,6 +227,21 @@ jobs:
           }
           $obj | ConvertTo-Json -Depth 6 | Out-File latest.json -Encoding utf8
 
+      - name: Commit Cargo.lock to pin exact crate versions
+        shell: pwsh
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add src-tauri/Cargo.lock
+          $diff = git diff --cached --name-only
+          if ($diff) {
+            git commit -m "chore: pin Cargo.lock after successful build v${{ steps.version.outputs.version }}"
+            git push origin HEAD:main
+            Write-Host "Cargo.lock committed and pushed — versions now pinned."
+          } else {
+            Write-Host "Cargo.lock unchanged — already pinned."
+          }
+
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
