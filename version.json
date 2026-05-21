@@ -1,4 +1,4 @@
 {
-  "version": "2.3.6",
-  "notes": "V2.3.6 — FiveM crash fixes (IoPriority=2, MitigationOptions conflict resolved), window opens instantly on launch, Stripe code redemption fix."
+  "version": "2.3.7",
+  "notes": "V2.3.7 test build — process_lasso disabled, window visible immediately. For startup crash testing only."
 }

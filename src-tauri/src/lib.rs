@@ -35,15 +35,8 @@ pub fn run() {
                 }
             });
 
-            #[cfg(windows)]
-            {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(err) = commands::process_lasso::run_forever(handle).await {
-                        log::error!("[process_lasso] worker exited: {err:#}");
-                    }
-                });
-            }
+            // process_lasso disabled in this test build (variant B)
+            // to isolate whether it causes startup crash
 
             Ok(())
         })

@@ -4923,6 +4923,46 @@ export default function Admin() {
         {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
         {tab === "announcements" && (
           <div className="space-y-5">
+
+            {/* ─── TEST BUILDS ─────────────────────────────────────────── */}
+            <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/[0.04] p-4 space-y-3">
+              <h3 className="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-2">
+                <span>⚠</span> Startup Test Builds — Morning Testing
+              </h3>
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                Two builds for diagnosing the v2.3.6 startup crash. Test <span className="text-yellow-300 font-bold">Build A first</span>, then B if A fails. Tell the agent which one works to ship the final release.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-white">Build A — v2.3.6</div>
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">Full app, window shows immediately (<code className="text-zinc-300">visible:true</code>). All features including ProBalance.</div>
+                  <a
+                    href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.6/OptiGods-Setup-2.3.6.exe"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
+                    data-testid="link-test-build-a"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Build A
+                  </a>
+                </div>
+                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-white">Build B — v2.3.7</div>
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">ProBalance disabled at startup. Tests if process scheduling causes the crash.</div>
+                  <a
+                    href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
+                    data-testid="link-test-build-b"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Build B
+                  </a>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-600">Both builds complete overnight. Links go live after GitHub Actions finishes (~15 min each).</p>
+            </div>
+
             {/* ─── Version & Updates config (Task #27) ───────────────── */}
             <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-4 space-y-3" data-testid="section-version-updates">
               <h3 className="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
