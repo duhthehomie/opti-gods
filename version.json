@@ -1,4 +1,4 @@
 {
-  "version": "2.3.7",
-  "notes": "V2.3.7 test build — process_lasso disabled, window visible immediately. For startup crash testing only."
+  "version": "2.3.8",
+  "notes": "V2.3.8 — guaranteed launch fix: notification/updater/os plugins removed (Win10 WinRT init issue), panic mode safe, window visible immediately, ProBalance on-demand only."
 }

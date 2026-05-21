@@ -4927,40 +4927,83 @@ export default function Admin() {
             {/* ─── TEST BUILDS ─────────────────────────────────────────── */}
             <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/[0.04] p-4 space-y-3">
               <h3 className="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-2">
-                <span>⚠</span> Startup Test Builds — Morning Testing
+                <span>⚠</span> Startup Crash — Test Builds (Test in order A → B → C)
               </h3>
               <p className="text-[10px] text-zinc-400 leading-relaxed">
-                Two builds for diagnosing the v2.3.6 startup crash. Test <span className="text-yellow-300 font-bold">Build A first</span>, then B if A fails. Tell the agent which one works to ship the final release.
+                Three targeted builds. <span className="text-emerald-400 font-bold">Build C is highest confidence</span> — stripped to minimum plugins, no silent crash mode. Test A first (fastest), then B, then C. Tell the agent which works → it ships as the final release in minutes.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
                   <div className="text-[11px] font-bold text-white">Build A — v2.3.6</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">Full app, window shows immediately (<code className="text-zinc-300">visible:true</code>). All features including ProBalance.</div>
-                  <a
-                    href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.6/OptiGods-Setup-2.3.6.exe"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">Full app, window shows immediately. All features on.</div>
+                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.6/OptiGods-Setup-2.3.6.exe"
+                    target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-a"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download Build A
+                    data-testid="link-test-build-a">
+                    <Download className="w-3.5 h-3.5" /> Download A
                   </a>
                 </div>
                 <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
                   <div className="text-[11px] font-bold text-white">Build B — v2.3.7</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">ProBalance disabled at startup. Tests if process scheduling causes the crash.</div>
-                  <a
-                    href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">ProBalance disabled at startup. All other features on.</div>
+                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
+                    target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-b"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download Build B
+                    data-testid="link-test-build-b">
+                    <Download className="w-3.5 h-3.5" /> Download B
+                  </a>
+                </div>
+                <div className="rounded-lg border border-emerald-600/40 bg-emerald-500/[0.04] p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-emerald-300">Build C — v2.3.8 ⭐ Highest Confidence</div>
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">Notification + updater + OS plugins removed (Win10 WinRT fix). Safe panic mode. ProBalance on-demand only.</div>
+                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.8/OptiGods-Setup-2.3.8.exe"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 w-full justify-center bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
+                    data-testid="link-test-build-c">
+                    <Download className="w-3.5 h-3.5" /> Download C
                   </a>
                 </div>
               </div>
-              <p className="text-[10px] text-zinc-600">Both builds complete overnight. Links go live after GitHub Actions finishes (~15 min each).</p>
+              <p className="text-[10px] text-zinc-600">All 3 builds complete overnight. Links go live ~15 min after each push. Tell the agent which one launches → it ships as the official release instantly.</p>
+            </div>
+
+            {/* ─── WHAT'S WORKING ──────────────────────────────────────── */}
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4 space-y-3">
+              <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5" /> What's Working — Opti Gods V2
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
+                {[
+                  ["437 optimization toggles", "Registry, Network, GPU, Games, System, Laptop, Memory"],
+                  ["PowerShell script generation", "Download .ps1 with selected tweaks, instant apply"],
+                  ["Pro paywall", "CashApp, PayPal, Stripe card payments — all active"],
+                  ["Access code redemption", "Codes + free friend unlock (?unlock=key)"],
+                  ["Admin panel — 11 tabs", "Codes, Friends, Activity, Email, Sessions, Updates, Analytics, Security, Preset Gen, Aether AI, Tickets"],
+                  ["Opti Gods AI", "Groq-powered streaming chat, image analysis, smart preset generation"],
+                  ["Aether admin AI", "Live stats injection, revenue/visits/downloads, security events"],
+                  ["Discord OAuth", "Login in desktop exe and web — session persistence"],
+                  ["Game detection", "PS1 scanner for 14 games, opens filtered game card grid"],
+                  ["Preset save/load", "Stored in PostgreSQL, shareable via URL"],
+                  ["System Scan", "Browser-side + native WMI deep scan in .exe"],
+                  ["Security center", "IP bans, rate limits, geo-intelligence, threat monitoring"],
+                  ["Critical event alerts", "Discord webhook + email for security events"],
+                  ["User report / ticket system", "Submit via AI chat, admin reviews with status tracking"],
+                  ["Mobile showcase mode", "Marketing page for mobile visitors, not the optimizer"],
+                  ["Auto-updater", "Version check popup, GitHub release auto-detect"],
+                  ["FiveM optimizations", "V2.1 crash fixes — IPv6, timer resolution, MSI mode safe"],
+                  ["NVIDIA driver tweaks", "12 tweaks incl. reapply button after driver reinstall"],
+                  ["AMD driver tweaks", "8 tweaks incl. reapply button after Adrenalin update"],
+                  ["AI Preset Generator", "buildSafePreset — vendor filter, safety gates, opt-in flags"],
+                ].map(([title, desc]) => (
+                  <div key={title} className="flex items-start gap-2 py-1 border-b border-white/[0.03]">
+                    <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
+                    <div>
+                      <span className="text-white font-semibold">{title}</span>
+                      <span className="text-zinc-500 ml-1">{desc}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* ─── Version & Updates config (Task #27) ───────────────── */}

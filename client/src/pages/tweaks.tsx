@@ -205,7 +205,8 @@ export default function TweaksPage() {
         </header>
 
         {/* Category Tab Bar */}
-        <div className="flex gap-1.5 flex-wrap border-b border-white/5 pb-4">
+        <div className="flex gap-1.5 overflow-x-auto pb-4 border-b border-white/5 scrollbar-none"
+          style={{ scrollbarWidth: "none" }}>
           {TABS.map(tab => {
             const count = tab.id === "all"
               ? SECTIONS.length
