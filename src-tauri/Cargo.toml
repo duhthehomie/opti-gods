@@ -12,19 +12,19 @@ name = "opti_gods_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "~2.1", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Tauri core
-tauri = { version = "~2.1", features = ["protocol-asset"] }
-tauri-plugin-shell = "~2.1"
-tauri-plugin-dialog = "~2.1"
-tauri-plugin-process = "~2.1"
-tauri-plugin-http = "~2.1"
-tauri-plugin-fs = "~2.1"
-tauri-plugin-updater = "~2.1"
-tauri-plugin-os = "~2.1"
-tauri-plugin-notification = "~2.1"
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-http = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
