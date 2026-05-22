@@ -1,4 +1,4 @@
 {
-  "version": "2.3.8",
-  "notes": "V2.3.8 — guaranteed launch fix: notification/updater/os plugins removed (Win10 WinRT init issue), panic mode safe, window visible immediately, ProBalance on-demand only."
+  "version": "2.3.9",
+  "notes": "V2.3.9 — skip WebView2 bootstrapper (Win10/11 has it pre-installed), currentUser install (no UAC), notification plugin removed, safe panic mode."
 }
