@@ -1,4 +1,4 @@
 {
-  "version": "2.3.9",
-  "notes": "V2.3.9 — skip WebView2 bootstrapper (Win10/11 has it pre-installed), currentUser install (no UAC), notification plugin removed, safe panic mode."
+  "version": "2.3.10",
+  "notes": "V2.3.10 — fresh crate resolution (delete Cargo.lock pin), downloadBootstrapper WebView2 (verifies version), perMachine install, notification removed, safe panic."
 }
