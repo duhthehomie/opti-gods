@@ -2,8 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { BRAND, prefersReducedMotion } from "./assets";
 
 const PRO_EVENT = "optigods_pro_changed";
+export const PRO_CELEBRATE_EVENT = "optigods_pro_celebrate";
 const DISMISS_MS = 4000;
 const FADE_MS = 400;
+
+export function fireCelebration() {
+  window.dispatchEvent(new Event(PRO_CELEBRATE_EVENT));
+}
 
 export function ProCelebration() {
   const [phase, setPhase] = useState<"hidden" | "show" | "fade">("hidden");
@@ -21,8 +26,15 @@ export function ProCelebration() {
       }
       wasProRef.current = nowPro;
     };
+
+    const onForce = () => setPhase("show");
+
     window.addEventListener(PRO_EVENT, onChange);
-    return () => window.removeEventListener(PRO_EVENT, onChange);
+    window.addEventListener(PRO_CELEBRATE_EVENT, onForce);
+    return () => {
+      window.removeEventListener(PRO_EVENT, onChange);
+      window.removeEventListener(PRO_CELEBRATE_EVENT, onForce);
+    };
   }, []);
 
   useEffect(() => {
@@ -31,7 +43,6 @@ export function ProCelebration() {
       const t = window.setTimeout(() => setPhase("fade"), DISMISS_MS);
       return () => window.clearTimeout(t);
     }
-    // phase === "fade"
     const t = window.setTimeout(() => setPhase("hidden"), FADE_MS);
     return () => window.clearTimeout(t);
   }, [phase]);

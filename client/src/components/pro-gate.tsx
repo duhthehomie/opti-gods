@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
+import { fireCelebration } from "@/components/branding/pro-celebration";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
@@ -86,6 +87,7 @@ export function ProPaymentDialog({
         }
         setDiscordSaved(data.discordSaved ?? false);
         setSuccess(true);
+        fireCelebration();
         // Only auto-close if Discord is already linked — otherwise we hold
         // the dialog open so the user sees the "link Discord NOW" warning.
         if (data.discordSaved) {

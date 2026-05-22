@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Opti Gods",
-  "version": "2.3.13",
+  "version": "2.0.0",
   "identifier": "gg.optigods.desktop",
   "build": {
     "beforeDevCommand": "",
@@ -36,10 +36,10 @@
       "nsis"
     ],
     "publisher": "leaq",
-    "copyright": "\u00a9 2026 leaq. All rights reserved.",
+    "copyright": "© 2026 leaq. All rights reserved.",
     "category": "Utility",
     "shortDescription": "Windows 10/11 PC optimizer.",
-    "longDescription": "Opti Gods is a Windows tuning toolkit for competitive gamers \u2014 registry, network, GPU, and process-priority tweaks with one-click apply and undo.",
+    "longDescription": "Opti Gods is a Windows tuning toolkit for competitive gamers — registry, network, GPU, and process-priority tweaks with one-click apply and undo.",
     "icon": [
       "icons/16x16.png",
       "icons/32x32.png",

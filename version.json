@@ -1,4 +1,4 @@
 {
-  "version": "2.3.13",
-  "notes": "V2.3.13 — exact working 2.3.1 config restored + Tauri pinned below 2.10.0 to fix startup regression."
+  "version": "2.0.0",
+  "notes": "V2.0 — Official release."
 }
