@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api-base";
@@ -8,7 +9,7 @@ import type { OsInfo } from "@/hooks/use-os-detection";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
-  LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap,
+  LogOut, DollarSign, Users, BarChart3, Clock, Search, Zap, ArrowLeft,
   MessageSquare, Flame, RefreshCw, ChevronDown, ChevronUp, RotateCcw, ShieldOff,
   Mail, Send, XCircle, Inbox, Activity, Bot, Timer, TrendingUp, Wifi, WifiOff,
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
