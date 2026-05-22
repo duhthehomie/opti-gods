@@ -4927,44 +4927,34 @@ export default function Admin() {
             {/* ─── TEST BUILDS ─────────────────────────────────────────── */}
             <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/[0.04] p-4 space-y-3">
               <h3 className="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-2">
-                <span>⚠</span> Startup Crash — Test Builds (Test in order A → B → C)
+                <span>⚠</span> Startup Crash — Test Builds (try D first — it's the fix)
               </h3>
               <p className="text-[10px] text-zinc-400 leading-relaxed">
-                Three targeted builds. <span className="text-emerald-400 font-bold">Build C is highest confidence</span> — stripped to minimum plugins, no silent crash mode. Test A first (fastest), then B, then C. Tell the agent which works → it ships as the final release in minutes.
+                <span className="text-emerald-400 font-bold">Build D (v2.3.9) is the real fix</span> — WebView2 bootstrapper completely removed (it was crashing in native C++ before Rust even started). Win10/11 already has WebView2 via Windows Update. Also no UAC popup, no silent crash mode.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
-                  <div className="text-[11px] font-bold text-white">Build A — v2.3.6</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">Full app, window shows immediately. All features on.</div>
-                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.6/OptiGods-Setup-2.3.6.exe"
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-a">
-                    <Download className="w-3.5 h-3.5" /> Download A
-                  </a>
-                </div>
-                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
-                  <div className="text-[11px] font-bold text-white">Build B — v2.3.7</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">ProBalance disabled at startup. All other features on.</div>
-                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-b">
-                    <Download className="w-3.5 h-3.5" /> Download B
-                  </a>
-                </div>
-                <div className="rounded-lg border border-emerald-600/40 bg-emerald-500/[0.04] p-3 space-y-2">
-                  <div className="text-[11px] font-bold text-emerald-300">Build C — v2.3.8 ⭐ Highest Confidence</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">Notification + updater + OS plugins removed (Win10 WinRT fix). Safe panic mode. ProBalance on-demand only.</div>
-                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.8/OptiGods-Setup-2.3.8.exe"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-emerald-600/40 bg-emerald-500/[0.06] p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-emerald-300">Build D — v2.3.9 ⭐ TEST THIS FIRST</div>
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">WebView2 bootstrapper skipped — was crashing in native C++ before window ever showed. No UAC. No silent crash mode. Notification plugin removed.</div>
+                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.9/OptiGods-Setup-2.3.9.exe"
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 w-full justify-center bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
+                    data-testid="link-test-build-d">
+                    <Download className="w-3.5 h-3.5" /> Download D — v2.3.9
+                  </a>
+                </div>
+                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-white">Build C — v2.3.8 (backup)</div>
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">Notification + OS plugins removed, safe panic mode. Try this if D doesn't work.</div>
+                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.8/OptiGods-Setup-2.3.8.exe"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
                     data-testid="link-test-build-c">
-                    <Download className="w-3.5 h-3.5" /> Download C
+                    <Download className="w-3.5 h-3.5" /> Download C — v2.3.8
                   </a>
                 </div>
               </div>
-              <p className="text-[10px] text-zinc-600">All 3 builds complete overnight. Links go live ~15 min after each push. Tell the agent which one launches → it ships as the official release instantly.</p>
+              <p className="text-[10px] text-zinc-600">Build D link goes live ~15 min after the latest push. If it works, tell the agent → ships as official release immediately.</p>
             </div>
 
             {/* ─── WHAT'S WORKING ──────────────────────────────────────── */}
