@@ -1,4 +1,4 @@
 {
-  "version": "2.3.12",
-  "notes": "V2.3.12 — pin Tauri to <2.10.0 (avoid 2.10-2.11 regression), fresh crate resolution, clean startup code."
+  "version": "2.3.13",
+  "notes": "V2.3.13 — exact working 2.3.1 config restored + Tauri pinned below 2.10.0 to fix startup regression."
 }

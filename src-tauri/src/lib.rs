@@ -6,7 +6,7 @@ mod state;
 #[cfg(windows)]
 mod win32;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,10 +21,36 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
-        .setup(|_app| {
+        .setup(|app| {
+            let handle_safety = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                if let Some(w) = handle_safety.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
+
+            #[cfg(windows)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = commands::process_lasso::run_forever(handle).await {
+                        log::error!("[process_lasso] worker exited: {err:#}");
+                    }
+                });
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                if window.label() == "main" {}
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::splash::finish_splash,

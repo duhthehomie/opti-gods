@@ -1,6 +1,6 @@
 [package]
 name = "opti-gods"
-version = "2.3.8"
+version = "2.3.13"
 description = "Opti Gods — Windows PC optimizer (Tauri shell)"
 authors = ["leaq"]
 license = "Proprietary"
@@ -12,10 +12,10 @@ name = "opti_gods_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = ">=2.0.0, <2.10.0", features = [] }
 
 [dependencies]
-# Tauri core
+# Tauri core — pinned below 2.10 to avoid the startup regression in 2.10/2.11
 tauri = { version = ">=2.0.0, <2.10.0", features = ["protocol-asset"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
@@ -23,6 +23,8 @@ tauri-plugin-process = "2"
 tauri-plugin-http = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -47,15 +49,14 @@ hex = "0.4"
 sha2 = "0.10"
 base64 = "0.22"
 
-# HTTP for Discord OAuth token exchange (reqwest is brought in by tauri-plugin-http internally,
-# but we need our own client for the loopback handler too).
+# HTTP for Discord OAuth token exchange
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 url = "2"
 
 # Secure token storage (Windows Credential Manager on Windows).
 keyring = { version = "3", features = ["windows-native"] }
 
-# Windows-only deps — everything below only compiles on Windows targets.
+# Windows-only deps
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 wmi = "0.14"
@@ -76,11 +77,11 @@ windows = { version = "0.58", features = [
 
 [features]
 default = ["custom-protocol"]
-# When the .exe is run standalone (not via `tauri dev`), enable the
-# custom asset protocol so the embedded React bundle can load.
 custom-protocol = ["tauri/custom-protocol"]
 
 [profile.release]
+panic = "abort"
 codegen-units = 1
-lto = "thin"
+lto = true
 opt-level = "s"
+strip = true

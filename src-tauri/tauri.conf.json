@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Opti Gods",
-  "version": "2.3.6",
+  "version": "2.3.13",
   "identifier": "gg.optigods.desktop",
   "build": {
     "beforeDevCommand": "",
@@ -23,7 +23,7 @@
         "transparent": false,
         "fullscreen": false,
         "center": true,
-        "visible": true
+        "visible": false
       }
     ],
     "security": {
@@ -56,7 +56,7 @@
     "externalBin": [],
     "windows": {
       "webviewInstallMode": {
-        "type": "offlineInstaller"
+        "type": "embedBootstrapper"
       },
       "nsis": {
         "installerIcon": "icons/icon.ico",
@@ -71,7 +71,15 @@
   },
   "plugins": {
     "updater": {
-      "active": false
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyNTg3NTIwNDlFNjdBNkIKUldScmV1WkpJSFZZNHVxTlp0ZVNLSUJsVTl2SXJKQUJHcm5iNG5ZVU1WbWhnYVJNenNvSk56NVoK",
+      "endpoints": [
+        "https://github.com/duhthehomie/opti-gods/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
