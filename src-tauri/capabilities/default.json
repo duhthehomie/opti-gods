@@ -15,8 +15,6 @@
     "process:default",
     "http:default",
     "fs:default",
-    "os:default",
-    "notification:default",
     "updater:default",
     "allow-finish-splash",
     "allow-apply-tweak",
