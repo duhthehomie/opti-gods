@@ -32,7 +32,6 @@ import SystemScanPage from "@/pages/system-scan";
 import ProPage from "@/pages/pro";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import AccountPage from "@/pages/account";
-import RustGamePage from "@/pages/rust-game";
 
 function SmartHome() {
   const isGuest = (() => { try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; } })();
@@ -105,7 +104,6 @@ function Router() {
       <Route path="/pro" component={ProPage} />
 
       <Route path="/ai" component={OptiGodsAI} />
-      <Route path="/rust" component={RustGamePage} />
       <Route path="/account" component={AccountPage} />
       <Route path="/admin" component={Admin} />
       <Route path="/showcase" component={Showcase} />
