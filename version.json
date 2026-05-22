@@ -1,4 +1,4 @@
 {
-  "version": "2.3.11",
-  "notes": "V2.3.11 — bundled WebView2 offline installer (installs WebView2 from scratch, no network, no assumptions), fresh crate resolution, perMachine, notification removed, safe panic."
+  "version": "2.3.12",
+  "notes": "V2.3.12 — pin Tauri to <2.10.0 (avoid 2.10-2.11 regression), fresh crate resolution, clean startup code."
 }
