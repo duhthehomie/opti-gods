@@ -4,12 +4,10 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
-import { Loader2, Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight } from "lucide-react";
+import { Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight } from "lucide-react";
 import { BRAND } from "@/components/branding/assets";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useGenerateScript } from "@/hooks/use-script";
 import { ScriptDialog } from "../script-dialog";
-import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
 import { UserChip } from "@/components/user-chip";
@@ -346,23 +344,12 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [command, setCommand] = useState<string | null>(null);
 
   const { tweaks, nvidiaPreset, reset } = useOptimizationStore();
-  const generateScript = useGenerateScript();
-  const { toast } = useToast();
   const osInfo = useOsDetection();
 
   const handleApply = () => {
-    generateScript.mutate({ tweaks, nvidiaPreset }, {
-      onSuccess: (data) => {
-        setCommand(data.command);
-        setDialogOpen(true);
-      },
-      onError: (error) => {
-        toast({ title: "Error Generating Script", description: error.message, variant: "destructive" });
-      }
-    });
+    setDialogOpen(true);
   };
 
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
@@ -436,7 +423,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
                   <Button
                     data-testid="button-apply-optimizations"
                     onClick={handleApply}
-                    disabled={generateScript.isPending}
+                    disabled={false}
                     className={cn(
                       "font-display tracking-wide px-6 border transition-all duration-300",
                       enabledCount > 0
@@ -444,11 +431,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
                         : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-700"
                     )}
                   >
-                    {generateScript.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4 mr-2" />
-                    )}
+                    <Download className="w-4 h-4 mr-2" />
                     {enabledCount > 0 ? `GET MY SCRIPT (${enabledCount})` : "GET MY SCRIPT"}
                   </Button>
                 </ProGate>
@@ -487,7 +470,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
       <ScriptDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        command={command}
+        command={null}
       />
     </SidebarProvider>
   );
