@@ -1,4 +1,4 @@
 {
-  "version": "2.3.10",
-  "notes": "V2.3.10 — fresh crate resolution (delete Cargo.lock pin), downloadBootstrapper WebView2 (verifies version), perMachine install, notification removed, safe panic."
+  "version": "2.3.11",
+  "notes": "V2.3.11 — bundled WebView2 offline installer (installs WebView2 from scratch, no network, no assumptions), fresh crate resolution, perMachine, notification removed, safe panic."
 }
