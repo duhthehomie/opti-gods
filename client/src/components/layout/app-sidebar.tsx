@@ -86,13 +86,6 @@ export function AppSidebar() {
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-unlock admin for the owner account — no code prompt needed
-  useEffect(() => {
-    if (user?.username?.toLowerCase() === "my1ik" && !adminUnlocked) {
-      storeAdminKey(ADMIN_UNLOCK_CODE);
-      setAdminUnlocked(true);
-    }
-  }, [user?.username, adminUnlocked]);
 
   const handleVersionTap = useCallback(() => {
     tapCount.current += 1;
@@ -275,16 +268,6 @@ export function AppSidebar() {
             </button>
           )}
 
-          {adminUnlocked && (
-            <button
-              data-testid="button-admin-lock"
-              onClick={handleAdminLock}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/5 border border-purple-500/20 hover:bg-purple-500/10 transition-colors"
-            >
-              <ShieldCheck className="w-3 h-3 text-purple-500 shrink-0" />
-              <span className="text-[10px] text-purple-400 font-semibold flex-1 text-left">Admin unlocked — tap to lock</span>
-            </button>
-          )}
 
           {enabledCount > 0 && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-3">

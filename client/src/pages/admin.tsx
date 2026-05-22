@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
+import { useAuth } from "@/hooks/use-auth";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
@@ -2657,10 +2658,19 @@ export default function Admin() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const isPro = useProStatus();
+  const { user, isLoading: authLoading } = useAuth();
   const [key, setKey] = useState(() => localStorage.getItem(ADMIN_KEY_STORAGE) || "");
   const [input, setInput] = useState("");
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState("");
+
+  const storedKey = typeof window !== "undefined" ? localStorage.getItem(ADMIN_KEY_STORAGE) : null;
+  const isOwner = user?.username?.toLowerCase() === "my1ik";
+  useEffect(() => {
+    if (!authLoading && !isOwner && !storedKey) {
+      setLocation("/");
+    }
+  }, [authLoading, isOwner, storedKey, setLocation]);
 
   const [tab, setTab] = useState<Tab>("codes");
   const [noteCode, setNoteCode] = useState("");

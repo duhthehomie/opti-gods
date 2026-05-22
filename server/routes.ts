@@ -1394,11 +1394,7 @@ export async function registerRoutes(
         }
       }
 
-      // Auto-resolved from GitHub releases — no manual update needed
-      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
-        return res.redirect(302, gh.exeUrl);
-      }
-
+      // Local bundled installer takes priority — always serve the file we ship
       const dir = join(process.cwd(), "client", "public", "downloads");
       if (existsSync(dir)) {
         const entries = readdirSync(dir)
@@ -1418,7 +1414,12 @@ export async function registerRoutes(
         }
       }
 
-      // Hard fallback — GitHub cache miss and no local file
+      // Fallback — auto-resolved from GitHub releases
+      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        return res.redirect(302, gh.exeUrl);
+      }
+
+      // Hard fallback — no local file and no GitHub release
       res.status(503).json({ status: "coming_soon", message: "No installer available yet. Check back soon." });
     } catch (e) {
       console.error("[/api/download/latest] failed:", e);
