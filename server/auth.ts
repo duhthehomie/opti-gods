@@ -333,7 +333,7 @@ export function registerAuthRoutes(app: Express): void {
     res.json({
       currentVersion: settings?.currentVersion ?? fileVersion ?? CURRENT,
       latestVersion:  settings?.latestVersion  ?? gh?.version ?? fileVersion ?? CURRENT,
-      updaterCmdUrl:  settings?.updaterCmdUrl  ?? gh?.exeUrl  ?? INSTALLER_URL,
+      updaterCmdUrl:  settings?.updaterCmdUrl  ?? INSTALLER_URL,
       updatePageUrl:  settings?.updatePageUrl  ?? gh?.pageUrl ?? "https://optigods.com",
     });
   });

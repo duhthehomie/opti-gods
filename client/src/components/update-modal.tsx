@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, X, Sparkles } from "lucide-react";
+import { Download, ExternalLink, X, Sparkles, Loader2 } from "lucide-react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { APP_VERSION } from "@/generated/version";
 import { isNative } from "@/lib/tauri-bridge";
+import { apiUrl } from "@/lib/api-base";
 
 export function UpdateModal() {
   const { data } = useVersionInfo();
   const [open, setOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   // Track dismiss in React state only — Tauri's WebView2 persists sessionStorage
   // across app launches (same as localStorage), which would permanently suppress
   // the prompt. React state resets cleanly every time the binary starts.
@@ -34,18 +36,34 @@ export function UpdateModal() {
     setOpen(false);
   };
 
-  const downloadUpdater = () => {
+  const downloadUpdater = async () => {
     if (!data.updaterCmdUrl) return;
-    // Trigger a real download — browser will save the .cmd to the user's
-    // downloads folder. They run it manually (browsers will not auto-execute
-    // .cmd files for safety).
-    const a = document.createElement("a");
-    a.href = data.updaterCmdUrl;
-    a.download = `OptiGods-Update-${data.latestVersion}.cmd`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    dismiss();
+    setDownloading(true);
+    try {
+      // Always fetch through the server so Tauri WebView2 gets a blob: URL
+      // (direct <a href="https://…"> clicks open the system browser in WebView2
+      // instead of triggering an in-app download).
+      const targetUrl = apiUrl(data.updaterCmdUrl);
+      const res = await fetch(targetUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], { type: "application/octet-stream" });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `OptiGods-Setup-${data.latestVersion ?? "latest"}.exe`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      dismiss();
+    } catch {
+      // Fallback — open in system browser so user can still get the file
+      window.open(data.updaterCmdUrl, "_blank", "noopener,noreferrer");
+      dismiss();
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const openUpdatePage = () => {
@@ -112,14 +130,16 @@ export function UpdateModal() {
                 <button
                   type="button"
                   onClick={downloadUpdater}
-                  disabled={!data.updaterCmdUrl}
+                  disabled={!data.updaterCmdUrl || downloading}
                   data-testid="button-update-download-cmd"
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white text-sm font-bold shadow-lg shadow-red-600/30 transition-colors"
                 >
-                  <Download className="w-4 h-4" />
-                  {data.updaterCmdUrl
-                    ? "Download & run updater"
-                    : "Updater not configured"}
+                  {downloading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Downloading...</>
+                    : data.updaterCmdUrl
+                      ? <><Download className="w-4 h-4" /> Download installer</>
+                      : "Updater not configured"
+                  }
                 </button>
                 <button
                   type="button"
@@ -143,8 +163,7 @@ export function UpdateModal() {
 
               {data.updaterCmdUrl && (
                 <p className="mt-3 text-[10px] text-zinc-600 leading-relaxed">
-                  Tip: your browser will save the <span className="font-mono text-zinc-500">.cmd</span> file
-                  to your Downloads folder. Double-click it to run the updater.
+                  Tip: the installer will save to your Downloads folder. Run it — Windows may show a SmartScreen prompt; click <span className="font-mono text-zinc-500">More info → Run anyway</span>.
                 </p>
               )}
             </div>
