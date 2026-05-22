@@ -2655,6 +2655,7 @@ function TicketsTab({ headers }: { headers: Record<string, string> }) {
 
 export default function Admin() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const isPro = useProStatus();
   const [key, setKey] = useState(() => localStorage.getItem(ADMIN_KEY_STORAGE) || "");
   const [input, setInput] = useState("");
@@ -3361,6 +3362,15 @@ export default function Admin() {
 
             {/* Brand */}
             <div className="flex items-center gap-3 flex-1">
+              <button
+                data-testid="button-exit-admin"
+                onClick={() => setLocation("/")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/60 border border-white/8 hover:bg-zinc-700/60 hover:border-white/15 transition-colors text-zinc-400 hover:text-white text-[11px] font-medium shrink-0"
+                title="Back to dashboard"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </button>
               <div className="relative">
                 <div className="w-12 h-12 bg-gradient-to-br from-zinc-800/60 to-black border border-red-500/40 rounded-xl flex items-center justify-center overflow-hidden shadow-[0_0_20px_-6px_rgba(239,68,68,0.5)]">
                   <AdminSilverMark className="w-11 h-11" />
