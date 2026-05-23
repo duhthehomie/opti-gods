@@ -1381,9 +1381,9 @@ export async function registerRoutes(
         getLatestGhRelease(),
       ]);
       const override = settings?.updaterCmdUrl?.trim();
-      // HTTPS-only + must point at a real installer. Admin-controlled, but we
-      // refuse to bounce visitors through arbitrary http/javascript URLs.
-      if (override && /^https:\/\//i.test(override) && /\.(exe|msi|zip)(\?|$)/i.test(override)) {
+      // HTTPS-only admin override — accepts any HTTPS URL (direct .exe links
+      // or file-host pages like gofile.io, mediafire, etc.)
+      if (override && /^https:\/\//i.test(override)) {
         try {
           const u = new URL(override);
           if (u.host && u.protocol === "https:") {
