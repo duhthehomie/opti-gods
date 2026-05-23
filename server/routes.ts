@@ -1394,7 +1394,8 @@ export async function registerRoutes(
         }
       }
 
-      // Local bundled installer takes priority — always serve the file we ship
+      // Local bundled installer — stream directly (no redirect needed, works in
+      // any environment regardless of static-file server configuration).
       const dir = join(process.cwd(), "client", "public", "downloads");
       if (existsSync(dir)) {
         const entries = readdirSync(dir)
@@ -1402,24 +1403,28 @@ export async function registerRoutes(
           .map((f) => {
             const full = join(dir, f);
             try {
-              return { name: f, mtime: statSync(full).mtimeMs };
+              return { name: f, full, mtime: statSync(full).mtimeMs };
             } catch {
               return null;
             }
           })
-          .filter((x): x is { name: string; mtime: number } => x !== null)
+          .filter((x): x is { name: string; full: string; mtime: number } => x !== null)
           .sort((a, b) => b.mtime - a.mtime);
         if (entries.length > 0) {
-          return res.redirect(302, `/downloads/${encodeURIComponent(entries[0].name)}`);
+          const { name, full } = entries[0];
+          console.log(`[download] Serving local file: ${name}`);
+          return res.download(full, name);
         }
       }
 
-      // Fallback — auto-resolved from GitHub releases
+      // Fallback — redirect to GitHub direct download URL (must be a .exe asset)
       if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        console.log(`[download] Redirecting to GitHub: ${gh.exeUrl}`);
         return res.redirect(302, gh.exeUrl);
       }
 
       // Hard fallback — no local file and no GitHub release
+      console.warn("[download] No installer available — returning 503");
       res.status(503).json({ status: "coming_soon", message: "No installer available yet. Check back soon." });
     } catch (e) {
       console.error("[/api/download/latest] failed:", e);
