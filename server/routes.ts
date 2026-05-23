@@ -1411,9 +1411,9 @@ export async function registerRoutes(
           .filter((x): x is { name: string; full: string; mtime: number } => x !== null)
           .sort((a, b) => b.mtime - a.mtime);
         if (entries.length > 0) {
-          const { name, full } = entries[0];
-          console.log(`[download] Serving local file: ${name}`);
-          return res.download(full, name);
+          const { name } = entries[0];
+          console.log(`[download] Redirecting to static file: ${name}`);
+          return res.redirect(302, `/downloads/${name}`);
         }
       }
 
