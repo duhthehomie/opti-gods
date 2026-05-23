@@ -1818,9 +1818,11 @@ Write-Output $json
   });
 
   app.post(api.script.generate.path, async (req, res) => {
-    if (!(await requirePaidPro(req))) {
-      return res.status(403).json({ message: "Pro access required. Activate your code to generate the optimization script." });
-    }
+    // No Pro gate here — this endpoint creates a session URL only (no script
+    // content). The actual script content is still gated by requirePaidPro on
+    // /api/script/session/:id and /api/script/download-bat. Removing the gate
+    // here lets the old .exe (which calls generate just to open the dialog)
+    // work without needing a rebuild.
     try {
       const input = api.script.generate.input.parse(req.body);
       const host = req.get('host') || 'localhost';
@@ -1876,16 +1878,26 @@ Write-Output $json
       res.status(410).setHeader('Content-Type', 'text/plain');
       return res.send('# Session expired. Please regenerate your script from the Opti Gods dashboard.');
     }
-    // If this session was bound to a Pro sessionToken, re-verify it.
-    // Admin-issued sessions (no sessionToken) are allowed since they only come
-    // from the gated /api/script/generate which already checked x-admin-key.
+    // Always verify Pro access before serving script content.
+    // Sessions with a stored token: re-verify the token is still active.
+    // Sessions without a token (admin key path): check the current request
+    // for an admin key — if not present, block the response.
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
     if (session.sessionToken) {
-      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
       const stillValid = await storage.verifyProSession(session.sessionToken, ip);
       if (!stillValid) {
         scriptSessions.delete(id);
         res.status(403).setHeader('Content-Type', 'text/plain');
         return res.send('# Your Pro access was revoked. Please re-activate your code in the dashboard.');
+      }
+    } else {
+      // No token stored → only admin-key requests may use this session
+      const adminKey = req.headers['x-admin-key'] as string | undefined;
+      const validAdmin = adminKey && adminKey === process.env.ADMIN_KEY;
+      if (!validAdmin) {
+        scriptSessions.delete(id);
+        res.status(403).setHeader('Content-Type', 'text/plain');
+        return res.send('# Pro access required. Please activate your code in the dashboard.');
       }
     }
     const enabledTweaks = Object.entries(session.tweaks).filter(([, v]) => v).map(([k]) => k);
