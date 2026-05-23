@@ -115,6 +115,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
       });
+      if (res.status === 403) throw new Error("Pro access required — enter your activation code first.");
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();
       const blob = new Blob([text], { type: "application/octet-stream" });
