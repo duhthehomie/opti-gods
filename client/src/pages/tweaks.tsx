@@ -2,11 +2,12 @@ import { useEffect, useState, lazy, Suspense, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks } from "lucide-react";
+import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 
 const Registry = lazy(() => import("@/pages/registry"));
+const CallOfDuty = lazy(() => import("@/pages/call-of-duty"));
 const Fivem = lazy(() => import("@/pages/fivem"));
 const Fortnite = lazy(() => import("@/pages/fortnite"));
 const RustGame = lazy(() => import("@/pages/rust-game"));
@@ -44,6 +45,7 @@ const SECTIONS: Section[] = [
   { id: "amd", title: "AMD Radeon", desc: "Anti-lag, shader cache, surface format", icon: Flame, group: "gpu", Component: Amd, categories: ["amd"] },
   { id: "intgpu", title: "Intel iGPU & AMD Vega", desc: "Integrated GPU tweaks (UHD / Iris / Vega 8)", icon: Monitor, group: "gpu", Component: IntegratedGraphics, categories: ["intgpu"] },
   { id: "laptop", title: "Laptop Optimizer", desc: "Thermal, GPU switching, USB suspend, fan curve", icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"] },
+  { id: "cod", title: "Call of Duty (BO6 / Warzone)", desc: "Textures, VRAM overflow, HAGS, network, GTX 1650 + Ryzen 3500", icon: Target, group: "games", Component: CallOfDuty, categories: ["cod"] },
   { id: "fivem", title: "FiveM / GTA V", desc: "Priority, cache, streaming, network buffers", icon: Gamepad2, group: "games", Component: Fivem, categories: ["fivem"] },
   { id: "fortnite", title: "Fortnite", desc: "DX12, shader precompile, input lag", icon: Crosshair, group: "games", Component: Fortnite, categories: ["fortnite"] },
   { id: "rust", title: "Rust", desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows", icon: Swords, group: "games", Component: RustGame, categories: ["rust"] },
