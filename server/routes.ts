@@ -2727,6 +2727,26 @@ Start-Sleep 2
     }
   });
 
+  // Admin — unlink Discord from a code (revoke entitlement + reset code so customer can re-enter)
+  app.post('/api/admin/codes/:id/unlink-discord', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const codeId = parseInt(req.params.id, 10);
+    if (!codeId) return res.status(400).json({ error: "Invalid code ID." });
+    const discordUserId = String(req.body?.discordUserId || "").trim();
+    if (!/^\d{15,25}$/.test(discordUserId)) {
+      return res.status(400).json({ error: "Discord user ID must be a 15–25 digit number." });
+    }
+    const allCodes = await storage.getAllCodes();
+    const target = allCodes.find(c => c.id === codeId);
+    if (!target) return res.status(404).json({ error: "Code not found." });
+    // Revoke the entitlement so this Discord user loses server-verified Pro
+    await storage.revokePro(discordUserId);
+    // Reset the code so the customer can re-enter it fresh (also wipes their pro_sessions)
+    await storage.resetCode(codeId);
+    log(`[admin] Discord ${discordUserId} unlinked from code ${target.code} — entitlement revoked, code reset`, "admin");
+    res.json({ ok: true });
+  });
+
   // Admin — generate new code
   app.post('/api/admin/codes', async (req, res) => {
     if (!checkAdminKey(req, res)) return;

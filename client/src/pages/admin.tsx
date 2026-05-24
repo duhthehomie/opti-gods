@@ -15,7 +15,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
-  Percent, Crown,
+  Percent, Crown, UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -2881,6 +2881,18 @@ export default function Admin() {
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const unlinkDiscordFromCode = useMutation({
+    mutationFn: ({ codeId, discordUserId }: { codeId: number; discordUserId: string }) =>
+      fetch(apiUrl(`/api/admin/codes/${codeId}/unlink-discord`), {
+        method: "POST", headers, body: JSON.stringify({ discordUserId }),
+      }).then(async r => { if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || "Unlink failed"); } return r.json(); }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
+      toast({ title: "Discord unlinked", description: "Entitlement revoked and code reset — customer can re-enter it to relink." });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const genFriend = useMutation({
     mutationFn: () => fetch(apiUrl("/api/admin/friends"), {
       method: "POST", headers, body: JSON.stringify({ note: noteFriend.trim() || null }),
@@ -4116,6 +4128,21 @@ export default function Admin() {
                           title={c.code.startsWith('STRIPE-') ? "Revive — restore their access (they revisit payment page to get new session)" : "Reset — let customer re-enter this code"}
                         >
                           <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">{c.code.startsWith('STRIPE-') ? 'Revive' : 'Reset'}</span>
+                        </button>
+                      )}
+                      {c.discordLinked && c.discordUserId && (
+                        <button
+                          data-testid={`button-unlink-discord-${c.id}`}
+                          onClick={() => {
+                            if (confirm(`Unlink Discord from ${c.code}?\n\nThis revokes ${c.discordUsername || c.discordUserId}'s entitlement and resets the code so they can re-enter it fresh.`)) {
+                              unlinkDiscordFromCode.mutate({ codeId: c.id, discordUserId: c.discordUserId! });
+                            }
+                          }}
+                          disabled={unlinkDiscordFromCode.isPending}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-orange-500/10 text-zinc-600 hover:text-orange-400 transition-colors"
+                          title={`Unlink Discord (${c.discordUsername || c.discordUserId}) — revoke entitlement and reset code`}
+                        >
+                          <UserX className="w-3 h-3" /> <span className="hidden sm:inline">Unlink</span>
                         </button>
                       )}
                       {c.usedAt && (
