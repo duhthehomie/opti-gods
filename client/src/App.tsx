@@ -32,6 +32,7 @@ import SystemScanPage from "@/pages/system-scan";
 import ProPage from "@/pages/pro";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import AccountPage from "@/pages/account";
+import GameDetectionPage from "@/pages/game-detection";
 
 function SmartHome() {
   const isGuest = (() => { try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; } })();
@@ -110,6 +111,7 @@ function Router() {
       <Route path="/get-code" component={GetCode} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/cancel" component={PaymentCancel} />
+      <Route path="/game-detection" component={GameDetectionPage} />
 
       <Route component={NotFound} />
     </Switch>

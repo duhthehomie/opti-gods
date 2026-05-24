@@ -18,11 +18,13 @@ const PUBLIC_PATHS_WEB = new Set<string>([
   "/payment/success",
   "/payment/cancel",
   "/admin",
+  "/game-detection",
 ]);
 const PUBLIC_PATHS_NATIVE = new Set<string>([
   "/payment/success",
   "/payment/cancel",
   "/admin",
+  "/game-detection",
 ]);
 
 function isGuestMode(): boolean {
