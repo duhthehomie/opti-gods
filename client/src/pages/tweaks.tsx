@@ -1,10 +1,11 @@
-import { useEffect, useState, lazy, Suspense, ReactNode } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks, Target } from "lucide-react";
+import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks, Target, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
+import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 
 const Registry = lazy(() => import("@/pages/registry"));
 const CallOfDuty = lazy(() => import("@/pages/call-of-duty"));
@@ -33,60 +34,77 @@ type Section = {
   icon: React.ComponentType<{ className?: string }>;
   group: GroupId;
   Component: React.ComponentType;
-  /** Registry categories whose tweaks live in this section (for live counts). */
   categories: TweakCategory[];
+  /** Return false to hide this section for the user's detected hardware. */
+  hardwareFilter?: (hw: HardwareInfo) => boolean;
 };
 
 const SECTIONS: Section[] = [
-  { id: "debloat", title: "Debloat Win10/11", desc: "Remove bloatware, telemetry, background services", icon: Trash2, group: "windows", Component: Debloat, categories: ["debloat"] },
-  { id: "wintitus", title: "WinUtil + OO ShutUp", desc: "Bundled WinUtil tasks and privacy hardening", icon: Wrench, group: "windows", Component: WinTitus, categories: ["wintitus"] },
-  { id: "registry", title: "Registry, Network & Latency", desc: "TCP/IP stack, MSI mode, timer resolution, priority scheduling", icon: Settings2, group: "network", Component: Registry, categories: ["registry", "network"] },
-  { id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS", icon: MonitorPlay, group: "gpu", Component: Nvidia, categories: ["nvidia"] },
-  { id: "amd", title: "AMD Radeon", desc: "Anti-lag, shader cache, surface format", icon: Flame, group: "gpu", Component: Amd, categories: ["amd"] },
-  { id: "intgpu", title: "Intel iGPU & AMD Vega", desc: "Integrated GPU tweaks (UHD / Iris / Vega 8)", icon: Monitor, group: "gpu", Component: IntegratedGraphics, categories: ["intgpu"] },
-  { id: "laptop", title: "Laptop Optimizer", desc: "Thermal, GPU switching, USB suspend, fan curve", icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"] },
-  { id: "cod", title: "Call of Duty (BO6 / Warzone)", desc: "Textures, VRAM overflow, HAGS, network, GTX 1650 + Ryzen 3500", icon: Target, group: "games", Component: CallOfDuty, categories: ["cod"] },
-  { id: "fivem", title: "FiveM / GTA V", desc: "Priority, cache, streaming, network buffers", icon: Gamepad2, group: "games", Component: Fivem, categories: ["fivem"] },
-  { id: "fortnite", title: "Fortnite", desc: "DX12, shader precompile, input lag", icon: Crosshair, group: "games", Component: Fortnite, categories: ["fortnite"] },
-  { id: "rust", title: "Rust", desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows", icon: Swords, group: "games", Component: RustGame, categories: ["rust"] },
-  { id: "roblox", title: "Roblox", desc: "FPS unlock via FFlags, process priority, post-FX off", icon: Blocks, group: "games", Component: RobloxPage, categories: ["roblox"] },
-  { id: "discord", title: "Discord", desc: "CPU/RAM reduction while gaming", icon: MessageCircle, group: "games", Component: DiscordPage, categories: ["discord"] },
-  { id: "memory", title: "Memory & Pagefile", desc: "Pagefile, compression, standby trim, RAM profile", icon: MemoryStick, group: "system", Component: Memory, categories: ["memory"] },
-  { id: "startup", title: "Startup Apps", desc: "Disable boot-time apps", icon: Power, group: "system", Component: StartupApps, categories: ["startup"] },
-  { id: "process-lasso", title: "Process Lasso", desc: "CPU affinity & priority automation", icon: Cpu, group: "system", Component: ProcessLasso, categories: ["process-lasso"] },
-  { id: "processes", title: "Process Reduction", desc: "Disable services & idle processes", icon: Server, group: "system", Component: ProcessesPage, categories: ["processes"] },
+  { id: "debloat",       title: "Debloat Win10/11",           desc: "Remove bloatware, telemetry, background services",          icon: Trash2,       group: "windows", Component: Debloat,            categories: ["debloat"] },
+  { id: "wintitus",      title: "WinUtil + OO ShutUp",         desc: "Bundled WinUtil tasks and privacy hardening",               icon: Wrench,       group: "windows", Component: WinTitus,           categories: ["wintitus"] },
+  { id: "registry",      title: "Registry, Network & Latency", desc: "TCP/IP stack, MSI mode, timer resolution, priority",        icon: Settings2,    group: "network", Component: Registry,           categories: ["registry", "network"] },
+  {
+    id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS",
+    icon: MonitorPlay, group: "gpu", Component: Nvidia, categories: ["nvidia"],
+    hardwareFilter: (hw) => hw.isNvidia,
+  },
+  {
+    id: "amd", title: "AMD Radeon", desc: "Anti-lag, shader cache, surface format",
+    icon: Flame, group: "gpu", Component: Amd, categories: ["amd"],
+    hardwareFilter: (hw) => hw.isAmdGpu || hw.isAmdApu,
+  },
+  {
+    id: "intgpu", title: "Intel iGPU & AMD Vega", desc: "Integrated GPU tweaks (UHD / Iris / Vega 8)",
+    icon: Monitor, group: "gpu", Component: IntegratedGraphics, categories: ["intgpu"],
+    hardwareFilter: (hw) => hw.isIntel || hw.isAmdApu,
+  },
+  {
+    id: "laptop", title: "Laptop Optimizer", desc: "Thermal, GPU switching, USB suspend, fan curve",
+    icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"],
+    hardwareFilter: (hw) => hw.isLaptop,
+  },
+  { id: "cod",          title: "Call of Duty (BO6 / Warzone)", desc: "Textures, VRAM overflow, HAGS, network, CPU boost",         icon: Target,       group: "games",   Component: CallOfDuty,         categories: ["cod"] },
+  { id: "fivem",        title: "FiveM / GTA V",                desc: "Priority, cache, streaming, network buffers",               icon: Gamepad2,     group: "games",   Component: Fivem,              categories: ["fivem"] },
+  { id: "fortnite",     title: "Fortnite",                      desc: "DX12, shader precompile, input lag",                        icon: Crosshair,    group: "games",   Component: Fortnite,           categories: ["fortnite"] },
+  { id: "rust",         title: "Rust",                          desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows",       icon: Swords,       group: "games",   Component: RustGame,           categories: ["rust"] },
+  { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,       group: "games",   Component: RobloxPage,         categories: ["roblox"] },
+  { id: "discord",      title: "Discord",                       desc: "CPU/RAM reduction while gaming",                            icon: MessageCircle,group: "games",   Component: DiscordPage,        categories: ["discord"] },
+  { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,  group: "system",  Component: Memory,             categories: ["memory"] },
+  { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,        group: "system",  Component: StartupApps,        categories: ["startup"] },
+  { id: "process-lasso",title: "Process Lasso",                 desc: "CPU affinity & priority automation",                        icon: Cpu,          group: "system",  Component: ProcessLasso,       categories: ["process-lasso"] },
+  { id: "processes",    title: "Process Reduction",             desc: "Disable services & idle processes",                         icon: Server,       group: "system",  Component: ProcessesPage,      categories: ["processes"] },
 ];
+
+/** Returns true if hardware is still being fingerprinted (don't filter yet). */
+function isDetecting(hw: HardwareInfo): boolean {
+  return hw.gpuName === "Detecting..." || hw.gpuName === "";
+}
+
+function applyHardwareFilter(sections: Section[], hw: HardwareInfo, showAll: boolean): Section[] {
+  if (showAll || isDetecting(hw)) return sections;
+  return sections.filter(s => !s.hardwareFilter || s.hardwareFilter(hw));
+}
 
 function sectionCount(section: Section): number {
   return section.categories.reduce((sum, c) => sum + tweaksByCategory(c).length, 0);
 }
 
-const GROUPS: { id: GroupId; label: string }[] = [
-  { id: "windows", label: "Windows" },
-  { id: "network", label: "Network" },
-  { id: "gpu", label: "GPU" },
-  { id: "games", label: "Game-Specific" },
-  { id: "system", label: "System" },
-];
-
-const STORAGE_KEY = "optigods_tweaks_open_sections";
+const STORAGE_KEY     = "optigods_tweaks_open_sections";
 const TAB_STORAGE_KEY = "optigods_tweaks_active_group";
+const SHOW_ALL_KEY    = "optigods_tweaks_show_all";
 
 type TabId = "all" | GroupId;
 const TABS: { id: TabId; label: string }[] = [
-  { id: "all", label: "All" },
+  { id: "all",     label: "All"     },
   { id: "windows", label: "Windows" },
   { id: "network", label: "Network" },
-  { id: "gpu", label: "GPU" },
-  { id: "games", label: "Games" },
-  { id: "system", label: "System" },
+  { id: "gpu",     label: "GPU"     },
+  { id: "games",   label: "Games"   },
+  { id: "system",  label: "System"  },
 ];
 
 function loadOpen(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch {}
   return {};
 }
 
@@ -115,9 +133,7 @@ function Accordion({ section, open, onToggle }: { section: Section; open: boolea
             data-testid={`count-${section.id}`}
             className={cn(
               "shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border",
-              open
-                ? "bg-red-500/15 text-red-300 border-red-500/30"
-                : "bg-zinc-900 text-zinc-400 border-white/10"
+              open ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-zinc-900 text-zinc-400 border-white/10"
             )}
           >
             {count}
@@ -139,25 +155,26 @@ function Accordion({ section, open, onToggle }: { section: Section; open: boolea
 }
 
 export default function TweaksPage() {
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>(loadOpen);
-  const [location] = useLocation();
+  const [openMap, setOpenMap]   = useState<Record<string, boolean>>(loadOpen);
+  const [location]              = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
   });
+  const [showAll, setShowAll] = useState<boolean>(() => {
+    try { return localStorage.getItem(SHOW_ALL_KEY) === "1"; } catch { return false; }
+  });
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(openMap));
-  }, [openMap]);
+  const hw = useHardwareInfo();
+  const detecting = isDetecting(hw);
 
-  useEffect(() => {
-    try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {}
-  }, [activeTab]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(openMap)); }, [openMap]);
+  useEffect(() => { try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {} }, [activeTab]);
+  useEffect(() => { try { localStorage.setItem(SHOW_ALL_KEY, showAll ? "1" : "0"); } catch {} }, [showAll]);
 
   // Auto-open + scroll if hash is set
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (hash && SECTIONS.some(s => s.id === hash)) {
-      // Switch to the correct tab for the hash
       const section = SECTIONS.find(s => s.id === hash);
       if (section) setActiveTab(section.group);
       setOpenMap(prev => ({ ...prev, [hash]: true }));
@@ -169,16 +186,26 @@ export default function TweaksPage() {
 
   const toggle = (id: string) => setOpenMap(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const visibleSections = activeTab === "all"
-    ? SECTIONS
-    : SECTIONS.filter(s => s.group === activeTab);
+  // Filtered sections — hardware-irrelevant tabs hidden unless showAll
+  const filteredSections = applyHardwareFilter(SECTIONS, hw, showAll);
 
-  const openAll = () => setOpenMap(Object.fromEntries(visibleSections.map(s => [s.id, true])));
+  const visibleSections = activeTab === "all"
+    ? filteredSections
+    : filteredSections.filter(s => s.group === activeTab);
+
+  const openAll  = () => setOpenMap(Object.fromEntries(visibleSections.map(s => [s.id, true])));
   const closeAll = () => setOpenMap(prev => {
     const next = { ...prev };
     visibleSections.forEach(s => { next[s.id] = false; });
     return next;
   });
+
+  // How many sections were hidden by hardware filter
+  const allForTab = activeTab === "all" ? SECTIONS : SECTIONS.filter(s => s.group === activeTab);
+  const hiddenCount = allForTab.length - visibleSections.length;
+
+  // Detected hardware label for the chip
+  const gpuChip = !detecting && hw.gpuName ? hw.gpuName : null;
 
   return (
     <AppLayout>
@@ -193,26 +220,48 @@ export default function TweaksPage() {
               >
                 {TOTAL_TWEAK_COUNT} total
               </span>
+              {gpuChip && !showAll && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
+                  <MonitorPlay className="w-3 h-3" />
+                  {gpuChip}
+                </span>
+              )}
             </div>
             <p className="text-sm text-zinc-500 mt-1">
               {activeTab === "all"
-                ? `All ${TOTAL_TWEAK_COUNT} optimization toggles across ${SECTIONS.length} sections.`
+                ? `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} matched to your hardware.`
                 : `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} in the ${TABS.find(t => t.id === activeTab)?.label} category.`}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={openAll} data-testid="button-expand-all" className="text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors">Expand All</button>
+          <div className="flex gap-2 flex-wrap">
+            {/* Show all / show matched toggle */}
+            {!detecting && (
+              <button
+                data-testid="button-toggle-show-all"
+                onClick={() => setShowAll(v => !v)}
+                className={cn(
+                  "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border transition-colors",
+                  showAll
+                    ? "border-zinc-500/40 text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/60"
+                    : "border-white/10 text-zinc-500 hover:text-zinc-200 hover:border-white/20 bg-transparent"
+                )}
+              >
+                <Eye className="w-3 h-3" />
+                {showAll ? "Matched only" : `Show all${hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : ""}`}
+              </button>
+            )}
+            <button onClick={openAll}  data-testid="button-expand-all"   className="text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors">Expand All</button>
             <button onClick={closeAll} data-testid="button-collapse-all" className="text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors">Collapse All</button>
           </div>
         </header>
 
         {/* Category Tab Bar */}
-        <div className="flex gap-1.5 overflow-x-auto pb-4 border-b border-white/5 scrollbar-none"
-          style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1.5 overflow-x-auto pb-4 border-b border-white/5 scrollbar-none" style={{ scrollbarWidth: "none" }}>
           {TABS.map(tab => {
-            const count = tab.id === "all"
-              ? SECTIONS.length
-              : SECTIONS.filter(s => s.group === tab.id).length;
+            const allInGroup  = tab.id === "all" ? SECTIONS         : SECTIONS.filter(s => s.group === tab.id);
+            const showInGroup = tab.id === "all" ? filteredSections  : filteredSections.filter(s => s.group === tab.id);
+            const count = showInGroup.length;
+            const isFiltered = showInGroup.length < allInGroup.length;
             return (
               <button
                 key={tab.id}
@@ -232,10 +281,27 @@ export default function TweaksPage() {
                 )}>
                   {count}
                 </span>
+                {isFiltered && !showAll && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" title="Some tabs hidden by hardware filter" />
+                )}
               </button>
             );
           })}
         </div>
+
+        {/* Hidden tabs notice */}
+        {!showAll && !detecting && hiddenCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/50 border border-white/5 text-[11px] text-zinc-500">
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
+            {hiddenCount} tab{hiddenCount !== 1 ? "s" : ""} hidden — not relevant to your detected hardware ({hw.gpuName}).
+            <button
+              onClick={() => setShowAll(true)}
+              className="ml-auto text-zinc-400 hover:text-white underline underline-offset-2 transition-colors"
+            >
+              Show anyway
+            </button>
+          </div>
+        )}
 
         {/* Sections */}
         <div className="space-y-4">
