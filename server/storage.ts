@@ -96,6 +96,8 @@ export interface IStorage {
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
+  // Buyer display name — set after payment success
+  setCodeDisplayName(sessionToken: string, name: string): Promise<boolean>;
   // Customer hardware snapshots
   saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void>;
   getAllCustomerHardware(): Promise<CustomerHardware[]>;
@@ -760,6 +762,26 @@ export class DatabaseStorage implements IStorage {
     await db.update(proAccessCodes)
       .set({ usedAt: new Date(), ...(ip ? { usedByIp: ip } : {}) })
       .where(eq(proAccessCodes.code, codeValue));
+  }
+
+  async setCodeDisplayName(sessionToken: string, name: string): Promise<boolean> {
+    const sessionRows = await db.select({ codeRef: proSessions.codeRef })
+      .from(proSessions).where(eq(proSessions.sessionToken, sessionToken));
+    if (!sessionRows.length) return false;
+    const codeRef = sessionRows[0].codeRef ?? "";
+    if (!codeRef || codeRef.startsWith("admin-") || codeRef.startsWith("friend:")) return false;
+    const codeRows = await db.select().from(proAccessCodes)
+      .where(eq(proAccessCodes.code, codeRef));
+    if (!codeRows.length) return false;
+    const existing = codeRows[0];
+    const existingNote = existing.note ?? "";
+    // Strip any prior display-name prefix (format: "Name | rest")
+    const baseNote = /^[^|]+\|/.test(existingNote)
+      ? existingNote.replace(/^[^|]+\|\s*/, "").trim()
+      : existingNote;
+    const newNote = baseNote ? `${name} | ${baseNote}` : name;
+    await db.update(proAccessCodes).set({ note: newNote }).where(eq(proAccessCodes.id, existing.id));
+    return true;
   }
 
   async saveCustomerHardware(codeRef: string, data: { gpuVendor: string; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: string; isLaptop: boolean }): Promise<void> {

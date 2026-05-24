@@ -2614,6 +2614,21 @@ Start-Sleep 2
     return res.json({ ok: true, revoked: count });
   });
 
+  // Buyer display name — set after Stripe payment success (shown in admin codes tab)
+  app.post('/api/pro/set-display-name', rateLimit(10, 60_000, 5), async (req, res) => {
+    const { sessionToken, name } = req.body || {};
+    if (!sessionToken || typeof sessionToken !== "string") {
+      return res.status(400).json({ error: "Missing sessionToken" });
+    }
+    if (!name || typeof name !== "string" || name.trim().length < 1) {
+      return res.status(400).json({ error: "Name required" });
+    }
+    const cleanName = name.trim().slice(0, 50);
+    const ok = await storage.setCodeDisplayName(sessionToken, cleanName);
+    if (!ok) return res.status(404).json({ error: "Session or code not found" });
+    return res.json({ ok: true });
+  });
+
   // Friend token — single-use URL unlock
   // Rate limit: 5 per minute, hard-block at 10
   app.post('/api/pro/friend', rateLimit(5, 60_000, 10), async (req, res) => {

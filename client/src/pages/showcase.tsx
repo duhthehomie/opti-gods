@@ -170,6 +170,17 @@ export default function Showcase() {
             </div>
           </ProUnlockButton>
         </div>
+
+        {/* Discreet admin link for leaq — visible on mobile where /admin isn't in nav */}
+        <div className="pb-6 text-center">
+          <a
+            href="/admin"
+            data-testid="link-admin-showcase"
+            className="text-[10px] text-zinc-800 hover:text-zinc-600 transition-colors font-mono tracking-wider"
+          >
+            admin
+          </a>
+        </div>
       </div>
     </AppLayout>
   );

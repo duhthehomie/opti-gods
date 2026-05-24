@@ -222,6 +222,23 @@ const WIN11_CORE: string[] = [
   "Win11AdsInStart", "Win11OneDriveBackup", "Win11StartRecommended",
 ];
 
+/** COD / Warzone tweaks — universal (no GPU prefix); safe to include for any gaming PC */
+const COD_UNIVERSAL: string[] = [
+  "CodHighPriority",
+  "CodGameMode",
+  "CodShaderCacheClear",
+  "CodPagefileOptimize",
+  "CodDisableHAGS",
+  "CodNetworkBuffer",
+  "CodDisableLSO",
+  "CodTCPOptimize",
+  "CodBattlenetOptimize",
+];
+/** COD tweaks that only apply on NVIDIA hardware */
+const COD_NVIDIA: string[] = ["Cod1650LowLatency", "Cod1650DisableAnsel"];
+/** COD tweaks that only apply on AMD CPU builds */
+const COD_AMD_CPU: string[] = ["Cod3500PowerPlan", "Cod3500CoreUnpark"];
+
 /** Hardware-summary string for prompts/UI. */
 export function summarizeHardware(hw: PresetHardware): string {
   const gpu = hw.gpuName || (hw.gpuVendor === "unknown" ? "Unknown GPU" : `${hw.gpuVendor.toUpperCase()} GPU`);
@@ -308,6 +325,14 @@ export function buildSafePreset(
     WIN11_CORE.forEach(id => candidates.add(id));
     reasons.push("Windows 11 detected — Win11 debloat included");
   }
+
+  // COD / Warzone game pack — always included (process priority, shader cache,
+  // network buffer, Battle.net agent kill, pagefile). Vendor-specific extras
+  // (1650 low-latency, Ryzen 3500 power plan) respect GPU/CPU vendor gating.
+  COD_UNIVERSAL.forEach(id => candidates.add(id));
+  if (hw.gpuVendor === "nvidia") COD_NVIDIA.forEach(id => candidates.add(id));
+  if (hw.cpuBrand === "amd") COD_AMD_CPU.forEach(id => candidates.add(id));
+  reasons.push("COD/Warzone pack: process priority, network buffer, shader cache, Battle.net agent kill, pagefile");
 
   // 2. Goal-driven nudges (advisory: tighten or relax)
   if (goal === "stability") {

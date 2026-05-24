@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { useLocation } from "wouter";
-import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle } from "lucide-react";
+import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle, User } from "lucide-react";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { setProStatus, setProSession } from "@/lib/pro-status";
@@ -16,6 +16,10 @@ export default function PaymentSuccess() {
   const [countdown, setCountdown] = useState(8);
   const [emailInfo, setEmailInfo] = useState<{ sent: boolean; email: string | null }>({ sent: false, email: null });
   const [tier, setTier] = useState<"pro" | "manual">("pro");
+  const [displayName, setDisplayName] = useState("");
+  const [nameSaved, setNameSaved] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -52,9 +56,26 @@ export default function PaymentSuccess() {
     verify();
   }, []);
 
+  const handleSaveName = async () => {
+    const clean = displayName.trim();
+    if (!clean) { setNameSaved(true); return; }
+    setSavingName(true);
+    try {
+      const token = localStorage.getItem("optigods_pro_session") || "";
+      await fetch(apiUrl("/api/pro/set-display-name"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken: token, name: clean }),
+      });
+    } catch { /* non-critical */ }
+    setSavingName(false);
+    setNameSaved(true);
+  };
+
   useEffect(() => {
     // Don't auto-redirect manual buyers — they need to read the next-steps panel.
-    if (status !== "success" || tier === "manual") return;
+    // Also wait for pro buyers until they've dismissed the name step.
+    if (status !== "success" || tier === "manual" || !nameSaved) return;
     const interval = setInterval(() => {
       setCountdown((n) => {
         if (n <= 1) {
@@ -66,7 +87,7 @@ export default function PaymentSuccess() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [status, tier, setLocation]);
+  }, [status, tier, nameSaved, setLocation]);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white flex items-center justify-center p-6">
@@ -161,6 +182,49 @@ export default function PaymentSuccess() {
                   </Button>
                 </div>
               </>
+            ) : !nameSaved ? (
+              /* ── Name picker step (shows before countdown starts) ── */
+              <div className="space-y-5">
+                <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/60 p-6 text-left space-y-4">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-red-400 shrink-0" />
+                    <p className="text-[11px] uppercase tracking-widest font-bold text-zinc-300">What should we call you?</p>
+                  </div>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
+                    Your name shows up in leaq's admin panel so he knows who bought. Totally optional — skip if you prefer to stay anonymous.
+                  </p>
+                  <input
+                    ref={nameInputRef}
+                    data-testid="input-display-name"
+                    type="text"
+                    placeholder="e.g. xDarkRacer, Tom, gamer123..."
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
+                    maxLength={50}
+                    className="w-full bg-black/70 border border-zinc-700 focus:border-red-500/60 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-700 focus:outline-none transition-colors"
+                    style={{ fontSize: "16px" }}
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-3">
+                    <Button
+                      data-testid="button-save-display-name"
+                      onClick={handleSaveName}
+                      disabled={savingName}
+                      className="flex-1 bg-red-600 hover:bg-red-500 text-white border border-red-500/30 font-bold"
+                    >
+                      {savingName ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Name"}
+                    </Button>
+                    <button
+                      data-testid="button-skip-display-name"
+                      onClick={() => setNameSaved(true)}
+                      className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
               <>
                 <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2">

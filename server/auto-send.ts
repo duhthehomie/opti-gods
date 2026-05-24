@@ -59,10 +59,16 @@ export async function runAutoSend(): Promise<number> {
     for (const req of stale) {
       try {
         const allCodes = await storage.getAllCodes();
-        const available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
+        let available: typeof allCodes[0] | undefined = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
         if (!available) {
-          log("[auto-send] No available codes left — stopping auto-send", "auto-send");
-          break;
+          // Inventory empty — auto-generate a fresh code so the buyer isn't left waiting
+          const { randomBytes } = await import("crypto");
+          const genId = randomBytes(3).toString("hex").toUpperCase();
+          const newCode = `AUTO-${genId}`;
+          const autoNote = `Auto-generated for ${req.email}${req.discordUsername ? ` (@${req.discordUsername})` : ""} — inventory was empty at send time`;
+          const created = await storage.createCode(newCode, autoNote);
+          available = { ...created, lastSessionAt: null, sessionIp: null };
+          log(`[auto-send] No codes in stock — auto-generated ${newCode} for ${req.email}`, "auto-send");
         }
         reservedCodeIds.add(available.id);
         await sendProCode(req.email, available.code, getSiteUrl());
