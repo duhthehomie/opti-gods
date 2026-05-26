@@ -4970,166 +4970,65 @@ export default function Admin() {
 
         {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
         {tab === "announcements" && (
-          <div className="space-y-5">
+          <div className="space-y-4">
 
-            {/* ─── TEST BUILDS ─────────────────────────────────────────── */}
-            <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/[0.04] p-4 space-y-3">
-              <h3 className="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-2">
-                <span>⚠</span> Startup Crash — Test Builds (try D first — it's the fix)
-              </h3>
-              <p className="text-[10px] text-zinc-400 leading-relaxed">
-                <span className="text-emerald-400 font-bold">Build D (v2.3.9) is the real fix</span> — WebView2 bootstrapper completely removed (it was crashing in native C++ before Rust even started). Win10/11 already has WebView2 via Windows Update. Also no UAC popup, no silent crash mode.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-emerald-600/40 bg-emerald-500/[0.06] p-3 space-y-2">
-                  <div className="text-[11px] font-bold text-emerald-300">Build D — v2.3.9 ⭐ TEST THIS FIRST</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">WebView2 bootstrapper skipped — was crashing in native C++ before window ever showed. No UAC. No silent crash mode. Notification plugin removed.</div>
-                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.9/OptiGods-Setup-2.3.9.exe"
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 w-full justify-center bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-d">
-                    <Download className="w-3.5 h-3.5" /> Download D — v2.3.9
-                  </a>
+            {/* GitHub Auto-Detect */}
+            <div className={`rounded-xl border p-4 space-y-3 ${ghReleaseQ.data?.version ? "border-emerald-500/25 bg-emerald-500/[0.04]" : "border-zinc-700 bg-white/[0.02]"}`} data-testid="section-version-updates">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${ghReleaseQ.data?.version ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+                  <span className={`text-xs font-bold uppercase tracking-wider ${ghReleaseQ.data?.version ? "text-emerald-400" : "text-zinc-500"}`}>
+                    {ghReleaseQ.data?.version ? "GitHub auto-detect: live" : "GitHub auto-detect: offline"}
+                  </span>
                 </div>
-                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-2">
-                  <div className="text-[11px] font-bold text-white">Build C — v2.3.8 (backup)</div>
-                  <div className="text-[10px] text-zinc-400 leading-relaxed">Notification + OS plugins removed, safe panic mode. Try this if D doesn't work.</div>
-                  <a href="https://github.com/duhthehomie/opti-gods/releases/download/v2.3.8/OptiGods-Setup-2.3.8.exe"
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 w-full justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-[11px] font-bold rounded-lg px-3 py-2 transition-colors"
-                    data-testid="link-test-build-c">
-                    <Download className="w-3.5 h-3.5" /> Download C — v2.3.8
-                  </a>
-                </div>
+                <button
+                  data-testid="button-gh-refresh"
+                  onClick={refreshGhRelease}
+                  disabled={ghRefreshing}
+                  className="text-zinc-400 hover:text-white text-[10px] font-mono border border-white/10 rounded px-2 py-0.5 hover:border-white/20 transition-colors disabled:opacity-40"
+                >
+                  {ghRefreshing ? "…" : "↺ Refresh"}
+                </button>
               </div>
-              <p className="text-[10px] text-zinc-600">Build D link goes live ~15 min after the latest push. If it works, tell the agent → ships as official release immediately.</p>
+
+              {ghReleaseQ.data?.version ? (
+                <div className="space-y-1 text-[11px] pl-4">
+                  <div className="text-zinc-400">Version: <span className="text-white font-mono font-bold">v{ghReleaseQ.data.version}</span></div>
+                  <div className="text-zinc-400 truncate">Download: <span className="text-zinc-300 font-mono">{ghReleaseQ.data.exeUrl ?? "—"}</span></div>
+                  {ghReleaseQ.data.fetchedAt && (
+                    <div className="text-zinc-600">Cached {Math.round((Date.now() - ghReleaseQ.data.fetchedAt) / 60000)}m ago · auto-refreshes every 10m</div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-600 pl-4">Could not reach GitHub. Use the override below to force an update prompt.</p>
+              )}
             </div>
 
-            {/* ─── WHAT'S WORKING ──────────────────────────────────────── */}
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4 space-y-3">
-              <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5" /> What's Working — Opti Gods V2
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
-                {[
-                  ["437 optimization toggles", "Registry, Network, GPU, Games, System, Laptop, Memory"],
-                  ["PowerShell script generation", "Download .ps1 with selected tweaks, instant apply"],
-                  ["Pro paywall", "CashApp, PayPal, Stripe card payments — all active"],
-                  ["Access code redemption", "Codes + free friend unlock (?unlock=key)"],
-                  ["Admin panel — 11 tabs", "Codes, Friends, Activity, Email, Sessions, Updates, Analytics, Security, Preset Gen, Aether AI, Tickets"],
-                  ["Opti Gods AI", "Groq-powered streaming chat, image analysis, smart preset generation"],
-                  ["Aether admin AI", "Live stats injection, revenue/visits/downloads, security events"],
-                  ["Discord OAuth", "Login in desktop exe and web — session persistence"],
-                  ["Game detection", "PS1 scanner for 14 games, opens filtered game card grid"],
-                  ["Preset save/load", "Stored in PostgreSQL, shareable via URL"],
-                  ["System Scan", "Browser-side + native WMI deep scan in .exe"],
-                  ["Security center", "IP bans, rate limits, geo-intelligence, threat monitoring"],
-                  ["Critical event alerts", "Discord webhook + email for security events"],
-                  ["User report / ticket system", "Submit via AI chat, admin reviews with status tracking"],
-                  ["Mobile showcase mode", "Marketing page for mobile visitors, not the optimizer"],
-                  ["Auto-updater", "Version check popup, GitHub release auto-detect"],
-                  ["FiveM optimizations", "V2.1 crash fixes — IPv6, timer resolution, MSI mode safe"],
-                  ["NVIDIA driver tweaks", "12 tweaks incl. reapply button after driver reinstall"],
-                  ["AMD driver tweaks", "8 tweaks incl. reapply button after Adrenalin update"],
-                  ["AI Preset Generator", "buildSafePreset — vendor filter, safety gates, opt-in flags"],
-                ].map(([title, desc]) => (
-                  <div key={title} className="flex items-start gap-2 py-1 border-b border-white/[0.03]">
-                    <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
-                    <div>
-                      <span className="text-white font-semibold">{title}</span>
-                      <span className="text-zinc-500 ml-1">{desc}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="text-[10px] text-zinc-600 leading-relaxed">
+              Push to GitHub → Actions builds the .exe → Replit detects the new release within 10 min → anyone on an older version sees the update splash on next launch. <span className="text-zinc-400">No action needed.</span>
+            </p>
 
-            {/* ─── Version & Updates config (Task #27) ───────────────── */}
-            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-4 space-y-3" data-testid="section-version-updates">
-              <h3 className="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5" /> Version &amp; Updates
-              </h3>
-
-              {/* GitHub Auto-Detect Status */}
-              <div className={`rounded-lg border px-3 py-2.5 text-[10px] ${ghReleaseQ.data?.version ? "border-emerald-500/30 bg-emerald-500/5" : "border-zinc-700 bg-white/[0.02]"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${ghReleaseQ.data?.version ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
-                    <span className={`font-bold uppercase tracking-wider ${ghReleaseQ.data?.version ? "text-emerald-400" : "text-zinc-500"}`}>
-                      {ghReleaseQ.data?.version ? "GitHub Auto-Detect: LIVE" : "GitHub Auto-Detect: Offline"}
-                    </span>
-                  </div>
-                  <button
-                    data-testid="button-gh-refresh"
-                    onClick={refreshGhRelease}
-                    disabled={ghRefreshing}
-                    className="text-zinc-400 hover:text-white text-[10px] font-mono border border-white/10 rounded px-2 py-0.5 hover:border-white/20 transition-colors disabled:opacity-40"
-                  >
-                    {ghRefreshing ? "…" : "↺ Refresh"}
-                  </button>
-                </div>
-                {ghReleaseQ.data?.version && (
-                  <div className="mt-1.5 space-y-0.5 text-zinc-400 pl-3.5">
-                    <div>Version detected: <span className="text-white font-mono">v{ghReleaseQ.data.version}</span></div>
-                    <div className="truncate">Download: <span className="text-zinc-300 font-mono">{ghReleaseQ.data.exeUrl ?? "—"}</span></div>
-                    <div>Release page: <span className="text-zinc-300 font-mono">{ghReleaseQ.data.pageUrl ?? "—"}</span></div>
-                    {ghReleaseQ.data.fetchedAt && (
-                      <div className="text-zinc-600">Cached {Math.round((Date.now() - ghReleaseQ.data.fetchedAt) / 60000)}m ago · refreshes every 10m</div>
-                    )}
-                  </div>
-                )}
-                {!ghReleaseQ.data?.version && (
-                  <div className="mt-1 text-zinc-600 pl-3.5">Could not reach GitHub API. Use the overrides below.</div>
-                )}
-              </div>
-
-              <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Version, download URL, and release page are <span className="text-emerald-400 font-bold">auto-pulled from GitHub</span> every 10 minutes — no action needed after publishing a release. The fields below are <span className="text-zinc-300">optional overrides</span> only. Leave them blank to use GitHub auto-detect. Bump <span className="text-zinc-300 font-mono">Current version</span> after users install an update to clear the popup.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Manual override — only needed to force/test */}
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
+              <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Force override <span className="text-zinc-600 normal-case font-normal">(leave blank to use GitHub auto)</span></h3>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Current version (installed) — override</label>
-                  <input
-                    data-testid="input-version-current"
-                    value={verCurrent}
-                    onChange={e => setVerCurrent(e.target.value)}
-                    placeholder={ghReleaseQ.data?.version ?? "2.00"}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1 block">Latest version — override (blank = GitHub auto)</label>
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Latest version</label>
                   <input
                     data-testid="input-version-latest"
                     value={verLatest}
                     onChange={e => setVerLatest(e.target.value)}
-                    placeholder={ghReleaseQ.data?.version ? `Auto: ${ghReleaseQ.data.version}` : "2.10"}
+                    placeholder={ghReleaseQ.data?.version ? `Auto: ${ghReleaseQ.data.version}` : "e.g. 2.3.7"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Download URL — override (blank = GitHub auto)</label>
-                    {verCmdUrl && <button onClick={() => setVerCmdUrl("")} className="text-[10px] text-zinc-500 hover:text-red-400 font-mono">× clear</button>}
-                  </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Download URL</label>
                   <input
                     data-testid="input-version-cmd-url"
                     value={verCmdUrl}
                     onChange={e => setVerCmdUrl(e.target.value)}
-                    placeholder={ghReleaseQ.data?.exeUrl ?? "Auto-resolved from GitHub"}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Release notes URL — override (blank = GitHub auto)</label>
-                    {verPageUrl && <button onClick={() => setVerPageUrl("")} className="text-[10px] text-zinc-500 hover:text-red-400 font-mono">× clear</button>}
-                  </div>
-                  <input
-                    data-testid="input-version-page-url"
-                    value={verPageUrl}
-                    onChange={e => setVerPageUrl(e.target.value)}
-                    placeholder={ghReleaseQ.data?.pageUrl ?? "Auto-resolved from GitHub"}
+                    placeholder={ghReleaseQ.data?.exeUrl ?? "Auto from GitHub"}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
                   />
                 </div>
@@ -5141,127 +5040,11 @@ export default function Admin() {
                   disabled={verSaving}
                   className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
                 >
-                  {verSaving ? "Saving…" : "Save overrides"}
+                  {verSaving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </div>
 
-            <div className="text-[10px] text-zinc-600 leading-relaxed">
-              Post update notes, hotfixes, and announcements that appear on the public <span className="text-zinc-400 font-mono">/updates</span> page. Visible to all users — no Pro required.
-            </div>
-
-            {/* Compose form */}
-            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
-              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-                <Megaphone className="w-3.5 h-3.5 text-red-500" /> New Announcement
-              </h3>
-              <input
-                data-testid="input-ann-title"
-                value={annTitle}
-                onChange={e => setAnnTitle(e.target.value)}
-                placeholder="Title (e.g. v2.4 — NVIDIA tweak update)"
-                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
-              />
-              <textarea
-                data-testid="input-ann-body"
-                value={annBody}
-                onChange={e => setAnnBody(e.target.value)}
-                placeholder="Body — describe what changed, what's new, or any warnings..."
-                rows={4}
-                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40 resize-none"
-              />
-
-              {/* Tweak IDs — optional, links update to specific tweaks */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-3 h-3 text-red-500 shrink-0" />
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Linked Tweaks (optional)</span>
-                  {parsedTweakIds.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded text-[9px] font-bold">{parsedTweakIds.length} tweaks</span>
-                  )}
-                </div>
-                <textarea
-                  data-testid="input-ann-tweakids"
-                  value={annTweakIds}
-                  onChange={e => setAnnTweakIds(e.target.value)}
-                  placeholder={"Enter tweak IDs — one per line or comma-separated:\nNvidiaPowerMizer\nNvidiaThreadedOpt\nFiveMHighPriority"}
-                  rows={3}
-                  className="w-full bg-zinc-900/60 border border-white/5 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono placeholder-zinc-700 focus:outline-none focus:border-red-500/30 resize-none"
-                />
-                <p className="text-[10px] text-zinc-700 leading-relaxed">
-                  Pro users on the Updates page will see which of these tweaks they haven't applied yet, with a one-click "Apply New Tweaks" button. Leave blank for general announcements.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 flex-1">
-                  <Tag className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  <select
-                    data-testid="select-ann-tag"
-                    value={annTag}
-                    onChange={e => setAnnTag(e.target.value)}
-                    className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-red-500/40"
-                  >
-                    <option value="update">Update</option>
-                    <option value="hotfix">Hotfix</option>
-                    <option value="new">New</option>
-                    <option value="announcement">Announcement</option>
-                    <option value="warning">Warning</option>
-                  </select>
-                </div>
-                <button
-                  data-testid="button-post-announcement"
-                  disabled={!annTitle.trim() || !annBody.trim() || createAnn.isPending}
-                  onClick={() => createAnn.mutate()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  {createAnn.isPending ? "Posting..." : "Post Announcement"}
-                </button>
-              </div>
-            </div>
-
-            {/* Existing announcements */}
-            <div className="space-y-2">
-              {announcementsQuery.isLoading && (
-                <div className="py-8 text-center text-xs text-zinc-600 animate-pulse">Loading announcements...</div>
-              )}
-              {!announcementsQuery.isLoading && !(announcementsQuery.data?.length) && (
-                <div className="py-8 text-center">
-                  <Bell className="w-8 h-8 text-zinc-800 mx-auto mb-3" />
-                  <p className="text-xs text-zinc-600">No announcements yet.</p>
-                </div>
-              )}
-              {(announcementsQuery.data || []).map(ann => (
-                <div
-                  key={ann.id}
-                  data-testid={`card-admin-ann-${ann.id}`}
-                  className="flex items-start gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.01]"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-white truncate">{ann.title}</span>
-                      {ann.tag && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
-                          {ann.tag}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{ann.body}</p>
-                    <p className="text-[10px] text-zinc-700 mt-1">{new Date(ann.createdAt).toLocaleString()}</p>
-                  </div>
-                  <button
-                    data-testid={`button-del-ann-${ann.id}`}
-                    onClick={() => deleteAnn.mutate(ann.id)}
-                    disabled={deleteAnn.isPending}
-                    className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
-                    title="Delete announcement"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
