@@ -2389,39 +2389,42 @@ Start-Sleep 2
       return res.json({ valid: false });
     }
 
-    // Path 1: First-time redemption — marks usedAt, creates session, optionally
-    // links to Discord account for lifetime cross-device access.
+    // Resolve Discord user ID BEFORE touching the code so we can enforce the
+    // requirement without burning the code slot on an unlinked redemption.
+    let redeemerDiscordId: string | null = req.session?.userId ?? null;
+    if (!redeemerDiscordId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") {
+        redeemerDiscordId = await validateNativeToken(nativeToken);
+      }
+    }
+
+    // Gate: Discord login is required to redeem a code. This permanently locks
+    // the code to one Discord account and prevents sharing — without Discord the
+    // code would only exist as a localStorage token that anyone can copy.
+    if (!redeemerDiscordId) {
+      return res.json({ valid: false, reason: "discord_required" });
+    }
+
+    // Path 1: First-time redemption — marks usedAt, creates session, and links
+    // to the Discord account that was verified above.
     const redeemed = await storage.redeemCode(normalizedCode, clientIp);
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
 
-      // Resolve the redeemer's Discord user ID from either the session cookie
-      // (web flow) or the X-Native-Auth bearer token (.exe flow). Without this,
-      // native users always get "No Discord" in the admin panel because their
-      // req.session.userId is never populated by the cookie middleware.
-      let redeemerDiscordId: string | null = req.session?.userId ?? null;
-      if (!redeemerDiscordId) {
-        const nativeToken = req.headers["x-native-auth"];
-        if (typeof nativeToken === "string") {
-          redeemerDiscordId = await validateNativeToken(nativeToken);
-        }
+      try {
+        await storage.grantPro({
+          discordUserId: redeemerDiscordId,
+          source: "code",
+          notes: `code:${normalizedCode}`,
+        });
+      } catch (err: any) {
+        console.error("[pro/verify] grantPro failed:", err?.message || err);
+        return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
       }
-
-      if (redeemerDiscordId) {
-        try {
-          await storage.grantPro({
-            discordUserId: redeemerDiscordId,
-            source: "code",
-            notes: `code:${normalizedCode}`,
-          });
-        } catch (err: any) {
-          console.error("[pro/verify] grantPro failed:", err?.message || err);
-          return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
-        }
-      }
-      return res.json({ valid: true, sessionToken, discordSaved: !!redeemerDiscordId });
+      return res.json({ valid: true, sessionToken, discordSaved: true });
     }
 
     // Path 2: Code exists in DB and was already redeemed — reject.

@@ -35,6 +35,7 @@ export function ProPaymentDialog({
   const [success, setSuccess] = useState(false);
   const [discordSaved, setDiscordSaved] = useState(false);
   const [alreadyUsed, setAlreadyUsed] = useState(false);
+  const [discordRequired, setDiscordRequired] = useState(false);
   const [cryptoCopied, setCryptoCopied] = useState(false);
   const withSession = false;
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -62,6 +63,7 @@ export function ProPaymentDialog({
     setLoading(true);
     setError("");
     setAlreadyUsed(false);
+    setDiscordRequired(false);
     try {
       const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
@@ -97,6 +99,9 @@ export function ProPaymentDialog({
             setCode("");
           }, 1400);
         }
+      } else if (data.reason === "discord_required") {
+        // No Discord session — require login before the code slot is touched.
+        setDiscordRequired(true);
       } else if (data.reason === "already_used") {
         // Code was already redeemed — show the Discord restore path instead of
         // a generic error. Existing buyers recover access via Discord login.
@@ -575,7 +580,7 @@ export function ProPaymentDialog({
                   type="text"
                   placeholder="XXXX-XXXX-XXXX"
                   value={code}
-                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); setAlreadyUsed(false); }}
+                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); setAlreadyUsed(false); setDiscordRequired(false); }}
                   onKeyDown={(e) => e.key === "Enter" && handleVerify()}
                   className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-red-500/50 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none font-mono transition-colors"
                 />
@@ -588,6 +593,25 @@ export function ProPaymentDialog({
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
                 </Button>
               </div>
+
+              {/* Discord required — code is valid but needs Discord login first */}
+              {discordRequired && (
+                <div data-testid="panel-discord-required" className="rounded-xl border border-[#5865F2]/40 bg-[#5865F2]/[0.07] p-3.5 space-y-2.5">
+                  <p className="text-xs font-bold text-[#7289da]">Discord login required</p>
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    Log in with Discord first — this permanently locks your code to your account so nobody else can use it.
+                  </p>
+                  <button
+                    data-testid="button-discord-login-required"
+                    onClick={() => loginWithDiscord()}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/50 hover:bg-[#5865F2]/30 hover:border-[#5865F2]/70 text-white text-xs font-black tracking-wide transition-all"
+                  >
+                    <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />
+                    Log in with Discord
+                  </button>
+                  <p className="text-[10px] text-zinc-500">Your code is still valid — come back here after logging in.</p>
+                </div>
+              )}
 
               {/* Already-used code — show Discord restore path, not a generic error */}
               {alreadyUsed && (
