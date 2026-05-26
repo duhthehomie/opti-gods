@@ -2472,7 +2472,12 @@ Start-Sleep 2
   // token logs in via Discord. Their old session is upgraded to a permanent
   // entitlement so they're Pro on every future device.
   app.post('/api/pro/migrate-legacy', rateLimit(5, 60_000, 10), async (req, res) => {
-    const userId = req.session?.userId;
+    // Resolve Discord user ID from cookie session (web) OR native bearer token (.exe)
+    let userId: string | null = req.session?.userId ?? null;
+    if (!userId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") userId = await validateNativeToken(nativeToken);
+    }
     if (!userId) return res.status(401).json({ migrated: false });
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") {
@@ -2481,16 +2486,18 @@ Start-Sleep 2
     const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const valid = await storage.verifyProSession(sessionToken, ip);
     if (!valid) return res.json({ migrated: false });
-    // Find the codeRef so we can record it as the migration source/note.
+    // Find the codeRef so we can record it in the exact format the admin panel
+    // expects (code:XXXX) — without this the Discord link shows as "No Discord"
+    // even after a successful migration.
     const sessions = await storage.getAllProSessions();
     const session = sessions.find(s => s.sessionToken === sessionToken);
-    const codeRef = session?.codeRef ?? "unknown";
+    const codeRef = session?.codeRef ?? null;
     await storage.grantPro({
       discordUserId: userId,
-      source: "legacy",
-      notes: `migrated from session token (codeRef=${codeRef})`,
+      source: "code",
+      notes: codeRef ? `code:${codeRef}` : `migrated:${sessionToken.slice(0, 8)}`,
     });
-    res.json({ migrated: true, source: "legacy" });
+    res.json({ migrated: true, source: "code" });
   });
 
   // Legacy POST /api/pro/status — kept for backward compat with any client
