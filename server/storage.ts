@@ -242,13 +242,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetCode(id: number): Promise<void> {
-    // Look up the code value first so we can also wipe its pro_sessions.
-    // Without this, the next person to enter the code hits "already redeemed".
+    // Look up the code value first so we can also wipe its pro_sessions
+    // and revoke any Discord entitlement — without the revoke, the old Discord
+    // account stays "orphan-Pro" and blocks the next person from cleanly linking.
     const [row] = await db.select({ code: proAccessCodes.code }).from(proAccessCodes).where(eq(proAccessCodes.id, id));
     if (row?.code) {
+      await this._revokeCodeEntitlements(row.code);
       await db.delete(proSessions).where(eq(proSessions.codeRef, row.code));
     }
     await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
+  }
+
+  /**
+   * Revoke any Discord entitlement whose notes reference the given code value.
+   * Called on delete AND revive so orphaned entitlements never block fresh redemptions.
+   */
+  private async _revokeCodeEntitlements(codeValue: string): Promise<void> {
+    const all = await db.select().from(proEntitlements);
+    // Match "code:XXXX" at start of notes OR after a pipe/space separator
+    const pattern = new RegExp(`(?:^|[\\s|])code:${codeValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+    for (const ent of all) {
+      if (ent.notes && pattern.test(ent.notes) && !ent.revokedAt) {
+        await db.update(proEntitlements)
+          .set({ revokedAt: new Date() })
+          .where(eq(proEntitlements.discordUserId, ent.discordUserId));
+      }
+    }
   }
 
   async reviveDeadCodes(): Promise<number> {
@@ -257,18 +276,24 @@ export class DatabaseStorage implements IStorage {
     const allUsed = await db.select().from(proAccessCodes).where(isNotNull(proAccessCodes.usedAt));
     const sessions = await db.select({ codeRef: proSessions.codeRef }).from(proSessions);
     const activeCodes = new Set(sessions.map(s => s.codeRef));
-    const deadIds = allUsed.filter(c => !activeCodes.has(c.code)).map(c => c.id);
-    if (!deadIds.length) return 0;
-    for (const id of deadIds) {
-      await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
+    const dead = allUsed.filter(c => !activeCodes.has(c.code));
+    if (!dead.length) return 0;
+    for (const dc of dead) {
+      // Revoke the Discord entitlement tied to this code so the next redeemer
+      // starts with a clean slate and can link their own Discord account
+      await this._revokeCodeEntitlements(dc.code);
+      await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, dc.id));
     }
-    return deadIds.length;
+    return dead.length;
   }
 
   async deleteCode(id: number): Promise<void> {
-    // Cascade: revoke all active sessions tied to this code before deleting
+    // Cascade: revoke Discord entitlement + sessions tied to this code before deleting
     const [row] = await db.select({ code: proAccessCodes.code }).from(proAccessCodes).where(eq(proAccessCodes.id, id));
     if (row?.code) {
+      // Unlink any Discord account that was bound to this code — without this,
+      // the entitlement stays "orphan-Pro" and blocks clean linking to the next code
+      await this._revokeCodeEntitlements(row.code);
       await db.delete(proSessions).where(eq(proSessions.codeRef, row.code));
     }
     await db.delete(proAccessCodes).where(eq(proAccessCodes.id, id));
