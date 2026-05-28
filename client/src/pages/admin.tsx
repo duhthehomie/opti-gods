@@ -2665,12 +2665,6 @@ export default function Admin() {
   const [authError, setAuthError] = useState("");
 
   const storedKey = typeof window !== "undefined" ? localStorage.getItem(ADMIN_KEY_STORAGE) : null;
-  const isOwner = user?.username?.toLowerCase() === "my1ik";
-  useEffect(() => {
-    if (!authLoading && !isOwner && !storedKey) {
-      setLocation("/");
-    }
-  }, [authLoading, isOwner, storedKey, setLocation]);
 
   const [tab, setTab] = useState<Tab>("codes");
   const [noteCode, setNoteCode] = useState("");
