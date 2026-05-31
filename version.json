@@ -1,4 +1,4 @@
 {
-  "version": "2.3.6",
-  "notes": "V2.3.6 — COD preset pack, auto-code generation, buyer name tag, Discord auto-link fix, admin mobile access."
+  "version": "2.3.7",
+  "notes": "V2.3.7 — Discord login WAF fix (new endpoint), code redemption works without Discord login."
 }
