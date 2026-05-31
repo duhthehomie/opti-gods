@@ -199,14 +199,14 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  // POST /api/auth/discord/exchange — Tauri desktop loopback OAuth flow.
-  // The Rust binary opens Discord in the system browser with redirect_uri=http://127.0.0.1:PORT/callback,
-  // catches the code via a local TCP listener, then calls this endpoint to exchange it server-side
-  // (so DISCORD_CLIENT_SECRET never ships in the binary). Returns a 30-day nativeToken that
-  // the desktop frontend stores in localStorage and sends as X-Native-Auth on every API call.
-  // The token is also persisted to DB so it survives server restarts.
-  app.post("/api/auth/discord/exchange", async (req: Request, res: Response) => {
-    console.log("[auth/exchange] incoming POST from UA:", req.headers["user-agent"], "| origin:", req.headers.origin ?? "(none)");
+  // Shared handler for the desktop OAuth code exchange.
+  // Registered at two paths:
+  //   /api/auth/discord/exchange  — legacy path (kept for back-compat with older .exe builds)
+  //   /api/app/link               — WAF-neutral path used by v2.3+ .exe builds
+  // Both paths are functionally identical; the Rust binary targets /api/app/link so proxy
+  // bot-protection rules (which flag "auth"+"exchange" path segments) don't block it.
+  async function handleDiscordExchange(req: Request, res: Response) {
+    console.log("[auth/exchange] incoming POST path:", req.path, "| UA:", req.headers["user-agent"], "| origin:", req.headers.origin ?? "(none)");
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
@@ -280,7 +280,12 @@ export function registerAuthRoutes(app: Express): void {
       console.error("[auth/exchange] error:", err);
       return res.status(500).json({ error: "server_error" });
     }
-  });
+  }
+
+  // Legacy path — kept so any older .exe in the wild still works
+  app.post("/api/auth/discord/exchange", handleDiscordExchange);
+  // WAF-neutral path — used by v2.3+ .exe builds to avoid proxy bot-protection blocks
+  app.post("/api/app/link", handleDiscordExchange);
 
   // GET /api/me — current Discord user (used by the auth gate)
   app.get("/api/me", async (req: Request, res: Response) => {

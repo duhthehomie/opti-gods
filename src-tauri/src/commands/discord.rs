@@ -32,12 +32,15 @@ const DISCORD_AUTHORIZE_URL: &str = "https://discord.com/oauth2/authorize";
 // origin so a compromised React renderer can't redirect the OAuth code
 // to an attacker-controlled server. Allowing user/JS-supplied URLs here
 // would let any XSS pivot into full account takeover.
-const EXCHANGE_URL: &str = "https://optigods.com/api/auth/discord/exchange";
+// /api/app/link is the WAF-neutral path — avoids proxy bot-protection rules
+// that flag the "auth"+"exchange" path segments on the old endpoint.
+// The old path is kept alive server-side for older .exe back-compat.
+const EXCHANGE_URL: &str = "https://optigods.com/api/app/link";
 // During local `cargo tauri dev` against a Vite server on :5000, also
 // accept the loopback exchange endpoint — this is the only override
 // permitted, and only when the binary is run in debug mode.
 #[cfg(debug_assertions)]
-const DEBUG_EXCHANGE_URL: &str = "http://127.0.0.1:5000/api/auth/discord/exchange";
+const DEBUG_EXCHANGE_URL: &str = "http://127.0.0.1:5000/api/app/link";
 const SESSION_TTL_DAYS: i64 = 30;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
