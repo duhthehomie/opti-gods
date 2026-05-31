@@ -2389,8 +2389,10 @@ Start-Sleep 2
       return res.json({ valid: false });
     }
 
-    // Resolve Discord user ID BEFORE touching the code so we can enforce the
-    // requirement without burning the code slot on an unlinked redemption.
+    // Resolve Discord user ID — optional. If logged in we link the code to the
+    // Discord account for permanent cross-device restore. If not logged in the
+    // code is still redeemed and Pro lives in localStorage until Discord is
+    // connected. This allows codes to work even when Discord OAuth is unavailable.
     let redeemerDiscordId: string | null = req.session?.userId ?? null;
     if (!redeemerDiscordId) {
       const nativeToken = req.headers["x-native-auth"];
@@ -2399,32 +2401,29 @@ Start-Sleep 2
       }
     }
 
-    // Gate: Discord login is required to redeem a code. This permanently locks
-    // the code to one Discord account and prevents sharing — without Discord the
-    // code would only exist as a localStorage token that anyone can copy.
-    if (!redeemerDiscordId) {
-      return res.json({ valid: false, reason: "discord_required" });
-    }
-
-    // Path 1: First-time redemption — marks usedAt, creates session, and links
-    // to the Discord account that was verified above.
+    // Path 1: First-time redemption — marks usedAt and creates session token.
     const redeemed = await storage.redeemCode(normalizedCode, clientIp);
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
 
-      try {
-        await storage.grantPro({
-          discordUserId: redeemerDiscordId,
-          source: "code",
-          notes: `code:${normalizedCode}`,
-        });
-      } catch (err: any) {
-        console.error("[pro/verify] grantPro failed:", err?.message || err);
-        return res.status(500).json({ valid: false, error: "Code redeemed but entitlement save failed. Contact admin with code: " + normalizedCode });
+      // If Discord is linked, save the entitlement for cross-device restore.
+      // If not, Pro is granted via session token — user can link Discord later.
+      let discordSaved = false;
+      if (redeemerDiscordId) {
+        try {
+          await storage.grantPro({
+            discordUserId: redeemerDiscordId,
+            source: "code",
+            notes: `code:${normalizedCode}`,
+          });
+          discordSaved = true;
+        } catch (err: any) {
+          console.error("[pro/verify] grantPro failed (non-fatal):", err?.message || err);
+        }
       }
-      return res.json({ valid: true, sessionToken, discordSaved: true });
+      return res.json({ valid: true, sessionToken, discordSaved });
     }
 
     // Path 2: Code exists in DB and was already redeemed — reject.
