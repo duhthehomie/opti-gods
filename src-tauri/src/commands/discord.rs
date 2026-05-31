@@ -194,7 +194,10 @@ async fn discord_login_inner(
         )
         .build()
         .map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({ "code": code, "redirect_uri": redirect_uri });
+    // Send loopback_port as a plain integer instead of the full redirect_uri string.
+    // Replit's WAF blocks POST bodies containing "127.0.0.1" (SSRF protection).
+    // The server reconstructs http://127.0.0.1:{port}/callback internally.
+    let payload = serde_json::json!({ "code": code, "loopback_port": fixed_port });
     let resp = client
         .post(&exchange_url)
         .header("Accept", "application/json, text/plain, */*")

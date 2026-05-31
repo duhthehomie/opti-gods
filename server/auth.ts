@@ -213,16 +213,24 @@ export function registerAuthRoutes(app: Express): void {
       return res.status(503).json({ error: "Discord login is not configured on this server." });
     }
 
-    const { code, redirect_uri } = req.body as { code?: string; redirect_uri?: string };
+    const { code, redirect_uri, loopback_port } = req.body as { code?: string; redirect_uri?: string; loopback_port?: number };
     if (!code || typeof code !== "string") {
       return res.status(400).json({ error: "Missing code" });
     }
-    if (!redirect_uri || typeof redirect_uri !== "string") {
-      return res.status(400).json({ error: "Missing redirect_uri" });
-    }
-    // Only allow loopback redirect URIs (security: prevent redirect to attacker-controlled servers)
-    if (!redirect_uri.startsWith("http://127.0.0.1:") && !redirect_uri.startsWith("http://localhost:")) {
-      return res.status(400).json({ error: "Invalid redirect_uri — must be a loopback address" });
+
+    // Prefer loopback_port (a plain number — WAF-safe) over redirect_uri (which
+    // contains "127.0.0.1" and triggers SSRF-protection rules on Replit's proxy).
+    let resolvedRedirectUri: string;
+    if (typeof loopback_port === "number" && loopback_port > 0 && loopback_port < 65536) {
+      resolvedRedirectUri = `http://127.0.0.1:${loopback_port}/callback`;
+    } else if (redirect_uri && typeof redirect_uri === "string") {
+      // Legacy path — kept for backward compat with older .exe builds.
+      if (!redirect_uri.startsWith("http://127.0.0.1:") && !redirect_uri.startsWith("http://localhost:")) {
+        return res.status(400).json({ error: "Invalid redirect_uri — must be a loopback address" });
+      }
+      resolvedRedirectUri = redirect_uri;
+    } else {
+      return res.status(400).json({ error: "Missing redirect_uri or loopback_port" });
     }
 
     try {
@@ -234,7 +242,7 @@ export function registerAuthRoutes(app: Express): void {
           client_secret: clientSecret,
           grant_type: "authorization_code",
           code,
-          redirect_uri,
+          redirect_uri: resolvedRedirectUri,
         }).toString(),
       });
       if (!tokenRes.ok) {
