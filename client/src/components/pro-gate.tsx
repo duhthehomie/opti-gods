@@ -9,8 +9,9 @@ import { cn } from "@/lib/utils";
 import { useProStatus, setProStatus, setProSession } from "@/lib/pro-status";
 import { fireCelebration } from "@/components/branding/pro-celebration";
 import { apiUrl } from "@/lib/api-base";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -48,6 +49,8 @@ export function ProPaymentDialog({
   const [manualDiscountValidating, setManualDiscountValidating] = useState(false);
   const [manualDiscountData, setManualDiscountData] = useState<{ percentOff: number; discountedPrice: number; code: string } | null>(null);
   const [manualDiscountError, setManualDiscountError] = useState("");
+  const [linkingDiscord, setLinkingDiscord] = useState(false);
+  const [linkDiscordError, setLinkDiscordError] = useState("");
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -122,6 +125,31 @@ export function ProPaymentDialog({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLinkDiscord = async () => {
+    if (isNative()) {
+      setLinkingDiscord(true);
+      setLinkDiscordError("");
+      try {
+        const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        if (!cfgRes.ok) throw new Error("Discord not configured on server");
+        const { clientId } = await cfgRes.json() as { clientId: string };
+        const session = await discordLogin(clientId);
+        try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+        setDiscordSaved(true);
+        setTimeout(() => { onOpenChange(false); setSuccess(false); setCode(""); }, 1400);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setLinkDiscordError(msg.replace(/^Error:\s*/i, ""));
+      } finally {
+        setLinkingDiscord(false);
+      }
+      return;
+    }
+    loginWithDiscord();
   };
 
   const handleCopyCrypto = async () => {
@@ -339,12 +367,14 @@ export function ProPaymentDialog({
                   </p>
                   <button
                     data-testid="button-link-discord-now"
-                    onClick={() => loginWithDiscord()}
-                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-black tracking-wide transition-all"
+                    onClick={handleLinkDiscord}
+                    disabled={linkingDiscord}
+                    className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-60 text-white text-sm font-black tracking-wide transition-all"
                   >
-                    <SiDiscord className="w-4 h-4" />
-                    Link Discord Now — Save My Pro Access
+                    {linkingDiscord ? <Loader2 className="w-4 h-4 animate-spin" /> : <SiDiscord className="w-4 h-4" />}
+                    {linkingDiscord ? "Opening Discord login…" : "Link Discord Now — Save My Pro Access"}
                   </button>
+                  {linkDiscordError && <p className="text-[11px] text-red-400 text-center">{linkDiscordError}</p>}
                   <button
                     data-testid="button-skip-discord-warning"
                     onClick={() => {
@@ -603,11 +633,12 @@ export function ProPaymentDialog({
                   </p>
                   <button
                     data-testid="button-discord-login-required"
-                    onClick={() => loginWithDiscord()}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/50 hover:bg-[#5865F2]/30 hover:border-[#5865F2]/70 text-white text-xs font-black tracking-wide transition-all"
+                    onClick={handleLinkDiscord}
+                    disabled={linkingDiscord}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/50 hover:bg-[#5865F2]/30 hover:border-[#5865F2]/70 disabled:opacity-60 text-white text-xs font-black tracking-wide transition-all"
                   >
-                    <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />
-                    Log in with Discord
+                    {linkingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />}
+                    {linkingDiscord ? "Opening Discord login…" : "Log in with Discord"}
                   </button>
                   <p className="text-[10px] text-zinc-500">Your code is still valid — come back here after logging in.</p>
                 </div>
@@ -622,11 +653,12 @@ export function ProPaymentDialog({
                   </p>
                   <button
                     data-testid="button-discord-restore-pro"
-                    onClick={() => loginWithDiscord()}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/15 border border-[#5865F2]/40 hover:bg-[#5865F2]/25 hover:border-[#5865F2]/60 text-white text-xs font-black tracking-wide transition-all"
+                    onClick={handleLinkDiscord}
+                    disabled={linkingDiscord}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#5865F2]/15 border border-[#5865F2]/40 hover:bg-[#5865F2]/25 hover:border-[#5865F2]/60 disabled:opacity-60 text-white text-xs font-black tracking-wide transition-all"
                   >
-                    <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />
-                    Log in with Discord to restore Pro
+                    {linkingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SiDiscord className="w-3.5 h-3.5 text-[#5865F2]" />}
+                    {linkingDiscord ? "Opening Discord login…" : "Log in with Discord to restore Pro"}
                   </button>
                   <p className="text-[10px] text-zinc-500 leading-snug">
                     Redeemed without Discord? Message <strong className="text-zinc-400">leaq</strong> on Discord — he'll reset your code so you can re-enter it.
