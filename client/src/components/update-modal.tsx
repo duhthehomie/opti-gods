@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { APP_VERSION } from "@/generated/version";
-import { isNative } from "@/lib/tauri-bridge";
+import { isNative, performUpdate } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { CheckCircle2 } from "lucide-react";
 
-type Phase = "detecting" | "downloading" | "done";
+type Phase = "detecting" | "downloading" | "installing" | "done";
 
 export function UpdateModal() {
   const { data } = useVersionInfo();
@@ -28,21 +28,52 @@ export function UpdateModal() {
     if (!installedVersion) return;
     if (compareVersions(latestVersion, installedVersion) <= 0) return;
 
-    // Update found — show splash, auto-start download after 1.8 s
+    // Update found — show detecting splash, auto-start after 1.8 s
     setPhase("detecting");
     const t = window.setTimeout(() => {
       if (!downloadStarted.current) {
         downloadStarted.current = true;
-        triggerDownload();
+        triggerUpdate();
       }
     }, 1800);
     return () => window.clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, dismissed]);
 
-  // Animate fake progress bar while downloading
-  useEffect(() => {
-    if (phase !== "downloading") return;
+  async function triggerUpdate() {
+    setPhase("downloading");
+    setProgress(5);
+
+    try {
+      // ── Native path: Tauri updater downloads + installs silently ──────────
+      // perform_update emits "update-progress" events as it downloads.
+      // When download is complete it emits installing:true, then the NSIS
+      // passive installer replaces the binary and the app restarts.
+      await performUpdate((pct: number, installing: boolean) => {
+        if (installing) {
+          setPhase("installing");
+          setProgress(100);
+        } else {
+          setProgress(Math.max(5, pct));
+        }
+      });
+      // If we reach here the installer finished and the process is about to
+      // be replaced. Show "done" briefly before the OS swaps it out.
+      setProgress(100);
+      setPhase("done");
+      window.setTimeout(dismiss, 3000);
+    } catch (err) {
+      // ── Fallback: blob download to Downloads folder ────────────────────────
+      // Used when the Tauri updater can't verify the signature (e.g. an
+      // unsigned preview build) or when the network request fails.
+      console.warn("[update] native updater failed, using download fallback:", err);
+      await fallbackDownload();
+    }
+  }
+
+  async function fallbackDownload() {
+    if (!data?.updaterCmdUrl) { dismiss(); return; }
+    // Animate a fake progress bar while the file downloads in the background
     setProgress(5);
     const tick = window.setInterval(() => {
       setProgress(p => {
@@ -50,12 +81,6 @@ export function UpdateModal() {
         return p + Math.random() * 3.5 + 0.5;
       });
     }, 160);
-    return () => window.clearInterval(tick);
-  }, [phase]);
-
-  async function triggerDownload() {
-    if (!data?.updaterCmdUrl) { dismiss(); return; }
-    setPhase("downloading");
     try {
       const targetUrl = apiUrl(data.updaterCmdUrl);
       const res = await fetch(targetUrl);
@@ -72,11 +97,12 @@ export function UpdateModal() {
       URL.revokeObjectURL(blobUrl);
     } catch {
       window.open(data?.updaterCmdUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      window.clearInterval(tick);
     }
     setProgress(100);
     setPhase("done");
-    // Auto-dismiss after showing "done" state
-    window.setTimeout(dismiss, 3800);
+    window.setTimeout(dismiss, 4000);
   }
 
   function dismiss() {
@@ -87,19 +113,24 @@ export function UpdateModal() {
   if (!phase || dismissed) return null;
 
   const headingText =
-    phase === "done" ? "Update Downloaded" : "Updating Opti Gods";
+    phase === "done"       ? "Update Downloaded" :
+    phase === "installing" ? "Installing Update…" :
+                             "Updating Opti Gods";
 
   const subText =
-    phase === "detecting"   ? "Checking for updates..." :
-    phase === "downloading" ? "Downloading update..." :
-                              "Run the installer from your Downloads folder";
+    phase === "detecting"   ? "Checking for updates…" :
+    phase === "downloading" ? "Downloading update…" :
+    phase === "installing"  ? "Installing — please wait…" :
+                              "Restart the app to apply the update";
 
   const versionLine =
     phase === "detecting"
       ? `v${data?.latestVersion ?? ""} is available`
       : phase === "downloading"
       ? "This will only take a moment"
-      : "Restart the app to apply the update";
+      : phase === "installing"
+      ? "Almost done — do not close the app"
+      : "The app will restart automatically";
 
   const barWidth =
     phase === "detecting"   ? 6 :
@@ -179,8 +210,8 @@ export function UpdateModal() {
         />
       </div>
 
-      {/* Skip — only during detecting/downloading */}
-      {phase !== "done" && (
+      {/* Skip — only during detecting/downloading phases */}
+      {(phase === "detecting" || phase === "downloading") && (
         <button
           onClick={dismiss}
           data-testid="update-skip"

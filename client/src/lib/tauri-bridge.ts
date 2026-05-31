@@ -268,3 +268,70 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   if (!isNative()) return null;
   return invoke<UpdateInfo>("check_for_update");
 }
+
+// Internal: subscribe to a Tauri event using __TAURI_INTERNALS__ directly,
+// mirroring @tauri-apps/api/event listen() without a static npm import.
+type Unlisten = () => Promise<void>;
+async function tauriListen<T>(
+  event: string,
+  handler: (payload: T) => void,
+): Promise<Unlisten> {
+  if (!isNative()) return async () => {};
+  const w = window as unknown as {
+    __TAURI_INTERNALS__?: {
+      invoke: <R>(c: string, a?: unknown) => Promise<R>;
+      transformCallback: (
+        cb: (e: { payload: unknown }) => void,
+        once?: boolean,
+      ) => number;
+    };
+  };
+  const internals = w.__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals?.transformCallback) return async () => {};
+  const callbackId = internals.transformCallback((e: { payload: unknown }) => {
+    handler(e.payload as T);
+  });
+  const unlistenId = await internals.invoke<number>("plugin:event|listen", {
+    event,
+    target: { kind: "Any" },
+    handler: callbackId,
+  });
+  return async () => {
+    try {
+      await internals.invoke("plugin:event|unlisten", {
+        event,
+        handlerId: unlistenId,
+      });
+    } catch { /* noop */ }
+  };
+}
+
+interface UpdateProgressPayload {
+  downloaded: number;
+  total: number | null;
+  percent: number;
+  installing: boolean;
+}
+
+/**
+ * Download and install the update using Tauri's native updater plugin.
+ * Calls onProgress(percent 0–100, installing) for each progress event.
+ * Throws if no update is available or if the Tauri updater fails
+ * (caller should fall back to browser download in that case).
+ */
+export async function performUpdate(
+  onProgress: (percent: number, installing: boolean) => void,
+): Promise<void> {
+  if (!isNative()) throw new Error("not native");
+  const unlisten = await tauriListen<UpdateProgressPayload>(
+    "update-progress",
+    (payload) => {
+      onProgress(payload.percent ?? 0, payload.installing ?? false);
+    },
+  );
+  try {
+    await invoke<void>("perform_update");
+  } finally {
+    await unlisten();
+  }
+}

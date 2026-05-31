@@ -179,13 +179,26 @@ async fn discord_login_inner(
     }
 
     // 5. Exchange the code server-side (CLIENT_SECRET stays on the backend).
+    //
+    // Use a browser-like User-Agent + standard browser request headers so the
+    // request is not blocked by Replit's or Cloudflare's bot-protection layer.
+    // The origin is pinned to optigods.com to match the server's CORS policy.
     let client = reqwest::Client::builder()
-        .user_agent("OptiGods/2.0 (desktop)")
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+             AppleWebKit/537.36 (KHTML, like Gecko) \
+             Chrome/124.0.0.0 Safari/537.36",
+        )
         .build()
         .map_err(|e| e.to_string())?;
     let payload = serde_json::json!({ "code": code, "redirect_uri": redirect_uri });
     let resp = client
         .post(&exchange_url)
+        .header("Accept", "application/json, text/plain, */*")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Content-Type", "application/json")
+        .header("Origin", "https://optigods.com")
+        .header("Referer", "https://optigods.com/")
         .json(&payload)
         .send()
         .await
