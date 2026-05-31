@@ -2659,12 +2659,12 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const isPro = useProStatus();
   const { user, isLoading: authLoading } = useAuth();
-  const [key, setKey] = useState(() => localStorage.getItem(ADMIN_KEY_STORAGE) || "");
+  const [key, setKey] = useState(() => {
+    try { return localStorage.getItem(ADMIN_KEY_STORAGE) || ""; } catch { return ""; }
+  });
   const [input, setInput] = useState("");
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState("");
-
-  const storedKey = typeof window !== "undefined" ? localStorage.getItem(ADMIN_KEY_STORAGE) : null;
 
   const [tab, setTab] = useState<Tab>("codes");
   const [noteCode, setNoteCode] = useState("");
@@ -3234,11 +3234,24 @@ export default function Admin() {
     return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
   }
 
+  // Auto-login on mount when a stored key is present (avoids re-typing on mobile/Safari)
+  const autoLoginAttempted = useRef(false);
+  useEffect(() => {
+    if (autoLoginAttempted.current || authed) return;
+    let storedK = "";
+    try { storedK = localStorage.getItem(ADMIN_KEY_STORAGE) || ""; } catch { /* private mode */ }
+    if (!storedK) return;
+    autoLoginAttempted.current = true;
+    fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": storedK } })
+      .then(r => { if (r.ok) { setKey(storedK); setAuthed(true); } })
+      .catch(() => {});
+  }, [authed]);
+
   const handleLogin = async () => {
     setAuthError("");
     const res = await fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": input } });
     if (res.ok) {
-      localStorage.setItem(ADMIN_KEY_STORAGE, input);
+      try { localStorage.setItem(ADMIN_KEY_STORAGE, input); } catch { /* private mode */ }
       setKey(input);
       setAuthed(true);
     } else {
@@ -3247,7 +3260,7 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(ADMIN_KEY_STORAGE);
+    try { localStorage.removeItem(ADMIN_KEY_STORAGE); } catch { /* private mode */ }
     setKey(""); setInput(""); setAuthed(false);
   };
 
@@ -3255,8 +3268,8 @@ export default function Admin() {
     return (codesQuery.data || [])
       .filter(c => {
         const cx = c as typeof c & { discordLinked?: boolean };
-        if (filterCode === "available") return !c.usedAt;
-        if (filterCode === "used") return !!c.usedAt;
+        if (filterCode === "available") return !c.usedAt && !(c as any).usedByIp;
+        if (filterCode === "used") return !!c.usedAt || !!(c as any).usedByIp;
         if (filterCode === "discord") return !!cx.discordLinked;
         if (filterCode === "no-discord") return !!c.usedAt && !cx.discordLinked;
         return true;
@@ -3947,7 +3960,7 @@ export default function Admin() {
                   data-testid={`row-code-${c.id}`}
                   className={cn(
                     "group px-3 py-3 border-b border-white/5 last:border-0 transition-colors",
-                    c.usedAt ? "opacity-40" : "hover:bg-zinc-900/40"
+                    c.usedAt ? "opacity-40" : (c as any).usedByIp ? "opacity-60" : "hover:bg-zinc-900/40"
                   )}
                 >
                   {/* Row 1: index + code (full width) + status badge */}
@@ -3958,9 +3971,11 @@ export default function Admin() {
                       "text-[10px] font-bold px-2 py-0.5 rounded border shrink-0",
                       c.usedAt
                         ? "text-zinc-600 bg-zinc-800/50 border-zinc-700"
-                        : "text-red-400 bg-red-500/10 border-red-500/20"
+                        : (c as any).usedByIp
+                          ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                          : "text-red-400 bg-red-500/10 border-red-500/20"
                     )}>
-                      {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : "AVAILABLE"}
+                      {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : (c as any).usedByIp ? "PARTIAL — Reset needed" : "AVAILABLE"}
                     </span>
                     {c.usedAt && (() => {
                       const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null; discordManuallyLinked?: boolean };

@@ -2436,7 +2436,10 @@ Start-Sleep 2
     // recovery message instead of a generic "invalid code" error.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
-    if (matchingCode?.usedAt) {
+    // Catch both fully-used codes (usedAt set) AND partial-state codes where usedByIp
+    // was written by an older version of the code but usedAt was never committed.
+    // Both cases mean the code slot is taken — surface the Discord restore path.
+    if (matchingCode?.usedAt || matchingCode?.usedByIp) {
       return res.json({ valid: false, reason: "already_used" });
     }
 
@@ -3401,8 +3404,10 @@ Start-Sleep 2
         .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
         .map(r => r.sentCodeId)
     );
-    // Available = not used AND not reserved by a sent email request
-    const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
+    // Available = not used/locked AND not reserved by a sent email request.
+    // Partial-state codes (usedByIp set but usedAt null) are treated as locked — they
+    // cannot be redeemed by anyone else without an admin Reset.
+    const availableCodes = codes.filter(c => !c.usedAt && !c.usedByIp && !reservedCodeIds.has(c.id)).length;
     // Confirmed email revenue (sum actual amountPaid from email requests — default $15 for legacy rows with null amountPaid)
     const emailRevenue = emailReqs
       .filter(r => r.status === "sent" || r.status === "auto-sent")
@@ -3411,7 +3416,8 @@ Start-Sleep 2
     const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
     const codeRevenue = emailRevenue + directRevenue;
     const revenueEstimate = codeRevenue + manualTotal;
-    const usedCodes = codes.filter(c => c.usedAt).length;
+    // usedCodes includes partial-state (usedByIp only) so the dashboard doesn't double-count
+    const usedCodes = codes.filter(c => c.usedAt || c.usedByIp).length;
     const usedFriends = friends.filter(f => f.usedAt).length;
     const availableFriends = friends.filter(f => !f.usedAt).length;
     res.json({
@@ -4608,8 +4614,8 @@ Read-Host "Press Enter to close this window"
         .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
         .map(r => r.sentCodeId)
     );
-    const availableCodes = codes.filter(c => !c.usedAt && !reservedCodeIds.has(c.id)).length;
-    const usedCodes = codes.filter(c => c.usedAt).length;
+    const availableCodes = codes.filter(c => !c.usedAt && !c.usedByIp && !reservedCodeIds.has(c.id)).length;
+    const usedCodes = codes.filter(c => c.usedAt || c.usedByIp).length;
     const emailRevenue = emailReqs
       .filter(r => r.status === "sent" || r.status === "auto-sent")
       .reduce((sum, r) => sum + (r.amountPaid ?? 15), 0);

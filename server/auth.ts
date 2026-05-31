@@ -206,6 +206,7 @@ export function registerAuthRoutes(app: Express): void {
   // the desktop frontend stores in localStorage and sends as X-Native-Auth on every API call.
   // The token is also persisted to DB so it survives server restarts.
   app.post("/api/auth/discord/exchange", async (req: Request, res: Response) => {
+    console.log("[auth/exchange] incoming POST from UA:", req.headers["user-agent"], "| origin:", req.headers.origin ?? "(none)");
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
