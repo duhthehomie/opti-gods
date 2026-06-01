@@ -299,6 +299,9 @@ export function registerAuthRoutes(app: Express): void {
   // Code + port travel as query params so there is no request body for the WAF
   // (or TLS-fingerprint bot-detection) to inspect or block.
   app.get("/api/d", async (req: Request, res: Response) => {
+    // CORS — the fetch originates from http://127.0.0.1:25444 (loopback HTML page in Chrome)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET");
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
