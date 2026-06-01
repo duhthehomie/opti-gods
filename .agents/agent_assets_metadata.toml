@@ -30,3 +30,9 @@ id = "tG0WvUzZwQlDYDNWAVqcv"
 uri = "file://attached_assets/fire_icon_preview.png"
 type = "image"
 title = "New Fire Icon (256x256 preview)"
+
+[[outputs]]
+id = "Z1gCEAIbHJbI8KHLm2Tiu"
+uri = "file://scripts/output/OptiGods-COD-9800X3D-RTX5070-Streamer.zip"
+type = "unspecified"
+title = "OptiGods — COD Streamer Script (9800X3D + RTX 5070)"
