@@ -1,0 +1,1 @@
+- [CI Cargo cache key](ci-cargo-cache.md) — cache key must include src/** hash or .rs changes are silently ignored and old binary ships.
