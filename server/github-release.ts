@@ -16,8 +16,10 @@ export async function getLatestGhRelease(): Promise<GhRelease | null> {
   if (_fetching) return _cache;
   _fetching = true;
   try {
+    // Use /releases list instead of /releases/latest — the latter skips
+    // pre-releases, and all optigods releases are tagged as pre-release.
     const r = await fetch(
-      `https://api.github.com/repos/${GH_REPO}/releases/latest`,
+      `https://api.github.com/repos/${GH_REPO}/releases?per_page=5`,
       {
         headers: {
           Accept: "application/vnd.github+json",
@@ -27,7 +29,11 @@ export async function getLatestGhRelease(): Promise<GhRelease | null> {
       }
     );
     if (!r.ok) return _cache;
-    const data = (await r.json()) as Record<string, unknown>;
+    const list = (await r.json()) as Record<string, unknown>[];
+    if (!Array.isArray(list) || list.length === 0) return _cache;
+
+    // Pick the first non-draft release (list is newest-first)
+    const data = list.find((rel) => !rel.draft) ?? list[0];
     const tag = String(data.tag_name ?? "");
     const version = tag.replace(/^v/, "");
     const assets = Array.isArray(data.assets) ? data.assets : [];

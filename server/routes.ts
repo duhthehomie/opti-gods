@@ -1391,6 +1391,14 @@ export async function registerRoutes(
   // Admin override via updaterCmdUrl in admin_settings still takes priority.
   app.get("/api/download/latest", async (_req, res) => {
     try {
+      // Env-var override — highest priority, set via Replit Secrets as DOWNLOAD_URL.
+      // Lets us update the download target without touching the DB or redeploying.
+      const envUrl = process.env.DOWNLOAD_URL?.trim();
+      if (envUrl && /^https:\/\//i.test(envUrl)) {
+        console.log(`[download] Redirecting to DOWNLOAD_URL env: ${envUrl}`);
+        return res.redirect(302, envUrl);
+      }
+
       const [settings, gh] = await Promise.all([
         storage.getAdminSettings().catch(() => null),
         getLatestGhRelease(),
