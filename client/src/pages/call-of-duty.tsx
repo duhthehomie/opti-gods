@@ -174,14 +174,14 @@ export default function CallOfDuty() {
                   {
                     id: "CodHighPriority",
                     title: "Force cod.exe to High CPU + IO Priority (Persistent)",
-                    desc: "Registers cod.exe in IFEO with High CPU priority, IO priority 3, page priority 5, energy throttle off, and foreground boost — survives every reboot. Works on any CPU. The single biggest FPS consistency fix for Warzone on any rig.",
+                    desc: "Registers cod.exe in IFEO with High CPU priority, IO priority 3, page priority 5, energy throttle off, and foreground boost — survives every reboot. Works on any CPU. The single biggest FPS consistency fix for Warzone on any rig.\n\n⚠️ STREAMERS: High CPU priority starves OBS/Streamlabs of encoding time → choppy stream. If you stream, set OBS process priority to 'Above Normal' in OBS → Settings → Advanced, or skip this tweak.",
                     badge: "MUST HAVE",
                     impact: "HIGH" as const,
                   },
                   {
                     id: "CodGameMode",
                     title: "Enable Windows Game Mode + Disable Xbox DVR",
-                    desc: "Enables Windows Game Mode so Windows deprioritizes background tasks while COD is running. Disables Xbox DVR background capture hooks that eat into DirectX frame delivery. Universal benefit on any hardware.",
+                    desc: "Enables Windows Game Mode so Windows deprioritizes background tasks while COD is running. Disables Xbox DVR background capture hooks that eat into DirectX frame delivery. Universal benefit on any hardware.\n\n⚠️ STREAMERS: Game Mode deprioritizes OBS/Streamlabs as a 'background task' — this directly causes dropped frames and choppy stream. Disable this tweak if you stream.",
                     badge: "RECOMMENDED",
                     impact: "HIGH" as const,
                   },
