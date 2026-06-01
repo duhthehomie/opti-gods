@@ -1399,26 +1399,8 @@ export async function registerRoutes(
         return res.redirect(302, envUrl);
       }
 
-      const [settings, gh] = await Promise.all([
-        storage.getAdminSettings().catch(() => null),
-        getLatestGhRelease(),
-      ]);
-      const override = settings?.updaterCmdUrl?.trim();
-      // HTTPS-only admin override — accepts any HTTPS URL (direct .exe links
-      // or file-host pages like gofile.io, mediafire, etc.)
-      if (override && /^https:\/\//i.test(override)) {
-        try {
-          const u = new URL(override);
-          if (u.host && u.protocol === "https:") {
-            return res.redirect(302, u.toString());
-          }
-        } catch {
-          // fall through
-        }
-      }
-
-      // Local bundled installer — stream directly (no redirect needed, works in
-      // any environment regardless of static-file server configuration).
+      // Local bundled installer — highest priority after env-var override.
+      // Dropping a new .exe into client/public/downloads/ immediately wins.
       const dir = join(process.cwd(), "client", "public", "downloads");
       if (existsSync(dir)) {
         const entries = readdirSync(dir)
@@ -1437,6 +1419,24 @@ export async function registerRoutes(
           const { name } = entries[0];
           console.log(`[download] Redirecting to static file: ${name}`);
           return res.redirect(302, `/downloads/${name}`);
+        }
+      }
+
+      const [settings, gh] = await Promise.all([
+        storage.getAdminSettings().catch(() => null),
+        getLatestGhRelease(),
+      ]);
+      const override = settings?.updaterCmdUrl?.trim();
+      // HTTPS-only admin override — accepts any HTTPS URL (direct .exe links
+      // or file-host pages like gofile.io, mediafire, etc.)
+      if (override && /^https:\/\//i.test(override)) {
+        try {
+          const u = new URL(override);
+          if (u.host && u.protocol === "https:") {
+            return res.redirect(302, u.toString());
+          }
+        } catch {
+          // fall through
         }
       }
 
