@@ -25,8 +25,6 @@ import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
 import { useState, useRef, useCallback, useEffect } from "react";
 
-const ADMIN_UNLOCK_CODE = "4258";
-
 type NavItem = {
   title: string;
   url: string;
@@ -83,6 +81,7 @@ export function AppSidebar() {
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockInput, setUnlockInput] = useState("");
   const [unlockError, setUnlockError] = useState(false);
+  const [unlockLoading, setUnlockLoading] = useState(false);
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,14 +99,26 @@ export function AppSidebar() {
     }
   }, []);
 
-  const handleUnlockSubmit = () => {
-    if (unlockInput.trim() === ADMIN_UNLOCK_CODE) {
-      storeAdminKey(unlockInput.trim());
-      setAdminUnlocked(true);
-      setShowUnlockModal(false);
-      setUnlockError(false);
-    } else {
+  const handleUnlockSubmit = async () => {
+    const key = unlockInput.trim();
+    if (!key) return;
+    setUnlockLoading(true);
+    setUnlockError(false);
+    try {
+      const res = await fetch(apiUrl("/api/admin/codes"), {
+        headers: { "x-admin-key": key },
+      });
+      if (res.ok) {
+        storeAdminKey(key);
+        setAdminUnlocked(true);
+        setShowUnlockModal(false);
+      } else {
+        setUnlockError(true);
+      }
+    } catch {
       setUnlockError(true);
+    } finally {
+      setUnlockLoading(false);
     }
   };
 
@@ -323,7 +334,7 @@ export function AppSidebar() {
               type="password"
               value={unlockInput}
               onChange={e => { setUnlockInput(e.target.value); setUnlockError(false); }}
-              onKeyDown={e => e.key === "Enter" && handleUnlockSubmit()}
+              onKeyDown={e => e.key === "Enter" && !unlockLoading && handleUnlockSubmit()}
               placeholder="••••"
               data-testid="input-admin-unlock"
               className={cn(
@@ -336,10 +347,11 @@ export function AppSidebar() {
             )}
             <button
               onClick={handleUnlockSubmit}
+              disabled={unlockLoading}
               data-testid="button-admin-unlock-submit"
-              className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold transition-colors"
+              className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
             >
-              Unlock
+              {unlockLoading ? "Checking…" : "Unlock"}
             </button>
           </div>
         </div>
