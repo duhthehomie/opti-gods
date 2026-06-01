@@ -295,6 +295,63 @@ export function registerAuthRoutes(app: Express): void {
   // WAF-neutral path — used by v2.3+ .exe builds to avoid proxy bot-protection blocks
   app.post("/api/app/link", handleDiscordExchange);
 
+  // GET /api/d — zero-body WAF-bypass path used by v2.3.8+ .exe builds.
+  // Code + port travel as query params so there is no request body for the WAF
+  // (or TLS-fingerprint bot-detection) to inspect or block.
+  app.get("/api/d", async (req: Request, res: Response) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ error: "Discord login is not configured." });
+    }
+    const { c: code, p: portStr } = req.query as { c?: string; p?: string };
+    if (!code || typeof code !== "string") return res.status(400).json({ error: "Missing code" });
+    const port = parseInt(portStr ?? "0", 10);
+    if (!port || port <= 0 || port >= 65536) return res.status(400).json({ error: "Invalid port" });
+    const resolvedRedirectUri = `http://127.0.0.1:${port}/callback`;
+    console.log("[auth/d] GET exchange | port:", port, "| UA:", req.headers["user-agent"]);
+    try {
+      const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: resolvedRedirectUri,
+        }).toString(),
+      });
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        console.error("[auth/d] Discord token exchange failed", tokenRes.status, body);
+        return res.status(502).json({ error: "token_exchange_failed" });
+      }
+      const tokenJson = (await tokenRes.json()) as { access_token?: string };
+      if (!tokenJson.access_token) return res.status(502).json({ error: "no_access_token" });
+      const userRes = await fetch(`${DISCORD_API}/users/@me`, {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      });
+      if (!userRes.ok) return res.status(502).json({ error: "user_fetch_failed" });
+      const userJson = (await userRes.json()) as {
+        id: string; username: string; global_name?: string | null;
+        avatar?: string | null; email?: string | null;
+      };
+      await storage.upsertUser({
+        discordId: userJson.id,
+        username: userJson.username,
+        globalName: userJson.global_name ?? null,
+        avatarUrl: discordAvatarUrl(userJson.id, userJson.avatar ?? null),
+        email: userJson.email ?? null,
+      });
+      const token = await issueNativeToken(userJson.id);
+      return res.json({ access_token: token, user: { id: userJson.id, username: userJson.username } });
+    } catch (err) {
+      console.error("[auth/d] error:", err);
+      return res.status(500).json({ error: "server_error" });
+    }
+  });
+
   // GET /api/me — current Discord user (used by the auth gate)
   app.get("/api/me", async (req: Request, res: Response) => {
     // Desktop app sends X-Native-Auth bearer token (no SameSite cookie available)
