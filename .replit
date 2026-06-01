@@ -53,7 +53,6 @@ ADMIN_KEY = "4258"
 DISCORD_REDIRECT_URI = "https://optigods.com/api/auth/discord/callback"
 
 [userenv.production]
-DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
 
 [postMerge]
 path = "scripts/post-merge.sh"
