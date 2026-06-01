@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BRAND, prefersReducedMotion } from "./assets";
+import { BRAND } from "./assets";
 
 const PRO_EVENT = "optigods_pro_changed";
 export const PRO_CELEBRATE_EVENT = "optigods_pro_celebrate";
@@ -49,8 +49,6 @@ export function ProCelebration() {
 
   if (phase === "hidden") return null;
 
-  const reduced = prefersReducedMotion();
-
   return (
     <div
       data-testid="pro-celebration"
@@ -63,23 +61,25 @@ export function ProCelebration() {
       }}
       onClick={() => setPhase("fade")}
     >
-      {reduced ? (
-        <img
-          src={BRAND.goldPng}
-          alt="Opti Gods Pro Unlocked"
-          className="relative z-10 w-56 h-56 object-contain drop-shadow-[0_0_50px_rgba(250,204,21,0.6)]"
-        />
-      ) : (
-        <video
-          ref={videoRef}
-          src={BRAND.spinWhiteGold}
-          autoPlay
-          muted
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      )}
+      {/* Always show the video — ignore OS reduced-motion setting for this
+          one-time unlock moment. Fall back to the PNG only if the file fails. */}
+      <video
+        ref={videoRef}
+        src={BRAND.spinWhiteGold}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover"
+        onError={e => {
+          const v = e.currentTarget;
+          const img = document.createElement("img");
+          img.src = BRAND.goldPng;
+          img.alt = "Opti Gods Pro";
+          img.className = "absolute inset-0 w-full h-full object-contain";
+          v.replaceWith(img);
+        }}
+      />
       <div className="relative z-10 mt-6 text-center space-y-1 px-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-amber-300/80">
           Welcome to
