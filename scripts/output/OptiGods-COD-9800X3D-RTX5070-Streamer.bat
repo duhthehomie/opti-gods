@@ -55,7 +55,7 @@ trap {
 
 Write-Host "=====================================" -ForegroundColor Red
 Write-Host "  OPTI GODS by leaq" -ForegroundColor Red
-Write-Host "  STREAMER BUILD — 71 optimizations" -ForegroundColor White
+Write-Host "  STREAMER BUILD — 70 optimizations" -ForegroundColor White
 Write-Host "  9800X3D + RTX 5070 + 32GB Win11" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Red
 Write-Host ""
@@ -233,20 +233,6 @@ try {
     Write-Host "[ERR] CodNetworkBuffer: $_" -ForegroundColor Red
 }
 
-Write-Host "[>>] CodPagefileOptimize..." -ForegroundColor DarkYellow
-try {
-    $minMB = 16384; $maxMB = 32768
-    $cs = Get-WmiObject Win32_ComputerSystem; $cs.AutomaticManagedPagefile = $false; $cs.Put() | Out-Null
-    $pf = Get-WmiObject Win32_PageFileSetting -EA SilentlyContinue | Where-Object { $_.Name -like 'C:*' }
-    If ($pf) { $pf.InitialSize = $minMB; $pf.MaximumSize = $maxMB; $pf.Put() | Out-Null } Else {
-        $s = ([WMIClass]'Win32_PageFileSetting').CreateInstance(); $s.Name = 'C:\pagefile.sys'; $s.InitialSize = $minMB; $s.MaximumSize = $maxMB; $s.Put() | Out-Null
-    }
-    Write-Host "[COD] Pagefile set to 16GB-32GB — steady overflow buffer for texture streaming." -ForegroundColor Green
-    $appliedTweaks.Add("CodPagefileOptimize") | Out-Null
-} catch {
-    $failedTweaks.Add("CodPagefileOptimize") | Out-Null
-    Write-Host "[ERR] CodPagefileOptimize: $_" -ForegroundColor Red
-}
 
 Write-Host "[>>] CodShaderCacheClear..." -ForegroundColor DarkYellow
 try {
@@ -967,7 +953,7 @@ Write-Host "=============================================" -ForegroundColor Dark
 Write-Host "   OPTI GODS by leaq -- TWEAKS APPLIED" -ForegroundColor Red
 Write-Host "=============================================" -ForegroundColor DarkRed
 Write-Host ""
-Write-Host "  [OK] $($appliedTweaks.Count) of 71 tweaks applied" -ForegroundColor Green
+Write-Host "  [OK] $($appliedTweaks.Count) of 70 tweaks applied" -ForegroundColor Green
 if ($failedTweaks.Count -gt 0) {
     Write-Host ""
     Write-Host "  [FAILED] ($($failedTweaks.Count) tweaks had errors):" -ForegroundColor Red
