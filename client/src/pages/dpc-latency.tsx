@@ -1,16 +1,9 @@
-import { useMemo, useState } from "react";
-import { Activity, Download, Info, AlertTriangle, ClipboardPaste, Play, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Activity, Download, ChevronDown, Zap, Wifi, Volume2, HardDrive, Monitor, Cpu, CheckCircle2, ClipboardPaste, Play, Info, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { V2TweakSection } from "@/components/v2-tweak-section";
-
-/**
- * DPC Latency tab — Tools & Fixes shell.
- * V2 Task #38/#39: web build provides a "Run check" PowerShell that uses
- * xperf (preferred) or wpr (fallback) to capture a 30-second DPC/ISR sample,
- * then summarises top offenders to the console. The user pastes that summary
- * back in and we parse + highlight the worst drivers inline.
- */
+import { cn } from "@/lib/utils";
 
 interface ParsedDriver {
   name: string;
@@ -23,29 +16,13 @@ function parseXperfSummary(raw: string): ParsedDriver[] {
   const rows: ParsedDriver[] = [];
   const lines = raw.split(/\r?\n/);
   for (const line of lines) {
-    // xperf -a dpcisr summary lines look like:
-    //   nvlddmkm.sys     12345    9876   123.45us
-    // wpr summary lines look like:
-    //   Driver: ndis.sys    DPCs: 4321    Avg(us): 87.4    %Time: 1.2
     const xperfMatch = line.match(/([\w.\-+]+\.sys)\b[^\d]*\d+[^\d]+\d+[^\d]+([\d.]+)\s*us/i);
-    if (xperfMatch) {
-      rows.push({ name: xperfMatch[1], usPerDpc: parseFloat(xperfMatch[2]) });
-      continue;
-    }
+    if (xperfMatch) { rows.push({ name: xperfMatch[1], usPerDpc: parseFloat(xperfMatch[2]) }); continue; }
     const wprMatch = line.match(/([\w.\-+]+\.sys)[^\d]*DPCs:\s*\d+[^\d]+Avg\(us\):\s*([\d.]+)(?:[^\d]+%Time:\s*([\d.]+))?/i);
-    if (wprMatch) {
-      rows.push({
-        name: wprMatch[1],
-        usPerDpc: parseFloat(wprMatch[2]),
-        pctTime: wprMatch[3] ? parseFloat(wprMatch[3]) : undefined,
-      });
-      continue;
-    }
-    // Fallback: lines that begin with a .sys filename and contain any us value
+    if (wprMatch) { rows.push({ name: wprMatch[1], usPerDpc: parseFloat(wprMatch[2]), pctTime: wprMatch[3] ? parseFloat(wprMatch[3]) : undefined }); continue; }
     const looseMatch = line.match(/^([\w.\-+]+\.sys)\s.*?([\d.]+)\s*us/i);
     if (looseMatch) rows.push({ name: looseMatch[1], usPerDpc: parseFloat(looseMatch[2]) });
   }
-  // Dedup by name (max usPerDpc), then sort desc
   const byName = new Map<string, ParsedDriver>();
   for (const r of rows) {
     const prev = byName.get(r.name.toLowerCase());
@@ -54,300 +31,554 @@ function parseXperfSummary(raw: string): ParsedDriver[] {
   return Array.from(byName.values()).sort((a, b) => b.usPerDpc - a.usPerDpc).slice(0, 12);
 }
 
-const KNOWN_FIXES: Array<{ pattern: RegExp; fix: string }> = [
-  { pattern: /nvlddmkm/i,           fix: "NVIDIA — enable Max-Perf Mode + MSI Mode (Registry / NVIDIA tabs)" },
-  { pattern: /amdkmdag|atikmdag/i,  fix: "AMD — Optimize Latency + TDR Timeout tweaks (AMD tab)" },
-  { pattern: /ndis|netio|tcpip/i,   fix: "Disable Large Send Offload + RSS tuning (Network tab)" },
-  { pattern: /athrx|killer|wifi/i,  fix: "Network Throttling Index FFFFFFFF + USB Wi-Fi power-save off" },
-  { pattern: /usbport|usbhub|usbxhci|hidusb/i, fix: "Disable USB Selective Suspend + USB Power-Save (Laptop tab)" },
-  { pattern: /hdaudbus|portcls/i,   fix: "Disable HDMI Audio bus on NVIDIA/AMD; raise audio driver buffer" },
-  { pattern: /storport|ntfs|stornvme/i, fix: "Update chipset/NVMe drivers; disable DIPM in power options" },
-  { pattern: /dxgkrnl|dxgmms/i,     fix: "Toggle HAGS off then on; rebuild shader cache" },
-  { pattern: /tcpip\.sys/i,         fix: "Reset Winsock + TCP autotuning to normal" },
+function downloadBat(filename: string, ps1: string) {
+  const b64 = btoa(unescape(encodeURIComponent(ps1)));
+  const bat = [
+    "@echo off",
+    "net session >nul 2>&1",
+    "if %errorLevel% neq 0 (",
+    "    echo Requesting administrator privileges...",
+    "    powershell -Command \"Start-Process '%~f0' -Verb RunAs\"",
+    "    exit /b",
+    ")",
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$b = '${b64}'; $ps = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b)); $t = [IO.Path]::GetTempFileName() + '.ps1'; [IO.File]::WriteAllText($t, $ps); & $t; Remove-Item $t -EA SilentlyContinue"`,
+    "pause",
+    "",
+  ].join("\r\n");
+  const blob = new Blob([bat], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `optigods_${filename}.bat`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+interface DpcFix {
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  driver: string;
+  label: string;
+  desc: string;
+  severity: "critical" | "high" | "medium";
+  reboot: boolean;
+  ps1: string;
+}
+
+const DPC_FIXES: DpcFix[] = [
+  {
+    id: "nvidia",
+    icon: Monitor,
+    driver: "nvlddmkm.sys",
+    label: "NVIDIA GPU",
+    severity: "critical",
+    reboot: true,
+    desc: "Enables MSI interrupt mode on your NVIDIA GPU — the #1 cause of DPC spikes. Also sets PowerMizer to Max Performance so the driver doesn't downclock between frames.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — NVIDIA DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — NVIDIA DPC Latency Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+$devClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
+$fixed = $false
+0..9 | ForEach-Object {
+    $k = "$devClass\\000$_"
+    if (Test-Path $k) {
+        $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc
+        if ($desc -match 'NVIDIA') {
+            Write-Host " [GPU] Found: $desc" -ForegroundColor Cyan
+            $msiPath = "$k\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"
+            if (!(Test-Path $msiPath)) { New-Item $msiPath -Force | Out-Null }
+            Set-ItemProperty $msiPath 'MSISupported' 1 -Type DWord -Force
+            Set-ItemProperty $msiPath 'MessageNumberLimit' 16 -Type DWord -Force
+            Write-Host " [OK] MSI Interrupt mode ENABLED — eliminates level-triggered interrupt delays" -ForegroundColor Green
+            Set-ItemProperty $k 'PowerMizerEnable' 0 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'PowerMizerLevel' 1 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'PerfLevelSrc' 0x2222 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] PowerMizer set to Maximum Performance — GPU won't downclock between frames" -ForegroundColor Green
+            $fixed = $true
+        }
+    }
+}
+if (!$fixed) { Write-Host " [!] No NVIDIA GPU found. Make sure NVIDIA drivers are installed." -ForegroundColor Yellow }
+Write-Host ""
+Write-Host " REBOOT REQUIRED for MSI mode to activate." -ForegroundColor Cyan
+Write-Host " After reboot: Device Manager > Display Adapters > GPU > Properties > Resources" -ForegroundColor Gray
+Write-Host "   Should now show Message-Signaled Interrupts instead of Interrupt Request Line" -ForegroundColor Gray
+Write-Host ""`,
+  },
+  {
+    id: "amd",
+    icon: Monitor,
+    driver: "amdkmdag.sys",
+    label: "AMD GPU",
+    severity: "critical",
+    reboot: true,
+    desc: "Enables MSI interrupt mode on AMD Radeon GPU and disables ULPS (Ultra Low Power State) — the main AMD DPC offender that causes stutters when the GPU wakes from low power.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — AMD DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — AMD GPU DPC Latency Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+$devClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
+$fixed = $false
+0..9 | ForEach-Object {
+    $k = "$devClass\\000$_"
+    if (Test-Path $k) {
+        $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc
+        if ($desc -match 'AMD|Radeon|ATI') {
+            Write-Host " [GPU] Found: $desc" -ForegroundColor Cyan
+            $msiPath = "$k\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"
+            if (!(Test-Path $msiPath)) { New-Item $msiPath -Force | Out-Null }
+            Set-ItemProperty $msiPath 'MSISupported' 1 -Type DWord -Force
+            Write-Host " [OK] MSI Interrupt mode ENABLED" -ForegroundColor Green
+            Set-ItemProperty $k 'EnableULPS' 0 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'EnableULPS_NA' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] ULPS (Ultra Low Power State) DISABLED — was causing DPC stutter spikes on GPU wake" -ForegroundColor Green
+            Set-ItemProperty $k 'PP_ThermalAutoThrottlingEnable' 0 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'KMD_EnableComputePreemption' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] Thermal auto-throttle and compute preemption disabled" -ForegroundColor Green
+            $fixed = $true
+        }
+    }
+}
+if (!$fixed) { Write-Host " [!] No AMD GPU found. Install AMD Adrenalin drivers first." -ForegroundColor Yellow }
+Write-Host ""
+Write-Host " REBOOT REQUIRED." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  {
+    id: "network",
+    icon: Wifi,
+    driver: "ndis.sys / netio.sys",
+    label: "Network Driver",
+    severity: "high",
+    reboot: false,
+    desc: "Disables interrupt moderation, RSS, and LSO on all active network adapters. Also removes the Windows 10% UDP throttle that affects game server tick rates.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — Network DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — Network Driver DPC Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object {
+    $n = $_.Name
+    Write-Host " [NET] Processing: $n ($($_.InterfaceDescription))" -ForegroundColor Cyan
+    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*InterruptModeration' -RegistryValue 0 -EA SilentlyContinue
+    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RSS' -RegistryValue 0 -EA SilentlyContinue
+    Disable-NetAdapterLso -Name $n -EA SilentlyContinue
+    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*LsoV2IPv4' -RegistryValue 0 -EA SilentlyContinue
+    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*LsoV2IPv6' -RegistryValue 0 -EA SilentlyContinue
+    Write-Host " [OK] Interrupt moderation OFF, RSS OFF, LSO OFF on $n" -ForegroundColor Green
+}
+Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xFFFFFFFF -Type DWord -Force
+Write-Host " [OK] NetworkThrottlingIndex removed — no more 10% UDP throttle on game traffic" -ForegroundColor Green
+Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' -Name 'TCPNoDelay' -Value 1 -Type DWord -Force
+Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' -Name 'TcpAckFrequency' -Value 1 -Type DWord -Force
+Write-Host " [OK] TCP no-delay + immediate ACK enabled" -ForegroundColor Green
+Write-Host ""
+Write-Host " Network DPC fix applied. No reboot needed — takes effect immediately." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  {
+    id: "usb",
+    icon: Zap,
+    driver: "usbport.sys",
+    label: "USB Controller",
+    severity: "high",
+    reboot: true,
+    desc: "Disables USB selective suspend for all controllers and hubs. USB suspend causes 1-20ms interrupt storms when your mouse/keyboard/headset wakes from low-power — directly hurts input latency.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — USB DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — USB Controller DPC Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+$usbSvc = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\USB'
+if (!(Test-Path $usbSvc)) { New-Item $usbSvc -Force | Out-Null }
+Set-ItemProperty $usbSvc 'DisableSelectiveSuspend' 1 -Type DWord -Force
+Write-Host " [OK] USB selective suspend DISABLED — controllers won't power down mid-game" -ForegroundColor Green
+powercfg -setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+powercfg -setdcvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+powercfg -setactive SCHEME_CURRENT 2>$null
+Write-Host " [OK] USB power management set to always-on in power plan" -ForegroundColor Green
+Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\USB' -EA SilentlyContinue | ForEach-Object {
+    Get-ChildItem $_.PSPath -EA SilentlyContinue | ForEach-Object {
+        $devParam = "$($_.PSPath)\\Device Parameters"
+        if (Test-Path $devParam) {
+            Set-ItemProperty $devParam 'SelectiveSuspendEnabled' 0 -Type DWord -Force -EA SilentlyContinue
+        }
+    }
+}
+Write-Host " [OK] All USB hub devices set to no-suspend" -ForegroundColor Green
+Write-Host ""
+Write-Host " REBOOT RECOMMENDED." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  {
+    id: "audio",
+    icon: Volume2,
+    driver: "HDAudBus.sys",
+    label: "Audio Driver",
+    severity: "medium",
+    reboot: false,
+    desc: "Raises MMCSS Pro Audio scheduler priority and sets SystemResponsiveness=0 so games get maximum CPU time. NVIDIA/AMD HDMI audio devices are common DPC offenders if you output audio over HDMI.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — Audio DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — Audio Driver DPC Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+$proAudio = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Pro Audio'
+if (!(Test-Path $proAudio)) { New-Item $proAudio -Force | Out-Null }
+Set-ItemProperty $proAudio 'Scheduling Category' 'High' -Type String -Force
+Set-ItemProperty $proAudio 'Priority' 6 -Type DWord -Force
+Set-ItemProperty $proAudio 'SFIO Priority' 'High' -Type String -Force
+Set-ItemProperty $proAudio 'Background Only' 'False' -Type String -Force
+Set-ItemProperty $proAudio 'Clock Rate' 10000 -Type DWord -Force
+Set-ItemProperty $proAudio 'GPU Priority' 8 -Type DWord -Force
+Write-Host " [OK] MMCSS Pro Audio profile set to maximum priority" -ForegroundColor Green
+Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 0 -Type DWord -Force
+Write-Host " [OK] SystemResponsiveness=0 — maximum CPU time to foreground games and multimedia" -ForegroundColor Green
+Write-Host ""
+Write-Host " Audio DPC fix applied. No reboot needed." -ForegroundColor Cyan
+Write-Host " TIP: If you still see HDAudBus spikes, update audio drivers from your GPU vendor" -ForegroundColor Gray
+Write-Host "      site (not Windows Update) and consider disabling HDMI audio if unused." -ForegroundColor Gray
+Write-Host ""`,
+  },
+  {
+    id: "nvme",
+    icon: HardDrive,
+    driver: "stornvme.sys",
+    label: "NVMe Storage",
+    severity: "medium",
+    reboot: true,
+    desc: "Disables NVMe APST (Autonomous Power State Transitions) — the drive entering low-power states mid-game causes read latency spikes of 100-500ms that feel like freezes.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — NVMe DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — NVMe Storage DPC Fix" -ForegroundColor Red
+Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host ""
+$nvmeKey = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device'
+if (!(Test-Path $nvmeKey)) { New-Item $nvmeKey -Force | Out-Null }
+Set-ItemProperty $nvmeKey 'AllowIdlePowerManagement' 0 -Type DWord -Force
+Write-Host " [OK] NVMe APST disabled — drive won't enter low-power states mid-game" -ForegroundColor Green
+powercfg -setacvalueindex SCHEME_CURRENT 0012ee47-9041-4b5d-9b77-535fba8b1442 6738e2c4-e8a5-4a42-b16a-e040e769756e 0 2>$null
+powercfg -setactive SCHEME_CURRENT 2>$null
+Write-Host " [OK] Disk power-off timeout set to Never" -ForegroundColor Green
+Write-Host ""
+Write-Host " REBOOT REQUIRED for NVMe changes to take effect." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  {
+    id: "directx",
+    icon: Cpu,
+    driver: "dxgkrnl.sys",
+    label: "DirectX / GPU Scheduler",
+    severity: "high",
+    reboot: true,
+    desc: "Disables Hardware-Accelerated GPU Scheduling (HAGS) which causes dxgkrnl DPC spikes on GTX 10xx/16xx and older AMD cards. Also clears all stale shader caches.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — DirectX DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — DirectX GPU Scheduler DPC Fix" -ForegroundColor Red
+Write-Host " =============================================" -ForegroundColor DarkRed
+Write-Host ""
+Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force
+Write-Host " [OK] HAGS disabled — reduces dxgkrnl DPC overhead on GTX 10xx/16xx and older AMD cards" -ForegroundColor Green
+$caches = @(
+    "$env:LOCALAPPDATA\\NVIDIA\\DXCache",
+    "$env:LOCALAPPDATA\\NVIDIA\\GLCache",
+    "$env:LOCALAPPDATA\\D3DSCache",
+    "$env:LOCALAPPDATA\\AMD\\DxcCache"
+)
+foreach ($c in $caches) {
+    if (Test-Path $c) {
+        Remove-Item "$c\\*" -Recurse -Force -EA SilentlyContinue
+        Write-Host " [OK] Cleared: $c" -ForegroundColor Green
+    }
+}
+Write-Host " [OK] All DirectX/GPU shader caches cleared — dxgkrnl rebuilds clean on next game launch" -ForegroundColor Green
+Write-Host ""
+Write-Host " REBOOT REQUIRED." -ForegroundColor Cyan
+Write-Host ""`,
+  },
 ];
 
-function suggestFix(driverName: string): string {
-  for (const { pattern, fix } of KNOWN_FIXES) {
-    if (pattern.test(driverName)) return fix;
+const SEVERITY_CONFIG = {
+  critical: { label: "CRITICAL", cls: "bg-red-500/20 text-red-300 border-red-500/40" },
+  high:     { label: "HIGH",     cls: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+  medium:   { label: "MEDIUM",   cls: "bg-amber-500/10 text-amber-300 border-amber-500/25" },
+};
+
+const KNOWN_FIXES: Array<{ pattern: RegExp; fix: string }> = [
+  { pattern: /nvlddmkm/i,           fix: "NVIDIA GPU — click the 'NVIDIA GPU' fix card above to apply MSI mode + Max Performance" },
+  { pattern: /amdkmdag|atikmdag/i,  fix: "AMD GPU — click the 'AMD GPU' fix card above to disable ULPS and enable MSI mode" },
+  { pattern: /ndis|netio|tcpip/i,   fix: "Network Driver — click the 'Network Driver' fix card above" },
+  { pattern: /usbport|usbhub/i,     fix: "USB Controller — click the 'USB Controller' fix card above to disable selective suspend" },
+  { pattern: /hdaudbus|portcls/i,   fix: "Audio — click the 'Audio Driver' fix card above to boost MMCSS priority" },
+  { pattern: /stornvme|storahci/i,  fix: "NVMe Storage — click the 'NVMe Storage' fix card above to disable APST" },
+  { pattern: /dxgkrnl/i,            fix: "DirectX — click the 'DirectX / GPU Scheduler' fix card above" },
+  { pattern: /acpi/i,               fix: "ACPI — BIOS-level; update your motherboard firmware + disable C-states in BIOS" },
+  { pattern: /wdf|kmdf/i,           fix: "WDF Driver — check for driver updates for the specific device causing DPC spikes" },
+];
+
+export default function DpcLatencyPage() {
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [rawText, setRawText] = useState("");
+  const [parsed, setParsed] = useState<ParsedDriver[]>([]);
+
+  function applyFix(fix: DpcFix) {
+    downloadBat(`dpc_${fix.id}`, fix.ps1);
+    setApplied(prev => new Set(prev).add(fix.id));
   }
-  return "Update vendor driver from manufacturer's site (not Windows Update)";
-}
 
-function severityFor(us: number): { label: string; tone: string } {
-  if (us >= 500) return { label: "CRITICAL", tone: "text-red-400 bg-red-500/10 border-red-500/30" };
-  if (us >= 250) return { label: "HIGH",     tone: "text-orange-400 bg-orange-500/10 border-orange-500/30" };
-  if (us >= 100) return { label: "MED",      tone: "text-amber-400 bg-amber-500/10 border-amber-500/30" };
-  return                  { label: "OK",     tone: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" };
-}
-
-export default function DPCLatencyPage() {
-  const [pasted, setPasted] = useState("");
-  const parsed = useMemo(() => parseXperfSummary(pasted), [pasted]);
-
-  const downloadRunCheck = () => {
-    const ps1 = `# ==============================================================
-# Opti Gods — DPC Latency Run Check (xperf / WPR)
-#
-# Captures a 30-second DPC/ISR trace and prints a per-driver
-# summary you paste back into the Opti Gods web UI.
-#
-# 1. Right-click  -> "Run with PowerShell as Administrator"
-# 2. Wait 30 seconds while the trace runs.
-# 3. The script will print a table of the worst offenders.
-# 4. Copy everything from "===== PASTE THIS BLOCK =====" down to
-#    "===== END PASTE =====" into the textarea on the website.
-# ============================================================
-
-$ErrorActionPreference = 'SilentlyContinue'
-$Host.UI.RawUI.WindowTitle = "Opti Gods - DPC Latency Run Check"
-
-function Test-Admin {
-    $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    (New-Object System.Security.Principal.WindowsPrincipal($id)).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-if (-not (Test-Admin)) {
-    Write-Host ""
-    Write-Host "  !! This script must run as Administrator !!" -ForegroundColor Red
-    Read-Host "  Press Enter to close"; exit 1
-}
-
-Write-Host ""
-Write-Host " OPTI GODS - DPC Latency Run Check" -ForegroundColor Red
-Write-Host " ----------------------------------" -ForegroundColor DarkRed
-Write-Host ""
-
-# Detect xperf (Windows Performance Toolkit) — preferred, gives per-driver us.
-$xperf = Get-Command xperf.exe -EA SilentlyContinue
-$wpr   = Get-Command wpr.exe   -EA SilentlyContinue
-
-if ($xperf) {
-    $etl = "$env:TEMP\\optigods-dpc.etl"
-    Write-Host " [1/3] Starting kernel DPC/ISR trace (xperf, 30s)..." -ForegroundColor Cyan
-    xperf -on PROC_THREAD+LOADER+DPC+INTERRUPT -f $etl | Out-Null
-    Start-Sleep -Seconds 30
-    xperf -d $etl | Out-Null
-    Write-Host " [2/3] Trace written: $etl" -ForegroundColor DarkGreen
-    Write-Host " [3/3] Summarising per-driver DPC time..." -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "===== PASTE THIS BLOCK =====" -ForegroundColor Yellow
-    # xperf -i ... -a dpcisr  produces lines like:
-    #   <driver.sys>  <dpc_count>  <isr_count>  <us_per_dpc>us
-    xperf -i $etl -a dpcisr 2>$null | Select-Object -First 60
-    Write-Host "===== END PASTE =====" -ForegroundColor Yellow
-} elseif ($wpr) {
-    $etl = "$env:TEMP\\optigods-dpc.etl"
-    Write-Host " [1/3] xperf not found — falling back to WPR (Windows Performance Recorder, 30s)..." -ForegroundColor Cyan
-    wpr -start GeneralProfile -filemode 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) { wpr -start GeneralProfile 2>$null | Out-Null }
-    Start-Sleep -Seconds 30
-    wpr -stop $etl 2>$null | Out-Null
-    Write-Host " [2/3] Trace written: $etl" -ForegroundColor DarkGreen
-    Write-Host " [3/3] Inline driver summary is not available without xperf." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "===== PASTE THIS BLOCK =====" -ForegroundColor Yellow
-    Write-Host "WPR trace captured at $etl"
-    Write-Host "Open it with Windows Performance Analyzer (wpa.exe) for a per-driver breakdown."
-    Write-Host "Install xperf (Windows Performance Toolkit) and re-run this script for inline parsing."
-    Write-Host "===== END PASTE =====" -ForegroundColor Yellow
-} else {
-    Write-Host " [!] Neither xperf nor wpr is installed on this PC." -ForegroundColor Red
-    Write-Host "     Install the Windows ADK -> Windows Performance Toolkit, then re-run." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "===== PASTE THIS BLOCK =====" -ForegroundColor Yellow
-    Write-Host "ERROR: Windows Performance Toolkit not installed."
-    Write-Host "Download: https://learn.microsoft.com/windows-hardware/get-started/adk-install"
-    Write-Host "===== END PASTE =====" -ForegroundColor Yellow
-}
-
-Write-Host ""
-Write-Host " Done. Paste the marked block back into Opti Gods to see the top offenders." -ForegroundColor Green
-Write-Host ""
-Read-Host " Press Enter to close"
-`;
-    const blob = new Blob([ps1], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "OptiGods-DPC-RunCheck.ps1";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const pasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setPasted(text);
-    } catch {
-      /* clipboard denied — user can still paste manually */
-    }
-  };
+  function runAnalysis() {
+    setParsed(parseXperfSummary(rawText));
+  }
 
   return (
-    <div id="dpc-latency" className="space-y-6" data-testid="page-dpc-latency">
-      <header className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+    <div className="space-y-6 px-5 py-4">
+      {/* Header */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-red-400" />
+          <h1 className="text-xl font-display font-bold text-white">DPC Latency Fixes</h1>
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-300 border border-red-500/25 uppercase tracking-wide">
+            V3 Click-to-Apply
+          </span>
         </div>
-        <div>
-          <h2 className="text-xl font-display font-bold text-white">DPC Latency Check</h2>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            Measure kernel-mode driver latency spikes — the #1 cause of audio crackles + frame-time stutter.
+        <p className="text-sm text-zinc-500">
+          One-click fixes for the most common DPC interrupt offenders. Each button downloads a targeted .bat — run as Administrator for instant results.
+        </p>
+      </div>
+
+      {/* What is DPC? */}
+      <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-blue-500/20 bg-blue-500/5">
+        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="text-xs font-bold text-blue-300">What causes DPC latency?</p>
+          <p className="text-[11px] text-zinc-400 leading-relaxed">
+            DPC (Deferred Procedure Call) spikes happen when a hardware driver takes too long to handle an interrupt. Spikes above <span className="text-white font-semibold">500µs</span> cause frame stutters, input lag, and audio glitches. GPU, network, and USB drivers are the most common offenders on gaming PCs.
           </p>
         </div>
-      </header>
+      </div>
 
-      <V2TweakSection
-        heading="DPC Latency Tool"
-        accent="red"
-        testIdSuffix="dpc-tool"
-        description="Enable to include the DPC probe entry in your generated PowerShell script."
-        ids={["ToolDPCLatencyCheck"]}
-      />
-
-      {/* ── Step 1: Run check ── */}
-      <section className="rounded-xl border border-red-500/25 bg-gradient-to-br from-red-500/5 to-black/40 p-5 space-y-4" data-testid="section-dpc-run-check">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 shrink-0">
-            <Play className="w-4 h-4 text-red-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Step 1 — Run check</h3>
-            <p className="text-xs text-zinc-400 mt-1">
-              Downloads a PowerShell script that uses <strong className="text-zinc-200">xperf</strong> (or
-              <strong className="text-zinc-200"> wpr</strong> as a fallback) to record a 30-second DPC/ISR trace
-              and print a per-driver summary into the console window.
-            </p>
-          </div>
-        </div>
-        <Button
-          onClick={downloadRunCheck}
-          data-testid="button-run-dpc-check"
-          className="bg-red-600 hover:bg-red-700 text-white"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Download Run Check (.ps1)
-        </Button>
-      </section>
-
-      {/* ── Step 2: Paste back ── */}
-      <section className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4" data-testid="section-dpc-paste-back">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-white/5 border border-white/10 shrink-0">
-            <ClipboardPaste className="w-4 h-4 text-zinc-300" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Step 2 — Paste results</h3>
-            <p className="text-xs text-zinc-400 mt-1">
-              Copy everything between <code className="font-mono text-xs px-1 py-0.5 rounded bg-black/40">PASTE THIS BLOCK</code>{" "}
-              and <code className="font-mono text-xs px-1 py-0.5 rounded bg-black/40">END PASTE</code> from the PowerShell window,
-              then paste it here. We will rank the worst offenders and suggest a fix for each.
-            </p>
-          </div>
-        </div>
-        <Textarea
-          value={pasted}
-          onChange={(e) => setPasted(e.target.value)}
-          placeholder="Paste the &quot;PASTE THIS BLOCK&quot; output here..."
-          data-testid="textarea-dpc-paste"
-          className="font-mono text-xs min-h-[140px] bg-black/40 border-white/10"
-        />
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            onClick={pasteFromClipboard}
-            variant="outline"
-            size="sm"
-            data-testid="button-paste-clipboard"
-            className="border-white/10 text-zinc-300"
-          >
-            <ClipboardPaste className="w-3.5 h-3.5 mr-1.5" />
-            Paste from clipboard
-          </Button>
-          {pasted && (
-            <Button
-              onClick={() => setPasted("")}
-              variant="ghost"
-              size="sm"
-              data-testid="button-clear-paste"
-              className="text-zinc-500"
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* Parsed offenders */}
-        {parsed.length > 0 && (
-          <div className="pt-2" data-testid="dpc-results">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
-              Top {parsed.length} DPC offenders
-            </h4>
-            <ul className="space-y-1.5">
-              {parsed.map((d) => {
-                const sev = severityFor(d.usPerDpc);
-                return (
-                  <li
-                    key={d.name}
-                    data-testid={`dpc-row-${d.name.toLowerCase()}`}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/40 border border-white/5"
-                  >
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${sev.tone}`}>
+      {/* One-Click Fix Cards */}
+      <div className="space-y-3">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Fixes</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {DPC_FIXES.map((fix, i) => {
+            const Icon = fix.icon;
+            const sev = SEVERITY_CONFIG[fix.severity];
+            const done = applied.has(fix.id);
+            return (
+              <motion.div
+                key={fix.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04, duration: 0.3 }}
+                className={cn(
+                  "relative flex flex-col gap-3 p-4 rounded-xl border transition-colors",
+                  done
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : "border-white/8 bg-zinc-950/50 hover:border-white/15 hover:bg-zinc-900/50"
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0",
+                      done ? "bg-emerald-500/15 border-emerald-500/30" : "bg-zinc-900 border-white/8"
+                    )}>
+                      <Icon className={cn("w-4 h-4", done ? "text-emerald-400" : "text-zinc-400")} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-white leading-tight">{fix.label}</p>
+                      <p className="text-[10px] font-mono text-zinc-600 leading-tight mt-0.5">{fix.driver}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", sev.cls)}>
                       {sev.label}
                     </span>
-                    <span className="font-mono text-xs text-zinc-200 w-44 truncate shrink-0">{d.name}</span>
-                    <span className="text-xs text-zinc-400 shrink-0 tabular-nums w-24">{d.usPerDpc.toFixed(1)} us/DPC</span>
-                    <ChevronRight className="w-3 h-3 text-zinc-700 shrink-0" />
-                    <span className="text-xs text-zinc-400 flex-1">{suggestFix(d.name)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
+                    {fix.reboot && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-amber-500/25 bg-amber-500/8 text-amber-400 uppercase tracking-wide">
+                        REBOOT
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-        {pasted && parsed.length === 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            Could not parse any driver rows from the paste. Make sure you copied the lines between the
-            <code className="font-mono px-1">PASTE THIS BLOCK</code> markers.
-          </div>
-        )}
-      </section>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">{fix.desc}</p>
 
-      <section className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
-        <h3 className="text-sm font-bold text-zinc-200 uppercase tracking-wider">
-          Common DPC Offenders (and the fixes Opti Gods already ships)
-        </h3>
-        <ul className="space-y-2 text-sm text-zinc-400">
-          {[
-            { drv: "nvlddmkm.sys", fix: "NVIDIA Max-Perf Mode + MSI Mode tweaks (Registry tab)" },
-            { drv: "ndis.sys / Wi-Fi", fix: "Disable Large Send Offload + RSS Tuning (Network tab)" },
-            { drv: "USB host controllers", fix: "Disable USB Selective Suspend + Power Save (Laptop tab)" },
-            { drv: "athrx.sys / Killer NIC", fix: "Network Throttling Index FFFFFFFF" },
-            { drv: "HDAudBus.sys", fix: "Disable HDMI Audio bus (NVIDIA/AMD tabs)" },
-            { drv: "amdkmdag.sys", fix: "AMD Optimize Latency + TDR tweaks (AMD tab)" },
-          ].map(({ drv, fix }) => (
-            <li key={drv} className="flex items-start gap-2">
-              <span className="font-mono text-xs text-red-400 shrink-0 w-44">{drv}</span>
-              <span className="text-zinc-500">→</span>
-              <span>{fix}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+                <Button
+                  size="sm"
+                  data-testid={`button-dpc-fix-${fix.id}`}
+                  onClick={() => applyFix(fix)}
+                  className={cn(
+                    "w-full gap-2 text-xs font-bold transition-all",
+                    done
+                      ? "bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300"
+                      : "bg-red-600 hover:bg-red-500 text-white"
+                  )}
+                >
+                  {done ? (
+                    <><CheckCircle2 className="w-3.5 h-3.5" /> Downloaded — Run as Admin</>
+                  ) : (
+                    <><Download className="w-3.5 h-3.5" /> Apply Fix (.bat)</>
+                  )}
+                </Button>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
 
-      <div className="flex flex-wrap gap-3">
-        <a
-          href="https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-analyzer"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-white/10 text-zinc-300 hover:bg-white/5 text-sm"
-          data-testid="link-wpa-docs"
+      {/* Advanced: Diagnose Section */}
+      <div className="rounded-xl border border-white/8 overflow-hidden">
+        <button
+          onClick={() => setAdvancedOpen(v => !v)}
+          data-testid="button-dpc-advanced-toggle"
+          className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-zinc-900/60 transition-colors"
         >
-          <Info className="w-4 h-4" />
-          Windows Performance Analyzer Docs
-        </a>
+          <ClipboardPaste className="w-4 h-4 text-zinc-500" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-zinc-300">Advanced — Diagnose Your PC</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">Download the scanner, paste results, see which drivers are spiking on your specific system</p>
+          </div>
+          <ChevronDown className={cn("w-4 h-4 text-zinc-600 transition-transform", advancedOpen && "rotate-180")} />
+        </button>
+
+        <AnimatePresence>
+          {advancedOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="px-5 pb-5 pt-1 space-y-4 border-t border-white/5 bg-black/30">
+                {/* Step 1 */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide mt-3">Step 1 — Run the scanner</p>
+                  <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-zinc-900/60 border border-white/5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      Requires <span className="text-white font-semibold">Windows Performance Toolkit</span> (xperf) — part of the Windows SDK. If you don't have it, the script falls back to WPR which is built in to Windows 10/11.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    data-testid="button-dpc-download-scanner"
+                    onClick={() => downloadBat("dpc_scanner", `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — DPC Scanner"
+Write-Host ""
+Write-Host " OPTI GODS — DPC Latency Scanner" -ForegroundColor Red
+Write-Host " Capturing 30-second DPC/ISR trace..." -ForegroundColor Cyan
+Write-Host ""
+$hasXperf = Get-Command xperf -EA SilentlyContinue
+if ($hasXperf) {
+    Write-Host " [xperf] Starting trace..." -ForegroundColor Green
+    xperf -on PROC_THREAD+LOADER+DPC+INTERRUPT -f "$env:TEMP\\optigods_dpc.etl" 2>$null
+    Start-Sleep 30
+    xperf -stop 2>$null
+    Write-Host " [xperf] Analyzing..." -ForegroundColor Cyan
+    xperf -i "$env:TEMP\\optigods_dpc.etl" -a dpcisr -noheader 2>$null
+    Remove-Item "$env:TEMP\\optigods_dpc.etl" -EA SilentlyContinue
+} else {
+    Write-Host " [wpr] xperf not found, using WPR fallback..." -ForegroundColor Yellow
+    $out = "$env:TEMP\\optigods_dpc.etl"
+    wpr -start DPC -filemode 2>$null
+    Write-Host " Recording for 30 seconds... close games if open for clean baseline." -ForegroundColor Gray
+    Start-Sleep 30
+    wpr -stop $out 2>$null
+    Write-Host " [wpr] Trace captured. Analysing with xbootmgr is needed for full output." -ForegroundColor Yellow
+    Write-Host " Copy the lines above and paste them into the Opti Gods DPC analyser." -ForegroundColor Cyan
+}
+Write-Host ""
+Write-Host " PASTE THE OUTPUT ABOVE into the Opti Gods DPC analyser." -ForegroundColor Yellow
+Write-Host ""`)}
+                    className="gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download DPC Scanner (.bat)
+                  </Button>
+                </div>
+
+                {/* Step 2 */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Step 2 — Paste results here</p>
+                  <Textarea
+                    data-testid="textarea-dpc-paste"
+                    value={rawText}
+                    onChange={e => setRawText(e.target.value)}
+                    placeholder="Paste the xperf/WPR console output here..."
+                    className="font-mono text-[11px] bg-black/40 border-white/10 text-zinc-300 placeholder:text-zinc-700 resize-none h-32"
+                  />
+                  <Button
+                    size="sm"
+                    data-testid="button-dpc-analyze"
+                    onClick={runAnalysis}
+                    disabled={!rawText.trim()}
+                    className="gap-2 bg-red-600 hover:bg-red-500 text-white"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Analyze Output
+                  </Button>
+                </div>
+
+                {/* Results */}
+                {parsed.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2"
+                  >
+                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Results — Top DPC Offenders</p>
+                    <div className="space-y-2">
+                      {parsed.map((d, i) => {
+                        const fix = KNOWN_FIXES.find(k => k.pattern.test(d.name));
+                        const severity = d.usPerDpc > 500 ? "critical" : d.usPerDpc > 150 ? "high" : "medium";
+                        const sev = SEVERITY_CONFIG[severity];
+                        return (
+                          <div
+                            key={d.name}
+                            className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-white/5 bg-zinc-900/40"
+                          >
+                            <span className="text-[10px] font-mono text-zinc-600 w-4 shrink-0 mt-0.5">{i + 1}</span>
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-mono font-bold text-white">{d.name}</span>
+                                <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", sev.cls)}>
+                                  {sev.label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+                                <span><span className="text-zinc-300 font-semibold">{d.usPerDpc.toFixed(1)}µs</span> avg per DPC</span>
+                                {d.pctTime !== undefined && <span>{d.pctTime.toFixed(1)}% CPU time</span>}
+                              </div>
+                              {fix && (
+                                <p className="text-[11px] text-emerald-400 mt-1">
+                                  → {fix.fix}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

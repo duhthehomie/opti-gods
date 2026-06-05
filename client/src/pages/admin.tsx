@@ -2689,6 +2689,34 @@ export default function Admin() {
   const [presetFillData, setPresetFillData] = useState<PresetFillValues | null>(null);
   const [presetFillKey, setPresetFillKey] = useState("default");
 
+  // T007: Read hardware params from URL (set by game scanner v1.1+) and pre-fill preset gen
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get("tab");
+    const gpu = params.get("gpu");
+    const cpu = params.get("cpu");
+    const ram = params.get("ram");
+    const vendor = params.get("vendor");
+    const os = params.get("os");
+    const laptop = params.get("laptop");
+    if (urlTab === "preset" && authed) {
+      setTab("preset" as Tab);
+      if (gpu || cpu) {
+        const v = (vendor && ["nvidia","amd","intel"].includes(vendor)) ? vendor as "nvidia"|"amd"|"intel" : "nvidia";
+        const fill: PresetFillValues = {
+          gpuVendor: v,
+          gpuName: gpu || "",
+          cpuModel: cpu || "",
+          ramGb: parseInt(ram || "16") || 16,
+          osVersion: os === "win11" ? "win11" : "win10",
+          isLaptop: laptop === "true",
+        };
+        setPresetFillData(fill);
+        setPresetFillKey(`url-${Date.now()}`);
+      }
+    }
+  }, [authed]);
+
   // Pro paywall preview dialog
   const [previewPaywallOpen, setPreviewPaywallOpen] = useState(false);
 

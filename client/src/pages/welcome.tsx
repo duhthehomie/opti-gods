@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
+import { X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { APP_VERSION } from "@/generated/version";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
@@ -175,26 +175,6 @@ export default function Welcome() {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/80" />
-      </div>
-
-      {/* Cosmetic title bar buttons */}
-      <div className="absolute top-0 right-0 flex items-center h-9 z-20">
-        <button
-          type="button"
-          data-testid="button-cosmetic-minimize"
-          aria-label="Minimize"
-          className="w-11 h-9 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          data-testid="button-cosmetic-close"
-          aria-label="Close"
-          className="w-11 h-9 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-red-600 transition-colors"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* Card */}

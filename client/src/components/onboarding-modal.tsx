@@ -39,8 +39,8 @@ export function OnboardingModal() {
   useEffect(() => {
     const already = localStorage.getItem(ONBOARDING_KEY);
     const scanned = getScannedInfo();
-    if (!already && !scanned) {
-      // Small delay so page loads first
+    const isAdmin = window.location.pathname.startsWith("/admin");
+    if (!already && !scanned && !isAdmin) {
       const t = setTimeout(() => setOpen(true), 800);
       return () => clearTimeout(t);
     }

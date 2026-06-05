@@ -4,7 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   Shield, Terminal, CheckCircle, XCircle, Info,
-  Gamepad, Download, RefreshCw, Search, AlertCircle
+  Gamepad, Download, RefreshCw, Search, AlertCircle, Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ const GAMES: GameEntry[] = [
     name: "Valorant",
     publisher: "Riot Games",
     accentBorder: "border-l-red-500",
+    coverUrl: "https://cdn2.mobalytics.gg/production/media/images/games/valorant-logo.jpg",
     coverGradient: "from-red-900 via-red-800 to-zinc-900",
     detectPaths: ["%LocalAppData%\\VALORANT", "C:\\Riot Games\\VALORANT"],
     processName: "VALORANT-Win64-Shipping.exe",
@@ -73,6 +74,7 @@ const GAMES: GameEntry[] = [
     name: "League of Legends",
     publisher: "Riot Games",
     accentBorder: "border-l-amber-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2805730/header.jpg",
     coverGradient: "from-amber-950 via-yellow-900 to-zinc-900",
     detectPaths: ["C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe"],
     processName: "League of Legends.exe",
@@ -83,6 +85,7 @@ const GAMES: GameEntry[] = [
     name: "Overwatch 2",
     publisher: "Blizzard",
     accentBorder: "border-l-orange-500",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2357570/header.jpg",
     coverGradient: "from-orange-900 via-orange-800 to-zinc-900",
     detectPaths: ["C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe", "C:\\Program Files\\Overwatch\\_retail_\\Overwatch.exe"],
     processName: "Overwatch.exe",
@@ -123,6 +126,7 @@ const GAMES: GameEntry[] = [
     name: "Roblox",
     publisher: "Roblox Corporation",
     accentBorder: "border-l-red-400",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1282500/header.jpg",
     coverGradient: "from-red-950 via-red-900 to-zinc-900",
     detectPaths: ["%LocalAppData%\\Roblox\\Versions"],
     processName: "RobloxPlayerBeta.exe",
@@ -133,6 +137,7 @@ const GAMES: GameEntry[] = [
     name: "Escape from Tarkov",
     publisher: "Battlestate Games",
     accentBorder: "border-l-stone-500",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2793120/header.jpg",
     coverGradient: "from-stone-900 via-neutral-800 to-zinc-900",
     detectPaths: ["C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe", "C:\\Games\\EFT\\EscapeFromTarkov.exe"],
     processName: "EscapeFromTarkov.exe",
@@ -245,6 +250,7 @@ const GAMES: GameEntry[] = [
     name: "FiveM",
     publisher: "Cfx.re / Rockstar",
     accentBorder: "border-l-red-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/header.jpg",
     coverGradient: "from-red-950 via-red-900 to-zinc-900",
     detectPaths: [
       "%LocalAppData%\\FiveM\\FiveM.exe",
@@ -285,6 +291,7 @@ const GAMES: GameEntry[] = [
     name: "ARC Raiders",
     publisher: "Embark Studios",
     accentBorder: "border-l-cyan-600",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/863550/header.jpg",
     coverGradient: "from-cyan-950 via-slate-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\ARC Raiders",
@@ -297,6 +304,47 @@ const GAMES: GameEntry[] = [
       "High I/O priority for open-world asset streaming (Unreal Engine 5)",
       "GPU Priority 8 + disable energy throttling for sustained frame delivery",
       "Network buffer 512KB — reduces desync in PvE/PvP extraction lobbies",
+    ],
+  },
+  {
+    id: "game_007firstlight",
+    name: "007 First Light",
+    publisher: "IO Interactive",
+    accentBorder: "border-l-zinc-400",
+    coverGradient: "from-zinc-900 via-slate-800 to-black",
+    detectPaths: [
+      "C:\\Program Files (x86)\\Steam\\steamapps\\common\\007 First Light",
+      "D:\\SteamLibrary\\steamapps\\common\\007 First Light",
+      "E:\\SteamLibrary\\steamapps\\common\\007 First Light",
+      "C:\\Program Files\\IO Interactive\\007 First Light",
+      "D:\\Games\\007 First Light",
+    ],
+    processName: "007FirstLight-Win64-Shipping.exe",
+    tweaks: [
+      "Above Normal CPU priority (IFEO persistent) + High I/O",
+      "GPU Priority 8 — ensures smooth frame delivery on all GPUs",
+      "Defender exclusion for install folder (eliminates scan-stutter on load)",
+      "Network buffer tuning (online co-op and mission lobbies)",
+    ],
+  },
+  {
+    id: "game_fortnite",
+    name: "Fortnite",
+    publisher: "Epic Games",
+    accentBorder: "border-l-blue-400",
+    coverGradient: "from-blue-900 via-indigo-900 to-zinc-900",
+    detectPaths: [
+      "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",
+      "D:\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",
+      "E:\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",
+    ],
+    processName: "FortniteClient-Win64-Shipping.exe",
+    tweaks: [
+      "Above Normal CPU priority (Unreal Engine 5, IFEO persistent)",
+      "High I/O priority for Battle Royale asset streaming",
+      "GPU Priority 8 for frame delivery consistency (critical at 144+ fps)",
+      "Defender exclusion for Fortnite folder (eliminates pak-scan stutters on drop)",
+      "512KB network buffer — reduces packet batching lag on drop-phase servers",
     ],
   },
   {
@@ -428,9 +476,11 @@ function downloadScannerScript() {
 export default function GameDetection() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
 
-  // Read detected game IDs from URL params (set by the scanner PS1 script)
+  // Read detected game IDs + hardware params from URL (set by the scanner PS1 script)
   const [detectedIds, setDetectedIds] = useState<Set<string> | null>(null);
   const [isFiltered, setIsFiltered] = useState(false);
+  const [hwFromUrl, setHwFromUrl] = useState<{ gpu?: string; cpu?: string; ram?: string; vendor?: string; os?: string; laptop?: string } | null>(null);
+  const [adminLinkCopied, setAdminLinkCopied] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -442,7 +492,36 @@ export default function GameDetection() {
         setIsFiltered(true);
       }
     }
+    // Hardware params added by scanner v1.1+
+    const gpu = params.get("gpu");
+    const cpu = params.get("cpu");
+    const ram = params.get("ram");
+    const vendor = params.get("vendor");
+    const os = params.get("os");
+    const laptop = params.get("laptop");
+    if (gpu || cpu) {
+      setHwFromUrl({ gpu: gpu ?? undefined, cpu: cpu ?? undefined, ram: ram ?? undefined, vendor: vendor ?? undefined, os: os ?? undefined, laptop: laptop ?? undefined });
+    }
   }, []);
+
+  function copyAdminPresetLink() {
+    if (!hwFromUrl) return;
+    const p = new URLSearchParams();
+    p.set("tab", "preset");
+    if (hwFromUrl.gpu) p.set("gpu", hwFromUrl.gpu);
+    if (hwFromUrl.cpu) p.set("cpu", hwFromUrl.cpu);
+    if (hwFromUrl.ram) p.set("ram", hwFromUrl.ram);
+    if (hwFromUrl.vendor) p.set("vendor", hwFromUrl.vendor);
+    if (hwFromUrl.os) p.set("os", hwFromUrl.os);
+    if (hwFromUrl.laptop) p.set("laptop", hwFromUrl.laptop);
+    const link = `${window.location.origin}/admin?${p.toString()}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setAdminLinkCopied(true);
+      setTimeout(() => setAdminLinkCopied(false), 2000);
+    }).catch(() => {
+      prompt("Copy this admin preset link:", link);
+    });
+  }
 
   // Which games to show: filtered list if detection ran, otherwise all
   const visibleGames = isFiltered && detectedIds
@@ -537,7 +616,7 @@ export default function GameDetection() {
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-xl border border-red-500/20 bg-red-500/5 p-4"
+            className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 space-y-3"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -571,6 +650,47 @@ export default function GameDetection() {
                 </Button>
               </div>
             </div>
+            {/* Hardware profile (only shown if scanner detected hardware) */}
+            {hwFromUrl && (
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/5 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-400">
+                  {hwFromUrl.gpu && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-zinc-500">GPU</span>
+                      <span className="text-zinc-200 font-medium">{hwFromUrl.gpu}</span>
+                    </span>
+                  )}
+                  {hwFromUrl.cpu && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-zinc-500">CPU</span>
+                      <span className="text-zinc-200 font-medium">{hwFromUrl.cpu}</span>
+                    </span>
+                  )}
+                  {hwFromUrl.ram && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-zinc-500">RAM</span>
+                      <span className="text-zinc-200 font-medium">{hwFromUrl.ram}GB</span>
+                    </span>
+                  )}
+                  {hwFromUrl.os && (
+                    <span className="text-zinc-500 uppercase">{hwFromUrl.os}</span>
+                  )}
+                </div>
+                <Button
+                  data-testid="button-copy-admin-preset-link"
+                  size="sm"
+                  variant="outline"
+                  onClick={copyAdminPresetLink}
+                  className="border-zinc-700 text-zinc-400 hover:text-emerald-300 hover:border-emerald-500/40 text-[11px] flex items-center gap-1.5 h-7 px-2.5"
+                >
+                  {adminLinkCopied ? (
+                    <><CheckCircle className="w-3 h-3 text-emerald-400" /> Copied!</>
+                  ) : (
+                    <><Copy className="w-3 h-3" /> Copy Admin Preset Link</>
+                  )}
+                </Button>
+              </div>
+            )}
           </motion.div>
         )}
 

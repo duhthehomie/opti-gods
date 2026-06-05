@@ -13,21 +13,24 @@ import { cn } from "@/lib/utils";
 
 const ALL_COD_IDS = [
   "CodHighPriority", "CodGameMode", "CodDisableXboxCapture", "CodBattlenetOptimize",
+  "CodGPUPriority", "CodDirectXQueue",
   "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
+  "CodDefenderExclusion", "CodVRAMShaderBudget",
   "CodNetworkBuffer", "CodDisableLSO", "CodTCPOptimize",
   "Cod1650LowLatency", "Cod1650DisableAnsel",
   "Cod3500PowerPlan", "Cod3500CoreUnpark",
 ];
 
 const COD_RECOMMENDED = [
-  "CodHighPriority", "CodGameMode", "CodShaderCacheClear",
-  "CodPagefileOptimize", "CodDisableHAGS", "CodNetworkBuffer",
+  "CodHighPriority", "CodGameMode", "CodGPUPriority",
+  "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
+  "CodDefenderExclusion", "CodNetworkBuffer",
   "CodDisableLSO", "Cod1650LowLatency", "Cod3500PowerPlan", "Cod3500CoreUnpark",
 ];
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
-  fps:     ["CodHighPriority", "CodGameMode", "CodDisableXboxCapture"],
-  texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS"],
+  fps:     ["CodHighPriority", "CodGameMode", "CodGPUPriority", "CodDirectXQueue"],
+  texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodVRAMShaderBudget"],
   network: ["CodNetworkBuffer", "CodDisableLSO"],
   nvidia:  ["Cod1650LowLatency"],
   cpu:     ["Cod3500PowerPlan", "Cod3500CoreUnpark"],
@@ -197,6 +200,20 @@ export default function CallOfDuty() {
                     desc: "Kills Battle.net background update and scanning agents while you play. These processes use 50-150MB RAM and periodic CPU bursts that cause micro-stutter in BO6 on any system.",
                     impact: "MED" as const,
                   },
+                  {
+                    id: "CodGPUPriority",
+                    title: "GPU Render Queue Priority 8 (IFEO — All COD Executables)",
+                    desc: "Sets GPUPriority=8 for cod.exe, ModernWarfare.exe, ModernWarfareII.exe, and ModernWarfareIII.exe via IFEO — gives COD the highest possible slot in the Windows WDDM GPU scheduler. Reduces render-submit latency in BO6 gunfights and eliminates frame-submission stalls on mid-range GPUs. Works on any NVIDIA or AMD card.",
+                    badge: "RECOMMENDED",
+                    impact: "HIGH" as const,
+                  },
+                  {
+                    id: "CodDirectXQueue",
+                    title: "DirectX MaxFrameLatency=1 + Flip Model Override",
+                    desc: "Sets D3D MaxFrameLatency to 1 via registry and enables flip model presentation — reduces the GPU-side pre-render queue by 1 frame. Tightens frame delivery consistency in BO6 and reduces the input-to-display pipeline by 4-15ms on any GPU. No driver update needed.",
+                    badge: "DX FIX",
+                    impact: "MED" as const,
+                  },
                 ]).map((item, i) => (
                   <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                     badge={item.badge} impact={item.impact}
@@ -234,6 +251,20 @@ export default function CallOfDuty() {
                       : "BO6 is one of the most VRAM-hungry games at high settings. When GPU VRAM fills, Windows streams overflow textures via pagefile. A minimum 16GB pagefile ensures stable texture streaming even during peak Warzone BR phases.",
                     badge: "RECOMMENDED",
                     impact: "HIGH" as const,
+                  },
+                  {
+                    id: "CodDefenderExclusion",
+                    title: "Add COD Install Folder to Defender Exclusions",
+                    desc: "Windows Defender scans COD's .pak and .ff asset files on every load — adding 2-8 seconds to load screens and causing disk read spikes mid-game that stutter textures. This exclusion stops real-time scanning on the COD folder without disabling Defender globally. Checks all common install paths (C/D/E drives, Battle.net, Steam).",
+                    badge: "RECOMMENDED",
+                    impact: "HIGH" as const,
+                  },
+                  {
+                    id: "CodVRAMShaderBudget",
+                    title: "Clear COD Shader Cache + All DXCache Folders",
+                    desc: "Clears NVIDIA DXCache, NVIDIA GLCache, D3DSCache (Windows-wide), AMD DxcCache, and the Warzone-specific Battle.net cache. Stale or oversized shader caches waste VRAM headroom — COD keeps old shader data in VRAM reducing the budget for actual texture streaming. Forces a clean shader recompile on next launch (2-3 min first-game stutter, then clean every time).",
+                    badge: "VRAM FIX",
+                    impact: "MED" as const,
                   },
                   {
                     id: "CodDisableHAGS",

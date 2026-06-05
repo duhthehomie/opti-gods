@@ -2,7 +2,7 @@ import { useEffect, useState, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks, Target, Eye } from "lucide-react";
+import { ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop, Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2, Swords, Blocks, Target, Eye, Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
@@ -24,6 +24,7 @@ const StartupApps = lazy(() => import("@/pages/startup-apps"));
 const Memory = lazy(() => import("@/pages/memory"));
 const Debloat = lazy(() => import("@/pages/debloat"));
 const WinTitus = lazy(() => import("@/pages/wintitus"));
+const SpotifyPage = lazy(() => import("@/pages/spotify"));
 
 type GroupId = "windows" | "network" | "gpu" | "games" | "system";
 
@@ -69,6 +70,7 @@ const SECTIONS: Section[] = [
   { id: "rust",         title: "Rust",                          desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows",       icon: Swords,       group: "games",   Component: RustGame,           categories: ["rust"] },
   { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,       group: "games",   Component: RobloxPage,         categories: ["roblox"] },
   { id: "discord",      title: "Discord",                       desc: "CPU/RAM reduction while gaming",                            icon: MessageCircle,group: "games",   Component: DiscordPage,        categories: ["discord"] },
+  { id: "spotify",      title: "Spotify While Gaming",          desc: "Stop Spotify stealing FPS — GPU, CPU priority, bandwidth",   icon: Music,        group: "games",   Component: SpotifyPage,        categories: ["spotify"] },
   { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,  group: "system",  Component: Memory,             categories: ["memory"] },
   { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,        group: "system",  Component: StartupApps,        categories: ["startup"] },
   { id: "process-lasso",title: "Process Lasso",                 desc: "CPU affinity & priority automation",                        icon: Cpu,          group: "system",  Component: ProcessLasso,       categories: ["process-lasso"] },
