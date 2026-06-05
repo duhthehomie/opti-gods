@@ -811,7 +811,7 @@ export default function Dashboard() {
           <Button
             data-testid="button-download-health-report"
             size="sm"
-            onClick={() => { const a = document.createElement('a'); a.href = apiUrl('/api/scan/script'); a.download = 'OptiGods-ScanSystem.ps1'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
+            onClick={() => { const a = document.createElement('a'); a.href = apiUrl('/api/scan/script'); a.download = 'OptiGods-ScanSystem.bat'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
             variant="outline"
             className="shrink-0 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 gap-1.5 font-bold uppercase tracking-wide"
           >

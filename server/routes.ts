@@ -1370,6 +1370,47 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   return scriptLines.join("\n");
 }
 
+/**
+ * Wraps any PS1 string in the standard Opti Gods .bat self-extracting launcher.
+ * The PS1 is appended after a unique marker; the CMD stage reads itself,
+ * extracts the PS1 to %TEMP%, then re-launches it elevated via UAC.
+ */
+function wrapInBat(ps1: string, opts: { title: string; tmpName: string; marker: string }): string {
+  const { title, tmpName, marker } = opts;
+  const markerTag = `##${marker}##`;
+  // Split marker so the string literal itself never matches the search
+  const markerSearch = `'##${marker.slice(0, Math.ceil(marker.length / 2))}'+'${marker.slice(Math.ceil(marker.length / 2))}##'`;
+  const lines = [
+    `@echo off`,
+    `setlocal`,
+    `set "SELF=%~f0"`,
+    `set "TMPPS1=%TEMP%\\${tmpName}.ps1"`,
+    ``,
+    `title Opti Gods by leaq  --  ${title}`,
+    `echo.`,
+    `echo  ==========================================`,
+    `echo    OPTI GODS by leaq  --  ${title}`,
+    `echo  ==========================================`,
+    `echo.`,
+    `echo  [1/2] Extracting script...`,
+    `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m=${markerSearch};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+    `if not exist "%TMPPS1%" (`,
+    `  echo.`,
+    `  echo  [ERROR] Extraction failed. Re-download from the website.`,
+    `  pause`,
+    `  exit /b 1`,
+    `)`,
+    `echo  [2/2] Click Yes on the UAC prompt to run as Administrator.`,
+    `echo.`,
+    `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"`,
+    `del "%TMPPS1%" 2>nul`,
+    `exit /b 0`,
+    `${markerTag}`,
+    ps1,
+  ];
+  return lines.join('\r\n');
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1656,9 +1697,9 @@ export async function registerRoutes(
     ];
 
     const script = scanLines.join('\r\n');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-ScanSystem.ps1"');
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-ScanSystem.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'System Scanner', tmpName: 'OptiGods-ScanSystem', marker: 'SCAN_SYS_PS1_START' }), 'utf8'));
   });
 
   app.get(api.startup.list.path, async (_req, res) => {
@@ -1756,9 +1797,9 @@ Write-Host "[INFO] Services set to Manual will NOT auto-start next boot." -Foreg
 Write-Host ""
 Read-Host "Press Enter to close"
 `;
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', 'attachment; filename="optigods-smart-scan.ps1"');
-    res.send(ps1.trim());
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-SmartScan.bat"');
+    res.end(Buffer.from(wrapInBat(ps1.trim(), { title: 'Smart Process Optimizer', tmpName: 'OptiGods-SmartScan', marker: 'SMART_SCAN_PS1_START' }), 'utf8'));
   });
 
   app.get('/api/startup/scan', (_req, res) => {
@@ -1951,10 +1992,10 @@ Write-Output $json
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
-    fireAuditLog("apply", enabledTweaks, sessionToken, { format: "ps1", nvidiaPreset }).catch(() => {});
+    fireAuditLog("apply", enabledTweaks, sessionToken, { format: "bat", nvidiaPreset }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.ps1"');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(scriptContent, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-by-leaq.bat"');
+    res.end(Buffer.from(wrapInBat(scriptContent, { title: 'Optimizer', tmpName: 'OptiGods-leaq', marker: 'LEGACY_PS1_START' }), 'utf8'));
   });
 
   // .bat download — double-click to run, no right-click needed
@@ -2031,13 +2072,13 @@ Write-Output $json
     const hasGranularUndo = getTweakUndoEntry(id) != null;
     fireAuditLog("undo", [id], sessionToken, { format: "ps1", granular: hasGranularUndo ? "true" : "false" }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Undo-${id}.ps1"`);
-    // Signal to the client whether this PS1 actually reverses the tweak.
+    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Undo-${id}.bat"`);
+    // Signal to the client whether this script actually reverses the tweak.
     // When false, the script only directs the user to "Restore Last Working
     // State" — the client MUST NOT mark the tweak as reverted.
     res.setHeader('X-Undo-Available', hasGranularUndo ? 'true' : 'false');
     res.setHeader('Access-Control-Expose-Headers', 'X-Undo-Available');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.end(Buffer.from(wrapInBat(script, { title: `Undo Tweak: ${id}`, tmpName: 'OptiGods-Undo', marker: 'UNDO_PS1_START' }), 'utf8'));
   });
 
   // ── V2.2 Reapply driver tweaks ─────────────────────────────────────────────
@@ -2095,10 +2136,10 @@ Write-Output $json
     ].join('\r\n');
     const footer = `\r\n\r\nWrite-Host "[Reapply] Done. Reboot to fully activate driver registry changes." -ForegroundColor Green\r\n`;
     const script = header + cmds.join('\r\n\r\n') + footer;
-    fireAuditLog("apply", ids as string[], req.body?.sessionToken, { format: "ps1", kind: "driver-reapply", tab }).catch(() => {});
+    fireAuditLog("apply", ids as string[], req.body?.sessionToken, { format: "bat", kind: "driver-reapply", tab }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Reapply-${label}.ps1"`);
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', `attachment; filename="OptiGods-Reapply-${label}.bat"`);
+    res.end(Buffer.from(wrapInBat(script, { title: `Reapply ${label} Driver Tweaks`, tmpName: `OptiGods-Reapply-${label}`, marker: 'REAPPLY_PS1_START' }), 'utf8'));
   });
 
   app.get('/api/restore-points/latest/restore', async (req, res) => {
@@ -2109,8 +2150,8 @@ Write-Output $json
     const script = buildRestoreLastWorkingScript();
     fireAuditLog("restore", [], sessionToken, { kind: "latest" }).catch(() => {});
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Restore-Last-Working-State.ps1"');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Restore-Last-Working-State.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Restore Last Working State', tmpName: 'OptiGods-Restore', marker: 'RESTORE_LWS_PS1_START' }), 'utf8'));
   });
 
   // Game detection scanner script download
@@ -2274,8 +2315,8 @@ Start-Sleep 2
 `;
 
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-DetectGames.ps1"');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-DetectGames.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Game Scanner', tmpName: 'OptiGods-DetectGames', marker: 'DETECT_GAMES_PS1_START' }), 'utf8'));
   });
 
   // Helpers
@@ -3076,8 +3117,8 @@ Start-Sleep 2
 
     const script = lines.join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-CrashFix-by-leaq.ps1"');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-CrashFix-by-leaq.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Crash Fix', tmpName: 'OptiGods-CrashFix', marker: 'CRASHFIX_PS1_START' }), 'utf8'));
   });
 
   // Public — Rocket League crash/won't start fix (ADVANCED — resets everything)
@@ -3417,8 +3458,8 @@ Start-Sleep 2
       : valid;
     const script = buildRestoreScript(selected.length ? selected : valid);
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-RESTORE-by-leaq.ps1"');
-    res.end(Buffer.concat([Buffer.from('\ufeff', 'utf8'), Buffer.from(script, 'utf8')]));
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-RESTORE-by-leaq.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Registry Restore', tmpName: 'OptiGods-RESTORE', marker: 'RESTORE_PS1_START' }), 'utf8'));
   });
 
   // Public — track a site visit (called once per browser session from frontend)

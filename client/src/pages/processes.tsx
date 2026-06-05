@@ -416,12 +416,12 @@ export default function ProcessesPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "optigods-smart-scan.ps1";
+      a.download = "OptiGods-SmartScan.bat";
       a.click();
       URL.revokeObjectURL(url);
       toast({
-        title: "Smart Scan script downloaded",
-        description: "Run optigods-smart-scan.ps1 as Administrator — it scans 47+ services and shows your process count before and after.",
+        title: "Smart Scan downloaded",
+        description: "Double-click the .bat and click Yes — it scans 47+ services and shows your process count before and after.",
       });
     } catch {
       toast({ title: "Error", description: "Failed to download scan script", variant: "destructive" });

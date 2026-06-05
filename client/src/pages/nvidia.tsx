@@ -48,7 +48,7 @@ async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `OptiGods-Reapply-${tab.toUpperCase()}.ps1`;
+  a.download = `OptiGods-Reapply-${tab.toUpperCase()}.bat`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }

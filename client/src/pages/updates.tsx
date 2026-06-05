@@ -94,7 +94,7 @@ function TweakDiffPanel({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `OptiGods-Update-${annId}.ps1`;
+      a.download = `OptiGods-Update-${annId}.bat`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

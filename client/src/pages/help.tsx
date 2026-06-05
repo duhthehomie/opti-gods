@@ -24,7 +24,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "The script says 'not recognized' or fails to run",
-    a: "Use the .bat download from the script dialog — just double-click it and click Yes on the UAC popup. It handles everything automatically. If you're using the .ps1 file and Windows blocks it: right-click it → Properties → check Unblock → OK, then double-click to run.",
+    a: "All downloads are now .bat files — just double-click and click Yes on the UAC popup. No right-click needed, no Unblock step. It handles everything automatically.",
   },
   {
     q: "Can I reverse the tweaks?",

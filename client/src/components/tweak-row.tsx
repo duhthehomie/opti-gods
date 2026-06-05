@@ -109,7 +109,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `OptiGods-Undo-${id}.ps1`;
+      a.download = `OptiGods-Undo-${id}.bat`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

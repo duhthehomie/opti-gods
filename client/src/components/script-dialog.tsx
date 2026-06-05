@@ -153,13 +153,13 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "OptiGods-by-leaq.ps1";
+      a.download = "OptiGods-by-leaq.bat";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       markApplied(Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k));
-      toast({ title: "PS1 downloaded", description: "Double-click to run. If Windows blocks it: right-click → Properties → Unblock → OK." });
+      toast({ title: "Script downloaded", description: "Double-click the .bat file and click Yes on the UAC prompt. Done." });
     } catch (e) {
       toast({ title: "Download failed", description: String(e), variant: "destructive" });
     } finally {
@@ -308,7 +308,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
                     className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors disabled:opacity-40"
                   >
                     <List className="w-3 h-3" />
-                    {downloadingPs1 ? "Downloading..." : "Download .ps1"}
+                    {downloadingPs1 ? "Downloading..." : "Download .bat (raw)"}
                   </button>
                   <span className="text-zinc-800">·</span>
                   <button

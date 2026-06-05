@@ -86,7 +86,7 @@ export default function StartupApps() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "scan-startup-apps.ps1";
+      a.download = "OptiGods-ScanStartup.bat";
       a.click();
       URL.revokeObjectURL(url);
       
