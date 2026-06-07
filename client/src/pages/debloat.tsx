@@ -214,7 +214,7 @@ export default function Debloat() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-6 w-full pb-10">
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 mb-4">
           <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
             <Trash2 className="w-6 h-6 text-red-500" />

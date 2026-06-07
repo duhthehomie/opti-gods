@@ -505,7 +505,7 @@ export default function ProcessesPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10 text-white">
+      <div className="space-y-6 w-full pb-10 text-white">
 
         {/* Header */}
         <motion.div

@@ -279,7 +279,7 @@ export default function Amd() {
 
   return (
     <AppLayout>
-      <div className="space-y-10 max-w-5xl pb-10">
+      <div className="space-y-10 w-full pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}

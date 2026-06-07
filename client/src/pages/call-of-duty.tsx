@@ -90,7 +90,7 @@ export default function CallOfDuty() {
   return (
     <AppLayout>
       <div className="min-h-screen bg-black text-white">
-        <div className="max-w-4xl mx-auto px-4 py-8 pb-32">
+        <div className="w-full px-4 py-8 pb-32">
 
           {/* Header */}
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">

@@ -4168,17 +4168,18 @@ export default function Admin() {
                           <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">{c.code.startsWith('STRIPE-') ? 'Revive' : 'Reset'}</span>
                         </button>
                       )}
-                      {c.discordLinked && c.discordUserId && (
+                      {(c as any).discordLinked && (c as any).discordUserId && (
                         <button
                           data-testid={`button-unlink-discord-${c.id}`}
                           onClick={() => {
-                            if (confirm(`Unlink Discord from ${c.code}?\n\nThis revokes ${c.discordUsername || c.discordUserId}'s entitlement and resets the code so they can re-enter it fresh.`)) {
-                              unlinkDiscordFromCode.mutate({ codeId: c.id, discordUserId: c.discordUserId! });
+                            const ca = c as any;
+                            if (confirm(`Unlink Discord from ${c.code}?\n\nThis revokes ${ca.discordUsername || ca.discordUserId}'s entitlement and resets the code so they can re-enter it fresh.`)) {
+                              unlinkDiscordFromCode.mutate({ codeId: c.id, discordUserId: ca.discordUserId! });
                             }
                           }}
                           disabled={unlinkDiscordFromCode.isPending}
                           className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-orange-500/10 text-zinc-600 hover:text-orange-400 transition-colors"
-                          title={`Unlink Discord (${c.discordUsername || c.discordUserId}) — revoke entitlement and reset code`}
+                          title={`Unlink Discord (${(c as any).discordUsername || (c as any).discordUserId}) — revoke entitlement and reset code`}
                         >
                           <UserX className="w-3 h-3" /> <span className="hidden sm:inline">Unlink</span>
                         </button>

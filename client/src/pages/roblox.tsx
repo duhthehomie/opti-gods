@@ -65,7 +65,7 @@ export default function RobloxPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-6 w-full pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}

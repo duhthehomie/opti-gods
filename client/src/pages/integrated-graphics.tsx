@@ -385,7 +385,7 @@ export default function IntegratedGraphics() {
 
   return (
     <AppLayout>
-      <div className="p-4 md:p-6 space-y-6 max-w-4xl">
+      <div className="p-4 md:p-6 space-y-6 w-full">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="flex items-start gap-4">
