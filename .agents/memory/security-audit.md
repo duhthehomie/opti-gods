@@ -21,10 +21,9 @@ description: Full audit of all Pro access paths; findings and fixes applied
 **Frontend:** Both `get-code.tsx` and `admin.tsx` already read `d.error` / `data.error` — no frontend changes needed.
 
 ### DB state at time of audit (2026-06-07)
-- 14 script downloads: ALL have `session_token = null` → admin key downloads (leaq testing)
+- 14 script downloads: ALL have `session_token = null` → admin key downloads (owner testing)
 - 2 Pro sessions: both `friend:` code_ref → legitimately given friend tokens
-- email_requests: empty (codes for person today were sent manually outside the system)
-- pro_access_codes: 1 code (`ZF3W-P4VC-HQ9Z`, unused)
-- IP logs reference 2 deleted codes (`775G-JUXY-7W23`, `VNTW-3Z3K-M8EL`) — sessions dead
+- email_requests table was empty at audit time
+- IP logs show 2 previously-used codes no longer in pro_access_codes — those sessions are dead
 
-**Why:** `verifyProSession` cross-validates code_ref against `pro_access_codes` and auto-deletes orphan sessions. Deleting a code instantly kills access.
+**Why orphan sessions die:** `verifyProSession` cross-validates code_ref against `pro_access_codes` and auto-deletes sessions with no matching code. Deleting a code instantly kills access.
