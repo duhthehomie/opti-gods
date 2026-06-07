@@ -184,31 +184,13 @@ const QUICK_BOOST_PRESETS = [
   },
 ];
 
-const ALL_RECOMMENDED_TWEAKS = [
-  "Win32PrioritySeparation", "SetTimerResolution", "SetResponsiveness", "GameModeTweaks",
-  "DisablePointerPrecision", "EnableHAGS",
-  "NetworkThrottling", "OptimizeTCP", "DisableNagle", "InputLagTCP", "SetDNSPriority",
-  "SetHighPerformancePlan", "DisableCoreParking", "DisableDynamicTick",
-  "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
-  "OptimizeRAMUsage", "DisablePowerThrottling",
-  "ServiceDiagTrack", "ServiceSysMain",
-  "PrivacyTelemetry", "PrivacyAdvertisingID",
-  "FiveMHighPriority", "FiveMCacheClear", "FiveMNetworkBuffer", "FiveMQueueFix",
-  "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMGameModeAdd",
-  "FiveMRenderingBoost", "FiveMGPUPriorityStack", "FiveMDisableMPO",
-  "FiveMReduceNPCDensity", "FiveMCommandLineTweaks", "FiveMDisableLSO", "FiveMEnableRSS",
-  "RegistryNTFSOptimize", "RegistryIOPageLock", "RegistryDPCLatency",
-  // V3 additions
-  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
-  "CodGPUPriority", "CodDefenderExclusion", "CodDirectXQueue", "CodVRAMShaderBudget",
-];
 
 // How to use steps
 const HOW_TO_STEPS = [
   {
     icon: Terminal,
     title: "Browse & Toggle",
-    desc: "Hit 'Smart Recommendations' on the Home tab — it auto-selects 360+ tweaks matched to your exact GPU, CPU, and RAM. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.",
+    desc: `Hit 'Enable All Tweaks' on the Home tab — it enables every tweak in the app. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.`,
   },
   {
     icon: Download,
@@ -267,17 +249,18 @@ export default function Dashboard() {
   const [recommendedApplied, setRecommendedApplied] = useState(false);
 
   const applyAllRecommended = () => {
+    // Enable every tweak in the store — no artificial cap.
+    // Hardware-specific filtering (vendor, OS, laptop vs desktop) happens
+    // at script generation time on the server, so enabling all client-side
+    // is safe: incompatible tweaks simply won't appear in the downloaded .bat.
     const next = { ...tweaks };
-    let applied = 0;
-    const recIds = hw.loading ? ALL_RECOMMENDED_TWEAKS : Array.from(smartRecs.ids);
-    recIds.forEach((key) => {
-      if (key in next) { next[key] = true; applied++; }
-    });
+    Object.keys(next).forEach(key => { (next as any)[key] = true; });
+    const applied = Object.keys(next).length;
     setAllTweaks(next);
     setRecommendedApplied(true);
     toast({
-      title: "Smart Recommended Tweaks Applied!",
-      description: `${applied} tweaks enabled for your hardware. Click GET MY SCRIPT (top right) to get your script.`,
+      title: "All Tweaks Enabled!",
+      description: `${applied} tweaks enabled. Hardware filtering runs at script generation — only compatible tweaks land in your .bat.`,
     });
   };
 
@@ -431,7 +414,7 @@ export default function Dashboard() {
               <div className="shrink-0 flex items-center gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/20">
                   <Zap className="w-3.5 h-3.5 text-red-400" />
-                  <span className="text-xs font-bold text-red-400">{smartRecs.ids.size} tweaks recommended</span>
+                  <span className="text-xs font-bold text-red-400">{totalTweaks} tweaks available</span>
                 </div>
                 {hw.scanned && (
                   <HardwareScanZone
@@ -612,12 +595,12 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-              {recommendedApplied ? "All Recommended Tweaks Are Enabled" : "Apply All Recommended Tweaks in One Click"}
+              {recommendedApplied ? "All Tweaks Enabled" : "Enable All Tweaks in One Click"}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
                 ? "Click GET MY SCRIPT (top right) to download your personalized script. Restart your PC after running it."
-                : `${hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} hand-picked tweaks matched to your hardware — covers CPU priority, network, memory, power, and GPU. No uninstalls, no risks.`}
+                : `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`}
             </p>
           </div>
 
@@ -628,7 +611,7 @@ export default function Dashboard() {
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-sm"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size} Tweaks Enabled
+                {enabledCount} Tweaks Enabled
               </div>
             ) : (
               <Button
@@ -637,7 +620,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                Apply All Recommended ({hw.loading ? ALL_RECOMMENDED_TWEAKS.length : smartRecs.ids.size})
+                Enable All {totalTweaks} Tweaks
               </Button>
             )}
             <span className="text-[10px] text-zinc-600 text-center">
