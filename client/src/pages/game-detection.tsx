@@ -117,7 +117,7 @@ const GAMES: GameEntry[] = [
     name: "Minecraft (Java)",
     publisher: "Mojang / Microsoft",
     accentBorder: "border-l-zinc-600",
-    coverUrl: "",
+    coverUrl: "/game-covers/minecraft.png",
     coverGradient: "from-green-950 via-emerald-900 to-zinc-900",
     detectPaths: ["%AppData%\\.minecraft\\launcher_profiles.json"],
     processName: "javaw.exe",
