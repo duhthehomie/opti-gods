@@ -560,6 +560,91 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   ArrowLunarLakePowerPlan: false,
   ArrowITDTelemetryOff: false,
   ToolDPCLatencyCheck: false,
+  // COD / Warzone / Black Ops 6
+  CodRawInput: false,
+  CodHighPriority: false,
+  CodGameMode: false,
+  CodShaderCacheClear: false,
+  CodPagefileOptimize: false,
+  CodDisableHAGS: false,
+  CodNetworkBuffer: false,
+  CodDisableLSO: false,
+  CodTCPOptimize: false,
+  CodBattlenetOptimize: false,
+  CodDisableXboxCapture: false,
+  Cod1650LowLatency: false,
+  Cod1650DisableAnsel: false,
+  Cod3500PowerPlan: false,
+  Cod3500CoreUnpark: false,
+  CodGPUPriority: false,
+  CodDefenderExclusion: false,
+  CodDirectXQueue: false,
+  CodVRAMShaderBudget: false,
+  CodDisableTelemetry: false,
+  CodMMCSS: false,
+  CodQoSPolicy: false,
+  // Rust
+  RustHighPriority: false,
+  RustDisableThrottling: false,
+  RustGameMode: false,
+  RustFPSUncap: false,
+  RustDisableVSync: false,
+  RustLowShadows: false,
+  RustDisableBloom: false,
+  RustDisableMotionBlur: false,
+  RustWaterOff: false,
+  RustGrassShadowOff: false,
+  RustNetworkBuffer: false,
+  RustOcclusionOff: false,
+  RustDisableAniso: false,
+  RustNagleOff: false,
+  // Roblox
+  RobloxHighPriority: false,
+  RobloxDisableThrottling: false,
+  RobloxGameMode: false,
+  RobloxFPSUnlock: false,
+  RobloxDisablePostFX: false,
+  RobloxReduceLightUpdates: false,
+  RobloxNetworkBuffer: false,
+  RobloxDisableSSAO: false,
+  RobloxNagleOff: false,
+  // Spotify
+  SpotifyLowPriority: false,
+  SpotifyDisableGPU: false,
+  SpotifyDisableAutoUpdate: false,
+  SpotifyLimitBandwidth: false,
+  // Registry — misc safe tweaks
+  DisableSearchIndexer: false,
+  DisableAutoMaintenance: false,
+  // V2.2 Driver Reapply — NVIDIA
+  NvTextureFilterHighPerf: false,
+  NvLowLatencyUltra: false,
+  NvThreadedOptOn: false,
+  NvPowerMgmtMax: false,
+  NvFrameLimitOff: false,
+  NvFrameLimit30: false,
+  NvFrameLimit60: false,
+  NvFrameLimit120: false,
+  NvFrameLimit144: false,
+  NvFrameLimit240: false,
+  NvFrameLimitCustom: false,
+  // V2.2 Driver Reapply — AMD
+  AmdTextureFilterPerf: false,
+  AmdSurfaceFormatOpt: false,
+  AmdTessOverride16x: false,
+  AmdRadeonBoostOff: false,
+  AmdFRTC60: false,
+  AmdFRTC144: false,
+  AmdFRTC240: false,
+  // MSI Mode — safe variant (V2.2)
+  EnableMSIMode_Safe: false,
+  // Remaining registry IDs
+  FiveM2060VRAMBudget: false,
+  FiveMi5CoreAffinity: false,
+  FortniteDisableSSR: false,
+  FortniteRawInput: false,
+  CodTdrDelay: false,
+  IntelOldGenPowerOpt: false,
 };
 
 export const useOptimizationStore = create<OptimizationState>()(
@@ -582,7 +667,12 @@ export const useOptimizationStore = create<OptimizationState>()(
 
       setNvidiaPreset: (preset) => set({ nvidiaPreset: preset }),
 
-      setAllTweaks: (tweaks) => set({ tweaks }),
+      setAllTweaks: (tweaks) => set((state) => {
+        const now = Date.now();
+        const nextApplied = { ...state.appliedAt };
+        Object.entries(tweaks).forEach(([k, v]) => { if (v) nextApplied[k] = now; });
+        return { tweaks, appliedAt: nextApplied };
+      }),
 
       markApplied: (ids) => set((state) => {
         const now = Date.now();
@@ -603,8 +693,15 @@ export const useOptimizationStore = create<OptimizationState>()(
       reset: () => set({ tweaks: { ...DEFAULT_TWEAKS }, nvidiaPreset: '', appliedAt: {} }),
     }),
     {
-      name: 'optigods-tweaks-v1',
+      name: 'optigods-tweaks-v2',
       partialize: (state: OptimizationState) => ({ tweaks: state.tweaks, nvidiaPreset: state.nvidiaPreset, appliedAt: state.appliedAt }),
+      merge: (persisted: unknown, current) => ({
+        ...current,
+        ...(persisted as Partial<OptimizationState>),
+        // Deep-merge tweaks so new DEFAULT_TWEAKS keys (added in future versions)
+        // always appear — persisted user choices override, new keys default to false.
+        tweaks: { ...current.tweaks, ...((persisted as any)?.tweaks ?? {}) },
+      }),
     }
   )
 );
