@@ -29,6 +29,7 @@ const ALL_REGISTRY_IDS = [
   "Win11DisableVBS","Win11DisableHVCI","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
   "ProcNUMAAware","ProcAffinityFPS","ProcMMCSSGaming","ProcGPUSchedulerHigh",
   "IntelOldGenPowerOpt",
+  "DisableSearchIndexer","DisableAutoMaintenance",
   "ToolDPCLatencyCheck","CodDisableTelemetry","CodTdrDelay","CodMMCSS","CodQoSPolicy",
 ];
 const REGISTRY_RECOMMENDED_IDS = [
@@ -126,6 +127,8 @@ export default function Registry() {
     { id: "EnableMSIMode", title: "Enable MSI Mode for GPU", desc: "Forces Message Signaled Interrupts on the GPU — eliminates interrupt sharing latency with other PCI-e devices.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
     { id: "DisableCoreParking", title: "Disable CPU Core Parking (Advanced)", desc: "Forces all CPU cores active via PowerSettings registry path + powercfg — removes 1–3ms wake latency on parked cores.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power.", impact: "MED" },
+    { id: "DisableSearchIndexer", title: "Disable Windows Search Indexer", desc: "Stops the WSearch service so SearchIndexer.exe cannot spike disk I/O and CPU during gaming. Re-enable via Services.msc if you need Windows Search. Safe — doesn't remove the service, just stops it.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "DisableAutoMaintenance", title: "Disable Automatic Maintenance", desc: "Sets MaintenanceDisabled=1 in the Windows schedule — prevents Defender scans, disk cleanup, and maintenance tasks from launching mid-session. Re-enable via Control Panel > Security and Maintenance if needed.", impact: "MED" },
   ];
 
   const NETWORK_TWEAKS: TweakDef[] = [

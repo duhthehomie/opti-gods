@@ -16,6 +16,7 @@ const ALL_FORTNITE_IDS = [
   "FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableVSync","FortniteGameMode",
   "FortniteHighPriority","FortniteAffinityPhysical","FortniteDisableThrottling",
   "FortniteEngineStreaming","FortniteDisableMotionBlur","FortniteLowShadows","FortniteDisableLumen",
+  "FortniteDisableSSR","FortniteRawInput",
   "FortniteForceDirectX12","FortniteDisableRecording","FortniteNetworkBuffer","FortniteInputLatency",
 ];
 const FORTNITE_RECOMMENDED = ["FortniteUncapLobbyFPS","FortniteHighPriority","FortniteDisableThrottling","FortniteDisableVSync"];
@@ -191,6 +192,8 @@ export default function Fortnite() {
                 { id: "FortniteDisableMotionBlur", title: "Disable Motion Blur & Lens Flare", desc: "Adds r.MotionBlurQuality=0 and r.LensFlareQuality=0 to Engine.ini — removes blur and gains back ~3–5% GPU performance.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteLowShadows", title: "Force Minimal Shadow Quality", desc: "Sets r.Shadow.MaxResolution=512 and r.ShadowQuality=0 in Engine.ini — significant GPU savings, especially at high resolutions.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteDisableLumen", title: "Disable Lumen Global Illumination", desc: "Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI for a significant FPS boost on mid-range GPUs.", impact: "HIGH" as const },
+                { id: "FortniteDisableSSR", title: "Disable Screen-Space Reflections", desc: "Sets r.ssr.quality=0 and r.ReflectionCaptureResolution=64 in Engine.ini — SSR is computed every frame and costs 5–15% GPU on mid-range cards. Disabling it has zero competitive impact.", badge: "RECOMMENDED", impact: "MED" as const },
+                { id: "FortniteRawInput", title: "Enable Raw Mouse Input", desc: "Sets bEnableMouseSmoothing=False, bViewAccelerationEnabled=False, and WindowsMouseSpeedFix=False in Engine.ini — bypasses Unreal's input smoothing pipeline for 1:1 mouse-to-crosshair tracking. Essential for competitive play.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteDisableRecording", title: "Disable Background Video Recording", desc: "Disables Fortnite's built-in replay/recording via Engine.ini — frees GPU encoder bandwidth.", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}

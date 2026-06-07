@@ -9,11 +9,11 @@ import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 
 const ALL_ROBLOX_IDS = [
-  "RobloxFPSUnlock", "RobloxDisablePostFX", "RobloxReduceLightUpdates",
+  "RobloxFPSUnlock", "RobloxDisablePostFX", "RobloxReduceLightUpdates", "RobloxDisableSSAO",
   "RobloxHighPriority", "RobloxDisableThrottling", "RobloxGameMode",
-  "RobloxNetworkBuffer",
+  "RobloxNetworkBuffer", "RobloxNagleOff",
 ];
-const ROBLOX_RECOMMENDED = ["RobloxFPSUnlock", "RobloxHighPriority", "RobloxDisableThrottling", "RobloxDisablePostFX"];
+const ROBLOX_RECOMMENDED = ["RobloxFPSUnlock", "RobloxHighPriority", "RobloxDisableThrottling", "RobloxDisablePostFX", "RobloxDisableSSAO"];
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
   fps: ["RobloxFPSUnlock", "RobloxDisablePostFX"],
@@ -133,6 +133,7 @@ export default function RobloxPage() {
                 { id: "RobloxFPSUnlock", title: "Unlock FPS via FFlags (9999 target)", desc: "Writes DFIntTaskSchedulerTargetFps=9999 to ClientAppSettings.json — bypasses Roblox's 60fps cap without external tools.", badge: "MUST HAVE", impact: "HIGH" as const },
                 { id: "RobloxDisablePostFX", title: "Disable Post-Processing Effects", desc: "Sets FFlagDisablePostFx=true in FFlags — removes bloom, depth of field, and color grading for cleaner visuals and better performance.", impact: "MED" as const },
                 { id: "RobloxReduceLightUpdates", title: "Reduce Local Light Update Frequency", desc: "Lowers FIntRenderLocalLightUpdatesMax/Min in FFlags — reduces how often dynamic lights are recomputed, freeing GPU time.", impact: "MED" as const },
+                { id: "RobloxDisableSSAO", title: "Disable Ambient Occlusion & Sky Overhead", desc: "Sets FFlagRenderNoLowFiSky=true and disables expensive light attenuation in FFlags — removes ambient occlusion shadow computation and sky rendering overhead. Measurable GPU savings on mid-range hardware.", badge: "RECOMMENDED", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   badge={(item as any).badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
@@ -159,6 +160,7 @@ export default function RobloxPage() {
             <div className="space-y-3">
               {[
                 { id: "RobloxNetworkBuffer", title: "Increase Network Socket Buffers", desc: "Increases AFD send/receive buffers to 256KB — reduces packet loss and lag spikes on Roblox servers.", impact: "MED" as const },
+                { id: "RobloxNagleOff", title: "Disable Nagle Algorithm", desc: "Sets TcpNoDelay=1 and TcpAckFrequency=1 — forces immediate packet sends, reducing ping variance during fast-paced Roblox game modes.", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />

@@ -20,7 +20,7 @@ const ALL_COD_IDS = [
   "Cod1650LowLatency", "Cod1650DisableAnsel",
   "Cod3500PowerPlan", "Cod3500CoreUnpark",
   // V3 additions
-  "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy",
+  "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy", "CodRawInput",
 ];
 
 const COD_RECOMMENDED = [
@@ -449,6 +449,13 @@ export default function CallOfDuty() {
                     desc: "Creates Windows Quality of Service policies for cod.exe that mark all UDP and TCP traffic with DSCP value 46 (Expedited Forwarding). Routers and switches that honor DSCP will prioritize COD packets over background downloads, Discord voice, and browser traffic. Most modern home routers honor this — reduces jitter and packet loss during Warzone drops.",
                     badge: "NETWORK",
                     impact: "MED" as const,
+                  },
+                  {
+                    id: "CodRawInput",
+                    title: "Enable Raw Mouse Input for COD",
+                    desc: "Writes raw_mouse_input=true and mouse_filter=0 to Call of Duty's adv_options.ini — bypasses Windows' mouse acceleration stack for 1:1 aim tracking. If you've ever felt like your crosshair moves slightly differently at different speeds, this eliminates that. Applies to both BO6 and Warzone. Re-run if COD resets the file after an update.",
+                    badge: "RECOMMENDED",
+                    impact: "HIGH" as const,
                   },
                 ]).map((item, i) => (
                   <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}

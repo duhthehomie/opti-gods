@@ -12,9 +12,10 @@ const ALL_RUST_IDS = [
   "RustFPSUncap", "RustDisableVSync",
   "RustHighPriority", "RustDisableThrottling", "RustGameMode",
   "RustLowShadows", "RustDisableBloom", "RustDisableMotionBlur", "RustWaterOff", "RustGrassShadowOff",
-  "RustNetworkBuffer",
+  "RustOcclusionOff", "RustDisableAniso",
+  "RustNetworkBuffer", "RustNagleOff",
 ];
-const RUST_RECOMMENDED = ["RustFPSUncap", "RustHighPriority", "RustDisableThrottling", "RustDisableVSync", "RustLowShadows", "RustDisableMotionBlur"];
+const RUST_RECOMMENDED = ["RustFPSUncap", "RustHighPriority", "RustDisableThrottling", "RustDisableVSync", "RustLowShadows", "RustDisableMotionBlur", "RustOcclusionOff"];
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
   fps: ["RustFPSUncap", "RustDisableVSync"],
@@ -159,6 +160,8 @@ export default function RustGame() {
                 { id: "RustDisableBloom", title: "Disable Bloom", desc: "Sets graphics.bloom 0 in client.cfg — removes bloom glow effect, frees GPU bandwidth.", impact: "MED" as const },
                 { id: "RustWaterOff", title: "Disable Water Reflections", desc: "Sets graphics.water 0 in client.cfg — disables expensive water reflection rendering.", impact: "MED" as const },
                 { id: "RustGrassShadowOff", title: "Disable Grass Shadow Casting", desc: "Sets grass.shadowcast 0 in client.cfg — grass stops casting dynamic shadows, significant FPS gain in open areas.", impact: "MED" as const },
+                { id: "RustOcclusionOff", title: "Disable Occlusion Culling", desc: "Sets occlusion.base 0 in client.cfg — removes per-frame CPU overhead from occlusion checks. Rust's occlusion pass can spike on complex outdoor scenes with many players. Visible geometry is rendered directly.", badge: "RECOMMENDED", impact: "MED" as const },
+                { id: "RustDisableAniso", title: "Disable Anisotropic Filtering", desc: "Sets graphics.aniso 0 in client.cfg — removes anisotropic texture filtering, freeing GPU texture sampling budget. Minimal visual impact at normal PvP viewing distances.", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   badge={(item as any).badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
@@ -171,6 +174,7 @@ export default function RustGame() {
             <div className="space-y-3">
               {[
                 { id: "RustNetworkBuffer", title: "Increase Network Socket Buffers", desc: "Sets AFD send/receive buffers to 256KB — reduces packet loss and network hiccups on Rust servers.", impact: "MED" as const },
+                { id: "RustNagleOff", title: "Disable Nagle Algorithm", desc: "Sets TcpNoDelay=1 and TcpAckFrequency=1 — forces immediate TCP packet sends instead of batching. Reduces ping variance during raids and PvP engagements.", badge: "RECOMMENDED", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
