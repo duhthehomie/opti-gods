@@ -36,41 +36,106 @@ const FEATURES = [
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
-// Quick Boost Presets — V3.0 (Spotify + COD + DPC included)
+// Quick Boost Presets — V3.1 (expanded Safe, Max FPS COD stack, Streamer Mode overhauled)
+
+// ── Safe Boost ─────────────────────────────────────────────────────────────
 const SAFE_TWEAKS = [
-  "Win32PrioritySeparation","SetResponsiveness","GameModeTweaks",
-  "NetworkThrottling","DisableNagle","InputLagTCP","SetDNSPriority",
-  "SetHighPerformancePlan","DisableXboxGameBar","DisableGameDVR",
-  "DisablePointerPrecision","DisableCoreParking","EnableHAGS","DisableFastStartup",
-  // Spotify — no-ops if not installed, zero risk
-  "SpotifyLowPriority","SpotifyDisableGPU",
-  // COD — no-ops if not installed
-  "CodGPUPriority","CodDefenderExclusion",
+  // CPU scheduling & responsiveness
+  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
+  // Network baseline
+  "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority",
+  // Power & hardware
+  "SetHighPerformancePlan", "DisableCoreParking", "EnableHAGS",
+  // Input
+  "DisablePointerPrecision",
+  // Windows cleanup — zero risk
+  "DisableXboxGameBar", "DisableGameDVR", "DisableFastStartup",
+  "DisableWindowsError", "DisableHungAppDetection", "SysVisualBestPerf",
+  // Memory
+  "OptimizeRAMUsage", "DisableNDU",
+  // Privacy — no functional change
+  "PrivacyTelemetry", "ServiceDiagTrack",
+  // Spotify — no-op if not installed
+  "SpotifyLowPriority", "SpotifyDisableGPU",
+  // COD — no-op if not installed
+  "CodGPUPriority", "CodDefenderExclusion",
 ];
+
+// ── Max FPS Gaming ─────────────────────────────────────────────────────────
 const MAX_FPS_TWEAKS = [
   ...SAFE_TWEAKS,
-  "DisableDynamicTick","DisablePowerThrottlingAdv","DisableUSBSuspend",
-  "DisableAnimations","DisableNDU","DisablePowerThrottling",
-  "OptimizeRAMUsage","ServiceDiagTrack","ServiceWSearch","PrivacyTelemetry",
-  "FiveMHighPriority","FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMRenderingBoost",
-  "FiveMGPUPriorityStack","FiveMDisableMPO","FiveMReduceNPCDensity","FiveMCommandLineTweaks",
-  "FiveMDisableLSO","FiveMEnableRSS","FiveMCacheClear","FiveMNetworkBuffer",
-  "RegistryNTFSOptimize","RegistryIOPageLock","RegistryDPCLatency",
-  // COD full pack
-  "CodGPUPriority","CodDefenderExclusion","CodDirectXQueue","CodVRAMShaderBudget",
+  // Aggressive timer & power
+  "SetTimerResolution", "DisableDynamicTick",
+  "DisablePowerThrottling", "DisablePowerThrottlingAdv",
+  // Hardware interrupts
+  "DisableUSBSuspend",
+  // Network full stack
+  "OptimizeTCP", "EnableTCPAutoTuning",
+  // Visual & search overhead
+  "DisableAnimations", "ServiceWSearch", "DisableSearchIndexer",
+  // FiveM full pack
+  "FiveMHighPriority", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMRenderingBoost",
+  "FiveMGPUPriorityStack", "FiveMDisableMPO", "FiveMReduceNPCDensity", "FiveMCommandLineTweaks",
+  "FiveMDisableLSO", "FiveMEnableRSS", "FiveMCacheClear", "FiveMNetworkBuffer",
+  // Registry deep tuning
+  "RegistryNTFSOptimize", "RegistryIOPageLock", "RegistryDPCLatency",
+  // COD full pack (no-ops if not installed)
+  "CodDirectXQueue", "CodVRAMShaderBudget", "CodHighPriority", "CodMMCSS",
+  "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodGameMode",
+  "CodDisableXboxCapture", "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
   // Spotify full pack
-  "SpotifyLowPriority","SpotifyDisableGPU","SpotifyDisableAutoUpdate","SpotifyLimitBandwidth",
+  "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
+  // Display & background cleanup
+  "WinTitusDisplayPerf", "WinTitusBgApps",
 ];
+
+// ── Competitive Shooter ────────────────────────────────────────────────────
 const COMPETITIVE_TWEAKS = [
   ...MAX_FPS_TWEAKS,
-  "ProcessLassoAffinityGaming","ProcessLassoProBalance","ProcessAutoKillHung",
-  "FortniteHighPriority","FortniteDisableVSync","FortniteDisableMotionBlur",
-  "FortniteInputLatency","FortniteUncapGameFPS","FiveMHighPriority","FiveMNetworkBuffer",
+  // MSI interrupt mode — safe version (no BSOD risk)
+  "EnableMSIMode_Safe",
+  // Process management
+  "ProcessLassoAffinityGaming", "ProcessLassoProBalance", "ProcessAutoKillHung",
+  // Fortnite pack
+  "FortniteHighPriority", "FortniteDisableVSync", "FortniteDisableMotionBlur",
+  "FortniteInputLatency", "FortniteUncapGameFPS",
+  // Discord — low footprint for voice chat while gaming
+  "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
 ];
+
+// ── Streamer Mode ──────────────────────────────────────────────────────────
+// Goal: game performance + stable OBS encode + smooth Discord + low-noise desktop.
+// Deliberately OMITS DisableXboxGameBar / DisableGameDVR — some capture setups need them.
 const STREAMER_TWEAKS = [
-  "Win32PrioritySeparation","SetResponsiveness","SetTimerResolution",
-  "NetworkThrottling","DisableNagle","SetHighPerformancePlan",
-  "DisablePointerPrecision","DisableCoreParking","EnableHAGS","SetDNSPriority",
+  // CPU scheduling — balanced between game priority and encoder threads
+  "Win32PrioritySeparation", "SetResponsiveness", "SetTimerResolution", "GameModeTweaks",
+  // Power — sustained high clocks for both game + encoder (no throttling)
+  "SetHighPerformancePlan", "DisableCoreParking",
+  "DisablePowerThrottling", "DisablePowerThrottlingAdv",
+  // HAGS — better GPU scheduling for game + OBS simultaneous workload
+  "EnableHAGS",
+  // Input
+  "DisablePointerPrecision",
+  // Network — stability & low jitter (not raw speed) for stream upload
+  "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority", "OptimizeTCP",
+  // Memory — game + OBS + browser tabs + Discord all need RAM headroom
+  "OptimizeRAMUsage", "DisableNDU",
+  // Kill background noise that steals encoder CPU time
+  "ServiceDiagTrack", "PrivacyTelemetry", "DisableWindowsError",
+  "DisableHungAppDetection", "DisableAutoMaintenance",
+  // USB suspend causes stutter-freeze mid-stream on USB headsets / capture cards
+  "DisableUSBSuspend",
+  // Disk I/O — OBS writes VOD files constantly; fast NTFS helps
+  "RegistryNTFSOptimize",
+  // Desktop visuals — perf mode keeps GPU free for game + encoder
+  "SysVisualBestPerf", "DisableFastStartup",
+  // Discord — every streamer uses it; cut its GPU + CPU footprint hard
+  "DiscordOptimizeCodec", "DiscordDisableAnimations", "DiscordReduceGPUPriority",
+  "DiscordDisableHWAccel", "DiscordClearCache", "DiscordDisableVAD",
+  // Spotify — keep music running but prioritize game + encoder above it
+  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyLimitBandwidth",
+  // Background Windows apps — free RAM + CPU for stream
+  "WinTitusBgApps",
 ];
 
 const QUICK_BOOST_PRESETS = [
@@ -89,7 +154,7 @@ const QUICK_BOOST_PRESETS = [
     id: "maxfps",
     icon: Flame,
     title: "Max FPS Gaming",
-    desc: "Aggressive CPU, network, and memory tweaks for the highest possible framerate.",
+    desc: "Aggressive CPU, timer, network, and COD/FiveM packs for the highest possible framerate.",
     color: "text-red-400",
     border: "border-red-500/25 hover:border-red-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(239,68,68,0.1)]",
@@ -100,7 +165,7 @@ const QUICK_BOOST_PRESETS = [
     id: "competitive",
     icon: Crosshair,
     title: "Competitive Shooter",
-    desc: "All Max FPS tweaks + per-game priority packs for Valorant, Call of Duty, Apex, Warzone, and more.",
+    desc: "All Max FPS tweaks + MSI mode, Fortnite/COD priority packs, Process Lasso, and Discord tuning.",
     color: "text-orange-400",
     border: "border-orange-500/25 hover:border-orange-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(249,115,22,0.1)]",
@@ -111,7 +176,7 @@ const QUICK_BOOST_PRESETS = [
     id: "streamer",
     icon: Radio,
     title: "Streamer Mode",
-    desc: "Performance boost without killing Game Bar or DVR — keeps OBS and stream capture working.",
+    desc: "Game perf + stable OBS encode + Discord tuning + Spotify at low priority. Keeps Game Bar and capture working.",
     color: "text-violet-400",
     border: "border-violet-500/25 hover:border-violet-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(139,92,246,0.1)]",
