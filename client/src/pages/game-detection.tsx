@@ -117,7 +117,7 @@ const GAMES: GameEntry[] = [
     name: "Minecraft (Java)",
     publisher: "Mojang / Microsoft",
     accentBorder: "border-l-zinc-600",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2329360/header.jpg",
+    coverUrl: "",
     coverGradient: "from-green-950 via-emerald-900 to-zinc-900",
     detectPaths: ["%AppData%\\.minecraft\\launcher_profiles.json"],
     processName: "javaw.exe",
@@ -313,7 +313,7 @@ const GAMES: GameEntry[] = [
     name: "007: First Light",
     publisher: "IO Interactive",
     accentBorder: "border-l-yellow-500",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2828570/header.jpg",
+    coverUrl: "/game-covers/007-first-light.jpg",
     coverGradient: "from-yellow-950 via-zinc-900 to-black",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\007 First Light",
@@ -339,7 +339,7 @@ const GAMES: GameEntry[] = [
     name: "Fortnite",
     publisher: "Epic Games",
     accentBorder: "border-l-blue-400",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1811700/header.jpg",
+    coverUrl: "/game-covers/fortnite.jpg",
     coverGradient: "from-blue-900 via-indigo-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",
