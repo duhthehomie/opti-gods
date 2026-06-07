@@ -112,12 +112,67 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "presets", label: "Presets" },
 ];
 
-// ─── Section card (grid tile) ─────────────────────────────────────────────────
+// ─── Per-section active-tweak count ───────────────────────────────────────────
+function sectionActiveTweaks(section: Section, tweaks: Record<string, boolean>): number {
+  return section.categories.reduce((sum, c) => {
+    return sum + tweaksByCategory(c).filter(t => tweaks[t.id]).length;
+  }, 0);
+}
+
+// ─── Section card (grid tile + compact sidebar variant) ───────────────────────
 function SectionCard({
-  section, active, onClick,
-}: { section: Section; active: boolean; onClick: () => void }) {
+  section, active, onClick, activeTweaks = 0, compact = false,
+}: {
+  section: Section;
+  active: boolean;
+  onClick: () => void;
+  activeTweaks?: number;
+  compact?: boolean;
+}) {
   const Icon  = section.icon;
   const count = sectionCount(section);
+  const pct   = count > 0 ? Math.min(Math.round((activeTweaks / count) * 100), 100) : 0;
+
+  // ── Compact: slim sidebar nav item ──────────────────────────────────────────
+  if (compact) {
+    return (
+      <button
+        id={`card-${section.id}`}
+        onClick={onClick}
+        data-testid={`card-${section.id}`}
+        className={cn(
+          "w-full text-left px-3 py-2.5 rounded-lg border transition-all duration-150 flex items-center gap-2.5 group",
+          active
+            ? "bg-red-500/10 border-red-500/35 shadow-[inset_0_0_12px_-6px_rgba(239,68,68,0.15)]"
+            : "bg-zinc-950/40 border-white/5 hover:border-white/15 hover:bg-zinc-900/50"
+        )}
+      >
+        <div className={cn(
+          "w-7 h-7 rounded-md flex items-center justify-center border shrink-0 transition-colors",
+          active ? "bg-red-500/15 border-red-500/30" : "bg-zinc-900 border-white/5 group-hover:border-white/10"
+        )}>
+          <Icon className={cn("w-3.5 h-3.5 transition-colors", active ? "text-red-400" : "text-zinc-500 group-hover:text-zinc-400")} />
+        </div>
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <p className={cn("text-xs font-bold leading-tight truncate transition-colors", active ? "text-white" : "text-zinc-300")}>{section.title}</p>
+          {activeTweaks > 0 && (
+            <div className="h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+        </div>
+        {activeTweaks > 0 ? (
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 tabular-nums">
+            {activeTweaks}
+          </span>
+        ) : active ? (
+          <ChevronDown className="w-3 h-3 text-red-400 shrink-0" />
+        ) : null}
+      </button>
+    );
+  }
+
+  // ── Full: grid card ──────────────────────────────────────────────────────────
   return (
     <button
       id={`card-${section.id}`}
@@ -141,16 +196,28 @@ function SectionCard({
           <p className={cn("text-sm font-bold leading-tight truncate transition-colors", active ? "text-white" : "text-zinc-200")}>{section.title}</p>
           <p className="text-[11px] text-zinc-500 leading-tight mt-0.5 line-clamp-2">{section.desc}</p>
         </div>
+        {activeTweaks > 0 && (
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide tabular-nums">
+            {activeTweaks} ON
+          </span>
+        )}
       </div>
       {count > 0 && (
-        <div className="mt-3 flex items-center justify-between">
-          <span className={cn(
-            "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border",
-            active ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-zinc-900 text-zinc-500 border-white/8"
-          )}>
-            {count} tweaks
-          </span>
-          {active && <ChevronDown className="w-3.5 h-3.5 text-red-400 rotate-180" />}
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border",
+              active ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-zinc-900 text-zinc-500 border-white/8"
+            )}>
+              {count} tweaks
+            </span>
+            {active && <ChevronDown className="w-3.5 h-3.5 text-red-400 rotate-180" />}
+          </div>
+          {activeTweaks > 0 && (
+            <div className="h-0.5 bg-zinc-900 rounded-full overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+            </div>
+          )}
         </div>
       )}
     </button>
@@ -314,6 +381,8 @@ export default function TweaksPage() {
 
   const hw = useHardwareInfo();
   const detecting = isDetecting(hw);
+  const { tweaks } = useOptimizationStore();
+  const enabledCount = Object.values(tweaks).filter(Boolean).length;
 
   useEffect(() => { try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {} }, [activeTab]);
   useEffect(() => { try { localStorage.setItem(SHOW_ALL_KEY, showAll ? "1" : "0"); } catch {} }, [showAll]);
@@ -326,9 +395,6 @@ export default function TweaksPage() {
       const section = SECTIONS.find(s => s.id === hash);
       if (section) setActiveTab(section.group as TabId);
       setActiveSectionId(hash);
-      setTimeout(() => {
-        document.getElementById(`card-${hash}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 150);
     }
   }, [location]);
 
@@ -343,18 +409,9 @@ export default function TweaksPage() {
   const gpuChip = !detecting && hw.gpuName ? hw.gpuName : null;
 
   const activeSection = SECTIONS.find(s => s.id === activeSectionId) ?? null;
-  const ActiveIcon    = activeSection?.icon;
 
   function toggle(id: string) {
-    setActiveSectionId(prev => {
-      const next = prev === id ? null : id;
-      if (next) {
-        setTimeout(() => {
-          document.getElementById(next)?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 80);
-      }
-      return next;
-    });
+    setActiveSectionId(prev => prev === id ? null : id);
   }
 
   return (
@@ -371,6 +428,15 @@ export default function TweaksPage() {
               >
                 {TOTAL_TWEAK_COUNT} total
               </span>
+              {enabledCount > 0 ? (
+                <span
+                  data-testid="badge-active-tweaks"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-300 border border-red-500/50 uppercase tracking-wide animate-in fade-in duration-200"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                  {enabledCount} active
+                </span>
+              ) : null}
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800/80 text-zinc-400 border border-white/8 uppercase tracking-wide">
                 V3.0.0
               </span>
@@ -474,58 +540,89 @@ export default function TweaksPage() {
         {/* ── SECTION GRID + ACTIVE PANEL ──────────────────────────────────── */}
         {activeTab !== "presets" && (
           <>
-            {/* 2-column card grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {visibleSections.map(s => (
-                <SectionCard
-                  key={s.id}
-                  section={s}
-                  active={activeSectionId === s.id}
-                  onClick={() => toggle(s.id)}
-                />
-              ))}
-            </div>
-
-            {/* Active section content panel */}
-            {activeSection && (
-              <div
-                id={activeSection.id}
-                className="border border-red-500/20 rounded-xl overflow-hidden scroll-mt-6 animate-in fade-in slide-in-from-top-2 duration-200"
-              >
-                {/* Panel header — minimal strip, no title (inner page has its own h1) */}
-                <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
-                  <span className="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">{sectionCount(activeSection)} tweaks</span>
-                  <button
-                    onClick={() => setActiveSectionId(null)}
-                    data-testid="button-close-section"
-                    className="p-1.5 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Panel body */}
-                <div className="bg-black/40 px-6 pt-6 pb-10">
-                  <EmbeddedProvider>
-                    <Suspense fallback={
-                      <div className="flex items-center justify-center py-14">
-                        <Loader2 className="w-5 h-5 text-red-400 animate-spin" />
-                      </div>
-                    }>
-                      <activeSection.Component />
-                    </Suspense>
-                  </EmbeddedProvider>
-                </div>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {visibleSections.length === 0 && (
+            {visibleSections.length === 0 ? (
               <div className="text-center py-16 text-zinc-600">
                 <Zap className="w-8 h-8 mx-auto mb-3 opacity-30" />
                 <p className="text-sm font-bold mb-1">No sections in this category</p>
                 <p className="text-xs">Your hardware filter may be hiding them.</p>
                 <button onClick={() => setShowAll(true)} className="mt-3 text-xs text-zinc-400 hover:text-white underline">Show all sections</button>
+              </div>
+            ) : activeSection ? (
+              /* ── TWO-PANEL: left nav + right content ── */
+              <div className="flex gap-4 items-start">
+                {/* Left: compact section list */}
+                <div className="w-52 shrink-0 flex flex-col gap-1.5 sticky top-4 max-h-[calc(100vh-160px)] overflow-y-auto pr-0.5" style={{ scrollbarWidth: "thin" }}>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600 px-1 mb-1">Sections</p>
+                  {visibleSections.map(s => (
+                    <SectionCard
+                      key={s.id}
+                      section={s}
+                      active={activeSectionId === s.id}
+                      onClick={() => toggle(s.id)}
+                      activeTweaks={sectionActiveTweaks(s, tweaks)}
+                      compact
+                    />
+                  ))}
+                </div>
+
+                {/* Right: active section content panel */}
+                <div
+                  id={activeSection.id}
+                  className="flex-1 min-w-0 border border-red-500/20 rounded-xl overflow-hidden animate-in fade-in duration-200"
+                >
+                  {/* Panel header */}
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-zinc-950/60">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">{activeSection.title}</span>
+                      <span className="text-[10px] text-zinc-600 font-mono">— {sectionCount(activeSection)} tweaks</span>
+                      {(() => {
+                        const on = sectionActiveTweaks(activeSection, tweaks);
+                        return on > 0 ? (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                            <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+                            {on} on
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
+                    <button
+                      onClick={() => setActiveSectionId(null)}
+                      data-testid="button-close-section"
+                      className="p-1.5 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Panel body — scrollable, fixed height */}
+                  <div
+                    className="bg-black/40 px-6 pt-6 pb-10 overflow-y-auto"
+                    style={{ maxHeight: "calc(100vh - 210px)" }}
+                  >
+                    <EmbeddedProvider>
+                      <Suspense fallback={
+                        <div className="flex items-center justify-center py-14">
+                          <Loader2 className="w-5 h-5 text-red-400 animate-spin" />
+                        </div>
+                      }>
+                        <activeSection.Component />
+                      </Suspense>
+                    </EmbeddedProvider>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ── GRID: no section open ── */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {visibleSections.map(s => (
+                  <SectionCard
+                    key={s.id}
+                    section={s}
+                    active={false}
+                    onClick={() => toggle(s.id)}
+                    activeTweaks={sectionActiveTweaks(s, tweaks)}
+                  />
+                ))}
               </div>
             )}
           </>
