@@ -16,6 +16,7 @@ interface GameEntry {
   accentBorder: string;
   coverUrl?: string;
   coverGradient?: string;
+  coverPosition?: string;
   detectPaths: string[];
   processName: string;
   tweaks: string[];
@@ -27,7 +28,7 @@ const GAMES: GameEntry[] = [
     name: "Valorant",
     publisher: "Riot Games",
     accentBorder: "border-l-red-500",
-    coverUrl: "https://cdn2.mobalytics.gg/production/media/images/games/valorant-logo.jpg",
+    coverUrl: "/game-covers/valorant.jpg",
     coverGradient: "from-red-900 via-red-800 to-zinc-900",
     detectPaths: ["%LocalAppData%\\VALORANT", "C:\\Riot Games\\VALORANT"],
     processName: "VALORANT-Win64-Shipping.exe",
@@ -75,7 +76,7 @@ const GAMES: GameEntry[] = [
     name: "League of Legends",
     publisher: "Riot Games",
     accentBorder: "border-l-amber-600",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2805730/header.jpg",
+    coverUrl: "/game-covers/lol.jpg",
     coverGradient: "from-amber-950 via-yellow-900 to-zinc-900",
     detectPaths: ["C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe"],
     processName: "League of Legends.exe",
@@ -139,7 +140,7 @@ const GAMES: GameEntry[] = [
     name: "Escape from Tarkov",
     publisher: "Battlestate Games",
     accentBorder: "border-l-stone-500",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2793120/header.jpg",
+    coverUrl: "/game-covers/tarkov.jpg",
     coverGradient: "from-stone-900 via-neutral-800 to-zinc-900",
     detectPaths: ["C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe", "C:\\Games\\EFT\\EscapeFromTarkov.exe"],
     processName: "EscapeFromTarkov.exe",
@@ -314,6 +315,7 @@ const GAMES: GameEntry[] = [
     publisher: "IO Interactive",
     accentBorder: "border-l-yellow-500",
     coverUrl: "/game-covers/007-first-light.jpg",
+    coverPosition: "center top",
     coverGradient: "from-yellow-950 via-zinc-900 to-black",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\007 First Light",
@@ -342,7 +344,7 @@ const GAMES: GameEntry[] = [
     name: "Fortnite",
     publisher: "Epic Games",
     accentBorder: "border-l-blue-400",
-    coverUrl: "/game-covers/fortnite.jpg",
+    coverUrl: "/game-covers/fortnite-new.jpg",
     coverGradient: "from-blue-900 via-indigo-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",
@@ -414,6 +416,7 @@ function GameCard({ game }: { game: GameEntry }) {
             src={game.coverUrl}
             alt={game.name}
             onError={() => setImgErr(true)}
+            style={game.coverPosition ? { objectPosition: game.coverPosition } : undefined}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         )}

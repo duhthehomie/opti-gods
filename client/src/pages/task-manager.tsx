@@ -173,15 +173,27 @@ export default function TaskManagerPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10 text-white">
+      <div className="space-y-6 pb-10 text-white">
 
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
           <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
             <Monitor className="w-6 h-6 text-red-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-display font-bold text-white">Task Manager</h1>
-            <p className="text-zinc-500 text-sm">Kill background apps and remove them from startup — more RAM and CPU for your games</p>
+            <h1 className="text-2xl font-display font-bold text-white">Background App Manager</h1>
+            <p className="text-zinc-500 text-sm">Select apps to kill before gaming and remove from startup — frees RAM and CPU</p>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}
+          className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-start gap-3"
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[12px] text-amber-300 font-semibold mb-0.5">This is a checklist, not a live process viewer</p>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              These are the most common background apps that hurt gaming performance. Tick the ones you actually have installed, download the script, and run it before your next session. The script only acts on processes that are actually running — it skips anything that isn't.
+            </p>
           </div>
         </motion.div>
 
