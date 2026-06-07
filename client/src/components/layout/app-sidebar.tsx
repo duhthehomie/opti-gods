@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
@@ -37,9 +37,12 @@ const PRIMARY: NavItem[] = [
   { title: "System Scan", url: "/system-scan", icon: Activity },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
+  { title: "Task Manager", url: "/task-manager", icon: Monitor },
+  { title: "Game Detection", url: "/game-detection", icon: Gamepad2 },
   { title: "AI Assistant", url: "/ai", icon: Bot },
   { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
   { title: "Account", url: "/account", icon: UserCircle },
+  { title: "Help", url: "/help", icon: HelpCircle },
 ];
 
 const ADMIN_NAV: NavItem = { title: "Admin", url: "/admin", icon: ShieldCheck, accent: "admin" };

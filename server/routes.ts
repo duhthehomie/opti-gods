@@ -1439,7 +1439,7 @@ function wrapInBat(ps1: string, opts: { title: string; tmpName: string; marker: 
     `echo  ==========================================`,
     `echo.`,
     `echo  [1/2] Extracting script...`,
-    `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m=${markerSearch};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+    `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m=${markerSearch};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
     `if not exist "%TMPPS1%" (`,
     `  echo.`,
     `  echo  [ERROR] Extraction failed. Re-download from the website.`,
@@ -1473,9 +1473,11 @@ export async function registerRoutes(
     "/dashboard", "/system-scan", "/tweaks", "/tools", "/pro",
     "/registry", "/fivem", "/fortnite", "/nvidia", "/amd",
     "/integrated-graphics", "/laptop", "/discord", "/memory",
-    "/startup", "/debloat", "/process-lasso", "/processes", "/wintitus",
-    "/fixes", "/game-detection", "/custom-os", "/help", "/updates",
+    "/startup", "/debloat", "/process-lasso", "/wintitus",
+    "/fixes", "/custom-os", "/updates",
   ];
+  // NOTE: /processes, /game-detection, /help, /task-manager are intentionally NOT
+  // in MOVED_PATHS — they are live sidebar tabs accessible via direct URL.
   for (const p of MOVED_PATHS) {
     app.get(p, (_req, res) => res.redirect(302, "/?moved=1"));
   }
@@ -1870,6 +1872,72 @@ Read-Host "Press Enter to close"
     res.end(Buffer.from(wrapInBat(ps1.trim(), { title: 'Smart Process Optimizer', tmpName: 'OptiGods-SmartScan', marker: 'SMART_SCAN_PS1_START' }), 'utf8'));
   });
 
+  app.post('/api/task-manager/kill-script', checkIpBan, async (req, res) => {
+    const { kill = [], startup = [] } = req.body || {};
+    const safeExe = /^[a-zA-Z0-9_\-. ]+\.exe$/i;
+    const safeKey = /^[a-zA-Z0-9_\-. ]+$/;
+    const validKill: string[] = (Array.isArray(kill) ? kill : []).filter((p: unknown) => typeof p === 'string' && safeExe.test(p)).slice(0, 60);
+    const validStartup: string[] = (Array.isArray(startup) ? startup : []).filter((s: unknown) => typeof s === 'string' && safeKey.test(s)).slice(0, 60);
+
+    const ps1Lines: string[] = [
+      `#Requires -RunAsAdministrator`,
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Clear-Host`,
+      `Write-Host "==========================================" -ForegroundColor Red`,
+      `Write-Host "  OPTI GODS -- Task Manager Kill Script" -ForegroundColor White`,
+      `Write-Host "==========================================" -ForegroundColor Red`,
+      `Write-Host ""`,
+      `$killed = 0; $skipped = 0`,
+      `Write-Host "=== Killing selected processes ===" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+    ];
+
+    for (const exe of validKill) {
+      const name = exe.replace(/\.exe$/i, '');
+      ps1Lines.push(
+        `$p = Get-Process -Name '${name}' -EA SilentlyContinue`,
+        `if ($p) { $c = $p.Count; $p | Stop-Process -Force -EA SilentlyContinue; $killed += $c; Write-Host "[KILL] ${exe} -- $c instance(s) stopped" -ForegroundColor Red }`,
+        `Else { $skipped++; Write-Host "[SKIP] ${exe} -- not running" -ForegroundColor DarkGray }`,
+      );
+    }
+
+    ps1Lines.push(
+      `Write-Host ""`,
+      `Write-Host "--- Kill complete: $killed process(es) stopped, $skipped not running ---" -ForegroundColor Cyan`,
+    );
+
+    if (validStartup.length > 0) {
+      ps1Lines.push(
+        `Write-Host ""`,
+        `Write-Host "=== Disabling startup entries ===" -ForegroundColor Yellow`,
+        `Write-Host ""`,
+      );
+      for (const key of validStartup) {
+        ps1Lines.push(
+          `$runPaths = @('HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run','HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run','HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run')`,
+          `foreach ($rp in $runPaths) { if (Get-ItemProperty $rp -Name '${key}' -EA SilentlyContinue) { Remove-ItemProperty -Path $rp -Name '${key}' -Force -EA SilentlyContinue; Write-Host "[STARTUP] ${key} -- removed from Run key: $rp" -ForegroundColor Green } }`,
+          `$sa = 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run'`,
+          `if (Test-Path $sa) { Set-ItemProperty $sa -Name '${key}' -Value ([byte[]](0x03,0,0,0,0,0,0,0,0,0,0,0)) -Type Binary -Force -EA SilentlyContinue; Write-Host "[STARTUP] ${key} -- StartupApproved entry disabled" -ForegroundColor Green }`,
+        );
+      }
+      ps1Lines.push(
+        `Write-Host ""`,
+        `Write-Host "--- Startup changes applied. Reboot for full effect ---" -ForegroundColor Cyan`,
+      );
+    }
+
+    ps1Lines.push(
+      `Write-Host ""`,
+      `Write-Host "Done. Press Enter to close." -ForegroundColor White`,
+      `Read-Host`,
+    );
+
+    const script = ps1Lines.join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_TaskManager.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Task Manager - Kill and Startup Disable', tmpName: 'OptiGods-TaskMgr', marker: 'TASKMGR_PS1_START' }), 'utf8'));
+  });
+
   app.get('/api/startup/scan', (_req, res) => {
     const ps1 = `
 # Scan Windows registry for all startup apps
@@ -2102,7 +2170,7 @@ Write-Output $json
       `echo  ==========================================`,
       `echo.`,
       `echo  [1/2] Extracting optimization script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
       `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
@@ -3308,7 +3376,7 @@ Start-Sleep 2
       `echo  ==========================================`,
       `echo.`,
       `echo  [1/2] Extracting fix script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
       `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
@@ -3502,7 +3570,7 @@ Start-Sleep 2
       `echo  ==========================================`,
       `echo.`,
       `echo  [1/2] Extracting fix script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
       `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
@@ -4168,7 +4236,7 @@ Read-Host "Press Enter to close this window"
       `echo  READ-ONLY scan -- nothing will be changed on your PC.`,
       `echo.`,
       `echo  [1/2] Extracting scan script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF);$m='##DETECT_PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##DETECT_PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (`,
       `  echo.`,
       `  echo  [ERROR] Extraction failed. Re-download from the website.`,

@@ -117,6 +117,18 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "Auto",
     highlights: ["Hardware Scanner", "Game Library Detect", "Auto-Recommendations", "GPU Detection", "System Profile"],
   },
+  "/task-manager": {
+    title: "Task Manager",
+    desc: "Kill background apps and remove them from Windows startup — more RAM and CPU dedicated to your games.",
+    tweakCount: "Live",
+    highlights: ["Kill Background Apps", "Disable Startup Entries", "Browser Cleanup", "Game Launcher Trim", "Cloud Sync Off"],
+  },
+  "/help": {
+    title: "Help & Support",
+    desc: "FAQ, crash recovery guide, and direct support via Discord ticket.",
+    tweakCount: "Support",
+    highlights: ["Safe to Run", "Crash Recovery", "Script Help", "Discord Support", "Ping @leaq"],
+  },
 };
 
 function MobilePageDescription({ pageInfo }: { pageInfo: { title: string; desc: string; tweakCount: string; highlights: string[] } }) {
