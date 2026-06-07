@@ -4217,20 +4217,14 @@ try {
     $desktop = [Environment]::GetFolderPath('Desktop')
   }
 
-  $nl            = [Environment]::NewLine
-  $resultContent = "OptiGods by leaq - Scan Result" + $nl +
-                   "==============================" + $nl +
-                   "OPTIGODS_STATE:$b64" + $nl +
-                   "==============================" + $nl +
-                   "Drag this file into the Opti Gods app to import your PC state."
   $saved = @()
-  try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.txt",   $resultContent, [Text.Encoding]::UTF8); $saved += "Desktop"   } catch {}
-  try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.txt", $resultContent, [Text.Encoding]::UTF8); $saved += "Downloads" } catch {}
+  try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.json",   $json, [Text.Encoding]::UTF8); $saved += "Desktop"   } catch {}
+  try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.json", $json, [Text.Encoding]::UTF8); $saved += "Downloads" } catch {}
 
   Write-Host ""
   if ($saved.Count -gt 0) {
-    Write-Host "  Scan result saved to: $($saved -join ' and ')" -ForegroundColor Green
-    Write-Host "  Drag OptiGods-Scan-Result.txt into the Opti Gods app to finish." -ForegroundColor Cyan
+    Write-Host "  Saved: OptiGods-Scan-Result.json on $($saved -join ' and ')" -ForegroundColor Green
+    Write-Host "  Drag that file into the Opti Gods app to import your PC state." -ForegroundColor Cyan
   } else {
     Write-Host "  Could not save file automatically." -ForegroundColor Yellow
     Write-Host "  Copy the OPTIGODS_STATE line above manually." -ForegroundColor Yellow

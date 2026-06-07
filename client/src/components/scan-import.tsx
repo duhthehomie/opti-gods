@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api-base";
 
 export function ScanImport() {
   const [dragging, setDragging] = useState(false);
@@ -17,7 +18,7 @@ export function ScanImport() {
 
   const handleDownload = () => {
     const a = document.createElement("a");
-    a.href = "/api/script/detect";
+    a.href = apiUrl("/api/script/detect");
     a.download = "OptiGods-Detect.bat";
     document.body.appendChild(a);
     a.click();
@@ -25,31 +26,38 @@ export function ScanImport() {
   };
 
   const parseAndApply = (text: string) => {
-    const match = text.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
-    const b64 = match ? match[1] : text.trim();
+    let detected: Record<string, boolean> | null = null;
+    // Try plain JSON first (from .json output file)
     try {
-      const json = atob(b64);
-      const detected: Record<string, boolean> = JSON.parse(json);
-      const next = { ...tweaks };
-      let count = 0;
-      for (const [key, val] of Object.entries(detected)) {
-        if (key in next && typeof val === "boolean") {
-          next[key] = val;
-          if (val) count++;
-        }
-      }
-      setAllTweaks(next);
-      setImported(count);
-      setStatus("success");
-      setFallbackPaste("");
-      setShowFallback(false);
-      toast({
-        title: "PC state loaded",
-        description: `${count} optimizations detected as already applied on your system.`,
-      });
-    } catch {
-      setStatus("error");
+      const parsed = JSON.parse(text.trim());
+      if (parsed && typeof parsed === "object") detected = parsed as Record<string, boolean>;
+    } catch {}
+    // Fallback: try base64-encoded state from .txt output
+    if (!detected) {
+      try {
+        const match = text.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
+        const b64 = match ? match[1] : text.trim();
+        detected = JSON.parse(atob(b64));
+      } catch {}
     }
+    if (!detected) { setStatus("error"); return; }
+    const next = { ...tweaks };
+    let count = 0;
+    for (const [key, val] of Object.entries(detected)) {
+      if (key in next && typeof val === "boolean") {
+        next[key] = val;
+        if (val) count++;
+      }
+    }
+    setAllTweaks(next);
+    setImported(count);
+    setStatus("success");
+    setFallbackPaste("");
+    setShowFallback(false);
+    toast({
+      title: "PC state loaded",
+      description: `${count} optimizations detected as already applied on your system.`,
+    });
   };
 
   const handleFile = (file: File) => {
@@ -118,7 +126,7 @@ export function ScanImport() {
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-white mb-1">Drop the Result File Here</p>
             <p className="text-[11px] text-zinc-500 mb-2">
-              Drag <span className="font-mono text-zinc-400">OptiGods-Scan-Result.txt</span> from your Desktop into the box below.
+              Drag <span className="font-mono text-zinc-400">OptiGods-Scan-Result.json</span> from your Desktop into the box below.
             </p>
 
             <div
@@ -139,7 +147,7 @@ export function ScanImport() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.log"
+                accept=".json,.txt,.log"
                 onChange={onFileInputChange}
                 className="hidden"
                 data-testid="input-file-scan"
@@ -158,7 +166,7 @@ export function ScanImport() {
                 <>
                   <FileText className="w-5 h-5 text-zinc-600" />
                   <span className="text-[11px] text-zinc-500 text-center leading-tight">
-                    Drag <span className="font-mono">OptiGods-Scan-Result.txt</span> here<br />
+                    Drag <span className="font-mono">OptiGods-Scan-Result.json</span> here<br />
                     <span className="text-zinc-700">or click to browse</span>
                   </span>
                 </>

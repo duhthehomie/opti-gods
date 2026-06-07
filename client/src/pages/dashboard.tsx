@@ -423,7 +423,7 @@ export default function Dashboard() {
                   <span className="text-white font-bold">{recApplied}</span>
                   <span className="text-zinc-600"> of </span>
                   <span className="text-white font-bold">{smartRecs.ids.size}</span>
-                  {" "}hardware-matched tweaks applied
+                  {" "}tweaks selected — <span className="text-zinc-600">run the detect scan to verify what&apos;s actually in your registry</span>
                 </p>
                 <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs mx-auto md:mx-0">
                   <div
