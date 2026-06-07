@@ -418,7 +418,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // Vendor / hardware gating — same rules as the manual branches above
     if (tweak.category === "nvidia" && !hw.isNvidia) continue;
     if (tweak.category === "amd"    && !hw.isAmdGpu) continue;
-    if (tweak.category === "intgpu" && !hw.isAmdApu && !hw.isIntel) continue;
+    if (tweak.category === "intgpu" && !hw.isAmdApu && !hw.hasIntegratedGpu) continue;
     if (tweak.category === "laptop" && !hw.isLaptop) continue;
     ids.add(tweak.id);
   }
