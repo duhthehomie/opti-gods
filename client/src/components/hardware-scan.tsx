@@ -18,7 +18,12 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
   // Always upload — Pro users get linked to their code, others stored by IP.
   const token = getStoredToken();
   const gpuVendor = detectGpuVendor(parsed.GPU || "");
-  const osVersion = parsed.OsBuild && parsed.OsBuild >= 22000 ? "win11" : "win10";
+  // Only derive from scan when OsBuild is present (PS1 scan).
+  // Native scan (Tauri WMI path) doesn't populate OsBuild yet — keep
+  // the pre-existing "win11" fallback so native users aren't regressed.
+  const osVersion = parsed.OsBuild
+    ? (parsed.OsBuild >= 22000 ? "win11" : "win10")
+    : "win11";
   fetch(apiUrl("/api/session/hardware"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
