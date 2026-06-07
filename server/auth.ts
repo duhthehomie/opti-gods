@@ -404,13 +404,37 @@ export function registerAuthRoutes(app: Express): void {
     const CURRENT = "3.0.0";
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
+
+    // currentVersion is always the compiled-in version — the app binary knows
+    // its own version; never show a stale DB value as "current".
+    const currentVersion = CURRENT;
+
+    // latestVersion: if the resolved value is older than CURRENT (e.g. GitHub
+    // still has a v2.x tag and v3 isn't published yet), floor it at CURRENT so
+    // the UI never shows "update to v2.3.7" while running v3.0.0.
+    const resolvedLatest = settings?.latestVersion ?? gh?.version ?? fileVersion ?? CURRENT;
+    const latestVersion = semverGte(resolvedLatest, CURRENT) ? resolvedLatest : CURRENT;
+
     res.json({
-      currentVersion: settings?.currentVersion ?? fileVersion ?? CURRENT,
-      latestVersion:  settings?.latestVersion  ?? gh?.version ?? fileVersion ?? CURRENT,
+      currentVersion,
+      latestVersion,
       updaterCmdUrl:  settings?.updaterCmdUrl  ?? INSTALLER_URL,
       updatePageUrl:  settings?.updatePageUrl  ?? gh?.pageUrl ?? "https://optigods.com",
     });
   });
+}
+
+// Semver GTE — returns true when a >= b (used to floor latestVersion at CURRENT)
+function semverGte(a: string, b: string): boolean {
+  const pa = a.split(".").map(n => parseInt(n, 10) || 0);
+  const pb = b.split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return true;
 }
 
 // Cached read of /version.json — the file is committed so this never throws

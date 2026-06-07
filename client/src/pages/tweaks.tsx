@@ -346,7 +346,15 @@ export default function TweaksPage() {
   const ActiveIcon    = activeSection?.icon;
 
   function toggle(id: string) {
-    setActiveSectionId(prev => prev === id ? null : id);
+    setActiveSectionId(prev => {
+      const next = prev === id ? null : id;
+      if (next) {
+        setTimeout(() => {
+          document.getElementById(next)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
+      return next;
+    });
   }
 
   return (
@@ -484,22 +492,20 @@ export default function TweaksPage() {
                 id={activeSection.id}
                 className="border border-red-500/20 rounded-xl overflow-hidden scroll-mt-6 animate-in fade-in slide-in-from-top-2 duration-200"
               >
-                {/* Panel header */}
-                <div className="flex items-center gap-3 px-5 py-3 bg-red-500/5 border-b border-red-500/10">
-                  {ActiveIcon && <ActiveIcon className="w-4 h-4 text-red-400 shrink-0" />}
-                  <h2 className="text-sm font-bold text-white flex-1 truncate">{activeSection.title}</h2>
-                  <span className="text-[10px] text-zinc-600 font-mono hidden sm:block">{sectionCount(activeSection)} tweaks</span>
+                {/* Panel header — minimal strip, no title (inner page has its own h1) */}
+                <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
+                  <span className="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">{sectionCount(activeSection)} tweaks</span>
                   <button
                     onClick={() => setActiveSectionId(null)}
                     data-testid="button-close-section"
-                    className="p-1 rounded text-zinc-600 hover:text-zinc-300 transition-colors ml-2"
+                    className="p-1.5 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 {/* Panel body */}
-                <div className="bg-black/40 pt-2 pb-4">
+                <div className="bg-black/40 px-6 pt-6 pb-10">
                   <EmbeddedProvider>
                     <Suspense fallback={
                       <div className="flex items-center justify-center py-14">

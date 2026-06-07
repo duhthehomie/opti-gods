@@ -32,6 +32,8 @@ const ALL_AMD_IDS = [
   // V2.2 driver reapply tweaks
   "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff","AmdFRTC60","AmdFRTC144","AmdFRTC240",
   "EnableMSIMode_Safe",
+  // DirectX & PCIe
+  "AmdD3DOptimize","AmdPCIeOptimize",
 ];
 
 const AMD_DRIVER_REAPPLY_TWEAKS = [
@@ -789,6 +791,52 @@ export default function Amd() {
               onCheckedChange={(v) => setTweak("AmdEnhancedSync", v)}
               delay={3}
               data-testid="tweak-AmdEnhancedSync"
+            />
+          </div>
+        </section>
+
+        {/* DirectX & PCIe Optimization */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-blue-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400">DirectX & PCIe Optimization</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const recIds = ["AmdD3DOptimize","AmdPCIeOptimize"];
+              const allOn = recIds.every(id => tweaks[id]);
+              return (
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-amd-dx"
+                  className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Applied" : "Apply Both"}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-500 px-1 mb-4">
+            Low-level DirectX and PCIe registry optimization for AMD GPUs. Clears debug overhead, enables async shader paths, and optimizes async compute dispatch — meaningful gains on Polaris (RX 570/580), RDNA1 (RX 5000), and RDNA2 (RX 6000) on a Ryzen platform.
+          </p>
+          <div className="space-y-4">
+            <TweakRow
+              id="AmdD3DOptimize"
+              title="DirectX Debug Layers OFF + Async Shader Compile"
+              description="Disables DirectX 11/12 debug/validation layers (ForceDebugRuntime=0, LoadDebugRuntime=0) — these add 10–30% CPU overhead if triggered by a game or installer. Enables async shader compilation so DX11/DX12 compile shaders in the background instead of blocking the render thread. Also sets DXGI WaitableObjectsThreshold=1 for tighter frame pacing on AMD. Effective on all AMD GPU generations."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdD3DOptimize"] || false}
+              onCheckedChange={(v) => setTweak("AmdD3DOptimize", v)}
+              delay={1}
+            />
+            <TweakRow
+              id="AmdPCIeOptimize"
+              title="Async Compute ON + PCIe Preemption Optimize"
+              description="Writes KMD_EnableAsyncCompute=1 to the AMD GPU class registry — enables async compute dispatch so the GPU can run game rendering and physics/AI compute in parallel on separate compute queues. On RDNA1/2 (RX 5000/6000) this is the primary way to saturate the GPU without adding frames. Also clears the FRTC driver flag override and enables GPU preemption for smoother DPC scheduling."
+              badge="RECOMMENDED"
+              impact="HIGH"
+              checked={tweaks["AmdPCIeOptimize"] || false}
+              onCheckedChange={(v) => setTweak("AmdPCIeOptimize", v)}
+              delay={2}
             />
           </div>
         </section>

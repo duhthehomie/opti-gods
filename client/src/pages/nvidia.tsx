@@ -17,7 +17,8 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","NvFrameLimit30","NvFrameLimit60","NvFrameLimit120","NvFrameLimit144","NvFrameLimit240","NvFrameLimitCustom","EnableMSIMode_Safe"];
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","NvFrameLimit30","NvFrameLimit60","NvFrameLimit120","NvFrameLimit144","NvFrameLimit240","NvFrameLimitCustom","EnableMSIMode_Safe",
+  "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force"];
 
 // V2.2 — driver-class tweaks that survive game restarts but are wiped on driver
 // reinstall. The "Reapply driver tweaks" button re-emits ONLY these as a focused
@@ -52,7 +53,32 @@ async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) 
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
-const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt"];
+const NVIDIA_RECOMMENDED_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaLowLatency","NvidiaPowerMizer","EnableHAGS","NvidiaReflexEnable","NvidiaTripleBufferOff","NvidiaAnisoFiltering","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaD3DOptimize","NvidiaPCIeGen3Force"];
+
+const NVIDIA_DX_TWEAKS = [
+  {
+    id: "NvidiaD3DOptimize",
+    title: "DirectX Debug Layers OFF + Async Shader Compile",
+    desc: "Disables the DirectX 11/12 debug and validation layers (ForceDebugRuntime=0, LoadDebugRuntime=0) — these layers add 10–30% CPU overhead if accidentally enabled by a game or installer. Also enables EnableAsyncShaderCompilation=1 which lets DX11 compile shaders asynchronously instead of blocking the render thread — eliminates mid-game compile-stall stutters seen in COD, FiveM, and Fortnite on GTX 1650 Super.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
+  {
+    id: "NvidiaPCIeGen3Force",
+    title: "Lock PCIe Gen3 x16 + Enable GPU Preemption",
+    desc: "Writes PCIELinkSpeedOverride=2 (Gen3) to the NVIDIA GPU class registry and sets EnableMsHybrid=0 — prevents the driver from falling back to PCIe 2.0 x8 mode under power transitions, which halves GPU memory bandwidth. Also enables GPU preemption for smoother DPC scheduling. GTX 1650 Super sits on a Ryzen 5 3500 PCIe 3.0 x16 slot — this keeps it there.",
+    badge: "GTX 1650 / 1060",
+    impact: "MED" as const,
+  },
+  {
+    id: "NvidiaInterruptAffinity",
+    title: "GPU Interrupt Affinity — Route to CPU Core 2",
+    desc: "Sets TargetedProcessors=4 (core 2 affinity bitmask) and AssignmentPolicy=1 in the GPU's PCI Interrupt Management key — tells Windows to route GPU DPC interrupts to CPU core 2 instead of core 0. Core 0 handles OS scheduler + timer interrupts on Ryzen 5 3500 which competes with GPU work. Routing to core 2 reduces DPC latency spikes during high-FPS gaming. NOTE: Does NOT touch DevicePolicy or DevicePriority (the V1 BSOD keys).",
+    badge: "ADVANCED",
+    impact: "MED" as const,
+    warning: "Advanced interrupt routing tweak. If you experience any instability after rebooting, restore using the Fixes tab. Do not combine with EnableMSIMode on older drivers.",
+  },
+];
 
 const PRESETS = [
   {
@@ -664,6 +690,44 @@ export default function Nvidia() {
                 checked={tweaks[item.id] || false}
                 onCheckedChange={(v) => setTweak(item.id, v)}
                 delay={i + 1}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* DirectX & PCIe Optimization */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Layers className="w-4 h-4 text-blue-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400">DirectX & PCIe Optimization</h2>
+            <div className="flex-1 h-px bg-white/5 ml-2" />
+            {(() => {
+              const recIds = NVIDIA_DX_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "GTX 1650 / 1060").map(t => t.id);
+              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              return (
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                  data-testid="button-enable-recommended-nvidia-dx"
+                  className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {allOn ? "Applied" : `Apply Recommended (${recIds.length})`}
+                </Button>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-zinc-600 px-1 mb-4">DirectX 11/12 debug layer removal, async shader compilation, PCIe Gen3 link lock, and GPU interrupt routing. GTX 1650 Super + Ryzen 5 3500 targeted — each tweak is safe to apply and addresses real-world stutter causes in COD, FiveM, and Fortnite.</p>
+          <div className="space-y-4">
+            {NVIDIA_DX_TWEAKS.map((item, i) => (
+              <TweakRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                description={item.desc}
+                badge={item.badge}
+                impact={item.impact}
+                checked={tweaks[item.id] || false}
+                onCheckedChange={(v) => setTweak(item.id, v)}
+                delay={i + 1}
+                warning={item.warning}
               />
             ))}
           </div>
