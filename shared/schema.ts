@@ -30,6 +30,7 @@ export const presets = pgTable("presets", {
   config: jsonb("config").notNull(),
   isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  ownerId: text("owner_id"),
 });
 
 export const startupApps = pgTable("startup_apps", {

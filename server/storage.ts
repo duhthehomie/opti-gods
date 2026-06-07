@@ -4,7 +4,8 @@ import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle
 import { randomBytes, createHash } from "crypto";
 
 export interface IStorage {
-  getPresets(): Promise<Preset[]>;
+  getPresets(ownerId: string): Promise<Preset[]>;
+  getPresetById(id: number): Promise<Preset | undefined>;
   createPreset(preset: InsertPreset): Promise<Preset>;
   deletePreset(id: number): Promise<void>;
   getStartupApps(): Promise<StartupApp[]>;
@@ -158,8 +159,13 @@ export function computeRigHash(p: { cpu: string; gpu: string; vramMb?: number | 
 }
 
 export class DatabaseStorage implements IStorage {
-  async getPresets(): Promise<Preset[]> {
-    return await db.select().from(presets);
+  async getPresets(ownerId: string): Promise<Preset[]> {
+    return await db.select().from(presets).where(eq(presets.ownerId, ownerId));
+  }
+
+  async getPresetById(id: number): Promise<Preset | undefined> {
+    const [row] = await db.select().from(presets).where(eq(presets.id, id));
+    return row;
   }
 
   async createPreset(insertPreset: InsertPreset): Promise<Preset> {

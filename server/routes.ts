@@ -1578,21 +1578,30 @@ export async function registerRoutes(
   });
 
   app.get(api.presets.list.path, async (req, res) => {
-    // Presets are private — only the authenticated session owner or admin can list
+    // Presets require Discord login (account-bound) AND active Pro access.
+    // Admin can bypass with x-admin-key but still gets an empty list (presets are user-scoped).
     const adminKey = req.headers["x-admin-key"];
-    const isAdmin = adminKey && adminKey === process.env.ADMIN_KEY;
+    const isAdmin = !!(adminKey && adminKey === process.env.ADMIN_KEY);
     if (!req.session.userId && !isAdmin) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-    const items = await storage.getPresets();
+    if (!isAdmin && !(await requirePaidPro(req))) {
+      return res.status(403).json({ error: "Pro required to use presets" });
+    }
+    // Scope strictly to the authenticated Discord user — no cross-user leaks.
+    const ownerId = req.session.userId as string;
+    if (!ownerId) return res.json([]); // admin key path without Discord session → empty
+    const items = await storage.getPresets(ownerId);
     res.json(items);
   });
 
   app.post(api.presets.create.path, async (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+    // Presets require Discord login (for a stable owner identifier) AND Pro access.
+    if (!req.session.userId) return res.status(401).json({ error: "Discord login required to save presets" });
+    if (!(await requirePaidPro(req))) return res.status(403).json({ error: "Pro required to save presets" });
     try {
       const input = api.presets.create.input.parse(req.body);
-      const preset = await storage.createPreset(input);
+      const preset = await storage.createPreset({ ...input, ownerId: req.session.userId as string });
       res.status(201).json(preset);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1603,9 +1612,16 @@ export async function registerRoutes(
   });
 
   app.delete(api.presets.delete.path, async (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+    if (!req.session.userId) return res.status(401).json({ error: "Discord login required to delete presets" });
+    if (!(await requirePaidPro(req))) return res.status(403).json({ error: "Pro required" });
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });
+    // Ownership check — users may only delete their own presets.
+    const existing = await storage.getPresetById(id);
+    if (!existing) return res.status(404).json({ error: "Preset not found" });
+    if (existing.ownerId && existing.ownerId !== req.session.userId) {
+      return res.status(403).json({ error: "Not your preset" });
+    }
     await storage.deletePreset(id);
     res.json({ success: true });
   });
@@ -2302,7 +2318,7 @@ Try {
     $hwParams += "&vendor=$gpuVendor&os=$osVer&laptop=" + ($isLaptop.ToString().ToLower())
     Write-Host "  [HW] GPU: $gpu" -ForegroundColor DarkCyan
     Write-Host "  [HW] CPU: $cpu" -ForegroundColor DarkCyan
-    Write-Host "  [HW] RAM: ${ram}GB | OS: $osVer | Laptop: $isLaptop" -ForegroundColor DarkCyan
+    Write-Host "  [HW] RAM: $($ram)GB | OS: $osVer | Laptop: $isLaptop" -ForegroundColor DarkCyan
 } Catch {
     Write-Host "  [HW] Hardware detection skipped." -ForegroundColor DarkGray
 }
@@ -4873,11 +4889,11 @@ SAFE PRESET GENERATION (V2.2):
 
   // ── Opti Gods AI (Groq — SSE streaming) ───────────────────────────────────
   app.post("/api/ai/chat", rateLimit(20, 60_000, 40), async (req, res) => {
-    const { message, history = [], sessionId, isPro = false, imageBase64 } = req.body as {
+    const { message, history = [], sessionId, imageBase64 } = req.body as {
       message: string;
       history?: { role: string; content: string }[];
       sessionId?: string;
-      isPro?: boolean;
+      sessionToken?: string;
       imageBase64?: string;
     };
 
@@ -4893,7 +4909,11 @@ SAFE PRESET GENERATION (V2.2):
       return res.status(503).json({ error: "AI not configured" });
     }
 
-    const isPro_ = Boolean(isPro);
+    // Verify Pro server-side — NEVER trust client-supplied isPro field.
+    // Discord users: entitlement lookup via session. Legacy users: session token
+    // must be in req.body.sessionToken (frontend passes getStoredToken() value).
+    // Admin key always wins.
+    const isPro_ = await requirePaidPro(req);
     const proLine = isPro_
       ? "- This user has Opti Gods PRO. Add a PRO TIP section at the end with advanced registry-level or script-based advice they can apply immediately."
       : "- This user is on the free tier. After your answer, add one line: '⚡ Unlock Pro for the full PowerShell script → Get Code'";
@@ -5121,6 +5141,9 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
   // to produce a hardware-filtered, expert-gated preset. Implementation lives
   // in `shared/preset-builder.ts` — see that file for the rules.
   app.post("/api/ai/preset", rateLimit(30, 60_000, 60), async (req, res) => {
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ error: "Pro required to generate AI presets" });
+    }
     try {
       const body = req.body as {
         hardware?: Partial<PresetHardware>;

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useProStatus } from "@/lib/pro-status";
+import { useProStatus, getStoredToken } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +99,7 @@ function SavePresetCard() {
         hardware: hardwareToPresetPayload(hw, os),
         goal: "balanced",
         optInFlags: Array.from(optInIds),
+        sessionToken: getStoredToken() ?? undefined,
       }),
     })
       .then(r => r.ok ? r.json() : null)
@@ -657,7 +658,7 @@ export default function OptiGodsAI() {
           message: msgText || "Analyze this screenshot for PC optimization advice.",
           history: historyForApi,
           sessionId: sessionId.current,
-          isPro,
+          sessionToken: getStoredToken() ?? undefined,
           imageBase64: imageBase64 ?? undefined,
         }),
       });
