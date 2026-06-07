@@ -207,8 +207,8 @@ export function AppSidebar() {
         <SidebarHeader className="p-5 border-b border-white/5">
           <Link href="/" data-testid="link-home-logo">
             <div className="flex items-center gap-2.5 cursor-pointer">
-              <div className="w-9 h-9 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_12px_-4px_rgba(239,68,68,0.5)]">
-                <img src={BRAND.goldPng} alt="Opti Gods" className="w-8 h-8 object-contain" />
+              <div className="w-11 h-11 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_16px_-4px_rgba(239,68,68,0.6)]">
+                <video src={BRAND.spinRed} autoPlay muted loop playsInline className="w-11 h-11 object-cover" />
               </div>
               <div>
                 <p className="font-display font-black text-base leading-tight text-white">
@@ -284,22 +284,27 @@ export function AppSidebar() {
 
 
           {enabledCount > 0 && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
-                  <Download className="w-4 h-4 text-red-400" />
+            <Link href="/tweaks">
+              <div
+                data-testid="widget-script-cta"
+                className="rounded-xl border border-red-500/40 bg-red-500/8 px-3 py-3 cursor-pointer hover:bg-red-500/15 hover:border-red-500/60 transition-all group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/35 flex items-center justify-center shrink-0 group-hover:bg-red-500/30 transition-colors">
+                    <Download className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-red-300 leading-tight">
+                      {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected
+                    </p>
+                    <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 font-semibold">
+                      Tap to get your script →
+                    </p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-red-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-red-300 leading-tight">
-                    {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected
-                  </p>
-                  <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">
-                    Hit <span className="text-zinc-300 font-semibold">GET MY SCRIPT</span> ↑
-                  </p>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-red-500/60 shrink-0" />
               </div>
-            </div>
+            </Link>
           )}
 
           <div className="px-2 py-2.5 rounded-lg bg-zinc-900/60 border border-white/5">

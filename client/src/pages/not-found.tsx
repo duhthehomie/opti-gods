@@ -5,24 +5,42 @@ import { BRAND } from "@/components/branding/assets";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] text-white px-4">
-      <div className="max-w-md w-full text-center space-y-6">
-        <img
-          src={BRAND.redPng}
-          alt="Opti Gods"
-          className="w-40 h-40 mx-auto object-contain drop-shadow-[0_0_40px_rgba(239,68,68,0.45)]"
-          data-testid="img-404-logo"
-        />
-        <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-400">Error 404</p>
-          <h1 className="text-3xl font-display font-black text-white">Page not found</h1>
-          <p className="text-sm text-zinc-500">
-            That route doesn't exist. Head back to the dashboard and keep optimizing.
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#050505] text-white overflow-hidden relative">
+      <div className="absolute inset-0 bg-gradient-radial pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 60% at 50% 50%, rgba(239,68,68,0.07) 0%, transparent 70%)" }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-red-600/8 rounded-full blur-[180px] pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col items-center gap-10 px-4">
+        <div className="relative">
+          <video
+            src={BRAND.spinRed}
+            autoPlay
+            muted
+            loop
+            playsInline
+            data-testid="video-404-logo"
+            className="w-56 h-56 object-contain drop-shadow-[0_0_80px_rgba(239,68,68,0.55)]"
+          />
+          <div className="absolute inset-0 bg-red-600/10 rounded-full blur-[60px]" />
+        </div>
+
+        <div className="text-center space-y-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.5em] text-red-400" data-testid="text-404-label">
+            Error 404
+          </p>
+          <h1 className="text-5xl font-display font-black text-white tracking-tight" data-testid="heading-404">
+            Page not found
+          </h1>
+          <p className="text-sm text-zinc-500 max-w-sm leading-relaxed">
+            That route doesn&apos;t exist. Head back to the dashboard and keep optimizing.
           </p>
         </div>
-        <div className="flex items-center justify-center gap-2">
+
+        <div className="flex items-center gap-3">
           <Link href="/">
-            <Button data-testid="button-404-home" className="bg-red-600 hover:bg-red-500 text-white font-bold">
+            <Button
+              data-testid="button-404-home"
+              className="bg-red-600 hover:bg-red-500 text-white font-bold px-8 shadow-[0_0_20px_-4px_rgba(239,68,68,0.5)]"
+            >
               <Home className="w-4 h-4 mr-2" />
               Go Home
             </Button>
@@ -37,6 +55,8 @@ export default function NotFound() {
             Back
           </Button>
         </div>
+
+        <p className="text-[10px] text-zinc-700 font-mono">OPTI GODS — V3</p>
       </div>
     </div>
   );

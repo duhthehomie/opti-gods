@@ -271,6 +271,7 @@ function MobileShowcase() {
 }
 
 const AI_POPUP_KEY = "optigods_ai_popup_dismissed";
+const DETECT_POPUP_KEY = "optigods_detect_popup_dismissed";
 const OPTIMIZER_PAGES = ["/tweaks", "/tools"];
 
 function SmartAiPopup() {
@@ -323,6 +324,64 @@ function SmartAiPopup() {
           <button onClick={dismiss} className="text-zinc-700 hover:text-zinc-400 transition-colors shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GameDetectionPopup() {
+  const [show, setShow] = useState(false);
+  const [location] = useLocation();
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (localStorage.getItem(DETECT_POPUP_KEY)) return;
+    const timer = setTimeout(() => setShow(true), 35000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const dismiss = () => {
+    setShow(false);
+    localStorage.setItem(DETECT_POPUP_KEY, "1");
+  };
+
+  if (isMobile || !show || (location !== "/" && location !== "/tweaks") || location.startsWith("/admin")) return null;
+
+  return (
+    <div className="fixed bottom-20 left-6 z-40 animate-in slide-in-from-bottom-4 fade-in duration-300">
+      <div className="relative bg-zinc-900 border border-zinc-700/60 rounded-2xl p-4 shadow-2xl shadow-black/50 max-w-xs">
+        <button onClick={dismiss} className="absolute top-3 right-3 text-zinc-700 hover:text-zinc-400 transition-colors">
+          <X className="w-3.5 h-3.5" />
+        </button>
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            <Gamepad2 className="w-4 h-4 text-zinc-300" />
+          </div>
+          <div className="flex-1 pr-4">
+            <p className="text-xs font-bold text-white mb-1">Game Detection</p>
+            <p className="text-[11px] text-zinc-500 leading-relaxed mb-3">
+              Haven&apos;t run game detection yet? Auto-detect your installed games and apply per-game optimization packs in seconds.
+            </p>
+            <div className="flex items-center gap-2">
+              <Link href="/game-detection">
+                <button
+                  data-testid="button-detect-popup-scan"
+                  onClick={dismiss}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-[11px] font-bold transition-all"
+                >
+                  Scan Games
+                </button>
+              </Link>
+              <button
+                data-testid="button-detect-popup-dismiss"
+                onClick={dismiss}
+                className="px-3 py-1.5 rounded-lg text-zinc-600 hover:text-zinc-400 text-[11px] font-bold transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -465,7 +524,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
           {/* Main Content Area */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10 relative">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
-            <div className="max-w-5xl mx-auto w-full h-full space-y-6">
+            <div className="max-w-[1600px] mx-auto w-full h-full space-y-6">
               {!isMobile && <HardwareDetectionBanner compact />}
               {!isMobile && <ScanGateBanner />}
               {isMobile && MOBILE_PAGE_INFO[location] ? (
@@ -479,6 +538,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
       </div>
 
       <SmartAiPopup />
+      <GameDetectionPopup />
       <FloatingAiButton />
 
       <ScriptDialog

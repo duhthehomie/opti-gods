@@ -347,13 +347,13 @@ export default function DpcLatencyPage() {
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-red-400" />
-          <h1 className="text-xl font-display font-bold text-white">DPC Latency Fixes</h1>
+          <h1 className="text-xl font-display font-bold text-white">DPC Latency Tweaks</h1>
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-300 border border-red-500/25 uppercase tracking-wide">
             V3 Click-to-Apply
           </span>
         </div>
         <p className="text-sm text-zinc-500">
-          One-click fixes for the most common DPC interrupt offenders. Each button downloads a targeted .bat — run as Administrator for instant results.
+          One-click tweaks for the most common DPC interrupt offenders. Each button downloads a targeted .bat — run as Administrator for instant results.
         </p>
       </div>
 
@@ -370,7 +370,7 @@ export default function DpcLatencyPage() {
 
       {/* One-Click Fix Cards */}
       <div className="space-y-4">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Fixes</h2>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Tweaks</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {DPC_FIXES.map((fix, i) => {
             const Icon = fix.icon;
@@ -430,7 +430,7 @@ export default function DpcLatencyPage() {
                   {done ? (
                     <><CheckCircle2 className="w-3.5 h-3.5" /> Downloaded — Run as Admin</>
                   ) : (
-                    <><Download className="w-3.5 h-3.5" /> Apply Fix (.bat)</>
+                    <><Download className="w-3.5 h-3.5" /> Apply Tweak (.bat)</>
                   )}
                 </Button>
               </motion.div>
