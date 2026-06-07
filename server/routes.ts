@@ -2143,6 +2143,10 @@ Write-Output $json
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const sessionToken: string | undefined = req.body?.sessionToken || undefined;
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    // Diagnostic: log what tweaks were requested and whether TWEAK_COMMANDS has them
+    console.log(`[download-bat] enabledTweaks(${enabledTweaks.length}):`, enabledTweaks.join(', ') || '(none)');
+    const missing = enabledTweaks.filter(k => !TWEAK_COMMANDS[k]);
+    if (missing.length) console.warn(`[download-bat] ⚠ keys NOT in TWEAK_COMMANDS:`, missing);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
     fireAuditLog("apply", enabledTweaks, sessionToken, { format: "bat", nvidiaPreset }).catch(() => {});

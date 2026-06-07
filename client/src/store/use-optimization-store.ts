@@ -300,6 +300,8 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   game_rocketleague: false,
   game_arcraiders: false,
   game_marvelrivals: false,
+  game_007firstlight: false,
+  game_fortnite: false,
   // Fortnite
   FortniteHighPriority: false,
   FortniteUncapLobbyFPS: false,
