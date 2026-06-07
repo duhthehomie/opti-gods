@@ -565,7 +565,7 @@ export default function GameDetection() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-6 pb-10">
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
@@ -774,7 +774,7 @@ export default function GameDetection() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
               Included in Script ({enabledGames.length})
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {enabledGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
@@ -793,7 +793,7 @@ export default function GameDetection() {
                   : `All Games (${GAMES.length})`
               }
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {disabledGames.map((game, i) => (
                 <motion.div key={game.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                   <GameCard game={game} />

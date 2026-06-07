@@ -3263,18 +3263,7 @@ export default function Admin() {
     return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
   }
 
-  // Auto-login on mount when a stored key is present (avoids re-typing on mobile/Safari)
-  const autoLoginAttempted = useRef(false);
-  useEffect(() => {
-    if (autoLoginAttempted.current || authed) return;
-    let storedK = "";
-    try { storedK = localStorage.getItem(ADMIN_KEY_STORAGE) || ""; } catch { /* private mode */ }
-    if (!storedK) return;
-    autoLoginAttempted.current = true;
-    fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": storedK } })
-      .then(r => { if (r.ok) { setKey(storedK); setAuthed(true); } })
-      .catch(() => {});
-  }, [authed]);
+  // Auto-login intentionally removed — admin panel always requires explicit key entry.
 
   const handleLogin = async () => {
     setAuthError("");
@@ -3410,7 +3399,7 @@ export default function Admin() {
       {/* Top gradient bar */}
       <div className="h-1 w-full bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-80" />
 
-      <div className="max-w-5xl mx-auto px-3 py-3 md:px-6 md:py-5 space-y-4 md:space-y-5">
+      <div className="w-full px-3 py-3 md:px-6 md:py-5 space-y-4 md:space-y-5">
 
         {/* Header */}
         <div className="relative rounded-2xl overflow-hidden border border-red-500/15 bg-gradient-to-br from-zinc-900/80 via-black to-zinc-900/60 shadow-[inset_0_0_60px_-20px_rgba(239,68,68,0.08)]">

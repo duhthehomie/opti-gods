@@ -77,7 +77,7 @@ export default function SystemScanPage() {
           </div>
         ) : native && nativeScan ? (
           <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               <Stat icon={MonitorPlay} label="GPU" value={nativeScan.gpu || "Unknown"}
                 sub={nativeScan.vram_mb ? `${Math.round(nativeScan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
               <Stat icon={Cpu} label="CPU" value={nativeScan.cpu || "Unknown"} highlight />
@@ -116,7 +116,7 @@ export default function SystemScanPage() {
         ) : native && nativeError ? (
           <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4 text-sm text-red-400">
             Native scan failed: {nativeError}. Falling back to browser detection.
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 mt-4">
               <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName || "Unknown"} />
               <Stat icon={Cpu} label="CPU" value={hw.cpuLabel || "Unknown"} />
               <Stat icon={MemoryStick} label="RAM" value={hw.ramGB ? `${hw.ramGB} GB` : "Browser-limited"} />
@@ -125,7 +125,7 @@ export default function SystemScanPage() {
             </div>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
             <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName || "Unknown"}
               sub={[hw.isNvidia && "NVIDIA", hw.isAMD && "AMD", hw.isIntel && "Intel"].filter(Boolean).join(" · ") || undefined} />
             <Stat icon={Cpu} label="CPU" value={hw.cpuLabel || "Unknown"}

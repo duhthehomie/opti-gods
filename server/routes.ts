@@ -4217,17 +4217,30 @@ try {
     $desktop = [Environment]::GetFolderPath('Desktop')
   }
 
+  $documents = Join-Path $userProfile 'Documents'
   $saved = @()
-  try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.json",   $json, [Text.Encoding]::UTF8); $saved += "Desktop"   } catch {}
-  try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.json", $json, [Text.Encoding]::UTF8); $saved += "Downloads" } catch {}
+  $savedPaths = @()
+  foreach ($dir in @($desktop, $downloads, $documents)) {
+    if ($dir -and (Test-Path $dir)) {
+      $outPath = Join-Path $dir 'OptiGods-Scan-Result.json'
+      try {
+        [IO.File]::WriteAllText($outPath, $json, [Text.Encoding]::UTF8)
+        $saved += $outPath
+        break
+      } catch {}
+    }
+  }
 
   Write-Host ""
   if ($saved.Count -gt 0) {
-    Write-Host "  Saved: OptiGods-Scan-Result.json on $($saved -join ' and ')" -ForegroundColor Green
-    Write-Host "  Drag that file into the Opti Gods app to import your PC state." -ForegroundColor Cyan
+    Write-Host "  ==========================================" -ForegroundColor Green
+    Write-Host "  FILE SAVED:" -ForegroundColor Green
+    Write-Host "  $($saved[0])" -ForegroundColor White
+    Write-Host "  ==========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Drag  OptiGods-Scan-Result.json  into the Opti Gods app to import." -ForegroundColor Cyan
   } else {
-    Write-Host "  Could not save file automatically." -ForegroundColor Yellow
-    Write-Host "  Copy the OPTIGODS_STATE line above manually." -ForegroundColor Yellow
+    Write-Host "  Could not save file automatically. Paste the OPTIGODS_STATE line above into the app instead." -ForegroundColor Yellow
   }
   Write-Host ""
 } catch {
