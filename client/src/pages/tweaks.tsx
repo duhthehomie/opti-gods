@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
@@ -52,7 +52,7 @@ const SECTIONS: Section[] = [
   { id: "wintitus",      title: "WinUtil + OO ShutUp",          desc: "Bundled WinUtil tasks and privacy hardening",              icon: Wrench,        group: "windows", Component: WinTitus,           categories: ["wintitus"] },
   { id: "registry",      title: "Registry, Network & Latency",  desc: "TCP/IP stack, MSI mode, timer resolution, priority",       icon: Settings2,     group: "network", Component: Registry,           categories: ["registry", "network"] },
   {
-    id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS",
+    id: "nvidia", title: "NVIDIA Tweaks", desc: "Low-latency, max performance, Reflex, HAGS",
     icon: MonitorPlay, group: "gpu", Component: Nvidia, categories: ["nvidia"],
     hardwareFilter: (hw) => hw.isNvidia,
   },
@@ -378,6 +378,32 @@ export default function TweaksPage() {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(() => {
     try { return localStorage.getItem(ACTIVE_SECT_KEY) || null; } catch { return null; }
   });
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(260);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = ev.clientX - dragStartX.current;
+      setSidebarWidth(Math.max(160, Math.min(420, dragStartWidth.current + delta)));
+    };
+    const onUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [sidebarWidth]);
 
   const hw = useHardwareInfo();
   const detecting = isDetecting(hw);
@@ -549,9 +575,12 @@ export default function TweaksPage() {
               </div>
             ) : activeSection ? (
               /* ── TWO-PANEL: left nav + right content ── */
-              <div className="flex gap-4 items-start">
+              <div className="flex gap-0 items-start">
                 {/* Left: compact section list */}
-                <div className="w-52 shrink-0 flex flex-col gap-1.5 sticky top-4 max-h-[calc(100vh-160px)] overflow-y-auto pr-0.5" style={{ scrollbarWidth: "thin" }}>
+                <div
+                  className="shrink-0 flex flex-col gap-1.5 sticky top-4 max-h-[calc(100vh-160px)] overflow-y-auto pr-0.5"
+                  style={{ width: sidebarWidth, scrollbarWidth: "thin" }}
+                >
                   <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600 px-1 mb-1">Sections</p>
                   {visibleSections.map(s => (
                     <SectionCard
@@ -563,6 +592,21 @@ export default function TweaksPage() {
                       compact
                     />
                   ))}
+                </div>
+
+                {/* Drag handle */}
+                <div
+                  onMouseDown={onDragStart}
+                  className="group shrink-0 w-4 self-stretch flex items-center justify-center cursor-col-resize mx-1 relative"
+                  title="Drag to resize"
+                >
+                  <div className="w-px h-full bg-white/5 group-hover:bg-red-500/40 transition-colors absolute inset-y-0 left-1/2 -translate-x-1/2" />
+                  <div className="relative z-10 flex flex-col items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <svg width="12" height="16" viewBox="0 0 12 16" fill="none" className="text-red-500">
+                      <path d="M2 6 L6 2 L10 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M2 10 L6 14 L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
                 </div>
 
                 {/* Right: active section content panel */}
