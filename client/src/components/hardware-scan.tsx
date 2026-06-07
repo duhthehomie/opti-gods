@@ -18,6 +18,7 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
   // Always upload — Pro users get linked to their code, others stored by IP.
   const token = getStoredToken();
   const gpuVendor = detectGpuVendor(parsed.GPU || "");
+  const osVersion = parsed.OsBuild && parsed.OsBuild >= 22000 ? "win11" : "win10";
   fetch(apiUrl("/api/session/hardware"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,24 +30,25 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
       cpuCores: parsed.Cores || undefined,
       cpuThreads: parsed.Threads || undefined,
       ramGb: parsed.RAM_GB || 16,
-      osVersion: "win11",
+      osVersion,
       isLaptop: false,
     }),
   }).catch(() => {});
 }
 
-export const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
+export const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $ram=[Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,0); $os=Get-WmiObject Win32_OperatingSystem; $osBuild=[int]$os.BuildNumber; $osName=$os.Caption.Trim(); $path="$env:USERPROFILE\\Desktop\\optigods-sysinfo.json"; if(!(Test-Path "$env:USERPROFILE\\Desktop")){$path="$env:TEMP\\optigods-sysinfo.json"}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram;OsName=$osName;OsBuild=$osBuild}|ConvertTo-Json|Out-File $path -Encoding utf8 -Force; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
 
 interface HardwareScanZoneProps {
   onScanned: (info: ScannedSysInfo) => void;
   onCleared: () => void;
   isScanned: boolean;
+  defaultExpanded?: boolean;
 }
 
-export function HardwareScanZone({ onScanned, onCleared, isScanned }: HardwareScanZoneProps) {
+export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpanded = false }: HardwareScanZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 

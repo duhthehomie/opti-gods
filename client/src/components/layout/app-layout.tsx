@@ -12,6 +12,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
 import { UserChip } from "@/components/user-chip";
 import { HardwareDetectionBanner } from "@/components/hardware-detection-banner";
+import { ScanGateBanner } from "@/components/scan-gate-banner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
@@ -454,6 +455,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
             <div className="max-w-5xl mx-auto w-full h-full space-y-6">
               {!isMobile && <HardwareDetectionBanner compact />}
+              {!isMobile && <ScanGateBanner />}
               {isMobile && MOBILE_PAGE_INFO[location] ? (
                 <MobilePageDescription pageInfo={MOBILE_PAGE_INFO[location]} />
               ) : (

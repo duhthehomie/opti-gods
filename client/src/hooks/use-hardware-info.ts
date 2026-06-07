@@ -58,6 +58,8 @@ export interface ScannedSysInfo {
   Cores?: number;
   Threads?: number;
   RAM_GB?: number;
+  OsName?: string;
+  OsBuild?: number;
 }
 
 const SCAN_KEY = "optigods-sysinfo";

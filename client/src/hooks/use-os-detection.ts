@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getScannedInfo } from "@/hooks/use-hardware-info";
 
 export interface OsInfo {
   os: string;
@@ -8,9 +9,10 @@ export interface OsInfo {
   isWindows10: boolean;
   build: string;
   loading: boolean;
+  fromScan: boolean;
 }
 
-function parseFromUA(ua: string): Omit<OsInfo, "loading"> {
+function parseFromUA(ua: string): Omit<OsInfo, "loading" | "fromScan"> {
   if (/Windows NT 10\.0/.test(ua)) {
     return { os: "Windows 10 Pro", displayName: "Windows 10 Pro (22H2)", isWindows: true, isWindows11: false, isWindows10: true, build: "19045" };
   }
@@ -35,6 +37,32 @@ function parseFromUA(ua: string): Omit<OsInfo, "loading"> {
   return { os: "Unknown OS", displayName: "Unknown OS", isWindows: false, isWindows11: false, isWindows10: false, build: "" };
 }
 
+function parseFromScan(osBuild: number, osName: string): Omit<OsInfo, "loading" | "fromScan"> | null {
+  const isWin11 = osBuild >= 22000;
+  const isWin10 = osBuild >= 10240 && osBuild < 22000;
+  if (!isWin11 && !isWin10) return null;
+  const cleanName = osName.replace(/^Microsoft\s+/i, "").trim();
+  const build = String(osBuild);
+  if (isWin11) {
+    return {
+      os: cleanName || "Windows 11",
+      displayName: `${cleanName || "Windows 11"} (Build ${build})`,
+      isWindows: true,
+      isWindows11: true,
+      isWindows10: false,
+      build,
+    };
+  }
+  return {
+    os: cleanName || "Windows 10",
+    displayName: `${cleanName || "Windows 10"} (Build ${build})`,
+    isWindows: true,
+    isWindows11: false,
+    isWindows10: true,
+    build,
+  };
+}
+
 export function useOsDetection(): OsInfo {
   const [osInfo, setOsInfo] = useState<OsInfo>({
     os: "Detecting...",
@@ -44,13 +72,24 @@ export function useOsDetection(): OsInfo {
     isWindows10: false,
     build: "",
     loading: true,
+    fromScan: false,
   });
 
   useEffect(() => {
+    // Priority 1: scanned data from PS1 (exact build number, definitive)
+    const scanned = getScannedInfo();
+    if (scanned?.OsBuild && scanned.OsBuild > 0) {
+      const fromScan = parseFromScan(scanned.OsBuild, scanned.OsName || "");
+      if (fromScan) {
+        setOsInfo({ ...fromScan, loading: false, fromScan: true });
+        return;
+      }
+    }
+
     const ua = navigator.userAgent;
     const fallback = parseFromUA(ua);
 
-    // Use User-Agent Client Hints (Chrome 90+ / Edge 90+) for accurate Win11 detection
+    // Priority 2: User-Agent Client Hints (Chrome 90+ / Edge 90+) for accurate Win11 detection
     const uaData = (navigator as any).userAgentData;
     if (uaData && typeof uaData.getHighEntropyValues === "function") {
       uaData
@@ -68,6 +107,7 @@ export function useOsDetection(): OsInfo {
                 isWindows10: false,
                 build: "22631",
                 loading: false,
+                fromScan: false,
               });
             } else {
               setOsInfo({
@@ -78,21 +118,22 @@ export function useOsDetection(): OsInfo {
                 isWindows10: true,
                 build: "19045",
                 loading: false,
+                fromScan: false,
               });
             }
           } else if (info.platform === "macOS") {
-            setOsInfo({ os: "macOS", displayName: "macOS", isWindows: false, isWindows11: false, isWindows10: false, build: "", loading: false });
+            setOsInfo({ os: "macOS", displayName: "macOS", isWindows: false, isWindows11: false, isWindows10: false, build: "", loading: false, fromScan: false });
           } else if (info.platform === "Linux") {
-            setOsInfo({ os: "Linux", displayName: "Linux", isWindows: false, isWindows11: false, isWindows10: false, build: "", loading: false });
+            setOsInfo({ os: "Linux", displayName: "Linux", isWindows: false, isWindows11: false, isWindows10: false, build: "", loading: false, fromScan: false });
           } else {
-            setOsInfo({ ...fallback, loading: false });
+            setOsInfo({ ...fallback, loading: false, fromScan: false });
           }
         })
         .catch(() => {
-          setOsInfo({ ...fallback, loading: false });
+          setOsInfo({ ...fallback, loading: false, fromScan: false });
         });
     } else {
-      setOsInfo({ ...fallback, loading: false });
+      setOsInfo({ ...fallback, loading: false, fromScan: false });
     }
   }, []);
 
