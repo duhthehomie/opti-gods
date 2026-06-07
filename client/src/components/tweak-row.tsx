@@ -272,7 +272,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500 leading-snug">{description}</p>
+          <p className="text-xs text-zinc-500 leading-relaxed mt-0.5">{description}</p>
           {relevanceWarning && (
             <p className="text-[11px] text-zinc-600 mt-1 italic">💡 {relevanceWarning}</p>
           )}

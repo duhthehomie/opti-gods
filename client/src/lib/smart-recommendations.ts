@@ -103,6 +103,10 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "DiscordOptimizeCodec",
     // Hibernate / pagefile
     "SysHibernateOff",
+    // Spotify — run in background without stealing FPS (safe universally — no-ops if Spotify not installed)
+    "SpotifyLowPriority","SpotifyDisableGPU","SpotifyDisableAutoUpdate","SpotifyLimitBandwidth",
+    // COD / Warzone — IFEO + shader cache + DirectX (safe no-ops if COD not installed)
+    "CodGPUPriority","CodDefenderExclusion","CodDirectXQueue","CodVRAMShaderBudget",
     // Startup apps — disable non-essential startup programs (safe, user can re-enable)
     "su_discord","su_steam","su_epic","su_ea_app","su_ubisoft","su_battlenet",
     "su_onedrive","su_spotify","su_skype","su_teams","su_zoom","su_chrome",
@@ -180,6 +184,19 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     if (hw.cpuGeneration >= 12) {
       ["FiveMAffinityMask","ProcessLassoAffinityGaming"].forEach(id => ids.add(id));
       reasons.push(`Intel ${hw.cpuGeneration}th gen (has E-cores) — P-core affinity for gaming`);
+    } else if (hw.cpuGeneration >= 6 && hw.cpuGeneration < 12) {
+      // 6th–11th gen Intel desktop (Skylake / Kaby Lake / Coffee Lake / Comet Lake / Rocket Lake)
+      // No E-cores — max all cores, aggressive C-state suppression, full turbo
+      ["DisableCoreParking","DisableDynamicTick","Win32PrioritySeparation",
+       "SetHighPerformancePlan","DisablePowerThrottling","DisablePowerThrottlingAdv",
+       "ProcMMCSSGaming","ProcGPUSchedulerHigh",
+      ].forEach(id => ids.add(id));
+      if (hw.cpuGeneration === 6) {
+        // i5-6600K / i7-6700: Skylake — no E-cores, all cores equal, push them hard
+        reasons.push(`Intel ${hw.cpuGeneration}th gen Skylake (i5-6600K / i7-6700) — all cores maximised, C-states suppressed, Turbo pinned to 100%`);
+      } else {
+        reasons.push(`Intel ${hw.cpuGeneration}th gen — core parking disabled, full performance state applied`);
+      }
     } else {
       reasons.push(`Intel Core ${hw.cpuGeneration}th gen — core optimization applied`);
     }

@@ -3077,6 +3077,7 @@ export default function Admin() {
     id: number; sessionToken: string; tokenMasked: string;
     codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
     email: string | null; discordUsername: string | null;
+    codeNote: string | null;
   };
   const sessionsQuery = useQuery<SessionRow[]>({
     queryKey: ["/api/admin/sessions", key],
@@ -4936,9 +4937,11 @@ export default function Admin() {
                             <div className="flex-1 min-w-0">
                               {s.email ? (
                                 <p className="text-xs font-semibold text-white truncate">{s.email}</p>
+                              ) : s.codeNote && !isFriend && !isAdminTest && !isOrphan ? (
+                                <p className="text-xs font-semibold text-amber-300 truncate">{s.codeNote.split(" | stripe:")[0]}</p>
                               ) : (
                                 <p className={cn("text-xs font-semibold italic", isOrphan ? "text-red-400" : "text-zinc-500")}>
-                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : isOrphan ? "⚠ ORPHAN — code deleted" : "Unknown (code not matched)"}
+                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : isOrphan ? "⚠ ORPHAN — code deleted" : s.codeRef ?? "No session data"}
                                 </p>
                               )}
                               {s.discordUsername && (

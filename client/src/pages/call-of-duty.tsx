@@ -19,6 +19,8 @@ const ALL_COD_IDS = [
   "CodNetworkBuffer", "CodDisableLSO", "CodTCPOptimize",
   "Cod1650LowLatency", "Cod1650DisableAnsel",
   "Cod3500PowerPlan", "Cod3500CoreUnpark",
+  // V3 additions
+  "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy",
 ];
 
 const COD_RECOMMENDED = [
@@ -26,14 +28,16 @@ const COD_RECOMMENDED = [
   "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
   "CodDefenderExclusion", "CodNetworkBuffer",
   "CodDisableLSO", "Cod1650LowLatency", "Cod3500PowerPlan", "Cod3500CoreUnpark",
+  "CodMMCSS", "CodQoSPolicy", "CodDisableTelemetry",
 ];
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
-  fps:     ["CodHighPriority", "CodGameMode", "CodGPUPriority", "CodDirectXQueue"],
-  texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodVRAMShaderBudget"],
-  network: ["CodNetworkBuffer", "CodDisableLSO"],
+  fps:     ["CodHighPriority", "CodGameMode", "CodGPUPriority", "CodDirectXQueue", "CodMMCSS"],
+  texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodVRAMShaderBudget", "CodTdrDelay"],
+  network: ["CodNetworkBuffer", "CodDisableLSO", "CodQoSPolicy"],
   nvidia:  ["Cod1650LowLatency"],
   cpu:     ["Cod3500PowerPlan", "Cod3500CoreUnpark"],
+  advanced: ["CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy"],
 };
 
 function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
@@ -404,6 +408,55 @@ export default function CallOfDuty() {
                 </div>
               </div>
             )}
+
+            {/* V3 — Advanced Optimizations */}
+            <section>
+              <SectionHeader title="🔬 Advanced — V3 Optimizations" sectionKey="advanced" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
+              <div className="mb-3 flex items-start gap-2 bg-zinc-900/50 border border-white/8 rounded-lg px-3 py-2">
+                <Zap className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-zinc-400">
+                  Deeper system-level optimizations — GPU hang prevention, MMCSS scheduler tuning, QoS network prioritization, and telemetry removal. All safe for daily use.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {([
+                  {
+                    id: "CodDisableTelemetry",
+                    title: "Block Activision Telemetry + Stop Crash Reporters",
+                    desc: "Stops background Activision/Battle.net analytics tasks and blocks crash telemetry hosts (crash.callofduty.com, analytics.callofduty.com) via hosts file. These background tasks use CPU/disk/network mid-game for reporting. Disabling them eliminates micro-stutter spikes from periodic telemetry uploads.",
+                    badge: "UNIVERSAL",
+                    impact: "MED" as const,
+                  },
+                  {
+                    id: "CodTdrDelay",
+                    title: "Extend GPU TDR Delay to 8s (Shader Compile Crash Fix)",
+                    desc: isLowVramNvidia
+                      ? `Windows' GPU Timeout Detection (TDR) is set to 2s by default. Your ${gpuLabel} does heavy shader compilation on level loads — this can exceed the 2s window and trigger a 'GPU stopped responding' black screen. Extending to 8s prevents false crash resets without any real stability risk.`
+                      : "BO6 and Warzone perform heavy DirectX shader compilation during level loads, which can exceed Windows' 2-second GPU timeout on mid-range GPUs. This extends the TDR window to 8s — prevents false 'GPU stopped responding' crashes on shader-heavy transitions. Reboot required.",
+                    badge: isLowVramNvidia ? "GTX FIX" : "RECOMMENDED",
+                    impact: isLowVramNvidia ? "HIGH" as const : "MED" as const,
+                  },
+                  {
+                    id: "CodMMCSS",
+                    title: "Tune MMCSS Games Scheduler (CPU Priority + SystemResponsiveness)",
+                    desc: "Sets the Windows Multimedia Class Scheduler Service (MMCSS) Games task to Priority 6, GPU Priority 8, High scheduling category, and SystemResponsiveness=10. MMCSS is what Windows uses to give DirectX games consistent CPU time — these settings ensure cod.exe gets its CPU slices ahead of audio services, background apps, and system tasks during gunfights.",
+                    badge: "RECOMMENDED",
+                    impact: "MED" as const,
+                  },
+                  {
+                    id: "CodQoSPolicy",
+                    title: "QoS Network Policy — Mark COD Packets as High Priority",
+                    desc: "Creates Windows Quality of Service policies for cod.exe that mark all UDP and TCP traffic with DSCP value 46 (Expedited Forwarding). Routers and switches that honor DSCP will prioritize COD packets over background downloads, Discord voice, and browser traffic. Most modern home routers honor this — reduces jitter and packet loss during Warzone drops.",
+                    badge: "NETWORK",
+                    impact: "MED" as const,
+                  },
+                ]).map((item, i) => (
+                  <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
+                    badge={item.badge} impact={item.impact}
+                    checked={tweaks[item.id] || false} onCheckedChange={v => setTweak(item.id, v)} delay={i + 1} />
+                ))}
+              </div>
+            </section>
 
           </motion.div>
         </div>

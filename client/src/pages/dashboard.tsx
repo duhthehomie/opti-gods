@@ -36,27 +36,34 @@ const FEATURES = [
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
-// Quick Boost Presets
+// Quick Boost Presets — V3.0 (Spotify + COD + DPC included)
 const SAFE_TWEAKS = [
-  "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
+  "Win32PrioritySeparation","SetResponsiveness","GameModeTweaks",
   "NetworkThrottling","DisableNagle","InputLagTCP","SetDNSPriority",
   "SetHighPerformancePlan","DisableXboxGameBar","DisableGameDVR",
   "DisablePointerPrecision","DisableCoreParking","EnableHAGS","DisableFastStartup",
+  // Spotify — no-ops if not installed, zero risk
+  "SpotifyLowPriority","SpotifyDisableGPU",
+  // COD — no-ops if not installed
+  "CodGPUPriority","CodDefenderExclusion",
 ];
 const MAX_FPS_TWEAKS = [
   ...SAFE_TWEAKS,
-  "DisableDynamicTick","EnableMSIMode","DisablePowerThrottlingAdv","DisableUSBSuspend",
+  "DisableDynamicTick","DisablePowerThrottlingAdv","DisableUSBSuspend",
   "DisableAnimations","DisableNDU","DisablePowerThrottling",
   "OptimizeRAMUsage","ServiceDiagTrack","ServiceWSearch","PrivacyTelemetry",
   "FiveMHighPriority","FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMRenderingBoost",
   "FiveMGPUPriorityStack","FiveMDisableMPO","FiveMReduceNPCDensity","FiveMCommandLineTweaks",
   "FiveMDisableLSO","FiveMEnableRSS","FiveMCacheClear","FiveMNetworkBuffer",
   "RegistryNTFSOptimize","RegistryIOPageLock","RegistryDPCLatency",
+  // COD full pack
+  "CodGPUPriority","CodDefenderExclusion","CodDirectXQueue","CodVRAMShaderBudget",
+  // Spotify full pack
+  "SpotifyLowPriority","SpotifyDisableGPU","SpotifyDisableAutoUpdate","SpotifyLimitBandwidth",
 ];
 const COMPETITIVE_TWEAKS = [
   ...MAX_FPS_TWEAKS,
   "ProcessLassoAffinityGaming","ProcessLassoProBalance","ProcessAutoKillHung",
-  "game_valorant","game_cs2","game_apex","game_warzone","game_siege","game_lol",
   "FortniteHighPriority","FortniteDisableVSync","FortniteDisableMotionBlur",
   "FortniteInputLatency","FortniteUncapGameFPS","FiveMHighPriority","FiveMNetworkBuffer",
 ];
@@ -115,7 +122,7 @@ const QUICK_BOOST_PRESETS = [
 
 const ALL_RECOMMENDED_TWEAKS = [
   "Win32PrioritySeparation", "SetTimerResolution", "SetResponsiveness", "GameModeTweaks",
-  "DisablePointerPrecision", "EnableHAGS", "EnableMSIMode",
+  "DisablePointerPrecision", "EnableHAGS",
   "NetworkThrottling", "OptimizeTCP", "DisableNagle", "InputLagTCP", "SetDNSPriority",
   "SetHighPerformancePlan", "DisableCoreParking", "DisableDynamicTick",
   "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
@@ -126,7 +133,10 @@ const ALL_RECOMMENDED_TWEAKS = [
   "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMGameModeAdd",
   "FiveMRenderingBoost", "FiveMGPUPriorityStack", "FiveMDisableMPO",
   "FiveMReduceNPCDensity", "FiveMCommandLineTweaks", "FiveMDisableLSO", "FiveMEnableRSS",
-  "RegistryNTFSOptimize", "RegistryIOPageLock",
+  "RegistryNTFSOptimize", "RegistryIOPageLock", "RegistryDPCLatency",
+  // V3 additions
+  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
+  "CodGPUPriority", "CodDefenderExclusion", "CodDirectXQueue", "CodVRAMShaderBudget",
 ];
 
 // How to use steps
@@ -157,7 +167,7 @@ const HOW_TO_STEPS = [
 const PRO_BULLETS = [
   `${TOTAL_TWEAKS_LABEL} registry, network, memory, and GPU tweaks`,
   "FiveM, Fortnite, Call of Duty, Valorant, and Apex packs",
-  "Download your personalized .PS1 script",
+  "Download your personalized .bat script (double-click to run)",
   "Game auto-detection for 14 titles",
   "Preset save/load for quick re-apply",
   "Lifetime access — pay once, no subscription",
