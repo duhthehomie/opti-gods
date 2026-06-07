@@ -23,10 +23,8 @@ const ALL_FIVEM_IDS = [
   "FiveMFixProductId","FiveMFixNvidiaOverlay","FiveMDisableMPO",
   "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode",
   "FiveM3500CoreAffinity","FiveM3500PerfPlan",
-  "FiveM2060VRAMBudget",
-  "FiveMi5CoreAffinity",
+  "FiveM2060VRAMBudget","FiveMi5CoreAffinity",
 ];
-const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -45,12 +43,33 @@ export default function Fivem() {
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
 
+  const fivemRecommended = [
+    "FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions",
+    ...(hw.isRyzen && hw.cpuGeneration === 5 && hw.cpuLabel.toLowerCase().includes("5600") ? ["FiveM5600CoreAffinity","FiveM5600PowerPlan"] : []),
+    ...(hw.isRyzen && hw.cpuGeneration === 3 && hw.cpuLabel.toLowerCase().includes("3500") ? ["FiveM3500CoreAffinity","FiveM3500PerfPlan"] : []),
+    ...(hw.isIntelCore && hw.cpuGeneration === 4 ? ["FiveMi5CoreAffinity"] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? ["FiveM1060VRAMFlag","FiveM1060DisableHAGS"] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? ["FiveM1650VRAMBudget","FiveM1650DisableHAGS","FiveM1650LowLatencyMode"] : []),
+    ...(hw.gpuName.toLowerCase().includes("2060") ? ["FiveM2060VRAMBudget"] : []),
+  ];
+
   const PROCESS_TWEAKS: Tweak[] = [
     { id: "FiveMHighPriority", title: "Force GTA5.exe to High CPU Priority (Persistent)", desc: "Injects IFEO registry keys so Windows always schedules GTA5.exe at High CPU priority — survives restarts.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "FiveMDisablePhysX", title: "Disable NVIDIA PhysX GPU Acceleration", desc: "Forces CPU PhysX — reduces VRAM contention on servers with heavy particle effects.", impact: "LOW" },
     { id: "FiveMAffinityMask", title: "Pin GTA5.exe + FiveM.exe to Above Normal Priority", desc: "Sets Above Normal CPU priority for both GTA5.exe and FiveM.exe via IFEO — consistent scheduler priority across both processes.", impact: "MED" },
     { id: "FiveMIOPriority", title: "Set FiveM I/O Priority to High", desc: "Forces streaming disk reads to High I/O priority — faster asset loading on crowded servers.", impact: "MED" },
     { id: "FiveMWorkingSet", title: "Increase GTA5.exe Working Set Limit (4GB)", desc: "Raises the per-process memory ceiling for GTA5.exe to 4GB — reduces streaming model crashes on high-res texture packs.", impact: "MED" },
+    ...(hw.isRyzen && hw.cpuGeneration === 5 && hw.cpuLabel.toLowerCase().includes("5600") ? [
+      { id: "FiveM5600CoreAffinity", title: "Pin GTA5 + FiveM to Physical Cores Only", desc: "Sets CPU affinity for GTA5.exe and FiveM.exe to physical cores only — skips SMT sibling threads. On Zen 3, GTA V's threading model causes frame-time spikes under SMT load. Forcing it onto the real cores gives tighter, more consistent frametimes.", badge: "CPU AFFINITY", impact: "HIGH" as const },
+      { id: "FiveM5600PowerPlan", title: "Apply Optimized CPU Power Plan for Your Processor", desc: "Activates the AMD Ryzen High Performance power plan — removes the governor ramp-up delay that causes clock speed to drop between frames. Keeps boost clocks on for the full GTA V session.", badge: "POWER PLAN", impact: "MED" as const },
+    ] : []),
+    ...(hw.isRyzen && hw.cpuGeneration === 3 && hw.cpuLabel.toLowerCase().includes("3500") ? [
+      { id: "FiveM3500CoreAffinity", title: "Pin GTA5 + FiveM to All Physical Cores (0x3F)", desc: "Sets CPU affinity mask 0x3F for GTA5.exe and FiveM.exe — covers all physical cores. Applied via IFEO so it persists across restarts. Tighter frametimes under CPU load on dense FiveM servers.", badge: "CPU AFFINITY", impact: "HIGH" as const },
+      { id: "FiveM3500PerfPlan", title: "Lock CPU to Max Boost (100% Min/Max State)", desc: "Activates High Performance plan and forces Min=100%, Max=100%, BoostMode=Aggressive. Removes the clock ramp-up delay that causes frame-time spikes between shots on 6-core CPUs.", badge: "POWER PLAN", impact: "MED" as const },
+    ] : []),
+    ...(hw.isIntelCore && hw.cpuGeneration === 4 ? [
+      { id: "FiveMi5CoreAffinity", title: "Pin GTA5 + FiveM to All Physical Cores (0xF)", desc: "Sets CPU affinity mask 0xF for GTA5.exe and FiveM.exe — covers all 4 physical cores. Applied via IFEO (CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off). Prevents any background process from stealing a core mid-gunfight.", badge: "CPU AFFINITY", impact: "HIGH" as const },
+    ] : []),
   ];
 
   const CLIENT_TWEAKS: Tweak[] = [
@@ -82,6 +101,15 @@ export default function Fivem() {
     { id: "FiveMReduceNPCDensity", title: "Reduce GTA V NPC + Vehicle Density to 15%", desc: "Writes PedDensity=0.15 and TrafficDensity=0.15 to GTA V settings.xml. NPCs are the single biggest CPU cost in populated areas — a server with 32 players + full NPC density will tank a 6-core CPU. This is the highest-impact tweak for pistol FFA and crowded servers.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "FiveMReduceShadowQuality", title: "Reduce GTA V Shadow Quality to Minimum", desc: "Sets shadow quality, distance, and softness to 0 in GTA V settings.xml. Shadows are extremely CPU+GPU expensive in GTA V — running minimum quality can gain 15-30 FPS on GTX 1650-class hardware with zero gameplay impact.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "FiveMCommandLineTweaks", title: "Optimize GTA V commandline.txt Launch Flags", desc: "Creates/updates GTA V commandline.txt with 4 safe flags: -nomemrestrict (removes VRAM asset ceiling so your GPU uses its full memory budget), -norestrictions (removes engine-level asset limits), -noBlockOnLostFocus (game keeps running when alt-tabbing), -novblank (removes VSync frame lock). Does NOT force -dx11 — letting GTA V choose its own API gives better performance than overriding it.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? [
+      { id: "FiveM1060VRAMFlag", title: "Unlock Full GPU VRAM Budget for GTA V", desc: "Appends -availablevidmem 6144 to GTA V commandline.txt — some GPU setups under-report available VRAM, silently capping texture streaming below what your card can handle. Forces GTA V to use the full budget, improving texture quality and reducing streaming hitches.", badge: "COMMANDLINE", impact: "HIGH" as const },
+    ] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? [
+      { id: "FiveM1650VRAMBudget", title: "Unlock Full GPU VRAM Budget for GTA V", desc: "Appends -availablevidmem 4096 -percentvidmem 100 to GTA V commandline.txt. Forces GTA V to use your full VRAM — improves texture quality and reduces hitches on high-asset FiveM servers.", badge: "COMMANDLINE", impact: "HIGH" as const },
+    ] : []),
+    ...(hw.gpuName.toLowerCase().includes("2060") ? [
+      { id: "FiveM2060VRAMBudget", title: "Unlock Full GPU VRAM Budget for GTA V", desc: "Appends -availablevidmem 6144 -percentvidmem 100 to GTA V commandline.txt. Stops GTA V from under-reporting VRAM on some Turing GPU setups — eliminates texture pop-in on high-asset FiveM servers.", badge: "COMMANDLINE", impact: "HIGH" as const },
+    ] : []),
   ];
 
   const PERF_OPTIONS_TWEAKS: Tweak[] = [
@@ -90,6 +118,15 @@ export default function Fivem() {
     { id: "FiveMGameModeAdd", title: "Add FiveM + GTA5 to Windows Game Mode", desc: "Enables Auto Game Mode and whitelists GTA5.exe and FiveM.exe in the Windows Game Mode process registry — ensures Windows grants them priority scheduling automatically.", impact: "MED" },
     { id: "FiveMRenderingBoost", title: "Disable Rendering Preemption (FiveM + GTA5)", desc: "Sets DisableRenderingContextPreemption=1, DisableRenderingPreemption=1, EnableHWAcceleration=1, GpuIdle=0 on both FiveM.exe and GTA5.exe — eliminates GPU preemption micro-stutters during scene transitions.", impact: "HIGH" },
     { id: "FiveMGPUPriorityStack", title: "GPU Priority Stack (GpuPriorityClass=8 + HAGS)", desc: "Sets GpuPriorityClass=8, GPU Priority=8, GpuMaxPerformance=256, GpuThrottling=0 on FiveM.exe and applies GPU Priority=8, MaximumPreRenderedFrames=1 to the system Games multimedia profile.", badge: "NVIDIA/AMD", impact: "HIGH" },
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? [
+      { id: "FiveM1060DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS adds frame-time variance on older Pascal-gen cards — these GPUs predate HAGS and the scheduler overhead costs more than it saves. Disabling it reduces micro-stutters on populated FiveM servers.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1060AnselDisable", title: "Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel from injecting into GTA V every frame — on older cards this overhead is measurable. Disabling it frees a consistent amount of GPU time per frame.", badge: "GPU DRIVER", impact: "MED" as const },
+    ] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? [
+      { id: "FiveM1650DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS was designed for RTX 2000+ and RX 6000+ — on Turing 16xx cards it adds frame-time variance instead of reducing it. Turning it off is measurably better in crowded FiveM servers. Reboot required.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650DisableAnsel", title: "Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 in NVIDIA registry. Ansel injects into every render frame — disabling removes hook overhead and keeps the display container stable.", badge: "GPU DRIVER", impact: "MED" as const },
+      { id: "FiveM1650LowLatencyMode", title: "Enable Driver-Level Low Latency Mode", desc: "Forces FlipQueueSize=1, PerfLevelSrc=max, PowerMizerLevel=1 in the GPU class registry. Locks the driver to max-performance, ultra-low-latency mode — reduces input lag by 1-3 frames vs default driver behavior.", badge: "GPU DRIVER", impact: "HIGH" as const },
+    ] : []),
   ];
 
   const CRASH_FIX_TWEAKS: Tweak[] = [
@@ -98,36 +135,6 @@ export default function Fivem() {
     { id: "FiveMDisableMPO", title: "Fix: Black Screen at FiveM Server Load-In (Disable MPO)", desc: "Disables Multi-Plane Overlay (MPO) by setting OverlayTestMode=5 in the DWM registry key. MPO causes Windows DWM to conflict with Discord and Steam overlays during the FiveM server transition phase — producing a full black screen. This is the #1 cause of 'black screen when connecting to a server'. Reboot required after applying.", impact: "HIGH", badge: "BLACK SCREEN FIX" },
   ];
 
-  const GTX1650_TWEAKS: Tweak[] = [
-    { id: "FiveM1650DisableHAGS", title: "GTX 1650 SUPER: Disable HAGS (Reduce Frame-Time Variance)", desc: "Disables Hardware-Accelerated GPU Scheduling on GTX 16xx (Turing) cards. HAGS was built for RTX 2000+ and RX 6000+ — on GTX 1650 SUPER it adds more frame-time variance than it removes. Turning it off is measurable in crowded FiveM servers. Reboot required.", badge: "GTX 1650 SUPER", impact: "HIGH" },
-    { id: "FiveM1650VRAMBudget", title: "GTX 1650 SUPER: Force Full 4GB VRAM Budget in GTA V", desc: "Appends -availablevidmem 4096 -percentvidmem 100 to GTA V commandline.txt. Some 4GB Turing setups report VRAM below actual, capping texture streaming. This forces GTA V to use the full 4GB — improves texture quality and reduces VRAM-related hitches on high-asset FiveM servers.", badge: "GTX 1650 SUPER", impact: "HIGH" },
-    { id: "FiveM1650DisableAnsel", title: "GTX 1650 SUPER: Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 and OptInOrOutPreference=0 in NVIDIA registry. Ansel injects into every render frame on all NVIDIA GPUs including GTX 1650 SUPER. Disabling it removes measurable hook overhead — keeps the display container alive to avoid 0x80000003 overlay crashes.", badge: "GTX 1650 SUPER", impact: "MED" },
-    { id: "FiveM1650LowLatencyMode", title: "GTX 1650 SUPER: NVIDIA Low Latency Ultra (Driver-Level)", desc: "Forces FlipQueueSize=1, PerfLevelSrc=max, PowerMizerLevel=1 directly in the GPU class registry key. Bypasses NVCP and locks the driver to max-performance, ultra-low-latency mode for the full session. Reduces input lag by 1-3 frames vs default NVIDIA driver behavior.", badge: "GTX 1650 SUPER", impact: "HIGH" },
-  ];
-
-  const RYZEN3500_TWEAKS: Tweak[] = [
-    { id: "FiveM3500CoreAffinity", title: "Ryzen 5 3500: Pin GTA5 + FiveM to All 6 Physical Cores (0x3F)", desc: "Sets CPU affinity mask 0x3F (all 6 cores) for GTA5.exe and FiveM.exe. The Ryzen 5 3500 has no SMT — 0x3F is ALL physical cores. Also applies via IFEO so it persists on next launch: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. Tighter frametimes under CPU load on dense servers.", badge: "RYZEN 5 3500", impact: "HIGH" },
-    { id: "FiveM3500PerfPlan", title: "Ryzen 5 3500: Lock to High Performance Plan (Boost 100%)", desc: "Activates the High Performance plan and forces Min=100%, Max=100%, BoostMode=Aggressive, BoostPolicy=100%, CpuMinCores=100%. Precision Boost 2 on Zen 2 can drop clocks aggressively between frames. Locking to 100% removes the ramp-up delay and keeps all 6 cores at max boost for the full FiveM session.", badge: "RYZEN 5 3500", impact: "MED" },
-  ];
-
-  const GTX2060_TWEAKS: Tweak[] = [
-    { id: "FiveM2060VRAMBudget", title: "RTX/GTX 2060: Force Full 6GB VRAM Budget in GTA V", desc: "Appends -availablevidmem 6144 -percentvidmem 100 to GTA V commandline.txt. GTA V can under-report the available VRAM on some Turing GPU setups, artificially capping texture streaming. This forces the engine to budget the full 6GB GDDR6 — eliminates texture pop on high-asset FiveM servers.", badge: "RTX 2060", impact: "HIGH" },
-  ];
-
-  const I5_4XXX_TWEAKS: Tweak[] = [
-    { id: "FiveMi5CoreAffinity", title: "Intel i5-4XXX (Haswell): Pin GTA5 + FiveM to All 4 Physical Cores (0xF)", desc: "Sets CPU affinity mask 0xF (all 4 cores) for GTA5.exe and FiveM.exe. Haswell i5-4XXX has no HT — 0xF is ALL physical cores. Persists via IFEO: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. With only 4 real threads, this prevents any background process from stealing a core mid-gunfight.", badge: "i5-4XXX", impact: "HIGH" },
-  ];
-
-  const GTX1060_TWEAKS: Tweak[] = [
-    { id: "FiveM1060VRAMFlag", title: "GTX 1060 6GB: Force GTA V to Use Full 6GB VRAM", desc: "Appends -availablevidmem 6144 to GTA V commandline.txt — forces the engine to recognize and use the full 6GB VRAM budget. Some Pascal GPU setups incorrectly report available VRAM as lower, limiting texture streaming. This patch fixes it.", badge: "GTX 1060", impact: "HIGH" },
-    { id: "FiveM1060DisableHAGS", title: "GTX 1060: Disable Hardware-Accelerated GPU Scheduling (HAGS)", desc: "HAGS causes additional frame-time variance on Pascal-gen GPUs (GTX 1060, 1080, 1080 Ti). These cards were designed before HAGS existed and the scheduler overhead costs more than it saves. Disabling it reduces micro-stutters on populated FiveM servers.", badge: "GTX 1060", impact: "HIGH" },
-    { id: "FiveM1060AnselDisable", title: "GTX 1060: Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel (NVContainerLocalSystem) from injecting into GTA V. Ansel hooks every frame on NVIDIA GPUs including GTX 1060 — on older cards this is measurable overhead. Disabling it frees a small but consistent amount of GPU time.", badge: "GTX 1060", impact: "MED" },
-  ];
-
-  const RYZEN5600_TWEAKS: Tweak[] = [
-    { id: "FiveM5600CoreAffinity", title: "Ryzen 5 5600: Pin GTA5 + FiveM to Physical Cores (0,2,4,6,8,10)", desc: "Sets CPU affinity for GTA5.exe and FiveM.exe to physical cores only — avoiding the SMT (hyperthreaded) sibling cores. On Zen 3 (Ryzen 5 5600), GTA V's threading model interacts poorly with SMT under load, causing frame-time spikes. This forces it onto the 6 real cores for tighter frametimes.", badge: "RYZEN 5 5600", impact: "HIGH" },
-    { id: "FiveM5600PowerPlan", title: "Ryzen 5 5600: Apply AMD Ryzen High Performance Power Plan", desc: "Activates the AMD Ryzen High Performance power plan (GUID: fc5a4062). Zen 3 CPUs have aggressive frequency scaling that can cause latency spikes in GTA V. The Ryzen-tuned plan sets minimum processor state to 99% and removes the governor ramp-up delay — keeps boost clocks on for the full GTA V session.", badge: "RYZEN 5 5600", impact: "MED" },
-  ];
 
   const FIVEM_CLIENT_TWEAKS: Tweak[] = [
     { id: "FiveMCitizenDisableMedia", title: "CitizenFX.ini: Disable In-Game Media Player (GTA Radio)", desc: "Writes disable_media_player=1 to CitizenFX.ini. Kills the NUI Chromium audio thread that streams GTA radio. On 6-core CPUs, this thread competes directly with the render thread — disabling it frees ~2-4% CPU during city driving on high-density FiveM servers.", badge: "CITIZENFX", impact: "MED" },
@@ -239,7 +246,7 @@ export default function Fivem() {
 
         <TabSmartBar
           tweakIds={ALL_FIVEM_IDS}
-          recommendedIds={FIVEM_RECOMMENDED}
+          recommendedIds={fivemRecommended}
           label="FiveM"
           context="These tweaks are applied via PowerShell and target GTA V and FiveM process scheduling, network buffers, and CitizenFX config. Download the script and double-click to run — it requests admin automatically."
           tips={[
@@ -281,168 +288,6 @@ export default function Fivem() {
               ))}
             </div>
           </section>
-
-          {/* GTX 1060 Tweaks — only show if GPU is specifically GTX 1060 */}
-          {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1060 Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1060 6GB (Pascal) — HAGS off, VRAM budget unlock, Ansel hook removal</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {GTX1060_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Ryzen 5 5600 Tweaks — only show if CPU is specifically Ryzen 5 5600 (gen 5) */}
-          {hw.isRyzen && hw.cpuGeneration === 5 && hw.cpuLabel.toLowerCase().includes("5600") && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 5600 Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 5600 (Zen 3, 6C SMT) — core affinity to physical cores, Ryzen power plan</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {RYZEN5600_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* GTX 1650 SUPER Tweaks — only show if GPU is specifically GTX 1650 */}
-          {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">GTX 1650 SUPER Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for GTX 1650 SUPER (Turing/TU116) — HAGS off, VRAM budget unlock, Ansel hook removal, Low Latency Ultra driver mode</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {GTX1650_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Ryzen 5 3500 Tweaks — only show if CPU is specifically Ryzen 5 3500 (gen 3) */}
-          {hw.isRyzen && hw.cpuGeneration === 3 && hw.cpuLabel.toLowerCase().includes("3500") && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ryzen 5 3500 Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Ryzen 5 3500 (Zen 2, 6C no SMT) — core affinity, High Performance plan with boost locked to 100%</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {RYZEN3500_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* RTX/GTX 2060 Tweaks — show if GPU name contains "2060" */}
-          {hw.gpuName.toLowerCase().includes("2060") && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">RTX 2060 Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for RTX 2060 (Turing, 6GB GDDR6) — VRAM budget unlock so GTA V uses the full 6GB</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {GTX2060_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Intel i5-4XXX Tweaks — show for 4th-gen Intel Core (Haswell) */}
-          {hw.isIntelCore && hw.cpuGeneration === 4 && (
-            <section>
-              <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="flex-1">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Intel i5-4XXX (Haswell) Tweaks</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Intel i5-4XXX Haswell (4C, no HT) — affinity lock to all 4 physical cores, High CPU + IO priority via IFEO</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {I5_4XXX_TWEAKS.map((item, i) => (
-                  <TweakRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.title}
-                    description={item.desc}
-                    badge={item.badge}
-                    impact={item.impact}
-                    checked={tweaks[item.id] || false}
-                    onCheckedChange={(v) => setTweak(item.id, v)}
-                    delay={i + 1}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
 
           {/* FiveM Client Config — CitizenFX.ini, commandline.txt, Steam overlay */}
           {renderSection("FiveM Client Config Tweaks", FIVEM_CLIENT_TWEAKS)}
