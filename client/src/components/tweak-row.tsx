@@ -178,7 +178,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         onKeyDown={onRowKeyDown}
         data-testid={`row-tweak-${id}`}
         className={cn(
-          "flex flex-row items-center justify-between rounded-lg border p-4 transition-all duration-200 group",
+          "flex flex-row items-center justify-between rounded-lg border px-4 py-4 sm:px-5 sm:py-5 transition-all duration-200 group",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
           acBlocked ? "cursor-not-allowed" : "cursor-pointer",
           checked
@@ -186,7 +186,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/60"
         )}
       >
-        <div className="space-y-1 w-[80%]">
+        <div className="space-y-2 w-[80%]">
           <div className="flex items-center flex-wrap gap-1.5">
             <Label
               htmlFor={id}

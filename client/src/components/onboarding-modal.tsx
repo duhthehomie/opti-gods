@@ -40,7 +40,8 @@ export function OnboardingModal() {
     const already = localStorage.getItem(ONBOARDING_KEY);
     const scanned = getScannedInfo();
     const isAdmin = window.location.pathname.startsWith("/admin");
-    if (!already && !scanned && !isAdmin) {
+    const isMobile = window.innerWidth < 768;
+    if (!already && !scanned && !isAdmin && !isMobile) {
       const t = setTimeout(() => setOpen(true), 800);
       return () => clearTimeout(t);
     }

@@ -23,6 +23,8 @@ const ALL_FIVEM_IDS = [
   "FiveMFixProductId","FiveMFixNvidiaOverlay","FiveMDisableMPO",
   "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode",
   "FiveM3500CoreAffinity","FiveM3500PerfPlan",
+  "FiveM2060VRAMBudget",
+  "FiveMi5CoreAffinity",
 ];
 const FIVEM_RECOMMENDED = ["FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions"];
 
@@ -106,6 +108,14 @@ export default function Fivem() {
   const RYZEN3500_TWEAKS: Tweak[] = [
     { id: "FiveM3500CoreAffinity", title: "Ryzen 5 3500: Pin GTA5 + FiveM to All 6 Physical Cores (0x3F)", desc: "Sets CPU affinity mask 0x3F (all 6 cores) for GTA5.exe and FiveM.exe. The Ryzen 5 3500 has no SMT — 0x3F is ALL physical cores. Also applies via IFEO so it persists on next launch: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. Tighter frametimes under CPU load on dense servers.", badge: "RYZEN 5 3500", impact: "HIGH" },
     { id: "FiveM3500PerfPlan", title: "Ryzen 5 3500: Lock to High Performance Plan (Boost 100%)", desc: "Activates the High Performance plan and forces Min=100%, Max=100%, BoostMode=Aggressive, BoostPolicy=100%, CpuMinCores=100%. Precision Boost 2 on Zen 2 can drop clocks aggressively between frames. Locking to 100% removes the ramp-up delay and keeps all 6 cores at max boost for the full FiveM session.", badge: "RYZEN 5 3500", impact: "MED" },
+  ];
+
+  const GTX2060_TWEAKS: Tweak[] = [
+    { id: "FiveM2060VRAMBudget", title: "RTX/GTX 2060: Force Full 6GB VRAM Budget in GTA V", desc: "Appends -availablevidmem 6144 -percentvidmem 100 to GTA V commandline.txt. GTA V can under-report the available VRAM on some Turing GPU setups, artificially capping texture streaming. This forces the engine to budget the full 6GB GDDR6 — eliminates texture pop on high-asset FiveM servers.", badge: "RTX 2060", impact: "HIGH" },
+  ];
+
+  const I5_4XXX_TWEAKS: Tweak[] = [
+    { id: "FiveMi5CoreAffinity", title: "Intel i5-4XXX (Haswell): Pin GTA5 + FiveM to All 4 Physical Cores (0xF)", desc: "Sets CPU affinity mask 0xF (all 4 cores) for GTA5.exe and FiveM.exe. Haswell i5-4XXX has no HT — 0xF is ALL physical cores. Persists via IFEO: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. With only 4 real threads, this prevents any background process from stealing a core mid-gunfight.", badge: "i5-4XXX", impact: "HIGH" },
   ];
 
   const GTX1060_TWEAKS: Tweak[] = [
@@ -364,6 +374,60 @@ export default function Fivem() {
               </div>
               <div className="space-y-3">
                 {RYZEN3500_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* RTX/GTX 2060 Tweaks — show if GPU name contains "2060" */}
+          {hw.gpuName.toLowerCase().includes("2060") && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">RTX 2060 Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for RTX 2060 (Turing, 6GB GDDR6) — VRAM budget unlock so GTA V uses the full 6GB</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {GTX2060_TWEAKS.map((item, i) => (
+                  <TweakRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    description={item.desc}
+                    badge={item.badge}
+                    impact={item.impact}
+                    checked={tweaks[item.id] || false}
+                    onCheckedChange={(v) => setTweak(item.id, v)}
+                    delay={i + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Intel i5-4XXX Tweaks — show for 4th-gen Intel Core (Haswell) */}
+          {hw.isIntelCore && hw.cpuGeneration === 4 && (
+            <section>
+              <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Intel i5-4XXX (Haswell) Tweaks</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Targeted for Intel i5-4XXX Haswell (4C, no HT) — affinity lock to all 4 physical cores, High CPU + IO priority via IFEO</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {I5_4XXX_TWEAKS.map((item, i) => (
                   <TweakRow
                     key={item.id}
                     id={item.id}

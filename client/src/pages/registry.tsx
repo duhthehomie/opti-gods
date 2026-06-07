@@ -28,6 +28,8 @@ const ALL_REGISTRY_IDS = [
   "NetDNSCloudflare","NetDNSGoogle","NetDisableQoS","NetInterruptModeration","NetRSSQueues","NetAdapterPowerSave","NetTCPChimneyOffload",
   "Win11DisableVBS","Win11DisableHVCI","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
   "ProcNUMAAware","ProcAffinityFPS","ProcMMCSSGaming","ProcGPUSchedulerHigh",
+  "IntelOldGenPowerOpt",
+  "ToolDPCLatencyCheck","CodDisableTelemetry","CodTdrDelay","CodMMCSS","CodQoSPolicy",
 ];
 const REGISTRY_RECOMMENDED_IDS = [
   "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks","EnableMSIMode","DisableCoreParking",
@@ -169,6 +171,9 @@ export default function Registry() {
     { id: "DisableUSBSuspend", title: "Disable USB Selective Suspend", desc: "Prevents Windows from sleeping USB ports — eliminates controller and headset input stutter.", impact: "MED", recommended: true },
     { id: "DisablePowerThrottlingAdv", title: "Disable Power Throttling (Advanced Registry Path)", desc: "Targets the specific PowerSettings GUID path and disables power throttling at the driver level.", badge: "NEW", impact: "MED" },
     { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power.", impact: "MED" },
+    ...(hw.isIntelCore && hw.cpuGeneration >= 4 && hw.cpuGeneration <= 8 ? [
+      { id: "IntelOldGenPowerOpt", title: "Intel 4th–8th Gen: Disable CPU Frequency Scaling + Power Throttle", desc: "Activates High Performance plan and locks CPU Min/Max processor state to 100%. Also disables Windows Power Throttling — on older Intel CPUs (Haswell through Coffee Lake) with no speed-shift hardware, this prevents the 50–150ms frequency ramp-up delay that causes frame-time spikes when shooting starts. Pair with Disable Core Parking for maximum effect.", badge: "Intel 4th–8th Gen", impact: "HIGH" as const, recommended: true },
+    ] : []),
   ];
 
   const KERNEL_TWEAKS: TweakDef[] = [
