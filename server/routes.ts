@@ -4189,73 +4189,61 @@ foreach ($pkg in @(
   $state[$pkg.id] = -not ($packages -like "*$($pkg.name)*")
 }
 
-# Output result
-$json = ($state | ConvertTo-Json -Compress)
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-$b64 = [Convert]::ToBase64String($bytes)
-Write-Host ""
-Write-Host "=============================="
-Write-Host "OPTIGODS_STATE:$b64"
-Write-Host "=============================="
-Write-Host ""
+# ----- Output + file save (try/finally so window NEVER closes unexpectedly) -----
+try {
+  $json = ($state | ConvertTo-Json -Compress)
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+  $b64  = [Convert]::ToBase64String($bytes)
 
-# Save result file to Desktop and Downloads
-$resultLine = "OPTIGODS_STATE:$b64"
-$nl = [Environment]::NewLine
-$resultContent = "OptiGods by leaq - Scan Result" + $nl + "==============================" + $nl + $resultLine + $nl + "==============================" + $nl + "Drag this file into the Opti Gods app to import your PC state."
-$desktop = [Environment]::GetFolderPath('Desktop')
-$downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
-$saved = @()
-try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.txt", $resultContent); $saved += "Desktop" } catch {}
-try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.txt", $resultContent); $saved += "Downloads" } catch {}
+  Write-Host ""
+  Write-Host "  ==============================" -ForegroundColor Cyan
+  Write-Host "  OPTIGODS_STATE:$b64" -ForegroundColor White
+  Write-Host "  ==============================" -ForegroundColor Cyan
+  Write-Host ""
 
-Write-Host ""
-if ($saved.Count -gt 0) {
-  Write-Host "  Result file saved to: $($saved -join ' and ')" -ForegroundColor Green
-  Write-Host "  Drag OptiGods-Scan-Result.txt into the Opti Gods app to finish." -ForegroundColor Cyan
-} else {
-  Write-Host "  Could not save file automatically. Copy the OPTIGODS_STATE line above." -ForegroundColor Yellow
+  # Resolve Desktop / Downloads without COM objects (safe when elevated)
+  $userProfile = $env:USERPROFILE
+  if (-not $userProfile -or -not (Test-Path $userProfile)) {
+    $userProfile = "C:\\Users\\$env:USERNAME"
+  }
+  $desktop   = Join-Path $userProfile 'Desktop'
+  $downloads = Join-Path $userProfile 'Downloads'
+  # Fallback for non-English / redirected Desktop
+  if (-not (Test-Path $desktop)) {
+    $desktop = [Environment]::GetFolderPath('Desktop')
+  }
+
+  $nl            = [Environment]::NewLine
+  $resultContent = "OptiGods by leaq - Scan Result" + $nl +
+                   "==============================" + $nl +
+                   "OPTIGODS_STATE:$b64" + $nl +
+                   "==============================" + $nl +
+                   "Drag this file into the Opti Gods app to import your PC state."
+  $saved = @()
+  try { [IO.File]::WriteAllText("$desktop\\OptiGods-Scan-Result.txt",   $resultContent, [Text.Encoding]::UTF8); $saved += "Desktop"   } catch {}
+  try { [IO.File]::WriteAllText("$downloads\\OptiGods-Scan-Result.txt", $resultContent, [Text.Encoding]::UTF8); $saved += "Downloads" } catch {}
+
+  Write-Host ""
+  if ($saved.Count -gt 0) {
+    Write-Host "  Scan result saved to: $($saved -join ' and ')" -ForegroundColor Green
+    Write-Host "  Drag OptiGods-Scan-Result.txt into the Opti Gods app to finish." -ForegroundColor Cyan
+  } else {
+    Write-Host "  Could not save file automatically." -ForegroundColor Yellow
+    Write-Host "  Copy the OPTIGODS_STATE line above manually." -ForegroundColor Yellow
+  }
+  Write-Host ""
+} catch {
+  Write-Host "" 
+  Write-Host "  [ERROR] Scan failed: $_" -ForegroundColor Red
+  Write-Host ""
+} finally {
+  Read-Host "  Press Enter to close this window"
 }
-Write-Host ""
-Read-Host "Press Enter to close this window"
 `.trim();
 
-    const MARKER = '##DETECT_PS1_START##';
-    const batLines = [
-      `@echo off`,
-      `setlocal`,
-      `set "SELF=%~f0"`,
-      `set "TMPPS1=%TEMP%\\OptiGods-Detect.ps1"`,
-      ``,
-      `title Opti Gods by leaq  --  PC State Scan`,
-      `echo.`,
-      `echo  ==========================================`,
-      `echo    OPTI GODS by leaq  --  State Scan`,
-      `echo  ==========================================`,
-      `echo.`,
-      `echo  READ-ONLY scan -- nothing will be changed on your PC.`,
-      `echo.`,
-      `echo  [1/2] Extracting scan script...`,
-      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##DETECT_PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
-      `if not exist "%TMPPS1%" (`,
-      `  echo.`,
-      `  echo  [ERROR] Extraction failed. Re-download from the website.`,
-      `  pause`,
-      `  exit /b 1`,
-      `)`,
-      `echo  [2/2] Requesting Administrator rights to read registry...`,
-      `echo  Click Yes on the UAC prompt.`,
-      `echo.`,
-      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled: '+$_) -ForegroundColor Red; pause }"`,
-      `del "%TMPPS1%" 2>nul`,
-      `exit /b 0`,
-      `${MARKER}`,
-      ps1,
-    ];
-    const batContent = batLines.join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Detect.bat"');
-    res.end(Buffer.from(batContent, 'utf8'));
+    res.end(Buffer.from(wrapInBat(ps1, { title: 'PC State Scan (Read-Only)', tmpName: 'OptiGods-Detect', marker: 'DETECT_PS1_START' }), 'utf8'));
   });
 
   // --- Admin System Status ---
