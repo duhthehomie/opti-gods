@@ -1,1 +1,1 @@
-- [CI Cargo cache key](ci-cargo-cache.md) — cache key must include src/** hash or .rs changes are silently ignored and old binary ships.
+- [Security audit findings](security-audit.md) — full audit Jun 2026: all paths secure except email double-submit (fixed); no freeloaders found in DB.

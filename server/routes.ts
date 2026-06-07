@@ -4463,6 +4463,21 @@ Read-Host "Press Enter to close this window"
       });
     }
 
+    // Block duplicate submissions — same email can't submit a second request
+    // while one is still pending or already fulfilled (sent/auto-sent).
+    const existingRequests = await storage.getEmailRequests();
+    const alreadyExists = existingRequests.find(
+      r => r.email.toLowerCase() === email.toLowerCase() &&
+           (r.status === "pending" || r.status === "sent" || r.status === "auto-sent")
+    );
+    if (alreadyExists) {
+      if (alreadyExists.status === "pending") {
+        return res.status(409).json({ error: "You already have a pending request. Please wait — your proof is being reviewed." });
+      } else {
+        return res.status(409).json({ error: "A code has already been sent to this email. Check your inbox (including spam). Contact support if you need help." });
+      }
+    }
+
     // Task #41: capture the authenticated Discord ID so admin "Send Code"
     // can also grant a permanent Pro entitlement for CashApp/PayPal buyers.
     const discordUserId = req.session?.userId ?? null;
@@ -4497,6 +4512,20 @@ Read-Host "Press Enter to close this window"
     const emailReq = allRequests.find(r => r.id === id);
     if (!emailReq) return res.status(404).json({ error: "Request not found" });
     if (emailReq.status === "sent" || emailReq.status === "auto-sent") return res.status(400).json({ error: "Code already sent to this customer" });
+
+    // Cross-email duplicate guard — prevent accidentally sending a second code
+    // to the same email address from a different request entry.
+    const alreadySentToEmail = allRequests.find(
+      r => r.id !== id &&
+           r.email.toLowerCase() === emailReq.email.toLowerCase() &&
+           (r.status === "sent" || r.status === "auto-sent")
+    );
+    if (alreadySentToEmail) {
+      return res.status(409).json({
+        error: `A code was already sent to ${emailReq.email} (request #${alreadySentToEmail.id}). This looks like a duplicate submission. Reject this request to avoid giving out two codes.`,
+        duplicateRequestId: alreadySentToEmail.id,
+      });
+    }
 
     const allCodes = await storage.getAllCodes();
     // Exclude codes already reserved by other sent/auto-sent email requests
