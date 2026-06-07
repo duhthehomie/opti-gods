@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
 
@@ -249,18 +250,24 @@ export default function Dashboard() {
   const [recommendedApplied, setRecommendedApplied] = useState(false);
 
   const applyAllRecommended = () => {
-    // Enable every tweak in the store — no artificial cap.
-    // Hardware-specific filtering (vendor, OS, laptop vs desktop) happens
-    // at script generation time on the server, so enabling all client-side
-    // is safe: incompatible tweaks simply won't appear in the downloaded .bat.
+    // Enable all safe + aggressive tweaks. Expert tweaks (DisableDefender, DisableVBS,
+    // SysHypervisorOff, DisablePagefile, etc.) are NEVER auto-enabled — they require
+    // deliberate opt-in on their own tab. Hardware filtering at script generation time
+    // means incompatible tweaks (wrong GPU vendor, wrong OS, laptop-only) won't appear
+    // in the downloaded .bat even if toggled on.
+    const expertIds = new Set(
+      TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id)
+    );
     const next = { ...tweaks };
-    Object.keys(next).forEach(key => { (next as any)[key] = true; });
-    const applied = Object.keys(next).length;
+    let applied = 0;
+    Object.keys(next).forEach(key => {
+      if (!expertIds.has(key)) { (next as any)[key] = true; applied++; }
+    });
     setAllTweaks(next);
     setRecommendedApplied(true);
     toast({
-      title: "All Tweaks Enabled!",
-      description: `${applied} tweaks enabled. Hardware filtering runs at script generation — only compatible tweaks land in your .bat.`,
+      title: "All Safe Tweaks Enabled!",
+      description: `${applied} tweaks enabled (expert tweaks excluded — opt-in on their tabs). Hardware filtering runs at script generation.`,
     });
   };
 
