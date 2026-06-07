@@ -259,7 +259,7 @@ function LandingDesktop() {
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-[10px] font-bold tracking-[0.3em] uppercase text-red-300 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {TOTAL_TWEAKS_LABEL} tweaks · v2 just dropped
+            {TOTAL_TWEAKS_LABEL} tweaks · v3 is here
           </div>
 
           <h1 className="text-4xl md:text-6xl font-display font-black tracking-tight leading-[1.05] mb-5 max-w-3xl mx-auto">
@@ -433,7 +433,7 @@ function LandingDesktop() {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-display font-black text-white">
-                We have optimized over 200 PCs
+                500+ rigs optimized by the community
               </h3>
               <p className="text-sm text-zinc-400 mt-1">
                 Live support from leaq, build advice, free preset drops, and verified review channel.

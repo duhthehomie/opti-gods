@@ -1,1 +1,4 @@
 - [Security audit findings](security-audit.md) — full audit Jun 2026: all paths secure except email double-submit (fixed); no freeloaders found in DB.
+- [User rules & hard limits](user-rules.md) — things leaq has explicitly told me never to do or always do; read this first every session
+- [V3 architecture decisions](v3-architecture.md) — store, tweak counts, bat format, git workflow, GitHub Actions auto-release
+- [Repeated mistakes to avoid](repeated-mistakes.md) — mistakes that have come up more than once; check before acting

@@ -32,7 +32,7 @@ const FEATURES = [
   { icon: Power, title: "Power Plan", desc: "Processor performance states, C-states, and idle inhibit" },
   { icon: Gamepad2, title: "FiveM Optimizer", desc: "GTA V and FiveM-specific process tweaks for max FPS" },
   { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
-  { icon: Search, title: "Game Detection", desc: "Auto-detect 19 games and apply per-game optimization packs" },
+  { icon: Search, title: "Game Detection", desc: "Auto-detect 27 games and apply per-game optimization packs" },
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
@@ -286,6 +286,10 @@ export default function Dashboard() {
   const totalTweaks = Object.keys(tweaks).length;
   const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
   const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
+  const recApplied = Array.from(smartRecs.ids).filter(id => (tweaks as Record<string, boolean>)[id]).length;
+  const scorePercent = smartRecs.ids.size > 0 ? Math.round((recApplied / smartRecs.ids.size) * 100) : 0;
+  const tierLabel = scorePercent >= 90 ? "GOD TIER" : scorePercent >= 70 ? "ELITE" : scorePercent >= 46 ? "DECENT" : scorePercent >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
+  const tierColor = scorePercent >= 70 ? "text-red-400" : scorePercent >= 46 ? "text-orange-400" : "text-zinc-500";
 
   return (
     <AppLayout>
@@ -368,6 +372,96 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
+        {/* ─── OPTIMIZATION SCORE ─── */}
+        {smartRecs.ids.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.04 }}
+            data-testid="card-optimization-score"
+            className={cn(
+              "relative rounded-2xl border overflow-hidden",
+              scorePercent >= 90
+                ? "border-red-500/40 bg-gradient-to-br from-red-950/40 via-black to-black shadow-[0_0_60px_-20px_rgba(220,38,38,0.4)]"
+                : "border-white/5 bg-black/50"
+            )}
+          >
+            <div className="flex flex-col md:flex-row items-center gap-6 p-6 md:p-8">
+              {/* SVG Ring */}
+              <div className="relative shrink-0">
+                <svg width="110" height="110" viewBox="0 0 100 100" className="rotate-[-90deg]">
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#18181b" strokeWidth="8" />
+                  <circle
+                    cx="50" cy="50" r="40" fill="none"
+                    stroke={scorePercent >= 70 ? "#ef4444" : scorePercent >= 46 ? "#f97316" : "#52525b"}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(scorePercent / 100) * 251.3} 251.3`}
+                    className="transition-all duration-700"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-display font-black text-white leading-none">{scorePercent}%</span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-0.5">score</span>
+                </div>
+                {scorePercent >= 90 && (
+                  <div className="absolute inset-0 rounded-full blur-[24px] bg-red-500/20 pointer-events-none" />
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0 text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-2 mb-1.5">
+                  <span className={cn("text-sm font-black uppercase tracking-[0.2em]", tierColor)}>
+                    {tierLabel}
+                  </span>
+                  {scorePercent >= 90 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 font-black uppercase tracking-wide">🔥 Maxed</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-zinc-500 mb-3">
+                  <span className="text-white font-bold">{recApplied}</span>
+                  <span className="text-zinc-600"> of </span>
+                  <span className="text-white font-bold">{smartRecs.ids.size}</span>
+                  {" "}hardware-matched tweaks applied
+                </p>
+                <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs mx-auto md:mx-0">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-700",
+                      scorePercent >= 70 ? "bg-gradient-to-r from-red-600 to-red-400" : scorePercent >= 46 ? "bg-orange-500" : "bg-zinc-600"
+                    )}
+                    style={{ width: `${scorePercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="shrink-0">
+                {scorePercent < 100 ? (
+                  <Button
+                    data-testid="button-boost-score"
+                    onClick={applyAllRecommended}
+                    className={cn(
+                      "font-bold text-sm px-6 transition-all",
+                      scorePercent >= 90
+                        ? "bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30"
+                        : "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)]"
+                    )}
+                  >
+                    <Zap className="w-4 h-4 mr-1.5" />
+                    {scorePercent === 0 ? "Get Started" : "Boost My Score"}
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-sm">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Maxed Out
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* ─── SYSTEM PROFILE CARD ─── */}
         {!hw.loading && (
@@ -517,18 +611,18 @@ export default function Dashboard() {
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Active Tweaks by Category</span>
               </div>
-              <span className="text-xs font-bold text-white">{enabledCount} <span className="text-zinc-600 font-normal">/ 281 total</span></span>
+              <span className="text-xs font-bold text-white">{enabledCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} tweaks</span></span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {[
-                { label: "Registry",  keys: (k: string) => !["FiveM","Fortnite","Nvidia","game_","ProcessLasso","ProcessAuto","ProcessTrim","Discord","Mem","Service","Privacy","su_","Debloat","Remove","Amd","IntGpu"].some(p => k.startsWith(p)), total: 120 },
-                { label: "FiveM",     keys: (k: string) => k.startsWith("FiveM"), total: 28 },
-                { label: "Fortnite",  keys: (k: string) => k.startsWith("Fortnite"), total: 18 },
-                { label: "Memory",    keys: (k: string) => k.startsWith("Mem") || k.startsWith("mem"), total: 20 },
-                { label: "Games",     keys: (k: string) => k.startsWith("game_"), total: 19 },
-                { label: "Services",  keys: (k: string) => k.startsWith("Service"), total: 15 },
-                { label: "Privacy",   keys: (k: string) => k.startsWith("Privacy"), total: 12 },
-                { label: "Process",   keys: (k: string) => k.startsWith("Process"), total: 14 },
+                { label: "FiveM",     keys: (k: string) => k.startsWith("FiveM"),    total: TWEAK_REGISTRY.filter(t => t.id.startsWith("FiveM")).length },
+                { label: "Fortnite",  keys: (k: string) => k.startsWith("Fortnite"), total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Fortnite")).length },
+                { label: "Memory",    keys: (k: string) => k.startsWith("Mem") || k.startsWith("mem"), total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Mem") || t.id.startsWith("mem")).length },
+                { label: "Games",     keys: (k: string) => k.startsWith("game_"),    total: TWEAK_REGISTRY.filter(t => t.id.startsWith("game_")).length },
+                { label: "Services",  keys: (k: string) => k.startsWith("Service"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Service")).length },
+                { label: "Privacy",   keys: (k: string) => k.startsWith("Privacy"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Privacy")).length },
+                { label: "Process",   keys: (k: string) => k.startsWith("Process"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Process")).length },
+                { label: "Registry",  keys: (k: string) => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => k.startsWith(p)), total: TWEAK_REGISTRY.filter(t => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => t.id.startsWith(p))).length },
               ].map(({ label, keys, total }) => {
                 const active = Object.entries(tweaks).filter(([k, v]) => v && keys(k)).length;
                 const pct = Math.round((active / total) * 100);

@@ -42,7 +42,7 @@ export default function HomePage() {
           <div className="relative">
             <div className="flex items-center gap-2 mb-4">
               <Zap className="w-4 h-4 text-red-400" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v2</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v3</span>
             </div>
             <div className="mb-6">
               <OptiGodsWordmark variant="hero" />
