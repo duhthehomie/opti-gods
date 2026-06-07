@@ -1,5 +1,6 @@
 import type { HardwareInfo } from "@/hooks/use-hardware-info";
 import type { OsInfo } from "@/hooks/use-os-detection";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 
 export interface SmartRecs {
   ids: Set<string>;
@@ -398,6 +399,28 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     reasons.push("Windows 10 — Win10 debloat and service tweaks included");
   } else if (!os.isWindows && !os.loading) {
     reasons.push("Non-Windows OS — limited tweaks available");
+  }
+
+  // ===== CATCH-ALL: every remaining safe/aggressive registry tweak =====
+  // After hardware branches run, sweep TWEAK_REGISTRY and add anything not already
+  // included that passes the vendor/OS filter. This ensures the recommendation
+  // covers all 500+ tweaks — not just the ~320 in the curated hardcoded lists.
+  const CATCH_ALL_EXCLUDED = new Set([
+    "EnableMSIMode",          // V2.1: BSOD risk — use EnableMSIMode_Safe instead
+    "DisableIPv6",            // V2.1: breaks FiveM/Rockstar/Xbox — use WinTitusIPv4Prefer
+    "NvidiaDisableContainerLS", // known crash: NVIDIA Overlay 0x80000003 on many systems
+  ]);
+  for (const tweak of TWEAK_REGISTRY) {
+    if (ids.has(tweak.id)) continue;
+    if (tweak.safety === "expert") continue;
+    if (CATCH_ALL_EXCLUDED.has(tweak.id)) continue;
+    if (tweak.category === "game-detection") continue; // requires actual game scan
+    // Vendor / hardware gating — same rules as the manual branches above
+    if (tweak.category === "nvidia" && !hw.isNvidia) continue;
+    if (tweak.category === "amd"    && !hw.isAmdGpu) continue;
+    if (tweak.category === "intgpu" && !hw.isAmdApu && !hw.isIntel) continue;
+    if (tweak.category === "laptop" && !hw.isLaptop) continue;
+    ids.add(tweak.id);
   }
 
   // ===== PROFILE NAME =====
