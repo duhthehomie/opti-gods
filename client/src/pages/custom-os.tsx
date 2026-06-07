@@ -127,40 +127,18 @@ const GAMING_STACK = [
   { label: "Games Multimedia Profile", values: "GPU Priority=8, MaximumPreRenderedFrames=1, Scheduling Category=High, SFIO Priority=High" },
 ];
 
-const COMPARE_ROWS = [
-  { feature: "Safe to use on main PC", opti: true, revi: true },
-  { feature: "Game-specific PerfOptions (FiveM/Fortnite/CoD)", opti: true, revi: false },
-  { feature: "NVIDIA + AMD specific tuning", opti: true, revi: false },
-  { feature: "FiveM build-agnostic GTA process targeting", opti: true, revi: false },
-  { feature: "Telemetry completely removed", opti: true, revi: true },
-  { feature: "Windows Update (security patches kept)", opti: true, revi: true },
-  { feature: "Kernel scheduler hardened", opti: true, revi: true },
-  { feature: "Network stack optimized (TCP, DNS, buffers)", opti: true, revi: false },
-  { feature: "30+ bloat services disabled", opti: true, revi: true },
-  { feature: "SystemResponsiveness=0 (max CPU for games)", opti: true, revi: false },
-  { feature: "GPU scheduling tuned (HAGS + priority stack)", opti: true, revi: false },
-  { feature: "CpuPriorityClass safe value (3) enforced", opti: true, revi: false },
-];
 
 const INSTALL_STEPS = [
   {
     n: "01",
     title: "Download AME Wizard",
     desc: "AME Wizard is the open-source tool that applies the playbook to your Windows install safely.",
-    link: "https://ameliorated.io",
-    label: "ameliorated.io (No Ads) →",
+    link: "https://github.com/Ameliorated-LLC/trusted-uninstaller-cli/releases/tag/0.8.4",
+    label: "GitHub (Latest) →",
     accent: "violet",
   },
   {
     n: "02",
-    title: "Install Windows 10 or 11 clean",
-    desc: "Download the official Microsoft ISO and do a fresh install. Skip the Microsoft account during setup — use 'Domain join instead' to create a local account.",
-    link: "https://www.microsoft.com/software-download/windows11",
-    label: "Download Windows 11 ISO →",
-    accent: "blue",
-  },
-  {
-    n: "03",
     title: "Download ReviOS Playbook — click the No Ads link",
     desc: "Visit revi.cc and download the ReviOS .apbx playbook. When you land on the download page, click the 'No Ads' link — this skips any ad redirect and downloads directly.",
     link: "https://www.revi.cc/",
@@ -168,13 +146,13 @@ const INSTALL_STEPS = [
     accent: "red",
   },
   {
-    n: "04",
+    n: "03",
     title: "Run AME Wizard with the ReviOS Playbook",
     desc: "Open AME Wizard, drag the ReviOS .apbx file into it. AME Wizard will verify, then walk you through the automated setup. Takes 10–15 minutes.",
     accent: "orange",
   },
   {
-    n: "05",
+    n: "04",
     title: "On first boot — run Opti Gods Dashboard",
     desc: "After the playbook finishes and you reboot, open Opti Gods Dashboard and apply your game-specific tweaks on top. This is where the magic completes.",
     accent: "emerald",
@@ -189,11 +167,6 @@ const accentMap: Record<string, string> = {
   emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
 };
 
-function CheckIcon({ val }: { val: boolean }) {
-  return val
-    ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
-    : <span className="block w-4 h-0.5 bg-zinc-700 mx-auto rounded-full" />;
-}
 
 export default function CustomOS() {
   const hw = useHardwareInfo();
@@ -357,40 +330,6 @@ export default function CustomOS() {
                   </div>
                 </motion.div>
               ))}
-            </motion.div>
-
-            {/* Comparison Table */}
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="space-y-3"
-            >
-              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">How we stack up</h2>
-              <div className="rounded-xl border border-white/5 overflow-hidden">
-                <div className="grid grid-cols-4 bg-zinc-900/80 border-b border-white/5">
-                  <div className="py-2.5 px-3 text-[11px] font-bold text-zinc-400 uppercase tracking-wider col-span-2">Feature</div>
-                  <div className="py-2.5 px-1 text-center">
-                    <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Opti Gods</p>
-                  </div>
-                  <div className="py-2.5 px-1 text-center">
-                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">ReviOS</p>
-                  </div>
-                </div>
-                {COMPARE_ROWS.map((row, i) => (
-                  <div key={i} className={`grid grid-cols-4 border-b border-white/4 ${i % 2 === 0 ? "bg-zinc-950/40" : "bg-transparent"}`}>
-                    <div className="py-2.5 px-3 col-span-2 flex items-center">
-                      <span className="text-xs text-zinc-300">{row.feature}</span>
-                    </div>
-                    <div className="py-2.5 px-1 flex items-center justify-center">
-                      <CheckIcon val={row.opti} />
-                    </div>
-                    <div className="py-2.5 px-1 flex items-center justify-center">
-                      <CheckIcon val={row.revi} />
-                    </div>
-                  </div>
-                ))}
-              </div>
             </motion.div>
 
             {/* Gaming stack */}

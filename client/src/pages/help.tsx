@@ -4,7 +4,6 @@ import {
   MessageCircle, ExternalLink, HelpCircle, Ticket, AtSign,
   Shield, Zap, ChevronRight, AlertTriangle, Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const DISCORD_INVITE = "https://discord.gg/optigods";
@@ -91,15 +90,17 @@ export default function Help() {
               </p>
               <p className="text-[11px] text-zinc-600 font-mono mt-1">{DISCORD_INVITE}</p>
             </div>
-            <Button
+            <a
               data-testid="button-join-discord"
-              onClick={() => window.open(DISCORD_INVITE, "_blank", "noopener,noreferrer")}
-              className="shrink-0 bg-[#5865F2] hover:bg-[#4752c4] text-white border-0 font-bold gap-2 shadow-lg shadow-[#5865F2]/20"
+              href={DISCORD_INVITE}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-sm shadow-lg shadow-[#5865F2]/20 transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
               Join Discord
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-            </Button>
+            </a>
           </div>
         </motion.div>
 
@@ -199,16 +200,17 @@ export default function Help() {
             ))}
           </div>
           <div className="pt-2">
-            <Button
+            <a
               data-testid="button-discord-cta-bottom"
-              variant="outline"
-              onClick={() => window.open(DISCORD_INVITE, "_blank", "noopener,noreferrer")}
-              className="w-full border-[#5865F2]/30 text-[#5865F2] hover:bg-[#5865F2]/10 hover:text-[#5865F2] gap-2"
+              href={DISCORD_INVITE}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-[#5865F2]/30 text-[#5865F2] hover:bg-[#5865F2]/10 text-sm font-medium transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
               Open a Ticket on Discord
               <ExternalLink className="w-3.5 h-3.5" />
-            </Button>
+            </a>
           </div>
         </motion.div>
 
