@@ -42,7 +42,7 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
 
   return (
     <section data-testid={`section-v2-${testIdSuffix}`}>
-      <div className="flex items-center gap-2 mb-4 px-1">
+      <div className="flex items-center gap-2 mb-5 px-1">
         <h2 className={`text-sm font-bold uppercase tracking-wider ${a.text}`}>{heading}</h2>
         <span className="text-[10px] font-mono text-zinc-600">({items.length})</span>
         <div className="flex-1 h-px bg-white/5 ml-2" />
@@ -59,8 +59,8 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
           </Button>
         )}
       </div>
-      {description && <p className="text-xs text-zinc-600 px-1 mb-4">{description}</p>}
-      <div className="space-y-3">
+      {description && <p className="text-xs text-zinc-600 px-1 mb-5">{description}</p>}
+      <div className="space-y-4">
         {items.map((item, i) => (
           <TweakRow
             key={item.id}

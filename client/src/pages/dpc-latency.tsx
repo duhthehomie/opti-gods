@@ -369,7 +369,7 @@ export default function DpcLatencyPage() {
       </div>
 
       {/* One-Click Fix Cards */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Fixes</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {DPC_FIXES.map((fix, i) => {

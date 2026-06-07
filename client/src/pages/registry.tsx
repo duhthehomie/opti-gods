@@ -92,7 +92,7 @@ function Section({ heading, tweaks, tweakState, onSet, showRecommended = true, s
           </Button>
         )}
       </div>
-      <div className="space-y-3">
+      <div className="space-y-4">
         {tweaks.map((item, i) => (
           <TweakRow
             key={item.id}
@@ -217,7 +217,7 @@ export default function Registry() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-8 max-w-4xl pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -282,12 +282,12 @@ export default function Registry() {
           ]}
         />
 
-        <div className="space-y-8">
+        <div className="space-y-10">
           <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
           <Section heading="Network & Latency" tweaks={NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           {/* Memory section with RAM-aware safety note */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.ramGB <= 4 && hw.ramGB > 0 && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5">
@@ -301,7 +301,7 @@ export default function Registry() {
           </div>
 
           {/* Visual section with GPU-aware HAGS note */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.isIntel && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60">
@@ -341,7 +341,7 @@ export default function Registry() {
                 <p className="text-xs text-zinc-400">The tweaks below have real performance benefits but carry risk. Read descriptions carefully.</p>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {RISKY_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}

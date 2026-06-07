@@ -619,7 +619,7 @@ REM #PS1END`;
               {probalanceAllOn ? "Recommended ON" : "Enable Recommended"}
             </Button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {probalanceTweaks.map((item, i) => (
               <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                 impact={item.impact} badge={item.recommended ? "RECOMMENDED" : undefined}
@@ -644,7 +644,7 @@ REM #PS1END`;
               {memAllOn ? "Recommended ON" : "Enable Recommended"}
             </Button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {memTweaks.map((item, i) => (
               <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                 impact={item.impact} badge={item.recommended ? "RECOMMENDED" : undefined}

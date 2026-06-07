@@ -292,7 +292,7 @@ export default function Nvidia() {
 
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-5xl pb-10">
+      <div className="space-y-10 max-w-5xl pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -488,7 +488,7 @@ export default function Nvidia() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks write to the NVIDIA <code className="text-red-400">Global\NVTweak</code> profile hive. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every driver update to re-write only these keys (no full preset rerun needed).</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NVIDIA_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -528,7 +528,7 @@ export default function Nvidia() {
               );
             })()}
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NVIDIA_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -569,7 +569,7 @@ export default function Nvidia() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Direct writes to the NVIDIA GPU class key and NvTweak hive — these go deeper than NVCP and persist across driver reinstalls.</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NVIDIA_ADVANCED_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -610,7 +610,7 @@ export default function Nvidia() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">CUDA priority, unlimited shader cache, frame buffer caps, and service cleanup — deeper driver-level tuning for maximum FPS.</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NVIDIA_NEW_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -652,7 +652,7 @@ export default function Nvidia() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Deep driver tweaks targeting GTX 10xx/16xx Pascal and Turing VRAM and shader limitations. These go beyond NVCP and persist across driver reinstalls via the GPU class registry key.</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NVIDIA_LOW_END_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -738,7 +738,7 @@ export default function Nvidia() {
               {" "}<span className="text-zinc-500">RTX 2070 SUPER owners:</span> HDMI audio + background container flush are both effective on your 215W card.
             </p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <TweakRow
               id="NvidiaDisableHDMIAudio"
               title="Disable NVIDIA HDMI Audio Device"

@@ -317,7 +317,7 @@ export default function WinTitus() {
         </motion.div>
 
         {/* Sections */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           {SECTIONS.map((section, i) => (
             <motion.div
               key={section.id}

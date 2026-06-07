@@ -171,12 +171,12 @@ export default function CallOfDuty() {
 
           <PageGuide pageName="Call of Duty Optimizer" />
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="space-y-10 mt-6">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="space-y-12 mt-6">
 
             {/* FPS & Process Priority — UNIVERSAL */}
             <section>
               <SectionHeader title="⚡ FPS & Process Priority" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {([
                   {
                     id: "CodHighPriority",
@@ -238,7 +238,7 @@ export default function CallOfDuty() {
                   </p>
                 </div>
               )}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {([
                   {
                     id: "CodShaderCacheClear",
@@ -292,7 +292,7 @@ export default function CallOfDuty() {
             {/* Network & Stability — UNIVERSAL */}
             <section>
               <SectionHeader title="📡 Network & Stability" sectionKey="network" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {([
                   {
                     id: "CodNetworkBuffer",
@@ -330,7 +330,7 @@ export default function CallOfDuty() {
                   <h2 className="text-sm font-bold uppercase tracking-wider text-green-400">🟢 NVIDIA GPU</h2>
                   <span className="text-[10px] text-zinc-500 ml-1 font-mono">{gpuLabel}</span>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {([
                     {
                       id: "Cod1650LowLatency",
@@ -368,7 +368,7 @@ export default function CallOfDuty() {
                 </h2>
                 <span className="text-[10px] text-zinc-600 ml-1">CPU-specific</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {isAmdCpu && (
                   <TweakRow
                     id="Cod3500PowerPlan"
@@ -418,7 +418,7 @@ export default function CallOfDuty() {
                   Deeper system-level optimizations — GPU hang prevention, MMCSS scheduler tuning, QoS network prioritization, and telemetry removal. All safe for daily use.
                 </p>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {([
                   {
                     id: "CodDisableTelemetry",

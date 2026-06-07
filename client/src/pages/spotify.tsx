@@ -35,7 +35,7 @@ export default function SpotifyPage() {
       {/* CPU Priority Section */}
       <section>
         <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">⚡ CPU Priority</h2>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <TweakRow
             id="SpotifyLowPriority"
             title="Set Spotify to Below Normal CPU Priority"
@@ -56,7 +56,7 @@ export default function SpotifyPage() {
           <Monitor className="w-3.5 h-3.5 text-emerald-400" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400">GPU & VRAM</h2>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <TweakRow
             id="SpotifyDisableGPU"
             title="Disable Spotify Hardware GPU Acceleration"
@@ -77,7 +77,7 @@ export default function SpotifyPage() {
           <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400">Background Activity</h2>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <TweakRow
             id="SpotifyDisableAutoUpdate"
             title="Disable Spotify Auto-Update During Gaming"

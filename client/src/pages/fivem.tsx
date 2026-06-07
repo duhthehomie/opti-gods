@@ -165,7 +165,7 @@ export default function Fivem() {
             </Button>
           )}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {items.map((item, i) => (
             <TweakRow
               key={item.id}
@@ -186,7 +186,7 @@ export default function Fivem() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-8 max-w-4xl pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -256,7 +256,7 @@ export default function Fivem() {
           ]}
         />
 
-        <div className="space-y-8">
+        <div className="space-y-10">
           {renderSection("FiveM / GTA V Process", PROCESS_TWEAKS)}
           {renderSection("FiveM Client Optimizations", CLIENT_TWEAKS)}
           {renderSection("GTA V Engine, Graphics & Launch Flags", GTA_ENGINE_TWEAKS)}
@@ -272,7 +272,7 @@ export default function Fivem() {
                 <p className="text-xs text-zinc-500 mt-0.5">Targeted fixes for known NVIDIA / FiveM crash patterns — run after applying tweaks if you experience these errors</p>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {CRASH_FIX_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}

@@ -95,7 +95,7 @@ export default function Fortnite() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl pb-10">
+      <div className="space-y-8 max-w-4xl pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -153,11 +153,11 @@ export default function Fortnite() {
           ]}
         />
 
-        <div className="space-y-8">
+        <div className="space-y-10">
 
           <section>
             <SectionHeader title="FPS & Frame Timing" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
                 { id: "FortniteUncapLobbyFPS", title: "Uncap Lobby & Menu FPS (GameUserSettings.ini)", desc: "Patches GameUserSettings.ini to set FrameRateLimit=0.000000 — removes the 120fps menu cap. Handles read-only files automatically.", badge: "MUST HAVE", impact: "HIGH" as const },
                 { id: "FortniteUncapGameFPS", title: "Uncap In-Game FPS via Engine.ini", desc: "Adds t.MaxFPS=0 to Engine.ini — overrides any engine-level frame cap during gameplay.", badge: "RECOMMENDED", impact: "HIGH" as const },
@@ -172,7 +172,7 @@ export default function Fortnite() {
 
           <section>
             <SectionHeader title="CPU & Process Priority" sectionKey="cpu" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
                 { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteAffinityPhysical", title: "Pin Fortnite to Physical Cores Only", desc: "Removes hyperthreaded virtual cores from Fortnite's affinity mask — reduces cache thrashing on Intel HT CPUs.", impact: "MED" as const },
@@ -186,7 +186,7 @@ export default function Fortnite() {
 
           <section>
             <SectionHeader title="Engine.ini Config Patches" sectionKey="engine" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
                 { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches.", impact: "MED" as const },
                 { id: "FortniteDisableMotionBlur", title: "Disable Motion Blur & Lens Flare", desc: "Adds r.MotionBlurQuality=0 and r.LensFlareQuality=0 to Engine.ini — removes blur and gains back ~3–5% GPU performance.", badge: "RECOMMENDED", impact: "HIGH" as const },
@@ -204,7 +204,7 @@ export default function Fortnite() {
 
           <section>
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Graphics API</h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
                 { id: "FortniteForceDirectX12", title: "Force DirectX 12 Mode", desc: "Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute. Recommended for RTX cards.", badge: "RTX USERS", impact: "MED" as const },
               ].map((item, i) => (
@@ -216,7 +216,7 @@ export default function Fortnite() {
 
           <section>
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Network & Input</h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[
                 { id: "FortniteNetworkBuffer", title: "Increase Epic Games Network Buffers", desc: "Bumps socket send/receive buffers to 256KB for Epic server connections — reduces packet loss on congested connections." },
                 { id: "FortniteInputLatency", title: "Minimize Input Latency (Raw Input Buffer)", desc: "Disables raw input buffering via Engine.ini (r.RawInput.EnableRawInput=0 workaround) — lowers mouse latency on high-Hz polling mice.", badge: "HIGH-HZ MICE" },

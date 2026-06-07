@@ -238,7 +238,7 @@ export default function Discord() {
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3"
+          className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-4"
         >
           <div className="flex items-center gap-2 mb-1">
             <Info className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -301,7 +301,7 @@ export default function Discord() {
               tweakState={tweaks}
               onSet={setTweak}
             />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {PRIORITY_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}
@@ -328,7 +328,7 @@ export default function Discord() {
               tweakState={tweaks}
               onSet={setTweak}
             />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {SCREENSHARE_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}
@@ -370,7 +370,7 @@ export default function Discord() {
               tweakState={tweaks}
               onSet={setTweak}
             />
-            <div className="space-y-3">
+            <div className="space-y-4">
               {MAINTENANCE_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}

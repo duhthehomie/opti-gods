@@ -277,7 +277,7 @@ export default function Amd() {
 
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-5xl pb-10">
+      <div className="space-y-10 max-w-5xl pb-10">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -438,7 +438,7 @@ export default function Amd() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">These tweaks write to the AMD GPU device class. They survive game restarts but are wiped on driver reinstall — click <span className="text-red-400 font-semibold">Reapply driver tweaks</span> after every Adrenalin update to re-write only these keys (no full preset rerun needed).</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {AMD_DRIVER_REAPPLY_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -522,7 +522,7 @@ export default function Amd() {
               );
             })()}
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {PERFORMANCE_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -558,7 +558,7 @@ export default function Amd() {
               );
             })()}
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {DRIVER_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -582,7 +582,7 @@ export default function Amd() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Visual & Display</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {VISUAL_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -620,7 +620,7 @@ export default function Amd() {
             })()}
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Driver-level registry hints for Smart Access Memory, Anti-Lag+, and Fluid Motion Frames. Requires compatible hardware and driver version.</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {NEXTGEN_TWEAKS.map((item, i) => (
               <TweakRow
                 key={item.id}
@@ -660,7 +660,7 @@ export default function Amd() {
           <p className="text-xs text-zinc-500 px-1 mb-4">
             Windows-level registry and power plan tweaks tuned for AMD Ryzen CPUs (Zen 2 / Zen 3). These address known Windows scheduling issues with Ryzen — particularly important for Ryzen 5 3500 (6-core, no SMT) and Ryzen 7 3700X (8-core, SMT). Works for all Ryzen 3000 and 5000 series.
           </p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <TweakRow
               id="AmdCpuCoalescingOff"
               title="Disable Timer Coalescing"
@@ -725,7 +725,7 @@ export default function Amd() {
             Optional tweaks that reduce AMD GPU die temperature by disabling hardware that runs on the GPU even when not actively used.
             HDMI audio codecs consume power on the GPU die, and AMD ReLive/Adrenalin recording encodes in the background using your GPU's video encoder — both generate unnecessary heat and steal GPU resources during gaming.
           </p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <TweakRow
               id="AmdDisableHDMIAudio"
               title="Disable AMD HDMI Audio Device"
@@ -757,7 +757,7 @@ export default function Amd() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
           </div>
           <p className="text-xs text-zinc-600 px-1 mb-4">Resizable BAR, Radeon Boost, and Enhanced Sync — hardware-level features that unlock extra GPU performance.</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <TweakRow
               id="AmdResizableBAR"
               title="Enable Resizable BAR (Smart Access Memory)"

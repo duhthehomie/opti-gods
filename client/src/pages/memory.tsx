@@ -394,7 +394,7 @@ export default function Memory() {
             </Button>
           )}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {items.map((item, i) => {
             const { locked, reason } = isTweakLocked(item);
             return (
