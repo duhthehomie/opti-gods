@@ -48,10 +48,10 @@ jobs:
           echo "tag=$tag"     >> $env:GITHUB_OUTPUT
           Write-Host "Building OptiGods v$v (tag $tag)"
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Setup Rust (stable, MSVC)
@@ -69,7 +69,10 @@ jobs:
           key: cargo-v3-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
 
       - name: Install Tauri CLI
-        run: npm install --global @tauri-apps/cli@latest
+        # Pinned to ~2.9 to match the tauri Rust crate locked at 2.9.5.
+        # Do NOT bump to @latest — tauri-runtime v2.11+ is incompatible with
+        # the pinned tauri-runtime-wry <2.10 stack (missing eval_script_with_callback).
+        run: npm install --global @tauri-apps/cli@~2.9
 
       - name: npm install
         run: npm install

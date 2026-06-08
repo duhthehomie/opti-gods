@@ -1,4 +1,4 @@
 {
-  "version": "2.3.7",
-  "notes": "V2.3.7 — Discord login WAF fix (new endpoint), code redemption works without Discord login."
+  "version": "3.0.0",
+  "notes": "V3.0.0 — FiveM Graphics Studio, native Background App Manager, DPC click-to-apply, BAT downloads with UAC elevation, 007 First Light detection, game logo overhaul, AI preset generator, 580+ tweaks."
 }
