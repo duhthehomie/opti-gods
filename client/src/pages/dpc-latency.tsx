@@ -41,7 +41,7 @@ function downloadBat(filename: string, ps1: string) {
     "    powershell -Command \"Start-Process '%~f0' -Verb RunAs\"",
     "    exit /b",
     ")",
-    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$b = '${b64}'; $ps = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b)); $t = [IO.Path]::GetTempFileName() + '.ps1'; [IO.File]::WriteAllText($t, $ps); & $t; Remove-Item $t -EA SilentlyContinue"`,
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$b = '${b64}'; $ps = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b)); $t = [IO.Path]::GetTempFileName() + '.ps1'; [IO.File]::WriteAllText($t, $ps, (New-Object System.Text.UTF8Encoding $true)); & $t; Remove-Item $t -EA SilentlyContinue"`,
     "pause",
     "",
   ].join("\r\n");
