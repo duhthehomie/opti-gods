@@ -23,7 +23,7 @@ import { apiUrl } from "@/lib/api-base";
 import { NATIVE_TOKEN_KEY, NATIVE_ADMIN_KEY, queryClient } from "@/lib/queryClient";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 type NavItem = {
   title: string;
@@ -77,7 +77,7 @@ export function AppSidebar() {
   const isPro = useProStatus();
   const { user } = useAuth();
   const logout = useLogout();
-  const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const enabledCount = useMemo(() => Object.values(tweaks).filter(Boolean).length, [tweaks]);
   const isGuest = isGuestMode();
   const showSignIn = isGuest && !user;
 
