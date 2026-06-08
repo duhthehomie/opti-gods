@@ -121,6 +121,7 @@ export interface IStorage {
   upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }>;
   markRigAlertSent(hash: string): Promise<void>;
   getRigByHash(hash: string): Promise<HardwareRig | null>;
+  getRigById(id: number): Promise<HardwareRig | null>;
   getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null>;
   listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]>;
   addTweakSuggestion(data: InsertTweakSuggestion): Promise<TweakSuggestion>;

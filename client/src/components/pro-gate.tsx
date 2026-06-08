@@ -20,7 +20,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const DISCORD_LINK = "https://discord.gg/optigods";
-const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $25 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
+const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $15 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
 
 export function ProPaymentDialog({
   open,
@@ -57,7 +57,7 @@ export function ProPaymentDialog({
     staleTime: 60_000,
   });
 
-  const basePrice = pricing?.price ?? 25;
+  const basePrice = pricing?.price ?? 15;
   const isWeekend = pricing?.isWeekendDeal ?? false;
   const price = withSession ? basePrice + 20 : basePrice;
 

@@ -162,11 +162,11 @@ export default function Showcase() {
 
         <div className="mx-6 mb-8 p-6 rounded-xl border border-red-500/20 bg-gradient-to-r from-red-950/20 to-zinc-900/40 text-center">
           <h2 className="text-xl font-black text-white mb-1">Want These Results on Your PC?</h2>
-          <p className="text-sm text-zinc-400 mb-4">One-time $25. Lifetime access. Your hardware, fully unleashed.</p>
+          <p className="text-sm text-zinc-400 mb-4">One-time $15. Lifetime access. Your hardware, fully unleashed.</p>
           <ProUnlockButton>
             <div className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-colors">
               <Zap className="w-4 h-4" />
-              Get Opti Gods Pro — $25 Lifetime
+              Get Opti Gods Pro — $15 Lifetime
             </div>
           </ProUnlockButton>
         </div>
