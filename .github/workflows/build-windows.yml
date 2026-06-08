@@ -65,8 +65,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: cargo-v3-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: cargo-v4-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
 
       - name: Install Tauri CLI
         # Pinned to ~2.9 to match the tauri Rust crate locked at 2.9.5.
