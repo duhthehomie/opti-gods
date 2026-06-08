@@ -691,16 +691,16 @@ export default function TaskManagerPage() {
                                     ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400 cursor-default"
                                     : isKillPending
                                     ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-wait"
-                                    : "bg-red-600/80 border-red-500/60 text-white hover:bg-red-600 shadow-sm shadow-red-600/20"
+                                    : "bg-emerald-600/80 border-emerald-500/60 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-600/20"
                                 )}
                               >
                                 {isKillPending ? <Loader2 className="w-2 h-2 animate-spin" />
                                 : isKillDone   ? "✓ Killed"
-                                : <><Zap className="w-2 h-2" /> Kill</>}
+                                : <><Zap className="w-2 h-2" /> Safe to Kill</>}
                               </button>
                             ) : (
-                              <span className="text-[9px] text-zinc-700 px-2 py-1 rounded border border-zinc-800 flex items-center gap-1">
-                                <Lock className="w-2.5 h-2.5" /> Protected
+                              <span className="text-[9px] font-bold px-2 py-1 rounded border border-red-500/30 bg-red-500/10 text-red-400 flex items-center gap-1 whitespace-nowrap">
+                                <Lock className="w-2.5 h-2.5" /> Don't Kill
                               </span>
                             )}
                           </div>
