@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { Wrench, RotateCcw, HardDrive, Loader2, Activity, History, Download, Monitor } from "lucide-react";
+import { Wrench, RotateCcw, HardDrive, Loader2, Activity, History, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +12,6 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 const Fixes = lazy(() => import("@/pages/fixes"));
 const CustomOS = lazy(() => import("@/pages/custom-os"));
 const DPCLatency = lazy(() => import("@/pages/dpc-latency"));
-const TaskManager = lazy(() => import("@/pages/task-manager"));
-
 
 type Tab = {
   id: string;
@@ -24,7 +22,6 @@ type Tab = {
 
 const TABS: Tab[] = [
   { id: "fixes",          label: "Fixes & Restore", icon: RotateCcw,   Component: Fixes },
-  { id: "task-manager",   label: "Task Manager",    icon: Monitor,      Component: TaskManager },
   { id: "dpc-latency",    label: "DPC Latency",     icon: Activity,     Component: DPCLatency },
   { id: "custom-os",      label: "Custom OS",       icon: HardDrive,    Component: CustomOS },
 ];
