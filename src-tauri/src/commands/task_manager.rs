@@ -2,71 +2,60 @@
 //
 // scan_task_manager   — returns running known-app IDs, startup known-app IDs,
 //                       ALL running processes, and ALL startup registry entries.
-// kill_app            — terminates a process by image name (allowlisted).
-// disable_startup_app — removes a startup entry from HKCU Run (allowlisted).
+// kill_app            — terminates any non-critical process by image name.
+// disable_startup_app — removes a HKCU startup entry (HKLM is inherently protected).
 // get_startup_value   — reads current startup value (for undo).
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-// ── Allowlisted process names that kill_app may terminate ──────────────────
-const ALLOWED_PROCESS_NAMES: &[&str] = &[
-    "chrome.exe",
-    "msedge.exe",
-    "firefox.exe",
-    "brave.exe",
-    "steam.exe",
-    "EpicGamesLauncher.exe",
-    "Battle.net.exe",
-    "EADesktop.exe",
-    "upc.exe",
-    "PlayGTAV.exe",
-    "Discord.exe",
-    "Teams.exe",
-    "slack.exe",
-    "Zoom.exe",
-    "TeamViewer.exe",
-    "OneDrive.exe",
-    "Dropbox.exe",
-    "googledrivefs.exe",
-    "iCloudDrive.exe",
-    "NVIDIA Share.exe",
-    "RadeonSoftware.exe",
-    "MSIAfterburner.exe",
-    "RTSS.exe",
-    "Spotify.exe",
-    "iTunes.exe",
-    "Creative Cloud.exe",
-    "MBAMService.exe",
+// ── Processes that must NEVER be killed (denylist) ─────────────────────────
+const CRITICAL_WINDOWS_PROCESSES: &[&str] = &[
+    "system",
+    "registry",
+    "smss.exe",
+    "csrss.exe",
+    "wininit.exe",
+    "winlogon.exe",
+    "services.exe",
+    "lsass.exe",
+    "lsaiso.exe",
+    "svchost.exe",
+    "fontdrvhost.exe",
+    "dwm.exe",
+    "sihost.exe",
+    "taskhostw.exe",
+    "conhost.exe",
+    "audiodg.exe",
+    "spoolsv.exe",
+    "searchindexer.exe",
+    "searchhost.exe",
+    "runtimebroker.exe",
+    "shellexperiencehost.exe",
+    "startmenuexperiencehost.exe",
+    "textinputhost.exe",
+    "wsappx.exe",
+    "msdtc.exe",
+    "ctfmon.exe",
+    "securityhealthservice.exe",
+    "ntoskrnl.exe",
+    "wininit.exe",
+    "explorer.exe",
+    "taskmgr.exe",
+    "optigods.exe",
+    "dllhost.exe",
+    "wermgr.exe",
+    "wuauclt.exe",
 ];
 
-// ── Allowlisted startup registry key names ─────────────────────────────────
-const ALLOWED_STARTUP_KEYS: &[&str] = &[
-    "Google Chrome",
-    "MicrosoftEdge",
-    "Brave",
-    "Steam",
-    "EpicGamesLauncher",
-    "Battle.net",
-    "EADesktop",
-    "Ubisoft Connect",
-    "Rockstar Games Launcher",
-    "Discord",
-    "Teams",
-    "com.squirrel.slack.slack",
-    "Zoom",
-    "TeamViewer",
-    "OneDrive",
-    "Dropbox",
-    "GoogleDriveFS",
-    "iCloud",
-    "NvBackend",
-    "AMD Radeon Software",
-    "MSI Afterburner",
-    "RTSS",
-    "Spotify",
-    "iTunes",
-    "AdobeGCInvoker-1.0",
+// ── HKCU startup keys that must NOT be disabled ────────────────────────────
+// (HKLM entries are inherently protected — disable_startup_app only touches HKCU)
+const PROTECTED_STARTUP_KEYS: &[&str] = &[
+    "securityhealth",
+    "windows defender",
+    "windowsdefender",
+    "mrt",
+    "mscares",
 ];
 
 // ── Windows system processes to exclude from the background list ───────────
@@ -104,12 +93,13 @@ const WINDOWS_SYSTEM_PROCESSES: &[&str] = &[
     "memory compression",
     "system interrupts",
     "ntoskrnl.exe",
-    "wdmaud.sys",
     "unsecapp.exe",
     "wbem",
     "msiexec.exe",
-    "taskeng.exe",
+    "wermgr.exe",
+    "wuauclt.exe",
     "taskmgr.exe",
+    "optigods.exe",
 ];
 
 const RUN_KEY_HKCU: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -123,31 +113,30 @@ pub struct ScanArgs {
     pub startup_map: HashMap<String, String>,
 }
 
-/// A single running process entry.
 #[derive(Serialize, Debug, Clone)]
 pub struct ProcessInfo {
     pub name: String,
     pub pid: u32,
     pub instances: u32,
+    /// true = safe for the user to kill (not a critical Windows process)
+    pub can_kill: bool,
 }
 
-/// A single Windows startup registry entry.
 #[derive(Serialize, Debug, Clone)]
 pub struct StartupEntry {
     pub name: String,
     pub command: String,
+    /// "HKCU" or "HKLM"
     pub location: String,
+    /// true = can be removed via disable_startup_app
+    pub can_disable: bool,
 }
 
 #[derive(Serialize, Debug)]
 pub struct ScanResult {
-    /// App IDs (from process_map) whose process is currently running
     pub running: Vec<String>,
-    /// App IDs (from startup_map) whose startup key exists in registry
     pub in_startup: Vec<String>,
-    /// All running non-system processes on this machine
     pub all_processes: Vec<ProcessInfo>,
-    /// All entries in HKCU + HKLM Run keys
     pub all_startup_entries: Vec<StartupEntry>,
 }
 
@@ -195,7 +184,6 @@ fn existing_startup_keys_lower() -> HashSet<String> {
     use winreg::RegKey;
 
     let mut keys = HashSet::new();
-
     if let Ok(k) = RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey_with_flags(RUN_KEY_HKCU, KEY_READ)
     {
@@ -213,16 +201,16 @@ fn existing_startup_keys_lower() -> HashSet<String> {
     keys
 }
 
-/// Returns ALL running non-system processes, deduplicated by name, sorted alpha.
 #[cfg(windows)]
 fn all_running_processes() -> Vec<ProcessInfo> {
     let system_set: HashSet<&str> = WINDOWS_SYSTEM_PROCESSES.iter().copied().collect();
+    let critical_set: HashSet<&str> = CRITICAL_WINDOWS_PROCESSES.iter().copied().collect();
 
     let out = std::process::Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
         .output();
 
-    let mut counts: HashMap<String, (u32, u32)> = HashMap::new(); // name -> (first_pid, count)
+    let mut counts: HashMap<String, (u32, u32)> = HashMap::new();
 
     if let Ok(o) = out {
         let text = String::from_utf8_lossy(&o.stdout);
@@ -233,7 +221,6 @@ fn all_running_processes() -> Vec<ProcessInfo> {
             }
             let name = parts[0].trim_matches('"').to_string();
             let pid = parts[1].trim_matches('"').parse::<u32>().unwrap_or(0);
-            // Skip Windows system processes
             if system_set.contains(name.to_lowercase().as_str()) {
                 continue;
             }
@@ -244,20 +231,24 @@ fn all_running_processes() -> Vec<ProcessInfo> {
 
     let mut result: Vec<ProcessInfo> = counts
         .into_iter()
-        .map(|(name, (pid, instances))| ProcessInfo { name, pid, instances })
+        .map(|(name, (pid, instances))| {
+            let can_kill = !critical_set.contains(name.to_lowercase().as_str());
+            ProcessInfo { name, pid, instances, can_kill }
+        })
         .collect();
     result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     result
 }
 
-/// Returns ALL startup entries from HKCU + HKLM Run.
 #[cfg(windows)]
 fn all_startup_entries_list() -> Vec<StartupEntry> {
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
     use winreg::RegKey;
 
+    let protected: HashSet<&str> = PROTECTED_STARTUP_KEYS.iter().copied().collect();
     let mut entries: Vec<StartupEntry> = Vec::new();
 
+    // HKCU — user-level, safe to remove unless protected
     if let Ok(k) = RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey_with_flags(RUN_KEY_HKCU, KEY_READ)
     {
@@ -268,14 +259,17 @@ fn all_startup_entries_list() -> Vec<StartupEntry> {
             .collect();
         for name in names {
             let cmd: String = k.get_value(&name).unwrap_or_default();
+            let can_disable = !protected.contains(name.to_lowercase().as_str());
             entries.push(StartupEntry {
                 name,
                 command: cmd,
                 location: "HKCU".to_string(),
+                can_disable,
             });
         }
     }
 
+    // HKLM — system-level, never remove (we only read, not write)
     if let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE)
         .open_subkey_with_flags(RUN_KEY_HKLM, KEY_READ)
     {
@@ -290,11 +284,16 @@ fn all_startup_entries_list() -> Vec<StartupEntry> {
                 name,
                 command: cmd,
                 location: "HKLM".to_string(),
+                can_disable: false, // HKLM is always read-only for safety
             });
         }
     }
 
-    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries.sort_by(|a, b| {
+        // HKCU first (disableable ones), then HKLM
+        b.can_disable.cmp(&a.can_disable)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     entries
 }
 
@@ -324,12 +323,7 @@ pub fn scan_task_manager(args: ScanArgs) -> ScanResult {
         let all_processes = all_running_processes();
         let all_startup_entries = all_startup_entries_list();
 
-        ScanResult {
-            running,
-            in_startup,
-            all_processes,
-            all_startup_entries,
-        }
+        ScanResult { running, in_startup, all_processes, all_startup_entries }
     }
     #[cfg(not(windows))]
     {
@@ -343,17 +337,19 @@ pub fn scan_task_manager(args: ScanArgs) -> ScanResult {
     }
 }
 
+/// Kill any process that is NOT in the critical Windows denylist.
 #[tauri::command]
 pub fn kill_app(args: KillArgs) -> ActionResult {
     let name = args.process_name.trim().to_string();
 
-    if !ALLOWED_PROCESS_NAMES
+    // Reject if it's a critical Windows process
+    if CRITICAL_WINDOWS_PROCESSES
         .iter()
         .any(|&a| a.eq_ignore_ascii_case(&name))
     {
         return ActionResult {
             ok: false,
-            message: format!("'{}' is not in the kill allowlist.", name),
+            message: format!("'{}' is a protected Windows process and cannot be terminated.", name),
         };
     }
 
@@ -402,17 +398,21 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
     }
 }
 
+/// Remove a startup registry entry from HKCU Run.
+/// Any entry NOT in PROTECTED_STARTUP_KEYS can be removed.
+/// HKLM entries cannot be removed this way (inherently safe).
 #[tauri::command]
 pub fn disable_startup_app(args: StartupArgs) -> ActionResult {
     let key = args.startup_key.trim().to_string();
 
-    if !ALLOWED_STARTUP_KEYS
+    // Reject protected system startup entries
+    if PROTECTED_STARTUP_KEYS
         .iter()
         .any(|&a| a.eq_ignore_ascii_case(&key))
     {
         return ActionResult {
             ok: false,
-            message: format!("'{}' is not in the startup allowlist.", key),
+            message: format!("'{}' is a protected system startup entry.", key),
         };
     }
 
@@ -462,13 +462,6 @@ pub fn disable_startup_app(args: StartupArgs) -> ActionResult {
 pub fn get_startup_value(args: StartupArgs) -> Option<String> {
     let key = args.startup_key.trim().to_string();
 
-    if !ALLOWED_STARTUP_KEYS
-        .iter()
-        .any(|&a| a.eq_ignore_ascii_case(&key))
-    {
-        return None;
-    }
-
     #[cfg(windows)]
     {
         use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
@@ -481,6 +474,7 @@ pub fn get_startup_value(args: StartupArgs) -> Option<String> {
     }
     #[cfg(not(windows))]
     {
+        let _ = key;
         None
     }
 }

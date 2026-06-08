@@ -342,12 +342,14 @@ export interface ProcessInfo {
   name: string;
   pid: number;
   instances: number;
+  can_kill: boolean;
 }
 
 export interface StartupEntry {
   name: string;
   command: string;
   location: string;
+  can_disable: boolean;
 }
 
 export interface NativeTaskScan {
