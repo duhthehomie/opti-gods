@@ -49,12 +49,12 @@ const SECTIONS: Section[] = [
   { id: "wintitus",      title: "WinUtil + OO ShutUp",          desc: "Bundled WinUtil tasks and privacy hardening",              icon: Wrench,        group: "windows", Component: WinTitus,           categories: ["wintitus"] },
   { id: "registry",      title: "Registry, Network & Latency",  desc: "TCP/IP stack, MSI mode, timer resolution, priority",       icon: Settings2,     group: "network", Component: Registry,           categories: ["registry", "network"] },
   {
-    id: "nvidia", title: "NVIDIA Tweaks", desc: "Low-latency, max performance, Reflex, HAGS",
+    id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS",
     icon: MonitorPlay, group: "gpu", Component: Nvidia, categories: ["nvidia"],
     hardwareFilter: (hw) => hw.isNvidia,
   },
   {
-    id: "amd", title: "AMD Radeon", desc: "Anti-lag, shader cache, surface format",
+    id: "amd", title: "AMD Presets", desc: "Anti-lag, shader cache, surface format",
     icon: Flame, group: "gpu", Component: Amd, categories: ["amd"],
     hardwareFilter: (hw) => hw.isAmdGpu || hw.isAmdApu,
   },
@@ -235,7 +235,7 @@ export default function TweaksPage() {
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
   });
   const [showAll, setShowAll] = useState<boolean>(() => {
-    try { return localStorage.getItem(SHOW_ALL_KEY) === "1"; } catch { return false; }
+    try { const v = localStorage.getItem(SHOW_ALL_KEY); return v === null ? true : v === "1"; } catch { return true; }
   });
   const [activeSectionId, setActiveSectionId] = useState<string | null>(() => {
     try { return localStorage.getItem(ACTIVE_SECT_KEY) || null; } catch { return null; }
@@ -500,7 +500,7 @@ export default function TweaksPage() {
               </div>
             ) : (
               /* ── GRID: no section open ── */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {visibleSections.map(s => (
                   <SectionCard
                     key={s.id}
