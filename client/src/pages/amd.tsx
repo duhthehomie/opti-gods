@@ -410,7 +410,7 @@ export default function Amd() {
           <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-zinc-400 leading-relaxed">
             <span className="text-amber-400 font-semibold">AMD GPU Required.</span> These tweaks target the Radeon driver class registry path and will have no effect on NVIDIA or Intel hardware. NVIDIA users should use the{" "}
-            <span className="text-white font-medium">NVIDIA Presets</span> tab instead.
+            <span className="text-white font-medium">NVIDIA Tweaks</span> tab instead.
           </p>
         </div>
 

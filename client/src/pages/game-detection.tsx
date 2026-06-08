@@ -140,7 +140,7 @@ const GAMES: GameEntry[] = [
     name: "Escape from Tarkov",
     publisher: "Battlestate Games",
     accentBorder: "border-l-stone-500",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1249530/header.jpg",
+    coverUrl: "/game-covers/tarkov.png",
     coverGradient: "from-stone-900 via-neutral-800 to-zinc-900",
     detectPaths: ["C:\\Battlestate Games\\EFT\\EscapeFromTarkov.exe", "C:\\Games\\EFT\\EscapeFromTarkov.exe"],
     processName: "EscapeFromTarkov.exe",
@@ -344,7 +344,7 @@ const GAMES: GameEntry[] = [
     name: "Fortnite",
     publisher: "Epic Games",
     accentBorder: "border-l-blue-400",
-    coverUrl: "/game-covers/fortnite-new.jpg",
+    coverUrl: "/game-covers/fortnite-new.png",
     coverGradient: "from-blue-900 via-indigo-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe",

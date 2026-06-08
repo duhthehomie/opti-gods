@@ -49,12 +49,12 @@ const SECTIONS: Section[] = [
   { id: "wintitus",      title: "WinUtil + OO ShutUp",          desc: "Bundled WinUtil tasks and privacy hardening",              icon: Wrench,        group: "windows", Component: WinTitus,           categories: ["wintitus"] },
   { id: "registry",      title: "Registry, Network & Latency",  desc: "TCP/IP stack, MSI mode, timer resolution, priority",       icon: Settings2,     group: "network", Component: Registry,           categories: ["registry", "network"] },
   {
-    id: "nvidia", title: "NVIDIA Presets", desc: "Low-latency, max performance, Reflex, HAGS",
+    id: "nvidia", title: "NVIDIA Tweaks", desc: "Low-latency, max performance, Reflex, HAGS",
     icon: MonitorPlay, group: "gpu", Component: Nvidia, categories: ["nvidia"],
     hardwareFilter: (hw) => hw.isNvidia,
   },
   {
-    id: "amd", title: "AMD Presets", desc: "Anti-lag, shader cache, surface format",
+    id: "amd", title: "AMD Tweaks", desc: "Anti-lag, shader cache, surface format",
     icon: Flame, group: "gpu", Component: Amd, categories: ["amd"],
     hardwareFilter: (hw) => hw.isAmdGpu || hw.isAmdApu,
   },
