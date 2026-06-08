@@ -338,11 +338,27 @@ export async function performUpdate(
 
 // ─── Task Manager native commands ───────────────────────────────────────────
 
+export interface ProcessInfo {
+  name: string;
+  pid: number;
+  instances: number;
+}
+
+export interface StartupEntry {
+  name: string;
+  command: string;
+  location: string;
+}
+
 export interface NativeTaskScan {
   /** App IDs whose process is currently running */
   running: string[];
   /** App IDs whose startup key exists in the registry */
   in_startup: string[];
+  /** All running non-system processes on this machine */
+  all_processes: ProcessInfo[];
+  /** All entries in HKCU + HKLM Run keys */
+  all_startup_entries: StartupEntry[];
 }
 
 export interface NativeActionResult {

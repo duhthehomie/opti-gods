@@ -1,12 +1,10 @@
 // Native task-manager commands for the Opti Gods desktop shell.
 //
-// scan_task_manager   — returns which known apps are running and in startup.
+// scan_task_manager   — returns running known-app IDs, startup known-app IDs,
+//                       ALL running processes, and ALL startup registry entries.
 // kill_app            — terminates a process by image name (allowlisted).
 // disable_startup_app — removes a startup entry from HKCU Run (allowlisted).
 // get_startup_value   — reads current startup value (for undo).
-//
-// All write operations validate against a compile-time allowlist so the UI
-// cannot be abused to kill or disable arbitrary system processes.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -71,6 +69,49 @@ const ALLOWED_STARTUP_KEYS: &[&str] = &[
     "AdobeGCInvoker-1.0",
 ];
 
+// ── Windows system processes to exclude from the background list ───────────
+const WINDOWS_SYSTEM_PROCESSES: &[&str] = &[
+    "system",
+    "registry",
+    "smss.exe",
+    "csrss.exe",
+    "wininit.exe",
+    "winlogon.exe",
+    "services.exe",
+    "lsass.exe",
+    "svchost.exe",
+    "fontdrvhost.exe",
+    "dwm.exe",
+    "sihost.exe",
+    "taskhostw.exe",
+    "conhost.exe",
+    "dllhost.exe",
+    "audiodg.exe",
+    "spoolsv.exe",
+    "searchindexer.exe",
+    "searchhost.exe",
+    "runtimebroker.exe",
+    "shellexperiencehost.exe",
+    "startmenuexperiencehost.exe",
+    "textinputhost.exe",
+    "wsappx.exe",
+    "msdtc.exe",
+    "lsaiso.exe",
+    "ctfmon.exe",
+    "securityhealthservice.exe",
+    "wmpnetwk.exe",
+    "wlanext.exe",
+    "memory compression",
+    "system interrupts",
+    "ntoskrnl.exe",
+    "wdmaud.sys",
+    "unsecapp.exe",
+    "wbem",
+    "msiexec.exe",
+    "taskeng.exe",
+    "taskmgr.exe",
+];
+
 const RUN_KEY_HKCU: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_KEY_HKLM: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 
@@ -78,18 +119,36 @@ const RUN_KEY_HKLM: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 
 #[derive(Deserialize)]
 pub struct ScanArgs {
-    /// app_id → process image name  e.g. {"tm_chrome": "chrome.exe"}
     pub process_map: HashMap<String, String>,
-    /// app_id → startup registry key name  e.g. {"tm_chrome": "Google Chrome"}
     pub startup_map: HashMap<String, String>,
+}
+
+/// A single running process entry.
+#[derive(Serialize, Debug, Clone)]
+pub struct ProcessInfo {
+    pub name: String,
+    pub pid: u32,
+    pub instances: u32,
+}
+
+/// A single Windows startup registry entry.
+#[derive(Serialize, Debug, Clone)]
+pub struct StartupEntry {
+    pub name: String,
+    pub command: String,
+    pub location: String,
 }
 
 #[derive(Serialize, Debug)]
 pub struct ScanResult {
-    /// App IDs whose process is currently running
+    /// App IDs (from process_map) whose process is currently running
     pub running: Vec<String>,
-    /// App IDs whose startup key exists in HKCU/HKLM Run
+    /// App IDs (from startup_map) whose startup key exists in registry
     pub in_startup: Vec<String>,
+    /// All running non-system processes on this machine
+    pub all_processes: Vec<ProcessInfo>,
+    /// All entries in HKCU + HKLM Run keys
+    pub all_startup_entries: Vec<StartupEntry>,
 }
 
 #[derive(Deserialize)]
@@ -112,8 +171,6 @@ pub struct ActionResult {
 
 #[cfg(windows)]
 fn running_process_names_lower() -> HashSet<String> {
-    // tasklist /FO CSV /NH: one quoted CSV line per process.
-    // First field (quoted) is the image name.
     let out = std::process::Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
         .output();
@@ -156,10 +213,93 @@ fn existing_startup_keys_lower() -> HashSet<String> {
     keys
 }
 
+/// Returns ALL running non-system processes, deduplicated by name, sorted alpha.
+#[cfg(windows)]
+fn all_running_processes() -> Vec<ProcessInfo> {
+    let system_set: HashSet<&str> = WINDOWS_SYSTEM_PROCESSES.iter().copied().collect();
+
+    let out = std::process::Command::new("tasklist")
+        .args(["/FO", "CSV", "/NH"])
+        .output();
+
+    let mut counts: HashMap<String, (u32, u32)> = HashMap::new(); // name -> (first_pid, count)
+
+    if let Ok(o) = out {
+        let text = String::from_utf8_lossy(&o.stdout);
+        for line in text.lines() {
+            let parts: Vec<&str> = line.splitn(6, ',').collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let name = parts[0].trim_matches('"').to_string();
+            let pid = parts[1].trim_matches('"').parse::<u32>().unwrap_or(0);
+            // Skip Windows system processes
+            if system_set.contains(name.to_lowercase().as_str()) {
+                continue;
+            }
+            let entry = counts.entry(name).or_insert((pid, 0));
+            entry.1 += 1;
+        }
+    }
+
+    let mut result: Vec<ProcessInfo> = counts
+        .into_iter()
+        .map(|(name, (pid, instances))| ProcessInfo { name, pid, instances })
+        .collect();
+    result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    result
+}
+
+/// Returns ALL startup entries from HKCU + HKLM Run.
+#[cfg(windows)]
+fn all_startup_entries_list() -> Vec<StartupEntry> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::RegKey;
+
+    let mut entries: Vec<StartupEntry> = Vec::new();
+
+    if let Ok(k) = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(RUN_KEY_HKCU, KEY_READ)
+    {
+        let names: Vec<String> = k
+            .enum_values()
+            .filter_map(|r| r.ok())
+            .map(|(n, _)| n)
+            .collect();
+        for name in names {
+            let cmd: String = k.get_value(&name).unwrap_or_default();
+            entries.push(StartupEntry {
+                name,
+                command: cmd,
+                location: "HKCU".to_string(),
+            });
+        }
+    }
+
+    if let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(RUN_KEY_HKLM, KEY_READ)
+    {
+        let names: Vec<String> = k
+            .enum_values()
+            .filter_map(|r| r.ok())
+            .map(|(n, _)| n)
+            .collect();
+        for name in names {
+            let cmd: String = k.get_value(&name).unwrap_or_default();
+            entries.push(StartupEntry {
+                name,
+                command: cmd,
+                location: "HKLM".to_string(),
+            });
+        }
+    }
+
+    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries
+}
+
 // ─── Tauri commands ─────────────────────────────────────────────────────────
 
-/// Scan the system and return which known apps are currently running and which
-/// are registered in the Windows startup registry.
 #[tauri::command]
 pub fn scan_task_manager(args: ScanArgs) -> ScanResult {
     #[cfg(windows)]
@@ -181,7 +321,15 @@ pub fn scan_task_manager(args: ScanArgs) -> ScanResult {
             .map(|(id, _)| id.clone())
             .collect();
 
-        ScanResult { running, in_startup }
+        let all_processes = all_running_processes();
+        let all_startup_entries = all_startup_entries_list();
+
+        ScanResult {
+            running,
+            in_startup,
+            all_processes,
+            all_startup_entries,
+        }
     }
     #[cfg(not(windows))]
     {
@@ -189,12 +337,12 @@ pub fn scan_task_manager(args: ScanArgs) -> ScanResult {
         ScanResult {
             running: vec![],
             in_startup: vec![],
+            all_processes: vec![],
+            all_startup_entries: vec![],
         }
     }
 }
 
-/// Forcibly terminate a process by image name.
-/// The name must be in ALLOWED_PROCESS_NAMES.
 #[tauri::command]
 pub fn kill_app(args: KillArgs) -> ActionResult {
     let name = args.process_name.trim().to_string();
@@ -224,7 +372,6 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
                 let stderr = String::from_utf8_lossy(&o.stderr).to_lowercase();
                 let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
                 let combined = format!("{stderr}{stdout}");
-                // "not found" / "no tasks" means the process wasn't running — treat as success.
                 if combined.contains("not found")
                     || combined.contains("no tasks")
                     || combined.contains("not running")
@@ -255,8 +402,6 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
     }
 }
 
-/// Remove a startup registry entry from HKCU Run.
-/// The key name must be in ALLOWED_STARTUP_KEYS.
 #[tauri::command]
 pub fn disable_startup_app(args: StartupArgs) -> ActionResult {
     let key = args.startup_key.trim().to_string();
@@ -313,7 +458,6 @@ pub fn disable_startup_app(args: StartupArgs) -> ActionResult {
     }
 }
 
-/// Read the current value of a HKCU Run entry (used for undo).
 #[tauri::command]
 pub fn get_startup_value(args: StartupArgs) -> Option<String> {
     let key = args.startup_key.trim().to_string();
