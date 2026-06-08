@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle, Palette } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
@@ -38,6 +38,7 @@ const PRIMARY: NavItem[] = [
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
   { title: "Task Manager", url: "/task-manager", icon: Monitor },
+  { title: "FiveM Graphics", url: "/fivem-graphics", icon: Palette },
   { title: "Game Detection", url: "/game-detection", icon: Gamepad2 },
   { title: "AI Assistant", url: "/ai", icon: Bot },
   { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
@@ -56,17 +57,25 @@ function clearGuestMode() {
 }
 
 function getStoredAdminKey(): string | null {
-  try { return localStorage.getItem(NATIVE_ADMIN_KEY); } catch { return null; }
+  // Session-only: Admin link disappears when the app/browser restarts.
+  // The /admin page still reads from localStorage independently for key auto-fill.
+  try { return sessionStorage.getItem("optigods_admin_session"); } catch { return null; }
 }
 
 function storeAdminKey(key: string) {
-  // NATIVE_ADMIN_KEY = "optigods_admin_key" — same key the /admin page reads,
-  // so the panel is already authenticated when opened from the sidebar.
-  try { localStorage.setItem(NATIVE_ADMIN_KEY, key); } catch {}
+  // Write to sessionStorage (sidebar visibility this session only)
+  // AND to localStorage so the /admin page can still auto-fill the key field.
+  try {
+    sessionStorage.setItem("optigods_admin_session", key);
+    localStorage.setItem(NATIVE_ADMIN_KEY, key);
+  } catch {}
 }
 
 function clearAdminKey() {
-  try { localStorage.removeItem(NATIVE_ADMIN_KEY); } catch {}
+  try {
+    sessionStorage.removeItem("optigods_admin_session");
+    localStorage.removeItem(NATIVE_ADMIN_KEY);
+  } catch {}
 }
 
 export function AppSidebar() {

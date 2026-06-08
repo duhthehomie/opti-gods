@@ -175,45 +175,53 @@ function SectionCard({
       onClick={onClick}
       data-testid={`card-${section.id}`}
       className={cn(
-        "w-full text-left p-4 rounded-xl border transition-all duration-200 group",
+        "w-full text-left p-5 rounded-xl border transition-all duration-200 group",
         active
-          ? "bg-red-500/8 border-red-500/40 shadow-[inset_0_0_20px_-10px_rgba(239,68,68,0.12)]"
-          : "bg-zinc-950/40 border-white/5 hover:border-white/15 hover:bg-zinc-900/50"
+          ? "bg-red-500/8 border-red-500/40 shadow-[inset_0_0_28px_-8px_rgba(239,68,68,0.14)]"
+          : "bg-zinc-950/50 border-white/6 hover:border-white/18 hover:bg-zinc-900/60"
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-4">
         <div className={cn(
-          "w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 transition-colors",
-          active ? "bg-red-500/15 border-red-500/30" : "bg-zinc-900 border-white/5 group-hover:border-white/10"
+          "w-12 h-12 rounded-xl flex items-center justify-center border shrink-0 transition-colors",
+          active ? "bg-red-500/15 border-red-500/35" : "bg-zinc-900/80 border-white/8 group-hover:border-white/15"
         )}>
-          <Icon className={cn("w-4 h-4 transition-colors", active ? "text-red-400" : "text-zinc-400 group-hover:text-zinc-300")} />
+          <Icon className={cn("w-6 h-6 transition-colors", active ? "text-red-400" : "text-zinc-400 group-hover:text-zinc-300")} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={cn("text-sm font-bold leading-tight truncate transition-colors", active ? "text-white" : "text-zinc-200")}>{section.title}</p>
-          <p className="text-[11px] text-zinc-500 leading-tight mt-0.5 line-clamp-2">{section.desc}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={cn("text-base font-bold leading-tight transition-colors", active ? "text-white" : "text-zinc-100 group-hover:text-white")}>{section.title}</p>
+            {activeTweaks > 0 && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-300 border border-red-500/35 uppercase tracking-wide tabular-nums animate-in fade-in duration-200">
+                {activeTweaks} ON
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 leading-relaxed mt-1">{section.desc}</p>
         </div>
-        {activeTweaks > 0 && (
-          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide tabular-nums">
-            {activeTweaks} ON
-          </span>
-        )}
-      </div>
-      {count > 0 && (
-        <div className="mt-3 space-y-1.5">
-          <div className="flex items-center justify-between">
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          {count > 0 && (
             <span className={cn(
-              "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border",
-              active ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-zinc-900 text-zinc-500 border-white/8"
+              "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border",
+              active ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-zinc-800/80 text-zinc-500 border-white/8"
             )}>
               {count} tweaks
             </span>
-            {active && <ChevronDown className="w-3.5 h-3.5 text-red-400 rotate-180" />}
-          </div>
-          {activeTweaks > 0 && (
-            <div className="h-0.5 bg-zinc-900 rounded-full overflow-hidden">
-              <div className="h-full bg-red-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-            </div>
           )}
+          <ChevronDown className={cn(
+            "w-4 h-4 transition-all duration-200",
+            active ? "text-red-400 rotate-180" : "text-zinc-600 -rotate-90 group-hover:text-zinc-400"
+          )} />
+        </div>
+      </div>
+      {activeTweaks > 0 && count > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-wider">{pct}% configured</span>
+          </div>
+          <div className="h-1 bg-zinc-800/80 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+          </div>
         </div>
       )}
     </button>
@@ -433,15 +441,14 @@ export default function TweaksPage() {
                 {/* Drag handle */}
                 <div
                   onMouseDown={onDragStart}
-                  className="group shrink-0 w-4 self-stretch flex items-center justify-center cursor-col-resize mx-1 relative"
-                  title="Drag to resize"
+                  className="group shrink-0 w-5 self-stretch flex items-center justify-center cursor-col-resize relative select-none"
+                  title="Drag to resize panels"
                 >
-                  <div className="w-px h-full bg-white/5 group-hover:bg-red-500/40 transition-colors absolute inset-y-0 left-1/2 -translate-x-1/2" />
-                  <div className="relative z-10 flex flex-col items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                    <svg width="12" height="16" viewBox="0 0 12 16" fill="none" className="text-red-500">
-                      <path d="M2 6 L6 2 L10 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M2 10 L6 14 L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/8 group-hover:bg-red-500/50 group-active:bg-red-500/70 transition-colors duration-150" />
+                  <div className="relative z-10 w-4 h-10 rounded-sm bg-zinc-900/80 border border-white/10 group-hover:border-red-500/40 group-active:border-red-500/60 flex items-center justify-center transition-all duration-150 group-hover:bg-zinc-800/80 shadow-sm">
+                    <div className="flex flex-col gap-[3px]">
+                      <div className="w-0.5 h-3.5 rounded-full bg-zinc-600 group-hover:bg-red-400 group-active:bg-red-300 transition-colors duration-150" />
+                    </div>
                   </div>
                 </div>
 
@@ -493,7 +500,7 @@ export default function TweaksPage() {
               </div>
             ) : (
               /* ── GRID: no section open ── */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {visibleSections.map(s => (
                   <SectionCard
                     key={s.id}
