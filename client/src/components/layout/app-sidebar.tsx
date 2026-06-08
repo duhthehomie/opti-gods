@@ -57,25 +57,17 @@ function clearGuestMode() {
 }
 
 function getStoredAdminKey(): string | null {
-  // Session-only: Admin link disappears when the app/browser restarts.
-  // The /admin page still reads from localStorage independently for key auto-fill.
+  // Session-only: admin nav disappears when the app/tab closes.
   try { return sessionStorage.getItem("optigods_admin_session"); } catch { return null; }
 }
 
 function storeAdminKey(key: string) {
-  // Write to sessionStorage (sidebar visibility this session only)
-  // AND to localStorage so the /admin page can still auto-fill the key field.
-  try {
-    sessionStorage.setItem("optigods_admin_session", key);
-    localStorage.setItem(NATIVE_ADMIN_KEY, key);
-  } catch {}
+  // sessionStorage only — never persists across app restarts.
+  try { sessionStorage.setItem("optigods_admin_session", key); } catch {}
 }
 
 function clearAdminKey() {
-  try {
-    sessionStorage.removeItem("optigods_admin_session");
-    localStorage.removeItem(NATIVE_ADMIN_KEY);
-  } catch {}
+  try { sessionStorage.removeItem("optigods_admin_session"); } catch {}
 }
 
 export function AppSidebar() {

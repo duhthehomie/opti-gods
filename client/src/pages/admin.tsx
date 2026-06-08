@@ -1456,7 +1456,7 @@ function AdminPresetGenerator({
       preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
       const tweakIds = Object.keys(tweakMap);
 
-      const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
+      const adminKey = sessionStorage.getItem("optigods_admin_session") || "";
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
@@ -1511,7 +1511,7 @@ function AdminPresetGenerator({
       ];
       const tweakMap: Record<string, boolean> = {};
       fixTweaks.forEach(id => { tweakMap[id] = true; });
-      const adminKey = localStorage.getItem(ADMIN_KEY_STORAGE) || "";
+      const adminKey = sessionStorage.getItem("optigods_admin_session") || "";
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
@@ -2659,9 +2659,7 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const isPro = useProStatus();
   const { user, isLoading: authLoading } = useAuth();
-  const [key, setKey] = useState(() => {
-    try { return localStorage.getItem(ADMIN_KEY_STORAGE) || ""; } catch { return ""; }
-  });
+  const [key, setKey] = useState("");
   const [input, setInput] = useState("");
   const [authed, setAuthed] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -3269,7 +3267,7 @@ export default function Admin() {
     setAuthError("");
     const res = await fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": input } });
     if (res.ok) {
-      try { localStorage.setItem(ADMIN_KEY_STORAGE, input); } catch { /* private mode */ }
+      try { sessionStorage.setItem("optigods_admin_session", input); } catch { /* private mode */ }
       setKey(input);
       setAuthed(true);
     } else {
@@ -3278,7 +3276,7 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
-    try { localStorage.removeItem(ADMIN_KEY_STORAGE); } catch { /* private mode */ }
+    try { sessionStorage.removeItem("optigods_admin_session"); } catch { /* private mode */ }
     setKey(""); setInput(""); setAuthed(false);
   };
 
