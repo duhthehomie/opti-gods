@@ -91,7 +91,7 @@ export default function PaymentSuccess() {
 
   return (
     <div className="min-h-screen bg-[#020202] text-white flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-8">
+      <div className="max-w-xl w-full text-center space-y-8">
 
         {/* Logo */}
         <div className="flex items-center justify-center gap-2">
