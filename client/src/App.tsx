@@ -36,6 +36,7 @@ import GameDetectionPage from "@/pages/game-detection";
 import ProcessesPage from "@/pages/processes";
 import HelpPage from "@/pages/help";
 import TaskManagerPage from "@/pages/task-manager";
+import FivemGraphicsPage from "@/pages/fivem-graphics";
 
 function SmartHome() {
   const isGuest = (() => { try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; } })();
@@ -118,6 +119,7 @@ function Router() {
       <Route path="/processes" component={ProcessesPage} />
       <Route path="/help" component={HelpPage} />
       <Route path="/task-manager" component={TaskManagerPage} />
+      <Route path="/fivem-graphics" component={FivemGraphicsPage} />
 
       <Route component={NotFound} />
     </Switch>

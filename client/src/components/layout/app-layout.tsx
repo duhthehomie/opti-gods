@@ -123,6 +123,12 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "Live",
     highlights: ["Kill Background Apps", "Disable Startup Entries", "Browser Cleanup", "Game Launcher Trim", "Cloud Sync Off"],
   },
+  "/fivem-graphics": {
+    title: "FiveM Graphics Studio",
+    desc: "Pre-made optimised sky packs and a custom pack builder — adjust clouds, jet streams, and blue depth for maximum FPS.",
+    tweakCount: "Visual",
+    highlights: ["No-Cloud Sky Pack", "Vivid Blue Sky", "Jet Stream Control", "Custom Pack Builder", "One-Click Installer"],
+  },
   "/help": {
     title: "Help & Support",
     desc: "FAQ, crash recovery guide, and direct support via Discord ticket.",
