@@ -46,6 +46,20 @@ struct Win32NetworkAdapter {
     physical_adapter: Option<bool>,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Win32Fan {
+    name: Option<String>,
+}
+
+// MSAcpi_ThermalZoneTemperature lives in root\wmi, not root\cimv2.
+// Temperature is in tenths of Kelvin — convert with: (value / 10.0) - 273.15
+#[derive(Deserialize, Debug)]
+struct MsAcpiThermalZone {
+    #[serde(rename = "CurrentTemperature")]
+    current_temperature: Option<u32>,
+}
+
 pub fn scan() -> Result<HardwareScan> {
     let com = COMLibrary::new().context("COM init")?;
     let wmi = WMIConnection::new(com).context("WMI connect")?;
@@ -68,6 +82,17 @@ pub fn scan() -> Result<HardwareScan> {
     let nics: Vec<Win32NetworkAdapter> = wmi
         .raw_query("SELECT Manufacturer, PhysicalAdapter FROM Win32_NetworkAdapter")
         .context("query Win32_NetworkAdapter")?;
+
+    // Fan count — Win32_Fan is optional; many consumer boards don't expose fans
+    // via WMI even when fans are present, so we treat 0 results as "unknown".
+    let fans: Vec<Win32Fan> = wmi
+        .raw_query("SELECT Name FROM Win32_Fan")
+        .unwrap_or_default();
+    let fan_count: Option<u32> = if fans.is_empty() {
+        None
+    } else {
+        Some(fans.len() as u32)
+    };
 
     // Pick the "main" GPU heuristically: largest VRAM that isn't a virtual / RDP adapter.
     let main_gpu = gpus
@@ -122,14 +147,42 @@ pub fn scan() -> Result<HardwareScan> {
         })
     });
 
-    let cooling_type = chassis_label
-        .as_deref()
-        .map(|c| if c == "laptop" { "stock" } else { "air" }.to_string());
+    // Cooling label: prefer real fan count, then chassis-derived fallback.
+    let cooling_type = match (chassis_label.as_deref(), fan_count) {
+        (_, Some(n)) if n > 0 => Some(format!("{} fan{}", n, if n == 1 { "" } else { "s" })),
+        (Some("laptop"), _) => Some("stock".to_string()),
+        _ => Some("air".to_string()),
+    };
 
     let nic_vendor = nics
         .iter()
         .filter(|n| n.physical_adapter.unwrap_or(false))
         .find_map(|n| n.manufacturer.clone());
+
+    // CPU temperature via MSAcpi_ThermalZoneTemperature (root\wmi namespace).
+    // This is the same source Windows Task Manager and most monitoring tools use.
+    // Wrap in a closure so any failure returns None gracefully.
+    let cpu_temp_c: Option<f32> = (|| -> Option<f32> {
+        let com2 = COMLibrary::new().ok()?;
+        let wmi_root = WMIConnection::with_namespace_path("ROOT\\WMI", com2).ok()?;
+        let zones: Vec<MsAcpiThermalZone> = wmi_root
+            .raw_query("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")
+            .ok()?;
+        // Convert tenths of Kelvin → Celsius, filter implausible values
+        let mut temps: Vec<f32> = zones
+            .iter()
+            .filter_map(|z| z.current_temperature)
+            .filter(|&t| t > 2731) // > 0 °C
+            .map(|t| (t as f32 / 10.0) - 273.15)
+            .filter(|&c| c > 0.0 && c < 115.0)
+            .collect();
+        if temps.is_empty() {
+            return None;
+        }
+        // Return the highest thermal zone (most likely CPU package)
+        temps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        temps.last().copied()
+    })();
 
     Ok(HardwareScan {
         cpu,
@@ -140,6 +193,8 @@ pub fn scan() -> Result<HardwareScan> {
         motherboard,
         chassis: chassis_label,
         cooling_type,
+        fan_count,
+        cpu_temp_c,
         refresh_hz: None,
         nic_vendor,
         anticheats: Vec::new(),

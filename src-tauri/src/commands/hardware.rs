@@ -14,6 +14,8 @@ pub struct HardwareScan {
     pub motherboard: Option<String>,
     pub chassis: Option<String>,
     pub cooling_type: Option<String>,
+    pub fan_count: Option<u32>,
+    pub cpu_temp_c: Option<f32>,
     pub refresh_hz: Option<u32>,
     pub nic_vendor: Option<String>,
     pub anticheats: Vec<String>,

@@ -29,6 +29,8 @@ export interface NativeHardwareScan {
   motherboard: string | null;
   chassis: string | null;
   cooling_type: string | null;
+  fan_count: number | null;
+  cpu_temp_c: number | null;
   refresh_hz: number | null;
   nic_vendor: string | null;
   anticheats: string[];
