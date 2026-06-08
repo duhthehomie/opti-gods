@@ -15,7 +15,7 @@ export default function AccountPage() {
   const display = user?.globalName || user?.username;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-6 max-w-lg mx-auto">
+    <div className="min-h-screen bg-[#050505] text-white p-6 w-full">
       <div className="mb-6 flex items-center gap-3">
         <button
           data-testid="button-account-back"

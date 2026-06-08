@@ -25,7 +25,7 @@ export default function ProPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-4xl">
+      <div className="space-y-8 w-full">
         {/* Hero */}
         <div className="relative rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-zinc-950 to-black p-8 overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/10 rounded-full blur-[120px] pointer-events-none" />

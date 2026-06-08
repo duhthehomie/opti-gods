@@ -173,7 +173,7 @@ export default function CustomOS() {
 
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-4xl pb-12">
+      <div className="space-y-8 w-full pb-12">
 
         {/* Hero */}
         <motion.div
