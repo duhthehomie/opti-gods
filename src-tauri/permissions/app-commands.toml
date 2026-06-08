@@ -83,6 +83,26 @@ identifier = "allow-open-downloads"
 description = "Open the Windows Downloads folder in Explorer."
 commands.allow = ["open_downloads"]
 
+[[permission]]
+identifier = "allow-scan-task-manager"
+description = "Scan running processes and startup entries."
+commands.allow = ["scan_task_manager"]
+
+[[permission]]
+identifier = "allow-kill-app"
+description = "Terminate a running process by name or PID."
+commands.allow = ["kill_app"]
+
+[[permission]]
+identifier = "allow-disable-startup-app"
+description = "Disable a startup entry in the registry."
+commands.allow = ["disable_startup_app"]
+
+[[permission]]
+identifier = "allow-get-startup-value"
+description = "Read the current value of a startup registry entry."
+commands.allow = ["get_startup_value"]
+
 [permission_set]
 identifier = "all-app-commands"
 description = "All app-level commands."
@@ -104,4 +124,8 @@ permissions = [
   "allow-check-for-update",
   "allow-env-info",
   "allow-open-downloads",
+  "allow-scan-task-manager",
+  "allow-kill-app",
+  "allow-disable-startup-app",
+  "allow-get-startup-value",
 ]
