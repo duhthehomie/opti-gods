@@ -3415,8 +3415,8 @@ export default function Admin() {
                 <span className="hidden sm:inline">Dashboard</span>
               </button>
               <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-zinc-800/60 to-black border border-red-500/40 rounded-xl flex items-center justify-center overflow-hidden shadow-[0_0_24px_-6px_rgba(239,68,68,0.6)]">
-                  <AdminSilverMark className="w-16 h-16" />
+                <div className="w-20 h-20 bg-gradient-to-br from-zinc-700/60 to-zinc-900 border border-red-500/40 rounded-xl flex items-center justify-center overflow-hidden shadow-[0_0_28px_-6px_rgba(239,68,68,0.7)]">
+                  <AdminSilverMark className="w-20 h-20" />
                 </div>
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
               </div>

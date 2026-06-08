@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { BRAND, prefersReducedMotion } from "./assets";
 
 export function AdminSilverMark({ className = "" }: { className?: string }) {
@@ -26,7 +27,7 @@ export function AdminSilverMark({ className = "" }: { className?: string }) {
       <img
         src={BRAND.goldPng}
         alt="Opti Gods"
-        className={"w-12 h-12 object-contain " + className}
+        className={cn("w-20 h-20 object-cover", className)}
       />
     );
   }
@@ -40,7 +41,7 @@ export function AdminSilverMark({ className = "" }: { className?: string }) {
       loop
       playsInline
       preload="metadata"
-      className={"w-12 h-12 object-contain " + className}
+      className={cn("w-20 h-20 object-cover", className)}
       data-testid="admin-silver-mark"
     />
   );
