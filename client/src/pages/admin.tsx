@@ -1333,10 +1333,12 @@ function AdminPresetGenerator({
   initialValues,
   allHardware = [],
   allCodes = [],
+  apiKey = "",
 }: {
   initialValues?: PresetInitValues;
   allHardware?: CustomerHW[];
   allCodes?: Array<{ code: string; note: string | null }>;
+  apiKey?: string;
 }) {
   const { toast } = useToast();
   const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">(initialValues?.gpuVendor ?? "nvidia");
@@ -1456,10 +1458,9 @@ function AdminPresetGenerator({
       preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
       const tweakIds = Object.keys(tweakMap);
 
-      const adminKey = sessionStorage.getItem("optigods_admin_session") || "";
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
       });
 
@@ -1511,10 +1512,9 @@ function AdminPresetGenerator({
       ];
       const tweakMap: Record<string, boolean> = {};
       fixTweaks.forEach(id => { tweakMap[id] = true; });
-      const adminKey = sessionStorage.getItem("optigods_admin_session") || "";
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
         body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
       });
       if (!res.ok) throw new Error("Fix generation failed");
@@ -3267,7 +3267,6 @@ export default function Admin() {
     setAuthError("");
     const res = await fetch(apiUrl("/api/admin/codes"), { headers: { "x-admin-key": input } });
     if (res.ok) {
-      try { sessionStorage.setItem("optigods_admin_session", input); } catch { /* private mode */ }
       setKey(input);
       setAuthed(true);
     } else {
@@ -3276,7 +3275,6 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
-    try { sessionStorage.removeItem("optigods_admin_session"); } catch { /* private mode */ }
     setKey(""); setInput(""); setAuthed(false);
   };
 
@@ -5242,6 +5240,7 @@ export default function Admin() {
             initialValues={presetFillData ?? undefined}
             allHardware={customerHardwareQuery.data || []}
             allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
+            apiKey={key}
           />
         )}
 
