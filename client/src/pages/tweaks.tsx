@@ -5,15 +5,12 @@ import { EmbeddedProvider } from "@/lib/embedded-context";
 import {
   ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
   Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
-  Swords, Blocks, Target, Eye, Music, X, BookmarkCheck, Zap,
+  Swords, Blocks, Target, Eye, Music, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@shared/routes";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useToast } from "@/hooks/use-toast";
 
 const Registry         = lazy(() => import("@/pages/registry"));
 const CallOfDuty       = lazy(() => import("@/pages/call-of-duty"));
@@ -101,7 +98,7 @@ const TAB_STORAGE_KEY  = "optigods_tweaks_active_group";
 const SHOW_ALL_KEY     = "optigods_tweaks_show_all";
 const ACTIVE_SECT_KEY  = "optigods_tweaks_active_section";
 
-type TabId = "all" | GroupId | "presets";
+type TabId = "all" | GroupId;
 const TABS: { id: TabId; label: string }[] = [
   { id: "all",     label: "All"     },
   { id: "windows", label: "Windows" },
@@ -109,7 +106,6 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "gpu",     label: "GPU"     },
   { id: "games",   label: "Games"   },
   { id: "system",  label: "System"  },
-  { id: "presets", label: "Presets" },
 ];
 
 // ─── Per-section active-tweak count ───────────────────────────────────────────
@@ -224,148 +220,6 @@ function SectionCard({
   );
 }
 
-// ─── Inline Presets Panel ─────────────────────────────────────────────────────
-function PresetsPanel() {
-  const { tweaks, nvidiaPreset } = useOptimizationStore();
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [presetName, setPresetName] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const { data: savedPresets = [], isError } = useQuery<any[]>({
-    queryKey: [api.presets.list.path],
-    retry: false,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await fetch(`/api/presets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name, config: { tweaks, nvidiaPreset } }),
-      });
-      if (!res.ok) throw new Error("Failed to save preset");
-      return res.json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [api.presets.list.path] });
-      setPresetName("");
-      setSaving(false);
-      toast({ title: "Preset saved", description: `"${presetName}" added to your presets.` });
-    },
-    onError: () => {
-      toast({ title: "Could not save preset", description: "You must be logged in to save presets.", variant: "destructive" });
-      setSaving(false);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/presets/${id}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) throw new Error("Delete failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [api.presets.list.path] }),
-  });
-
-  const { setAllTweaks, setNvidiaPreset } = useOptimizationStore();
-
-  function loadPreset(preset: any) {
-    const cfg = preset.config as { tweaks?: Record<string, boolean>; nvidiaPreset?: string };
-    if (cfg?.tweaks) setAllTweaks(cfg.tweaks);
-    if (cfg?.nvidiaPreset) setNvidiaPreset(cfg.nvidiaPreset);
-    toast({ title: `Preset loaded`, description: `"${preset.name}" applied — toggles updated.` });
-  }
-
-  const enabledCount = Object.values(tweaks).filter(Boolean).length;
-
-  if (isError) {
-    return (
-      <div className="px-6 py-10 text-center">
-        <BookmarkCheck className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-        <p className="text-sm font-bold text-zinc-400 mb-1">Login required</p>
-        <p className="text-xs text-zinc-600">Presets are linked to your session. Connect via Discord to save and load presets across devices.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-4 pb-6 pt-2 space-y-6">
-      {/* Save current */}
-      <div className="p-4 rounded-xl bg-zinc-900/50 border border-white/5">
-        <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">Save current selection</p>
-        <p className="text-[11px] text-zinc-600 mb-3">{enabledCount} tweaks currently enabled</p>
-        {saving ? (
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              type="text"
-              placeholder="Preset name (e.g. FiveM Night Session)..."
-              value={presetName}
-              onChange={e => setPresetName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && presetName.trim()) createMutation.mutate(presetName.trim()); if (e.key === "Escape") setSaving(false); }}
-              className="flex-1 px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40"
-              data-testid="input-preset-name"
-            />
-            <button
-              onClick={() => presetName.trim() && createMutation.mutate(presetName.trim())}
-              disabled={createMutation.isPending || !presetName.trim()}
-              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold disabled:opacity-40 transition-colors"
-            >
-              Save
-            </button>
-            <button onClick={() => setSaving(false)} className="px-3 py-2 rounded-lg border border-white/10 text-zinc-400 hover:text-white transition-colors text-sm">
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setSaving(true)}
-            data-testid="button-save-preset"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-colors"
-          >
-            <BookmarkCheck className="w-4 h-4" /> Save Preset
-          </button>
-        )}
-      </div>
-
-      {/* Saved presets */}
-      <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">{savedPresets.length} saved preset{savedPresets.length !== 1 ? "s" : ""}</p>
-        {savedPresets.length === 0 ? (
-          <div className="text-center py-8 text-zinc-600 text-sm">No presets yet — save your current selection above.</div>
-        ) : (
-          <div className="space-y-2">
-            {savedPresets.map((p: any) => (
-              <div key={p.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors" data-testid={`preset-item-${p.id}`}>
-                <BookmarkCheck className="w-4 h-4 text-red-500 shrink-0" />
-                <span className="flex-1 text-sm font-bold text-white truncate">{p.name}</span>
-                <span className="text-[10px] text-zinc-600 font-mono shrink-0">
-                  {Object.values((p.config?.tweaks || {}) as Record<string, boolean>).filter(Boolean).length} tweaks
-                </span>
-                <button
-                  onClick={() => loadPreset(p)}
-                  data-testid={`button-load-preset-${p.id}`}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-600/20 text-red-300 border border-red-500/30 hover:bg-red-600/40 transition-colors"
-                >
-                  Load
-                </button>
-                <button
-                  onClick={() => deleteMutation.mutate(p.id)}
-                  data-testid={`button-delete-preset-${p.id}`}
-                  className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TweaksPage() {
   const [location] = useLocation();
@@ -425,11 +279,11 @@ export default function TweaksPage() {
   }, [location]);
 
   const filteredSections = applyHardwareFilter(SECTIONS, hw, showAll);
-  const visibleSections  = (activeTab === "all" || activeTab === "presets")
+  const visibleSections  = activeTab === "all"
     ? filteredSections
     : filteredSections.filter(s => s.group === activeTab);
 
-  const allForTab   = (activeTab === "all" || activeTab === "presets") ? SECTIONS : SECTIONS.filter(s => s.group === activeTab);
+  const allForTab   = activeTab === "all" ? SECTIONS : SECTIONS.filter(s => s.group === activeTab);
   const hiddenCount = allForTab.length - visibleSections.length;
 
   const gpuChip = !detecting && hw.gpuName ? hw.gpuName : null;
@@ -474,9 +328,7 @@ export default function TweaksPage() {
               )}
             </div>
             <p className="text-sm text-zinc-500 mt-1">
-              {activeTab === "presets"
-                ? "Save and load your tweak configurations."
-                : activeTab === "all"
+              {activeTab === "all"
                 ? `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} matched to your hardware.`
                 : `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} in the ${TABS.find(t => t.id === activeTab)?.label} category.`}
             </p>
@@ -503,16 +355,15 @@ export default function TweaksPage() {
         {/* Category Tab Bar */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 border-b border-white/5 scrollbar-none" style={{ scrollbarWidth: "none" }}>
           {TABS.map(tab => {
-            const isPresets    = tab.id === "presets";
-            const allInGroup   = isPresets ? [] : tab.id === "all" ? SECTIONS : SECTIONS.filter(s => s.group === tab.id);
-            const showInGroup  = isPresets ? [] : tab.id === "all" ? filteredSections : filteredSections.filter(s => s.group === tab.id);
-            const count        = isPresets ? null : showInGroup.length;
-            const isFiltered   = !isPresets && showInGroup.length < allInGroup.length;
+            const allInGroup  = tab.id === "all" ? SECTIONS : SECTIONS.filter(s => s.group === tab.id);
+            const showInGroup = tab.id === "all" ? filteredSections : filteredSections.filter(s => s.group === tab.id);
+            const count       = showInGroup.length;
+            const isFiltered  = showInGroup.length < allInGroup.length;
             return (
               <button
                 key={tab.id}
                 data-testid={`tab-tweaks-${tab.id}`}
-                onClick={() => { setActiveTab(tab.id); if (tab.id === "presets") setActiveSectionId(null); }}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0",
                   activeTab === tab.id
@@ -521,14 +372,12 @@ export default function TweaksPage() {
                 )}
               >
                 {tab.label}
-                {count !== null && (
-                  <span className={cn(
-                    "text-[9px] px-1 py-0.5 rounded font-bold",
-                    activeTab === tab.id ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-600"
-                  )}>
-                    {count}
-                  </span>
-                )}
+                <span className={cn(
+                  "text-[9px] px-1 py-0.5 rounded font-bold",
+                  activeTab === tab.id ? "bg-red-500/20 text-red-400" : "bg-zinc-800 text-zinc-600"
+                )}>
+                  {count}
+                </span>
                 {isFiltered && !showAll && (
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" title="Some tabs hidden by hardware filter" />
                 )}
@@ -538,7 +387,7 @@ export default function TweaksPage() {
         </div>
 
         {/* Hidden tabs notice */}
-        {!showAll && !detecting && hiddenCount > 0 && activeTab !== "presets" && (
+        {!showAll && !detecting && hiddenCount > 0 && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/50 border border-white/5 text-[11px] text-zinc-500">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
             {hiddenCount} tab{hiddenCount !== 1 ? "s" : ""} hidden — not relevant to your detected hardware ({hw.gpuName}).
@@ -551,22 +400,9 @@ export default function TweaksPage() {
           </div>
         )}
 
-        {/* ── PRESETS TAB ──────────────────────────────────────────────────── */}
-        {activeTab === "presets" && (
-          <div className="rounded-xl border border-white/5 bg-zinc-950/40 overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
-              <BookmarkCheck className="w-4 h-4 text-red-500" />
-              <h2 className="text-sm font-bold text-white">My Presets</h2>
-              <p className="text-xs text-zinc-500 ml-1">Save your current toggles as a named preset to reload later.</p>
-            </div>
-            <PresetsPanel />
-          </div>
-        )}
-
         {/* ── SECTION GRID + ACTIVE PANEL ──────────────────────────────────── */}
-        {activeTab !== "presets" && (
-          <>
-            {visibleSections.length === 0 ? (
+        <>
+          {visibleSections.length === 0 ? (
               <div className="text-center py-16 text-zinc-600">
                 <Zap className="w-8 h-8 mx-auto mb-3 opacity-30" />
                 <p className="text-sm font-bold mb-1">No sections in this category</p>
@@ -669,8 +505,7 @@ export default function TweaksPage() {
                 ))}
               </div>
             )}
-          </>
-        )}
+        </>
       </div>
     </AppLayout>
   );
