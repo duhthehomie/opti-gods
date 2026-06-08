@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { zipSync, strToU8 } from "fflate";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Slider } from "@/components/ui/slider";
@@ -7,7 +7,8 @@ import {
   Cloud, CloudOff, Wind, Palette, Package, Lock, Download,
   CheckCircle2, Sparkles, ChevronRight, Info, Eye,
   FolderOpen, Layers, Clock, Sun, Snowflake, CloudRain,
-  Zap, Shield, Monitor,
+  Zap, Shield, Monitor, Flame, Wand2, SendHorizonal, Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,6 +66,12 @@ function buildTimecycleXml(opts: {
   freezeWeather: boolean;
   disableRain: boolean;
   disableSnow: boolean;
+  aerialClouds: boolean;
+  aerialDensity: number;
+  lightRays: boolean;
+  lightRayIntensity: number;
+  sunIntensity: number;
+  atmosphereHaze: boolean;
 }): string {
   const c = opts.cloudThickness / 100;
   const j = opts.jetStreams / 100;
@@ -74,31 +81,50 @@ function buildTimecycleXml(opts: {
   const skyG = num(g / 255);
   const skyB = num(B / 255);
 
+  // Aerial cloud hat — high-altitude fluffy clouds visible from the sky
+  const aerialHat = opts.aerialClouds ? num(opts.aerialDensity / 100) : num(0);
+
+  // Light rays (god rays) — volumetric sun shafts
+  const rayStrength = opts.lightRays ? num(opts.lightRayIntensity / 100) : num(0);
+
+  // Sun intensity — controls sun brightness multiplier (0.5–3.0 range)
+  const sunMul = num(0.5 + (opts.sunIntensity / 100) * 2.5);
+
+  // Atmosphere haze — horizon fog/heat shimmer
+  const hazeVal = opts.atmosphereHaze ? num(0.18) : num(0);
+
   const items = WEATHER_TYPES.map(w => {
-    // Weather-specific cloud suppression
-    let cloudVal = num(c);
-    let jetVal   = num(j);
+    let cloudVal   = num(c);
+    let jetVal     = num(j);
+    let aerialVal  = aerialHat;
+    let rayVal     = rayStrength;
 
     if (opts.disableRain && RAIN_WEATHER.includes(w)) {
-      cloudVal = num(0);
-      jetVal   = num(0);
+      cloudVal  = num(0);
+      jetVal    = num(0);
+      aerialVal = num(0);
+      rayVal    = num(0);
     }
     if (opts.disableSnow && SNOW_WEATHER.includes(w)) {
-      cloudVal = num(0);
+      cloudVal  = num(0);
+      aerialVal = num(0);
     }
     if (opts.freezeWeather) {
-      // Force all weather to look like EXTRASUNNY
-      cloudVal = num(0);
-      jetVal   = num(0);
+      cloudVal  = num(0);
+      jetVal    = num(0);
+      aerialVal = num(0);
     }
 
     const mods = [
-      ["cloudinessVal",   cloudVal, cloudVal],
-      ["cloudHatLevel",   cloudVal, cloudVal],
-      ["contrailDensity", jetVal,   jetVal  ],
-      ["skyColour r",     skyR,     skyR    ],
-      ["skyColour g",     skyG,     skyG    ],
-      ["skyColour b",     skyB,     skyB    ],
+      ["cloudinessVal",    cloudVal,  cloudVal ],
+      ["cloudHatLevel",    aerialVal, aerialVal],
+      ["contrailDensity",  jetVal,    jetVal   ],
+      ["lightRayStrength", rayVal,    rayVal   ],
+      ["sunMult",          sunMul,    sunMul   ],
+      ["fogHaze",          hazeVal,   hazeVal  ],
+      ["skyColour r",      skyR,      skyR     ],
+      ["skyColour g",      skyG,      skyG     ],
+      ["skyColour b",      skyB,      skyB     ],
     ];
 
     const modEntries = mods.map(([kw, val, valEnd]) =>
@@ -183,7 +209,7 @@ function buildTimeFreezeManifest(): string {
   ].join("\n");
 }
 
-function buildReadme(opts: {
+type PackOpts = {
   packName: string;
   cloudThickness: number;
   jetStreams: number;
@@ -195,13 +221,24 @@ function buildReadme(opts: {
   freezeTime: boolean;
   freezeHour: number;
   freezeMinute: number;
-}): string {
+  aerialClouds: boolean;
+  aerialDensity: number;
+  lightRays: boolean;
+  lightRayIntensity: number;
+  sunIntensity: number;
+  atmosphereHaze: boolean;
+};
+
+function buildReadme(opts: PackOpts): string {
   const label = skyLabel(opts.blueDepth);
   const flags: string[] = [];
-  if (opts.disableRain)    flags.push("Rain disabled");
-  if (opts.disableSnow)    flags.push("Snow disabled");
-  if (opts.freezeWeather)  flags.push("All weather frozen to clear");
-  if (opts.freezeTime)     flags.push(`Time frozen at ${String(opts.freezeHour).padStart(2,"0")}:${String(opts.freezeMinute).padStart(2,"0")}`);
+  if (opts.disableRain)      flags.push("Rain disabled");
+  if (opts.disableSnow)      flags.push("Snow disabled");
+  if (opts.freezeWeather)    flags.push("All weather frozen to clear");
+  if (opts.freezeTime)       flags.push(`Time frozen at ${String(opts.freezeHour).padStart(2,"0")}:${String(opts.freezeMinute).padStart(2,"0")}`);
+  if (opts.aerialClouds)     flags.push(`Aerial clouds ON (${opts.aerialDensity}% density)`);
+  if (opts.lightRays)        flags.push(`Light rays ON (${opts.lightRayIntensity}% intensity)`);
+  if (opts.atmosphereHaze)   flags.push("Atmosphere haze ON");
 
   return [
     `OPTI GODS — FiveM Graphics Pack`,
@@ -209,8 +246,12 @@ function buildReadme(opts: {
     `Generated  : ${new Date().toISOString().split("T")[0]}`,
     ``,
     `SETTINGS`,
-    `  Cloud Thickness : ${opts.cloudThickness}%`,
-    `  Jet Streams     : ${opts.jetStreams}%`,
+    `  Ground Clouds   : ${opts.cloudThickness}%  ${opts.cloudThickness === 0 ? "(+2-6 FPS)" : ""}`,
+    `  Aerial Clouds   : ${opts.aerialClouds ? opts.aerialDensity + "% density" : "OFF (+3-8 FPS)"}`,
+    `  Jet Streams     : ${opts.jetStreams}%  ${opts.jetStreams === 0 ? "(+1-2 FPS)" : ""}`,
+    `  Light Rays      : ${opts.lightRays ? opts.lightRayIntensity + "% intensity (-5-15 FPS)" : "OFF (+5-15 FPS)"}`,
+    `  Sun Intensity   : ${opts.sunIntensity}%`,
+    `  Atmosphere Haze : ${opts.atmosphereHaze ? "ON" : "OFF (+1-3 FPS)"}`,
     `  Sky Colour      : ${label} (${opts.blueDepth}%)`,
     `  Props           : ${opts.keepProps ? "Kept (full props)" : "Reduced"}`,
     flags.length ? `  Extra flags     : ${flags.join(", ")}` : "",
@@ -240,19 +281,7 @@ function buildReadme(opts: {
   ].filter(l => l !== "").join("\r\n");
 }
 
-function generateZip(opts: {
-  packName: string;
-  cloudThickness: number;
-  jetStreams: number;
-  blueDepth: number;
-  keepProps: boolean;
-  freezeWeather: boolean;
-  disableRain: boolean;
-  disableSnow: boolean;
-  freezeTime: boolean;
-  freezeHour: number;
-  freezeMinute: number;
-}): Uint8Array {
+function generateZip(opts: PackOpts): Uint8Array {
   const tcXml      = buildTimecycleXml(opts);
   const weatherXml = buildWeatherXml(opts);
   const readme     = buildReadme(opts);
@@ -379,6 +408,48 @@ function ToggleRow({
           {warn}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── ControlRow — slider with icon + FPS badge + sublabel ─────────────────────
+function ControlRow({
+  icon: Icon, label, sublabel, fpsBadge, fpsColor = "emerald", color = "zinc", children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string; sublabel?: string; fpsBadge?: string | null;
+  fpsColor?: "emerald" | "zinc" | "amber" | "red";
+  color?: string; children: React.ReactNode;
+}) {
+  const iconColors: Record<string, string> = {
+    zinc: "text-zinc-400", red: "text-red-400", blue: "text-blue-400",
+    cyan: "text-cyan-400", amber: "text-amber-400",
+  };
+  const badgeColors = {
+    emerald: "bg-emerald-500/15 border-emerald-500/20 text-emerald-400",
+    zinc:    "bg-zinc-800 border-white/10 text-zinc-500",
+    amber:   "bg-amber-500/15 border-amber-500/20 text-amber-400",
+    red:     "bg-red-500/15 border-red-500/20 text-red-400",
+  };
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center shrink-0">
+          <Icon className={cn("w-3.5 h-3.5", iconColors[color] ?? "text-zinc-400")} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-white leading-tight">{label}</p>
+            {fpsBadge && (
+              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border", badgeColors[fpsColor])}>
+                {fpsBadge}
+              </span>
+            )}
+          </div>
+          {sublabel && <p className="text-[10px] text-zinc-500 mt-0.5">{sublabel}</p>}
+        </div>
+      </div>
+      <div className="pl-9">{children}</div>
     </div>
   );
 }
@@ -669,9 +740,30 @@ export default function FivemGraphics() {
   const [freezeHour,     setFreezeHour]     = useState(12);
   const [freezeMinute,   setFreezeMinute]   = useState(0);
 
+  // Lighting & atmosphere
+  const [aerialClouds,     setAerialClouds]     = useState(false);
+  const [aerialDensity,    setAerialDensity]    = useState(60);
+  const [lightRays,        setLightRays]        = useState(false);
+  const [lightRayIntensity,setLightRayIntensity]= useState(50);
+  const [sunIntensity,     setSunIntensity]     = useState(60);
+  const [atmosphereHaze,   setAtmosphereHaze]   = useState(false);
+
+  // AI pack generator
+  const [aiPrompt,         setAiPrompt]         = useState("");
+  const [aiLoading,        setAiLoading]        = useState(false);
+  const [aiError,          setAiError]          = useState("");
+  const [aiSuccess,        setAiSuccess]        = useState("");
+  const aiInputRef = useRef<HTMLTextAreaElement>(null);
+
   const [activeTab, setActiveTab] = useState<"packs" | "builder" | "reshade" | "info">("packs");
 
   const handleUnlock = useCallback(() => setUnlockedState(true), []);
+
+  const buildOpts = (): PackOpts => ({
+    packName, cloudThickness, jetStreams, blueDepth, keepProps,
+    freezeWeather, disableRain, disableSnow, freezeTime, freezeHour, freezeMinute,
+    aerialClouds, aerialDensity, lightRays, lightRayIntensity, sunIntensity, atmosphereHaze,
+  });
 
   // "Open FiveM App Data" — download a single-line bat that opens the folder
   const handleOpenAppData = () => {
@@ -686,12 +778,47 @@ export default function FivemGraphics() {
   };
 
   const handleGenerate = () => {
-    const opts = { packName, cloudThickness, jetStreams, blueDepth, keepProps, freezeWeather, disableRain, disableSnow, freezeTime, freezeHour, freezeMinute };
+    const opts = buildOpts();
     const zip  = generateZip(opts);
     const safe = packName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
     downloadBlob(zip, `optigods-fivem-${safe}.zip`);
     setGenerated(true);
     setTimeout(() => setGenerated(false), 3000);
+  };
+
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiSuccess("");
+    try {
+      const res = await fetch("/api/ai/graphics-pack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: aiPrompt }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (data.packName)          setPackName(data.packName);
+      if (data.cloudThickness != null) setCloudThickness(data.cloudThickness);
+      if (data.jetStreams != null)      setJetStreams(data.jetStreams);
+      if (data.blueDepth != null)      setBlueDepth(data.blueDepth);
+      if (data.aerialClouds != null)   setAerialClouds(data.aerialClouds);
+      if (data.aerialDensity != null)  setAerialDensity(data.aerialDensity);
+      if (data.lightRays != null)      setLightRays(data.lightRays);
+      if (data.lightRayIntensity != null) setLightRayIntensity(data.lightRayIntensity);
+      if (data.sunIntensity != null)   setSunIntensity(data.sunIntensity);
+      if (data.atmosphereHaze != null) setAtmosphereHaze(data.atmosphereHaze);
+      if (data.freezeWeather != null)  setFreezeWeather(data.freezeWeather);
+      if (data.disableRain != null)    setDisableRain(data.disableRain);
+      if (data.disableSnow != null)    setDisableSnow(data.disableSnow);
+      setAiSuccess(data.mood || "Pack configured! Review the sliders below, then download.");
+      setActiveTab("builder");
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : "AI failed — try again");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   if (!unlocked) {
@@ -772,56 +899,131 @@ export default function FivemGraphics() {
 
         {/* ── Pre-Made Packs ── */}
         {activeTab === "packs" && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Package className="w-4 h-4 text-red-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Pre-Made Packs</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* leaq's pack */}
-              <div className="rounded-2xl border border-white/8 bg-gradient-to-br from-zinc-900/80 to-black p-5 relative overflow-hidden group hover:border-red-500/30 transition-all">
-                <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none"
-                  style={{ background: "radial-gradient(ellipse at top left, rgb(20,60,180) 0%, transparent 70%)" }} />
-                <div className="relative">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.15em] text-red-400 font-bold mb-0.5">leaq's pack · v1</p>
-                      <h3 className="text-lg font-display font-black text-white">Opti Gods Blue Sky Pack</h3>
-                    </div>
-                    <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full uppercase">Tested</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {["No Clouds","Vivid Blue Sky","No Jet Streams","Props Intact","1650 Super Tested"].map(tag => (
-                      <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-zinc-300">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed mb-4">
-                    The exact pack leaq runs daily on his GTX 1650 Super + Ryzen 5 3500. All-clear blue sky, zero clouds, zero contrails — big FPS gain on low-to-mid GPU builds.
-                  </p>
-                  <a
-                    href="https://github.com/duhthehomie/opti-gods/releases/latest"
-                    target="_blank" rel="noopener noreferrer"
-                    data-testid="link-graphics-pack-download"
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download from GitHub Releases
-                    <ChevronRight className="w-3 h-3 opacity-60" />
-                  </a>
+          <section className="space-y-5">
+            {/* Hero gallery — real FiveM screenshots */}
+            <div className="relative rounded-2xl overflow-hidden h-64 md:h-80 border border-white/8 group">
+              <img src="/reshade-presets/preview-gunsrz2.png" alt="FiveM aerial view" className="w-full h-full object-cover object-center" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+              <div className="absolute inset-0 flex items-end p-6">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-bold mb-1">Opti Gods · Graphics Studio</p>
+                  <h2 className="text-2xl md:text-3xl font-display font-black text-white leading-tight mb-2">
+                    FiveM looks like this.<br /><span className="text-red-400">Yours can too.</span>
+                  </h2>
+                  <p className="text-xs text-zinc-300/80">Real screenshots. Real FPS gains. No BS.</p>
                 </div>
               </div>
+            </div>
 
-              {/* Coming soon */}
-              <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-900/20 p-5 flex flex-col items-center justify-center text-center gap-3 group hover:border-white/20 transition-all">
-                <div className="w-12 h-12 rounded-2xl bg-white/3 border border-white/8 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+            {/* Screenshot gallery strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { src: "/reshade-presets/preview-sunrise.png",  label: "Golden Sunrise" },
+                { src: "/reshade-presets/preview-dusk.png",     label: "Moody Dusk" },
+                { src: "/reshade-presets/preview-dawn.png",     label: "Pre-Dawn" },
+                { src: "/reshade-presets/preview-gunsrz1.png",  label: "Sunset Clouds" },
+              ].map(({ src, label }) => (
+                <div key={label} className="relative rounded-xl overflow-hidden h-20 border border-white/8 hover:border-white/20 transition-all cursor-default">
+                  <img src={src} alt={label} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-2">
+                    <span className="text-[9px] font-bold text-white/90 uppercase tracking-wider">{label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* AI Pack Generator */}
+            <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/20 to-black p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
+                  <Wand2 className="w-4 h-4 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-zinc-400">More packs coming soon</p>
-                  <p className="text-xs text-zinc-600 mt-0.5">Warm sunset · Night city · Foggy RP · High-end cinematic</p>
+                  <p className="text-sm font-black text-white">AI Pack Generator</p>
+                  <p className="text-[10px] text-zinc-500">Describe the vibe — get a ready-to-download pack. Powered by Opti Gods AI.</p>
                 </div>
+              </div>
+              <div className="relative">
+                <textarea
+                  ref={aiInputRef}
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); }}}
+                  placeholder="e.g. &quot;golden sunrise with light rays and fluffy aerial clouds&quot; or &quot;moody blue night, no rain, high FPS&quot;"
+                  data-testid="input-ai-pack-prompt"
+                  rows={2}
+                  className="w-full bg-black/40 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-3 text-white text-sm outline-none transition-colors resize-none placeholder:text-zinc-600"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading || !aiPrompt.trim()}
+                  data-testid="button-ai-generate-pack"
+                  className={cn(
+                    "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all",
+                    aiLoading || !aiPrompt.trim()
+                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-500 text-white"
+                  )}
+                >
+                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizonal className="w-4 h-4" />}
+                  {aiLoading ? "Generating..." : "Generate Pack"}
+                </button>
+                <p className="text-[10px] text-zinc-600">Press Enter to submit · Opens Builder tab with your settings pre-filled</p>
+              </div>
+              <AnimatePresence>
+                {aiSuccess && (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-emerald-300">{aiSuccess}</p>
+                  </motion.div>
+                )}
+                {aiError && (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-300">{aiError}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* leaq's pack card */}
+            <div className="rounded-2xl overflow-hidden border border-white/8 group hover:border-red-500/30 transition-all relative">
+              <div className="absolute inset-0">
+                <img src="/reshade-presets/preview-sunrise.png" alt="pack preview" className="w-full h-full object-cover object-top" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-black/40" />
+              </div>
+              <div className="relative p-6 md:p-8">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.15em] text-red-400 font-bold mb-1">leaq's pack · v1 · Tested on 1650 Super</p>
+                    <h3 className="text-xl font-display font-black text-white">Opti Gods Blue Sky Pack</h3>
+                  </div>
+                  <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full uppercase shrink-0">Tested</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {["No Clouds +6 FPS","Vivid Blue Sky","No Contrails +2 FPS","Props Intact","No Rain","Freeze Weather"].map(tag => (
+                    <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/8 border border-white/10 text-zinc-200">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed mb-5 max-w-md">
+                  The exact pack leaq runs daily — all-clear blue sky, zero clouds, zero contrails. Big FPS gain on low-to-mid GPU builds. Simple, clean, high performance.
+                </p>
+                <a
+                  href="https://github.com/duhthehomie/opti-gods/releases/latest"
+                  target="_blank" rel="noopener noreferrer"
+                  data-testid="link-graphics-pack-download"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download from GitHub Releases
+                  <ChevronRight className="w-3 h-3 opacity-60" />
+                </a>
               </div>
             </div>
           </section>
@@ -839,104 +1041,281 @@ export default function FivemGraphics() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
               {/* Left: Controls */}
-              <div className="space-y-5">
+              <div className="space-y-4">
 
-                {/* Visuals */}
-                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-6 space-y-6">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2 block">Pack Name</label>
-                    <input
-                      type="text" value={packName} onChange={e => setPackName(e.target.value)}
-                      placeholder="My Blue Sky Pack" data-testid="input-pack-name"
-                      className="w-full bg-zinc-900 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-2.5 text-white text-sm font-semibold outline-none transition-colors"
-                    />
+                {/* Pack name */}
+                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 px-5 py-4">
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2 block">Pack Name</label>
+                  <input
+                    type="text" value={packName} onChange={e => setPackName(e.target.value)}
+                    placeholder="My Blue Sky Pack" data-testid="input-pack-name"
+                    className="w-full bg-zinc-900 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-2.5 text-white text-sm font-semibold outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Sky & Clouds */}
+                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 space-y-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Sky & Clouds</p>
                   </div>
-                  <SliderRow icon={Cloud} label="Cloud Thickness"
-                    sublabel="How thick/dense the cloud coverage is"
-                    value={cloudThickness} onChange={setCloudThickness}
-                    color="red" leftLabel="Clear sky (0 clouds)" rightLabel="Full overcast" />
-                  <SliderRow icon={Wind} label="Jet Streams"
-                    sublabel="Aircraft contrail / vapour trail visibility"
-                    value={jetStreams} onChange={setJetStreams}
-                    color="cyan" leftLabel="None" rightLabel="Full" />
-                  <SliderRow icon={Palette} label="Blue Depth"
-                    sublabel="Sky colour — dark navy to vivid sky blue"
-                    value={blueDepth} onChange={setBlueDepth}
-                    color="blue" leftLabel="Dark navy" rightLabel="Vivid sky" />
-                  <ToggleRow icon={Eye} label="Keep Props" on={keepProps} onToggle={() => setKeepProps(v => !v)}
-                    sub="Full world props — recommended for max FPS w/ visuals" testId="toggle-keep-props" />
+
+                  {/* Ground clouds */}
+                  <ControlRow
+                    icon={Cloud} label="Ground Clouds" color="zinc"
+                    fpsBadge={cloudThickness === 0 ? "+2–6 FPS" : null}
+                    fpsColor={cloudThickness === 0 ? "emerald" : "zinc"}
+                    sublabel={cloudThickness === 0 ? "OFF — no cloud draw calls" : `${cloudThickness}% density`}
+                  >
+                    <Slider value={[cloudThickness]} onValueChange={([v]) => setCloudThickness(v)}
+                      min={0} max={100} step={1} className="w-full" data-testid="slider-cloud-thickness" />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-zinc-600">Clear sky</span>
+                      <span className="text-[9px] text-zinc-600">Full overcast</span>
+                    </div>
+                  </ControlRow>
+
+                  {/* Aerial clouds */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                          <Cloud className="w-3.5 h-3.5 text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white leading-tight">Aerial Clouds</p>
+                            <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border",
+                              aerialClouds ? "bg-blue-500/15 border-blue-500/20 text-blue-400" : "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                            )}>
+                              {aerialClouds ? `ON · ${aerialDensity}%` : "+3–8 FPS"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-500">Fluffy high-altitude clouds visible when flying</p>
+                        </div>
+                      </div>
+                      <Toggle on={aerialClouds} onToggle={() => setAerialClouds(v => !v)} testId="toggle-aerial-clouds" />
+                    </div>
+                    <AnimatePresence>
+                      {aerialClouds && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
+                          <div className="pt-1 pl-9">
+                            <Slider value={[aerialDensity]} onValueChange={([v]) => setAerialDensity(v)}
+                              min={10} max={100} step={5} className="w-full" data-testid="slider-aerial-density" />
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[9px] text-zinc-600">Light wisps</span>
+                              <span className="text-[9px] text-zinc-600">Thick cloud banks</span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Jet streams */}
+                  <ControlRow
+                    icon={Wind} label="Jet Streams / Contrails" color="cyan"
+                    fpsBadge={jetStreams === 0 ? "+1–2 FPS" : null}
+                    fpsColor={jetStreams === 0 ? "emerald" : "zinc"}
+                    sublabel={jetStreams === 0 ? "OFF" : `${jetStreams}% visibility`}
+                  >
+                    <Slider value={[jetStreams]} onValueChange={([v]) => setJetStreams(v)}
+                      min={0} max={100} step={1} className="w-full" data-testid="slider-jet-streams" />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-zinc-600">None</span>
+                      <span className="text-[9px] text-zinc-600">Full</span>
+                    </div>
+                  </ControlRow>
+
+                  {/* Sky colour */}
+                  <ControlRow
+                    icon={Palette} label="Sky Colour" color="blue"
+                    fpsBadge="No FPS impact" fpsColor="zinc"
+                    sublabel={skyLabel(blueDepth)}
+                  >
+                    <Slider value={[blueDepth]} onValueChange={([v]) => setBlueDepth(v)}
+                      min={0} max={100} step={1} className="w-full" data-testid="slider-blue-depth" />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-zinc-600">Dark navy</span>
+                      <span className="text-[9px] text-zinc-600">Vivid sky blue</span>
+                    </div>
+                  </ControlRow>
+                </div>
+
+                {/* Lighting */}
+                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 space-y-5">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Lighting & Atmosphere</p>
+
+                  {/* Light rays */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                          <Flame className="w-3.5 h-3.5 text-amber-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white leading-tight">Light Rays / God Rays</p>
+                            <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border",
+                              lightRays ? "bg-amber-500/15 border-amber-500/20 text-amber-400" : "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                            )}>
+                              {lightRays ? `ON · ${lightRayIntensity}%` : "+5–15 FPS"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-500">Volumetric sun shafts — most expensive visual effect</p>
+                        </div>
+                      </div>
+                      <Toggle on={lightRays} onToggle={() => setLightRays(v => !v)} testId="toggle-light-rays" />
+                    </div>
+                    <AnimatePresence>
+                      {lightRays && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
+                          <div className="pt-1 pl-9">
+                            <Slider value={[lightRayIntensity]} onValueChange={([v]) => setLightRayIntensity(v)}
+                              min={10} max={100} step={5} className="w-full" data-testid="slider-light-ray-intensity" />
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[9px] text-zinc-600">Subtle</span>
+                              <span className="text-[9px] text-zinc-600">Intense</span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Sun intensity */}
+                  <ControlRow
+                    icon={Sun} label="Sun Intensity" color="amber"
+                    fpsBadge="No FPS impact" fpsColor="zinc"
+                    sublabel={sunIntensity < 30 ? "Dim / overcast look" : sunIntensity > 75 ? "Blazing warm glow" : "Natural brightness"}
+                  >
+                    <Slider value={[sunIntensity]} onValueChange={([v]) => setSunIntensity(v)}
+                      min={0} max={100} step={5} className="w-full" data-testid="slider-sun-intensity" />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-zinc-600">Dim</span>
+                      <span className="text-[9px] text-zinc-600">Blazing</span>
+                    </div>
+                  </ControlRow>
+
+                  {/* Haze */}
+                  <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                        <Wind className="w-3.5 h-3.5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white leading-tight">Atmosphere Haze</p>
+                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border",
+                            atmosphereHaze ? "bg-zinc-500/15 border-zinc-500/20 text-zinc-400" : "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                          )}>
+                            {atmosphereHaze ? "ON" : "+1–3 FPS"}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">Horizon heat shimmer / atmospheric depth fog</p>
+                      </div>
+                    </div>
+                    <Toggle on={atmosphereHaze} onToggle={() => setAtmosphereHaze(v => !v)} testId="toggle-atmosphere-haze" />
+                  </div>
                 </div>
 
                 {/* Weather control */}
-                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-6 space-y-1">
+                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 space-y-1">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-3">Weather Control</p>
-                  <ToggleRow icon={Sun} label="Freeze all weather to clear"
-                    sub="Forces EXTRASUNNY sky on every weather state — max FPS, no cloud draw calls"
-                    on={freezeWeather} onToggle={() => setFreezeWeather(v => !v)}
-                    testId="toggle-freeze-weather" color="amber"
-                    warn="Overrides cloud thickness and jet streams — all weather will look clear." />
-                  <ToggleRow icon={CloudRain} label="Disable rain & thunder"
-                    sub="Removes rain particles and thunder effects — FPS boost during rain events"
-                    on={disableRain} onToggle={() => setDisableRain(v => !v)}
-                    testId="toggle-disable-rain" color="cyan" />
-                  <ToggleRow icon={Snowflake} label="Disable snow & blizzard"
-                    sub="Removes snow particle draw on SNOW / BLIZZARD / XMAS weather states"
-                    on={disableSnow} onToggle={() => setDisableSnow(v => !v)}
-                    testId="toggle-disable-snow" color="cyan" />
-                </div>
-
-                {/* Time freeze */}
-                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-6 space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                        <Sun className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white leading-tight">Freeze all weather to clear</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+5–15 FPS</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">Forces EXTRASUNNY on all weather states</p>
+                      </div>
+                    </div>
+                    <Toggle on={freezeWeather} onToggle={() => setFreezeWeather(v => !v)} testId="toggle-freeze-weather" />
+                  </div>
+                  {freezeWeather && (
+                    <div className="ml-9 text-[10px] text-amber-400/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-1.5">
+                      Overrides clouds + jet streams — all weather will look clear.
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                        <CloudRain className="w-3.5 h-3.5 text-cyan-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white leading-tight">Disable rain & thunder</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+2–4 FPS</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">Removes rain particles during RAIN / THUNDER states</p>
+                      </div>
+                    </div>
+                    <Toggle on={disableRain} onToggle={() => setDisableRain(v => !v)} testId="toggle-disable-rain" />
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
+                        <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white leading-tight">Disable snow & blizzard</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+1–3 FPS</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">Removes snow particles on SNOW / BLIZZARD / XMAS</p>
+                      </div>
+                    </div>
+                    <Toggle on={disableSnow} onToggle={() => setDisableSnow(v => !v)} testId="toggle-disable-snow" />
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-white/3 border border-white/8 flex items-center justify-center">
                         <Clock className="w-3.5 h-3.5 text-amber-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-white leading-tight">Freeze Time</p>
-                        <p className="text-[10px] text-zinc-500">Lock the in-game clock — prevents FPS dips from sun angle changes</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white leading-tight">Freeze Time</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+1–4 FPS</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500">Lock in-game clock — stops sun-angle FPS dips</p>
                       </div>
                     </div>
                     <Toggle on={freezeTime} onToggle={() => setFreezeTime(v => !v)} testId="toggle-freeze-time" />
                   </div>
-
                   <AnimatePresence>
                     {freezeTime && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="pt-2 space-y-3">
-                          <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3">
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
+                        <div className="pt-2 pl-9 space-y-3">
+                          <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-2.5">
                             <p className="text-[10px] text-amber-300/80 leading-relaxed">
-                              <span className="font-bold text-amber-300">How it works:</span> A FiveM Lua resource (<span className="font-mono">optigods-timecycle</span>) is included in the ZIP.
-                              Drop it in your server's <span className="font-mono">resources</span> folder and add <span className="font-mono">start optigods-timecycle</span> to <span className="font-mono">server.cfg</span>.
-                              The script calls <span className="font-mono">NetworkOverrideClockTime</span> every second — no mods needed.
+                              Lua resource <span className="font-mono">optigods-timecycle</span> included in ZIP — drop in server resources, add <span className="font-mono">start optigods-timecycle</span> to server.cfg.
                             </p>
                           </div>
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2 block">
-                              Lock clock at hour — {String(freezeHour).padStart(2,"0")}:00
+                              Lock at — {String(freezeHour).padStart(2,"0")}:00
                             </label>
-                            <Slider
-                              value={[freezeHour]} onValueChange={([v]) => setFreezeHour(v)}
-                              min={0} max={23} step={1} className="w-full"
-                              data-testid="slider-freeze-hour"
-                            />
+                            <Slider value={[freezeHour]} onValueChange={([v]) => setFreezeHour(v)}
+                              min={0} max={23} step={1} className="w-full" data-testid="slider-freeze-hour" />
                             <div className="flex justify-between mt-1">
-                              <span className="text-[9px] text-zinc-600">Midnight (00:00)</span>
-                              <span className="text-[9px] text-zinc-600">Noon (12:00)</span>
-                              <span className="text-[9px] text-zinc-600">Night (23:00)</span>
+                              <span className="text-[9px] text-zinc-600">Midnight</span>
+                              <span className="text-[9px] text-zinc-600">Noon (recommended)</span>
+                              <span className="text-[9px] text-zinc-600">Night</span>
                             </div>
-                            <p className="text-[10px] text-zinc-500 mt-2">
-                              Recommended: <span className="text-white font-semibold">12:00</span> (noon — stable bright lighting, no shadow movement cost)
-                            </p>
                           </div>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  <ToggleRow icon={Eye} label="Keep Props" on={keepProps} onToggle={() => setKeepProps(v => !v)}
+                    sub="Full world props — recommended for max FPS with visuals" testId="toggle-keep-props" />
                 </div>
               </div>
 
@@ -952,13 +1331,17 @@ export default function FivemGraphics() {
                 <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-4 space-y-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Pack Summary</p>
                   {[
-                    { label: "Clouds",       value: freezeWeather ? "Frozen clear" : cloudThickness === 0 ? "Disabled (max FPS)" : `${cloudThickness}% density`, ok: cloudThickness < 30 || freezeWeather },
-                    { label: "Jet Streams",  value: freezeWeather ? "Disabled" : jetStreams === 0 ? "Disabled" : `${jetStreams}% density`, ok: jetStreams === 0 || freezeWeather },
-                    { label: "Sky Colour",   value: skyLabel(blueDepth), ok: true },
-                    { label: "Rain",         value: freezeWeather ? "Frozen out" : disableRain ? "Disabled" : "Active",   ok: disableRain || freezeWeather },
-                    { label: "Snow",         value: freezeWeather ? "Frozen out" : disableSnow ? "Disabled" : "Active",   ok: disableSnow || freezeWeather },
-                    { label: "Time",         value: freezeTime ? `Locked at ${String(freezeHour).padStart(2,"0")}:00` : "Dynamic (changes)", ok: freezeTime },
-                    { label: "Props",        value: keepProps ? "Full (recommended)" : "Reduced", ok: keepProps },
+                    { label: "Ground Clouds", value: freezeWeather ? "Frozen clear" : cloudThickness === 0 ? "OFF (+2–6 FPS)" : `${cloudThickness}%`, ok: cloudThickness < 30 || freezeWeather },
+                    { label: "Aerial Clouds", value: aerialClouds ? `ON · ${aerialDensity}%` : "OFF (+3–8 FPS)", ok: !aerialClouds },
+                    { label: "Jet Streams",   value: freezeWeather ? "Disabled" : jetStreams === 0 ? "OFF (+1–2 FPS)" : `${jetStreams}%`, ok: jetStreams === 0 || freezeWeather },
+                    { label: "Light Rays",    value: lightRays ? `ON · ${lightRayIntensity}% (−5–15 FPS)` : "OFF (+5–15 FPS)", ok: !lightRays },
+                    { label: "Sun Intensity", value: `${sunIntensity}%`, ok: true },
+                    { label: "Haze",          value: atmosphereHaze ? "ON" : "OFF (+1–3 FPS)", ok: !atmosphereHaze },
+                    { label: "Sky Colour",    value: skyLabel(blueDepth), ok: true },
+                    { label: "Rain",          value: freezeWeather ? "Frozen out" : disableRain ? "OFF (+2–4 FPS)" : "Active", ok: disableRain || freezeWeather },
+                    { label: "Snow",          value: freezeWeather ? "Frozen out" : disableSnow ? "OFF (+1–3 FPS)" : "Active", ok: disableSnow || freezeWeather },
+                    { label: "Time",          value: freezeTime ? `Locked ${String(freezeHour).padStart(2,"0")}:00 (+1–4 FPS)` : "Dynamic", ok: freezeTime },
+                    { label: "Props",         value: keepProps ? "Full" : "Reduced", ok: keepProps },
                   ].map(({ label, value, ok }) => (
                     <div key={label} className="flex items-center justify-between gap-2">
                       <span className="text-xs text-zinc-500 shrink-0">{label}</span>
@@ -1038,63 +1421,92 @@ export default function FivemGraphics() {
         {/* ── ReShade Presets ── */}
         {activeTab === "reshade" && (
           <section className="space-y-5">
-            <div className="flex items-center gap-2 mb-1">
-              <Monitor className="w-4 h-4 text-red-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">ReShade Presets</h2>
-              <span className="text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25 px-2 py-0.5 rounded-full uppercase ml-1">leaq's Collection</span>
-            </div>
-
-            {/* Install instructions */}
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] px-4 py-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-blue-400 shrink-0" />
-                <p className="text-xs font-bold text-blue-300">How to install ReShade presets</p>
+            {/* Hero strip */}
+            <div className="relative rounded-2xl overflow-hidden h-48 border border-white/8">
+              <img src="/reshade-presets/preview-gunsrz1.png" alt="ReShade preview" className="w-full h-full object-cover object-center" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
+              <div className="absolute inset-0 flex items-center p-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Monitor className="w-4 h-4 text-red-400" />
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-bold">leaq's ReShade Collection</span>
+                  </div>
+                  <h2 className="text-xl font-display font-black text-white leading-tight">
+                    Post-process presets.<br /><span className="text-zinc-300">Real screenshots. Real results.</span>
+                  </h2>
+                </div>
               </div>
-              <ol className="text-[11px] text-zinc-400 leading-relaxed space-y-1 ml-6 list-decimal">
-                <li>Install <span className="text-white font-semibold">ReShade</span> from <span className="font-mono text-blue-300">reshade.me</span> — select FiveM's <span className="font-mono">FiveM.exe</span> as the target</li>
-                <li>Download a preset <span className="font-mono">.ini</span> file below</li>
-                <li>Open <span className="font-mono text-amber-300">%LOCALAPPDATA%\FiveM\FiveM Application Data\plugins\</span> (use the button above)</li>
-                <li>Drop the <span className="font-mono">.ini</span> file into the <span className="font-mono">plugins</span> folder</li>
-                <li>In-game: open ReShade overlay (<span className="font-mono">Home</span> key) → click the preset dropdown → select the file</li>
-              </ol>
             </div>
 
-            {/* Preset cards */}
+            {/* Install steps — compact */}
+            <div className="rounded-xl border border-blue-500/15 bg-blue-500/[0.04] px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <p className="text-xs font-bold text-blue-300">Quick install</p>
+              </div>
+              <div className="flex items-start gap-3 flex-wrap text-[11px] text-zinc-400">
+                {[
+                  "Install ReShade from reshade.me → target FiveM.exe",
+                  "Download a preset .ini below",
+                  "Drop into %LOCALAPPDATA%\\FiveM\\FiveM Application Data\\plugins\\",
+                  "In-game: Home key → preset dropdown → select file",
+                ].map((step, i) => (
+                  <div key={i} className="flex items-start gap-1.5 min-w-[45%]">
+                    <span className="w-4 h-4 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">{i+1}</span>
+                    <span className="leading-relaxed">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Cinematic preset cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {RESHADE_PRESETS.map(preset => (
-                <div key={preset.id}
-                  className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 flex flex-col gap-3 hover:border-white/15 transition-all"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-0.5">ReShade Preset</p>
-                      <h3 className="text-sm font-display font-black text-white">{preset.label}</h3>
+                <div key={preset.id} className="group rounded-2xl border border-white/8 overflow-hidden hover:border-white/20 transition-all relative">
+                  {/* Screenshot background */}
+                  <div className="relative h-44 overflow-hidden">
+                    <img
+                      src={preset.screenshot}
+                      alt={preset.label}
+                      className="w-full h-full object-cover object-center group-hover:scale-[1.03] transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10" />
+                    {/* Badge — top right */}
+                    <div className="absolute top-3 right-3">
+                      <span className={cn("text-[9px] font-bold px-2 py-1 rounded-full border uppercase backdrop-blur-sm", preset.badgeCls)}>
+                        {preset.badge}
+                      </span>
                     </div>
-                    <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase shrink-0", preset.badgeCls)}>
-                      {preset.badge}
-                    </span>
+                    {/* Title over image */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-zinc-400 mb-0.5">ReShade Preset</p>
+                      <h3 className="text-base font-display font-black text-white leading-tight">{preset.label}</h3>
+                    </div>
                   </div>
 
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">{preset.desc}</p>
+                  {/* Card body */}
+                  <div className="bg-zinc-900/95 p-4 space-y-3">
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">{preset.desc}</p>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-zinc-300">
-                      {preset.techniques}
-                    </span>
-                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/15 text-emerald-400">
-                      {preset.perf}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-zinc-300">
+                        {preset.techniques}
+                      </span>
+                      <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/15 text-emerald-400">
+                        {preset.perf}
+                      </span>
+                    </div>
+
+                    <a
+                      href={preset.file}
+                      download={`${preset.name}.ini`}
+                      data-testid={`button-download-reshade-${preset.id}`}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all w-full"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download {preset.name}.ini
+                    </a>
                   </div>
-
-                  <a
-                    href={preset.file}
-                    download={`${preset.name}.ini`}
-                    data-testid={`button-download-reshade-${preset.id}`}
-                    className="flex items-center justify-center gap-2 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/8 hover:border-white/15 text-white text-xs font-bold transition-all mt-auto"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download {preset.name}.ini
-                  </a>
                 </div>
               ))}
             </div>
@@ -1103,7 +1515,7 @@ export default function FivemGraphics() {
             <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-start gap-3">
               <Zap className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                ReShade runs post-process on top of the game — it has a small GPU cost. On a <span className="text-zinc-300">1650 Super</span>, all four presets stay under 3 ms GPU overhead at 1080p. If you're already CPU-bottlenecked in FiveM, ReShade adds near-zero latency.
+                ReShade runs post-process on top of the game. On a <span className="text-zinc-300">1650 Super</span> at 1080p, all four presets stay under 3 ms GPU overhead. If you're CPU-bottlenecked in FiveM, ReShade adds near-zero latency.
               </p>
             </div>
           </section>

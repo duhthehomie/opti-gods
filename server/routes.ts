@@ -5467,6 +5467,110 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     return res.json({ driver });
   });
 
+  // ── FiveM Graphics Pack AI Generator ─────────────────────────────────────────
+  // Parses a plain-English description into slider/toggle values for the citizen pack builder.
+  app.post("/api/ai/graphics-pack", rateLimit(20, 60_000, 30), async (req, res) => {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: "AI not configured" });
+
+    const { description } = req.body as { description?: string };
+    if (!description || typeof description !== "string" || description.length > 500) {
+      return res.status(400).json({ error: "description required (max 500 chars)" });
+    }
+
+    const systemPrompt = `You are a FiveM graphics pack generator. Given a plain-English description of a desired visual style, output ONLY valid JSON with these fields (no extra text, no markdown):
+{
+  "packName": string (short creative name, max 30 chars),
+  "cloudThickness": number (0-100, 0=no clouds best FPS),
+  "jetStreams": number (0-100, 0=no contrails),
+  "blueDepth": number (0-100, 0=dark navy, 100=vivid cyan sky),
+  "aerialClouds": boolean (true=enable high-altitude clouds),
+  "aerialDensity": number (10-100, density of aerial clouds if enabled),
+  "lightRays": boolean (true=god rays / sun shafts, costs 5-15 FPS),
+  "lightRayIntensity": number (10-100, intensity if enabled),
+  "sunIntensity": number (0-100, 0=dim overcast, 100=blazing warm),
+  "atmosphereHaze": boolean (true=horizon haze/depth fog),
+  "freezeWeather": boolean (true=lock to clear/sunny, big FPS gain),
+  "disableRain": boolean,
+  "disableSnow": boolean,
+  "mood": string (one sentence describing the visual result, e.g. "Golden sunrise with dramatic god rays and high FPS")
+}
+
+Rules:
+- "high FPS" / "performance" descriptions → low cloudThickness (0-20), no lightRays, no atmosphereHaze, freezeWeather=true
+- "cinematic" / "beautiful" → can enable lightRays, aerialClouds, higher cloudThickness
+- "sunrise" / "golden" → sunIntensity 70-90, blueDepth 40-60, lightRays=true, lightRayIntensity 50-70
+- "night" → blueDepth 0-20, sunIntensity 10-30, freezeWeather=false
+- "foggy" / "moody" → atmosphereHaze=true, cloudThickness 40-70, blueDepth 20-40
+- "clear" / "sunny" → cloudThickness 0, jetStreams 0, freezeWeather=true, blueDepth 60-90
+- Always output valid parseable JSON. No prose outside JSON.`;
+
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Generate a FiveM graphics pack for: "${description}"` },
+          ],
+          temperature: 0.4,
+          max_tokens: 400,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        console.error("[ai/graphics-pack] Groq error:", err);
+        return res.status(502).json({ error: "AI request failed" });
+      }
+
+      const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+      const raw = data.choices?.[0]?.message?.content ?? "";
+
+      // Strip markdown code fences if present
+      const jsonStr = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        console.error("[ai/graphics-pack] JSON parse failed:", raw);
+        return res.status(502).json({ error: "AI returned invalid JSON — try rephrasing your description" });
+      }
+
+      // Sanitise numeric ranges
+      const clamp = (v: unknown, min: number, max: number, def: number) => {
+        const n = typeof v === "number" ? v : def;
+        return Math.max(min, Math.min(max, Math.round(n)));
+      };
+      const bool = (v: unknown, def: boolean) => typeof v === "boolean" ? v : def;
+
+      return res.json({
+        packName:          typeof parsed.packName === "string" ? parsed.packName.slice(0, 30) : "Custom Pack",
+        cloudThickness:    clamp(parsed.cloudThickness,    0, 100, 0),
+        jetStreams:         clamp(parsed.jetStreams,         0, 100, 0),
+        blueDepth:          clamp(parsed.blueDepth,          0, 100, 60),
+        aerialClouds:       bool(parsed.aerialClouds, false),
+        aerialDensity:      clamp(parsed.aerialDensity,      10, 100, 60),
+        lightRays:          bool(parsed.lightRays, false),
+        lightRayIntensity:  clamp(parsed.lightRayIntensity,  10, 100, 50),
+        sunIntensity:       clamp(parsed.sunIntensity,       0, 100, 60),
+        atmosphereHaze:     bool(parsed.atmosphereHaze, false),
+        freezeWeather:      bool(parsed.freezeWeather, false),
+        disableRain:        bool(parsed.disableRain, false),
+        disableSnow:        bool(parsed.disableSnow, false),
+        mood: typeof parsed.mood === "string" ? parsed.mood.slice(0, 200) : "Pack generated — review sliders in the Builder tab.",
+      });
+    } catch (err) {
+      console.error("[ai/graphics-pack] error:", err);
+      return res.status(500).json({ error: "AI request failed" });
+    }
+  });
+
   // Load AI chat session history
   app.get("/api/ai/session/:sessionId", rateLimit(30, 60_000, 60), async (req, res) => {
     const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId;
