@@ -75,7 +75,10 @@ jobs:
         run: npm install --global @tauri-apps/cli@~2.9
 
       - name: npm install
-        run: npm install
+        # --ignore-scripts skips sharp's postinstall binary-download step which
+        # fails on Windows CI. The Tauri build only needs the JS bundles — the
+        # Node server (which uses sharp) is never started during CI.
+        run: npm install --ignore-scripts
 
       - name: Sync version → tauri.conf.json
         run: npx tsx scripts/sync-version.ts
