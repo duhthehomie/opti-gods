@@ -160,8 +160,11 @@ pub struct ActionResult {
 
 #[cfg(windows)]
 fn running_process_names_lower() -> HashSet<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let out = std::process::Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
     match out {
         Ok(o) => {
@@ -203,11 +206,15 @@ fn existing_startup_keys_lower() -> HashSet<String> {
 
 #[cfg(windows)]
 fn all_running_processes() -> Vec<ProcessInfo> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
     let system_set: HashSet<&str> = WINDOWS_SYSTEM_PROCESSES.iter().copied().collect();
     let critical_set: HashSet<&str> = CRITICAL_WINDOWS_PROCESSES.iter().copied().collect();
 
     let out = std::process::Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     let mut counts: HashMap<String, (u32, u32)> = HashMap::new();
@@ -355,8 +362,11 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
 
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let out = std::process::Command::new("taskkill")
             .args(["/F", "/IM", &name])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
 
         match out {
