@@ -56,7 +56,7 @@ const STEPS = [
 export default function Help() {
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-3xl pb-10">
+      <div className="space-y-8 pb-10">
 
         <motion.div
           initial={{ opacity: 0, y: -10 }}
