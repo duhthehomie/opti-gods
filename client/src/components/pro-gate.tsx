@@ -515,7 +515,7 @@ export function ProPaymentDialog({
                   </p>
 
                   <a
-                    href={`https://discord.com/channels/@me?text=${SUPPORT_TICKET_TEXT}`}
+                    href="https://discord.gg/optigods"
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="link-manual-card-support"

@@ -165,7 +165,7 @@ export default function Fivem() {
             </Button>
           )}
         </div>
-        <div className="space-y-4">
+        <div className="space-y-5">
           {items.map((item, i) => (
             <TweakRow
               key={item.id}
@@ -272,7 +272,7 @@ export default function Fivem() {
                 <p className="text-xs text-zinc-500 mt-0.5">Targeted fixes for known NVIDIA / FiveM crash patterns — run after applying tweaks if you experience these errors</p>
               </div>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-5">
               {CRASH_FIX_TWEAKS.map((item, i) => (
                 <TweakRow
                   key={item.id}

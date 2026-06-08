@@ -135,6 +135,19 @@ export function AppSidebar() {
     return () => { if (tapTimer.current) clearTimeout(tapTimer.current); };
   }, []);
 
+  const spinVideoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = spinVideoRef.current;
+    if (!v) return;
+    v.play().catch(() => {});
+    const obs = new IntersectionObserver(
+      (entries) => { entries.forEach(e => { if (e.isIntersecting) v.play().catch(() => {}); }); },
+      { threshold: 0.1 }
+    );
+    obs.observe(v);
+    return () => obs.disconnect();
+  }, []);
+
   const isActive = (url: string) => {
     if (url === "/") return location === "/" || location === "/dashboard";
     return location === url || location.startsWith(url + "/");
@@ -209,7 +222,7 @@ export function AppSidebar() {
           <Link href="/" data-testid="link-home-logo">
             <div className="flex items-center gap-2.5 cursor-pointer">
               <div className="w-11 h-11 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_16px_-4px_rgba(239,68,68,0.6)]">
-                <video src={BRAND.spinRed} autoPlay muted loop playsInline className="w-11 h-11 object-cover" />
+                <video ref={spinVideoRef} src={BRAND.spinRed} autoPlay muted loop playsInline className="w-11 h-11 object-cover" />
               </div>
               <div>
                 <p className="font-display font-black text-base leading-tight text-white">

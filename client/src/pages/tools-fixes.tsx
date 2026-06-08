@@ -91,7 +91,7 @@ export default function ToolsFixesPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="flex flex-col gap-6 min-h-full">
         <header>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
@@ -151,9 +151,9 @@ export default function ToolsFixesPage() {
           })}
         </div>
 
-        <div>
+        <div className="flex-1 min-h-0">
           <EmbeddedProvider>
-            <Suspense fallback={<div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 text-red-400 animate-spin" /></div>}>
+            <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 text-red-400 animate-spin" /></div>}>
               <ActiveComp />
             </Suspense>
           </EmbeddedProvider>

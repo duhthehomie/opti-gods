@@ -483,8 +483,8 @@ export default function TweaksPage() {
 
                   {/* Panel body — scrollable, fixed height */}
                   <div
-                    className="bg-black/40 px-6 pt-6 pb-10 overflow-y-auto"
-                    style={{ maxHeight: "calc(100vh - 210px)" }}
+                    className="bg-black/40 px-7 pt-7 pb-12 overflow-y-auto"
+                    style={{ maxHeight: "calc(100vh - 200px)" }}
                   >
                     <EmbeddedProvider>
                       <Suspense fallback={

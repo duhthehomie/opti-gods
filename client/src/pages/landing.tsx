@@ -330,7 +330,7 @@ function LandingDesktop() {
         </div>
         <div className="flex justify-center">
           <a
-            href="https://discord.com/channels/1489905883692667051/1489905885567385742"
+            href="https://discord.gg/optigods"
             target="_blank"
             rel="noreferrer"
             data-testid="link-reviews-discord"
