@@ -160,16 +160,17 @@ function buildReadme(opts: {
     ``,
     `INSTALL`,
     `  1. Extract this zip`,
-    `  2. Copy the "citizen" folder to:`,
-    `     %LOCALAPPDATA%\\FiveM\\FiveM Application Data\\`,
-    `  3. Merge / overwrite if prompted`,
-    `  4. Restart FiveM completely`,
+    `  2. Open: %LOCALAPPDATA%\\FiveM\\FiveM Application Data\\`,
+    `  3. DELETE the existing "citizen" folder inside that folder`,
+    `  4. Drag the new "citizen" folder from the zip into that folder`,
+    `  5. Restart FiveM completely`,
     ``,
     `UNINSTALL`,
-    `  Delete these files from your FiveM citizen folder:`,
+    `  Open: %LOCALAPPDATA%\\FiveM\\FiveM Application Data\\`,
+    `  Delete the entire "citizen" folder (or just remove:`,
     `    citizen\\platform\\data\\tune\\timecycle_mods_1.xml`,
-    `    citizen\\common\\data\\weather.xml`,
-    `  Then restart FiveM.`,
+    `    citizen\\common\\data\\weather.xml)`,
+    `  Restart FiveM - stock visuals restore instantly.`,
     ``,
     `by leaq — optigods.com`,
   ].join("\r\n");
@@ -363,7 +364,7 @@ export default function FivemGraphics() {
             FiveM <span className="text-red-500">Graphics Studio</span>
           </h1>
           <p className="text-sm text-zinc-400">
-            Build a custom graphics pack and download it as a ready-to-merge citizen ZIP — same format as any MediaFire graphics mod.
+            Build a custom graphics pack and download it as a citizen ZIP — same format as any FiveM graphics mod. Delete your old citizen folder, drag the new one in, done.
           </p>
         </div>
 
@@ -372,8 +373,10 @@ export default function FivemGraphics() {
           <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-300/80 leading-relaxed">
             <span className="font-bold text-amber-300">How to install: </span>
-            Extract the ZIP → copy the <span className="font-mono font-bold text-amber-300">citizen</span> folder to{" "}
-            <span className="font-mono text-amber-400/90">%LOCALAPPDATA%\FiveM\FiveM Application Data\</span> → merge when prompted → restart FiveM.
+            Extract the ZIP → open{" "}
+            <span className="font-mono text-amber-400/90">%LOCALAPPDATA%\FiveM\FiveM Application Data\</span>
+            {" "}→ <span className="font-bold text-amber-300">delete</span> the existing <span className="font-mono font-bold text-amber-300">citizen</span> folder →{" "}
+            drag the new <span className="font-mono font-bold text-amber-300">citizen</span> folder in → restart FiveM.
           </div>
         </div>
 
@@ -547,7 +550,7 @@ export default function FivemGraphics() {
                   { label: "Jet Streams",  value: jetStreams      === 0 ? "Disabled" : `${jetStreams}% density`,             ok: jetStreams === 0 },
                   { label: "Sky Colour",   value: skyLabel,                                                                   ok: true },
                   { label: "Props",        value: keepProps ? "Full (recommended)" : "Reduced",                               ok: keepProps },
-                  { label: "Output",       value: "citizen ZIP → extract & merge",                                            ok: true },
+                  { label: "Output",       value: "citizen ZIP → delete old → drag in new",                               ok: true },
                 ].map(({ label, value, ok }) => (
                   <div key={label} className="flex items-center justify-between gap-2">
                     <span className="text-xs text-zinc-500 shrink-0">{label}</span>
@@ -635,7 +638,7 @@ export default function FivemGraphics() {
             </div>
             <div>
               <p className="font-semibold text-zinc-300 mb-1">To uninstall</p>
-              <p>Delete <span className="font-mono text-zinc-400">timecycle_mods_1.xml</span> and <span className="font-mono text-zinc-400">weather.xml</span> from your citizen folder. Restart FiveM — stock visuals restore instantly.</p>
+              <p>Open <span className="font-mono text-zinc-400">FiveM Application Data\</span> and delete the <span className="font-mono text-zinc-400">citizen</span> folder entirely, or remove just the two XML files. Restart FiveM — stock visuals restore instantly.</p>
             </div>
           </div>
         </section>
