@@ -335,3 +335,51 @@ export async function performUpdate(
     await unlisten();
   }
 }
+
+// ─── Task Manager native commands ───────────────────────────────────────────
+
+export interface NativeTaskScan {
+  /** App IDs whose process is currently running */
+  running: string[];
+  /** App IDs whose startup key exists in the registry */
+  in_startup: string[];
+}
+
+export interface NativeActionResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Scan the system for running processes and startup entries matching the
+ * supplied maps. Returns two lists of matching app IDs.
+ */
+export async function scanTaskManager(
+  processMap: Record<string, string>,
+  startupMap: Record<string, string>,
+): Promise<NativeTaskScan> {
+  return invoke<NativeTaskScan>("scan_task_manager", {
+    args: { process_map: processMap, startup_map: startupMap },
+  });
+}
+
+/**
+ * Forcibly terminate a process by image name (allowlisted in Rust).
+ */
+export async function killApp(processName: string): Promise<NativeActionResult> {
+  return invoke<NativeActionResult>("kill_app", { args: { process_name: processName } });
+}
+
+/**
+ * Remove a startup registry entry from HKCU Run (allowlisted in Rust).
+ */
+export async function disableStartupApp(startupKey: string): Promise<NativeActionResult> {
+  return invoke<NativeActionResult>("disable_startup_app", { args: { startup_key: startupKey } });
+}
+
+/**
+ * Read the current value of a HKCU Run startup entry (for undo).
+ */
+export async function getStartupValue(startupKey: string): Promise<string | null> {
+  return invoke<string | null>("get_startup_value", { args: { startup_key: startupKey } });
+}

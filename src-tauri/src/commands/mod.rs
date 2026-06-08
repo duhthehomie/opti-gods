@@ -8,5 +8,6 @@ pub mod misc;
 pub mod process_lasso;
 pub mod restore;
 pub mod splash;
+pub mod task_manager;
 pub mod tweaks;
 pub mod updater;

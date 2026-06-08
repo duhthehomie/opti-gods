@@ -34,6 +34,10 @@
     "allow-discord-cached-token",
     "allow-check-for-update",
     "allow-env-info",
-    "allow-open-downloads"
+    "allow-open-downloads",
+    "allow-scan-task-manager",
+    "allow-kill-app",
+    "allow-disable-startup-app",
+    "allow-get-startup-value"
   ]
 }
