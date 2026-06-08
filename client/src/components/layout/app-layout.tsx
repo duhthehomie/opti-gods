@@ -430,6 +430,12 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
     setDialogOpen(true);
   };
 
+  useEffect(() => {
+    const handler = () => setDialogOpen(true);
+    window.addEventListener("optigods:open-script", handler);
+    return () => window.removeEventListener("optigods:open-script", handler);
+  }, []);
+
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
 
@@ -528,7 +534,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 relative">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
             <div className="w-full h-full space-y-6">
               {!isMobile && <HardwareDetectionBanner compact />}

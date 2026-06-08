@@ -241,67 +241,6 @@ export default function CustomOS() {
           </motion.div>
         )}
 
-        {/* SmartScreen notice + OS Picks — visible to all */}
-        <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="space-y-4"
-        >
-          {/* Best OS Picks */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">Our OS Picks — Best Gaming Windows Right Now</h2>
-            <p className="text-xs text-zinc-500 px-1">These are the best custom Windows OS options on the market. ReviOS is the closest to what Opti Gods OS is designed to be.</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* ReviOS — top pick */}
-              <div className="relative rounded-xl border-2 border-blue-500/30 bg-gradient-to-br from-blue-950/20 to-zinc-950 p-4 overflow-hidden">
-                <div className="absolute top-2 right-2">
-                  <span className="text-[9px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded uppercase tracking-wider">
-                    ⭐ Top Pick
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5 mb-2.5">
-                  <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <HardDrive className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">ReviOS</p>
-                    <p className="text-[10px] text-blue-400 font-medium">Closest to Opti Gods OS vision</p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
-                  Debloated Windows 10/11 via AME Wizard. Removes telemetry, Cortana, unnecessary services. Keeps Windows Defender. Excellent for FiveM, Fortnite, and competitive titles. The OS Opti Gods OS draws the most inspiration from.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {["Runs on AME Wizard", "Windows Defender kept", "Zero telemetry", "FiveM optimized", "Low latency"].map(t => (
-                    <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/15 font-medium">{t}</span>
-                  ))}
-                </div>
-                <a
-                  href="https://www.revi.cc/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="link-revios"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-300 hover:text-white transition-colors underline"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Get ReviOS at revi.cc
-                </a>
-                <p className="text-[10px] text-amber-400/80 mt-1.5 font-medium">
-                  ⚠ On the download page — click the <strong className="text-amber-300">"No Ads"</strong> link to download directly without any ad redirects.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
-              <Zap className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-zinc-500 leading-relaxed">
-                <strong className="text-zinc-300">Pro tip:</strong> Run either OS + the Opti Gods tweaks from this app on top — that combination gives you the maximum possible performance boost. The app's tweaks are designed to complement any clean or custom Windows install.
-              </p>
-            </div>
-          </div>
-        </motion.div>
 
         <ProGate>
           <div className="space-y-8">

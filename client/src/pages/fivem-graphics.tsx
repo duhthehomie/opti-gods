@@ -319,6 +319,7 @@ export default function FivemGraphics() {
   const [keepProps,       setKeepProps]       = useState(true);
   const [packName,        setPackName]        = useState("My Blue Sky Pack");
   const [generated,       setGenerated]       = useState(false);
+  const [activeTab,       setActiveTab]       = useState<"packs" | "builder" | "info">("packs");
 
   const handleUnlock = useCallback(() => setUnlockedState(true), []);
 
@@ -351,7 +352,7 @@ export default function FivemGraphics() {
 
   return (
     <AppLayout>
-      <div className="w-full px-4 py-8 space-y-8">
+      <div className="w-full px-4 py-6 space-y-6">
 
         {/* Header */}
         <div>
@@ -368,7 +369,30 @@ export default function FivemGraphics() {
           </p>
         </div>
 
-        {/* Install instructions */}
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-white/5 overflow-x-auto">
+          {([
+            { id: "packs",   label: "Pre-Made Packs",  icon: Package },
+            { id: "builder", label: "Build Your Own",  icon: Palette },
+            { id: "info",    label: "How It Works",    icon: Info    },
+          ] as const).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              data-testid={`tab-fivem-${id}`}
+              onClick={() => setActiveTab(id)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px shrink-0",
+                activeTab === id ? "text-red-400 border-red-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Install instructions — shown on packs + builder tabs */}
+        {activeTab !== "info" && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-start gap-3">
           <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-300/80 leading-relaxed">
@@ -379,9 +403,10 @@ export default function FivemGraphics() {
             drag the new <span className="font-mono font-bold text-amber-300">citizen</span> folder in → restart FiveM.
           </div>
         </div>
+        )}
 
         {/* Pre-made pack */}
-        <section>
+        {activeTab === "packs" && (<section>
           <div className="flex items-center gap-2 mb-4">
             <Package className="w-4 h-4 text-red-400" />
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Pre-Made Pack</h2>
@@ -434,10 +459,10 @@ export default function FivemGraphics() {
               </div>
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* Custom Pack Maker */}
-        <section>
+        {activeTab === "builder" && (<section>
           <div className="flex items-center gap-2 mb-4">
             <Palette className="w-4 h-4 text-red-400" />
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Custom Pack Maker</h2>
@@ -619,10 +644,10 @@ export default function FivemGraphics() {
               </Button>
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* Info footer */}
-        <section className="rounded-2xl border border-white/5 bg-zinc-900/30 p-5">
+        {activeTab === "info" && (<section className="rounded-2xl border border-white/5 bg-zinc-900/30 p-5">
           <div className="flex items-center gap-2 mb-3">
             <CloudOff className="w-4 h-4 text-zinc-400" />
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">How FiveM Graphics Packs Work</p>
@@ -641,7 +666,7 @@ export default function FivemGraphics() {
               <p>Open <span className="font-mono text-zinc-400">FiveM Application Data\</span> and delete the <span className="font-mono text-zinc-400">citizen</span> folder entirely, or remove just the two XML files. Restart FiveM — stock visuals restore instantly.</p>
             </div>
           </div>
-        </section>
+        </section>)}
 
       </div>
     </AppLayout>

@@ -293,27 +293,26 @@ export function AppSidebar() {
 
 
           {enabledCount > 0 && (
-            <Link href="/tweaks">
-              <div
-                data-testid="widget-script-cta"
-                className="rounded-xl border border-red-500/40 bg-red-500/8 px-3 py-3 cursor-pointer hover:bg-red-500/15 hover:border-red-500/60 transition-all group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/35 flex items-center justify-center shrink-0 group-hover:bg-red-500/30 transition-colors">
-                    <Download className="w-4 h-4 text-red-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold text-red-300 leading-tight">
-                      {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected
-                    </p>
-                    <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 font-semibold">
-                      Tap to get your script →
-                    </p>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-red-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            <div
+              data-testid="widget-script-cta"
+              onClick={() => window.dispatchEvent(new CustomEvent("optigods:open-script"))}
+              className="rounded-xl border border-red-500/40 bg-red-500/8 px-3 py-3 cursor-pointer hover:bg-red-500/15 hover:border-red-500/60 transition-all group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/35 flex items-center justify-center shrink-0 group-hover:bg-red-500/30 transition-colors">
+                  <Download className="w-4 h-4 text-red-400" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-red-300 leading-tight">
+                    {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected
+                  </p>
+                  <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 font-semibold">
+                    Hit GET MY SCRIPT ↑
+                  </p>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-red-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
               </div>
-            </Link>
+            </div>
           )}
 
           <div className="px-2 py-2.5 rounded-lg bg-zinc-900/60 border border-white/5">
