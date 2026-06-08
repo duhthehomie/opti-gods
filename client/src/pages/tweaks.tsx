@@ -235,7 +235,7 @@ export default function TweaksPage() {
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
   });
   const [showAll, setShowAll] = useState<boolean>(() => {
-    try { const v = localStorage.getItem(SHOW_ALL_KEY); return v === null ? true : v === "1"; } catch { return true; }
+    try { return localStorage.getItem(SHOW_ALL_KEY) === "1"; } catch { return false; }
   });
   const [activeSectionId, setActiveSectionId] = useState<string | null>(() => {
     try { return localStorage.getItem(ACTIVE_SECT_KEY) || null; } catch { return null; }
