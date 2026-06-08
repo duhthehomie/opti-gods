@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { Wrench, RotateCcw, HardDrive, Loader2, Activity, History, Download, Monitor, HelpCircle } from "lucide-react";
+import { Wrench, RotateCcw, HardDrive, Loader2, Activity, History, Download, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +14,6 @@ const CustomOS = lazy(() => import("@/pages/custom-os"));
 const DPCLatency = lazy(() => import("@/pages/dpc-latency"));
 const TaskManager = lazy(() => import("@/pages/task-manager"));
 
-const HelpPage = lazy(() => import("@/pages/help"));
 
 type Tab = {
   id: string;
@@ -28,7 +27,6 @@ const TABS: Tab[] = [
   { id: "task-manager",   label: "Task Manager",    icon: Monitor,      Component: TaskManager },
   { id: "dpc-latency",    label: "DPC Latency",     icon: Activity,     Component: DPCLatency },
   { id: "custom-os",      label: "Custom OS",       icon: HardDrive,    Component: CustomOS },
-  { id: "help",           label: "Help",            icon: HelpCircle,   Component: HelpPage },
 ];
 
 function readHashTab(): string {
