@@ -64,6 +64,8 @@ interface AppEntry {
   startupKey?: string; description: string;
   impact: "HIGH" | "MED" | "LOW";
   recommended?: boolean; warning?: string;
+  /** Extra helper/watchdog process names to also kill so the app can't self-relaunch */
+  relatedProcesses?: string[];
 }
 interface AppCategory {
   label: string;
@@ -78,40 +80,40 @@ const CATEGORIES: AppCategory[] = [
   {
     label: "Browsers", icon: Globe, color: "text-blue-400",
     apps: [
-      { id: "tm_chrome",  name: "Google Chrome",  processName: "chrome.exe",  startupKey: "Google Chrome", description: "Background render + GPU compositor. 150-400MB RAM even when minimised.", impact: "HIGH", recommended: true },
-      { id: "tm_edge",    name: "Microsoft Edge", processName: "msedge.exe",  startupKey: "MicrosoftEdge", description: "Edge Startup Boost keeps processes alive 24/7 even when the browser is closed.", impact: "HIGH", recommended: true },
-      { id: "tm_firefox", name: "Firefox",        processName: "firefox.exe", description: "Multiple content processes per tab. Safe to kill before gaming.", impact: "MED" },
-      { id: "tm_brave",   name: "Brave Browser",  processName: "brave.exe",   startupKey: "Brave", description: "Background service and updater stay active. Safe to kill.", impact: "MED" },
+      { id: "tm_chrome",  name: "Google Chrome",  processName: "chrome.exe",  startupKey: "Google Chrome", description: "Background render + GPU compositor. 150-400MB RAM even when minimised.", impact: "HIGH", recommended: true, relatedProcesses: ["GoogleCrashHandler.exe", "GoogleCrashHandler64.exe", "chrome_crashpad_handler.exe"] },
+      { id: "tm_edge",    name: "Microsoft Edge", processName: "msedge.exe",  startupKey: "MicrosoftEdge", description: "Edge Startup Boost keeps processes alive 24/7 even when the browser is closed.", impact: "HIGH", recommended: true, relatedProcesses: ["msedgewebview2.exe", "MicrosoftEdgeUpdate.exe"] },
+      { id: "tm_firefox", name: "Firefox",        processName: "firefox.exe", description: "Multiple content processes per tab. Safe to kill before gaming.", impact: "MED", relatedProcesses: ["plugin-container.exe"] },
+      { id: "tm_brave",   name: "Brave Browser",  processName: "brave.exe",   startupKey: "Brave", description: "Background service and updater stay active. Safe to kill.", impact: "MED", relatedProcesses: ["brave_crashpad_handler.exe"] },
     ],
   },
   {
     label: "Game Launchers", icon: Gamepad2, color: "text-orange-400",
     apps: [
-      { id: "tm_steam",     name: "Steam",               processName: "steam.exe",             startupKey: "Steam",                  description: "Steam client + web helper + crash handler. 200-350MB RAM idle.", impact: "MED" },
-      { id: "tm_epic",      name: "Epic Games Launcher", processName: "EpicGamesLauncher.exe", startupKey: "EpicGamesLauncher",       description: "Epic launcher + EOS overlay run in background even when idle.", impact: "MED", recommended: true },
-      { id: "tm_battlenet", name: "Battle.net",          processName: "Battle.net.exe",        startupKey: "Battle.net",             description: "Battle.net Agent uses CPU even when not updating. Kill before COD/OW.", impact: "HIGH", recommended: true },
-      { id: "tm_ea",        name: "EA App / Origin",     processName: "EADesktop.exe",         startupKey: "EADesktop",              description: "EA App telemetry runs constantly. Kill before Apex/BF.", impact: "MED", recommended: true },
-      { id: "tm_ubisoft",   name: "Ubisoft Connect",     processName: "upc.exe",               startupKey: "Ubisoft Connect",        description: "Game service + updater stays active when closed.", impact: "LOW" },
-      { id: "tm_rockstar",  name: "Rockstar Launcher",   processName: "PlayGTAV.exe",          startupKey: "Rockstar Games Launcher",description: "Rockstar Services + Web Helper. Only needed for GTA V / RDR2.", impact: "LOW" },
+      { id: "tm_steam",     name: "Steam",               processName: "steam.exe",             startupKey: "Steam",                  description: "Steam client + web helper + crash handler. 200-350MB RAM idle.", impact: "MED", relatedProcesses: ["steamwebhelper.exe", "SteamService.exe", "GameOverlayUI.exe"] },
+      { id: "tm_epic",      name: "Epic Games Launcher", processName: "EpicGamesLauncher.exe", startupKey: "EpicGamesLauncher",       description: "Epic launcher + EOS overlay run in background even when idle.", impact: "MED", recommended: true, relatedProcesses: ["EpicWebHelper.exe", "EpicOnlineServicesInstaller.exe", "EOSUserManager.exe"] },
+      { id: "tm_battlenet", name: "Battle.net",          processName: "Battle.net.exe",        startupKey: "Battle.net",             description: "Battle.net Agent uses CPU even when not updating. Kill before COD/OW.", impact: "HIGH", recommended: true, relatedProcesses: ["Agent.exe", "Battle.net Helper.exe"] },
+      { id: "tm_ea",        name: "EA App / Origin",     processName: "EADesktop.exe",         startupKey: "EADesktop",              description: "EA App telemetry runs constantly. Kill before Apex/BF.", impact: "MED", recommended: true, relatedProcesses: ["EABackgroundService.exe", "EALocalHostSvc.exe", "OriginWebHelperService.exe"] },
+      { id: "tm_ubisoft",   name: "Ubisoft Connect",     processName: "upc.exe",               startupKey: "Ubisoft Connect",        description: "Game service + updater stays active when closed.", impact: "LOW", relatedProcesses: ["UbisoftGameLauncher.exe", "UplayWebCore.exe"] },
+      { id: "tm_rockstar",  name: "Rockstar Launcher",   processName: "PlayGTAV.exe",          startupKey: "Rockstar Games Launcher",description: "Rockstar Services + Web Helper. Only needed for GTA V / RDR2.", impact: "LOW", relatedProcesses: ["RockstarService.exe", "Rockstar Games Launcher.exe"] },
     ],
   },
   {
     label: "Communication", icon: MessageCircle, color: "text-indigo-400",
     apps: [
-      { id: "tm_discord",     name: "Discord",           processName: "Discord.exe",    startupKey: "Discord",                   description: "Overlay, video codec pre-loader, and crash handler run 3+ processes.", impact: "MED", warning: "Keep open if you use Discord voice during gaming." },
-      { id: "tm_teams",       name: "Microsoft Teams",   processName: "Teams.exe",      startupKey: "Teams",                     description: "Teams runs 4-8 processes at idle, 300-500MB RAM. Kill before gaming.", impact: "HIGH", recommended: true },
-      { id: "tm_slack",       name: "Slack",             processName: "slack.exe",      startupKey: "com.squirrel.slack.slack",  description: "Electron app with GPU compositor. 200-400MB RAM at idle.", impact: "MED", recommended: true },
-      { id: "tm_zoom",        name: "Zoom",              processName: "Zoom.exe",       startupKey: "Zoom",                      description: "Background helper and crash monitor run even when not in a call.", impact: "LOW", recommended: true },
-      { id: "tm_teamviewer",  name: "TeamViewer",        processName: "TeamViewer.exe", startupKey: "TeamViewer",                description: "Maintains a remote access connection. Not needed during gaming.", impact: "LOW", recommended: true },
+      { id: "tm_discord",     name: "Discord",           processName: "Discord.exe",    startupKey: "Discord",                   description: "Overlay, video codec pre-loader, and crash handler run 3+ processes.", impact: "MED", warning: "Keep open if you use Discord voice during gaming.", relatedProcesses: ["DiscordCrashHandler.exe", "DiscordHelper.exe", "DiscordPTB.exe", "DiscordCanary.exe"] },
+      { id: "tm_teams",       name: "Microsoft Teams",   processName: "Teams.exe",      startupKey: "Teams",                     description: "Teams runs 4-8 processes at idle, 300-500MB RAM. Kill before gaming.", impact: "HIGH", recommended: true, relatedProcesses: ["ms-teams.exe", "TeamsMeetingAddin.exe"] },
+      { id: "tm_slack",       name: "Slack",             processName: "slack.exe",      startupKey: "com.squirrel.slack.slack",  description: "Electron app with GPU compositor. 200-400MB RAM at idle.", impact: "MED", recommended: true, relatedProcesses: ["slack-helper.exe"] },
+      { id: "tm_zoom",        name: "Zoom",              processName: "Zoom.exe",       startupKey: "Zoom",                      description: "Background helper and crash monitor run even when not in a call.", impact: "LOW", recommended: true, relatedProcesses: ["ZoomNotus.exe", "Zoom_launcher.exe"] },
+      { id: "tm_teamviewer",  name: "TeamViewer",        processName: "TeamViewer.exe", startupKey: "TeamViewer",                description: "Maintains a remote access connection. Not needed during gaming.", impact: "LOW", recommended: true, relatedProcesses: ["TeamViewer_Service.exe"] },
     ],
   },
   {
     label: "Cloud & Sync", icon: Cloud, color: "text-cyan-400",
     apps: [
-      { id: "tm_onedrive", name: "OneDrive",    processName: "OneDrive.exe",     startupKey: "OneDrive",     description: "File sync generates constant disk I/O competing with game asset streaming.", impact: "HIGH", recommended: true },
-      { id: "tm_dropbox",  name: "Dropbox",     processName: "Dropbox.exe",      startupKey: "Dropbox",      description: "Background sync causes disk I/O spikes during gaming.", impact: "MED", recommended: true },
-      { id: "tm_gdrive",   name: "Google Drive",processName: "googledrivefs.exe", startupKey: "GoogleDriveFS",description: "Continuous cloud sync in background.", impact: "MED", recommended: true },
-      { id: "tm_icloud",   name: "iCloud",      processName: "iCloudDrive.exe",  startupKey: "iCloud",       description: "Drive sync + Photo Library indexing in background.", impact: "LOW", recommended: true },
+      { id: "tm_onedrive", name: "OneDrive",    processName: "OneDrive.exe",     startupKey: "OneDrive",     description: "File sync generates constant disk I/O competing with game asset streaming.", impact: "HIGH", recommended: true, relatedProcesses: ["OneDriveStandaloneUpdater.exe", "Microsoft.SharePoint.exe"] },
+      { id: "tm_dropbox",  name: "Dropbox",     processName: "Dropbox.exe",      startupKey: "Dropbox",      description: "Background sync causes disk I/O spikes during gaming.", impact: "MED", recommended: true, relatedProcesses: ["DropboxUpdate.exe"] },
+      { id: "tm_gdrive",   name: "Google Drive",processName: "googledrivefs.exe", startupKey: "GoogleDriveFS",description: "Continuous cloud sync in background.", impact: "MED", recommended: true, relatedProcesses: ["GoogleDriveFS.exe"] },
+      { id: "tm_icloud",   name: "iCloud",      processName: "iCloudDrive.exe",  startupKey: "iCloud",       description: "Drive sync + Photo Library indexing in background.", impact: "LOW", recommended: true, relatedProcesses: ["iCloud.exe", "iCloudPhotos.exe", "AppleMobileDeviceService.exe"] },
     ],
   },
   {
@@ -126,9 +128,9 @@ const CATEGORIES: AppCategory[] = [
   {
     label: "Background Bloat", icon: Music2, color: "text-red-400",
     apps: [
-      { id: "tm_spotify",      name: "Spotify",             processName: "Spotify.exe",       startupKey: "Spotify",             description: "4-6 Chromium-based helper processes at all times. 200-450MB RAM.", impact: "HIGH", recommended: true },
-      { id: "tm_itunes",       name: "iTunes / Apple Music", processName: "iTunes.exe",        startupKey: "iTunes",              description: "iTunes Helper + AppleMobileDeviceService run even when iTunes is closed.", impact: "LOW", recommended: true },
-      { id: "tm_adobecc",      name: "Adobe Creative Cloud", processName: "Creative Cloud.exe",startupKey: "AdobeGCInvoker-1.0", description: "CC Desktop + Genuine Checker + updater = 3 processes, 150MB RAM min.", impact: "MED", recommended: true },
+      { id: "tm_spotify",      name: "Spotify",             processName: "Spotify.exe",       startupKey: "Spotify",             description: "4-6 Chromium-based helper processes at all times. 200-450MB RAM.", impact: "HIGH", recommended: true, relatedProcesses: ["SpotifyWebHelper.exe", "SpotifyCrashService.exe"] },
+      { id: "tm_itunes",       name: "iTunes / Apple Music", processName: "iTunes.exe",        startupKey: "iTunes",              description: "iTunes Helper + AppleMobileDeviceService run even when iTunes is closed.", impact: "LOW", recommended: true, relatedProcesses: ["iTunesHelper.exe", "AppleMobileDeviceService.exe", "ApplePushService.exe"] },
+      { id: "tm_adobecc",      name: "Adobe Creative Cloud", processName: "Creative Cloud.exe",startupKey: "AdobeGCInvoker-1.0", description: "CC Desktop + Genuine Checker + updater = 3 processes, 150MB RAM min.", impact: "MED", recommended: true, relatedProcesses: ["AdobeUpdateService.exe", "AGMService.exe", "AGSService.exe", "AdobeIPCBroker.exe"] },
       { id: "tm_malwarebytes", name: "Malwarebytes",         processName: "MBAMService.exe",   description: "Real-time scanning causes I/O overhead during game loads.", impact: "MED", warning: "Do not disable permanently — real-time protection matters." },
     ],
   },
@@ -224,11 +226,16 @@ export default function TaskManagerPage() {
 
   useEffect(() => { if (native) runScan(); }, [native, runScan]);
 
-  // ── Known app kill ─────────────────────────────────────────────────────────
+  // ── Known app kill (main + all related helper/watchdog processes) ──────────
   const handleKill = async (app: AppEntry) => {
     setAppState(app.id, { killStatus: "pending" });
     try {
+      // Kill main process first
       const res = await killApp(app.processName);
+      // Kill all related helpers regardless of main result — best-effort, fire and forget
+      if (app.relatedProcesses?.length) {
+        await Promise.allSettled(app.relatedProcesses.map(p => killApp(p)));
+      }
       if (res.ok) {
         setAppState(app.id, { killStatus: "done" });
         setRunningIds(prev => { const n = new Set(prev); n.delete(app.id); return n; });
