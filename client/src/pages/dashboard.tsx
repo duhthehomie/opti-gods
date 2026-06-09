@@ -346,10 +346,15 @@ export default function Dashboard() {
   const totalTweaks = Object.keys(tweaks).length;
   const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
   const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
-  const recApplied = Array.from(smartRecs.ids).filter(id => (tweaks as Record<string, boolean>)[id]).length;
-  const scorePercent = smartRecs.ids.size > 0 ? Math.round((recApplied / smartRecs.ids.size) * 100) : 0;
-  const tierLabel = scorePercent >= 90 ? "GOD TIER" : scorePercent >= 70 ? "ELITE" : scorePercent >= 46 ? "DECENT" : scorePercent >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
-  const tierColor = scorePercent >= 70 ? "text-red-400" : scorePercent >= 46 ? "text-orange-400" : "text-zinc-500";
+  // Expert tweaks are intentionally excluded from auto-enable (require manual opt-in).
+  // Any tweak not present as a key in the store can't be toggled either.
+  // Filter both out of the score denominator so 100% is always achievable.
+  const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
+  const achievableIds = Array.from(smartRecs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
+  const recApplied = achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
+  const scorePercent = achievableIds.length > 0 ? Math.round((recApplied / achievableIds.length) * 100) : 0;
+  const tierLabel = scorePercent === 100 ? "100% OPTIMIZED" : scorePercent >= 90 ? "GOD TIER" : scorePercent >= 70 ? "ELITE" : scorePercent >= 46 ? "DECENT" : scorePercent >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
+  const tierColor = scorePercent === 100 ? "text-red-400" : scorePercent >= 70 ? "text-red-400" : scorePercent >= 46 ? "text-orange-400" : "text-zinc-500";
 
   return (
     <AppLayout>
@@ -475,21 +480,30 @@ export default function Dashboard() {
                   <span className={cn("text-sm font-black uppercase tracking-[0.2em]", tierColor)}>
                     {tierLabel}
                   </span>
-                  {scorePercent >= 90 && (
+                  {scorePercent === 100 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-400 font-black uppercase tracking-wide">🏆 100% Optimized</span>
+                  )}
+                  {scorePercent >= 90 && scorePercent < 100 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 font-black uppercase tracking-wide">🔥 Maxed</span>
                   )}
                 </div>
                 <p className="text-[11px] text-zinc-500 mb-3">
-                  <span className="text-white font-bold">{recApplied}</span>
-                  <span className="text-zinc-600"> of </span>
-                  <span className="text-white font-bold">{smartRecs.ids.size}</span>
-                  {" "}tweaks selected — <span className="text-zinc-600">run the detect scan to verify what&apos;s actually in your registry</span>
+                  {scorePercent === 100 ? (
+                    <span className="text-red-400 font-bold">All recommended tweaks enabled — max performance unlocked!</span>
+                  ) : (
+                    <>
+                      <span className="text-white font-bold">{recApplied}</span>
+                      <span className="text-zinc-600"> of </span>
+                      <span className="text-white font-bold">{achievableIds.length}</span>
+                      {" "}tweaks selected — <span className="text-zinc-600">run the detect scan to verify what&apos;s actually in your registry</span>
+                    </>
+                  )}
                 </p>
                 <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs mx-auto md:mx-0">
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-700",
-                      scorePercent >= 70 ? "bg-gradient-to-r from-red-600 to-red-400" : scorePercent >= 46 ? "bg-orange-500" : "bg-zinc-600"
+                      scorePercent === 100 ? "bg-gradient-to-r from-red-500 via-red-400 to-orange-400" : scorePercent >= 70 ? "bg-gradient-to-r from-red-600 to-red-400" : scorePercent >= 46 ? "bg-orange-500" : "bg-zinc-600"
                     )}
                     style={{ width: `${scorePercent}%` }}
                   />
@@ -513,9 +527,12 @@ export default function Dashboard() {
                     {scorePercent === 0 ? "Get Started" : "Boost My Score"}
                   </Button>
                 ) : (
-                  <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-sm">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Maxed Out
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 font-black text-sm shadow-[0_0_20px_-4px_rgba(220,38,38,0.3)]">
+                      <CheckCircle2 className="w-4 h-4" />
+                      100% Optimized
+                    </div>
+                    <span className="text-[9px] text-zinc-600 font-medium">Download your script below</span>
                   </div>
                 )}
               </div>
