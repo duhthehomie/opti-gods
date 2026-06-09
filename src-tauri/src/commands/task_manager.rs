@@ -386,10 +386,21 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
                         ok: true,
                         message: format!("{} was not running.", name),
                     }
-                } else {
+                } else if combined.contains("access is denied")
+                    || combined.contains("access denied")
+                {
                     ActionResult {
                         ok: false,
-                        message: String::from_utf8_lossy(&o.stderr).trim().to_string(),
+                        message: format!(
+                            "'{}' is running with elevated privileges — relaunch Opti Gods as Administrator to force-kill it.",
+                            name
+                        ),
+                    }
+                } else {
+                    let raw = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                    ActionResult {
+                        ok: false,
+                        message: if raw.is_empty() { format!("Could not terminate {}.", name) } else { raw },
                     }
                 }
             }

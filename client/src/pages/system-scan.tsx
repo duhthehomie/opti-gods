@@ -7,11 +7,34 @@ import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
+  Download, Upload, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/api-base";
+
+// ── HW Monitor import data shape ─────────────────────────────────────────────
+interface HwMonitorData {
+  gpu_temp_c?: number | null;
+  gpu_load_pct?: number | null;
+  gpu_name?: string;
+  gpu_vram_used_mb?: number;
+  gpu_vram_total_mb?: number;
+  cpu_temp_c?: number | null;
+  cpu_load_pct?: number | null;
+  cpu_name?: string;
+  cpu_cores?: number;
+  cpu_threads?: number;
+  cpu_mhz?: number;
+  ram_total_gb?: number;
+  ram_free_gb?: number;
+  ram_used_pct?: number;
+  disks?: Array<{ drive: string; free_gb: number; size_gb: number; used_pct: number }>;
+  timestamp?: string;
+  cpu_temp_note?: string;
+}
 
 // ── Stat card ────────────────────────────────────────────────────────────────
 function Stat({
@@ -298,6 +321,154 @@ function NativeScanResults({ scan, onRescan, rescanning }: {
   );
 }
 
+// ── HW Monitor Panel ─────────────────────────────────────────────────────────
+function HwMonitorPanel() {
+  const [hw, setHw] = useState<HwMonitorData | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const parseFile = (file: File) => {
+    setParseError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string) as HwMonitorData;
+        if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
+        setHw(data);
+      } catch {
+        setParseError("Invalid file — drop the OptiGods-HW-Monitor.json produced by the BAT script.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith(".json")) parseFile(file);
+    else setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
+  };
+
+  const downloadBat = () => {
+    const a = document.createElement("a");
+    a.href = apiUrl("/api/script/hw-monitor");
+    a.download = "OptiGods-HW-Monitor.bat";
+    a.click();
+  };
+
+  const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";
+  const usedColor = (pct: number) => pct < 60 ? "text-emerald-400" : pct < 80 ? "text-amber-400" : "text-red-400";
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+      className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <Thermometer className="w-4 h-4 text-red-400" />
+          <span className="text-sm font-bold text-white">Live Sensor Monitor</span>
+          <span className="text-[10px] text-zinc-600">CPU + GPU temps via BAT script</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {hw && (
+            <button onClick={() => setHw(null)} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            data-testid="button-download-hw-monitor"
+            onClick={downloadBat}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 border border-red-500/60 text-white text-[10px] font-bold uppercase tracking-wider transition-colors">
+            <Download className="w-3 h-3" /> Download BAT
+          </button>
+        </div>
+      </div>
+
+      {!hw ? (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current?.click()}
+          className={cn(
+            "m-3 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 py-8 cursor-pointer transition-all",
+            dragging ? "border-red-500/60 bg-red-500/5" : "border-white/10 hover:border-white/20 hover:bg-white/[0.02]"
+          )}>
+          <input ref={fileRef} type="file" accept=".json" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
+          <Upload className="w-5 h-5 text-zinc-600" />
+          <p className="text-[11px] text-zinc-500 text-center px-6">
+            1. Download the BAT above and run it (double-click → Yes to UAC)<br />
+            2. Drag <span className="font-mono text-zinc-400">OptiGods-HW-Monitor.json</span> here (saved to Desktop)
+          </p>
+          {parseError && <p className="text-[10px] text-red-400">{parseError}</p>}
+        </div>
+      ) : (
+        <div className="p-3 space-y-3">
+          {hw.timestamp && (
+            <p className="text-[10px] text-zinc-600">Snapshot: {hw.timestamp}</p>
+          )}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+            {hw.gpu_name && (
+              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3" /> GPU</p>
+                <p className="text-white font-mono text-xs font-semibold truncate">{hw.gpu_name}</p>
+                {hw.gpu_vram_total_mb && <p className="text-zinc-500 text-[10px]">{Math.round(hw.gpu_vram_total_mb / 1024)} GB VRAM</p>}
+              </div>
+            )}
+            {hw.gpu_temp_c != null && (
+              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Thermometer className="w-3 h-3" /> GPU Temp</p>
+                <p className={cn("font-mono text-lg font-black", tempColor(hw.gpu_temp_c))}>{hw.gpu_temp_c}°C</p>
+                {hw.gpu_load_pct != null && <p className="text-zinc-500 text-[10px]">{hw.gpu_load_pct}% load</p>}
+              </div>
+            )}
+            {hw.cpu_temp_c != null ? (
+              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
+                <p className={cn("font-mono text-lg font-black", tempColor(hw.cpu_temp_c))}>{hw.cpu_temp_c}°C</p>
+                {hw.cpu_load_pct != null && <p className="text-zinc-500 text-[10px]">{hw.cpu_load_pct}% load</p>}
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg border border-amber-500/10 bg-amber-500/[0.03]">
+                <p className="text-[10px] uppercase tracking-wider text-amber-500/70 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
+                <p className="text-amber-400 font-mono text-xs font-bold">N/A</p>
+                <p className="text-[9px] text-zinc-600 mt-0.5">AMD Ryzen desktop — ACPI not exposed. Use HWiNFO64.</p>
+              </div>
+            )}
+            {hw.ram_used_pct != null && (
+              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
+                <p className={cn("font-mono text-lg font-black", usedColor(hw.ram_used_pct))}>{hw.ram_used_pct}%</p>
+                {hw.ram_total_gb && hw.ram_free_gb != null && (
+                  <p className="text-zinc-500 text-[10px]">{hw.ram_free_gb} GB free / {hw.ram_total_gb} GB</p>
+                )}
+              </div>
+            )}
+          </div>
+          {hw.disks && hw.disks.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {hw.disks.map(d => (
+                <div key={d.drive} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><HardDrive className="w-3 h-3" /> {d.drive}</p>
+                  <p className={cn("font-mono text-base font-black", usedColor(d.used_pct))}>{d.used_pct}%</p>
+                  <p className="text-zinc-500 text-[10px]">{d.free_gb} GB free / {d.size_gb} GB</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {hw.cpu_temp_note && hw.cpu_temp_c == null && (
+            <p className="text-[10px] text-zinc-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3 h-3 text-amber-500/60 shrink-0 mt-0.5" />
+              {hw.cpu_temp_note}
+            </p>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function SystemScanPage() {
   const hw = useHardwareInfo();
@@ -428,6 +599,9 @@ export default function SystemScanPage() {
             </div>
           </div>
         )}
+
+        {/* HW Monitor — always visible, lets any user import sensor data */}
+        {!loading && <HwMonitorPanel />}
       </div>
     </AppLayout>
   );

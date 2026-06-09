@@ -146,6 +146,33 @@ const impactColor = (impact: "HIGH" | "MED" | "LOW") =>
 
 const PROCESS_PAGE_SIZE = 50;
 
+// ── Known background bloat processes (update agents, telemetry, crash reporters) ──
+const DEBLOAT_BG_PROCESSES = new Set([
+  "googleupdate.exe", "googleupdatebroker.exe", "googlecrashhandler.exe", "googlecrashhandler64.exe",
+  "adobearm.exe", "agmservice.exe", "agsservice.exe", "adobeipcbroker.exe", "adobeupdateservice.exe",
+  "microsoftedgeupdate.exe",
+  "steamwebhelper.exe", "gameoverlayu.exe", "steamservice.exe",
+  "epicwebhelper.exe", "epicgamesservices.exe",
+  "rockstarservice.exe",
+  "compattelrunner.exe", "musnotification.exe", "wuapihost.exe",
+  "nvspcaps64.exe", "nvsphelper64.exe", "nvcontainer.exe", "nvsync.exe", "nv_hostengine.exe",
+  "discordcrashhandler.exe", "discordptb.exe", "discordcanary.exe",
+  "yourphone.exe", "phoneexperiencehost.exe", "cortana.exe",
+  "officeclicktorun.exe", "sdxhelper.exe",
+  "mbamtray.exe", "mbamupdateui.exe",
+  "spotifywebhelper.exe",
+  "dropboxupdate.exe", "onedriveupdater.exe",
+  "zoomnotus.exe", "zoom_launcher.exe",
+  "teams.exe", "ms-teams.exe", "teamsupdatedaemon.exe",
+  "searchfilterhost.exe", "searchprotocolhost.exe",
+]);
+
+// ── HKLM startup entries that are genuine Windows system entries (never offer script) ──
+const WINDOWS_PROTECTED_STARTUP_NAMES = new Set([
+  "securityhealth", "windows defender", "windowsdefender", "mrt", "mscares",
+  "microsoftsecurityappbroker", "windowssecuritynotification", "windowsdefendernotificationiconsettings",
+]);
+
 export default function TaskManagerPage() {
   const { toast } = useToast();
   const native = isNative();
@@ -258,10 +285,38 @@ export default function TaskManagerPage() {
         setAllProcesses(prev => prev.filter(p => p.name.toLowerCase() !== key));
       } else {
         setBgKillStates(prev => ({ ...prev, [key]: "error" }));
-        toast({ title: "Cannot kill", description: res.message, variant: "destructive" });
+        const isElevated = res.message.toLowerCase().includes("elevated") ||
+                           res.message.toLowerCase().includes("access") ||
+                           res.message.toLowerCase().includes("administrator");
+        toast({
+          title: isElevated ? "Protected process" : "Cannot kill",
+          description: isElevated
+            ? `${processName} is running with elevated privileges. Relaunch Opti Gods as Administrator to force-kill it.`
+            : res.message,
+          variant: isElevated ? "default" : "destructive",
+        });
       }
-    } catch (err) {
+    } catch {
       setBgKillStates(prev => ({ ...prev, [key]: "error" }));
+    }
+  };
+
+  // ── Disable HKLM startup entry via StartupApproved script ─────────────────
+  const handleDisableHklmStartup = async (entryName: string) => {
+    try {
+      const r = await fetch(apiUrl("/api/task-manager/disable-hklm-startup"), {
+        method: "POST", headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({ entryName }),
+      });
+      if (!r.ok) throw new Error("server error");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `OptiGods_Disable_${entryName.replace(/\s+/g,"_")}.bat`; a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Script downloaded", description: `Run as Administrator to disable "${entryName}" from startup.` });
+    } catch {
+      toast({ title: "Error", description: "Failed to generate disable script.", variant: "destructive" });
     }
   };
 
@@ -395,7 +450,8 @@ export default function TaskManagerPage() {
                   <p className="text-xl font-display font-black text-red-400">
                     {scanning ? <Loader2 className="w-5 h-5 animate-spin text-red-400" /> : allProcesses.length || runningIds.size}
                   </p>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">processes</p>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">background</p>
+                  <p className="text-[9px] text-zinc-700">sys excluded</p>
                 </div>
                 <div className="w-px h-8 bg-white/10" />
                 <div className="text-center">
@@ -654,6 +710,7 @@ export default function TaskManagerPage() {
                     {displayedProcesses.map((proc) => {
                       const key = proc.name.toLowerCase();
                       const peripheral = PERIPHERAL_PROCESSES[key];
+                      const isDebloat = DEBLOAT_BG_PROCESSES.has(key);
                       const killState = bgKillStates[key] ?? "idle";
                       const isKillPending = killState === "pending";
                       const isKillDone = killState === "done";
@@ -666,6 +723,8 @@ export default function TaskManagerPage() {
                               "w-6 h-6 rounded border flex items-center justify-center shrink-0",
                               peripheral
                                 ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                                : isDebloat
+                                ? "bg-red-500/10 border-red-500/20 text-red-400"
                                 : "bg-zinc-800 border-white/5 text-zinc-500"
                             )}>
                               {peripheral
@@ -674,9 +733,16 @@ export default function TaskManagerPage() {
                               }
                             </div>
                             <div className="min-w-0">
-                              <span className={cn("text-sm font-mono truncate block", isKillDone ? "text-zinc-600 line-through" : "text-zinc-300")}>
-                                {proc.name}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={cn("text-sm font-mono truncate", isKillDone ? "text-zinc-600 line-through" : "text-zinc-300")}>
+                                  {proc.name}
+                                </span>
+                                {isDebloat && !isKillDone && (
+                                  <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 uppercase tracking-wider shrink-0">
+                                    DEBLOAT
+                                  </span>
+                                )}
+                              </div>
                               {peripheral && (
                                 <span className="text-[10px] text-blue-400">{peripheral.label}</span>
                               )}
@@ -800,10 +866,18 @@ export default function TaskManagerPage() {
                                 : isDisableDone   ? "✓ Removed"
                                 : <><WifiOff className="w-2.5 h-2.5" /> Disable</>}
                               </button>
+                            ) : entry.location === "HKLM" && !WINDOWS_PROTECTED_STARTUP_NAMES.has(entry.name.toLowerCase()) ? (
+                              <button
+                                data-testid={`button-hklm-script-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
+                                onClick={() => handleDisableHklmStartup(entry.name)}
+                                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap flex items-center gap-1 bg-zinc-800/80 border-zinc-600 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300"
+                                title="Downloads a BAT script — run as Administrator to disable this system-level startup entry">
+                                <Download className="w-2.5 h-2.5" /> Script
+                              </button>
                             ) : (
                               <span className="text-[9px] text-zinc-600 px-2 py-1.5 rounded border border-zinc-800 flex items-center gap-1 whitespace-nowrap">
                                 <Lock className="w-2.5 h-2.5" />
-                                {entry.location === "HKLM" ? "System Level" : "Protected"}
+                                Protected
                               </span>
                             )}
                           </div>

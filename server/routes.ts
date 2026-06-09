@@ -1938,6 +1938,190 @@ Read-Host "Press Enter to close"
     res.end(Buffer.from(wrapInBat(script, { title: 'Task Manager - Kill and Startup Disable', tmpName: 'OptiGods-TaskMgr', marker: 'TASKMGR_PS1_START' }), 'utf8'));
   });
 
+  // ── HW Monitor BAT — reads CPU + GPU temps, drops JSON to Desktop ──────────
+  app.get('/api/script/hw-monitor', (_req, res) => {
+    const ps1 = `
+$ErrorActionPreference = 'SilentlyContinue'
+$result = [ordered]@{}
+
+# ─── GPU via nvidia-smi ──────────────────────────────────────────────────────
+$smiExe = $null
+$smiCmd = Get-Command "nvidia-smi.exe" -EA SilentlyContinue
+if ($smiCmd) { $smiExe = $smiCmd.Source }
+else {
+    @("$env:SystemRoot\\System32\\nvidia-smi.exe",
+      "C:\\Windows\\System32\\nvidia-smi.exe",
+      "$env:ProgramFiles\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe") | ForEach-Object {
+        if (!$smiExe -and (Test-Path $_)) { $smiExe = $_ }
+    }
+}
+
+if ($smiExe) {
+    $gpuTempRaw = (& $smiExe --query-gpu=temperature.gpu --format=csv,noheader 2>$null).Trim()
+    if ($gpuTempRaw -match '^\\d+$') { $result.gpu_temp_c = [int]$gpuTempRaw }
+    $gpuLoadRaw = (& $smiExe --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>$null).Trim()
+    if ($gpuLoadRaw -match '^\\d+$') { $result.gpu_load_pct = [int]$gpuLoadRaw }
+    $gpuName = (& $smiExe --query-gpu=name --format=csv,noheader 2>$null).Trim()
+    if ($gpuName) { $result.gpu_name = $gpuName }
+    $gpuMemUsed  = (& $smiExe --query-gpu=memory.used  --format=csv,noheader,nounits 2>$null).Trim()
+    $gpuMemTotal = (& $smiExe --query-gpu=memory.total --format=csv,noheader,nounits 2>$null).Trim()
+    if ($gpuMemUsed -match '^\\d+$' -and $gpuMemTotal -match '^\\d+$') {
+        $result.gpu_vram_used_mb  = [int]$gpuMemUsed
+        $result.gpu_vram_total_mb = [int]$gpuMemTotal
+    }
+} else {
+    $result.gpu_name   = "NVIDIA GPU (nvidia-smi.exe not found -- ensure NVIDIA drivers installed)"
+    $result.gpu_temp_c = $null
+}
+
+# ─── CPU Temperature — 3 fallback methods ────────────────────────────────────
+$cpuTemp = $null
+
+# Method 1: MSAcpi_ThermalZoneTemperature (Intel / some AMD laptops)
+try {
+    $zones = Get-WmiObject -Namespace "root\\wmi" -Class MSAcpi_ThermalZoneTemperature -EA SilentlyContinue
+    if ($zones) {
+        $temps = $zones | ForEach-Object { [math]::Round($_.CurrentTemperature / 10.0 - 273.15, 1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 }
+        if ($temps) { $cpuTemp = ($temps | Measure-Object -Maximum).Maximum }
+    }
+} catch {}
+
+# Method 2: Windows PDH Thermal Zone Counters
+if (-not $cpuTemp) {
+    try {
+        $samples = (Get-Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -SampleInterval 1 -MaxSamples 1 -EA SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 2731 }
+        if ($samples) {
+            $maxK = ($samples | Measure-Object -Property CookedValue -Maximum).Maximum
+            $c = [math]::Round($maxK / 10.0 - 273.15, 1)
+            if ($c -gt 5 -and $c -lt 120) { $cpuTemp = $c }
+        }
+    } catch {}
+}
+
+# Method 3: OpenHardwareMonitor WMI (if OHM is already running)
+if (-not $cpuTemp) {
+    try {
+        $sensors = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "CPU Package|CPU Core|Tdie|CPU CCD" }
+        if ($sensors) {
+            $v = ($sensors | Measure-Object -Property Value -Maximum).Maximum
+            if ($v -gt 5 -and $v -lt 120) { $cpuTemp = [math]::Round($v, 1) }
+        }
+    } catch {}
+}
+
+$result.cpu_temp_c    = $cpuTemp
+$result.cpu_temp_note = if ($cpuTemp) { "OK" } else { "AMD Ryzen desktop package temp not exposed via Windows ACPI thermal zones. Install HWiNFO64 (free) with Shared Memory enabled for accurate readings." }
+
+# ─── CPU Info & Usage ────────────────────────────────────────────────────────
+try {
+    $cpu = Get-CimInstance Win32_Processor -EA SilentlyContinue | Select-Object -First 1
+    if ($cpu) {
+        $result.cpu_name    = $cpu.Name.Trim()
+        $result.cpu_cores   = $cpu.NumberOfCores
+        $result.cpu_threads = $cpu.NumberOfLogicalProcessors
+        $result.cpu_mhz     = $cpu.MaxClockSpeed
+    }
+} catch {}
+
+try {
+    $load = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1 -EA SilentlyContinue).CounterSamples[0].CookedValue
+    if ($null -ne $load) { $result.cpu_load_pct = [math]::Round($load, 1) }
+} catch {}
+
+# ─── RAM ─────────────────────────────────────────────────────────────────────
+try {
+    $os2 = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
+    if ($os2) {
+        $result.ram_total_gb = [math]::Round($os2.TotalVisibleMemorySize / 1MB, 1)
+        $result.ram_free_gb  = [math]::Round($os2.FreePhysicalMemory / 1MB, 1)
+        $result.ram_used_pct = [math]::Round(100 * (1 - $os2.FreePhysicalMemory / $os2.TotalVisibleMemorySize), 1)
+    }
+} catch {}
+
+# ─── Disks ───────────────────────────────────────────────────────────────────
+try {
+    $result.disks = @(Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -EA SilentlyContinue | Select-Object -First 4 | ForEach-Object {
+        [ordered]@{ drive = $_.DeviceID; free_gb = [math]::Round($_.FreeSpace/1GB,1); size_gb = [math]::Round($_.Size/1GB,1); used_pct = [math]::Round(100*(1-$_.FreeSpace/$_.Size),1) }
+    })
+} catch {}
+
+$result.timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$json = $result | ConvertTo-Json -Depth 5
+$desktop = [Environment]::GetFolderPath("Desktop")
+$outPath = Join-Path $desktop "OptiGods-HW-Monitor.json"
+Set-Content -Path $outPath -Value $json -Encoding UTF8
+
+Write-Host ""
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host "    OPTI GODS  --  Hardware Monitor" -ForegroundColor White
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host ""
+Write-Host "  GPU Temp  : $(if ($null -ne $result.gpu_temp_c) { "$($result.gpu_temp_c) C" } else { "N/A" })" -ForegroundColor Cyan
+Write-Host "  CPU Temp  : $(if ($cpuTemp) { "$cpuTemp C" } else { "N/A  (AMD Ryzen — see note in JSON)" })" -ForegroundColor Cyan
+Write-Host "  CPU Load  : $(if ($null -ne $result.cpu_load_pct) { "$($result.cpu_load_pct)%" } else { "N/A" })" -ForegroundColor Cyan
+Write-Host "  RAM Used  : $(if ($null -ne $result.ram_used_pct) { "$($result.ram_used_pct)%" } else { "N/A" })" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Saved: $outPath" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Drag the JSON file onto the Opti Gods System Scan tab to import." -ForegroundColor Yellow
+Write-Host ""
+Read-Host "  Press Enter to close"
+`.trim();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-HW-Monitor.bat"');
+    res.end(Buffer.from(wrapInBat(ps1, { title: 'Hardware Monitor', tmpName: 'OptiGods-HW-Monitor', marker: 'HW_MONITOR_PS1_START' }), 'utf8'));
+  });
+
+  // ── Disable HKLM startup entry via StartupApproved registry key ─────────────
+  app.post('/api/task-manager/disable-hklm-startup', checkIpBan, async (req, res) => {
+    const { entryName } = req.body || {};
+    const safeKey = /^[a-zA-Z0-9 _\-.()+]{1,80}$/;
+    if (!entryName || typeof entryName !== 'string' || !safeKey.test(entryName)) {
+      return res.status(400).json({ ok: false, message: 'Invalid entry name.' });
+    }
+    const safeName = entryName.trim();
+    const ps1 = `
+$ErrorActionPreference = 'SilentlyContinue'
+$entryName = '${safeName.replace(/'/g, "''")}'
+
+Write-Host ""
+Write-Host "  Disabling startup entry: $entryName" -ForegroundColor Yellow
+Write-Host ""
+
+# Method 1: StartupApproved registry key (same as Task Manager Startup tab)
+$saKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"
+try {
+    if (!(Test-Path $saKey)) { New-Item $saKey -Force | Out-Null }
+    Set-ItemProperty $saKey $entryName -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA Stop
+    Write-Host "  [OK] StartupApproved: $entryName marked disabled" -ForegroundColor Green
+} catch {
+    Write-Host "  [WARN] StartupApproved write failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+# Method 2: Also try HKLM Run32 (for 32-bit entries)
+$saKey32 = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run32"
+try {
+    if (Test-Path $saKey32) {
+        $existing = Get-ItemProperty $saKey32 -Name $entryName -EA SilentlyContinue
+        if ($existing) {
+            Set-ItemProperty $saKey32 $entryName -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue
+            Write-Host "  [OK] StartupApproved\\Run32: $entryName marked disabled" -ForegroundColor Green
+        }
+    }
+} catch {}
+
+Write-Host ""
+Write-Host "  '$entryName' will no longer launch on next boot." -ForegroundColor Green
+Write-Host "  To re-enable: Task Manager -> Startup apps -> Right-click -> Enable" -ForegroundColor DarkGray
+Write-Host ""
+Read-Host "  Press Enter to close"
+`.trim();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    const fileName = `OptiGods_Disable_${safeName.replace(/[^a-zA-Z0-9_\-]/g, '_')}.bat`;
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.end(Buffer.from(wrapInBat(ps1, { title: `Disable Startup: ${safeName}`, tmpName: 'OptiGods-DisableStartup', marker: 'DISABLE_STARTUP_PS1_START' }), 'utf8'));
+  });
+
   app.get('/api/startup/scan', (_req, res) => {
     const ps1 = `
 # Scan Windows registry for all startup apps
