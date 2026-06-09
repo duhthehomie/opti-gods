@@ -171,6 +171,15 @@ const DEBLOAT_BG_PROCESSES = new Set([
 const WINDOWS_PROTECTED_STARTUP_NAMES = new Set([
   "securityhealth", "windows defender", "windowsdefender", "mrt", "mscares",
   "microsoftsecurityappbroker", "windowssecuritynotification", "windowsdefendernotificationiconsettings",
+  // ctfmon = CTF (Collaborative Translation Framework) language bar — disabling it
+  // entirely breaks text input for ALL languages/IMEs system-wide. Never safe to remove.
+  "ctfmon",
+]);
+
+// ── HKLM entries that are third-party software safe to disable directly (no BAT needed) ──
+const HKLM_SAFE_DISABLE_NAMES = new Set([
+  "logitune", "logi tune",
+  "vanguard", "riot vanguard", "vgc", "vgk",
 ]);
 
 export default function TaskManagerPage() {
@@ -924,7 +933,7 @@ export default function TaskManagerPage() {
                             <p className="text-[10px] text-zinc-600 font-mono truncate">{entry.command}</p>
                           </div>
                           <div className="shrink-0 ml-2">
-                            {entry.can_disable ? (
+                            {(entry.can_disable || HKLM_SAFE_DISABLE_NAMES.has(entry.name.toLowerCase())) ? (
                               <button
                                 data-testid={`button-disable-startup-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
                                 onClick={() => handleDisableStartupEntry(entry)}
