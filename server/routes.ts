@@ -1564,6 +1564,54 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/download/version — returns what /api/download/latest would actually serve,
+  // without performing the redirect. Used by the landing page and admin panel to show
+  // the resolved installer version and source.
+  app.get("/api/download/version", async (_req, res) => {
+    try {
+      const envUrl = process.env.DOWNLOAD_URL?.trim();
+      if (envUrl && /^https:\/\//i.test(envUrl)) {
+        return res.json({ source: "env", version: null, url: envUrl });
+      }
+
+      const dir = join(process.cwd(), "client", "public", "downloads");
+      if (existsSync(dir)) {
+        const entries = readdirSync(dir)
+          .filter((f) => /\.(exe|msi)$/i.test(f))
+          .map((f) => {
+            const full = join(dir, f);
+            try { return { name: f, full, mtime: statSync(full).mtimeMs }; }
+            catch { return null; }
+          })
+          .filter((x): x is { name: string; full: string; mtime: number } => x !== null)
+          .sort((a, b) => b.mtime - a.mtime);
+        if (entries.length > 0) {
+          const { name } = entries[0];
+          const verMatch = name.match(/(\d+\.\d+[\d.]*)/);
+          return res.json({ source: "local", version: verMatch?.[1] ?? null, url: `/downloads/${name}`, filename: name });
+        }
+      }
+
+      const [settings, gh] = await Promise.all([
+        storage.getAdminSettings().catch(() => null),
+        getLatestGhRelease(),
+      ]);
+      const override = settings?.updaterCmdUrl?.trim();
+      if (override && /^https:\/\//i.test(override)) {
+        return res.json({ source: "admin_override", version: settings?.latestVersion ?? null, url: override });
+      }
+
+      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        return res.json({ source: "github", version: gh.version, url: gh.exeUrl, pageUrl: gh.pageUrl });
+      }
+
+      res.json({ source: "none", version: null, url: null });
+    } catch (e) {
+      console.error("[/api/download/version] failed:", e);
+      res.status(500).json({ source: "error", version: null, url: null });
+    }
+  });
+
   // GET /api/admin/github-release — live GitHub auto-detect status for admin panel
   app.get("/api/admin/github-release", async (req, res) => {
     if (!checkAdminKey(req, res)) return;

@@ -3161,6 +3161,19 @@ export default function Admin() {
     enabled: authed,
     refetchInterval: 60_000,
   });
+
+  const resolvedDownloadQ = useQuery<{
+    source: string;
+    version: string | null;
+    url: string | null;
+    filename?: string;
+    pageUrl?: string;
+  }>({
+    queryKey: ["/api/download/version", key],
+    queryFn: () => fetch(apiUrl("/api/download/version")).then(r => r.json()),
+    enabled: authed,
+    refetchInterval: 2 * 60_000,
+  });
   const [ghRefreshing, setGhRefreshing] = useState(false);
   const refreshGhRelease = async () => {
     setGhRefreshing(true);
@@ -4997,6 +5010,81 @@ export default function Admin() {
         {/* ─── ANNOUNCEMENTS TAB ────────────────────────────────────── */}
         {tab === "announcements" && (
           <div className="space-y-4">
+
+            {/* Live Download Status */}
+            {(() => {
+              const rd = resolvedDownloadQ.data;
+              const sourceLabels: Record<string, string> = {
+                github: "GitHub Release",
+                local: "Local file",
+                env: "DOWNLOAD_URL env",
+                admin_override: "Admin override",
+                none: "No installer",
+                error: "Error",
+              };
+              const sourceColors: Record<string, string> = {
+                github: "border-emerald-500/25 bg-emerald-500/[0.04]",
+                local: "border-blue-500/25 bg-blue-500/[0.04]",
+                env: "border-yellow-500/25 bg-yellow-500/[0.04]",
+                admin_override: "border-yellow-500/25 bg-yellow-500/[0.04]",
+                none: "border-zinc-700 bg-white/[0.02]",
+                error: "border-red-500/25 bg-red-500/[0.04]",
+              };
+              const dotColors: Record<string, string> = {
+                github: "bg-emerald-400 animate-pulse",
+                local: "bg-blue-400 animate-pulse",
+                env: "bg-yellow-400 animate-pulse",
+                admin_override: "bg-yellow-400 animate-pulse",
+                none: "bg-zinc-600",
+                error: "bg-red-400",
+              };
+              const labelColors: Record<string, string> = {
+                github: "text-emerald-400",
+                local: "text-blue-400",
+                env: "text-yellow-400",
+                admin_override: "text-yellow-400",
+                none: "text-zinc-500",
+                error: "text-red-400",
+              };
+              const src = rd?.source ?? "none";
+              return (
+                <div
+                  className={`rounded-xl border p-4 space-y-2 ${sourceColors[src] ?? "border-zinc-700 bg-white/[0.02]"}`}
+                  data-testid="section-live-download"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotColors[src] ?? "bg-zinc-600"}`} />
+                    <span className={`text-xs font-bold uppercase tracking-wider ${labelColors[src] ?? "text-zinc-500"}`}>
+                      Live download — {sourceLabels[src] ?? src}
+                    </span>
+                  </div>
+                  {rd ? (
+                    <div className="space-y-1 text-[11px] pl-4">
+                      {rd.version && (
+                        <div className="text-zinc-400">
+                          Version served: <span className="text-white font-mono font-bold">v{rd.version}</span>
+                        </div>
+                      )}
+                      {rd.url && (
+                        <div className="text-zinc-400 truncate">
+                          URL: <span className="text-zinc-300 font-mono">{rd.url}</span>
+                        </div>
+                      )}
+                      {rd.filename && (
+                        <div className="text-zinc-400">
+                          File: <span className="text-zinc-300 font-mono">{rd.filename}</span>
+                        </div>
+                      )}
+                      {src === "none" && (
+                        <div className="text-zinc-500">No installer is available yet. Set DOWNLOAD_URL, drop an .exe in client/public/downloads/, or publish a GitHub Release.</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-zinc-600 pl-4">Resolving…</div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* GitHub Auto-Detect */}
             <div className={`rounded-xl border p-4 space-y-3 ${ghReleaseQ.data?.version ? "border-emerald-500/25 bg-emerald-500/[0.04]" : "border-zinc-700 bg-white/[0.02]"}`} data-testid="section-version-updates">

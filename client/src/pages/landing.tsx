@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { apiUrl } from "@/lib/api-base";
+import { APP_VERSION } from "@/generated/version";
 import { motion } from "framer-motion";
 import {
   Download, Zap, Cpu, Shield, Sparkles, Bot,
@@ -168,8 +169,8 @@ function DownloadButton() {
         <Download className="w-5 h-5 md:w-6 md:h-6 mr-3" />
         Download for Windows
       </Button>
-      <p className="text-[11px] text-zinc-500">
-        Windows 10 / 11 · 64-bit · ~127 MB
+      <p className="text-[11px] text-zinc-500" data-testid="text-download-version">
+        Windows 10 / 11 · 64-bit · v{APP_VERSION} · ~127 MB
       </p>
     </div>
   );
