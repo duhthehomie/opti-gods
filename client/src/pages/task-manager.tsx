@@ -27,29 +27,32 @@ type PeripheralType = "keyboard" | "mouse" | "mic" | "audio";
 interface PeripheralInfo { label: string; type: PeripheralType }
 
 const PERIPHERAL_PROCESSES: Record<string, PeripheralInfo> = {
-  "lghub.exe":            { label: "Logitech G HUB",       type: "keyboard" },
-  "logioptions.exe":      { label: "Logitech Options",      type: "keyboard" },
-  "logioptions+.exe":     { label: "Logitech Options+",     type: "keyboard" },
-  "logitune.exe":         { label: "Logi Tune",             type: "keyboard" },
-  "logi_notify.exe":      { label: "Logitech Notification", type: "keyboard" },
-  "logioverlay.exe":      { label: "Logitech Overlay",      type: "keyboard" },
-  "icue.exe":             { label: "Corsair iCUE",          type: "keyboard" },
-  "icue4.exe":            { label: "Corsair iCUE 4",        type: "keyboard" },
-  "rzsynapse.exe":        { label: "Razer Synapse",         type: "keyboard" },
-  "razercentral.exe":     { label: "Razer Central",         type: "keyboard" },
-  "steelseriesgg.exe":    { label: "SteelSeries GG",        type: "keyboard" },
-  "ngenuity.exe":         { label: "HyperX NGenuity",       type: "keyboard" },
-  "armourysw.exe":        { label: "ASUS Armoury Crate",    type: "keyboard" },
-  "signalrgb.exe":        { label: "SignalRGB",              type: "keyboard" },
-  "openrgb.exe":          { label: "OpenRGB",               type: "keyboard" },
-  "voicemeeter.exe":      { label: "VoiceMeeter",           type: "mic" },
-  "voicemeeter8x64.exe":  { label: "VoiceMeeter Potato",    type: "mic" },
-  "voicemeeterbanana.exe":{ label: "VoiceMeeter Banana",    type: "mic" },
-  "nahimicservice.exe":   { label: "Nahimic Audio",         type: "audio" },
-  "nahimicsvc32.exe":     { label: "Nahimic Audio",         type: "audio" },
-  "soundblade.exe":       { label: "SteelSeries SoundBlade",type: "audio" },
-  "equalizer apo.exe":    { label: "Equalizer APO",         type: "audio" },
-  "peace.exe":            { label: "Peace EQ",              type: "audio" },
+  "lghub.exe":              { label: "Logitech G HUB",        type: "keyboard" },
+  "lghub_updater.exe":      { label: "Logitech G HUB Updater",type: "keyboard" },
+  "logioptions.exe":        { label: "Logitech Options",       type: "keyboard" },
+  "logioptions+.exe":       { label: "Logitech Options+",      type: "keyboard" },
+  "logitune.exe":           { label: "Logi Tune",              type: "keyboard" },
+  "logituneagent.exe":      { label: "Logi Tune Agent",        type: "keyboard" },
+  "logituneupdater.exe":    { label: "Logi Tune Updater",      type: "keyboard" },
+  "logi_notify.exe":        { label: "Logitech Notification",  type: "keyboard" },
+  "logioverlay.exe":        { label: "Logitech Overlay",       type: "keyboard" },
+  "icue.exe":               { label: "Corsair iCUE",           type: "keyboard" },
+  "icue4.exe":              { label: "Corsair iCUE 4",         type: "keyboard" },
+  "rzsynapse.exe":          { label: "Razer Synapse",          type: "keyboard" },
+  "razercentral.exe":       { label: "Razer Central",          type: "keyboard" },
+  "steelseriesgg.exe":      { label: "SteelSeries GG",         type: "keyboard" },
+  "ngenuity.exe":           { label: "HyperX NGenuity",        type: "keyboard" },
+  "armourysw.exe":          { label: "ASUS Armoury Crate",     type: "keyboard" },
+  "signalrgb.exe":          { label: "SignalRGB",               type: "keyboard" },
+  "openrgb.exe":            { label: "OpenRGB",                type: "keyboard" },
+  "voicemeeter.exe":        { label: "VoiceMeeter",            type: "mic" },
+  "voicemeeter8x64.exe":    { label: "VoiceMeeter Potato",     type: "mic" },
+  "voicemeeterbanana.exe":  { label: "VoiceMeeter Banana",     type: "mic" },
+  "nahimicservice.exe":     { label: "Nahimic Audio",          type: "audio" },
+  "nahimicsvc32.exe":       { label: "Nahimic Audio",          type: "audio" },
+  "soundblade.exe":         { label: "SteelSeries SoundBlade", type: "audio" },
+  "equalizer apo.exe":      { label: "Equalizer APO",          type: "audio" },
+  "peace.exe":              { label: "Peace EQ",               type: "audio" },
 };
 
 function PeripheralIcon({ type, className }: { type: PeripheralType; className?: string }) {
@@ -444,7 +447,15 @@ export default function TaskManagerPage() {
     + Object.values(startupDisableStates).filter(s => s === "done").length;
 
   const runningKnownApps = ALL_APPS.filter(a => runningIds.has(a.id));
-  const bgProcesses = allProcesses.filter(p => !KNOWN_PROCESS_NAMES_LOWER.has(p.name.toLowerCase()));
+  const peripheralProcesses = allProcesses.filter(p =>
+    !KNOWN_PROCESS_NAMES_LOWER.has(p.name.toLowerCase()) &&
+    PERIPHERAL_PROCESSES[p.name.toLowerCase()]
+  );
+  const peripheralKeysRunning = new Set(peripheralProcesses.map(p => p.name.toLowerCase()));
+  const bgProcesses = allProcesses.filter(p =>
+    !KNOWN_PROCESS_NAMES_LOWER.has(p.name.toLowerCase()) &&
+    !peripheralKeysRunning.has(p.name.toLowerCase())
+  );
   const displayedProcesses = showAllProcesses ? bgProcesses : bgProcesses.slice(0, PROCESS_PAGE_SIZE);
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
@@ -729,6 +740,82 @@ export default function TaskManagerPage() {
               );
             })}
 
+            {/* ── NATIVE: Peripheral Software section ────────────────────── */}
+            {native && scanned && peripheralProcesses.length > 0 && (
+              <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <Keyboard className="w-4 h-4 text-blue-400" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400">Peripheral Software</h2>
+                  <span className="text-[10px] text-zinc-600">{peripheralProcesses.length} running</span>
+                </div>
+
+                <div className="mb-3 rounded-lg border border-blue-500/15 bg-blue-500/5 px-3 py-2 flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Keyboard, mouse, and audio software detected. These are safe to kill while gaming —{" "}
+                    <span className="text-blue-300 font-semibold">your hardware keeps working</span>, only the overlay/RGB/updater closes.
+                    Re-open the app to get them back.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-blue-500/15 bg-zinc-900/60 overflow-hidden">
+                  <div className="divide-y divide-white/5">
+                    {peripheralProcesses.map((proc) => {
+                      const key = proc.name.toLowerCase();
+                      const info = PERIPHERAL_PROCESSES[key];
+                      const killState = bgKillStates[key] ?? "idle";
+                      const isKillPending = killState === "pending";
+                      const isKillDone = killState === "done";
+                      return (
+                        <div key={proc.name} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-6 h-6 rounded border bg-blue-500/10 border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                              <PeripheralIcon type={info.type} className="w-3 h-3" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={cn("text-sm font-mono truncate block", isKillDone ? "text-zinc-600 line-through" : "text-zinc-300")}>
+                                {proc.name}
+                              </span>
+                              <span className="text-[10px] text-blue-400">{info.label}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 ml-3">
+                            {proc.instances > 1 && (
+                              <span className="text-[10px] text-zinc-600 font-mono">×{proc.instances}</span>
+                            )}
+                            <span className="text-[10px] text-zinc-700 font-mono hidden sm:block">PID {proc.pid}</span>
+                            {proc.can_kill ? (
+                              <button
+                                data-testid={`button-kill-peripheral-${key}`}
+                                onClick={() => handleKillBgProcess(proc.name)}
+                                disabled={isKillPending || isKillDone}
+                                className={cn(
+                                  "px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1 whitespace-nowrap",
+                                  isKillDone
+                                    ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400 cursor-default"
+                                    : isKillPending
+                                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-wait"
+                                    : "bg-emerald-600/80 border-emerald-500/60 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-600/20"
+                                )}
+                              >
+                                {isKillPending ? <Loader2 className="w-2 h-2 animate-spin" />
+                                : isKillDone   ? "✓ Killed"
+                                : <><Zap className="w-2 h-2" /> Safe to Kill</>}
+                              </button>
+                            ) : (
+                              <span className="text-[9px] font-bold px-2 py-1 rounded border border-red-500/30 bg-red-500/10 text-red-400 flex items-center gap-1 whitespace-nowrap">
+                                <Lock className="w-2.5 h-2.5" /> Don't Kill
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.section>
+            )}
+
             {/* ── NATIVE: All background processes with Kill buttons ──────── */}
             {native && scanned && bgProcesses.length > 0 && (
               <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
@@ -742,8 +829,7 @@ export default function TaskManagerPage() {
                 <div className="mb-3 rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-2 flex items-start gap-2">
                   <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    These are all non-Windows processes running on your PC. <span className="text-emerald-400 font-semibold">Safe to close</span> — critical Windows processes are already filtered out.
-                    Peripheral software <span className="text-blue-400">(keyboard / mouse / audio)</span> is labelled so you know what it belongs to.
+                    These are all non-Windows processes running on your PC. <span className="text-emerald-400 font-semibold">Safe to close</span> — critical Windows processes and peripheral software are already filtered into their own sections above.
                   </p>
                 </div>
 

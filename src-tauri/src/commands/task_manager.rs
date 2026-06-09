@@ -43,9 +43,35 @@ const CRITICAL_WINDOWS_PROCESSES: &[&str] = &[
     "explorer.exe",
     "taskmgr.exe",
     "optigods.exe",
+    "opti-gods.exe",   // packaged build with hyphen
     "dllhost.exe",
     "wermgr.exe",
     "wuauclt.exe",
+    // NVIDIA display driver — killing breaks GPU output until reboot
+    "nvdisplay.container.exe",
+    // Riot Vanguard anti-cheat — killing mid-session causes an auto-ban
+    "vgc.exe",
+    "vgk.exe",
+    // WMI Provider Host — powers tasklist, hw queries, many system tools
+    "wmiprvse.exe",
+    // Windows User-mode Driver Framework — hosts USB/HID/printer drivers
+    "wudfhost.exe",
+    // Device Association Service — Bluetooth + USB pairing
+    "dashost.exe",
+    // Component Package Support — UWP app installs / APPX
+    "comppkgsrv.exe",
+    // RPC Locator — COM/DCOM service location
+    "locator.exe",
+    // Service stub — Windows service host helper
+    "srvstub.exe",
+    // Realtek audio driver service — killing silences all audio
+    "rtkauduservice64.exe",
+    "rtkauduservice.exe",
+    // Realtek Bluetooth management — killing drops BT audio/peripherals
+    "rtkbtmanserv.exe",
+    // Sound driver component (Realtek/Creative) — needed for audio
+    "secomn64.exe",
+    "secomn.exe",
 ];
 
 // ── HKCU startup keys that must NOT be disabled ────────────────────────────
@@ -92,6 +118,7 @@ const WINDOWS_SYSTEM_PROCESSES: &[&str] = &[
     "wlanext.exe",
     "memory compression",
     "system interrupts",
+    "system idle process",  // CPU idle counter — not a real killable process
     "ntoskrnl.exe",
     "unsecapp.exe",
     "wbem",
@@ -100,6 +127,8 @@ const WINDOWS_SYSTEM_PROCESSES: &[&str] = &[
     "wuauclt.exe",
     "taskmgr.exe",
     "optigods.exe",
+    // Transient — spawned by our own scan and gone before UI renders
+    "tasklist.exe",
 ];
 
 const RUN_KEY_HKCU: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
