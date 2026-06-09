@@ -327,7 +327,7 @@ const GAMES: GameEntry[] = [
     publisher: "IO Interactive",
     accentBorder: "border-l-yellow-500",
     coverUrl: "/game-covers/007-first-light.jpg",
-    coverPosition: "center center",
+    coverPosition: "center top",
     coverGradient: "from-yellow-950 via-zinc-900 to-black",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\007 First Light",
@@ -378,7 +378,7 @@ const GAMES: GameEntry[] = [
     publisher: "NetEase Games",
     accentBorder: "border-l-red-500",
     coverUrl: "/game-covers/marvel-rivals.png",
-    coverGradient: "from-red-950 via-purple-900 to-zinc-900",
+    coverGradient: "from-blue-950 via-purple-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Marvel Rivals",
       "D:\\SteamLibrary\\steamapps\\common\\Marvel Rivals",
