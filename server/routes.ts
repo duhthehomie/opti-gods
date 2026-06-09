@@ -4400,6 +4400,111 @@ Check 'Win11BingSearch' '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows
 Check 'Win11AutoHDR'    '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\DirectX\\UserGpuPreferences" -Name AutoHDREnable -EA SilentlyContinue).AutoHDREnable) -eq 0'
 Check 'Win11Snap'       '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name SnapAssist -EA SilentlyContinue).SnapAssist) -eq 0'
 
+# --- System / CPU ---
+Check 'DisableHungAppDetection'    '((Get-ItemProperty "HKCU:\\Control Panel\\Desktop" -Name HungAppTimeout -EA SilentlyContinue).HungAppTimeout) -eq "1000"'
+Check 'DisablePowerThrottlingAdv'  '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling" -Name PowerThrottlingOff -EA SilentlyContinue).PowerThrottlingOff) -eq 1'
+Check 'SysVisualBestPerf'          '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name VisualFXSetting -EA SilentlyContinue).VisualFXSetting) -eq 2'
+Check 'SysHibernateOff'            '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power" -Name HiberbootEnabled -EA SilentlyContinue).HiberbootEnabled) -eq 0'
+Check 'SysHypervisorOff'           '(bcdedit /enum 2>$null | Select-String "hypervisorlaunchtype\s+Off") -ne $null'
+Check 'DisableAutoMaintenance'     '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\Maintenance" -Name MaintenanceDisabled -EA SilentlyContinue).MaintenanceDisabled) -eq 1'
+Check 'PrivacyDiagFeedback'        '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules" -Name NumberOfSIUFInPeriod -EA SilentlyContinue).NumberOfSIUFInPeriod) -eq 0'
+
+# --- Memory (extended) ---
+Check 'MemFixedPagefile'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name AutomaticManagedPagefile -EA SilentlyContinue).AutomaticManagedPagefile) -eq 0'
+Check 'ClearPagefileOnShutdown' '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name ClearPageFileAtShutdown -EA SilentlyContinue).ClearPageFileAtShutdown) -eq 1'
+Check 'MemClearPagefileShutdown' '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name ClearPageFileAtShutdown -EA SilentlyContinue).ClearPageFileAtShutdown) -eq 1'
+Check 'MemSystemCacheBoost'    '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name LargeSystemCache -EA SilentlyContinue).LargeSystemCache) -eq 0'
+Check 'MemGPUSchedulerTweak'   '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name Scheduler -EA SilentlyContinue).Scheduler) -eq 1'
+Check 'MemTrimOnMinimize'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options" -Name TrimWorkingSetSize -EA SilentlyContinue).TrimWorkingSetSize) -eq 1'
+
+# --- WinTitus / OO ShutUp tweaks ---
+Check 'WinTitusConsumerFeatures' '((Get-ItemProperty "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent" -Name DisableWindowsConsumerFeatures -EA SilentlyContinue).DisableWindowsConsumerFeatures) -eq 1'
+Check 'WinTitusBgApps'           '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications" -Name GlobalUserDisabled -EA SilentlyContinue).GlobalUserDisabled) -eq 1'
+Check 'WinTitusFullscreenOpt'    '((Get-ItemProperty "HKCU:\\System\\GameConfigStore" -Name GameDVR_FSEBehavior -EA SilentlyContinue).GameDVR_FSEBehavior) -eq 2'
+Check 'WinTitusNotifTray'        '((Get-ItemProperty "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer" -Name DisableNotificationCenter -EA SilentlyContinue).DisableNotificationCenter) -eq 1'
+Check 'WinTitusStorageSense'     '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy" -Name 01 -EA SilentlyContinue)."01") -eq 0'
+Check 'WinTitusTeredo'           '(netsh interface teredo show state 2>$null | Select-String "disabled") -ne $null'
+Check 'WinTitusIPv4Prefer'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters" -Name DisabledComponents -EA SilentlyContinue).DisabledComponents) -eq 32'
+Check 'WinTitusRazerBlock'       '((Get-ItemProperty "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate" -Name ExcludeWUDriversInQualityUpdate -EA SilentlyContinue).ExcludeWUDriversInQualityUpdate) -eq 1'
+Check 'WinTitusWPBT'             '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager" -Name DisableWpbtExecution -EA SilentlyContinue).DisableWpbtExecution) -eq 1'
+Check 'WinTitusEdgeDebloat'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name BackgroundModeEnabled -EA SilentlyContinue).BackgroundModeEnabled) -eq 0'
+Check 'WinTitusClassicMenu'      'Test-Path "HKCU:\\SOFTWARE\\CLASSES\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32"'
+Check 'WinTitusShowExtensions'   '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name HideFileExt -EA SilentlyContinue).HideFileExt) -eq 0'
+Check 'WinTitusShowHidden'       '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name Hidden -EA SilentlyContinue).Hidden) -eq 1'
+Check 'WinTitusPosh7Telemetry'   '[System.Environment]::GetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT","Machine") -eq "1"'
+Check 'WinTitusAdobeBlock'       '(Get-Content "$env:SystemRoot\\System32\\drivers\\etc\\hosts" -EA SilentlyContinue | Select-String "activate.adobe.com") -ne $null'
+Check 'WinTitusDisplayPerf'      '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name VisualFXSetting -EA SilentlyContinue).VisualFXSetting) -eq 2'
+Check 'WinTitusHibernation'      '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power" -Name HiberbootEnabled -EA SilentlyContinue).HiberbootEnabled) -eq 0'
+
+# --- NVIDIA ---
+Check 'NvidiaLowLatency'       '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name MaximumPreRenderedFrames -EA SilentlyContinue).MaximumPreRenderedFrames) -eq 1'
+Check 'NvidiaPreRenderedFrames' '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name MaximumPreRenderedFrames -EA SilentlyContinue).MaximumPreRenderedFrames) -eq 1'
+Check 'NvidiaOptimizeLatency'  '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name "GPU Priority" -EA SilentlyContinue)."GPU Priority") -eq 8'
+Check 'NvidiaThreadedOpt'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NvTweak" -Name Threaded_Optimization_Override -EA SilentlyContinue).Threaded_Optimization_Override) -eq 1'
+Check 'NvidiaDisableTelemetry' '(Get-Service -Name "NvTelemetryContainer" -EA SilentlyContinue).StartType -eq "Disabled"'
+Check 'NvidiaDisableOverlay'   '((Get-ItemProperty "HKCU:\\SOFTWARE\\NVIDIA Corporation\\NVControlPanel2\\Client" -Name OptInOrOutPreference -EA SilentlyContinue).OptInOrOutPreference) -eq 0'
+Check 'NvidiaMaxPerfMode'      '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name PlatformSupportMiracast -EA SilentlyContinue).PlatformSupportMiracast) -eq 0'
+Check 'NvidiaShaderCache'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\DirectX" -Name ShaderCache -EA SilentlyContinue).ShaderCache) -eq 1'
+Check 'NvidiaPowerMizer'       '$nvFound=$false; 0..3 | ForEach-Object { $k="HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\000$_"; If ((Test-Path $k) -and (Get-ItemProperty $k -Name DriverDesc -EA SilentlyContinue).DriverDesc -match "NVIDIA") { If (((Get-ItemProperty $k -EA SilentlyContinue).PowerMizerLevel) -eq 1) { $nvFound=$true } } }; $nvFound'
+
+# --- AMD ---
+Check 'AmdDisableChill'     '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name UseChill -EA SilentlyContinue).UseChill) -eq 0'
+Check 'AmdDisableVSR'       '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name VSR -EA SilentlyContinue).VSR) -eq 0'
+Check 'AmdAntiLag'          '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name AntiLag -EA SilentlyContinue).AntiLag) -eq 1'
+Check 'AmdDisableVariBright' '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name VariBrightEnable -EA SilentlyContinue).VariBrightEnable) -eq 0'
+Check 'AmdDisableFreeSyncCompetitive' '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name FreeSync -EA SilentlyContinue).FreeSync) -eq 0'
+Check 'AmdImageSharpening'  '((Get-ItemProperty "HKCU:\\SOFTWARE\\AMD\\CN" -Name ImageSharpening -EA SilentlyContinue).ImageSharpening) -eq 1'
+Check 'AmdOptimizeLatency'  '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name MaximumPreRenderedFrames -EA SilentlyContinue).MaximumPreRenderedFrames) -eq 1'
+Check 'AmdDisableTelemetry' '(Get-Service -Name "AMD External Events Utility" -EA SilentlyContinue).StartType -eq "Disabled"'
+Check 'AmdTDRTweak'         '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrDelay -EA SilentlyContinue).TdrDelay) -eq 8'
+Check 'AmdShaderCache'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\DirectX" -Name ShaderCache -EA SilentlyContinue).ShaderCache) -eq 1'
+Check 'AmdDisableULPS'      '$amdFound=$false; $gpuPath="HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}"; Get-ChildItem $gpuPath -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc -match "AMD|Radeon|ATI" } | ForEach-Object { If (((Get-ItemProperty $_.PSPath -EA SilentlyContinue).EnableUlps) -eq 0) { $amdFound=$true } }; $amdFound'
+
+# --- Discord ---
+Check 'DiscordLowPriority'          '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Discord.exe\\PerfOptions" -Name CpuPriorityClass -EA SilentlyContinue).CpuPriorityClass) -eq 1'
+Check 'DiscordReduceGPUPriority'    '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Discord.exe\\PerfOptions" -Name GpuPriorityClass -EA SilentlyContinue).GpuPriorityClass) -eq 1'
+Check 'DiscordDisableUpdateCheck'   '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Update.exe\\PerfOptions" -Name CpuPriorityClass -EA SilentlyContinue).CpuPriorityClass) -eq 1'
+Check 'DiscordDisableVAD'           '(Get-Content "$env:APPDATA\\discord\\settings.json" -Raw -EA SilentlyContinue) -match "noVoiceActivityDetection.*true"'
+Check 'DiscordDisableHWAccel'       '(Get-Content "$env:APPDATA\\discord\\settings.json" -Raw -EA SilentlyContinue) -match "enableHardwareAcceleration.*false"'
+Check 'DiscordDisableAnimations'    '(Get-Content "$env:APPDATA\\discord\\settings.json" -Raw -EA SilentlyContinue) -match "reduceMotion.*true"'
+Check 'DiscordDisableClips'         '(Get-Content "$env:APPDATA\\discord\\settings.json" -Raw -EA SilentlyContinue) -match "disableClips.*true"'
+
+# --- Call of Duty ---
+Check 'CodHighPriority'      '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions" -Name CpuPriorityClass -EA SilentlyContinue).CpuPriorityClass) -eq 3'
+Check 'CodMemPriority'       '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions" -Name PagePriority -EA SilentlyContinue).PagePriority) -eq 5'
+Check 'CodGPUPriority'       '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions" -Name GPUPriority -EA SilentlyContinue).GPUPriority) -eq 8'
+Check 'CodNetworkBuffer'     '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters" -Name DefaultReceiveWindow -EA SilentlyContinue).DefaultReceiveWindow) -eq 524288'
+Check 'CodTdrDelay'          '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrDelay -EA SilentlyContinue).TdrDelay) -ge 8'
+Check 'CodFramePacing'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrDdiDelay -EA SilentlyContinue).TdrDdiDelay) -eq 8'
+Check 'CodMMCSS'             '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name "Scheduling Category" -EA SilentlyContinue)."Scheduling Category") -eq "High"'
+Check 'CodQoSPolicy'         'Test-Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\COD Gaming"'
+Check 'CodDisableHAGS'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name HwSchMode -EA SilentlyContinue).HwSchMode) -eq 1'
+Check 'CodDirectXQueue'      '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Direct3D" -Name MaxFrameLatency -EA SilentlyContinue).MaxFrameLatency) -eq 1'
+Check 'CodGameMode'          '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\GameBar" -Name AutoGameModeEnabled -EA SilentlyContinue).AutoGameModeEnabled) -eq 1'
+Check 'CodDisableXboxCapture' '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name AppCaptureEnabled -EA SilentlyContinue).AppCaptureEnabled) -eq 0'
+Check 'CodTCPOptimize'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" -Name TcpTimestampOpt -EA SilentlyContinue).TcpTimestampOpt) -eq 0'
+Check 'Cod1650LowLatency'    '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm" -Name NvCplLowLatencyMode -EA SilentlyContinue).NvCplLowLatencyMode) -eq 1'
+Check 'Cod1650DisableAnsel'  '((Get-ItemProperty "HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\Ansel" -Name AnselEnable -EA SilentlyContinue).AnselEnable) -eq 0'
+
+# --- FiveM (extended) ---
+Check 'FiveMDisableMPO'         '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm" -Name OverlayTestMode -EA SilentlyContinue).OverlayTestMode) -eq 5'
+Check 'FiveMExtendedMemory'     '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions" -Name CpuPriorityClass -EA SilentlyContinue).CpuPriorityClass) -eq 3'
+Check 'FiveMIOPriority'         '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions" -Name IoPriority -EA SilentlyContinue).IoPriority) -eq 2'
+Check 'FiveMDisableP2P'         '(Get-Content "$env:LOCALAPPDATA\\FiveM\\FiveM.app\\CitizenFX.ini" -EA SilentlyContinue | Select-String "DisablePeerToPeer=1") -ne $null'
+Check 'FiveM1060AnselDisable'   '((Get-ItemProperty "HKCU:\\SOFTWARE\\NVIDIA Corporation\\Ansel" -Name AnselEnable -EA SilentlyContinue).AnselEnable) -eq 0'
+Check 'FiveM5600PowerPlan'      '(powercfg /getactivescheme 2>$null | Select-String "Ryzen|AMD") -ne $null'
+
+# --- Fortnite (extended) ---
+Check 'FortniteNetworkBuffer'   '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters" -Name DefaultReceiveWindow -EA SilentlyContinue).DefaultReceiveWindow) -ge 131072'
+Check 'FortniteUncapLobbyFPS'   'Test-Path "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini" -EA SilentlyContinue'
+Check 'FortniteUncapGameFPS'    '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "t\.MaxFPS=0"'
+Check 'FortniteDisableMotionBlur' '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "r\.MotionBlurQuality=0"'
+Check 'FortniteLowShadows'      '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "r\.ShadowQuality=0"'
+Check 'FortniteInputLatency'    '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "bEnableMouseSmoothing=False"'
+Check 'FortniteRawInput'        '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "bEnableMouseSmoothing=False"'
+Check 'FortniteDisableSSR'      '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "r\.ssr\.quality=0"'
+Check 'FortniteDisableLumen'    '(Get-Content "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini" -Raw -EA SilentlyContinue) -match "r\.DynamicGlobalIlluminationMethod=0"'
+
 # --- Process Lasso ---
 $processLassoInstalled = (Test-Path "C:\\Program Files\\Process Lasso\\ProcessLasso.exe") -or ((Get-Service -Name "ProcessLasso" -EA SilentlyContinue) -ne $null)
 $state['ProcessLassoProBalance']       = $processLassoInstalled
@@ -4413,11 +4518,23 @@ foreach ($app in @(
   @{id='su_discord';   key='Discord'},
   @{id='su_spotify';   key='Spotify'},
   @{id='su_onedrive';  key='OneDrive'},
-  @{id='su_skype';     key='Skype'}
+  @{id='su_skype';     key='Skype'},
+  @{id='su_zoom';      key='Zoom'},
+  @{id='su_amdradeon'; key='RadeonSoftware'},
+  @{id='su_edge_startup'; key='Microsoft Edge'}
 )) {
   $val = (Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name $app.key -EA SilentlyContinue)
   $state[$app.id] = $val -eq $null
 }
+# Additional startup checks with non-standard keys
+$runKey = Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -EA SilentlyContinue
+$state['su_teams']    = ($runKey.'com.squirrel.Teams.Teams' -eq $null)
+$state['su_nvidia']   = ($runKey.NvBackend -eq $null) -and ($runKey.'NVIDIA GeForce Experience' -eq $null)
+$state['su_ccleaner'] = ($runKey.CCleaner -eq $null) -and ($runKey.CCleaner64 -eq $null)
+$state['su_battlenet'] = ($runKey.'Battle.net' -eq $null) -and ($runKey.'Battle.net Update Agent' -eq $null)
+$state['su_epic']     = ($runKey.EpicGamesLauncher -eq $null) -and ($runKey.'Epic Games Launcher' -eq $null)
+$state['su_chrome']   = ($runKey.'Google Chrome' -eq $null)
+$state['su_razer']    = ($runKey.RzSynapse -eq $null) -and ($runKey.'Razer Synapse' -eq $null)
 
 # --- Fortnite ---
 Check 'FortniteHighPriority'     '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FortniteClient-Win64-Shipping.exe\\PerfOptions" -Name CpuPriorityClass -EA SilentlyContinue).CpuPriorityClass) -eq 3'
@@ -4448,7 +4565,18 @@ foreach ($pkg in @(
   @{id='DebloatClipchamp'; name='Clipchamp.Clipchamp'},
   @{id='DebloatQuickAssist'; name='MicrosoftCorporationII.QuickAssist'},
   @{id='DebloatFeedback';  name='Microsoft.WindowsFeedbackHub'},
-  @{id='DebloatGetHelp';   name='Microsoft.GetHelp'}
+  @{id='DebloatGetHelp';       name='Microsoft.GetHelp'},
+  @{id='DebloatMixedReality';  name='Microsoft.MixedReality.Portal'},
+  @{id='DebloatZune';          name='Microsoft.ZuneMusic'},
+  @{id='DebloatOfficeHub';     name='Microsoft.MicrosoftOfficeHub'},
+  @{id='DebloatXboxIdentity';  name='Microsoft.XboxIdentityProvider'},
+  @{id='DebloatGrooveMusic';   name='Microsoft.ZuneMusic'},
+  @{id='DebloatMSPaint3D';     name='Microsoft.MSPaint'},
+  @{id='DebloatWindowsCamera'; name='Microsoft.WindowsCamera'},
+  @{id='DebloatYourPhone';     name='Microsoft.YourPhone'},
+  @{id='DebloatPowerAutomate'; name='Microsoft.PowerAutomateDesktop'},
+  @{id='DebloatTeamsConsumer'; name='MicrosoftTeams'},
+  @{id='DebloatAlarmsAndClock';name='Microsoft.WindowsAlarms'}
 )) {
   $state[$pkg.id] = -not ($packages -like "*$($pkg.name)*")
 }
@@ -4498,7 +4626,7 @@ try {
     Write-Host "  $($saved[0])" -ForegroundColor White
     Write-Host "  ==========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Drag  OptiGods-Scan-Result.json  into the Opti Gods app to import." -ForegroundColor Cyan
+    Write-Host "  Paste the OPTIGODS_STATE: code above into the Opti Gods app to import." -ForegroundColor Cyan
   } else {
     Write-Host "  Could not save file automatically. Paste the OPTIGODS_STATE line above into the app instead." -ForegroundColor Yellow
   }
