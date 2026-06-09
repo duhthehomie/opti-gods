@@ -194,6 +194,10 @@ export default function TaskManagerPage() {
   // ── Background process kill state ──────────────────────────────────────────
   const [bgKillStates, setBgKillStates] = useState<Record<string, "idle" | "pending" | "done" | "error">>({});
 
+  // ── Closed tasks (killed bg processes this session) ────────────────────────
+  const [closedBgProcesses, setClosedBgProcesses] = useState<{ name: string; pid?: number }[]>([]);
+  const [relaunchStates, setRelaunchStates] = useState<Record<string, "idle" | "pending">>({});
+
   // ── Startup disable state (for non-curated entries) ────────────────────────
   const [startupDisableStates, setStartupDisableStates] = useState<Record<string, "idle" | "pending" | "done" | "error">>({});
 
@@ -277,12 +281,17 @@ export default function TaskManagerPage() {
   // ── Background process kill ────────────────────────────────────────────────
   const handleKillBgProcess = async (processName: string) => {
     const key = processName.toLowerCase();
+    const procInfo = allProcesses.find(p => p.name.toLowerCase() === key);
     setBgKillStates(prev => ({ ...prev, [key]: "pending" }));
     try {
       const res = await killApp(processName);
       if (res.ok) {
         setBgKillStates(prev => ({ ...prev, [key]: "done" }));
         setAllProcesses(prev => prev.filter(p => p.name.toLowerCase() !== key));
+        setClosedBgProcesses(prev => {
+          if (prev.some(p => p.name.toLowerCase() === key)) return prev;
+          return [...prev, { name: processName, pid: procInfo?.pid }];
+        });
       } else {
         setBgKillStates(prev => ({ ...prev, [key]: "error" }));
         const isElevated = res.message.toLowerCase().includes("elevated") ||
@@ -298,6 +307,30 @@ export default function TaskManagerPage() {
       }
     } catch {
       setBgKillStates(prev => ({ ...prev, [key]: "error" }));
+    }
+  };
+
+  // ── Relaunch a previously-killed bg process ────────────────────────────────
+  const handleRelaunchProcess = async (processName: string) => {
+    const key = processName.toLowerCase();
+    setRelaunchStates(prev => ({ ...prev, [key]: "pending" }));
+    try {
+      const res = await fetch(apiUrl("/api/task-manager/relaunch"), {
+        method: "POST", headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({ processName }),
+      });
+      if (!res.ok) throw new Error("server error");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `Relaunch_${processName.replace(/\.exe$/i,"")}.bat`; a.click();
+      URL.revokeObjectURL(url);
+      setClosedBgProcesses(prev => prev.filter(p => p.name.toLowerCase() !== key));
+      toast({ title: "Script downloaded", description: `Run to relaunch ${processName}.` });
+    } catch {
+      toast({ title: "Error", description: "Failed to generate relaunch script.", variant: "destructive" });
+    } finally {
+      setRelaunchStates(prev => ({ ...prev, [key]: "idle" }));
     }
   };
 
@@ -791,6 +824,43 @@ export default function TaskManagerPage() {
                         : <><ChevronDown className="w-3 h-3" /> Show all {bgProcesses.length} processes</>}
                     </button>
                   )}
+                </div>
+              </motion.section>
+            )}
+
+            {/* ── NATIVE: Closed Tasks — killed this session ─────────────── */}
+            {native && scanned && closedBgProcesses.length > 0 && (
+              <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <RotateCcw className="w-4 h-4 text-zinc-500" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Closed Tasks</h2>
+                  <span className="text-[10px] text-zinc-600">{closedBgProcesses.length} killed this session</span>
+                </div>
+
+                <div className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden divide-y divide-white/5">
+                  {closedBgProcesses.map(proc => {
+                    const key = proc.name.toLowerCase();
+                    const isPending = relaunchStates[key] === "pending";
+                    return (
+                      <div key={proc.name} className="flex items-center justify-between px-4 py-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-6 h-6 rounded border bg-zinc-800/60 border-white/5 flex items-center justify-center shrink-0 text-zinc-600">
+                            <X className="w-3 h-3" />
+                          </div>
+                          <span className="text-sm font-mono text-zinc-600 line-through truncate">{proc.name}</span>
+                        </div>
+                        <button
+                          data-testid={`button-relaunch-${key}`}
+                          onClick={() => handleRelaunchProcess(proc.name)}
+                          disabled={isPending}
+                          className="px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1 whitespace-nowrap bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+                        >
+                          {isPending ? <Loader2 className="w-2 h-2 animate-spin" /> : <RotateCcw className="w-2 h-2" />}
+                          Bring Back
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </motion.section>
             )}

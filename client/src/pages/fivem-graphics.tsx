@@ -708,23 +708,6 @@ function SkyPreview({
           style={{ background: `linear-gradient(to top, rgba(${r},${g},${B},0.18) 0%, transparent 38%)` }} />
       )}
 
-      {/* City skyline silhouette */}
-      <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-        <svg viewBox="0 0 500 64" className="w-full" preserveAspectRatio="none" style={{ height: "52px", display: "block" }}>
-          <path d="M0,64 L0,50 L12,50 L12,42 L18,42 L18,36 L24,36 L24,42 L32,42 L32,30 L37,30 L37,24 L43,24 L43,30 L50,30 L50,44 L58,44 L58,32 L64,32 L64,24 L70,24 L70,18 L76,18 L76,24 L82,24 L82,32 L90,32 L90,44 L100,44 L100,38 L108,38 L108,44 L118,44 L118,28 L124,28 L124,20 L131,20 L131,14 L137,14 L137,20 L144,20 L144,28 L154,28 L154,44 L163,44 L163,34 L170,34 L170,26 L178,26 L178,34 L188,34 L188,44 L198,44 L198,36 L205,36 L205,28 L212,28 L212,20 L219,20 L219,28 L226,28 L226,36 L235,36 L235,44 L244,44 L244,30 L251,30 L251,22 L258,22 L258,16 L265,16 L265,22 L272,22 L272,30 L282,30 L282,44 L292,44 L292,38 L300,38 L300,44 L310,44 L310,28 L317,28 L317,20 L325,20 L325,28 L334,28 L334,44 L342,44 L342,36 L350,36 L350,26 L358,26 L358,36 L368,36 L368,44 L378,44 L378,30 L385,30 L385,22 L393,22 L393,30 L401,30 L401,44 L412,44 L412,38 L420,38 L420,44 L430,44 L430,32 L438,32 L438,24 L446,24 L446,32 L455,32 L455,44 L465,44 L465,50 L500,50 L500,64 Z"
-            fill="rgb(6,6,10)" />
-        </svg>
-      </div>
-
-      {/* Ground fade */}
-      <div className="absolute bottom-0 left-0 right-0 pointer-events-none"
-        style={{ height: "38px", background: "linear-gradient(to top, rgb(6,6,10) 0%, transparent 100%)" }} />
-
-      {/* Night city glow at base of buildings */}
-      {isNight && (
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none"
-          style={{ height: "32px", background: "linear-gradient(to top, rgba(255,80,20,0.06) 0%, transparent 100%)" }} />
-      )}
 
       {/* Status row */}
       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
@@ -994,8 +977,11 @@ export default function FivemGraphics() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: aiPrompt }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const text = await res.text();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any;
+      try { data = JSON.parse(text); } catch { throw new Error("Server error — please try again"); }
+      if (!res.ok) throw new Error(data?.error || "Request failed");
       if (data.packName)          setPackName(data.packName);
       if (data.cloudThickness != null) setCloudThickness(data.cloudThickness);
       if (data.jetStreams != null)      setJetStreams(data.jetStreams);
@@ -1129,64 +1115,6 @@ export default function FivemGraphics() {
               ))}
             </div>
 
-            {/* AI Pack Generator */}
-            <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/20 to-black p-5 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
-                  <Wand2 className="w-4 h-4 text-red-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-white">AI Pack Generator</p>
-                  <p className="text-[10px] text-zinc-500">Describe the vibe — get a ready-to-download pack. Powered by Opti Gods AI.</p>
-                </div>
-              </div>
-              <div className="relative">
-                <textarea
-                  ref={aiInputRef}
-                  value={aiPrompt}
-                  onChange={e => setAiPrompt(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); }}}
-                  placeholder="e.g. &quot;golden sunrise with light rays and fluffy aerial clouds&quot; or &quot;moody blue night, no rain, high FPS&quot;"
-                  data-testid="input-ai-pack-prompt"
-                  rows={2}
-                  className="w-full bg-black/40 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-3 text-white text-sm outline-none transition-colors resize-none placeholder:text-zinc-600"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleAiGenerate}
-                  disabled={aiLoading || !aiPrompt.trim()}
-                  data-testid="button-ai-generate-pack"
-                  className={cn(
-                    "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all",
-                    aiLoading || !aiPrompt.trim()
-                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-500 text-white"
-                  )}
-                >
-                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizonal className="w-4 h-4" />}
-                  {aiLoading ? "Generating..." : "Generate Pack"}
-                </button>
-                <p className="text-[10px] text-zinc-600">Press Enter to submit · Opens Builder tab with your settings pre-filled</p>
-              </div>
-              <AnimatePresence>
-                {aiSuccess && (
-                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-emerald-300">{aiSuccess}</p>
-                  </motion.div>
-                )}
-                {aiError && (
-                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-300">{aiError}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
             {/* Quick Pack Options strip */}
             <div className="rounded-2xl border border-white/8 bg-zinc-900/50 p-4">
               <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-3">Quick Pack Options</p>
@@ -1278,12 +1206,8 @@ export default function FivemGraphics() {
             </div>
 
             {/* leaq's pack card */}
-            <div className="rounded-2xl overflow-hidden border border-white/8 group hover:border-red-500/30 transition-all relative">
-              <div className="absolute inset-0">
-                <img src="/reshade-presets/preview-sunrise.png" alt="pack preview" className="w-full h-full object-cover object-top" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-black/40" />
-              </div>
-              <div className="relative p-6 md:p-8">
+            <div className="rounded-2xl border border-white/8 hover:border-red-500/30 transition-all bg-zinc-900/70">
+              <div className="p-6 md:p-8">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.15em] text-red-400 font-bold mb-1">leaq's pack · v1 · Tested on 1650 Super</p>
@@ -1294,8 +1218,8 @@ export default function FivemGraphics() {
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {[
                     "No Clouds +6 FPS","Vivid Blue Sky","No Contrails +2 FPS","Props Intact","Freeze Weather",
-                    ...(disableRain ? ["No Rain +2 FPS"] : []),
-                    ...(disableSnow ? ["No Snow +1 FPS"] : []),
+                    ...(disableRain ? ["No Rain +25 FPS"] : []),
+                    ...(disableSnow ? ["No Snow +3 FPS"] : []),
                     ...(disableBloodDecals ? ["No Blood Decals"] : []),
                     ...(freezeTime ? [`Locked ${String(freezeHour).padStart(2,"0")}:00`] : []),
                   ].map(tag => (
@@ -1335,6 +1259,64 @@ export default function FivemGraphics() {
               {/* Left: Controls */}
               <div className="space-y-4">
 
+                {/* AI Pack Generator */}
+                <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/20 to-black p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
+                      <Wand2 className="w-4 h-4 text-red-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-white">AI Pack Generator</p>
+                      <p className="text-[10px] text-zinc-500">Describe the vibe — get sliders pre-filled instantly.</p>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <textarea
+                      ref={aiInputRef}
+                      value={aiPrompt}
+                      onChange={e => setAiPrompt(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); }}}
+                      placeholder="e.g. &quot;golden sunrise with light rays&quot; or &quot;moody blue night, high FPS&quot;"
+                      data-testid="input-ai-pack-prompt"
+                      rows={2}
+                      className="w-full bg-black/40 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-3 text-white text-sm outline-none transition-colors resize-none placeholder:text-zinc-600"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleAiGenerate}
+                      disabled={aiLoading || !aiPrompt.trim()}
+                      data-testid="button-ai-generate-pack"
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all",
+                        aiLoading || !aiPrompt.trim()
+                          ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                          : "bg-red-600 hover:bg-red-500 text-white"
+                      )}
+                    >
+                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizonal className="w-4 h-4" />}
+                      {aiLoading ? "Generating..." : "Generate Pack"}
+                    </button>
+                    <p className="text-[10px] text-zinc-600">Enter to submit</p>
+                  </div>
+                  <AnimatePresence>
+                    {aiSuccess && (
+                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-emerald-300">{aiSuccess}</p>
+                      </motion.div>
+                    )}
+                    {aiError && (
+                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-300">{aiError}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {/* Pack name */}
                 <div className="rounded-2xl border border-white/8 bg-zinc-900/60 px-5 py-4">
                   <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2 block">Pack Name</label>
@@ -1351,11 +1333,11 @@ export default function FivemGraphics() {
                   <div className="grid grid-cols-3 gap-2">
                     {([
                       { label: "Freeze Weather", active: freezeWeather, onToggle: () => setFreezeWeather(v => !v), fps: "+5–15 FPS", color: "amber", testId: "quick-fx-freeze-weather" },
-                      { label: "No Rain",         active: disableRain,    onToggle: () => setDisableRain(v => !v),    fps: "+2–4 FPS",  color: "cyan",  testId: "quick-fx-rain" },
-                      { label: "No Snow",         active: disableSnow,   onToggle: () => setDisableSnow(v => !v),   fps: "+1–3 FPS",  color: "cyan",  testId: "quick-fx-snow" },
-                      { label: "No Blood",        active: disableBloodDecals, onToggle: () => setDisableBloodDecals(v => !v), fps: "Citizen", color: "red", testId: "quick-fx-blood" },
-                      { label: "Freeze Time",     active: freezeTime,    onToggle: () => setFreezeTime(v => !v),    fps: "+1–4 FPS",  color: "amber", testId: "quick-fx-time" },
-                      { label: "Keep Props",      active: keepProps,     onToggle: () => setKeepProps(v => !v),     fps: "Visuals",   color: "zinc",  testId: "quick-fx-props" },
+                      { label: "No Rain",         active: disableRain,    onToggle: () => setDisableRain(v => !v),    fps: "+25 FPS",    color: "cyan",  testId: "quick-fx-rain" },
+                      { label: "No Snow",         active: disableSnow,   onToggle: () => setDisableSnow(v => !v),   fps: "+3–5 FPS",   color: "cyan",  testId: "quick-fx-snow" },
+                      { label: "No Blood",        active: disableBloodDecals, onToggle: () => setDisableBloodDecals(v => !v), fps: "15–20 FPS", color: "red", testId: "quick-fx-blood" },
+                      { label: "Freeze Time",     active: freezeTime,    onToggle: () => setFreezeTime(v => !v),    fps: "+30–40 FPS", color: "amber", testId: "quick-fx-time" },
+                      { label: "Keep Props",      active: keepProps,     onToggle: () => setKeepProps(v => !v),     fps: "+50 FPS",    color: "zinc",  testId: "quick-fx-props" },
                     ] as Array<{ label: string; active: boolean; onToggle: () => void; fps: string; color: string; testId: string }>).map(({ label, active, onToggle, fps, color, testId }) => {
                       const activeCls: Record<string, string> = {
                         amber: "border-amber-500/40 bg-amber-500/10 text-amber-300",
@@ -1592,7 +1574,7 @@ export default function FivemGraphics() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-white leading-tight">Disable rain & thunder</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+2–4 FPS</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+25 FPS</span>
                         </div>
                         <p className="text-[10px] text-zinc-500">Removes rain particles during RAIN / THUNDER states</p>
                       </div>
@@ -1607,7 +1589,7 @@ export default function FivemGraphics() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-white leading-tight">Disable snow & blizzard</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+1–3 FPS</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+3–5 FPS</span>
                         </div>
                         <p className="text-[10px] text-zinc-500">Removes snow particles on SNOW / BLIZZARD / XMAS</p>
                       </div>
@@ -1622,7 +1604,7 @@ export default function FivemGraphics() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-white leading-tight">Disable blood decals</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-zinc-800 border-zinc-700 text-zinc-400">Citizen folder</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">15–20 FPS</span>
                         </div>
                         <p className="text-[10px] text-zinc-500">Zeros blood pool scale in visualsettings.dat — citizen folder only, no server resource</p>
                       </div>
@@ -1639,7 +1621,7 @@ export default function FivemGraphics() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-white leading-tight">Freeze Time</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+1–4 FPS</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/20 text-emerald-400">+30–40 FPS</span>
                         </div>
                         <p className="text-[10px] text-zinc-500">Lock the in-game clock — stops sun-angle FPS dips as day/night cycles</p>
                       </div>
@@ -1860,26 +1842,16 @@ export default function FivemGraphics() {
             {/* Cinematic preset cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {RESHADE_PRESETS.map(preset => (
-                <div key={preset.id} className="group rounded-2xl border border-white/8 overflow-hidden hover:border-white/20 transition-all relative">
-                  {/* Screenshot background */}
-                  <div className="relative h-44 overflow-hidden">
-                    <img
-                      src={preset.screenshot}
-                      alt={preset.label}
-                      className="w-full h-full object-cover object-center group-hover:scale-[1.03] transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10" />
-                    {/* Badge — top right */}
-                    <div className="absolute top-3 right-3">
-                      <span className={cn("text-[9px] font-bold px-2 py-1 rounded-full border uppercase backdrop-blur-sm", preset.badgeCls)}>
-                        {preset.badge}
-                      </span>
-                    </div>
-                    {/* Title over image */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-zinc-400 mb-0.5">ReShade Preset</p>
+                <div key={preset.id} className="rounded-2xl border border-white/8 overflow-hidden hover:border-white/20 transition-all">
+                  {/* Header band */}
+                  <div className="bg-zinc-900 border-b border-white/6 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-zinc-500 mb-0.5">ReShade Preset</p>
                       <h3 className="text-base font-display font-black text-white leading-tight">{preset.label}</h3>
                     </div>
+                    <span className={cn("text-[9px] font-bold px-2 py-1 rounded-full border uppercase shrink-0", preset.badgeCls)}>
+                      {preset.badge}
+                    </span>
                   </div>
 
                   {/* Card body */}

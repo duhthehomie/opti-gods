@@ -2132,6 +2132,24 @@ Read-Host "  Press Enter to close"
     res.end(Buffer.from(wrapInBat(ps1, { title: `Disable Startup: ${safeName}`, tmpName: 'OptiGods-DisableStartup', marker: 'DISABLE_STARTUP_PS1_START' }), 'utf8'));
   });
 
+  // Relaunch a killed background process — generates a one-liner .bat
+  app.post('/api/task-manager/relaunch', checkIpBan, (req, res) => {
+    const { processName } = req.body as { processName?: string };
+    if (!processName || typeof processName !== 'string') {
+      return res.status(400).json({ error: 'processName required' });
+    }
+    // Only allow valid .exe names — letters, digits, spaces, hyphens, underscores, dots
+    if (!/^[\w\-. ]+\.exe$/i.test(processName.trim())) {
+      return res.status(400).json({ error: 'Invalid process name' });
+    }
+    const safe = processName.trim().replace(/'/g, "''");
+    const bat = `@echo off\ntitle Relaunch ${safe}\necho Attempting to relaunch ${safe}...\nstart "" "${safe}"\nping 127.0.0.1 -n 2 >nul\necho Done. If nothing opened, the app may need its full path to start.\npause\n`;
+    const fileName = `Relaunch_${safe.replace(/\.exe$/i, '').replace(/[^a-zA-Z0-9_\-]/g, '_')}.bat`;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.end(Buffer.from(bat, 'utf8'));
+  });
+
   app.get('/api/startup/scan', (_req, res) => {
     const ps1 = `
 # Scan Windows registry for all startup apps
