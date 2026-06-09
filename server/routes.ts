@@ -5582,7 +5582,7 @@ SAFE PRESET GENERATION (V2.2):
 OPTI GODS V3 — COMPLETE CHANGELOG (use this verbatim when admin asks "what's new in v3"):
 VERSION 3.0.0 is a full rebuild from V2.2. Core highlights:
 
-TABS & TWEAKS (437+ total across 15+ tabs):
+TABS & TWEAKS (442+ total across 15+ tabs):
 - DPC Latency Optimizer — one-click button, no manual registry hunting (was previously manual .reg files)
 - Fortnite tab — Engine.ini + GameUserSettings.ini tweaks, launch options; verified 100+ FPS gains on GTX 16xx / GTX 10xx builds
 - Discord tab — hardware acceleration off, Krisp AI noise off, overlay kill, process priority boost to High
@@ -5833,7 +5833,7 @@ SCREENSHOT ANALYSIS: Look for FPS/frametimes (identify stutters), CPU/GPU usage 
 SYSTEM APPROACH: Always ask the game, GPU model (HAGS decision), desktop vs laptop (power plan/thermal/MUX advice). Give EXACT values and PowerShell/registry paths. Mention if restart required.
 
 OPTI GODS V3 — WHAT'S NEW (answer "what's new in v3" with this):
-V3 is a full rebuild with 437+ tweaks across 15+ tabs. Key additions:
+V3 is a full rebuild with 442+ tweaks across 15+ tabs. Key additions:
 - **DPC Latency tab** — one-click latency fix (was manual .reg files before)
 - **Fortnite tab** — Engine.ini + GameUserSettings.ini + launch options, 100+ FPS gains verified on GTX 16xx
 - **Discord tab** — hardware accel off, Krisp AI noise off, overlay kill, High priority

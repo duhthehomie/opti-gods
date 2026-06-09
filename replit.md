@@ -67,7 +67,7 @@ Versioned `2.1.0` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
 
 ## Key Features
 
-- **437 optimization toggles** across 15+ tabs (Registry, FiveM, NVIDIA, AMD, AMD Integrated GPU, Intel iGPU, Laptop, Network, Startup, Debloat, Memory, Fortnite, Discord, Game Detection, Process Lasso)
+- **442 optimization toggles** across 15+ tabs (Registry, FiveM, NVIDIA, AMD, AMD Integrated GPU, Intel iGPU, Laptop, Network, Startup, Debloat, Memory, Fortnite, Discord While Gaming, Game Detection, Process Lasso)
 - **PowerShell script generation** — downloads a personalized `.ps1` file based on selected tweaks
 - **Pro paywall** (`ProGate` component) — secured server-side session token (64-char hex), unlocked via access code redeem
 - **Payment options**: CashApp `$my1ik`, PayPal `paypal.me/accountslg`, Stripe card payments ($15 flat)
