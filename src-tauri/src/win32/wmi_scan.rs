@@ -52,6 +52,15 @@ struct Win32Fan {
     name: Option<String>,
 }
 
+// Used to detect ACPI-registered fans (e.g. "ACPI Fan" in Device Manager).
+// Many OEM boards (HP, Dell, Lenovo) expose case fans here even when
+// Win32_Fan only sees the CPU fan header.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Win32PnPFan {
+    name: Option<String>,
+}
+
 // MSAcpi_ThermalZoneTemperature lives in root\wmi, not root\cimv2.
 // Temperature is in tenths of Kelvin — convert with: (value / 10.0) - 273.15
 #[derive(Deserialize, Debug)]
@@ -83,16 +92,32 @@ pub fn scan() -> Result<HardwareScan> {
         .raw_query("SELECT Manufacturer, PhysicalAdapter FROM Win32_NetworkAdapter")
         .context("query Win32_NetworkAdapter")?;
 
-    // Fan count — Win32_Fan is optional; many consumer boards don't expose fans
-    // via WMI even when fans are present, so we treat 0 results as "unknown".
+    // Fan count — two independent WMI sources, take the higher count:
+    //
+    // 1. Win32_Fan — traditional source; reliable when OEM populates it, but
+    //    many consumer boards (HP Pavilion, Dell Inspiron, etc.) only register
+    //    the CPU fan here and silently omit case fans.
+    //
+    // 2. Win32_PnPEntity WHERE PNPClass='Fan' — Windows exposes ACPI-registered
+    //    fan devices here (visible in Device Manager as "System devices > ACPI Fan").
+    //    OEM EC firmware typically registers ALL fan headers through ACPI, so this
+    //    query catches chassis / case fans that Win32_Fan misses.
+    //
+    // Taking max() means a system where Win32_Fan sees 1 (CPU fan) but PnP sees 2
+    // (CPU + chassis) will correctly report 2 — which is the HP Pavilion case.
     let fans: Vec<Win32Fan> = wmi
         .raw_query("SELECT Name FROM Win32_Fan")
         .unwrap_or_default();
-    let fan_count: Option<u32> = if fans.is_empty() {
-        None
-    } else {
-        Some(fans.len() as u32)
-    };
+    let wmi_fan_count = fans.len() as u32;
+
+    let pnp_fans: Vec<Win32PnPFan> = wmi
+        .raw_query("SELECT Name FROM Win32_PnPEntity WHERE PNPClass = 'Fan'")
+        .unwrap_or_default();
+    let pnp_fan_count = pnp_fans.len() as u32;
+
+    // Use the highest count either source reports.
+    let best_count = wmi_fan_count.max(pnp_fan_count);
+    let fan_count: Option<u32> = if best_count > 0 { Some(best_count) } else { None };
 
     // Pick the "main" GPU heuristically: largest VRAM that isn't a virtual / RDP adapter.
     let main_gpu = gpus
