@@ -14,15 +14,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ── Gate ─────────────────────────────────────────────────────────────────────
-const GATE_KEY  = "fg_unlocked_v1";
 const GATE_CODE = "4258";
-
-function isUnlocked() {
-  try { return sessionStorage.getItem(GATE_KEY) === "1"; } catch { return false; }
-}
-function storeUnlocked() {
-  try { sessionStorage.setItem(GATE_KEY, "1"); } catch {} 
-}
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 function lerp(a: number, b: number, t: number) {
@@ -842,7 +834,7 @@ function CodeGate({ onUnlock }: { onUnlock: () => void }) {
   const [shake, setShake] = useState(false);
 
   const handleSubmit = () => {
-    if (code.trim() === GATE_CODE) { storeUnlocked(); onUnlock(); }
+    if (code.trim() === GATE_CODE) { onUnlock(); }
     else {
       setError(true); setShake(true);
       setTimeout(() => setShake(false), 500);
@@ -889,7 +881,7 @@ function CodeGate({ onUnlock }: { onUnlock: () => void }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FivemGraphics() {
-  const [unlocked,       setUnlockedState]  = useState(isUnlocked);
+  const [unlocked,       setUnlockedState]  = useState(false);
   const [cloudThickness, setCloudThickness] = useState(0);
   const [jetStreams,      setJetStreams]     = useState(0);
   const [blueDepth,      setBlueDepth]      = useState(70);
