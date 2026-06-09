@@ -4123,7 +4123,7 @@ Start-Sleep 2
         },
       });
 
-      res.json({ url: session.url, tier, appliedDiscount });
+      res.json({ url: session.url, sessionId: session.id, tier, appliedDiscount });
     } catch (err: any) {
       console.error('Stripe checkout error:', err.message);
       res.status(500).json({ error: 'Failed to create checkout session.' });

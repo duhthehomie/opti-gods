@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Zap, X, Loader2, MessageCircle, CreditCard, ShieldCheck, Copy, Check, Flame, Ticket } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
@@ -11,7 +11,7 @@ import { fireCelebration } from "@/components/branding/pro-celebration";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
-import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { isNative, discordLogin, openExternal } from "@/lib/tauri-bridge";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -51,6 +51,9 @@ export function ProPaymentDialog({
   const [manualDiscountError, setManualDiscountError] = useState("");
   const [linkingDiscord, setLinkingDiscord] = useState(false);
   const [linkDiscordError, setLinkDiscordError] = useState("");
+  const [awaitingNativePayment, setAwaitingNativePayment] = useState(false);
+  const [nativeSessionId, setNativeSessionId] = useState<string | null>(null);
+  const nativePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: pricing } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -209,6 +212,13 @@ export function ProPaymentDialog({
     }
   };
 
+  // Clean up any active payment poll when the dialog closes or unmounts
+  useEffect(() => {
+    return () => {
+      if (nativePollRef.current) clearInterval(nativePollRef.current);
+    };
+  }, []);
+
   const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
     if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
     const activeDiscount = tier === "pro" ? discountData : manualDiscountData;
@@ -220,7 +230,31 @@ export function ProPaymentDialog({
       });
       const data = await res.json();
       if (data.url) {
-        window.location.href = data.url;
+        if (isNative() && data.sessionId) {
+          // Native (.exe) mode: open Stripe in the system browser, then poll
+          // the server until the payment completes and activate Pro here.
+          await openExternal(data.url);
+          setNativeSessionId(data.sessionId);
+          setAwaitingNativePayment(true);
+          if (nativePollRef.current) clearInterval(nativePollRef.current);
+          nativePollRef.current = setInterval(async () => {
+            try {
+              const vRes = await fetch(apiUrl(`/api/verify-payment?session_id=${encodeURIComponent(data.sessionId)}`));
+              const vData = await vRes.json();
+              if (vData.paid) {
+                clearInterval(nativePollRef.current!);
+                nativePollRef.current = null;
+                setAwaitingNativePayment(false);
+                if (vData.sessionToken) setProSession(vData.sessionToken);
+                setProStatus(true);
+                fireCelebration();
+                onOpenChange(false);
+              }
+            } catch { /* keep polling */ }
+          }, 3000);
+        } else {
+          window.location.href = data.url;
+        }
       } else {
         setError("Failed to create checkout session. Please try again.");
       }
@@ -330,6 +364,29 @@ export function ProPaymentDialog({
               <strong className="text-red-300">Sharing your code with anyone else = permanent ban.</strong> You'll have to buy a brand-new code to get back in. One code = one person.
             </p>
           </div>
+
+          {/* Native payment waiting state — shown after Stripe opens in system browser */}
+          {awaitingNativePayment && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/8 p-5 space-y-4 text-center">
+              <div className="flex items-center justify-center gap-3">
+                <Loader2 className="w-5 h-5 text-red-400 animate-spin shrink-0" />
+                <p className="text-sm font-bold text-white">Waiting for payment...</p>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Complete your payment in the browser window that just opened. This app will unlock automatically once your card clears — no need to do anything here.
+              </p>
+              <button
+                onClick={() => {
+                  if (nativePollRef.current) { clearInterval(nativePollRef.current); nativePollRef.current = null; }
+                  setAwaitingNativePayment(false);
+                  setNativeSessionId(null);
+                }}
+                className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
           {success ? (
             discordSaved ? (

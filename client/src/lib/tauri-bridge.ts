@@ -338,6 +338,27 @@ export async function performUpdate(
   }
 }
 
+// ─── External URL opener ─────────────────────────────────────────────────────
+
+/**
+ * Open a URL in the system's default browser.
+ * In native (Tauri) mode uses plugin:shell|open so the link opens in the real
+ * browser instead of navigating the WebView away from the app.
+ * Falls back to window.location.href on the web.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (isNative()) {
+    try {
+      // shell:allow-open permission is granted in capabilities/default.json
+      await invoke<void>("plugin:shell|open", { path: url });
+      return;
+    } catch (err) {
+      console.warn("[native] openExternal fallback:", err);
+    }
+  }
+  window.location.href = url;
+}
+
 // ─── File drop (drag onto Tauri window) ─────────────────────────────────────
 
 /**
