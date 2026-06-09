@@ -205,22 +205,21 @@ export default function Fivem() {
 
         {/* Opti Gods Graphics Pack Download */}
         <a
-          href="/downloads/optigods-graphics-pack.zip"
-          download="optigods-graphics-pack.zip"
+          href="/fivem-graphics"
           className="flex items-center gap-4 p-4 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/40 transition-all group"
         >
           <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 shrink-0">
             <Package className="w-5 h-5 text-red-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white">Opti Gods Smooth Graphics Pack</p>
+            <p className="text-sm font-bold text-white">Opti Gods Graphics Packs + ReShade Presets</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              FiveM resource (timecycle) + ReShade preset — clean bright visuals, built for light-game players. Free.
+              Blue sky timecycle pack, custom builder, ReShade presets — download directly. Free.
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-medium text-red-400 shrink-0 group-hover:text-red-300 transition-colors">
             <Download className="w-3.5 h-3.5" />
-            <span>Free Download</span>
+            <span>Open Graphics Hub</span>
           </div>
         </a>
 
