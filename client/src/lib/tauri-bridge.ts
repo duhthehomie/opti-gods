@@ -338,6 +338,36 @@ export async function performUpdate(
   }
 }
 
+// ─── File drop (drag onto Tauri window) ─────────────────────────────────────
+
+/**
+ * Listen for files dragged onto the Tauri app window.
+ * Returns an unlisten function to clean up the listener.
+ * No-op in web mode.
+ */
+export async function onFileDrop(
+  handler: (paths: string[]) => void,
+): Promise<() => Promise<void>> {
+  type Payload =
+    | { paths: string[] }
+    | { type?: string; paths?: string[] }
+    | string[];
+  return tauriListen<Payload>("tauri://drag-drop", (payload) => {
+    const paths: string[] = Array.isArray(payload)
+      ? (payload as string[])
+      : ((payload as { paths?: string[] }).paths ?? []);
+    if (paths.length > 0) handler(paths);
+  });
+}
+
+/**
+ * Read a local file as UTF-8 text using Tauri's fs plugin.
+ * Requires `fs:default` capability (already granted in capabilities/default.json).
+ */
+export async function readTauriTextFile(path: string): Promise<string> {
+  return invoke<string>("plugin:fs|read_text_file", { path });
+}
+
 // ─── Task Manager native commands ───────────────────────────────────────────
 
 export interface ProcessInfo {

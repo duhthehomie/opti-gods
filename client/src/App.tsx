@@ -15,7 +15,8 @@ import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
-import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
+import { isNative, discordCachedToken, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
+import { useOptimizationStore } from "@/store/use-optimization-store";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 // Always eager — these are the first screens the user sees
@@ -166,6 +167,49 @@ function NativeBootstrap() {
   return null;
 }
 
+function TauriFileDropHandler() {
+  const { toast } = useToast();
+  useEffect(() => {
+    if (!isNative()) return;
+    let cleanup: (() => Promise<void>) | null = null;
+    onFileDrop(async (paths) => {
+      const jsonPath = paths.find(p => p.toLowerCase().endsWith(".json"));
+      if (!jsonPath) return;
+      try {
+        const text = await readTauriTextFile(jsonPath);
+        let detected: Record<string, boolean> | null = null;
+        try {
+          const parsed = JSON.parse(text.trim());
+          if (parsed && typeof parsed === "object") detected = parsed as Record<string, boolean>;
+        } catch {}
+        if (!detected) {
+          try {
+            const match = text.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
+            const b64 = match ? match[1] : text.trim();
+            detected = JSON.parse(atob(b64));
+          } catch {}
+        }
+        if (!detected) {
+          toast({ title: "Couldn't read file", description: "Drop OptiGods-Scan-Result.json from the detect script.", variant: "destructive" });
+          return;
+        }
+        const store = useOptimizationStore.getState();
+        const next = { ...store.tweaks };
+        let count = 0;
+        for (const [key, val] of Object.entries(detected)) {
+          if (key in next && typeof val === "boolean") { next[key] = val; if (val) count++; }
+        }
+        store.setAllTweaks(next);
+        toast({ title: "PC state loaded", description: `${count} optimizations detected as already applied.` });
+      } catch (err) {
+        toast({ title: "File read failed", description: String(err), variant: "destructive" });
+      }
+    }).then(u => { cleanup = u; });
+    return () => { cleanup?.(); };
+  }, [toast]);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -175,6 +219,7 @@ function App() {
         <NativeTokenHandler />
         <NativeCachedTokenHandler />
         <NativeBootstrap />
+        <TauriFileDropHandler />
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>

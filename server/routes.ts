@@ -4626,7 +4626,7 @@ try {
     Write-Host "  $($saved[0])" -ForegroundColor White
     Write-Host "  ==========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Paste the OPTIGODS_STATE: code above into the Opti Gods app to import." -ForegroundColor Cyan
+    Write-Host "  Drag OptiGods-Scan-Result.json onto the Opti Gods window to import it." -ForegroundColor Cyan
   } else {
     Write-Host "  Could not save file automatically. Paste the OPTIGODS_STATE line above into the app instead." -ForegroundColor Yellow
   }
