@@ -36,9 +36,10 @@ const FEATURES = [
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
-// Quick Boost Presets — V3.1 (expanded Safe, Max FPS COD stack, Streamer Mode overhauled)
+// Quick Boost Presets — V3.2 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
 
 // ── Safe Boost ─────────────────────────────────────────────────────────────
+// No service stops, no uninstalls — pure registry + power plan + privacy tweaks.
 const SAFE_TWEAKS = [
   // CPU scheduling & responsiveness
   "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
@@ -51,56 +52,101 @@ const SAFE_TWEAKS = [
   // Windows cleanup — zero risk
   "DisableXboxGameBar", "DisableGameDVR", "DisableFastStartup",
   "DisableWindowsError", "DisableHungAppDetection", "SysVisualBestPerf",
+  "DisableAutoMaintenance", "SysHibernateOff",
   // Memory
-  "OptimizeRAMUsage", "DisableNDU",
+  "OptimizeRAMUsage", "DisableNDU", "MemGPUOptimize", "MemGPUSchedulerTweak",
   // Privacy — no functional change
-  "PrivacyTelemetry", "ServiceDiagTrack",
+  "PrivacyTelemetry", "PrivacyActivityHistory", "PrivacyAdvertisingID",
+  "PrivacyLocationTracking", "ServiceDiagTrack",
+  // WinTitus — safe visual / background registry tweaks
+  "WinTitusConsumerFeatures", "WinTitusBgApps", "WinTitusDisplayPerf",
+  "WinTitusShowExtensions", "WinTitusIPv4Prefer",
   // Spotify — no-op if not installed
   "SpotifyLowPriority", "SpotifyDisableGPU",
   // COD — no-op if not installed
-  "CodGPUPriority", "CodDefenderExclusion",
+  "CodGPUPriority", "CodDefenderExclusion", "CodGameMode",
+  // Fortnite — no-op if not installed
+  "FortniteGameMode",
+  // Startup cleanup — removes background auto-launch only; apps still open normally
+  "su_onedrive", "su_edge_startup", "su_zoom",
 ];
 
 // ── Max FPS Gaming ─────────────────────────────────────────────────────────
+// Everything Safe plus aggressive timer, full service list, COD/FiveM/Fortnite packs, startup cleanup.
 const MAX_FPS_TWEAKS = [
   ...SAFE_TWEAKS,
-  // Aggressive timer & power
+  // Aggressive timer & power throttle removal
   "SetTimerResolution", "DisableDynamicTick",
   "DisablePowerThrottling", "DisablePowerThrottlingAdv",
   // Hardware interrupts
   "DisableUSBSuspend",
   // Network full stack
-  "OptimizeTCP", "EnableTCPAutoTuning",
+  "OptimizeTCP", "EnableTCPAutoTuning", "DisableIPv6",
   // Visual & search overhead
   "DisableAnimations", "ServiceWSearch", "DisableSearchIndexer",
-  // FiveM full pack
+  // Windows background services — individually safe, collectively frees significant CPU/RAM
+  "ServiceSysMain", "ServiceRemoteReg", "ServiceWMPNetworkSvc", "ServiceFax",
+  "ServiceRetailDemo", "ServiceTabletInput", "ServiceMapsBroker", "ServiceWerSvc",
+  "ServiceDPS", "ServiceDusmSvc", "ServiceTrkWks", "ServiceLltdsvc",
+  "ServiceFDHost", "ServiceWbioSrvc", "ServicePcaSvc", "ServiceAeLookupSvc",
+  // WinTitus batch service pass + telemetry opt-outs
+  "WinTitusServicesManual", "WinTitusPosh7Telemetry", "WinTitusShowHidden",
+  "WinTitusWPBT", "WinTitusRazerBlock",
+  // Memory deep tuning
+  "DisablePagefileEncryption", "DisablePrefetch", "MemFixedPagefile",
+  // FiveM full pack (no-op if not installed)
   "FiveMHighPriority", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMRenderingBoost",
   "FiveMGPUPriorityStack", "FiveMDisableMPO", "FiveMReduceNPCDensity", "FiveMCommandLineTweaks",
   "FiveMDisableLSO", "FiveMEnableRSS", "FiveMCacheClear", "FiveMNetworkBuffer",
+  "FiveMDisableNvidiaTelemetry", "FiveMGameModeAdd",
   // Registry deep tuning
-  "RegistryNTFSOptimize", "RegistryIOPageLock", "RegistryDPCLatency",
-  // COD full pack (no-ops if not installed)
+  "RegistryNTFSOptimize", "RegistryIOPageLock",
+  // COD full pack (no-op if not installed)
   "CodDirectXQueue", "CodVRAMShaderBudget", "CodHighPriority", "CodMMCSS",
-  "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodGameMode",
-  "CodDisableXboxCapture", "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
+  "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodDisableXboxCapture",
+  "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
+  "CodTdrDelay", "CodFramePacing", "CodPagefileOptimize", "CodShaderCacheClear",
+  "CodDisableHAGS", "CodBattlenetOptimize", "CodMemPriority",
   // Spotify full pack
   "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
-  // Display & background cleanup
-  "WinTitusDisplayPerf", "WinTitusBgApps",
+  // Fortnite FPS pack (no-op if not installed)
+  "FortniteHighPriority", "FortniteUncapGameFPS", "FortniteUncapLobbyFPS",
+  "FortniteDisableMotionBlur", "FortniteLowShadows", "FortniteDisableRecording",
+  "FortniteNetworkBuffer", "FortniteDisableThrottling",
+  // Startup app cleanup — removes background launch, apps still open normally
+  "su_discord", "su_spotify", "su_skype", "su_teams", "su_nvidia",
+  "su_ccleaner", "su_battlenet", "su_epic", "su_chrome", "su_razer",
+  "su_amdradeon", "su_rtss", "su_logitech",
 ];
 
 // ── Competitive Shooter ────────────────────────────────────────────────────
+// Everything Max FPS + full GPU vendor packs (NVIDIA + AMD), Process Lasso, complete Discord tuning.
 const COMPETITIVE_TWEAKS = [
   ...MAX_FPS_TWEAKS,
-  // MSI interrupt mode — safe version (no BSOD risk)
+  // MSI interrupt mode — safe version (no BSOD risk, filters GPU + NVMe + NIC)
   "EnableMSIMode_Safe",
+  // NVIDIA performance pack — no-op on AMD/Intel systems
+  "NvidiaDisableTelemetry", "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
+  "NvidiaShaderCache", "NvidiaOptimizeLatency", "NvidiaDisableOverlay",
+  "NvidiaDisableAnsel", "NvidiaDisableShadowPlay",
+  // AMD performance pack — no-op on NVIDIA/Intel systems
+  "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
+  "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
+  "AmdOptimizeLatency", "AmdShaderCache", "AmdTextureFilterPerf",
+  "AmdSurfaceFormatOpt", "AmdTessOverride16x", "AmdRadeonBoostOff",
+  "AmdD3DOptimize", "AmdPCIeOptimize",
   // Process management
   "ProcessLassoAffinityGaming", "ProcessLassoProBalance", "ProcessAutoKillHung",
-  // Fortnite pack
-  "FortniteHighPriority", "FortniteDisableVSync", "FortniteDisableMotionBlur",
-  "FortniteInputLatency", "FortniteUncapGameFPS",
-  // Discord — low footprint for voice chat while gaming
-  "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
+  "ProcessLassoInstanceBalancer",
+  // Fortnite competitive extras
+  "FortniteDisableVSync", "FortniteInputLatency", "FortniteDisableSSR",
+  "FortniteRawInput", "FortniteDisableLumen", "FortniteAffinityPhysical",
+  // Discord — full competitive footprint reduction
+  "DiscordLowPriority", "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
+  "DiscordDisableVAD", "DiscordDisableClips", "DiscordDisableUpdateCheck",
+  "DiscordDisableCrashHandler", "DiscordDisableAnimations",
+  // Memory — safe on 16 GB+ systems; script auto-warns on low-RAM rigs
+  "DisableMemoryCompression",
 ];
 
 // ── Streamer Mode ──────────────────────────────────────────────────────────
@@ -118,24 +164,38 @@ const STREAMER_TWEAKS = [
   "DisablePointerPrecision",
   // Network — stability & low jitter (not raw speed) for stream upload
   "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority", "OptimizeTCP",
-  // Memory — game + OBS + browser tabs + Discord all need RAM headroom
-  "OptimizeRAMUsage", "DisableNDU",
+  // Memory — game + OBS + browser tabs + Discord all need headroom
+  "OptimizeRAMUsage", "DisableNDU", "MemGPUOptimize", "MemFixedPagefile",
   // Kill background noise that steals encoder CPU time
-  "ServiceDiagTrack", "PrivacyTelemetry", "DisableWindowsError",
-  "DisableHungAppDetection", "DisableAutoMaintenance",
-  // USB suspend causes stutter-freeze mid-stream on USB headsets / capture cards
+  "ServiceDiagTrack", "PrivacyTelemetry", "PrivacyActivityHistory", "PrivacyAdvertisingID",
+  "DisableWindowsError", "DisableHungAppDetection", "DisableAutoMaintenance", "SysHibernateOff",
+  // WinTitus — background apps, display perf, consumer features
+  "WinTitusConsumerFeatures", "WinTitusBgApps", "WinTitusDisplayPerf",
+  "WinTitusPosh7Telemetry", "WinTitusIPv4Prefer", "WinTitusShowExtensions",
+  // Light service pass — frees background CPU without touching streaming-critical services
+  "ServiceFax", "ServiceRetailDemo", "ServiceTabletInput",
+  "ServiceMapsBroker", "ServiceWbioSrvc", "ServicePcaSvc",
+  // USB suspend causes stutter-freeze on USB headsets / capture cards mid-stream
   "DisableUSBSuspend",
-  // Disk I/O — OBS writes VOD files constantly; fast NTFS helps
+  // Disk I/O — OBS writes large VOD files continuously; NTFS optimisation helps
   "RegistryNTFSOptimize",
-  // Desktop visuals — perf mode keeps GPU free for game + encoder
+  // Desktop
   "SysVisualBestPerf", "DisableFastStartup",
-  // Discord — every streamer uses it; cut its GPU + CPU footprint hard
+  // Discord — full footprint reduction for streamers
   "DiscordOptimizeCodec", "DiscordDisableAnimations", "DiscordReduceGPUPriority",
   "DiscordDisableHWAccel", "DiscordClearCache", "DiscordDisableVAD",
-  // Spotify — keep music running but prioritize game + encoder above it
-  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyLimitBandwidth",
-  // Background Windows apps — free RAM + CPU for stream
-  "WinTitusBgApps",
+  "DiscordLowPriority", "DiscordDisableClips", "DiscordDisableUpdateCheck",
+  "DiscordDisableCrashHandler", "DiscordDisableStreaming",
+  // Spotify — keep music playing but yield CPU/I/O to game + encoder
+  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyLimitBandwidth", "SpotifyDisableAutoUpdate",
+  // Startup cleanup — frees RAM at boot for OBS + game
+  "su_discord", "su_onedrive", "su_edge_startup", "su_zoom", "su_teams", "su_chrome",
+  // Game mode / COD no-op packs
+  "CodGameMode", "CodDefenderExclusion",
+  // Process priority
+  "ProcessLassoProBalance", "ProcessAutoKillHung",
+  // Xbox / search overhead removed (OBS capture works without Game Bar on most setups)
+  "DisableSearchIndexer",
 ];
 
 const QUICK_BOOST_PRESETS = [
@@ -143,7 +203,7 @@ const QUICK_BOOST_PRESETS = [
     id: "safe",
     icon: Shield,
     title: "Safe Boost",
-    desc: "Recommended tweaks only — safe for any PC, no uninstalls, no service stops.",
+    desc: "Pure registry tweaks — CPU scheduling, power plan, privacy, memory, and game packs. Safe for any PC.",
     color: "text-emerald-400",
     border: "border-emerald-500/25 hover:border-emerald-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(52,211,153,0.1)]",
@@ -154,7 +214,7 @@ const QUICK_BOOST_PRESETS = [
     id: "maxfps",
     icon: Flame,
     title: "Max FPS Gaming",
-    desc: "Aggressive CPU, timer, network, and COD/FiveM packs for the highest possible framerate.",
+    desc: "Aggressive timer, full service list, all COD/FiveM/Fortnite packs, startup cleanup, and deep memory tuning.",
     color: "text-red-400",
     border: "border-red-500/25 hover:border-red-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(239,68,68,0.1)]",
@@ -165,7 +225,7 @@ const QUICK_BOOST_PRESETS = [
     id: "competitive",
     icon: Crosshair,
     title: "Competitive Shooter",
-    desc: "All Max FPS tweaks + MSI mode, Fortnite/COD priority packs, Process Lasso, and Discord tuning.",
+    desc: "All Max FPS tweaks + full NVIDIA & AMD driver packs, MSI mode, Process Lasso, and complete Discord tuning.",
     color: "text-orange-400",
     border: "border-orange-500/25 hover:border-orange-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(249,115,22,0.1)]",
@@ -176,7 +236,7 @@ const QUICK_BOOST_PRESETS = [
     id: "streamer",
     icon: Radio,
     title: "Streamer Mode",
-    desc: "Game perf + stable OBS encode + Discord tuning + Spotify at low priority. Keeps Game Bar and capture working.",
+    desc: "Game perf + stable OBS encode + full Discord + Spotify deprioritised. Startup cleanup included.",
     color: "text-violet-400",
     border: "border-violet-500/25 hover:border-violet-500/50",
     glow: "shadow-[inset_0_0_20px_-8px_rgba(139,92,246,0.1)]",
