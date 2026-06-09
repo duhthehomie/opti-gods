@@ -5,7 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield } from "lucide-react";
+import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield, Gamepad2 } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
@@ -24,6 +24,12 @@ const ALL_DISCORD_IDS = [
   "DiscordDisableVAD",
   "DiscordLowerVoiceQuality",
   "DiscordDisableStreaming",
+  // Gaming session tweaks
+  "DiscordDisableRichPresence",
+  "DiscordDisableGifAutoplay",
+  "DiscordDisableSpellcheck",
+  "DiscordSuppressNotifications",
+  "DiscordMinimizeBgLoad",
 ];
 
 const DISCORD_RECOMMENDED = [
@@ -35,6 +41,10 @@ const DISCORD_RECOMMENDED = [
   "DiscordDisableOverlay",
   "DiscordDisableClips",
   "DiscordLowerVoiceQuality",
+  // Gaming session
+  "DiscordDisableRichPresence",
+  "DiscordDisableGifAutoplay",
+  "DiscordMinimizeBgLoad",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -150,6 +160,45 @@ const MAINTENANCE_TWEAKS: Tweak[] = [
     title: "Disable Streaming Features & Buffers",
     desc: "Disables streamNotices, streamingConsent, and streamPauseNotification in settings.json. Removes background streaming metadata processing and screenshare buffer overhead. Screenshare still works, just without the extra overhead.",
     impact: "MED",
+  },
+];
+
+const GAMING_SESSION_TWEAKS: Tweak[] = [
+  {
+    id: "DiscordDisableRichPresence",
+    title: "Disable Game Activity Scanner (Rich Presence)",
+    desc: "Sets detectPlatformGames: false and showCurrentGame: false in settings.json — stops Discord from polling every running process every few seconds to detect what game you're playing. Eliminates the recurring CPU overhead of Discord's process scanner mid-game.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "DiscordDisableGifAutoplay",
+    title: "Disable GIF & Animated Emoji Autoplay",
+    desc: "Sets gifAutoPlay: false, animatedEmojiAutoplay: false, and showEmojiSuggestions: false in settings.json — stops Discord from rendering looping GIFs and bouncing animated emoji in chat. Each animated frame is a GPU draw call; disabling autoplay cuts this entirely while gaming.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "DiscordMinimizeBgLoad",
+    title: "Minimize Background Media & Rendering Load",
+    desc: "Sets inlineAttachmentMedia: false, renderSpoilers: ON_CLICK, and showMemberListAvatars: false in settings.json — stops Discord from preloading image/video attachments inline, loading spoiler content eagerly, and rendering avatars in the member list. Reduces background network fetches and GPU compositing while your game is running.",
+    badge: "RECOMMENDED",
+    impact: "MED",
+    recommended: true,
+  },
+  {
+    id: "DiscordSuppressNotifications",
+    title: "Suppress Notification Toasts During Gaming",
+    desc: "Sets notifyFriendsOnline: false and notifyTyping: false in settings.json — eliminates the popup toasts for friend-online and typing indicators. Also applies the Windows NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK registry flag to suppress system-level toasts when you're in a fullscreen game.",
+    impact: "MED",
+  },
+  {
+    id: "DiscordDisableSpellcheck",
+    title: "Disable Spellcheck Worker",
+    desc: "Sets enableSpellCheck: false in settings.json — kills Discord's background spellcheck process that runs on every keystroke in a text box. Small but constant CPU overhead, especially during intense typing moments (calling shots in-game).",
+    impact: "LOW",
   },
 ];
 
@@ -388,6 +437,49 @@ export default function Discord() {
                 />
               ))}
             </div>
+          </section>
+
+          {/* Discord Open While Gaming */}
+          <section>
+            <SectionHeader
+              icon={Gamepad2}
+              title="Discord Open While Gaming"
+              recommended={["DiscordDisableRichPresence", "DiscordDisableGifAutoplay", "DiscordMinimizeBgLoad"]}
+              tweakState={tweaks}
+              onSet={setTweak}
+            />
+            <div className="space-y-4">
+              {GAMING_SESSION_TWEAKS.map((item, i) => (
+                <TweakRow
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.desc}
+                  badge={item.badge}
+                  impact={item.impact}
+                  warning={item.warning}
+                  checked={tweaks[item.id] || false}
+                  onCheckedChange={v => setTweak(item.id, v)}
+                  delay={i + 1}
+                />
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mt-3 flex items-start gap-3 px-4 py-3 rounded-lg border border-red-500/15 bg-red-500/5"
+            >
+              <Gamepad2 className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                <span className="text-red-400 font-semibold">Gaming session tip:</span>{" "}
+                These tweaks target Discord's background overhead specifically while a game is running.
+                Apply them alongside the CPU/GPU Priority tweaks above for maximum effect — together they
+                stop Discord from scanning processes, rendering animations, preloading media, and
+                popping up notifications mid-game.
+              </p>
+            </motion.div>
           </section>
 
           {/* What to expect */}
