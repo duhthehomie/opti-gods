@@ -52,3 +52,34 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
         Err("restore_to_point is Windows-only.".into())
     }
 }
+
+/// Called once on app startup — enables System Restore (if it was disabled)
+/// then creates a baseline "OptiGods V3" checkpoint. Non-fatal: errors are
+/// logged but never surfaced to the user as a crash.
+#[tauri::command]
+pub async fn startup_restore_checkpoint() -> Result<Option<RestorePoint>, String> {
+    #[cfg(windows)]
+    {
+        // Best-effort enable — clears policy key + starts srservice
+        if let Err(e) = crate::win32::restore::ensure_enabled() {
+            log::warn!("[restore] ensure_enabled failed (non-fatal): {e:#}");
+        }
+        match crate::win32::restore::create("OptiGods V3 — Pre-Optimization Baseline") {
+            Ok(rp) => {
+                log::info!(
+                    "[restore] startup checkpoint created — seq={} label={}",
+                    rp.sequence_number, rp.label
+                );
+                Ok(Some(rp))
+            }
+            Err(e) => {
+                log::warn!("[restore] startup checkpoint failed (non-fatal): {e:#}");
+                Ok(None) // harmless — user can still use Restore Last Working State
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(None)
+    }
+}

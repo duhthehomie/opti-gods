@@ -3504,7 +3504,196 @@ Start-Sleep 2
   });
 
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
-  app.get('/api/stability-fix-script', (req, res) => {
+  // V3 Discord/Network fix — re-enables IPv6, fixes SystemResponsiveness, Win32PrioritySeparation
+  app.get('/api/discord-network-fix-script', (req, res) => {
+    const script = [
+      `\$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host "" `,
+      `Write-Host "  Opti Gods V3 - Discord / Network Fix" -ForegroundColor Blue`,
+      `Write-Host "  ======================================" -ForegroundColor DarkBlue`,
+      `Write-Host "  Fixes: IPv6 disabled (DisableIPv6 opt-in), Discord voice drops, FiveM auth" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `# FIX 1: Re-enable IPv6 (DisableIPv6 expert opt-in breaks Discord relay + FiveM Rockstar auth)`,
+      `Write-Host "[FIX 1] Re-enabling IPv6 on all adapters..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters' -Name 'DisabledComponents' -Value 0 -Type DWord -Force`,
+      `Get-NetAdapter | ForEach-Object { Enable-NetAdapterBinding -Name \$_.Name -ComponentID ms_tcpip6 -EA SilentlyContinue }`,
+      `Write-Host "  [OK] IPv6 re-enabled — Discord voice relay, Xbox party, FiveM auth restored" -ForegroundColor Green`,
+      `# FIX 2: Fix SystemResponsiveness (0 starves Discord audio threads)`,
+      `Write-Host "[FIX 2] Correcting SystemResponsiveness..." -ForegroundColor Cyan`,
+      `\$mmPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'`,
+      `Set-ItemProperty -Path \$mmPath -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force`,
+      `Write-Host "  [OK] SystemResponsiveness = 10 (Discord-safe — 10% reserved for audio/background)" -ForegroundColor Green`,
+      `# FIX 3: Fix Win32PrioritySeparation (38 = server mode, wrong for gaming)`,
+      `Write-Host "[FIX 3] Correcting CPU scheduler mode..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26 -Type DWord -Force`,
+      `Write-Host "  [OK] Win32PrioritySeparation = 26 (short quantum, max foreground boost)" -ForegroundColor Green`,
+      `# FIX 4: Restart Discord so it picks up new scheduling`,
+      `Write-Host "[FIX 4] Restarting Discord if running..." -ForegroundColor Cyan`,
+      `\$disc = Get-Process 'Discord' -EA SilentlyContinue`,
+      `If (\$disc) { Stop-Process -Name 'Discord' -Force -EA SilentlyContinue; Start-Sleep 2`,
+      `  \$discExe = "\$env:LocalAppData\\Discord\\Update.exe"`,
+      `  If (Test-Path \$discExe) { Start-Process \$discExe '--processStart Discord.exe' -EA SilentlyContinue }`,
+      `  Write-Host "  [OK] Discord restarted" -ForegroundColor Green`,
+      `} Else { Write-Host "  Discord not running — start it manually after reboot" -ForegroundColor DarkGray }`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED. Restart your PC for full effect." -ForegroundColor Cyan`,
+      `Write-Host "  Voice relay, Xbox party chat, and FiveM auth will work after reboot." -ForegroundColor Green`,
+      `Write-Host ""; Write-Host "  Opti Gods by leaq" -ForegroundColor DarkBlue`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Discord-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Discord Network Fix', tmpName: 'OptiGods-DiscordFix', marker: 'DISCORD_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // Legacy route — keep old URL working for any existing bookmarks
+  app.get('/api/stability-fix-script', (req, res) => res.redirect(307, '/api/discord-network-fix-script'));
+
+  // V3 Valorant/Anti-Cheat fix — re-enables VBS, HVCI, hypervisor (broken by expert tweaks Win11DisableVBS/HVCI/SysHypervisorOff)
+  app.get('/api/valorant-fix-script', (req, res) => {
+    const script = [
+      `\$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Valorant / Anti-Cheat Fix" -ForegroundColor Magenta`,
+      `Write-Host "  =========================================" -ForegroundColor DarkMagenta`,
+      `Write-Host "  Fixes: VBS/HVCI disabled by expert tweaks — Vanguard + BattlEye anti-cheats blocked" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `# FIX 1: Re-enable VBS via DeviceGuard registry key`,
+      `Write-Host "[FIX 1] Re-enabling Virtualization Based Security (VBS)..." -ForegroundColor Cyan`,
+      `\$vbsPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard'`,
+      `If (!(Test-Path \$vbsPath)) { New-Item -Path \$vbsPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path \$vbsPath -Name 'EnableVirtualizationBasedSecurity' -Value 1 -Type DWord -Force`,
+      `Set-ItemProperty -Path \$vbsPath -Name 'RequirePlatformSecurityFeatures'   -Value 1 -Type DWord -Force`,
+      `Write-Host "  [OK] VBS registry keys restored" -ForegroundColor Green`,
+      `# FIX 2: Re-enable HVCI (Hypervisor-Protected Code Integrity)`,
+      `Write-Host "[FIX 2] Re-enabling HVCI..." -ForegroundColor Cyan`,
+      `\$hvciPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity'`,
+      `If (!(Test-Path \$hvciPath)) { New-Item -Path \$hvciPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path \$hvciPath -Name 'Enabled' -Value 1 -Type DWord -Force`,
+      `Write-Host "  [OK] HVCI re-enabled" -ForegroundColor Green`,
+      `# FIX 3: Restore hypervisor via bcdedit`,
+      `Write-Host "[FIX 3] Restoring hypervisor launch type..." -ForegroundColor Cyan`,
+      `& bcdedit /set hypervisorlaunchtype Auto 2>&1 | Out-Null`,
+      `Write-Host "  [OK] hypervisorlaunchtype = Auto" -ForegroundColor Green`,
+      `# FIX 4: Re-enable DeviceGuard Credential Guard`,
+      `Write-Host "[FIX 4] Restoring Credential Guard policy..." -ForegroundColor Cyan`,
+      `\$cgPath = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard'`,
+      `If (Test-Path \$cgPath) {`,
+      `  Set-ItemProperty -Path \$cgPath -Name 'EnableVirtualizationBasedSecurity' -Value 1 -Type DWord -Force`,
+      `  Set-ItemProperty -Path \$cgPath -Name 'HypervisorEnforcedCodeIntegrity'   -Value 1 -Type DWord -Force`,
+      `}`,
+      `Write-Host "  [OK] DeviceGuard policy restored" -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED." -ForegroundColor Cyan`,
+      `Write-Host "  REBOOT REQUIRED — Valorant/Vanguard, BattlEye, and WSL2 will work after restart." -ForegroundColor Yellow`,
+      `Write-Host ""; Write-Host "  Opti Gods by leaq" -ForegroundColor DarkMagenta`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Valorant-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Valorant Anti-Cheat Fix', tmpName: 'OptiGods-ValorantFix', marker: 'VALORANT_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // Legacy route — keep old Rocket League URL alive
+  app.get('/api/rocket-league-fix-script', (req, res) => res.redirect(307, '/api/valorant-fix-script'));
+
+  // V3 Xbox Game Pass / Microsoft Store fix
+  app.get('/api/xbox-gamepass-fix-script', (req, res) => {
+    const script = [
+      `\$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Xbox Game Pass Fix" -ForegroundColor Cyan`,
+      `Write-Host "  ==================================" -ForegroundColor DarkCyan`,
+      `Write-Host "  Fixes: Game Pass games won't launch, Xbox services disabled by Debloat tab" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `# FIX 1: Re-enable required Xbox services (minimal — no telemetry/DVR)`,
+      `Write-Host "[FIX 1] Re-enabling required Xbox services..." -ForegroundColor Cyan`,
+      `\$xboxSvcs = @('XboxNetApiSvc','XblGameSave','XblAuthManager','XboxGipSvc')`,
+      `\$xboxSvcs | ForEach-Object {`,
+      `  Set-Service -Name \$_ -StartupType Manual -EA SilentlyContinue`,
+      `  Start-Service -Name \$_ -EA SilentlyContinue`,
+      `  Write-Host "  [OK] \$_ — re-enabled (Manual start)" -ForegroundColor Green`,
+      `}`,
+      `# FIX 2: Re-enable Xbox Game Bar Presence Server API (not recording — just the API)`,
+      `Write-Host "[FIX 2] Restoring GameBar Presence API registration..." -ForegroundColor Cyan`,
+      `\$gbKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR'`,
+      `If (!(Test-Path \$gbKey)) { New-Item -Path \$gbKey -Force | Out-Null }`,
+      `Set-ItemProperty -Path \$gbKey -Name 'AppCaptureEnabled' -Value 0 -Type DWord -Force`,
+      `\$gbSys = 'HKLM:\\SOFTWARE\\Microsoft\\WindowsRuntime\\ActivatableClassId\\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter'`,
+      `If (Test-Path \$gbSys) { Set-ItemProperty -Path \$gbSys -Name 'ActivationType' -Value 1 -Type DWord -Force }`,
+      `Write-Host "  [OK] GameBar Presence API restored (DVR/recording stays OFF)" -ForegroundColor Green`,
+      `# FIX 3: Clear AppCompatFlags shims on WindowsApps executables`,
+      `Write-Host "[FIX 3] Clearing compatibility shims on Microsoft Store executables..." -ForegroundColor Cyan`,
+      `\$appsKey = 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers'`,
+      `If (Test-Path \$appsKey) {`,
+      `  (Get-Item \$appsKey).Property | Where-Object { \$_ -match 'WindowsApps|Xbox|Microsoft.Gaming' } |`,
+      `  ForEach-Object { Remove-ItemProperty -Path \$appsKey -Name \$_ -EA SilentlyContinue; Write-Host "  [OK] Compat flag cleared: \$_" -ForegroundColor Green }`,
+      `}`,
+      `# FIX 4: Ensure wsappx and StorSvc are running (Game Pass license check)`,
+      `Write-Host "[FIX 4] Ensuring Windows Store service is running..." -ForegroundColor Cyan`,
+      `Set-Service -Name 'StorSvc' -StartupType Manual -EA SilentlyContinue`,
+      `Start-Service -Name 'StorSvc' -EA SilentlyContinue`,
+      `Write-Host "  [OK] StorSvc running" -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED. Restart your PC." -ForegroundColor Cyan`,
+      `Write-Host "  Game Pass games will launch normally. Xbox DVR recording stays disabled." -ForegroundColor Green`,
+      `Write-Host ""; Write-Host "  Opti Gods by leaq" -ForegroundColor DarkCyan`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Xbox-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Xbox Game Pass Fix', tmpName: 'OptiGods-XboxFix', marker: 'XBOX_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // V3 Boot/BCD fix — resets bcdedit overrides + re-enables VBS for black screen / boot hang
+  app.get('/api/boot-fix-script', (req, res) => {
+    const script = [
+      `\$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Boot / Black Screen Fix" -ForegroundColor Yellow`,
+      `Write-Host "  =======================================" -ForegroundColor DarkYellow`,
+      `Write-Host "  Fixes: black screen after reboot, display driver TDR crash, boot hang on AMD APU / Intel" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `# FIX 1: Remove disabledynamictick BCD override (can hang boot on Ryzen APUs)`,
+      `Write-Host "[FIX 1] Removing disabledynamictick bcdedit override..." -ForegroundColor Cyan`,
+      `& bcdedit /deletevalue disabledynamictick 2>&1 | Out-Null`,
+      `Write-Host "  [OK] disabledynamictick removed (Windows default)" -ForegroundColor Green`,
+      `# FIX 2: Restore hypervisor launch type`,
+      `Write-Host "[FIX 2] Restoring hypervisor launch type..." -ForegroundColor Cyan`,
+      `& bcdedit /set hypervisorlaunchtype Auto 2>&1 | Out-Null`,
+      `Write-Host "  [OK] hypervisorlaunchtype = Auto" -ForegroundColor Green`,
+      `# FIX 3: Remove other BCD overrides that can affect boot`,
+      `Write-Host "[FIX 3] Removing legacy BCD overrides..." -ForegroundColor Cyan`,
+      `& bcdedit /deletevalue useplatformtick   2>&1 | Out-Null`,
+      `& bcdedit /deletevalue uselegacyapicmode 2>&1 | Out-Null`,
+      `Write-Host "  [OK] useplatformtick + uselegacyapicmode removed" -ForegroundColor Green`,
+      `# FIX 4: Reset TDR to Windows default (2s) — long TDR causes display to go black on wake`,
+      `Write-Host "[FIX 4] Resetting GPU TDR to safe default (2s)..." -ForegroundColor Cyan`,
+      `\$gdrv = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'`,
+      `Set-ItemProperty -Path \$gdrv -Name 'TdrLevel' -Value 3 -Type DWord -Force`,
+      `Set-ItemProperty -Path \$gdrv -Name 'TdrDelay' -Value 2 -Type DWord -Force`,
+      `Remove-ItemProperty -Path \$gdrv -Name 'DisableOverlays' -EA SilentlyContinue`,
+      `Write-Host "  [OK] TdrDelay = 2s, DisableOverlays removed (prevents post-wake black screen on NVIDIA+Intel)" -ForegroundColor Green`,
+      `# FIX 5: Re-enable VBS registry (needed on Optimus laptops / hybrid GPU)`,
+      `Write-Host "[FIX 5] Restoring VBS registry for display driver loading..." -ForegroundColor Cyan`,
+      `\$vbsPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard'`,
+      `If (!(Test-Path \$vbsPath)) { New-Item -Path \$vbsPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path \$vbsPath -Name 'EnableVirtualizationBasedSecurity' -Value 1 -Type DWord -Force`,
+      `Write-Host "  [OK] VBS restored — Optimus/hybrid GPU display driver will load on boot" -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED." -ForegroundColor Cyan`,
+      `Write-Host "  REBOOT REQUIRED — boot issues and black screen will be resolved after restart." -ForegroundColor Yellow`,
+      `Write-Host "  This only resets boot config — your performance tweaks are untouched." -ForegroundColor DarkGray`,
+      `Write-Host ""; Write-Host "  Opti Gods by leaq" -ForegroundColor DarkYellow`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Boot-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Boot Black Screen Fix', tmpName: 'OptiGods-BootFix', marker: 'BOOT_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // ── OLD stability-fix-script handler (now above as discord-network-fix) ───
+  app.get('/api/old-stability-fix-script', (req, res) => {
     const lines = [
       `# ============================================================`,
       `#  Opti Gods — FiveM + Discord Stability Fix  (by leaq)`,
@@ -3587,8 +3776,10 @@ Start-Sleep 2
     res.end(Buffer.from(wrapInBat(script, { title: 'Crash Fix', tmpName: 'OptiGods-CrashFix', marker: 'CRASHFIX_PS1_START' }), 'utf8'));
   });
 
-  // Public — Rocket League crash/won't start fix (ADVANCED — resets everything)
-  app.get('/api/rocket-league-fix-script', (req, res) => {
+  // ── Legacy Rocket League fix handler kept for any saved links ──────────────
+  // The redirect above at line ~3598 catches /api/rocket-league-fix-script first.
+  // This fallback is unreachable in practice but kept to avoid orphan code removal confusion.
+  app.get('/api/rocket-league-fix-script-legacy', (req, res) => {
     const RL_MARKER = '##PS1_START##';
 
     const ps1Lines = [

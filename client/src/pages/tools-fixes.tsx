@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredToken } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { isNative, listRestorePoints, restoreToPoint } from "@/lib/tauri-bridge";
 
 const Fixes = lazy(() => import("@/pages/fixes"));
 const CustomOS = lazy(() => import("@/pages/custom-os"));
@@ -41,9 +42,40 @@ export default function ToolsFixesPage() {
 
   const handleRestoreLast = async () => {
     if (restoring) return;
-    if (!window.confirm("Download the 'Restore Last Working State' script? This script reverts your PC to the most recent OptiGods restore point. A reboot is required.")) {
+
+    // ── Native Tauri path ─────────────────────────────────────────────────────
+    // When running as the installed .exe, find the most recent OptiGods restore
+    // point (auto-created on startup) and trigger rstrui.exe to roll back to it.
+    if (isNative()) {
+      if (!window.confirm("Roll back to the OptiGods V3 pre-optimization restore point?\n\nWindows will launch the System Restore wizard — confirm there and your PC will reboot.")) return;
+      setRestoring(true);
+      try {
+        const points = await listRestorePoints();
+        // Find the most recent checkpoint created by this app
+        const ogPoints = points
+          .filter(p => p.label.toLowerCase().includes("optigods"))
+          .sort((a, b) => b.sequence_number - a.sequence_number);
+        if (!ogPoints.length) {
+          toast({
+            title: "No OptiGods restore point found",
+            description: "The startup restore point was not created on this machine (System Restore may have been disabled). Use the web backup script instead.",
+            variant: "destructive",
+          });
+          return;
+        }
+        await restoreToPoint(ogPoints[0].sequence_number);
+        clearAllApplied();
+        toast({ title: "System Restore launched", description: "Confirm in the wizard — your PC will reboot to the pre-optimization state." });
+      } catch (e) {
+        toast({ title: "Restore failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      } finally {
+        setRestoring(false);
+      }
       return;
     }
+
+    // ── Web fallback path (browser) ───────────────────────────────────────────
+    if (!window.confirm("Download the 'Restore Last Working State' script? This script reverts your PC to the most recent OptiGods restore point. A reboot is required.")) return;
     setRestoring(true);
     try {
       const sessionToken = getStoredToken();
@@ -62,7 +94,6 @@ export default function ToolsFixesPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      // Wipe local appliedAt — assume rollback is in flight.
       clearAllApplied();
       toast({ title: "Restore script downloaded", description: "Run as Administrator. Windows will reboot to roll back to the last OptiGods restore point." });
     } catch (e) {

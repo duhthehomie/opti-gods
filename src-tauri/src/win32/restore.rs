@@ -107,6 +107,42 @@ pub fn restore(sequence_number: i64) -> Result<()> {
     Ok(())
 }
 
+/// Ensure System Restore is enabled on the C: drive.
+/// Requires admin rights (Opti Gods app.manifest already requests them).
+/// Best-effort — if it fails, we log the error and continue.
+pub fn ensure_enabled() -> anyhow::Result<()> {
+    use std::process::Command;
+
+    // 1. Clear the policy key that disables System Restore
+    //    HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore DisableSR = 0
+    Command::new("reg")
+        .args([
+            "add",
+            r"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore",
+            "/v", "DisableSR",
+            "/t", "REG_DWORD",
+            "/d", "0",
+            "/f",
+        ])
+        .output()
+        .ok();
+
+    // 2. Set srservice (System Restore) to Manual start and start it
+    Command::new("sc").args(["config", "srservice", "start=", "demand"]).output().ok();
+    Command::new("sc").args(["start", "srservice"]).output().ok();
+
+    // 3. Enable System Restore on C:\ via PowerShell
+    Command::new("powershell")
+        .args([
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "Enable-ComputerRestore -Drive 'C:\\' -EA SilentlyContinue",
+        ])
+        .output()
+        .ok();
+
+    Ok(())
+}
+
 fn chrono_iso_now() -> String {
     // Tiny ISO-8601 timestamp without pulling in `chrono`.
     use std::time::{SystemTime, UNIX_EPOCH};

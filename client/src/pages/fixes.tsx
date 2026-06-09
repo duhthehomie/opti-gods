@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2, ShieldAlert,
-  ChevronDown, ChevronUp, Siren, CheckCheck, Server,
+  ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff, Gamepad,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -311,78 +311,35 @@ export default function Fixes() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set(CATEGORIES.map((c) => c.id)));
   const [downloading, setDownloading] = useState(false);
-  const [downloadingFix, setDownloadingFix] = useState(false);
-  const [downloadingRLFix, setDownloadingRLFix] = useState(false);
   const [downloadingFiveMFix, setDownloadingFiveMFix] = useState(false);
+  const [downloadingVanguardFix, setDownloadingVanguardFix] = useState(false);
+  const [downloadingDiscordFix, setDownloadingDiscordFix] = useState(false);
+  const [downloadingXboxFix, setDownloadingXboxFix] = useState(false);
+  const [downloadingBootFix, setDownloadingBootFix] = useState(false);
 
-  const downloadFiveMCrashFix = async () => {
-    setDownloadingFiveMFix(true);
+  const dlFix = async (endpoint: string, filename: string, title: string, desc: string, setter: (v: boolean) => void) => {
+    setter(true);
     try {
-      const res = await fetch(apiUrl("/api/fivem-crash-fix-script"));
+      const res = await fetch(apiUrl(endpoint));
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods_FiveM_Crash_Fix.bat";
-      a.click();
+      a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
-      toast({
-        title: "FiveM Crash Fix Downloaded",
-        description: "Double-click the .bat file → allow UAC → restart your PC when done.",
-      });
+      toast({ title, description: desc });
     } catch {
       toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
     } finally {
-      setDownloadingFiveMFix(false);
+      setter(false);
     }
   };
 
-  const downloadRocketLeagueFix = async () => {
-    setDownloadingRLFix(true);
-    try {
-      const res = await fetch(apiUrl("/api/rocket-league-fix-script"));
-      if (!res.ok) throw new Error("Failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods-RocketLeagueFix-by-leaq.bat";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({
-        title: "Rocket League Fix Downloaded",
-        description: "Double-click the file — allow admin prompt → restart your PC. Game will re-validate shaders on first launch.",
-      });
-    } catch {
-      toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
-    } finally {
-      setDownloadingRLFix(false);
-    }
-  };
-
-  const downloadCrashFix = async () => {
-    setDownloadingFix(true);
-    try {
-      const res = await fetch(apiUrl("/api/stability-fix-script"));
-      if (!res.ok) throw new Error("Failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods-CrashFix-by-leaq.bat";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({
-        title: "Crash Fix Downloaded",
-        description: "Double-click the file — it will request admin automatically. Restart your PC when done.",
-      });
-    } catch {
-      toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
-    } finally {
-      setDownloadingFix(false);
-    }
-  };
+  const downloadFiveMCrashFix = () => dlFix("/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.", setDownloadingFiveMFix);
+  const downloadVanguardFix    = () => dlFix("/api/valorant-fix-script",   "OptiGods-Valorant-Fix.bat", "Valorant Fix Downloaded", "Re-enables VBS/HVCI. Reboot required.", setDownloadingVanguardFix);
+  const downloadDiscordFix     = () => dlFix("/api/discord-network-fix-script", "OptiGods-Discord-Fix.bat", "Discord Fix Downloaded", "Re-enables IPv6. Restart Discord + PC.", setDownloadingDiscordFix);
+  const downloadXboxFix        = () => dlFix("/api/xbox-gamepass-fix-script", "OptiGods-Xbox-Fix.bat", "Xbox Fix Downloaded", "Re-enables Game Bar & Xbox services. Restart PC.", setDownloadingXboxFix);
+  const downloadBootFix        = () => dlFix("/api/boot-fix-script", "OptiGods-Boot-Fix.bat", "Boot Fix Downloaded", "Resets bcdedit + VBS. Restart PC.", setDownloadingBootFix);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -443,193 +400,197 @@ export default function Fixes() {
           </div>
         </motion.div>
 
-        {/* ── FIVEM CRASH FIX ──────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.005 }}
-          className="rounded-2xl border-2 border-red-600/60 bg-red-950/40 overflow-hidden shadow-[0_0_32px_-8px_rgba(220,38,38,0.4)]"
-        >
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* V3 SAFETY FIXES — one card per V3 tweak that MAY break a game/feature */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+
+        {/* ── CARD 1: FiveM & GTA V ─────────────────────────────────────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.005 }}
+          className="rounded-2xl border-2 border-red-600/60 bg-red-950/40 overflow-hidden shadow-[0_0_32px_-8px_rgba(220,38,38,0.4)]">
           <div className="flex items-center gap-2 px-4 py-2 bg-red-700/30 border-b border-red-600/40">
             <Siren className="w-3.5 h-3.5 text-red-400 animate-pulse shrink-0" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
-              FiveM &amp; GTA V — All Crash Types Fixed
-            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">FiveM &amp; GTA V — Memory / GPU Crash</span>
+            <span className="ml-auto text-[9px] text-red-400/60 font-mono">Tweaks: DisablePagingExecutive · DisableMemoryCompression · IFEO GpuPriorityClass · PagingAllocation · TDR</span>
           </div>
-
           <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm font-bold text-white leading-snug">
                 FiveM crashing? Silent exits, "memory could not be written", "Assertion failure: status == MH_OK", or <span className="text-red-300">productId != ProductID::INVALID</span>?
               </p>
               <div className="space-y-1">
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Fixes productId != ProductID::INVALID (CfxState.h:88)</span> — clears IFEO MitigationOptions + Debugger keys from Rockstar/FiveM executables, purges stale CfxState priv cache, re-enables Rockstar Service if disabled → <span className="text-red-300">cfxline assertion crash fixed</span>
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Clears Windows Exploit Protection / ACG flags</span> — Arbitrary Code Guard blocked FiveM's hook system from writing trampoline stubs → <span className="text-red-300">Assertion failure: status == MH_OK (Hooking.Stubs.cpp:20)</span>
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Removes GpuPriorityClass=8 + DisableRenderingContextPreemption</span> — Real-time GPU starved the CEF browser, blocked GPU hang recovery → silent black screen exits
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Restores GPU VRAM paging + TDR delay</span> — PagingAllocation=0 killed the game silently on VRAM fill; TdrDelay=60s caused display to go black with no crash report
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Fixes DisablePagingExecutive + WorkingSetLimitInKB + Memory Compression</span> — memory write crashes and CEF browser heap failures
-                  </p>
-                </div>
+                {[
+                  ["Fixes productId != ProductID::INVALID (CfxState.h:88)", "clears IFEO MitigationOptions + Debugger keys, purges stale CfxState priv cache, re-enables Rockstar Service → cfxline assertion crash fixed"],
+                  ["Clears Windows Exploit Protection / ACG flags", "ACG blocked FiveM's hook system from writing trampoline stubs → Assertion failure: status == MH_OK (Hooking.Stubs.cpp:20)"],
+                  ["Removes GpuPriorityClass=8 + DisableRenderingContextPreemption", "Real-time GPU starved the CEF browser, blocked GPU hang recovery → silent black screen exits"],
+                  ["Restores DisablePagingExecutive=0 + re-enables Memory Compression", "memory write crash fix + FiveM_ChromeBrowser 0xe0000008 heap failure fix"],
+                  ["Restores GPU VRAM paging + safe TDR delay (8s)", "PagingAllocation=0 killed game silently on VRAM fill; TdrDelay=60s caused display to go black with no report"],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
               </div>
-              <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Universal fix — safe for all systems. Covers all 13 FiveM build numbers. Takes ~5 seconds.
-              </p>
+              <p className="text-[10px] text-zinc-500">Universal fix — safe for all systems. Covers all 13 FiveM build numbers. ~5 seconds.</p>
             </div>
-
             <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
-              <Button
-                data-testid="button-download-fivem-crash-fix"
-                onClick={downloadFiveMCrashFix}
-                disabled={downloadingFiveMFix}
-                className="bg-red-700 hover:bg-red-600 text-white font-black text-sm px-5 py-2.5 border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] whitespace-nowrap"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {downloadingFiveMFix ? "Generating..." : "Download FiveM Fix"}
+              <Button data-testid="button-download-fivem-crash-fix" onClick={downloadFiveMCrashFix} disabled={downloadingFiveMFix}
+                className="bg-red-700 hover:bg-red-600 text-white font-black text-sm px-5 py-2.5 border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingFiveMFix ? "Generating..." : "Download FiveM Fix"}
               </Button>
-              <p className="text-[9px] text-zinc-600 text-center">
-                Double-click → allow UAC → restart PC
-              </p>
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → restart PC</p>
             </div>
           </div>
         </motion.div>
 
-        {/* ── ROCKET LEAGUE FIX ─────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.01 }}
-          className="rounded-2xl border-2 border-orange-500/40 bg-orange-950/30 overflow-hidden"
-        >
-          {/* Top label strip */}
-          <div className="flex items-center gap-2 px-4 py-2 bg-orange-600/20 border-b border-orange-500/30">
-            <Gamepad2 className="w-3.5 h-3.5 text-orange-400 animate-pulse shrink-0" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">
-              Rocket League Won't Start
-            </span>
+        {/* ── CARD 2: Valorant / Vanguard & VBS-dependent anti-cheats ─────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.01 }}
+          className="rounded-2xl border-2 border-purple-500/50 bg-purple-950/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 border-b border-purple-500/30">
+            <Shield className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-purple-400">Valorant / Vanguard Anti-Cheat Blocked</span>
+            <span className="ml-auto text-[9px] text-purple-400/60 font-mono">Expert tweaks only: Win11DisableVBS · Win11DisableHVCI · SysHypervisorOff</span>
           </div>
-
           <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm font-bold text-white leading-snug">
-                Game shows "Running" then hangs, never appears in Task Manager.
+                Valorant or other Vanguard/BattlEye games showing <span className="text-purple-300">"This game requires Virtualization Based Security"</span> or crashing at launch?
               </p>
               <div className="space-y-1">
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Resets all game config</span> — wipes corrupted settings
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Validates DirectX & runtimes</span> — checks GPU access
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Runs system file checker</span> — repairs Windows corruption
-                  </p>
-                </div>
+                {[
+                  ["Only applies if you opted in to expert tweaks", "Win11DisableVBS, Win11DisableHVCI, or SysHypervisorOff — NOT enabled by default. Core preset does not touch VBS."],
+                  ["Valorant/Vanguard requires VBS + HVCI on Windows 11", "When VBS/HVCI are disabled by expert tweaks, Vanguard's kernel driver cannot load → game black-screens or refuses to launch."],
+                  ["Fixes: re-enables VBS, HVCI, and hypervisor launch via bcdedit", "Also re-enables DeviceGuard. WSL2 and Hyper-V VMs will work again after reboot."],
+                  ["Some BattlEye games (Rainbow Six Siege, PUBG, EFT) also check HVCI state", "If your anti-cheat game suddenly shows an integrity error, run this fix first."],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
               </div>
-              <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Advanced recovery script that resets everything and validates system. Takes ~10 minutes (system file check included).
-              </p>
+              <p className="text-[10px] text-zinc-500">Reboot required after running. Valorant will launch normally after restart.</p>
             </div>
-
             <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
-              <Button
-                data-testid="button-download-rocket-league-fix"
-                onClick={downloadRocketLeagueFix}
-                disabled={downloadingRLFix}
-                className="bg-orange-600 hover:bg-orange-500 text-white font-black text-sm px-5 py-2.5 border border-orange-400/30 shadow-[0_0_24px_-4px_rgba(234,88,12,0.5)] whitespace-nowrap"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {downloadingRLFix ? "Generating..." : "Download RL Fix"}
+              <Button data-testid="button-download-valorant-fix" onClick={downloadVanguardFix} disabled={downloadingVanguardFix}
+                className="bg-purple-700 hover:bg-purple-600 text-white font-black text-sm px-5 py-2.5 border border-purple-500/40 shadow-[0_0_24px_-4px_rgba(168,85,247,0.5)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingVanguardFix ? "Generating..." : "Download Vanguard Fix"}
               </Button>
-              <p className="text-[9px] text-zinc-600 text-center">
-                Double-click → allow UAC → restart PC
-              </p>
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → reboot PC</p>
             </div>
           </div>
         </motion.div>
 
-        {/* ── EMERGENCY CRASH FIX BANNER ─────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.02 }}
-          className="rounded-2xl border-2 border-red-500/40 bg-red-950/30 overflow-hidden"
-        >
-          {/* Top label strip */}
-          <div className="flex items-center gap-2 px-4 py-2 bg-red-600/20 border-b border-red-500/30">
-            <Siren className="w-3.5 h-3.5 text-red-400 animate-pulse shrink-0" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">
-              Known Issue — FiveM &amp; Discord Crashing
-            </span>
+        {/* ── CARD 3: Discord Voice Drops / FiveM Auth / Xbox Party ────────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.015 }}
+          className="rounded-2xl border-2 border-blue-500/40 bg-blue-950/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 border-b border-blue-500/30">
+            <WifiOff className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">Discord Voice Drops / FiveM Auth / Xbox Party Chat</span>
+            <span className="ml-auto text-[9px] text-blue-400/60 font-mono">Expert opt-in ONLY: DisableIPv6</span>
           </div>
-
           <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-sm font-bold text-white leading-snug">
-                Two optimizer settings were causing crashes. Run this fix.
+                Discord voice relay disconnecting mid-game? Xbox party chat failing? FiveM showing <span className="text-blue-300">"productId != INVALID"</span> after a clean install?
               </p>
               <div className="space-y-1">
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">SystemResponsiveness was set to 0</span> — starved Discord's audio threads, causing it to randomly close during gameplay.
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCheck className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-zinc-300 leading-snug">
-                    <span className="text-white font-semibold">Win32PrioritySeparation was set to 38</span> — put Windows in server scheduling mode, reducing game thread priority and causing FiveM instability.
-                  </p>
-                </div>
+                {[
+                  ["Only applies if you opted in to DisableIPv6 (NOT a default tweak)", "V3's core preset uses the safe prefer-IPv4 method instead. If you manually enabled DisableIPv6, run this fix."],
+                  ["DisableIPv6 breaks Discord voice relay ICE negotiation", "Discord uses IPv6 TURN/STUN relay addresses when IPv4 relay is saturated — disabling IPv6 causes mid-call drops."],
+                  ["Also breaks Xbox party chat + FiveM Rockstar entitlement check", "Rockstar Social Club + Xbox Live both negotiate via IPv6 endpoints → authentication fails silently."],
+                  ["Also fixes SystemResponsiveness=0 starving Discord audio threads", "Sets SystemResponsiveness=10 (10% reserved for audio/background) — prevents Discord audio pipeline from dying under CPU load."],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
               </div>
-              <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Both values are corrected in the optimizer going forward. Run this script once to fix your current PC — it takes 5 seconds.
-              </p>
+              <p className="text-[10px] text-zinc-500">Restart Discord + PC after running. Voice relay, Xbox party, and FiveM auth will all work again.</p>
             </div>
-
             <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
-              <Button
-                data-testid="button-download-crash-fix"
-                onClick={downloadCrashFix}
-                disabled={downloadingFix}
-                className="bg-red-600 hover:bg-red-500 text-white font-black text-sm px-5 py-2.5 border border-red-400/30 shadow-[0_0_24px_-4px_rgba(220,38,38,0.5)] whitespace-nowrap"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {downloadingFix ? "Generating..." : "Download Crash Fix"}
+              <Button data-testid="button-download-discord-fix" onClick={downloadDiscordFix} disabled={downloadingDiscordFix}
+                className="bg-blue-700 hover:bg-blue-600 text-white font-black text-sm px-5 py-2.5 border border-blue-500/40 shadow-[0_0_24px_-4px_rgba(59,130,246,0.5)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingDiscordFix ? "Generating..." : "Download Discord Fix"}
               </Button>
-              <p className="text-[9px] text-zinc-600 text-center">
-                Double-click → allow UAC prompt → restart PC
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → restart PC</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── CARD 4: Xbox Game Pass / Microsoft Store Games ───────────────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}
+          className="rounded-2xl border-2 border-teal-500/40 bg-teal-950/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-teal-600/20 border-b border-teal-500/30">
+            <Gamepad className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Xbox Game Pass / Microsoft Store Games Won't Launch</span>
+            <span className="ml-auto text-[9px] text-teal-400/60 font-mono">Tweaks: DisableXboxGameBar · Xbox services via Debloat</span>
+          </div>
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                Game Pass games close immediately after clicking Play? Microsoft Store games crashing at launch? Xbox cloud gaming broken?
               </p>
+              <div className="space-y-1">
+                {[
+                  ["DisableXboxGameBar disables the GameBar Presence Server API", "Some Game Pass titles call the GameBar API on launch to log a session — if it's gone they exit silently. This fix re-registers the API without turning Game Bar back on for you."],
+                  ["Xbox services disabled via Debloat tab breaks Game Pass DRM", "XblGameSave, XblAuthManager, XboxNetApiSvc must be running for Game Pass license validation — if they're stopped, games see an invalid license and refuse to start."],
+                  ["Fixes: re-enables required Xbox services (not the full bloat)", "Only XblGameSave, XblAuthManager, XboxNetApiSvc, and XboxGipSvc are restored — not Cortana, Xbox DVR, or Xbox telemetry."],
+                  ["Also clears AppCompatFlags that can block Microsoft Store executables", "Removes any compatibility shims applied to WindowsApps executables that may prevent them from loading."],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-500">Restart PC after running. Game Pass games will launch normally. Xbox DVR/Game Bar recording stays disabled.</p>
+            </div>
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button data-testid="button-download-xbox-fix" onClick={downloadXboxFix} disabled={downloadingXboxFix}
+                className="bg-teal-700 hover:bg-teal-600 text-white font-black text-sm px-5 py-2.5 border border-teal-500/40 shadow-[0_0_24px_-4px_rgba(20,184,166,0.5)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingXboxFix ? "Generating..." : "Download Xbox Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → restart PC</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── CARD 5: Black Screen / Boot Issues ───────────────────────────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.025 }}
+          className="rounded-2xl border-2 border-amber-500/40 bg-amber-950/20 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-600/20 border-b border-amber-500/30">
+            <MonitorOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Black Screen / Boot Issues / Display Driver Crash</span>
+            <span className="ml-auto text-[9px] text-amber-400/60 font-mono">Expert tweaks: SysHypervisorOff · Win11DisableVBS · bcdedit DisableDynamicTick</span>
+          </div>
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                Black screen after reboot? Display driver TDR crash on wake? Monitor not detected? Boot hangs at spinner?
+              </p>
+              <div className="space-y-1">
+                {[
+                  ["SysHypervisorOff + Win11DisableVBS on hybrid GPU / Optimus laptops causes boot black screen", "When the hypervisor is disabled, the display driver can't load its kernel component on resume — manifests as a black screen you have to hard-reboot out of."],
+                  ["DisableDynamicTick (bcdedit) can cause boot hang on AMD Ryzen APUs and some Intel platforms", "V3 uses the safer disabledynamictick=yes instead of useplatformtick=yes — but on a few AMD APU models this still causes slow boot. This fix removes the BCD override entirely."],
+                  ["Fixes: resets bcdedit disabledynamictick, restores hypervisorlaunchtype=Auto, resets TDR to 2s", "Removes useplatformtick and uselegacyapicmode overrides. Re-enables VBS via registry. Resets MPO (multi-plane overlay) that causes post-wake black screen on NVIDIA+Intel combos."],
+                  ["Safe for all PCs — only removes bcdedit overrides, does not touch game tweaks", "Your performance settings, registry tweaks, and scheduler config are untouched. Only the boot config is reset."],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-500">Reboot required. Black screen and boot issues will be resolved after restart. Takes ~10 seconds.</p>
+            </div>
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button data-testid="button-download-boot-fix" onClick={downloadBootFix} disabled={downloadingBootFix}
+                className="bg-amber-700 hover:bg-amber-600 text-white font-black text-sm px-5 py-2.5 border border-amber-500/40 shadow-[0_0_24px_-4px_rgba(245,158,11,0.5)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingBootFix ? "Generating..." : "Download Boot Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → reboot PC</p>
             </div>
           </div>
         </motion.div>
