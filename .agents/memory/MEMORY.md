@@ -2,3 +2,5 @@
 - [User rules & hard limits](user-rules.md) — things leaq has explicitly told me never to do or always do; read this first every session
 - [V3 architecture decisions](v3-architecture.md) — store, tweak counts, bat format, git workflow, GitHub Actions auto-release
 - [Repeated mistakes to avoid](repeated-mistakes.md) — mistakes that have come up more than once; check before acting
+- [FiveM Graphics sky color system](fivem-sky-colors.md) — replaced blueDepth slider with 12-color SKY_COLORS map (blues/pinks/grey/black) + skyBrightness 0-100.
+- [FiveM freezeTime consolidation](fivem-freeze-time.md) — freezeWeather removed; freezeTime now clears weather in both XML builders. No separate "freeze weather" toggle.
