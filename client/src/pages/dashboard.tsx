@@ -18,7 +18,7 @@ import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
-import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
+import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
@@ -343,7 +343,7 @@ export default function Dashboard() {
   };
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
-  const totalTweaks = Object.keys(tweaks).length;
+  const totalTweaks = TOTAL_TWEAKS;
   const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
   const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
   // Expert tweaks are intentionally excluded from auto-enable (require manual opt-in).
@@ -528,11 +528,15 @@ export default function Dashboard() {
                   </Button>
                 ) : (
                   <div className="flex flex-col items-center gap-1">
-                    <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 font-black text-sm shadow-[0_0_20px_-4px_rgba(220,38,38,0.3)]">
-                      <CheckCircle2 className="w-4 h-4" />
-                      100% Optimized
-                    </div>
-                    <span className="text-[9px] text-zinc-600 font-medium">Download your script below</span>
+                    <button
+                      data-testid="button-100pct-get-script"
+                      onClick={() => window.dispatchEvent(new CustomEvent("optigods:open-script"))}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 font-black text-sm shadow-[0_0_20px_-4px_rgba(220,38,38,0.3)] hover:bg-red-500/25 hover:border-red-500/50 hover:scale-[1.03] transition-all cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      Get My Script
+                    </button>
+                    <span className="text-[9px] text-zinc-600 font-medium">100% optimized — click to download</span>
                   </div>
                 )}
               </div>
