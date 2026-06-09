@@ -744,7 +744,7 @@ const RESHADE_PRESETS = [
     id: "mylik",
     file: "/reshade-presets/mylik.ini",
     name: "mylik",
-    label: "leaq's Daily Driver",
+    label: "leaq's Personal ReShade",
     badge: "Personal",
     badgeCls: "bg-red-500/15 border-red-500/25 text-red-400",
     accentCls: "from-red-900/80 via-black/70 to-black",
