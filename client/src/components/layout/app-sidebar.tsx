@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle, Palette } from "lucide-react";
+import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle, Palette, Cpu } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
@@ -37,6 +37,7 @@ const PRIMARY: NavItem[] = [
   { title: "System Scan", url: "/system-scan", icon: Activity },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
+  { title: "CPU Tweaks", url: "/cpu", icon: Cpu },
   { title: "Task Manager", url: "/task-manager", icon: Monitor },
   { title: "FiveM Graphics", url: "/fivem-graphics", icon: Palette },
   { title: "Game Detection", url: "/game-detection", icon: Gamepad2 },
