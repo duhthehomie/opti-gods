@@ -1664,7 +1664,7 @@ export default function FivemGraphics() {
               </div>
 
               {/* Right: Preview + summary + download */}
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
                 <SkyPreview
                   cloudThickness={cloudThickness} jetStreams={jetStreams} blueDepth={blueDepth}
                   freezeWeather={freezeWeather} disableRain={disableRain} disableSnow={disableSnow}

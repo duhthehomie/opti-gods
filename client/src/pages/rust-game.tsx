@@ -73,9 +73,7 @@ export default function RustGame() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3 mb-6"
         >
-          <div className="p-3 bg-zinc-900 rounded-lg border border-white/5">
-            <Swords className="w-6 h-6 text-red-500" />
-          </div>
+          <img src="/rust-logo.png" alt="Rust" className="h-10 w-auto object-contain" />
           <div>
             <h1 className="text-2xl font-display font-bold">Rust Optimizer</h1>
             <p className="text-zinc-500 text-sm">client.cfg patching, FPS uncap, CPU priority, and graphics tweaks for Rust (Steam)</p>
