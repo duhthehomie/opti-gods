@@ -37,7 +37,6 @@ const PRIMARY: NavItem[] = [
   { title: "System Scan", url: "/system-scan", icon: Activity },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Tools & Fixes", url: "/tools", icon: Wrench },
-  { title: "CPU Tweaks", url: "/cpu", icon: Cpu },
   { title: "Task Manager", url: "/task-manager", icon: Monitor },
   { title: "FiveM Graphics", url: "/fivem-graphics", icon: Palette },
   { title: "Game Detection", url: "/game-detection", icon: Gamepad2 },
