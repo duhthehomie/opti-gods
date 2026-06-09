@@ -19,11 +19,11 @@ import {
   Globe, Gamepad2, MessageCircle, Cloud, Cpu, Music2,
   AlertTriangle, Zap, WifiOff, RotateCcw, Power,
   ChevronDown, ChevronUp, List, Keyboard, Mic, Mouse,
-  Info, Shield, Lock,
+  Info, Shield, Lock, Camera,
 } from "lucide-react";
 
 // ── Peripheral software detection ──────────────────────────────────────────
-type PeripheralType = "keyboard" | "mouse" | "mic" | "audio";
+type PeripheralType = "keyboard" | "mouse" | "mic" | "audio" | "camera";
 interface PeripheralInfo { label: string; type: PeripheralType }
 
 const PERIPHERAL_PROCESSES: Record<string, PeripheralInfo> = {
@@ -31,9 +31,11 @@ const PERIPHERAL_PROCESSES: Record<string, PeripheralInfo> = {
   "lghub_updater.exe":      { label: "Logitech G HUB Updater",type: "keyboard" },
   "logioptions.exe":        { label: "Logitech Options",       type: "keyboard" },
   "logioptions+.exe":       { label: "Logitech Options+",      type: "keyboard" },
-  "logitune.exe":           { label: "Logi Tune",              type: "keyboard" },
-  "logituneagent.exe":      { label: "Logi Tune Agent",        type: "keyboard" },
-  "logituneupdater.exe":    { label: "Logi Tune Updater",      type: "keyboard" },
+  "logitune.exe":           { label: "Logi Tune (Camera)",     type: "camera" },
+  "logituneagent.exe":      { label: "Logi Tune Agent",        type: "camera" },
+  "logituneupdater.exe":    { label: "Logi Tune Updater",      type: "camera" },
+  "logivcam.exe":           { label: "Logitech Camera",        type: "camera" },
+  "logicamerasettings.exe": { label: "Logi Camera Settings",   type: "camera" },
   "logi_notify.exe":        { label: "Logitech Notification",  type: "keyboard" },
   "logioverlay.exe":        { label: "Logitech Overlay",       type: "keyboard" },
   "icue.exe":               { label: "Corsair iCUE",           type: "keyboard" },
@@ -58,6 +60,7 @@ const PERIPHERAL_PROCESSES: Record<string, PeripheralInfo> = {
 function PeripheralIcon({ type, className }: { type: PeripheralType; className?: string }) {
   if (type === "keyboard") return <Keyboard className={className} />;
   if (type === "mouse")    return <Mouse    className={className} />;
+  if (type === "camera")   return <Camera   className={className} />;
   return <Mic className={className} />;
 }
 
@@ -752,9 +755,9 @@ export default function TaskManagerPage() {
                 <div className="mb-3 rounded-lg border border-blue-500/15 bg-blue-500/5 px-3 py-2 flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Keyboard, mouse, and audio software detected. These are safe to kill while gaming —{" "}
-                    <span className="text-blue-300 font-semibold">your hardware keeps working</span>, only the overlay/RGB/updater closes.
-                    Re-open the app to get them back.
+                    Keyboard, mouse, audio, and camera software detected. These are safe to kill while gaming —{" "}
+                    <span className="text-blue-300 font-semibold">your hardware keeps working</span>, only the overlay/RGB/updater/camera app closes.
+                    Re-open the app to get controls back.
                   </p>
                 </div>
 
