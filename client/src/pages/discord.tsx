@@ -264,8 +264,8 @@ export default function Discord() {
               <MessageCircle className="w-6 h-6 text-red-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-display font-bold">Discord Optimizer</h1>
-              <p className="text-zinc-500 text-sm">Stop Discord from eating your FPS during gaming sessions and screenshares</p>
+              <h1 className="text-2xl font-display font-bold">Discord While Gaming</h1>
+              <p className="text-zinc-500 text-sm">Kill every way Discord steals FPS — process scanner, GIFs, overlays, notifications, CPU and GPU priority</p>
             </div>
           </div>
           <Button

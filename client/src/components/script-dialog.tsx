@@ -73,7 +73,7 @@ function categorizeTweaks(tweaks: Record<string, boolean>) {
     ["NVIDIA",   k => k.startsWith("Nvidia") || k.startsWith("gpu") || k.startsWith("Gpu")],
     ["Games",    k => k.startsWith("game_")],
     ["Process",  k => k.startsWith("ProcessLasso") || k.startsWith("ProcessAuto") || k.startsWith("ProcessTrim")],
-    ["Discord",  k => k.startsWith("Discord")],
+    ["Discord While Gaming",  k => k.startsWith("Discord")],
     ["Memory",   k => k.startsWith("Mem") || k.startsWith("mem")],
     ["Services", k => k.startsWith("Service")],
     ["Privacy",  k => k.startsWith("Privacy")],

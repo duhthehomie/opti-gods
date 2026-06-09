@@ -76,10 +76,10 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     highlights: ["Thermal Management", "GPU Switch Control", "Display Power Opt", "USB Selective Suspend", "Fan Curve Tuning"],
   },
   "/discord": {
-    title: "Discord Optimization",
-    desc: "Reduce Discord's CPU and RAM usage while gaming: hardware acceleration toggle, voice processing optimization, overlay disable.",
-    tweakCount: "8+",
-    highlights: ["Hardware Accel Toggle", "Voice Processing Opt", "Overlay Disable", "Bandwidth Reduce", "Startup Disable"],
+    title: "Discord While Gaming",
+    desc: "Stop Discord from stealing FPS during gaming sessions: kill the game activity scanner, GIF autoplay, inline media preload, notification toasts, and background CPU/GPU priority.",
+    tweakCount: "18+",
+    highlights: ["Game Scanner Off", "GIF Autoplay Off", "CPU Priority Low", "Overlay Disable", "Notification Suppress"],
   },
   "/memory": {
     title: "Memory & RAM",
