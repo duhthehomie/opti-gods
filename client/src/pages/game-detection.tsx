@@ -108,7 +108,7 @@ const GAMES: GameEntry[] = [
     name: "Rust",
     publisher: "Facepunch Studios",
     accentBorder: "border-l-red-800",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/252490/header.jpg",
+    coverUrl: "/game-covers/rust.png",
     detectPaths: ["Steam\\steamapps\\common\\Rust\\RustClient.exe"],
     processName: "RustClient.exe",
     tweaks: ["Above Normal CPU priority", "Expand streaming pool size in registry", "Disable background application throttling"],
@@ -365,7 +365,7 @@ const GAMES: GameEntry[] = [
     name: "Marvel Rivals",
     publisher: "NetEase Games",
     accentBorder: "border-l-red-500",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/2767030/header.jpg",
+    coverUrl: "/game-covers/marvel-rivals.png",
     coverGradient: "from-red-950 via-purple-900 to-zinc-900",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Marvel Rivals",
