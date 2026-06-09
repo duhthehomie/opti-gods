@@ -437,33 +437,36 @@ export default function CustomOS() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 px-1">1. Download AME Wizard & ReviOS Playbook (No Ads)</h2>
               <p className="text-xs text-zinc-500 px-1">Get AME Wizard and the ReviOS playbook — both free and no ads needed</p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open("https://ameliorated.io", "_blank", "noopener noreferrer")}
-                  className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
+                <a
+                  href="https://ameliorated.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-ame-wizard"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 text-xs font-medium transition-colors"
                 >
                   <Download className="w-3 h-3" />
                   AME Wizard (No Ads)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open("https://github.com/Ameliorated-LLC/trusted-uninstaller/releases", "_blank", "noopener noreferrer")}
-                  className="text-xs border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-1"
+                </a>
+                <a
+                  href="https://github.com/Ameliorated-LLC/trusted-uninstaller/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-ame-github"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 text-xs font-medium transition-colors"
                 >
                   <Download className="w-3 h-3" />
                   GitHub (Latest)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open("https://www.revi.cc/", "_blank", "noopener noreferrer")}
-                  className="text-xs border-blue-500/20 text-blue-400 hover:bg-blue-500/10 gap-1"
+                </a>
+                <a
+                  href="https://www.revi.cc/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-revios-playbook"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 text-xs font-medium transition-colors"
                 >
                   <Download className="w-3 h-3" />
                   ReviOS Playbook (No Ads)
-                </Button>
+                </a>
               </div>
             </motion.div>
 
@@ -485,23 +488,26 @@ export default function CustomOS() {
                   ⚠ On the download page at revi.cc — click the <strong>"No Ads"</strong> link to download directly.
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
-                  <Button
-                    data-testid="button-revios-download"
-                    onClick={() => window.open("https://www.revi.cc/", "_blank", "noopener noreferrer")}
-                    className="bg-blue-600 hover:bg-blue-700 text-white border border-blue-500/40 font-bold text-sm px-6"
+                  <a
+                    href="https://www.revi.cc/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-revios-download"
+                    className="inline-flex items-center gap-2 px-6 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white border border-blue-500/40 font-bold text-sm transition-colors"
                   >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                    <ExternalLink className="w-4 h-4" />
                     Get ReviOS at revi.cc
-                  </Button>
-                  <Button
-                    data-testid="button-discord-os"
-                    variant="outline"
-                    onClick={() => window.open("https://discord.gg/optigods", "_blank", "noopener noreferrer")}
-                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white font-semibold text-sm"
+                  </a>
+                  <a
+                    href="https://discord.gg/optigods"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-discord-os"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white font-semibold text-sm transition-colors"
                   >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                    <ExternalLink className="w-4 h-4" />
                     Questions? Join Discord
-                  </Button>
+                  </a>
                 </div>
               </div>
             </motion.div>
