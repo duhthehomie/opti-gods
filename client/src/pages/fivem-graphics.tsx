@@ -1345,6 +1345,55 @@ export default function FivemGraphics() {
                   />
                 </div>
 
+                {/* Quick Effects — weather & time toggles, immediately visible */}
+                <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Effects & Weather</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { label: "Freeze Weather", active: freezeWeather, onToggle: () => setFreezeWeather(v => !v), fps: "+5–15 FPS", color: "amber", testId: "quick-fx-freeze-weather" },
+                      { label: "No Rain",         active: disableRain,    onToggle: () => setDisableRain(v => !v),    fps: "+2–4 FPS",  color: "cyan",  testId: "quick-fx-rain" },
+                      { label: "No Snow",         active: disableSnow,   onToggle: () => setDisableSnow(v => !v),   fps: "+1–3 FPS",  color: "cyan",  testId: "quick-fx-snow" },
+                      { label: "No Blood",        active: disableBloodDecals, onToggle: () => setDisableBloodDecals(v => !v), fps: "Citizen", color: "red", testId: "quick-fx-blood" },
+                      { label: "Freeze Time",     active: freezeTime,    onToggle: () => setFreezeTime(v => !v),    fps: "+1–4 FPS",  color: "amber", testId: "quick-fx-time" },
+                      { label: "Keep Props",      active: keepProps,     onToggle: () => setKeepProps(v => !v),     fps: "Visuals",   color: "zinc",  testId: "quick-fx-props" },
+                    ] as Array<{ label: string; active: boolean; onToggle: () => void; fps: string; color: string; testId: string }>).map(({ label, active, onToggle, fps, color, testId }) => {
+                      const activeCls: Record<string, string> = {
+                        amber: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+                        cyan:  "border-cyan-500/40 bg-cyan-500/10 text-cyan-300",
+                        red:   "border-red-500/40 bg-red-500/10 text-red-300",
+                        zinc:  "border-zinc-500/40 bg-zinc-700/30 text-zinc-200",
+                      };
+                      return (
+                        <button key={testId} onClick={onToggle} data-testid={testId}
+                          className={cn(
+                            "flex flex-col items-start gap-1 px-2.5 py-2.5 rounded-xl border transition-all text-left",
+                            active ? activeCls[color] : "border-white/8 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:border-white/15"
+                          )}>
+                          <div className="flex items-center justify-between w-full">
+                            <span className={cn("w-3 h-3 rounded-full border flex-shrink-0 flex items-center justify-center", active ? "border-current" : "border-zinc-600")}>
+                              {active && <span className="w-1.5 h-1.5 rounded-full bg-current block" />}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold leading-tight">{label}</span>
+                          <span className="text-[9px] opacity-60">{fps}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {freezeTime && (
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 block">
+                        Locked Hour — {String(freezeHour).padStart(2, "0")}:00
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Slider value={[freezeHour]} onValueChange={([v]) => setFreezeHour(v)}
+                          min={0} max={23} step={1} className="flex-1" data-testid="builder-quick-slider-hour" />
+                        <span className="text-sm font-bold text-amber-400 w-10 text-right font-mono">{String(freezeHour).padStart(2, "0")}:00</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Sky & Clouds */}
                 <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 space-y-5">
                   <div className="flex items-center justify-between mb-1">

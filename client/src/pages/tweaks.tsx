@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 
 const Registry         = lazy(() => import("@/pages/registry"));
@@ -30,6 +31,7 @@ const Memory           = lazy(() => import("@/pages/memory"));
 const Debloat          = lazy(() => import("@/pages/debloat"));
 const WinTitus         = lazy(() => import("@/pages/wintitus"));
 const SpotifyPage      = lazy(() => import("@/pages/spotify"));
+const CpuPage          = lazy(() => import("@/pages/cpu"));
 
 type GroupId = "windows" | "network" | "gpu" | "games" | "system";
 
@@ -75,6 +77,7 @@ const SECTIONS: Section[] = [
   { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,        group: "games",   Component: RobloxPage,         categories: ["roblox"] },
   { id: "discord",      title: "Discord",                       desc: "CPU/RAM reduction while gaming",                            icon: MessageCircle, group: "games",   Component: DiscordPage,        categories: ["discord"] },
   { id: "spotify",      title: "Spotify While Gaming",          desc: "Stop Spotify stealing FPS — GPU, CPU priority, bandwidth",  icon: Music,         group: "games",   Component: SpotifyPage,        categories: ["spotify"] },
+  { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "system",  Component: CpuPage,            categories: [] as TweakCategory[] },
   { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,   group: "system",  Component: Memory,             categories: ["memory"] },
   { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,         group: "system",  Component: StartupApps,        categories: ["startup"] },
   { id: "process-lasso",title: "Process Lasso",                 desc: "CPU affinity & priority automation",                        icon: Cpu,           group: "system",  Component: ProcessLasso,       categories: ["process-lasso"] },
@@ -268,6 +271,7 @@ export default function TweaksPage() {
   }, [sidebarWidth]);
 
   const hw = useHardwareInfo();
+  const os = useOsDetection();
   const detecting = isDetecting(hw);
   const { tweaks } = useOptimizationStore();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
@@ -332,6 +336,24 @@ export default function TweaksPage() {
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
                   <MonitorPlay className="w-3 h-3" />
                   {gpuChip}
+                </span>
+              )}
+              {!detecting && hw.cpuLabel && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
+                  <Cpu className="w-3 h-3" />
+                  {hw.cpuLabel}
+                </span>
+              )}
+              {!detecting && hw.ramGB > 0 && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
+                  <MemoryStick className="w-3 h-3" />
+                  {hw.ramLabel} RAM
+                </span>
+              )}
+              {!os.loading && os.displayName && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
+                  <Monitor className="w-3 h-3" />
+                  {os.displayName}
                 </span>
               )}
             </div>
