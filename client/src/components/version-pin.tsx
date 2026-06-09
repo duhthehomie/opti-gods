@@ -19,7 +19,7 @@ export function VersionPin() {
       <span
         className={cn(
           "text-[10px] font-mono tracking-wider",
-          updateAvailable ? "text-red-400" : "text-zinc-700"
+          updateAvailable ? "text-red-400" : "text-red-500/50"
         )}
       >
         v{current}
