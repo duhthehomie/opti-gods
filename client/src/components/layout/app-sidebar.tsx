@@ -89,14 +89,31 @@ export function AppSidebar() {
   const [unlockLoading, setUnlockLoading] = useState(false);
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const [tapFlash, setTapFlash] = useState(false);
+  const [tapRemaining, setTapRemaining] = useState<number | null>(null);
+  const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLogoTap = useCallback(() => {
     tapCount.current += 1;
     if (tapTimer.current) clearTimeout(tapTimer.current);
-    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1500);
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; setTapRemaining(null); }, 1500);
+
+    // Visual flash on every tap
+    setTapFlash(true);
+    if (tapFlashTimer.current) clearTimeout(tapFlashTimer.current);
+    tapFlashTimer.current = setTimeout(() => setTapFlash(false), 150);
+
+    // Show countdown on taps 3, 4
+    const remaining = 5 - tapCount.current;
+    if (remaining > 0 && remaining <= 2) {
+      setTapRemaining(remaining);
+    } else {
+      setTapRemaining(null);
+    }
+
     if (tapCount.current >= 5) {
       tapCount.current = 0;
+      setTapRemaining(null);
       if (tapTimer.current) clearTimeout(tapTimer.current);
       setUnlockInput("");
       setUnlockError(false);
@@ -229,11 +246,21 @@ export function AppSidebar() {
         <SidebarHeader className="p-5 border-b border-white/5">
           <div className="flex items-center gap-2.5">
             <div
-              className="w-16 h-16 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)] cursor-pointer select-none shrink-0"
+              className={cn(
+                "relative w-16 h-16 rounded-xl bg-black border flex items-center justify-center overflow-hidden cursor-pointer select-none shrink-0 transition-all duration-150",
+                tapFlash
+                  ? "border-red-400/80 shadow-[0_0_28px_-2px_rgba(239,68,68,0.95)] scale-95"
+                  : "border-red-500/30 shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)] scale-100"
+              )}
               onClick={handleLogoTap}
               data-testid="logo-admin-tap"
             >
               <video ref={spinVideoRef} src={BRAND.spinRed} autoPlay muted loop playsInline className="w-16 h-16 object-cover pointer-events-none" />
+              {tapRemaining !== null && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl">
+                  <span className="text-red-400 font-display font-black text-2xl leading-none">{tapRemaining}</span>
+                </div>
+              )}
             </div>
             <Link href="/" data-testid="link-home-logo">
               <div className="cursor-pointer">
