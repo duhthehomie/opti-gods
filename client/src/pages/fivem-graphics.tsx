@@ -1149,14 +1149,14 @@ export default function FivemGraphics() {
               <div className="p-6 md:p-8">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.15em] text-red-400 font-bold mb-1">leaq's pack · v1 · Tested on 1650 Super</p>
+                    <p className="text-[10px] uppercase tracking-[0.15em] text-red-400 font-bold mb-1">leaq's pack · v1 · Ryzen 5 3500 · GTX 1650 Super · 32GB RAM</p>
                     <h3 className="text-xl font-display font-black text-white">Opti Gods Blue Sky Pack</h3>
                   </div>
                   <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full uppercase shrink-0">Tested</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {[
-                    "No Clouds +6 FPS","Vivid Blue Sky","No Contrails +2 FPS","Props Intact",
+                    "No Clouds = Stability","Vivid Blue Sky","No Contrails = Stability","Props Intact",
                     "Freeze Time +30-45 FPS","No Rain +25 FPS","No Snow +25-30 FPS",
                   ].map(tag => (
                     <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/8 border border-white/10 text-zinc-200">
