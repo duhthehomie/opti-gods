@@ -178,7 +178,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         onKeyDown={onRowKeyDown}
         data-testid={`row-tweak-${id}`}
         className={cn(
-          "flex flex-row items-center justify-between rounded-xl border px-5 py-5 sm:px-6 sm:py-6 transition-all duration-200 group",
+          "flex flex-row items-center justify-between rounded-xl border px-5 py-6 sm:px-6 sm:py-7 transition-all duration-200 group",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
           acBlocked ? "cursor-not-allowed" : "cursor-pointer",
           checked
@@ -272,7 +272,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               </span>
             )}
           </div>
-          <p className="text-[13px] text-zinc-500 leading-relaxed mt-1.5">{description}</p>
+          <p className="text-[13px] text-zinc-500 leading-loose mt-2">{description}</p>
           {relevanceWarning && (
             <p className="text-[11px] text-zinc-600 mt-1 italic">💡 {relevanceWarning}</p>
           )}

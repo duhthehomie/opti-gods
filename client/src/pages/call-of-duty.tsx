@@ -18,6 +18,8 @@ const ALL_COD_IDS = [
   "CodDefenderExclusion", "CodVRAMShaderBudget",
   "CodNetworkBuffer", "CodDisableLSO", "CodTCPOptimize",
   "Cod1650LowLatency", "Cod1650DisableAnsel",
+  "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
+  "AmdD3DOptimize", "AmdPCIeOptimize",
   "Cod3500PowerPlan", "Cod3500CoreUnpark",
   // V3 additions
   "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy", "CodRawInput",
@@ -35,7 +37,8 @@ const SECTION_RECOMMENDED: Record<string, string[]> = {
   fps:     ["CodHighPriority", "CodGameMode", "CodGPUPriority", "CodDirectXQueue", "CodMMCSS"],
   texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodVRAMShaderBudget", "CodTdrDelay"],
   network: ["CodNetworkBuffer", "CodDisableLSO", "CodQoSPolicy"],
-  nvidia:  ["Cod1650LowLatency"],
+  nvidia:  ["Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force"],
+  amdgpu:  ["AmdD3DOptimize", "AmdPCIeOptimize"],
   cpu:     ["Cod3500PowerPlan", "Cod3500CoreUnpark"],
   advanced: ["CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy"],
 };
@@ -325,11 +328,8 @@ export default function CallOfDuty() {
             {/* NVIDIA GPU section — shown to all NVIDIA users */}
             {isNvidiaUser && (
               <section>
-                <div className="flex items-center gap-2 mb-4 px-1">
-                  <div className="w-1 h-4 rounded bg-green-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-green-400">🟢 NVIDIA GPU</h2>
-                  <span className="text-[10px] text-zinc-500 ml-1 font-mono">{gpuLabel}</span>
-                </div>
+                <SectionHeader title="🟢 NVIDIA GPU" sectionKey="nvidia" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
+                <span className="text-[10px] text-zinc-600 font-mono -mt-2 mb-4 block px-1">{gpuLabel}</span>
                 <div className="space-y-4">
                   {([
                     {
@@ -349,6 +349,59 @@ export default function CallOfDuty() {
                         : "Ansel reserves a VRAM buffer at all times for its screenshot capture system. Disabling it frees that buffer and removes the Alt+F2 overlay hook from every DirectX game process.",
                       badge: "NVIDIA",
                       impact: isLowVramNvidia ? "MED" as const : "LOW" as const,
+                    },
+                    {
+                      id: "NvidiaD3DOptimize",
+                      title: "NVIDIA DirectX: Kill Debug Layers + Async Shader Compile",
+                      desc: isLowVramNvidia
+                        ? `Disables D3D11/D3D12 debug and validation layers — if accidentally enabled they add 10–30% CPU overhead. Turns on async shader compilation so BO6 and Warzone don't freeze-stutter mid-game while the ${gpuLabel} compiles shaders on the fly.`
+                        : "Disables D3D11/12 validation layers and enables async shader compilation. Compile-stall stutters eliminated in COD, FiveM, and Fortnite — no more 100ms freezes during new-area loads.",
+                      badge: "RECOMMENDED",
+                      impact: "HIGH" as const,
+                    },
+                    {
+                      id: "NvidiaPCIeGen3Force",
+                      title: `PCIe Gen3 Link Lock + GPU Preemption (${gpuLabel})`,
+                      desc: `Writes PCIELinkSpeedOverride=2 to your GPU's class key — prevents the driver from quietly falling back to PCIe 2.0 x8 during power transitions, which halves memory bandwidth and causes frame spikes. Also enables GPU preemption for smoother DPC scheduling under COD's DX12 workload.`,
+                      badge: "GTX 1650",
+                      impact: "MED" as const,
+                    },
+                    {
+                      id: "NvidiaInterruptAffinity",
+                      title: "Route GPU DPC Interrupts → CPU Core 2",
+                      desc: "Sets TargetedProcessors=4 (core 2) + AssignmentPolicy=1 so NVIDIA interrupt service routines land on core 2 instead of the OS scheduler's default core 0. On a Ryzen 5 3500, this keeps the game thread on core 0 uncontested — reduces input latency and frame-time jitter.",
+                      badge: "ADVANCED",
+                      impact: "MED" as const,
+                    },
+                  ]).map((item, i) => (
+                    <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
+                      badge={item.badge} impact={item.impact}
+                      checked={tweaks[item.id] || false} onCheckedChange={v => setTweak(item.id, v)} delay={i + 1} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* AMD GPU section — shown when AMD GPU detected */}
+            {hw.isAmd && !isNvidiaUser && (
+              <section>
+                <SectionHeader title="🔴 AMD GPU" sectionKey="amdgpu" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
+                <span className="text-[10px] text-zinc-600 font-mono -mt-2 mb-4 block px-1">{gpuLabel}</span>
+                <div className="space-y-4">
+                  {([
+                    {
+                      id: "AmdD3DOptimize",
+                      title: "AMD DirectX: Kill Debug Layers + Async Shader Compile",
+                      desc: "Disables D3D debug/validation layers that add CPU overhead if accidentally enabled. Enables async shader compilation and sets DXGI WaitableObjectsThreshold=1 — frame pacing stabilized on RDNA1/2/Polaris/Vega. Eliminates compile-stall freezes in BO6 and Warzone.",
+                      badge: "RECOMMENDED",
+                      impact: "HIGH" as const,
+                    },
+                    {
+                      id: "AmdPCIeOptimize",
+                      title: "AMD Async Compute ON + PCIe Preemption",
+                      desc: "Sets KMD_EnableAsyncCompute=1, clears the FRTC driver flag, and enables GPU preemption. Optimizes Radeon async compute dispatch and ensures full PCIe bandwidth — BO6's DX12 async compute queues benefit directly from this on any Radeon card.",
+                      badge: "RECOMMENDED",
+                      impact: "MED" as const,
                     },
                   ]).map((item, i) => (
                     <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
@@ -394,20 +447,6 @@ export default function CallOfDuty() {
               </div>
             </section>
 
-            {/* AMD GPU note — if no NVIDIA detected */}
-            {!isNvidiaUser && hw.isAmd && (
-              <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-red-500/20 bg-red-500/5">
-                <Info className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-bold text-red-300 mb-1">AMD GPU detected — more tweaks available</p>
-                  <p className="text-[11px] text-zinc-400">
-                    For AMD Radeon-specific COD tweaks (anti-lag, shader cache, texture filtering), visit the{" "}
-                    <span className="text-red-400 font-semibold">AMD Radeon</span> tab.
-                    The universal tweaks above (priority, network, pagefile, shader cache clear) all apply to your AMD GPU.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* V3 — Advanced Optimizations */}
             <section>

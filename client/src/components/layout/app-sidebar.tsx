@@ -90,7 +90,7 @@ export function AppSidebar() {
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
-  const handleVersionTap = useCallback(() => {
+  const handleLogoTap = useCallback(() => {
     tapCount.current += 1;
     if (tapTimer.current) clearTimeout(tapTimer.current);
     tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1500);
@@ -113,9 +113,16 @@ export function AppSidebar() {
         headers: { "x-admin-key": key },
       });
       if (res.ok) {
-        storeAdminKey(key);
-        setAdminUnlocked(true);
-        setShowUnlockModal(false);
+        if (adminUnlocked) {
+          // Already unlocked — re-entering valid code LOCKS admin (toggle off)
+          clearAdminKey();
+          setAdminUnlocked(false);
+          setShowUnlockModal(false);
+        } else {
+          storeAdminKey(key);
+          setAdminUnlocked(true);
+          setShowUnlockModal(false);
+        }
       } else {
         setUnlockError(true);
       }
@@ -219,25 +226,25 @@ export function AppSidebar() {
     <>
       <Sidebar className="border-r border-white/5">
         <SidebarHeader className="p-5 border-b border-white/5">
-          <Link href="/" data-testid="link-home-logo">
-            <div className="flex items-center gap-2.5 cursor-pointer">
-              <div className="w-16 h-16 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)]">
-                <video ref={spinVideoRef} src={BRAND.spinRed} autoPlay muted loop playsInline className="w-16 h-16 object-cover" />
-              </div>
-              <div>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-16 h-16 rounded-xl bg-black border border-red-500/30 flex items-center justify-center overflow-hidden shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)] cursor-pointer select-none shrink-0"
+              onClick={handleLogoTap}
+              data-testid="logo-admin-tap"
+            >
+              <video ref={spinVideoRef} src={BRAND.spinRed} autoPlay muted loop playsInline className="w-16 h-16 object-cover pointer-events-none" />
+            </div>
+            <Link href="/" data-testid="link-home-logo">
+              <div className="cursor-pointer">
                 <p className="font-display font-black text-base leading-tight text-white">
                   OPTI <span className="text-red-500">GODS</span>
                 </p>
-                <p
-                  className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 cursor-default select-none"
-                  onClick={handleVersionTap}
-                  data-testid="text-version-tap"
-                >
+                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 select-none" data-testid="text-version">
                   by leaq · v{APP_VERSION}
                 </p>
               </div>
-            </div>
-          </Link>
+            </Link>
+          </div>
         </SidebarHeader>
 
         <SidebarContent className="px-2 py-3">
@@ -342,12 +349,16 @@ export function AppSidebar() {
               <X className="w-3.5 h-3.5" />
             </button>
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-purple-400" />
+              <div className={cn("w-9 h-9 rounded-xl border flex items-center justify-center", adminUnlocked ? "bg-red-500/15 border-red-500/30" : "bg-purple-500/15 border-purple-500/30")}>
+                <ShieldCheck className={cn("w-4 h-4", adminUnlocked ? "text-red-400" : "text-purple-400")} />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.15em] text-purple-400 font-bold">Admin Access</p>
-                <p className="text-sm font-bold text-white">Enter unlock code</p>
+                <p className={cn("text-[10px] uppercase tracking-[0.15em] font-bold", adminUnlocked ? "text-red-400" : "text-purple-400")}>
+                  {adminUnlocked ? "Lock Admin" : "Admin Access"}
+                </p>
+                <p className="text-sm font-bold text-white">
+                  {adminUnlocked ? "Re-enter code to hide admin tab" : "Enter unlock code"}
+                </p>
               </div>
             </div>
             <input
@@ -370,9 +381,9 @@ export function AppSidebar() {
               onClick={handleUnlockSubmit}
               disabled={unlockLoading}
               data-testid="button-admin-unlock-submit"
-              className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+              className={cn("w-full py-2.5 rounded-xl disabled:opacity-50 text-white text-sm font-bold transition-colors", adminUnlocked ? "bg-red-700 hover:bg-red-600" : "bg-purple-600 hover:bg-purple-500")}
             >
-              {unlockLoading ? "Checking…" : "Unlock"}
+              {unlockLoading ? "Checking…" : adminUnlocked ? "Lock Admin" : "Unlock"}
             </button>
           </div>
         </div>
