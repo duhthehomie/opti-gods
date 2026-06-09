@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, Download, ChevronDown, Zap, Wifi, Volume2, HardDrive, Monitor, Cpu, CheckCircle2, ClipboardPaste, Play, Info, AlertTriangle } from "lucide-react";
+import { Activity, Download, ChevronDown, Zap, Wifi, Volume2, HardDrive, Monitor, Cpu, CheckCircle2, ClipboardPaste, Play, Info, AlertTriangle, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 
 interface ParsedDriver {
   name: string;
@@ -62,10 +63,15 @@ interface DpcFix {
   desc: string;
   severity: "critical" | "high" | "medium";
   reboot: boolean;
+  /** Returns true if this card is relevant for the detected hardware */
+  visible: (hw: HardwareInfo) => boolean;
+  /** Short label shown as a green badge when hw matches */
+  detectedLabel?: (hw: HardwareInfo) => string;
   ps1: string;
 }
 
 const DPC_FIXES: DpcFix[] = [
+  // ── GPU: NVIDIA ────────────────────────────────────────────────────────────
   {
     id: "nvidia",
     icon: Monitor,
@@ -73,6 +79,8 @@ const DPC_FIXES: DpcFix[] = [
     label: "NVIDIA GPU",
     severity: "critical",
     reboot: true,
+    visible: (hw) => hw.isNvidia,
+    detectedLabel: (hw) => hw.gpuName || "NVIDIA GPU",
     desc: "Enables MSI interrupt mode on your NVIDIA GPU — the #1 cause of DPC spikes. Also sets PowerMizer to Max Performance so the driver doesn't downclock between frames.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — NVIDIA DPC Fix"
@@ -108,6 +116,7 @@ Write-Host " After reboot: Device Manager > Display Adapters > GPU > Properties 
 Write-Host "   Should now show Message-Signaled Interrupts instead of Interrupt Request Line" -ForegroundColor Gray
 Write-Host ""`,
   },
+  // ── GPU: AMD (discrete Radeon or APU/Vega) ─────────────────────────────────
   {
     id: "amd",
     icon: Monitor,
@@ -115,7 +124,9 @@ Write-Host ""`,
     label: "AMD GPU",
     severity: "critical",
     reboot: true,
-    desc: "Enables MSI interrupt mode on AMD Radeon GPU and disables ULPS (Ultra Low Power State) — the main AMD DPC offender that causes stutters when the GPU wakes from low power.",
+    visible: (hw) => hw.isAmdGpu || hw.isAmdApu,
+    detectedLabel: (hw) => hw.gpuName || "AMD GPU",
+    desc: "Enables MSI interrupt mode on your AMD Radeon GPU and disables ULPS (Ultra Low Power State) — the main AMD DPC offender that causes stutters when the GPU wakes from low power.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — AMD DPC Fix"
 Write-Host ""
@@ -149,6 +160,98 @@ Write-Host ""
 Write-Host " REBOOT REQUIRED." -ForegroundColor Cyan
 Write-Host ""`,
   },
+  // ── CPU: AMD Ryzen C-State Latency ─────────────────────────────────────────
+  {
+    id: "cpu_ryzen",
+    icon: Cpu,
+    driver: "acpi.sys / amdppm.sys",
+    label: "AMD Ryzen CPU C-States",
+    severity: "high",
+    reboot: true,
+    visible: (hw) => hw.isRyzen,
+    detectedLabel: (hw) => hw.cpuLabel || "AMD Ryzen",
+    desc: "Disables deep C-state transitions (C2/C3) that cause ACPI wake-up latency spikes on Ryzen CPUs. Also pins Precision Boost 2 to 100% min frequency so the CPU never drops clock speed between game frames.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — AMD Ryzen DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — AMD Ryzen C-State / DPC Latency Fix" -ForegroundColor Red
+Write-Host " ==================================================" -ForegroundColor DarkRed
+Write-Host ""
+# Disable dynamic tick (biggest single fix for Ryzen DPC latency)
+$r = bcdedit /set disabledynamictick yes 2>&1
+Write-Host " [OK] Dynamic tick DISABLED — timer interrupt no longer coalesces with C-state wake-up" -ForegroundColor Green
+# Pin CPU min performance state to 100% in current power plan
+powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>$null
+powercfg -setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>$null
+powercfg -setactive SCHEME_CURRENT 2>$null
+Write-Host " [OK] CPU min frequency pinned to 100% — Precision Boost 2 now operates without floor drops" -ForegroundColor Green
+# Disable C-state transitions that cause ACPI latency spikes
+$cpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Processor'
+if (!(Test-Path $cpuClass)) { New-Item $cpuClass -Force | Out-Null }
+Set-ItemProperty $cpuClass 'Capabilities' 0x0007e066 -Type DWord -Force -EA SilentlyContinue
+Write-Host " [OK] CPU Capabilities: deep C-states (C2/C3) suppressed — wake latency eliminated" -ForegroundColor Green
+# MMCSS Gaming thread priority
+$games = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'
+if (!(Test-Path $games)) { New-Item $games -Force | Out-Null }
+Set-ItemProperty $games 'GPU Priority'          8  -Type DWord  -Force
+Set-ItemProperty $games 'Priority'              6  -Type DWord  -Force
+Set-ItemProperty $games 'Scheduling Category' 'High' -Type String -Force
+Set-ItemProperty $games 'SFIO Priority'       'High' -Type String -Force
+Write-Host " [OK] MMCSS Games profile: maximum CPU + GPU scheduler priority" -ForegroundColor Green
+# AMD scheduler hint — tell Windows scheduler this is a high-perf Ryzen
+Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000' 'KMD_EnableComputePreemption' 0 -Type DWord -Force -EA SilentlyContinue
+Write-Host " [OK] AMD scheduler hint applied" -ForegroundColor Green
+Write-Host ""
+Write-Host " REBOOT REQUIRED for C-state and dynamic tick changes." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  // ── CPU: Intel C-State Latency ──────────────────────────────────────────────
+  {
+    id: "cpu_intel",
+    icon: Cpu,
+    driver: "acpi.sys / intelppm.sys",
+    label: "Intel Core CPU C-States",
+    severity: "high",
+    reboot: true,
+    visible: (hw) => hw.isIntelCore,
+    detectedLabel: (hw) => hw.cpuLabel || "Intel Core",
+    desc: "Disables deep C-state transitions and dynamic tick that cause interrupt wake-up latency on Intel CPUs. Also pins minimum CPU frequency to 100% so SpeedStep doesn't drop clocks between game frames.",
+    ps1: `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods — Intel CPU DPC Fix"
+Write-Host ""
+Write-Host " OPTI GODS — Intel Core C-State / DPC Latency Fix" -ForegroundColor Red
+Write-Host " ===================================================" -ForegroundColor DarkRed
+Write-Host ""
+# Disable dynamic tick
+bcdedit /set disabledynamictick yes 2>$null
+Write-Host " [OK] Dynamic tick DISABLED — reduces interrupt coalescing latency" -ForegroundColor Green
+# Pin CPU min performance to 100%
+powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>$null
+powercfg -setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>$null
+powercfg -setactive SCHEME_CURRENT 2>$null
+Write-Host " [OK] CPU minimum frequency pinned to 100% — Turbo Boost stays active between frames" -ForegroundColor Green
+# Disable deep C-state (C3/C6) via power plan
+powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
+powercfg -setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 893dee8e-2bef-41e0-89c6-b55d0929964c 0 2>$null
+Write-Host " [OK] Deep CPU idle states (C3/C6) suppressed in active power plan" -ForegroundColor Green
+# Suppress CPU capabilities for C-state transitions
+$cpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Processor'
+if (!(Test-Path $cpuClass)) { New-Item $cpuClass -Force | Out-Null }
+Set-ItemProperty $cpuClass 'Capabilities' 0x0007e066 -Type DWord -Force -EA SilentlyContinue
+Write-Host " [OK] CPU Capabilities: C2/C3 deep sleep suppressed — wake-up latency eliminated" -ForegroundColor Green
+# MMCSS Games priority
+$games = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'
+if (!(Test-Path $games)) { New-Item $games -Force | Out-Null }
+Set-ItemProperty $games 'GPU Priority'          8  -Type DWord  -Force
+Set-ItemProperty $games 'Priority'              6  -Type DWord  -Force
+Set-ItemProperty $games 'Scheduling Category' 'High' -Type String -Force
+Set-ItemProperty $games 'SFIO Priority'       'High' -Type String -Force
+Write-Host " [OK] MMCSS Games profile: max CPU + GPU scheduler priority" -ForegroundColor Green
+Write-Host ""
+Write-Host " REBOOT REQUIRED." -ForegroundColor Cyan
+Write-Host ""`,
+  },
+  // ── Network (universal) ─────────────────────────────────────────────────────
   {
     id: "network",
     icon: Wifi,
@@ -156,6 +259,7 @@ Write-Host ""`,
     label: "Network Driver",
     severity: "high",
     reboot: false,
+    visible: () => true,
     desc: "Disables interrupt moderation, RSS, and LSO on all active network adapters. Also removes the Windows 10% UDP throttle that affects game server tick rates.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — Network DPC Fix"
@@ -182,6 +286,7 @@ Write-Host ""
 Write-Host " Network DPC fix applied. No reboot needed — takes effect immediately." -ForegroundColor Cyan
 Write-Host ""`,
   },
+  // ── USB (universal) ─────────────────────────────────────────────────────────
   {
     id: "usb",
     icon: Zap,
@@ -189,6 +294,7 @@ Write-Host ""`,
     label: "USB Controller",
     severity: "high",
     reboot: true,
+    visible: () => true,
     desc: "Disables USB selective suspend for all controllers and hubs. USB suspend causes 1-20ms interrupt storms when your mouse/keyboard/headset wakes from low-power — directly hurts input latency.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — USB DPC Fix"
@@ -217,6 +323,7 @@ Write-Host ""
 Write-Host " REBOOT RECOMMENDED." -ForegroundColor Cyan
 Write-Host ""`,
   },
+  // ── Audio (universal) ───────────────────────────────────────────────────────
   {
     id: "audio",
     icon: Volume2,
@@ -224,7 +331,8 @@ Write-Host ""`,
     label: "Audio Driver",
     severity: "medium",
     reboot: false,
-    desc: "Raises MMCSS Pro Audio scheduler priority and sets SystemResponsiveness=0 so games get maximum CPU time. NVIDIA/AMD HDMI audio devices are common DPC offenders if you output audio over HDMI.",
+    visible: () => true,
+    desc: "Raises MMCSS Pro Audio scheduler priority and sets SystemResponsiveness=0 so games get maximum CPU time. HDMI audio over GPU is a common DPC offender — patch applies regardless of audio output.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — Audio DPC Fix"
 Write-Host ""
@@ -248,6 +356,7 @@ Write-Host " TIP: If you still see HDAudBus spikes, update audio drivers from yo
 Write-Host "      site (not Windows Update) and consider disabling HDMI audio if unused." -ForegroundColor Gray
 Write-Host ""`,
   },
+  // ── NVMe Storage (universal — no-ops if no NVMe present) ────────────────────
   {
     id: "nvme",
     icon: HardDrive,
@@ -255,7 +364,8 @@ Write-Host ""`,
     label: "NVMe Storage",
     severity: "medium",
     reboot: true,
-    desc: "Disables NVMe APST (Autonomous Power State Transitions) — the drive entering low-power states mid-game causes read latency spikes of 100-500ms that feel like freezes.",
+    visible: () => true,
+    desc: "Disables NVMe APST (Autonomous Power State Transitions) — the drive entering low-power states mid-game causes read latency spikes of 100-500ms that feel like freezes. Safe no-op on non-NVMe systems.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — NVMe DPC Fix"
 Write-Host ""
@@ -273,14 +383,18 @@ Write-Host ""
 Write-Host " REBOOT REQUIRED for NVMe changes to take effect." -ForegroundColor Cyan
 Write-Host ""`,
   },
+  // ── DirectX / GPU Scheduler (GTX low-end + AMD only — not for RTX) ─────────
   {
     id: "directx",
-    icon: Cpu,
+    icon: Shield,
     driver: "dxgkrnl.sys",
     label: "DirectX / GPU Scheduler",
     severity: "high",
     reboot: true,
-    desc: "Disables Hardware-Accelerated GPU Scheduling (HAGS) which causes dxgkrnl DPC spikes on GTX 10xx/16xx and older AMD cards. Also clears all stale shader caches.",
+    // HAGS hurts GTX Pascal/Turing and older AMD. RTX 2000+ actually benefits from HAGS — hide this card for them.
+    visible: (hw) => !hw.isNvidia || hw.nvidiaIsLowEnd,
+    detectedLabel: (hw) => hw.nvidiaIsLowEnd ? "GTX — HAGS should be OFF" : hw.isAmdGpu ? "AMD GPU detected" : "GPU detected",
+    desc: "Disables Hardware-Accelerated GPU Scheduling (HAGS) which causes dxgkrnl DPC spikes on GTX 10xx/16xx and older AMD GPUs. Also clears all stale DirectX shader caches. Not shown for RTX users — HAGS helps RTX 2000+.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — DirectX DPC Fix"
 Write-Host ""
@@ -317,12 +431,13 @@ const SEVERITY_CONFIG = {
 const KNOWN_FIXES: Array<{ pattern: RegExp; fix: string }> = [
   { pattern: /nvlddmkm/i,           fix: "NVIDIA GPU — click the 'NVIDIA GPU' fix card above to apply MSI mode + Max Performance" },
   { pattern: /amdkmdag|atikmdag/i,  fix: "AMD GPU — click the 'AMD GPU' fix card above to disable ULPS and enable MSI mode" },
+  { pattern: /amdppm|acpi/i,        fix: "AMD/Intel CPU — click the CPU C-States fix card above to suppress wake-up latency" },
+  { pattern: /intelppm/i,           fix: "Intel CPU — click the 'Intel Core CPU C-States' fix card above" },
   { pattern: /ndis|netio|tcpip/i,   fix: "Network Driver — click the 'Network Driver' fix card above" },
   { pattern: /usbport|usbhub/i,     fix: "USB Controller — click the 'USB Controller' fix card above to disable selective suspend" },
   { pattern: /hdaudbus|portcls/i,   fix: "Audio — click the 'Audio Driver' fix card above to boost MMCSS priority" },
   { pattern: /stornvme|storahci/i,  fix: "NVMe Storage — click the 'NVMe Storage' fix card above to disable APST" },
   { pattern: /dxgkrnl/i,            fix: "DirectX — click the 'DirectX / GPU Scheduler' fix card above" },
-  { pattern: /acpi/i,               fix: "ACPI — BIOS-level; update your motherboard firmware + disable C-states in BIOS" },
   { pattern: /wdf|kmdf/i,           fix: "WDF Driver — check for driver updates for the specific device causing DPC spikes" },
 ];
 
@@ -331,6 +446,7 @@ export default function DpcLatencyPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rawText, setRawText] = useState("");
   const [parsed, setParsed] = useState<ParsedDriver[]>([]);
+  const hw = useHardwareInfo();
 
   function applyFix(fix: DpcFix) {
     downloadBat(`dpc_${fix.id}`, fix.ps1);
@@ -340,6 +456,8 @@ export default function DpcLatencyPage() {
   function runAnalysis() {
     setParsed(parseXperfSummary(rawText));
   }
+
+  const visibleFixes = hw.loading ? [] : DPC_FIXES.filter(f => f.visible(hw));
 
   return (
     <div className="space-y-6 px-5 py-4">
@@ -353,7 +471,7 @@ export default function DpcLatencyPage() {
           </span>
         </div>
         <p className="text-sm text-zinc-500">
-          One-click tweaks for the most common DPC interrupt offenders. Each button downloads a targeted .bat — run as Administrator for instant results.
+          One-click tweaks for the most common DPC interrupt offenders on <span className="text-zinc-300 font-semibold">your specific hardware</span>. Cards are auto-filtered to what's relevant for your system.
         </p>
       </div>
 
@@ -363,81 +481,104 @@ export default function DpcLatencyPage() {
         <div className="space-y-0.5">
           <p className="text-xs font-bold text-blue-300">What causes DPC latency?</p>
           <p className="text-[11px] text-zinc-400 leading-relaxed">
-            DPC (Deferred Procedure Call) spikes happen when a hardware driver takes too long to handle an interrupt. Spikes above <span className="text-white font-semibold">500µs</span> cause frame stutters, input lag, and audio glitches. GPU, network, and USB drivers are the most common offenders on gaming PCs.
+            DPC (Deferred Procedure Call) spikes happen when a hardware driver takes too long to handle an interrupt. Spikes above <span className="text-white font-semibold">500µs</span> cause frame stutters, input lag, and audio glitches. GPU, CPU C-states, network, and USB drivers are the most common offenders on gaming PCs.
           </p>
         </div>
       </div>
 
+      {/* Loading state */}
+      {hw.loading && (
+        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-white/8 bg-zinc-950/50">
+          <div className="w-4 h-4 rounded-full border-2 border-red-500 border-t-transparent animate-spin shrink-0" />
+          <p className="text-sm text-zinc-400">Detecting your hardware — filtering tweaks to your system…</p>
+        </div>
+      )}
+
       {/* One-Click Fix Cards */}
-      <div className="space-y-4">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Tweaks</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {DPC_FIXES.map((fix, i) => {
-            const Icon = fix.icon;
-            const sev = SEVERITY_CONFIG[fix.severity];
-            const done = applied.has(fix.id);
-            return (
-              <motion.div
-                key={fix.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04, duration: 0.3 }}
-                className={cn(
-                  "relative flex flex-col gap-3 p-4 rounded-xl border transition-colors",
-                  done
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : "border-white/8 bg-zinc-950/50 hover:border-white/15 hover:bg-zinc-900/50"
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0",
-                      done ? "bg-emerald-500/15 border-emerald-500/30" : "bg-zinc-900 border-white/8"
-                    )}>
-                      <Icon className={cn("w-4 h-4", done ? "text-emerald-400" : "text-zinc-400")} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-white leading-tight">{fix.label}</p>
-                      <p className="text-[10px] font-mono text-zinc-600 leading-tight mt-0.5">{fix.driver}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", sev.cls)}>
-                      {sev.label}
-                    </span>
-                    {fix.reboot && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-amber-500/25 bg-amber-500/8 text-amber-400 uppercase tracking-wide">
-                        REBOOT
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-zinc-400 leading-relaxed">{fix.desc}</p>
-
-                <Button
-                  size="sm"
-                  data-testid={`button-dpc-fix-${fix.id}`}
-                  onClick={() => applyFix(fix)}
+      {!hw.loading && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 px-1">One-Click Driver Tweaks</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wide">
+              {visibleFixes.length} tweaks for your system
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {visibleFixes.map((fix, i) => {
+              const Icon = fix.icon;
+              const sev = SEVERITY_CONFIG[fix.severity];
+              const done = applied.has(fix.id);
+              const detectedText = fix.detectedLabel?.(hw);
+              return (
+                <motion.div
+                  key={fix.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04, duration: 0.3 }}
+                  data-testid={`card-dpc-fix-${fix.id}`}
                   className={cn(
-                    "w-full gap-2 text-xs font-bold transition-all",
+                    "relative flex flex-col gap-3 p-4 rounded-xl border transition-colors",
                     done
-                      ? "bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300"
-                      : "bg-red-600 hover:bg-red-500 text-white"
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : "border-white/8 bg-zinc-950/50 hover:border-white/15 hover:bg-zinc-900/50"
                   )}
                 >
-                  {done ? (
-                    <><CheckCircle2 className="w-3.5 h-3.5" /> Downloaded — Run as Admin</>
-                  ) : (
-                    <><Download className="w-3.5 h-3.5" /> Apply Tweak (.bat)</>
-                  )}
-                </Button>
-              </motion.div>
-            );
-          })}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0",
+                        done ? "bg-emerald-500/15 border-emerald-500/30" : "bg-zinc-900 border-white/8"
+                      )}>
+                        <Icon className={cn("w-4 h-4", done ? "text-emerald-400" : "text-zinc-400")} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white leading-tight">{fix.label}</p>
+                        <p className="text-[10px] font-mono text-zinc-600 leading-tight mt-0.5">{fix.driver}</p>
+                        {detectedText && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wide">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            {detectedText}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", sev.cls)}>
+                        {sev.label}
+                      </span>
+                      {fix.reboot && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-amber-500/25 bg-amber-500/8 text-amber-400 uppercase tracking-wide">
+                          REBOOT
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">{fix.desc}</p>
+
+                  <Button
+                    size="sm"
+                    data-testid={`button-dpc-fix-${fix.id}`}
+                    onClick={() => applyFix(fix)}
+                    className={cn(
+                      "w-full gap-2 text-xs font-bold transition-all",
+                      done
+                        ? "bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300"
+                        : "bg-red-600 hover:bg-red-500 text-white"
+                    )}
+                  >
+                    {done ? (
+                      <><CheckCircle2 className="w-3.5 h-3.5" /> Downloaded — Run as Admin</>
+                    ) : (
+                      <><Download className="w-3.5 h-3.5" /> Apply Tweak (.bat)</>
+                    )}
+                  </Button>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Advanced: Diagnose Section */}
       <div className="rounded-xl border border-white/8 overflow-hidden">
@@ -538,37 +679,25 @@ Write-Host ""`)}
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-2"
+                    className="space-y-3"
                   >
                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Results — Top DPC Offenders</p>
-                    <div className="space-y-2">
-                      {parsed.map((d, i) => {
-                        const fix = KNOWN_FIXES.find(k => k.pattern.test(d.name));
-                        const severity = d.usPerDpc > 500 ? "critical" : d.usPerDpc > 150 ? "high" : "medium";
-                        const sev = SEVERITY_CONFIG[severity];
+                    <div className="space-y-1.5">
+                      {parsed.map((d, idx) => {
+                        const known = KNOWN_FIXES.find(f => f.pattern.test(d.name));
+                        const severity = d.usPerDpc >= 500 ? "text-red-400" : d.usPerDpc >= 200 ? "text-orange-400" : "text-zinc-400";
                         return (
-                          <div
-                            key={d.name}
-                            className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-white/5 bg-zinc-900/40"
-                          >
-                            <span className="text-[10px] font-mono text-zinc-600 w-4 shrink-0 mt-0.5">{i + 1}</span>
-                            <div className="flex-1 min-w-0 space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-mono font-bold text-white">{d.name}</span>
-                                <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wide", sev.cls)}>
-                                  {sev.label}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 text-[11px] text-zinc-500">
-                                <span><span className="text-zinc-300 font-semibold">{d.usPerDpc.toFixed(1)}µs</span> avg per DPC</span>
-                                {d.pctTime !== undefined && <span>{d.pctTime.toFixed(1)}% CPU time</span>}
-                              </div>
-                              {fix && (
-                                <p className="text-[11px] text-emerald-400 mt-1">
-                                  → {fix.fix}
-                                </p>
+                          <div key={idx} className="flex flex-col gap-0.5 px-3 py-2 rounded-lg bg-zinc-900/60 border border-white/5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[11px] text-zinc-300 font-bold">{d.name}</span>
+                              <span className={cn("text-[10px] font-bold ml-auto", severity)}>{d.usPerDpc.toFixed(1)}µs avg</span>
+                              {d.pctTime !== undefined && (
+                                <span className="text-[10px] text-zinc-600">{d.pctTime.toFixed(1)}% time</span>
                               )}
                             </div>
+                            {known && (
+                              <p className="text-[10px] text-zinc-500 leading-snug">{known.fix}</p>
+                            )}
                           </div>
                         );
                       })}
