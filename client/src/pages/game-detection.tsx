@@ -315,7 +315,7 @@ const GAMES: GameEntry[] = [
     publisher: "IO Interactive",
     accentBorder: "border-l-yellow-500",
     coverUrl: "/game-covers/007-first-light.jpg",
-    coverPosition: "center top",
+    coverPosition: "center center",
     coverGradient: "from-yellow-950 via-zinc-900 to-black",
     detectPaths: [
       "C:\\Program Files (x86)\\Steam\\steamapps\\common\\007 First Light",
