@@ -3141,25 +3141,29 @@ Start-Sleep 2
   app.post('/api/pro/friend', rateLimit(5, 60_000, 10), async (req, res) => {
     const { token } = req.body || {};
     if (!token) return res.json({ valid: false });
+
+    // Discord must be connected — this binds the unlock to a real identity and
+    // prevents the session token being copy-pasted / re-shared after redemption.
+    if (!req.session?.userId) {
+      return res.json({ valid: false, error: "discord_required" });
+    }
+
     const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const redeemed = await storage.redeemFriendToken(String(token), clientIp);
     if (redeemed) {
       const codeRef = `friend:${String(token)}`;
       const sessionToken = await storage.createProSession(codeRef);
       storage.logProIp(codeRef, clientIp).catch(() => {});
-      // Task #41: friend unlocks also grant a permanent Discord-keyed
-      // entitlement when the user is signed in.
-      if (req.session?.userId) {
-        try {
-          await storage.grantPro({
-            discordUserId: req.session.userId,
-            source: "friend",
-            notes: `friend token:${String(token).slice(0, 8)}…`,
-          });
-        } catch (err: any) {
-          console.error("[pro/friend] grantPro failed:", err?.message || err);
-          return res.status(500).json({ valid: false, error: "Friend token redeemed but entitlement save failed." });
-        }
+      // Discord is now guaranteed to be connected — always grant the permanent entitlement.
+      try {
+        await storage.grantPro({
+          discordUserId: req.session.userId,
+          source: "friend",
+          notes: `friend token:${String(token).slice(0, 8)}…`,
+        });
+      } catch (err: any) {
+        console.error("[pro/friend] grantPro failed:", err?.message || err);
+        return res.status(500).json({ valid: false, error: "Friend token redeemed but entitlement save failed." });
       }
       return res.json({ valid: true, sessionToken });
     }

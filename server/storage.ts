@@ -347,6 +347,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteFriendToken(id: number): Promise<void> {
+    // Look up the token string first so we can revoke the associated session.
+    const [row] = await db.select({ token: proFriendTokens.token })
+      .from(proFriendTokens)
+      .where(eq(proFriendTokens.id, id));
+    if (row?.token) {
+      await db.delete(proSessions).where(eq(proSessions.codeRef, `friend:${row.token}`)).catch(() => {});
+    }
     await db.delete(proFriendTokens).where(eq(proFriendTokens.id, id));
   }
 
@@ -356,6 +363,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUsedFriendTokens(): Promise<number> {
     const rows = await db.delete(proFriendTokens).where(isNotNull(proFriendTokens.usedAt)).returning();
+    // Revoke every associated session so ghost "friend link" sessions don't linger.
+    for (const r of rows) {
+      await db.delete(proSessions).where(eq(proSessions.codeRef, `friend:${r.token}`)).catch(() => {});
+    }
     return rows.length;
   }
 

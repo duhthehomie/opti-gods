@@ -64,16 +64,24 @@ function VisitTracker() {
   return null;
 }
 
+const PENDING_FRIEND_KEY = "optigods_pending_friend";
+
 function FriendUnlockHandler() {
   const { toast } = useToast();
   useEffect(() => {
+    // Pull token from URL param OR a pending token saved before Discord login
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("friend");
+    const urlToken = params.get("friend");
+    const pendingToken = (() => { try { return sessionStorage.getItem(PENDING_FRIEND_KEY); } catch { return null; } })();
+    const token = urlToken ?? pendingToken;
     if (!token) return;
 
-    const url = new URL(window.location.href);
-    url.searchParams.delete("friend");
-    window.history.replaceState({}, "", url.toString());
+    // Clean the URL so refresh doesn't re-trigger
+    if (urlToken) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("friend");
+      window.history.replaceState({}, "", url.toString());
+    }
 
     fetch(apiUrl("/api/pro/friend"), {
       method: "POST",
@@ -83,9 +91,19 @@ function FriendUnlockHandler() {
       .then((r) => r.json())
       .then((data) => {
         if (data.valid && data.sessionToken) {
+          try { sessionStorage.removeItem(PENDING_FRIEND_KEY); } catch {}
           setProStatus(true, data.sessionToken);
           window.location.reload();
+        } else if (data.error === "discord_required") {
+          // Save the token so it auto-redeems after the user signs in with Discord
+          try { sessionStorage.setItem(PENDING_FRIEND_KEY, token); } catch {}
+          toast({
+            title: "Discord sign-in required",
+            description: "Connect your Discord account first — your friend link will unlock automatically after you sign in.",
+            variant: "destructive",
+          });
         } else {
+          try { sessionStorage.removeItem(PENDING_FRIEND_KEY); } catch {}
           toast({
             title: "Link already used",
             description: "This friend link has already been redeemed. Each link can only be used once.",
@@ -94,7 +112,7 @@ function FriendUnlockHandler() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
