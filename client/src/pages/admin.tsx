@@ -1327,7 +1327,27 @@ function parseCpuModel(model: string): { brand: "intel" | "amd"; threads: number
 }
 
 type PresetInitValues = { gpuVendor: "nvidia" | "amd" | "intel"; gpuName: string; cpuModel: string; cpuCores?: number; cpuThreads?: number; ramGb: number; osVersion: "win11" | "win10"; isLaptop: boolean };
-type CustomerHW = { codeRef: string; gpuVendor: string | null; gpuName: string | null; cpuModel: string | null; cpuCores: number | null; cpuThreads: number | null; ramGb: number | null; osVersion: string | null; isLaptop: boolean | null };
+type CustomerHW = {
+  codeRef: string;
+  gpuVendor: string | null;
+  gpuName: string | null;
+  cpuModel: string | null;
+  cpuCores: number | null;
+  cpuThreads: number | null;
+  ramGb: number | null;
+  osVersion: string | null;
+  isLaptop: boolean | null;
+  // Extended fields from native scan (hardware_rigs table)
+  discordUsername?: string | null;
+  source?: "hw" | "rig";
+  lastSeenAt?: string | null;
+  rigId?: number | null;
+  seenCount?: number | null;
+  motherboard?: string | null;
+  vramMb?: number | null;
+  ramMhz?: number | null;
+  refreshHz?: number | null;
+};
 
 function AdminPresetGenerator({
   initialValues,
@@ -1359,6 +1379,8 @@ function AdminPresetGenerator({
   // V2.2 — server-resolved preset preview + admin opt-in selections
   const [safePreset, setSafePreset] = useState<SafePresetResponse | null>(null);
   const [adminOptInIds, setAdminOptInIds] = useState<Set<string>>(new Set());
+  // Admin always gets full preset — all expert tweaks included by default
+  const [includeAllExpert, setIncludeAllExpert] = useState(true);
 
   const loadUser = (hw: CustomerHW) => {
     setSelectedUser(hw.codeRef);
@@ -1427,6 +1449,58 @@ function AdminPresetGenerator({
 
   // V2.2 — buildSafePreset is the single canonical preset path. Admin previews
   // the structured response (core + red opt-in expert section) before downloading.
+  // Generate preset, optionally with directly-supplied hw values (bypasses async state for load+generate)
+  type DirectHW = { gpuVendor: "nvidia"|"amd"|"intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11"|"win10"; isLaptop: boolean };
+
+  const generateFromHW = async (hw: DirectHW) => {
+    setGenerating(true);
+    try {
+      const cpu = parseCpuModel(hw.cpuModel);
+      const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hardware: {
+            gpuVendor: hw.gpuVendor,
+            gpuName: hw.gpuName,
+            cpuBrand: cpu.brand,
+            cpuLabel: hw.cpuModel,
+            cpuCores: cpu.threads,
+            ramGB: hw.ramGb,
+            osVersion: hw.osVersion,
+            isLaptop: hw.isLaptop,
+            hasDiscreteGpu: hw.gpuVendor === "nvidia" || hw.gpuVendor === "amd",
+          },
+          goal: "balanced",
+          optInFlags: [],
+        }),
+      });
+      if (!safePresetRes.ok) throw new Error("Preset build failed");
+      const preset = (await safePresetRes.json()) as SafePresetResponse;
+      setSafePreset(preset);
+      // Pre-select all expert tweaks when includeAllExpert is on
+      if (includeAllExpert) setAdminOptInIds(new Set(preset.expert));
+      toast({ title: `Preset loaded — ${preset.core.length + (includeAllExpert ? preset.expert.length : 0)} tweaks ready`, description: "Review below, then hit Generate to download the .bat" });
+    } catch (e) {
+      toast({ title: "Auto-generate failed", description: String(e), variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const loadAndGenerate = (hw: CustomerHW) => {
+    loadUser(hw);
+    const vendor = (hw.gpuVendor && ["nvidia","amd","intel"].includes(hw.gpuVendor)) ? hw.gpuVendor as "nvidia"|"amd"|"intel" : "nvidia";
+    generateFromHW({
+      gpuVendor: vendor,
+      gpuName: hw.gpuName || "",
+      cpuModel: hw.cpuModel || "",
+      ramGb: hw.ramGb || 16,
+      osVersion: hw.osVersion === "win11" ? "win11" : "win10",
+      isLaptop: hw.isLaptop || false,
+    });
+  };
+
   const handleGenerate = async () => {
     setGenerating(true);
     try {
@@ -1446,7 +1520,7 @@ function AdminPresetGenerator({
             hasDiscreteGpu: gpuVendor === "nvidia" || gpuVendor === "amd",
           },
           goal: "balanced",
-          optInFlags: Array.from(adminOptInIds),
+          optInFlags: includeAllExpert ? [] : Array.from(adminOptInIds),
         }),
       });
       if (!safePresetRes.ok) throw new Error("Safe preset build failed");
@@ -1455,7 +1529,12 @@ function AdminPresetGenerator({
 
       const tweakMap: Record<string, boolean> = {};
       preset.core.forEach(id => { tweakMap[id] = true; });
-      preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
+      // When includeAllExpert is on, include ALL expert tweaks (lazy-user full preset)
+      if (includeAllExpert) {
+        preset.expert.forEach(id => { tweakMap[id] = true; });
+      } else {
+        preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
+      }
       const tweakIds = Object.keys(tweakMap);
 
       const res = await fetch(apiUrl("/api/script/download-bat"), {
@@ -1602,7 +1681,7 @@ function AdminPresetGenerator({
                   <button
                     key={hw.codeRef}
                     data-testid={`btn-load-user-${hw.codeRef}`}
-                    onClick={() => loadUser(hw)}
+                    onClick={() => loadAndGenerate(hw)}
                     className={cn(
                       "w-full text-left px-4 py-3 transition-all hover:bg-white/4 group",
                       isSelected && "bg-red-500/8 border-l-2 border-l-red-500"
@@ -1614,14 +1693,27 @@ function AdminPresetGenerator({
                       <div className="flex-1 min-w-0 space-y-1">
                         {/* Row 1: name + badges */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={cn("text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border", isSelected ? "text-red-300 bg-red-500/15 border-red-500/30" : "text-zinc-400 bg-zinc-800 border-zinc-700")}>
-                            {label.length > 22 ? label.slice(0, 22) + "…" : label}
-                          </span>
+                          {/* Discord username (if available) or code label */}
+                          {hw.discordUsername ? (
+                            <span className={cn("text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border flex items-center gap-1", isSelected ? "text-[#a5adff] bg-[#5865F2]/20 border-[#5865F2]/40" : "text-[#a5adff] bg-[#5865F2]/10 border-[#5865F2]/20")}>
+                              <span className="text-[8px]">⬤</span>{hw.discordUsername.length > 18 ? hw.discordUsername.slice(0, 18) + "…" : hw.discordUsername}
+                            </span>
+                          ) : (
+                            <span className={cn("text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border", isSelected ? "text-red-300 bg-red-500/15 border-red-500/30" : "text-zinc-400 bg-zinc-800 border-zinc-700")}>
+                              {label.length > 22 ? label.slice(0, 22) + "…" : label}
+                            </span>
+                          )}
+                          {hw.source === "rig" && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">SCAN</span>
+                          )}
                           {hw.isLaptop && (
                             <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">LAPTOP</span>
                           )}
                           {hw.osVersion && (
                             <span className="text-[9px] text-zinc-600">{hw.osVersion === "win11" ? "Win11" : "Win10"}</span>
+                          )}
+                          {hw.seenCount && hw.seenCount > 1 && (
+                            <span className="text-[9px] text-zinc-700">{hw.seenCount}x</span>
                           )}
                         </div>
                         {/* Row 2: GPU + CPU */}
@@ -1637,8 +1729,8 @@ function AdminPresetGenerator({
                             </span>
                           )}
                         </div>
-                        {/* Row 3: RAM + threads */}
-                        <div className="flex items-center gap-2">
+                        {/* Row 3: RAM + extras */}
+                        <div className="flex items-center gap-2 flex-wrap">
                           {hw.ramGb && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
                               <MemoryStick className="w-2.5 h-2.5 inline mr-0.5" />{hw.ramGb}GB
@@ -1649,13 +1741,19 @@ function AdminPresetGenerator({
                               {hw.cpuCores ? `${hw.cpuCores}C` : ""}{hw.cpuCores && hw.cpuThreads ? "/" : ""}{hw.cpuThreads ? `${hw.cpuThreads}T` : ""}
                             </span>
                           )}
+                          {hw.vramMb && (
+                            <span className="text-[9px] text-zinc-700">{Math.round(hw.vramMb / 1024)}GB VRAM</span>
+                          )}
+                          {hw.refreshHz && (
+                            <span className="text-[9px] text-zinc-700">{hw.refreshHz}Hz</span>
+                          )}
                           <span className={cn(
                             "ml-auto text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded transition-all",
                             isSelected
                               ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-zinc-800/0 text-zinc-700 group-hover:bg-zinc-800 group-hover:text-zinc-400 border border-transparent"
+                              : "bg-zinc-800/0 text-zinc-700 group-hover:bg-red-600 group-hover:text-white border border-transparent group-hover:border-red-500"
                           )}>
-                            {isSelected ? "✓ Loaded" : "Load →"}
+                            {isSelected ? (generating ? "⟳ Generating…" : "✓ Loaded") : "Load + Gen →"}
                           </span>
                         </div>
                       </div>
@@ -1871,6 +1969,25 @@ function AdminPresetGenerator({
         </div>
       )}
 
+      {/* Include all expert tweaks toggle */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-950/30 border border-red-500/20">
+        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+        <div className="flex-1">
+          <p className="text-xs font-bold text-red-300">Include all opt-in expert tweaks</p>
+          <p className="text-[10px] text-zinc-500">Lazy-user full preset — DisableDefender, VBS/HVCI off, etc. included in .bat</p>
+        </div>
+        <button
+          data-testid="toggle-include-all-expert"
+          onClick={() => setIncludeAllExpert(v => !v)}
+          className={cn(
+            "w-10 h-5 rounded-full transition-all relative shrink-0",
+            includeAllExpert ? "bg-red-600" : "bg-zinc-700"
+          )}
+        >
+          <div className={cn("w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all", includeAllExpert ? "left-5" : "left-0.5")} />
+        </button>
+      </div>
+
       {/* Generate button */}
       <button
         data-testid="button-generate-preset"
@@ -1879,7 +1996,7 @@ function AdminPresetGenerator({
         className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm border border-red-500/30 flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Download className="w-4 h-4" />
-        {generating ? "Generating Preset..." : "Generate Preset Script"}
+        {generating ? "Generating Preset..." : `Generate ${includeAllExpert ? "Full" : "Core"} Preset Script`}
       </button>
 
       <button
@@ -3017,6 +3134,16 @@ export default function Admin() {
     retry: false,
     refetchInterval: 30000,
   });
+
+  // Native scan users from hardware_rigs table (instant native scan → detected users)
+  const rigsDetectedQuery = useQuery<CustomerHW[]>({
+    queryKey: ["/api/admin/rigs-detected", key],
+    queryFn: () => fetch(apiUrl("/api/admin/rigs-detected"), { headers }).then(r => r.json()),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 15000,
+  });
+
   const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
 
   const sendEmailCode = useMutation({
@@ -5326,7 +5453,12 @@ export default function Admin() {
           <AdminPresetGenerator
             key={presetFillKey}
             initialValues={presetFillData ?? undefined}
-            allHardware={customerHardwareQuery.data || []}
+            allHardware={[
+              // Native scan rigs first (most recent, richest data — from instant native scan)
+              ...(rigsDetectedQuery.data || []).map(r => ({ ...r, source: "rig" as const })),
+              // Then code-linked hardware snapshots (may have OS version info)
+              ...(customerHardwareQuery.data || []).map(h => ({ ...h, source: "hw" as const })),
+            ]}
             allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
             apiKey={key}
           />

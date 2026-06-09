@@ -3046,6 +3046,59 @@ Start-Sleep 2
     res.json(rows);
   });
 
+  // Admin — rigs from native scan (hardware_rigs table) formatted for the preset generator
+  app.get('/api/admin/rigs-detected', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const rigs = await storage.listRigs({ limit: 300, offset: 0 });
+
+    // Batch Discord username lookups for rigs with a linked Discord user
+    const discordUserMap: Record<string, string> = {};
+    const uniqueDiscordIds = [...new Set(rigs.filter(r => r.discordUserId).map(r => r.discordUserId as string))];
+    await Promise.all(uniqueDiscordIds.map(async (id) => {
+      try {
+        const u = await storage.getUser(id);
+        if (u) discordUserMap[id] = u.globalName ?? u.username ?? id.slice(0, 10);
+      } catch {}
+    }));
+
+    const result = rigs.map(rig => {
+      const gpuLower = rig.gpu.toLowerCase();
+      const gpuVendor =
+        gpuLower.includes("nvidia") || gpuLower.includes("geforce") || gpuLower.includes("rtx") || gpuLower.includes("gtx") ? "nvidia"
+        : gpuLower.includes("amd") || gpuLower.includes("radeon") || gpuLower.includes(" rx ") || gpuLower.includes("rx6") || gpuLower.includes("rx7") ? "amd"
+        : gpuLower.includes("intel") || gpuLower.includes("uhd") || gpuLower.includes("arc") || gpuLower.includes("iris") || gpuLower.includes("xe") ? "intel"
+        : "nvidia";
+
+      const chassisLower = (rig.chassis ?? "").toLowerCase();
+      const isLaptop = ["laptop", "notebook", "portable", "sub notebook", "sub-notebook"].some(k => chassisLower.includes(k));
+
+      const discordUsername = rig.discordUserId ? (discordUserMap[rig.discordUserId] ?? null) : null;
+
+      return {
+        codeRef: `rig-${rig.id}-${rig.hash.slice(0, 8)}`,
+        gpuVendor,
+        gpuName: rig.gpu,
+        cpuModel: rig.cpu,
+        cpuCores: null,
+        cpuThreads: null,
+        ramGb: rig.ramGb ?? null,
+        osVersion: null,
+        isLaptop,
+        discordUsername,
+        source: "rig" as const,
+        lastSeenAt: rig.lastSeenAt ? (rig.lastSeenAt as Date).toISOString() : null,
+        rigId: rig.id,
+        seenCount: rig.seenCount,
+        motherboard: rig.motherboard ?? null,
+        vramMb: rig.vramMb ?? null,
+        ramMhz: rig.ramMhz ?? null,
+        refreshHz: rig.refreshHz ?? null,
+      };
+    });
+
+    return res.json(result);
+  });
+
   // Admin — grant themselves a real Pro session for testing (requires admin key)
   app.post('/api/admin/grant-pro-session', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
@@ -5327,7 +5380,46 @@ SAFE PRESET GENERATION (V2.2):
   Optional opt-ins (case-sensitive tweak IDs, comma-separated):
     Generate preset for rig #42 with EnableMSIMode,Win11DisableVBS
 - That command is intercepted by the server (NOT routed through you) and runs the canonical buildSafePreset() pipeline — hardware-filtered, expert-gated, V2.1-forbidden-trio (EnableMSIMode / DisableIPv6 / SetTimerResolution) refused unless explicitly opted-in.
-- NEVER hand-roll preset arrays yourself. NEVER list tweak IDs as a recommendation. If the admin wants a preset, instruct them to run the rig command above.`;
+- NEVER hand-roll preset arrays yourself. NEVER list tweak IDs as a recommendation. If the admin wants a preset, instruct them to run the rig command above.
+
+OPTI GODS V3 — COMPLETE CHANGELOG (use this verbatim when admin asks "what's new in v3"):
+VERSION 3.0.0 is a full rebuild from V2.2. Core highlights:
+
+TABS & TWEAKS (437+ total across 15+ tabs):
+- DPC Latency Optimizer — one-click button, no manual registry hunting (was previously manual .reg files)
+- Fortnite tab — Engine.ini + GameUserSettings.ini tweaks, launch options; verified 100+ FPS gains on GTX 16xx / GTX 10xx builds
+- Discord tab — hardware acceleration off, Krisp AI noise off, overlay kill, process priority boost to High
+- Game Detection tab — auto-scans 14+ installed games (FiveM, Fortnite, Valorant, CoD, CS2, Apex, GTA V, Warzone, Rocket League, R6 Siege, 007 First Light, and more); opens targeted boost guide per game
+- Background Manager (Process Lasso tab) — identifies CPU hogs, marks system-critical processes with "Don't Kill" badges to protect NVIDIA drivers / Vanguard / audio stack; dedicated Peripheral Software section for Logitech, Razer, Corsair, SteelSeries software
+- AMD Integrated GPU / Vega 8 tab — Ryzen APU-specific tweaks: TDR timeout, HDCP disable, audio co-processor power-gating
+- Laptop tab — MUX Switch (dGPU Direct for +15–30% FPS on supported hardware), thermal profile tuner, battery-saver killer, aggressive fan curve toggle
+- NVIDIA Driver Reapply button — re-applies all 12 driver-level registry tweaks after a GeForce driver update in one click
+- AMD Driver Reapply button — same for Adrenalin updates (8 driver-level tweaks)
+
+SAFETY (V2.1 stability surgery — fully applied in V3):
+- EnableMSIMode, DisableIPv6, SetTimerResolution permanently removed from auto-preset — these caused BSODs (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED), FiveM productId crashes, and Ryzen APU boot hangs on V1; now opt-in only with explicit warnings
+- buildSafePreset — canonical hardware-aware preset builder; GPU-vendor cross-contamination impossible (NVIDIA tweaks blocked on AMD rigs, etc.)
+
+SCRIPT & PRESET:
+- .bat file downloads instead of .ps1 — double-click and done, no PowerShell execution policy issues, shows live progress
+- Smart Preset Builder in admin panel — generates per-user hardware-matched .bat files from native scan data
+- Admin preset includes FULL tweak coverage: core safe tweaks + opt-in expert layer + driver-reapply layer
+
+AI:
+- Opti Gods AI (Groq-powered) — streaming chat, vision mode (screenshot analysis), smart preset generation via [SAVE_PRESET:AUTO] marker
+- Aether Admin AI (this interface) — live stats, rig preset generation, ticket triage, v3 changelog awareness
+
+DETECTION & AUTH:
+- Instant native scan — hardware auto-detect on first visit (GPU/CPU/RAM/OS), writes to admin Detected Users section with Discord name
+- Discord OAuth integration — users link Discord account for Pro lifetime entitlement
+- Peripheral Software detection — Logitech/Razer/Corsair background apps identified and flagged separately
+
+PERFORMANCE BENCHMARKS (leaq's rig: GTX 1650 Super + Ryzen 5 3500 + 32GB Win10):
+- Fortnite: 100+ FPS gain verified
+- FiveM: 120+ FPS gain verified
+- Valorant: 300+ FPS on budget builds verified
+- Laptops (Dell G15, Lenovo Legion): 60→165+ FPS and 80→200+ FPS verified by community
+- Full laptop + OEM support: Dell, Lenovo, HP, ASUS — hardware-aware tweaks fire correctly for each config`;
 
     const chatHistory = (history as { role: string; content: string }[])
       .slice(-10)
@@ -5542,6 +5634,23 @@ DRIVER BEST PRACTICE: Always use DDU (boot to Safe Mode → clean all → restar
 SCREENSHOT ANALYSIS: Look for FPS/frametimes (identify stutters), CPU/GPU usage (100% CPU=bottleneck, <80% GPU=driver issue), background processes, NVCP/Radeon settings, game settings quality levels, error messages.
 
 SYSTEM APPROACH: Always ask the game, GPU model (HAGS decision), desktop vs laptop (power plan/thermal/MUX advice). Give EXACT values and PowerShell/registry paths. Mention if restart required.
+
+OPTI GODS V3 — WHAT'S NEW (answer "what's new in v3" with this):
+V3 is a full rebuild with 437+ tweaks across 15+ tabs. Key additions:
+- **DPC Latency tab** — one-click latency fix (was manual .reg files before)
+- **Fortnite tab** — Engine.ini + GameUserSettings.ini + launch options, 100+ FPS gains verified on GTX 16xx
+- **Discord tab** — hardware accel off, Krisp AI noise off, overlay kill, High priority
+- **Game Detection** — scans for 14+ installed games, opens targeted FPS guide per game
+- **Background Manager** — "Don't Kill" badges protect NVIDIA drivers/Vanguard/audio stack; Peripheral Software section for Logitech/Razer/Corsair/SteelSeries
+- **Laptop tab** — MUX Switch (dGPU Direct, +15–30% FPS), thermal tuning, battery-saver killer
+- **AMD iGPU / Vega 8 tab** — Ryzen APU-specific tweaks for integrated graphics builds
+- **NVIDIA + AMD Driver Reapply** — one-click re-apply of driver tweaks after any update
+- **.bat downloads** instead of .ps1 — double-click and done, no execution policy issues
+- **Instant native scan** → admin Detected Users with Discord name + full specs
+- **Dell/Lenovo/HP/ASUS support** — laptop + OEM hardware-aware tweaks
+- **Verified gains**: 100+ FPS Fortnite, 120+ FPS FiveM, 300+ FPS Valorant
+- **V2.1 safety**: EnableMSIMode/DisableIPv6/SetTimerResolution are opt-in only (caused BSODs/FiveM crashes in V1)
+- To get a full hardware-matched preset: ask me "give me a smart preset for [your GPU]" and I'll generate one instantly.
 
 ${proLine}
 You are THE authority. Be direct, specific, and authoritative. Gamers need real answers — not disclaimers.`;
