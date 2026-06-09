@@ -181,7 +181,7 @@ export default function CallOfDuty() {
             {/* FPS & Process Priority — UNIVERSAL */}
             <section>
               <SectionHeader title="⚡ FPS & Process Priority" sectionKey="fps" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {([
                   {
                     id: "CodHighPriority",
@@ -243,7 +243,7 @@ export default function CallOfDuty() {
                   </p>
                 </div>
               )}
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {([
                   {
                     id: "CodShaderCacheClear",
@@ -297,7 +297,7 @@ export default function CallOfDuty() {
             {/* Network & Stability — UNIVERSAL */}
             <section>
               <SectionHeader title="📡 Network & Stability" sectionKey="network" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {([
                   {
                     id: "CodNetworkBuffer",
@@ -332,7 +332,7 @@ export default function CallOfDuty() {
               <section>
                 <SectionHeader title="🟢 NVIDIA GPU" sectionKey="nvidia" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
                 <span className="text-[10px] text-zinc-600 font-mono -mt-2 mb-4 block px-1">{gpuLabel}</span>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {([
                     {
                       id: "Cod1650LowLatency",
@@ -389,7 +389,7 @@ export default function CallOfDuty() {
               <section>
                 <SectionHeader title="🔴 AMD GPU" sectionKey="amdgpu" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
                 <span className="text-[10px] text-zinc-600 font-mono -mt-2 mb-4 block px-1">{gpuLabel}</span>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {([
                     {
                       id: "AmdD3DOptimize",
@@ -423,7 +423,7 @@ export default function CallOfDuty() {
                 </h2>
                 <span className="text-[10px] text-zinc-600 ml-1">CPU-specific</span>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {isAmdCpu && (
                   <TweakRow
                     id="Cod3500PowerPlan"
@@ -459,7 +459,7 @@ export default function CallOfDuty() {
                   Deeper system-level optimizations — GPU hang prevention, MMCSS scheduler tuning, QoS network prioritization, and telemetry removal. All safe for daily use.
                 </p>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {([
                   {
                     id: "CodDisableTelemetry",

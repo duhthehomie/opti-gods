@@ -337,8 +337,10 @@ export default function Nvidia() {
             variant="outline"
             size="sm"
             onClick={enableAllNvidia}
+            disabled={hw.gpuName === "Detecting..." || hw.loading}
+            title={hw.gpuName === "Detecting..." ? "Run Instant Scan first" : undefined}
             data-testid="button-enable-all-nvidia"
-            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide"
+            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Enable All Recommended
           </Button>
@@ -478,7 +480,7 @@ export default function Nvidia() {
 
         <TabSmartBar
           tweakIds={ALL_NVIDIA_IDS}
-          recommendedIds={NVIDIA_RECOMMENDED_IDS}
+          recommendedIds={nvidiaSmartIds}
           label="NVIDIA"
           context="These tweaks modify NVIDIA driver registry keys and GPU interrupt modes. They persist across driver updates. HAGS and MSI Mode require a reboot to take effect."
           tips={[
@@ -540,11 +542,13 @@ export default function Nvidia() {
             {(() => {
               const recIds = NVIDIA_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
                   variant="ghost" size="sm"
                   onClick={() => recIds.forEach(id => setTweak(id, true))}
-                  disabled={allOn}
+                  disabled={allOn || noScan}
+                  title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-registry"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed ml-1"
                 >
@@ -580,11 +584,13 @@ export default function Nvidia() {
             {(() => {
               const recIds = NVIDIA_ADVANCED_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
                   variant="ghost" size="sm"
                   onClick={() => recIds.forEach(id => setTweak(id, true))}
-                  disabled={allOn}
+                  disabled={allOn || noScan}
+                  title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-advanced"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -621,11 +627,13 @@ export default function Nvidia() {
             {(() => {
               const recIds = NVIDIA_NEW_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
                   variant="ghost" size="sm"
                   onClick={() => recIds.forEach(id => setTweak(id, true))}
-                  disabled={allOn}
+                  disabled={allOn || noScan}
+                  title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-new"
                   className="text-[10px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -663,11 +671,13 @@ export default function Nvidia() {
             {(() => {
               const recIds = NVIDIA_LOW_END_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "GTX 1060 / 1650").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
                   variant="ghost" size="sm"
                   onClick={() => recIds.forEach(id => setTweak(id, true))}
-                  disabled={allOn}
+                  disabled={allOn || noScan}
+                  title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-lowend"
                   className="text-[10px] font-bold uppercase tracking-wider text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 hover:border-orange-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -704,8 +714,10 @@ export default function Nvidia() {
             {(() => {
               const recIds = NVIDIA_DX_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "GTX 1650 / 1060").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn || noScan}
+                  title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-dx"
                   className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                   <CheckCircle2 className="w-3 h-3 mr-1" />

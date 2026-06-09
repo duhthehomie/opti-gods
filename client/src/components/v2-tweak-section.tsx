@@ -60,7 +60,7 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
         )}
       </div>
       {description && <p className="text-xs text-zinc-600 px-1 mb-5">{description}</p>}
-      <div className="space-y-4">
+      <div className="space-y-5">
         {items.map((item, i) => (
           <TweakRow
             key={item.id}

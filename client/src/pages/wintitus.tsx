@@ -292,7 +292,9 @@ export default function WinTitus() {
             <Button
               data-testid="button-enable-all-wintitus"
               onClick={enableAll}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500/40 font-bold text-sm"
+              disabled={hw.gpuName === "Detecting..." || hw.loading}
+              title={hw.gpuName === "Detecting..." ? "Run Instant Scan first" : undefined}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500/40 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2" />
               Enable All Recommended

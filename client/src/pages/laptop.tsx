@@ -464,7 +464,9 @@ export default function LaptopPage() {
               <span className="text-xs text-zinc-500">{enabledCount}/{ALL_LAPTOP_IDS.length} enabled</span>
               <button
                 onClick={enableAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors"
+                disabled={hw.gpuName === "Detecting..." || hw.loading}
+                title={hw.gpuName === "Detecting..." ? "Run Instant Scan first" : undefined}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Zap className="w-3 h-3" />
                 Enable All Recommended

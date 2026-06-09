@@ -298,8 +298,10 @@ export default function Amd() {
             variant="outline"
             size="sm"
             onClick={enableAllRecommended}
+            disabled={hw.gpuName === "Detecting..." || hw.loading}
+            title={hw.gpuName === "Detecting..." ? "Run Instant Scan first" : undefined}
             data-testid="button-enable-all-amd"
-            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide"
+            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Enable All Recommended
           </Button>

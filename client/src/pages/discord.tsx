@@ -223,8 +223,10 @@ export default function Discord() {
             variant="outline"
             size="sm"
             onClick={enableAll}
+            disabled={hw.gpuName === "Detecting..." || hw.loading}
+            title={hw.gpuName === "Detecting..." ? "Run Instant Scan first" : undefined}
             data-testid="button-enable-all-discord"
-            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide shrink-0"
+            className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Zap className="w-3.5 h-3.5 mr-1.5" />
             Enable All Recommended
