@@ -375,12 +375,6 @@ function HwMonitorPanel() {
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
-            data-testid="button-download-hw-monitor"
-            onClick={downloadBat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 border border-red-500/60 text-white text-[10px] font-bold uppercase tracking-wider transition-colors">
-            <Download className="w-3 h-3" /> Download BAT
-          </button>
         </div>
       </div>
 
@@ -398,8 +392,7 @@ function HwMonitorPanel() {
             onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
           <Upload className="w-5 h-5 text-zinc-600" />
           <p className="text-[11px] text-zinc-500 text-center px-6">
-            1. Download the BAT above and run it (double-click → Yes to UAC)<br />
-            2. Drag <span className="font-mono text-zinc-400">OptiGods-HW-Monitor.json</span> here (saved to Desktop)
+            Drag <span className="font-mono text-zinc-400">OptiGods-HW-Monitor.json</span> here (saved to Desktop)
           </p>
           {parseError && <p className="text-[10px] text-red-400">{parseError}</p>}
         </div>
