@@ -19,6 +19,7 @@ import { apiUrl } from "@/lib/api-base";
 interface HwMonitorData {
   gpu_temp_c?: number | null;
   gpu_load_pct?: number | null;
+  gpu_fan_pct?: number | null;
   gpu_name?: string;
   gpu_vram_used_mb?: number;
   gpu_vram_total_mb?: number;
@@ -32,6 +33,8 @@ interface HwMonitorData {
   ram_free_gb?: number;
   ram_used_pct?: number;
   disks?: Array<{ drive: string; free_gb: number; size_gb: number; used_pct: number }>;
+  fans?: Array<{ name: string; speed_pct?: number | null; speed_rpm?: number | null }>;
+  fan_count?: number;
   timestamp?: string;
   cpu_temp_note?: string;
 }
@@ -350,11 +353,21 @@ function HwMonitorPanel() {
     else setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
   };
 
-  const downloadBat = () => {
-    const a = document.createElement("a");
-    a.href = apiUrl("/api/script/hw-monitor");
-    a.download = "OptiGods-HW-Monitor.bat";
-    a.click();
+  const downloadBat = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/script/hw-monitor"));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "OptiGods-HW-Monitor.bat";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      window.open(apiUrl("/api/script/hw-monitor"), "_blank");
+    }
   };
 
   const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";
@@ -375,6 +388,12 @@ function HwMonitorPanel() {
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+          <button
+            data-testid="button-download-hw-monitor"
+            onClick={downloadBat}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 border border-red-500/60 text-white text-[10px] font-bold uppercase tracking-wider transition-colors">
+            <Download className="w-3 h-3" /> Download BAT
+          </button>
         </div>
       </div>
 
@@ -416,6 +435,12 @@ function HwMonitorPanel() {
                 {hw.gpu_load_pct != null && <p className="text-zinc-500 text-[10px]">{hw.gpu_load_pct}% load</p>}
               </div>
             )}
+            {hw.gpu_fan_pct != null && (
+              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Wind className="w-3 h-3" /> GPU Fan</p>
+                <p className="font-mono text-lg font-black text-white">{hw.gpu_fan_pct}%</p>
+              </div>
+            )}
             {hw.cpu_temp_c != null ? (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
@@ -439,6 +464,23 @@ function HwMonitorPanel() {
               </div>
             )}
           </div>
+          {hw.fans && hw.fans.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              {hw.fans.map((f, i) => (
+                <div key={i} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1">
+                    <Wind className="w-3 h-3" /> Fan {i + 1}
+                  </p>
+                  <p className="text-white font-mono text-xs font-semibold truncate">{f.name}</p>
+                  {f.speed_rpm != null && f.speed_rpm > 0
+                    ? <p className="text-zinc-500 text-[10px]">{f.speed_rpm} RPM</p>
+                    : f.speed_pct != null
+                      ? <p className="text-zinc-500 text-[10px]">{f.speed_pct}%</p>
+                      : null}
+                </div>
+              ))}
+            </div>
+          )}
           {hw.disks && hw.disks.length > 0 && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
               {hw.disks.map(d => (

@@ -92,19 +92,13 @@ pub fn scan() -> Result<HardwareScan> {
         .raw_query("SELECT Manufacturer, PhysicalAdapter FROM Win32_NetworkAdapter")
         .context("query Win32_NetworkAdapter")?;
 
-    // Fan count — two independent WMI sources, take the higher count:
+    // Fan count — three independent WMI sources, take the highest:
     //
-    // 1. Win32_Fan — traditional source; reliable when OEM populates it, but
-    //    many consumer boards (HP Pavilion, Dell Inspiron, etc.) only register
-    //    the CPU fan here and silently omit case fans.
-    //
-    // 2. Win32_PnPEntity WHERE PNPClass='Fan' — Windows exposes ACPI-registered
-    //    fan devices here (visible in Device Manager as "System devices > ACPI Fan").
-    //    OEM EC firmware typically registers ALL fan headers through ACPI, so this
-    //    query catches chassis / case fans that Win32_Fan misses.
-    //
-    // Taking max() means a system where Win32_Fan sees 1 (CPU fan) but PnP sees 2
-    // (CPU + chassis) will correctly report 2 — which is the HP Pavilion case.
+    // 1. Win32_Fan — traditional; only CPU fan on most consumer desktop boards.
+    // 2. Win32_PnPEntity WHERE PNPClass='Fan' — ACPI fans (OEM/laptop).
+    // 3. Win32_PnPEntity WHERE Name LIKE '%Fan%' — catches boards that register
+    //    fan headers under descriptions like "ACPI Fan", "System Fan", etc.
+    //    Filtered to exclude non-fan matches (mouse, microphone, etc.).
     let fans: Vec<Win32Fan> = wmi
         .raw_query("SELECT Name FROM Win32_Fan")
         .unwrap_or_default();
@@ -115,8 +109,25 @@ pub fn scan() -> Result<HardwareScan> {
         .unwrap_or_default();
     let pnp_fan_count = pnp_fans.len() as u32;
 
-    // Use the highest count either source reports.
-    let best_count = wmi_fan_count.max(pnp_fan_count);
+    // Third pass: Name LIKE '%Fan%' filtered to plausible fan device names
+    let pnp_named_fans: Vec<Win32PnPFan> = wmi
+        .raw_query("SELECT Name FROM Win32_PnPEntity WHERE Name LIKE '%Fan%' OR Description LIKE '%Fan%'")
+        .unwrap_or_default();
+    let named_fan_count = pnp_named_fans
+        .iter()
+        .filter(|f| {
+            let n = f.name.as_deref().unwrap_or("").to_lowercase();
+            // Only count entries that look like real fans; skip "Fancy", "Fanatic", etc.
+            (n.contains("fan") || n.contains("cooling"))
+                && !n.contains("fancy")
+                && !n.contains("fanatic")
+                && !n.contains("fantasy")
+                && !n.contains("fanfare")
+        })
+        .count() as u32;
+
+    // Use the highest count any source reports.
+    let best_count = wmi_fan_count.max(pnp_fan_count).max(named_fan_count);
     let fan_count: Option<u32> = if best_count > 0 { Some(best_count) } else { None };
 
     // Pick the "main" GPU heuristically: largest VRAM that isn't a virtual / RDP adapter.

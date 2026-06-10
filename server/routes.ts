@@ -2109,6 +2109,50 @@ try {
     })
 } catch {}
 
+# ─── Fan Speeds ───────────────────────────────────────────────────────────────
+$fanList = [System.Collections.Generic.List[object]]::new()
+
+# GPU fan % via nvidia-smi
+if ($smiExe) {
+    $gpuFanRaw = (& $smiExe --query-gpu=fan.speed --format=csv,noheader,nounits 2>$null).Trim()
+    if ($gpuFanRaw -match '^\d+$') {
+        $result.gpu_fan_pct = [int]$gpuFanRaw
+        $fanList.Add([ordered]@{ name = "GPU Fan"; speed_pct = [int]$gpuFanRaw; speed_rpm = $null })
+    }
+}
+
+# Try OpenHardwareMonitor WMI first (most accurate — all fan headers with RPM)
+$ohmFansDone = $false
+try {
+    $ohmSensors = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue |
+        Where-Object { $_.SensorType -eq "Fan" }
+    if ($ohmSensors) {
+        foreach ($s in @($ohmSensors)) {
+            $fanList.Add([ordered]@{ name = $s.Name; speed_pct = $null; speed_rpm = [math]::Round($s.Value) })
+        }
+        $ohmFansDone = $true
+    }
+} catch {}
+
+# Fallback: Win32_Fan + PnP Fan (WMI — typically only CPU header on desktops)
+if (-not $ohmFansDone) {
+    try {
+        $wmiFans   = @(Get-WmiObject Win32_Fan -EA SilentlyContinue)
+        $pnpFans   = @(Get-WmiObject Win32_PnPEntity -Filter "PNPClass='Fan'" -EA SilentlyContinue)
+        $seenNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($f in ($wmiFans + $pnpFans)) {
+            $n = if ($f.Name) { $f.Name } else { "Fan" }
+            if ($seenNames.Add($n)) {
+                $rpm = if ($f.PSObject.Properties['DesiredSpeed'] -and $f.DesiredSpeed -gt 0) { [int]$f.DesiredSpeed } else { $null }
+                $fanList.Add([ordered]@{ name = $n; speed_pct = $null; speed_rpm = $rpm })
+            }
+        }
+    } catch {}
+}
+
+if ($fanList.Count -gt 0) { $result.fans = $fanList.ToArray() }
+$result.fan_count = $fanList.Count
+
 $result.timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $json = $result | ConvertTo-Json -Depth 5
 $desktop = [Environment]::GetFolderPath("Desktop")
@@ -2121,9 +2165,11 @@ Write-Host "    OPTI GODS  --  Hardware Monitor" -ForegroundColor White
 Write-Host "  ================================================" -ForegroundColor Red
 Write-Host ""
 Write-Host "  GPU Temp  : $(if ($null -ne $result.gpu_temp_c) { "$($result.gpu_temp_c) C" } else { "N/A" })" -ForegroundColor Cyan
+Write-Host "  GPU Fan   : $(if ($null -ne $result.gpu_fan_pct) { "$($result.gpu_fan_pct)%" } else { "N/A" })" -ForegroundColor Cyan
 Write-Host "  CPU Temp  : $(if ($cpuTemp) { "$cpuTemp C" } else { "N/A  (AMD Ryzen — see note in JSON)" })" -ForegroundColor Cyan
 Write-Host "  CPU Load  : $(if ($null -ne $result.cpu_load_pct) { "$($result.cpu_load_pct)%" } else { "N/A" })" -ForegroundColor Cyan
 Write-Host "  RAM Used  : $(if ($null -ne $result.ram_used_pct) { "$($result.ram_used_pct)%" } else { "N/A" })" -ForegroundColor Cyan
+Write-Host "  Fans      : $(if ($result.fan_count -gt 0) { "$($result.fan_count) detected" } else { "N/A (install OpenHardwareMonitor for RPM readings)" })" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Saved: $outPath" -ForegroundColor Green
 Write-Host ""
