@@ -33,7 +33,7 @@ const WinTitus         = lazy(() => import("@/pages/wintitus"));
 const SpotifyPage      = lazy(() => import("@/pages/spotify"));
 const CpuPage          = lazy(() => import("@/pages/cpu"));
 
-type GroupId = "windows" | "network" | "gpu" | "games" | "system";
+type GroupId = "windows" | "network" | "gpu" | "cpu" | "games" | "system";
 
 type Section = {
   id: string;
@@ -77,7 +77,7 @@ const SECTIONS: Section[] = [
   { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,        group: "games",   Component: RobloxPage,         categories: ["roblox"] },
   { id: "discord",      title: "Discord While Gaming",          desc: "Stop Discord from eating FPS — process scanner, GIF, media, notifications",  icon: MessageCircle, group: "games",   Component: DiscordPage,        categories: ["discord"] },
   { id: "spotify",      title: "Spotify While Gaming",          desc: "Stop Spotify stealing FPS — GPU, CPU priority, bandwidth",  icon: Music,         group: "games",   Component: SpotifyPage,        categories: ["spotify"] },
-  { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "gpu",     Component: CpuPage,            categories: [] as TweakCategory[] },
+  { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "cpu",     Component: CpuPage,            categories: [] as TweakCategory[] },
   { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,   group: "system",  Component: Memory,             categories: ["memory"] },
   { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,         group: "system",  Component: StartupApps,        categories: ["startup"] },
   { id: "process-lasso",title: "Process Lasso",                 desc: "CPU affinity & priority automation",                        icon: Cpu,           group: "system",  Component: ProcessLasso,       categories: ["process-lasso"] },
@@ -107,6 +107,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "windows", label: "Windows" },
   { id: "network", label: "Network" },
   { id: "gpu",     label: "GPU"     },
+  { id: "cpu",     label: "CPU"     },
   { id: "games",   label: "Games"   },
   { id: "system",  label: "System"  },
 ];
