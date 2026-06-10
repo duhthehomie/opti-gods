@@ -43,6 +43,7 @@ type Section = {
   group: GroupId;
   Component: React.ComponentType;
   categories: TweakCategory[];
+  tweakIds?: string[];
   hardwareFilter?: (hw: HardwareInfo) => boolean;
 };
 
@@ -77,7 +78,16 @@ const SECTIONS: Section[] = [
   { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,        group: "games",   Component: RobloxPage,         categories: ["roblox"] },
   { id: "discord",      title: "Discord While Gaming",          desc: "Stop Discord from eating FPS — process scanner, GIF, media, notifications",  icon: MessageCircle, group: "games",   Component: DiscordPage,        categories: ["discord"] },
   { id: "spotify",      title: "Spotify While Gaming",          desc: "Stop Spotify stealing FPS — GPU, CPU priority, bandwidth",  icon: Music,         group: "games",   Component: SpotifyPage,        categories: ["spotify"] },
-  { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "cpu",     Component: CpuPage,            categories: [] as TweakCategory[] },
+  { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "cpu",     Component: CpuPage,            categories: [] as TweakCategory[],
+    tweakIds: [
+      "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
+      "ProcMMCSSGaming","ProcGPUSchedulerHigh","DisableHungAppDetection","DisableSearchIndexer","DisableAutoMaintenance",
+      "SetHighPerformancePlan","DisableCoreParking","CpuBoostModeAggressive","CpuIdleMin100",
+      "DisableDynamicTick","DisablePowerThrottlingAdv","DisableUSBSuspend","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
+      "FiveMFullPerfStack","CpuFortniteIFEO","CpuCodIFEO","CpuGenericGameIFEO","ProcNUMAAware","ProcAffinityFPS",
+      "SysHypervisorOff","Win11DisableVBS","Win11DisableHVCI","CpuDisableSpectreMitigation","IntelOldGenPowerOpt",
+    ],
+  },
   { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,   group: "system",  Component: Memory,             categories: ["memory"] },
   { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,         group: "system",  Component: StartupApps,        categories: ["startup"] },
   { id: "process-lasso",title: "Process Lasso",                 desc: "CPU affinity & priority automation",                        icon: Cpu,           group: "system",  Component: ProcessLasso,       categories: ["process-lasso"] },
@@ -94,6 +104,7 @@ function applyHardwareFilter(sections: Section[], hw: HardwareInfo, showAll: boo
 }
 
 function sectionCount(section: Section): number {
+  if (section.tweakIds) return section.tweakIds.length;
   return section.categories.reduce((sum, c) => sum + tweaksByCategory(c).length, 0);
 }
 
@@ -114,6 +125,7 @@ const TABS: { id: TabId; label: string }[] = [
 
 // ─── Per-section active-tweak count ───────────────────────────────────────────
 function sectionActiveTweaks(section: Section, tweaks: Record<string, boolean>): number {
+  if (section.tweakIds) return section.tweakIds.filter(id => tweaks[id]).length;
   return section.categories.reduce((sum, c) => {
     return sum + tweaksByCategory(c).filter(t => tweaks[t.id]).length;
   }, 0);
