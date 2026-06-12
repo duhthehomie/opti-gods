@@ -2002,6 +2002,45 @@ Read-Host "Press Enter to close"
     res.end(Buffer.from(wrapInBat(script, { title: 'Task Manager - Kill and Startup Disable', tmpName: 'OptiGods-TaskMgr', marker: 'TASKMGR_PS1_START' }), 'utf8'));
   });
 
+  // ── Create Restore Point BAT ─────────────────────────────────────────────────
+  app.get('/api/script/create-restore-point', (_req, res) => {
+    const ps1 = `
+$ErrorActionPreference = 'SilentlyContinue'
+Write-Host ""
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host "    OPTI GODS  --  Create Restore Point" -ForegroundColor White
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host ""
+Write-Host "  Enabling System Restore on C:\\ ..." -ForegroundColor Cyan
+try { Enable-ComputerRestore -Drive "C:\\" -EA SilentlyContinue } catch {}
+Write-Host "  Creating restore point..." -ForegroundColor Cyan
+try {
+    Checkpoint-Computer -Description "OptiGods V3 - Before Optimization" -RestorePointType "MODIFY_SETTINGS" -EA Stop
+    $pts = Get-ComputerRestorePoint -EA SilentlyContinue | Where-Object { $_.Description -like '*OptiGods*' } | Sort-Object SequenceNumber -Descending | Select-Object -First 1
+    if ($pts) {
+        Write-Host ""
+        Write-Host "  [OK] Restore point created: #$($pts.SequenceNumber)" -ForegroundColor Green
+        Write-Host "       Description : $($pts.Description)" -ForegroundColor Green
+        Write-Host "       Created      : $($pts.ConvertToDateTime($pts.CreationTime))" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK] Restore point created successfully." -ForegroundColor Green
+    }
+} catch {
+    Write-Host ""
+    Write-Host "  [ERROR] $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  TIP: Make sure System Restore is enabled in Control Panel -> Recovery." -ForegroundColor Yellow
+}
+Write-Host ""
+Write-Host "  You can now run Full Optimize safely." -ForegroundColor White
+Write-Host "  To roll back: Tools and Fixes -> Restore Last Working State" -ForegroundColor DarkGray
+Write-Host ""
+Read-Host "  Press Enter to close"
+`.trim();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-CreateRestorePoint.bat"');
+    res.end(Buffer.from(wrapInBat(ps1, { title: 'Create Restore Point', tmpName: 'OptiGods-RestorePoint', marker: 'RESTORE_POINT_PS1_START' }), 'utf8'));
+  });
+
   // ── HW Monitor BAT — reads CPU + GPU temps, drops JSON to Desktop ──────────
   app.get('/api/script/hw-monitor', (_req, res) => {
     const ps1 = `

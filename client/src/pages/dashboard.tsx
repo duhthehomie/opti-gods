@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -306,6 +307,38 @@ export default function Dashboard() {
     window.location.reload();
   }, []);
 
+  const [creatingRestore, setCreatingRestore] = useState(false);
+  const handleRestorePoint = async () => {
+    setCreatingRestore(true);
+    try {
+      if (isNative()) {
+        const result = await createRestorePoint("OptiGods V3 — Before Optimization");
+        if (result) {
+          toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — you can roll back anytime from Tools & Fixes.` });
+        } else {
+          toast({ title: "Restore point failed", description: "Could not create restore point. Try running as administrator.", variant: "destructive" });
+        }
+      } else {
+        const res = await fetch(apiUrl("/api/script/create-restore-point"));
+        if (!res.ok) throw new Error("Server error");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "OptiGods-CreateRestorePoint.bat";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        toast({ title: "Restore point script downloaded", description: "Run OptiGods-CreateRestorePoint.bat as admin before optimizing." });
+      }
+    } catch {
+      toast({ title: "Error", description: "Could not create restore point.", variant: "destructive" });
+    } finally {
+      setCreatingRestore(false);
+    }
+  };
+
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
 
@@ -428,10 +461,12 @@ export default function Dashboard() {
               <Button
                 data-testid="button-restore-point"
                 variant="outline"
+                onClick={handleRestorePoint}
+                disabled={creatingRestore}
                 className="border-white/10 hover:bg-white/5 hover:text-white text-zinc-400 font-medium text-sm"
               >
                 <ShieldAlert className="w-4 h-4 mr-2" />
-                Create Restore Point First
+                {creatingRestore ? "Creating…" : "Create Restore Point First"}
               </Button>
             </div>
           </div>
