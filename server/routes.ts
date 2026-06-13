@@ -2042,9 +2042,22 @@ Read-Host "  Press Enter to close"
   });
 
   // ── HW Monitor BAT — reads CPU + GPU temps, drops JSON to Desktop ──────────
+  // NOTE: This script does NOT need admin rights — no registry writes, only reads.
+  // We use a custom no-UAC wrapper so the user sees ONE PowerShell window (no
+  // flashing CMD + UAC + elevated PS).  Collision naming: _2, _3 if file exists.
   app.get('/api/script/hw-monitor', (_req, res) => {
     const ps1 = `
 $ErrorActionPreference = 'SilentlyContinue'
+
+# ─── Header ──────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host "    OPTI GODS by leaq  --  Hardware Monitor" -ForegroundColor White
+Write-Host "  ================================================" -ForegroundColor Red
+Write-Host ""
+Write-Host "  Collecting sensor data..." -ForegroundColor DarkGray
+Write-Host ""
+
 $result = [ordered]@{}
 
 # ─── GPU via nvidia-smi ──────────────────────────────────────────────────────
@@ -2072,6 +2085,8 @@ if ($smiExe) {
         $result.gpu_vram_used_mb  = [int]$gpuMemUsed
         $result.gpu_vram_total_mb = [int]$gpuMemTotal
     }
+    $gpuFanRaw = (& $smiExe --query-gpu=fan.speed --format=csv,noheader,nounits 2>$null).Trim()
+    if ($gpuFanRaw -match '^\\d+$') { $result.gpu_fan_pct = [int]$gpuFanRaw }
 } else {
     $result.gpu_name   = "NVIDIA GPU (nvidia-smi.exe not found -- ensure NVIDIA drivers installed)"
     $result.gpu_temp_c = $null
@@ -2080,7 +2095,6 @@ if ($smiExe) {
 # ─── CPU Temperature — 3 fallback methods ────────────────────────────────────
 $cpuTemp = $null
 
-# Method 1: MSAcpi_ThermalZoneTemperature (Intel / some AMD laptops)
 try {
     $zones = Get-WmiObject -Namespace "root\\wmi" -Class MSAcpi_ThermalZoneTemperature -EA SilentlyContinue
     if ($zones) {
@@ -2089,7 +2103,6 @@ try {
     }
 } catch {}
 
-# Method 2: Windows PDH Thermal Zone Counters
 if (-not $cpuTemp) {
     try {
         $samples = (Get-Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -SampleInterval 1 -MaxSamples 1 -EA SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 2731 }
@@ -2101,7 +2114,6 @@ if (-not $cpuTemp) {
     } catch {}
 }
 
-# Method 3: OpenHardwareMonitor WMI (if OHM is already running)
 if (-not $cpuTemp) {
     try {
         $sensors = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "CPU Package|CPU Core|Tdie|CPU CCD" }
@@ -2148,19 +2160,13 @@ try {
     })
 } catch {}
 
-# ─── Fan Speeds ───────────────────────────────────────────────────────────────
+# ─── Fan Speeds ──────────────────────────────────────────────────────────────
 $fanList = [System.Collections.Generic.List[object]]::new()
 
-# GPU fan % via nvidia-smi
-if ($smiExe) {
-    $gpuFanRaw = (& $smiExe --query-gpu=fan.speed --format=csv,noheader,nounits 2>$null).Trim()
-    if ($gpuFanRaw -match '^\d+$') {
-        $result.gpu_fan_pct = [int]$gpuFanRaw
-        $fanList.Add([ordered]@{ name = "GPU Fan"; speed_pct = [int]$gpuFanRaw; speed_rpm = $null })
-    }
+if ($result.gpu_fan_pct -ne $null) {
+    $fanList.Add([ordered]@{ name = "GPU Fan"; speed_pct = $result.gpu_fan_pct; speed_rpm = $null })
 }
 
-# Try OpenHardwareMonitor WMI first (most accurate — all fan headers with RPM)
 $ohmFansDone = $false
 try {
     $ohmSensors = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue |
@@ -2173,7 +2179,6 @@ try {
     }
 } catch {}
 
-# Fallback: Win32_Fan + PnP Fan (WMI — typically only CPU header on desktops)
 if (-not $ohmFansDone) {
     try {
         $wmiFans   = @(Get-WmiObject Win32_Fan -EA SilentlyContinue)
@@ -2191,34 +2196,82 @@ if (-not $ohmFansDone) {
 
 if ($fanList.Count -gt 0) { $result.fans = $fanList.ToArray() }
 $result.fan_count = $fanList.Count
-
 $result.timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$json = $result | ConvertTo-Json -Depth 5
-$desktop = [Environment]::GetFolderPath("Desktop")
-$outPath = Join-Path $desktop "OptiGods-HW-Monitor.json"
-Set-Content -Path $outPath -Value $json -Encoding UTF8
 
+# ─── Robust Desktop path (works with OneDrive redirect, works non-elevated) ──
+$desktop = $null
+try {
+    $regVal = (Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -EA SilentlyContinue).Desktop
+    if ($regVal) { $desktop = [Environment]::ExpandEnvironmentVariables($regVal) }
+} catch {}
+if (-not $desktop -or -not (Test-Path $desktop -PathType Container)) {
+    try { $desktop = [Environment]::GetFolderPath('Desktop') } catch {}
+}
+if (-not $desktop -or -not (Test-Path $desktop -PathType Container)) {
+    $desktop = Join-Path $env:USERPROFILE 'Desktop'
+}
+
+# ─── Collision-safe filename (_2, _3 … if file already exists) ───────────────
+$baseName = 'OptiGods-HW-Monitor'
+$outPath  = Join-Path $desktop "$baseName.json"
+$n = 2
+while (Test-Path $outPath) { $outPath = Join-Path $desktop "${baseName}_$n.json"; $n++ }
+
+# ─── Save JSON ───────────────────────────────────────────────────────────────
+$json = $result | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText($outPath, $json, [Text.Encoding]::UTF8)
+$fname = Split-Path $outPath -Leaf
+
+# ─── Results display ─────────────────────────────────────────────────────────
+Write-Host "  GPU       : $(if ($result.gpu_name) { $result.gpu_name } else { 'N/A' })" -ForegroundColor White
+Write-Host "  GPU Temp  : $(if ($null -ne $result.gpu_temp_c) { "$($result.gpu_temp_c) C" } else { 'N/A' })" -ForegroundColor Cyan
+Write-Host "  GPU Fan   : $(if ($null -ne $result.gpu_fan_pct) { "$($result.gpu_fan_pct)%" } else { 'N/A' })" -ForegroundColor Cyan
+Write-Host "  CPU Temp  : $(if ($cpuTemp) { "$cpuTemp C" } else { 'N/A  (AMD Ryzen desktop - use HWiNFO64)' })" -ForegroundColor Cyan
+Write-Host "  CPU Load  : $(if ($null -ne $result.cpu_load_pct) { "$($result.cpu_load_pct)%" } else { 'N/A' })" -ForegroundColor Cyan
+Write-Host "  RAM Used  : $(if ($null -ne $result.ram_used_pct) { "$($result.ram_used_pct)%" } else { 'N/A' })" -ForegroundColor Cyan
+Write-Host "  Fans      : $(if ($result.fan_count -gt 0) { "$($result.fan_count) detected" } else { 'N/A (install OpenHardwareMonitor for RPM)' })" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  ================================================" -ForegroundColor Red
-Write-Host "    OPTI GODS  --  Hardware Monitor" -ForegroundColor White
-Write-Host "  ================================================" -ForegroundColor Red
-Write-Host ""
-Write-Host "  GPU Temp  : $(if ($null -ne $result.gpu_temp_c) { "$($result.gpu_temp_c) C" } else { "N/A" })" -ForegroundColor Cyan
-Write-Host "  GPU Fan   : $(if ($null -ne $result.gpu_fan_pct) { "$($result.gpu_fan_pct)%" } else { "N/A" })" -ForegroundColor Cyan
-Write-Host "  CPU Temp  : $(if ($cpuTemp) { "$cpuTemp C" } else { "N/A  (AMD Ryzen — see note in JSON)" })" -ForegroundColor Cyan
-Write-Host "  CPU Load  : $(if ($null -ne $result.cpu_load_pct) { "$($result.cpu_load_pct)%" } else { "N/A" })" -ForegroundColor Cyan
-Write-Host "  RAM Used  : $(if ($null -ne $result.ram_used_pct) { "$($result.ram_used_pct)%" } else { "N/A" })" -ForegroundColor Cyan
-Write-Host "  Fans      : $(if ($result.fan_count -gt 0) { "$($result.fan_count) detected" } else { "N/A (install OpenHardwareMonitor for RPM readings)" })" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Saved: $outPath" -ForegroundColor Green
-Write-Host ""
-Write-Host "  Drag the JSON file onto the Opti Gods System Scan tab to import." -ForegroundColor Yellow
+Write-Host "  ================================================" -ForegroundColor DarkGray
+Write-Host "  $fname has been placed on your Desktop." -ForegroundColor Green
+Write-Host "  Drag it onto the Opti Gods System Scan tab to import." -ForegroundColor Yellow
+Write-Host "  ================================================" -ForegroundColor DarkGray
 Write-Host ""
 Read-Host "  Press Enter to close"
 `.trim();
+
+    // Custom no-admin BAT wrapper — single PowerShell window, no UAC, no flashes.
+    // HW Monitor only reads sensor data; it does not need elevated rights.
+    const marker = 'HW_MONITOR_PS1_START';
+    const markerTag = `##${marker}##`;
+    const markerSearch = `'##HW_MONITOR_P'+'S1_START##'`;
+    const bat = [
+      `@echo off`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-HW-Monitor.ps1"`,
+      ``,
+      `title Opti Gods by leaq  --  Hardware Monitor`,
+      ``,
+      `:: Extract embedded PS1 (runs in this CMD window, no separate window)`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m=${markerSearch};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      ``,
+      `if not exist "%TMPPS1%" (`,
+      `  echo  [ERROR] Extraction failed. Re-download from optigods.com.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      ``,
+      `:: Run PS1 directly — no UAC, no second window, output stays in this window`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      `${markerTag}`,
+      ps1,
+    ].join('\r\n');
+
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-HW-Monitor.bat"');
-    res.end(Buffer.from(wrapInBat(ps1, { title: 'Hardware Monitor', tmpName: 'OptiGods-HW-Monitor', marker: 'HW_MONITOR_PS1_START' }), 'utf8'));
+    res.end(Buffer.from(bat, 'utf8'));
   });
 
   // ── Disable HKLM startup entry via StartupApproved registry key ─────────────
