@@ -382,11 +382,13 @@ export async function onFileDrop(
 }
 
 /**
- * Read a local file as UTF-8 text using Tauri's fs plugin.
- * Requires `fs:default` capability (already granted in capabilities/default.json).
+ * Read a local file as UTF-8 text using the custom Rust `read_text_file` command.
+ * Uses std::fs::read_to_string in Rust — no Tauri fs-plugin scope restrictions,
+ * so it can read from any path the OS allows (Desktop, Downloads, etc.).
+ * Requires `allow-read-text-file` in capabilities/default.json.
  */
 export async function readTauriTextFile(path: string): Promise<string> {
-  return invoke<string>("plugin:fs|read_text_file", { path });
+  return invoke<string>("read_text_file", { path });
 }
 
 // ─── Task Manager native commands ───────────────────────────────────────────

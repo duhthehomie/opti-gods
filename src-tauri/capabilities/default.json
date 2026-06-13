@@ -34,6 +34,7 @@
     "allow-discord-cached-token",
     "allow-check-for-update",
     "allow-env-info",
+    "allow-read-text-file",
     "allow-open-downloads",
     "allow-scan-task-manager",
     "allow-kill-app",
