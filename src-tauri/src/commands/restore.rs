@@ -18,6 +18,9 @@ pub struct RestorePoint {
 pub async fn create_restore_point(label: String) -> Result<RestorePoint, String> {
     #[cfg(windows)]
     {
+        // Ensure System Restore is enabled first — some debloat scripts disable it.
+        // Non-fatal: if this fails we proceed and surface the real error from create().
+        let _ = crate::win32::restore::ensure_enabled();
         crate::win32::restore::create(&label).map_err(|e| format!("create_restore_point: {e:#}"))
     }
     #[cfg(not(windows))]

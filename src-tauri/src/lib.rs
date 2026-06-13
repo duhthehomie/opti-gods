@@ -94,6 +94,7 @@ pub fn run() {
             commands::updater::perform_update,
             commands::env::env_info,
             commands::misc::open_downloads,
+            commands::misc::read_text_file,
             commands::task_manager::scan_task_manager,
             commands::task_manager::kill_app,
             commands::task_manager::disable_startup_app,

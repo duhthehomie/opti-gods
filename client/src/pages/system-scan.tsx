@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { scanHardware, isNative } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -331,27 +331,55 @@ function HwMonitorPanel() {
   const [parseError, setParseError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const parseJson = (text: string) => {
+    setParseError(null);
+    try {
+      const data = JSON.parse(text) as HwMonitorData;
+      if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
+      setHw(data);
+    } catch {
+      setParseError("Invalid file — drop the OptiGods-HW-Monitor.json produced by the BAT script.");
+    }
+  };
+
   const parseFile = (file: File) => {
     setParseError(null);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string) as HwMonitorData;
-        if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
-        setHw(data);
-      } catch {
-        setParseError("Invalid file — drop the OptiGods-HW-Monitor.json produced by the BAT script.");
-      }
-    };
+    reader.onload = (e) => parseJson(e.target?.result as string);
     reader.readAsText(file);
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
+    // In Tauri v2 the OS file-drop is intercepted before DOM events fire.
+    // The useEffect below handles native drops; this branch covers web mode.
     const file = e.dataTransfer.files[0];
     if (file && file.name.endsWith(".json")) parseFile(file);
     else setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
   };
+
+  // In Tauri v2, OS-level drag-drop doesn't fire DOM events — Tauri delivers
+  // a `tauri://drag-drop` event with the file path(s) instead.
+  useEffect(() => {
+    if (!isNative()) return;
+    let unlisten: (() => Promise<void>) | null = null;
+    onFileDrop(async (paths) => {
+      setDragging(false);
+      const jsonPath = paths.find(p => p.toLowerCase().endsWith(".json"));
+      if (!jsonPath) {
+        setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
+        return;
+      }
+      try {
+        const text = await readTauriTextFile(jsonPath);
+        parseJson(text);
+      } catch (e: unknown) {
+        setParseError(`Could not read file: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const downloadBat = async () => {
     try {

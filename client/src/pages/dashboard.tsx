@@ -307,29 +307,59 @@ export default function Dashboard() {
     window.location.reload();
   }, []);
 
+  const downloadRestorePointBat = async () => {
+    const res = await fetch(apiUrl("/api/script/create-restore-point"));
+    if (!res.ok) throw new Error("Server error generating BAT");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "OptiGods-CreateRestorePoint.bat";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
   const [creatingRestore, setCreatingRestore] = useState(false);
   const handleRestorePoint = async () => {
     setCreatingRestore(true);
     try {
       if (isNative()) {
-        const result = await createRestorePoint("OptiGods V3 — Before Optimization");
-        if (result) {
-          toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — you can roll back anytime from Tools & Fixes.` });
-        } else {
-          toast({ title: "Restore point failed", description: "Could not create restore point. Try running as administrator.", variant: "destructive" });
+        let nativeOk = false;
+        let nativeErr = "";
+        try {
+          const result = await createRestorePoint("OptiGods V3 — Before Optimization");
+          if (result) {
+            toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — you can roll back anytime from Tools & Fixes.` });
+            nativeOk = true;
+          }
+        } catch (e: unknown) {
+          nativeErr = e instanceof Error ? e.message : String(e);
+        }
+        if (!nativeOk) {
+          // Native call failed (System Restore disabled or insufficient policy).
+          // Fall back to BAT download so the user can create the point manually.
+          try {
+            await downloadRestorePointBat();
+            toast({
+              title: "Restore point script downloaded",
+              description: nativeErr
+                ? `Native error: ${nativeErr.replace("create_restore_point: ", "").slice(0, 120)}. Run the BAT as admin instead.`
+                : "Run OptiGods-CreateRestorePoint.bat as admin before optimizing.",
+            });
+          } catch {
+            toast({
+              title: "Restore point failed",
+              description: nativeErr
+                ? nativeErr.replace("create_restore_point: ", "").slice(0, 160)
+                : "Could not create restore point. Try running the app as administrator.",
+              variant: "destructive",
+            });
+          }
         }
       } else {
-        const res = await fetch(apiUrl("/api/script/create-restore-point"));
-        if (!res.ok) throw new Error("Server error");
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "OptiGods-CreateRestorePoint.bat";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        await downloadRestorePointBat();
         toast({ title: "Restore point script downloaded", description: "Run OptiGods-CreateRestorePoint.bat as admin before optimizing." });
       }
     } catch {
