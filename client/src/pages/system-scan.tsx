@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 // ── HW Monitor import data shape ─────────────────────────────────────────────
 interface HwMonitorData {
   gpu_temp_c?: number | null;
@@ -328,6 +329,7 @@ function HwMonitorPanel() {
   const [dragging, setDragging] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const parseJson = (text: string) => {
     setParseError(null);
@@ -577,6 +579,10 @@ function HwMonitorPanel() {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast({
+      title: "Hardware scan script downloaded",
+      description: "Run OptiGods-HW-Monitor.bat, then drag the JSON it drops on your Desktop back here.",
+    });
   };
 
   const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";
