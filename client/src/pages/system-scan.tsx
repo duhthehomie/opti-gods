@@ -538,7 +538,6 @@ function HwMonitorPanel() {
       `Write-Host "  Drag it onto the Opti Gods System Scan tab to import." -ForegroundColor Yellow`,
       `Write-Host "  ================================================" -ForegroundColor DarkGray`,
       `Write-Host ""`,
-      `Read-Host "  Press Enter to close"`,
     ];
 
     const ps1 = ps1Lines.join('\r\n');
@@ -564,6 +563,8 @@ function HwMonitorPanel() {
       ``,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
       `del "%TMPPS1%" 2>nul`,
+      `echo.`,
+      `pause`,
       `exit /b 0`,
       marker,
       ps1,
