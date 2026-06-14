@@ -4999,10 +4999,12 @@ try {
 
   $documents = Join-Path $userProfile 'Documents'
   $saved = @()
-  $savedPaths = @()
   foreach ($dir in @($desktop, $downloads, $documents)) {
     if ($dir -and (Test-Path $dir)) {
-      $outPath = Join-Path $dir 'OptiGods-Scan-Result.json'
+      $base = Join-Path $dir 'OptiGods-DetectedTweaks'
+      $outPath = $base + '.json'
+      $n = 2
+      while (Test-Path $outPath) { $outPath = $base + '_' + $n + '.json'; $n++ }
       try {
         [IO.File]::WriteAllText($outPath, $json, [Text.Encoding]::UTF8)
         $saved += $outPath
@@ -5018,7 +5020,7 @@ try {
     Write-Host "  $($saved[0])" -ForegroundColor White
     Write-Host "  ==========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Drag OptiGods-Scan-Result.json onto the Opti Gods window to import it." -ForegroundColor Cyan
+    Write-Host "  Drag OptiGods-DetectedTweaks.json onto the Opti Gods window to import it." -ForegroundColor Cyan
   } else {
     Write-Host "  Could not save file automatically. Paste the OPTIGODS_STATE line above into the app instead." -ForegroundColor Yellow
   }

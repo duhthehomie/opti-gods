@@ -196,10 +196,18 @@ function TauriFileDropHandler() {
       try {
         const text = await readTauriTextFile(jsonPath);
         let detected: Record<string, boolean> | null = null;
+        let rawParsed: unknown = null;
         try {
-          const parsed = JSON.parse(text.trim());
-          if (parsed && typeof parsed === "object") detected = parsed as Record<string, boolean>;
+          rawParsed = JSON.parse(text.trim());
         } catch {}
+        if (rawParsed && typeof rawParsed === "object") {
+          const obj = rawParsed as Record<string, unknown>;
+          // Skip HW-monitor temp files (has gpu_temp_c / cpu_temp_c)
+          if ("gpu_temp_c" in obj || "cpu_temp_c" in obj) return;
+          // Skip hardware sysinfo files (has GPU + CPU + RAM_GB but no boolean tweaks)
+          if ("GPU" in obj && "CPU" in obj && "RAM_GB" in obj) return;
+          detected = obj as Record<string, boolean>;
+        }
         if (!detected) {
           try {
             const match = text.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
@@ -208,7 +216,7 @@ function TauriFileDropHandler() {
           } catch {}
         }
         if (!detected) {
-          toast({ title: "Couldn't read file", description: "Drop OptiGods-Scan-Result.json from the detect script.", variant: "destructive" });
+          toast({ title: "Couldn't read file", description: "Drop OptiGods-DetectedTweaks.json from the detect script.", variant: "destructive" });
           return;
         }
         const store = useOptimizationStore.getState();
@@ -218,6 +226,7 @@ function TauriFileDropHandler() {
           if (key in next && typeof val === "boolean") { next[key] = val; if (val) count++; }
         }
         store.setAllTweaks(next);
+        window.dispatchEvent(new CustomEvent("optigods:tweaks-imported", { detail: { count } }));
         toast({ title: "PC state loaded", description: `${count} optimizations detected as already applied.` });
       } catch (err) {
         toast({ title: "File read failed", description: String(err), variant: "destructive" });
