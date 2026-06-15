@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, Download, ChevronDown, Zap, Wifi, Volume2, HardDrive, Monitor, Cpu, CheckCircle2, ClipboardPaste, Play, Info, AlertTriangle, Shield } from "lucide-react";
+import { Activity, Download, ChevronDown, Zap, Wifi, Volume2, HardDrive, Monitor, Cpu, CheckCircle2, Upload, FileText, Play, Info, AlertTriangle, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 
@@ -446,6 +445,19 @@ export default function DpcLatencyPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rawText, setRawText] = useState("");
   const [parsed, setParsed] = useState<ParsedDriver[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [droppedFileName, setDroppedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileDrop = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target?.result as string;
+      setRawText(text);
+      setDroppedFileName(file.name);
+    };
+    reader.readAsText(file);
+  }, []);
   const hw = useHardwareInfo();
 
   function applyFix(fix: DpcFix) {
@@ -587,10 +599,10 @@ export default function DpcLatencyPage() {
           data-testid="button-dpc-advanced-toggle"
           className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-zinc-900/60 transition-colors"
         >
-          <ClipboardPaste className="w-4 h-4 text-zinc-500" />
+          <Upload className="w-4 h-4 text-zinc-500" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-zinc-300">Advanced — Diagnose Your PC</p>
-            <p className="text-[11px] text-zinc-600 mt-0.5">Download the scanner, paste results, see which drivers are spiking on your specific system</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">Download the scanner, drop the result file, see which drivers are spiking on your system</p>
           </div>
           <ChevronDown className={cn("w-4 h-4 text-zinc-600 transition-transform", advancedOpen && "rotate-180")} />
         </button>
@@ -619,10 +631,14 @@ export default function DpcLatencyPage() {
                     data-testid="button-dpc-download-scanner"
                     onClick={() => downloadBat("dpc_scanner", `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — DPC Scanner"
+$outFile = "$env:USERPROFILE\\Desktop\\OptiGods_DPC_Result.txt"
 Write-Host ""
 Write-Host " OPTI GODS — DPC Latency Scanner" -ForegroundColor Red
 Write-Host " Capturing 30-second DPC/ISR trace..." -ForegroundColor Cyan
 Write-Host ""
+$lines = [System.Collections.Generic.List[string]]::new()
+$lines.Add("OPTI GODS DPC Scan — $(Get-Date)")
+$lines.Add("")
 $hasXperf = Get-Command xperf -EA SilentlyContinue
 if ($hasXperf) {
     Write-Host " [xperf] Starting trace..." -ForegroundColor Green
@@ -630,20 +646,26 @@ if ($hasXperf) {
     Start-Sleep 30
     xperf -stop 2>$null
     Write-Host " [xperf] Analyzing..." -ForegroundColor Cyan
-    xperf -i "$env:TEMP\\optigods_dpc.etl" -a dpcisr -noheader 2>$null
+    $result = xperf -i "$env:TEMP\\optigods_dpc.etl" -a dpcisr -noheader 2>$null
+    $result | ForEach-Object { Write-Host $_; $lines.Add($_) }
     Remove-Item "$env:TEMP\\optigods_dpc.etl" -EA SilentlyContinue
 } else {
     Write-Host " [wpr] xperf not found, using WPR fallback..." -ForegroundColor Yellow
+    $lines.Add("[wpr] xperf not found — WPR fallback used")
     $out = "$env:TEMP\\optigods_dpc.etl"
     wpr -start DPC -filemode 2>$null
-    Write-Host " Recording for 30 seconds... close games if open for clean baseline." -ForegroundColor Gray
+    Write-Host " Recording for 30 seconds... close games for clean baseline." -ForegroundColor Gray
+    $lines.Add("Recording 30s baseline...")
     Start-Sleep 30
     wpr -stop $out 2>$null
-    Write-Host " [wpr] Trace captured. Analysing with xbootmgr is needed for full output." -ForegroundColor Yellow
-    Write-Host " Copy the lines above and paste them into the Opti Gods DPC analyser." -ForegroundColor Cyan
+    Write-Host " [wpr] Trace captured." -ForegroundColor Yellow
+    $lines.Add("[wpr] Trace captured — install Windows Performance Toolkit for full driver breakdown.")
+    $lines.Add("Tip: Search 'Windows Performance Toolkit' and install the Windows SDK component for xperf support.")
 }
+$lines | Set-Content -Path $outFile -Encoding UTF8
 Write-Host ""
-Write-Host " PASTE THE OUTPUT ABOVE into the Opti Gods DPC analyser." -ForegroundColor Yellow
+Write-Host " Results saved to: $outFile" -ForegroundColor Green
+Write-Host " Drag that file into the Opti Gods DPC Analyser." -ForegroundColor Cyan
 Write-Host ""`)}
                     className="gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10"
                   >
@@ -654,14 +676,50 @@ Write-Host ""`)}
 
                 {/* Step 2 */}
                 <div className="space-y-2">
-                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Step 2 — Paste results here</p>
-                  <Textarea
-                    data-testid="textarea-dpc-paste"
-                    value={rawText}
-                    onChange={e => setRawText(e.target.value)}
-                    placeholder="Paste the xperf/WPR console output here..."
-                    className="font-mono text-[11px] bg-black/40 border-white/10 text-zinc-300 placeholder:text-zinc-700 resize-none h-32"
+                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Step 2 — Drop the result file</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".txt,.log"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileDrop(f); }}
                   />
+                  <div
+                    data-testid="dropzone-dpc"
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      const f = e.dataTransfer.files[0];
+                      if (f) handleFileDrop(f);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={cn(
+                      "relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed cursor-pointer transition-colors py-8 px-4",
+                      isDragging
+                        ? "border-red-500/70 bg-red-500/8"
+                        : droppedFileName
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-white/10 bg-black/30 hover:border-white/20 hover:bg-white/3"
+                    )}
+                  >
+                    {droppedFileName ? (
+                      <>
+                        <FileText className="w-6 h-6 text-emerald-400" />
+                        <p className="text-xs font-bold text-emerald-400">Loaded: {droppedFileName}</p>
+                        <p className="text-[10px] text-zinc-500">Click to swap file</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className={cn("w-6 h-6", isDragging ? "text-red-400" : "text-zinc-500")} />
+                        <p className={cn("text-xs font-bold", isDragging ? "text-red-400" : "text-zinc-400")}>
+                          {isDragging ? "Drop it!" : "Drop OptiGods_DPC_Result.txt here"}
+                        </p>
+                        <p className="text-[10px] text-zinc-600">or click to browse</p>
+                      </>
+                    )}
+                  </div>
                   <Button
                     size="sm"
                     data-testid="button-dpc-analyze"
