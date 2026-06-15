@@ -3251,42 +3251,76 @@ Start-Sleep 2
     return res.json({ sessionToken });
   });
 
-  // Admin — list all active Pro sessions, enriched with email from email_requests
+  // Admin — list all active Pro sessions, enriched with email, Discord, and IP location
   app.get('/api/admin/sessions', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const sessions = await storage.getAllProSessions();
-    const emailReqs = await storage.getEmailRequests();
-    const codes = await storage.getAllCodes();
+    const [sessions, emailReqs, codes, proUsers, allIpLogs] = await Promise.all([
+      storage.getAllProSessions(),
+      storage.getEmailRequests(),
+      storage.getAllCodes(),
+      storage.listProUsers(),
+      storage.getIpLogs(),
+    ]);
 
-    // Build a codeRef → email map: first check email_requests.sentCodeId → code.code
+    // Build codeRef → email from email_requests
     const codeValueToEmail: Record<string, string> = {};
-    const codeValueToDiscord: Record<string, string> = {};
+    // Build codeRef → discord from email_requests (users who went through payment flow)
+    const codeValueToDiscordFromEmail: Record<string, string> = {};
     for (const req of emailReqs) {
       if (req.sentCodeId) {
         const code = codes.find(c => c.id === req.sentCodeId);
         if (code?.code) {
           codeValueToEmail[code.code] = req.email;
-          if ((req as any).discordUsername) codeValueToDiscord[code.code] = (req as any).discordUsername;
+          if ((req as any).discordUsername) codeValueToDiscordFromEmail[code.code] = (req as any).discordUsername;
         }
       }
     }
 
-    // Build codeRef → note map so every session always has a human name
+    // Build codeRef → discord from pro_entitlements notes (e.g. "code:XXXX" pattern)
+    // This catches users who redeemed a code directly (no email request) but are Discord-linked
+    const codeValueToDiscordFromEnt: Record<string, string> = {};
+    for (const ent of proUsers) {
+      if (!ent.notes || !ent.username) continue;
+      const match = ent.notes.match(/(?:^|[| ])code:([A-Z0-9_-]+)/i);
+      if (match) {
+        const key = match[1].toUpperCase();
+        if (!codeValueToDiscordFromEnt[key]) codeValueToDiscordFromEnt[key] = ent.username;
+      }
+    }
+
+    // Build codeRef → note map
     const codeValueToNote: Record<string, string> = {};
     for (const code of codes) {
       if (code.code && code.note) codeValueToNote[code.code] = code.note;
     }
 
-    const enriched = sessions.map(s => ({
-      ...s,
-      email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
-      discordUsername: s.codeRef ? (codeValueToDiscord[s.codeRef] ?? null) : null,
-      // codeNote — the human-readable name attached to the code (e.g. "leaq", "Lovers Rack")
-      // Always present when the code has a note so the admin never sees "Unknown (code not matched)"
-      codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
-      // Mask the token — show first 8 chars only so admin can reference it without exposing full token
-      tokenMasked: s.sessionToken.slice(0, 8) + "…",
-    }));
+    // Build codeRef → most-recent IP location from ip_logs
+    const codeValueToLocation: Record<string, { city: string | null; region: string | null; country: string | null }> = {};
+    for (const log of allIpLogs) {
+      if (!log.codeRef) continue;
+      const existing = codeValueToLocation[log.codeRef];
+      // ip_logs are ordered by seenAt ASC — last entry wins (most recent)
+      if (!existing || new Date(log.seenAt ?? 0) >= new Date((existing as any)._seenAt ?? 0)) {
+        codeValueToLocation[log.codeRef] = { city: log.city, region: log.region, country: log.country, _seenAt: log.seenAt } as any;
+      }
+    }
+
+    const enriched = sessions.map(s => {
+      const loc = s.codeRef ? (codeValueToLocation[s.codeRef] ?? null) : null;
+      return {
+        ...s,
+        email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
+        // Discord: prefer email_requests source, fall back to entitlements link
+        discordUsername: s.codeRef
+          ? (codeValueToDiscordFromEmail[s.codeRef] ?? codeValueToDiscordFromEnt[s.codeRef] ?? null)
+          : null,
+        codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
+        tokenMasked: s.sessionToken.slice(0, 8) + "…",
+        ipCity: loc?.city ?? null,
+        ipRegion: loc?.region ?? null,
+        ipCountry: loc?.country ?? null,
+      };
+    });
 
     return res.json(enriched);
   });

@@ -3203,6 +3203,7 @@ export default function Admin() {
     codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
     email: string | null; discordUsername: string | null;
     codeNote: string | null;
+    ipCity: string | null; ipRegion: string | null; ipCountry: string | null;
   };
   const sessionsQuery = useQuery<SessionRow[]>({
     queryKey: ["/api/admin/sessions", key],
@@ -5074,7 +5075,14 @@ export default function Admin() {
                                 <p className="text-[10px] text-indigo-400 font-bold truncate">Discord: {s.discordUsername}</p>
                               )}
                               {s.ipAddress && (
-                                <p className="text-[10px] text-zinc-500 font-mono truncate">IP: {s.ipAddress}</p>
+                                <p className="text-[10px] text-zinc-500 font-mono truncate">
+                                  IP: {s.ipAddress}
+                                  {(s.ipCity || s.ipRegion) && (
+                                    <span className="text-zinc-400 not-italic ml-1.5">
+                                      — {[s.ipCity, s.ipRegion, s.ipCountry].filter(Boolean).join(", ")}
+                                    </span>
+                                  )}
+                                </p>
                               )}
                             </div>
                             <span className={cn(
