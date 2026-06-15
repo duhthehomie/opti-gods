@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   Shield, Terminal, CheckCircle, XCircle, Info,
-  Gamepad, Download, RefreshCw, Search, AlertCircle, Copy
+  Gamepad, Download, RefreshCw, Search, AlertCircle, Copy,
+  Play, Zap, FolderOpen, MonitorCheck, CircleDashed
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { isNative, scanTaskManager } from "@/lib/tauri-bridge";
 
 interface GameEntry {
   id: string;
@@ -39,7 +41,7 @@ const GAMES: GameEntry[] = [
     name: "Call of Duty",
     publisher: "Activision",
     accentBorder: "border-l-orange-600",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1962663/header.jpg",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1938090/header.jpg",
     detectPaths: [
       "Call of Duty\\cod.exe",
       "Call of Duty Modern Warfare 2\\cod.exe",
@@ -65,7 +67,7 @@ const GAMES: GameEntry[] = [
     name: "Call of Duty: Warzone",
     publisher: "Activision",
     accentBorder: "border-l-zinc-400",
-    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1938090/header.jpg",
+    coverUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/1962663/header.jpg",
     coverGradient: "from-zinc-900 via-slate-800 to-zinc-950",
     detectPaths: ["C:\\Program Files (x86)\\Call of Duty", "C:\\Program Files\\Battle.net Apps\\Call of Duty"],
     processName: "cod.exe",
@@ -395,6 +397,393 @@ const GAMES: GameEntry[] = [
   },
 ];
 
+// ─── Now Playing Panel ────────────────────────────────────────────────────────
+
+function NowPlayingPanel() {
+  const { tweaks, setTweak } = useOptimizationStore();
+  const native = useMemo(() => isNative(), []);
+
+  const [runningGame, setRunningGame] = useState<GameEntry | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [lastScan, setLastScan] = useState<Date | null>(null);
+  const [customInput, setCustomInput] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+  const [customFound, setCustomFound] = useState<string | null>(null);
+  const [imgErr, setImgErr] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const processMap = useMemo(
+    () => Object.fromEntries(GAMES.map(g => [g.id, g.processName])),
+    []
+  );
+
+  const doScan = useCallback(async (silent = false) => {
+    if (!native) return;
+    if (!silent) setScanning(true);
+    try {
+      const result = await scanTaskManager(processMap, {});
+      // Pick first running game (or null)
+      const found = result.running.length > 0
+        ? GAMES.find(g => g.id === result.running[0]) ?? null
+        : null;
+      setRunningGame(prev => {
+        // Reset img error when game changes
+        if (prev?.id !== found?.id) setImgErr(false);
+        return found;
+      });
+      setLastScan(new Date());
+      // Custom process name search across all_processes
+      if (customInput.trim()) {
+        const needle = customInput.trim().toLowerCase();
+        const hit = result.all_processes.find(p => p.name.toLowerCase().includes(needle));
+        setCustomFound(hit ? hit.name : null);
+      } else {
+        setCustomFound(null);
+      }
+    } catch {
+      // non-native or permission denied — silently ignore
+    } finally {
+      if (!silent) setScanning(false);
+    }
+  }, [native, processMap, customInput]);
+
+  // Poll every 5 s in native mode
+  useEffect(() => {
+    if (!native) return;
+    doScan(true);
+    pollRef.current = setInterval(() => doScan(true), 5000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [native, doScan]);
+
+  const enabled = runningGame ? (tweaks[runningGame.id] ?? false) : false;
+  const showCover = runningGame?.coverUrl && !imgErr;
+
+  // ── Non-native web fallback ────────────────────────────────────────────────
+  if (!native) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-white/8 bg-zinc-900/60 p-4 flex items-center gap-4"
+      >
+        <div className="p-2.5 bg-zinc-800 rounded-lg border border-white/5 shrink-0">
+          <MonitorCheck className="w-5 h-5 text-zinc-500" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-zinc-300">Live Game Detection</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Launch the <span className="text-white font-medium">OptiGods.exe</span> desktop app to detect which game is currently running and see missing optimizations in real time.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── No game running ────────────────────────────────────────────────────────
+  if (!runningGame && !customFound) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-white/8 bg-zinc-900/60 overflow-hidden"
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2.5">
+            <CircleDashed className="w-4 h-4 text-zinc-600" />
+            <span className="text-sm font-bold text-zinc-400">Now Playing</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono uppercase tracking-wide">
+              No game detected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              data-testid="button-refresh-nowplaying"
+              size="sm"
+              variant="outline"
+              onClick={() => doScan(false)}
+              disabled={scanning}
+              className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
+            >
+              <RefreshCw className={cn("w-3 h-3", scanning && "animate-spin")} />
+              {scanning ? "Scanning…" : "Refresh"}
+            </Button>
+            <Button
+              data-testid="button-add-game-path"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowCustom(v => !v)}
+              className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
+            >
+              <FolderOpen className="w-3 h-3" />
+              Add Game Path
+            </Button>
+          </div>
+        </div>
+
+        {/* Custom path input */}
+        <AnimatePresence>
+          {showCustom && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 py-3 bg-zinc-900/80 border-b border-white/5 flex items-center gap-3">
+                <FolderOpen className="w-4 h-4 text-zinc-500 shrink-0" />
+                <input
+                  data-testid="input-custom-game-process"
+                  type="text"
+                  value={customInput}
+                  onChange={e => setCustomInput(e.target.value)}
+                  placeholder="Enter process name or path (e.g. cs2.exe, MyGame.exe)"
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-md px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => doScan(false)}
+                  disabled={scanning || !customInput.trim()}
+                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 shrink-0"
+                >
+                  Detect
+                </Button>
+              </div>
+              {customFound === null && customInput.trim() && !scanning && lastScan && (
+                <div className="px-4 py-2 text-[11px] text-zinc-500 bg-zinc-900/40 border-b border-white/5">
+                  <span className="text-red-400 font-medium">Not found</span> — "{customInput}" is not in the running process list. Make sure the game is open and try again.
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Idle state body */}
+        <div className="px-4 py-5 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-white/5 flex items-center justify-center shrink-0">
+            <Gamepad className="w-6 h-6 text-zinc-600" />
+          </div>
+          <div>
+            <p className="text-sm text-zinc-400">Open a game to see live optimization suggestions here.</p>
+            <p className="text-xs text-zinc-600 mt-1">
+              Scans every 5 seconds — {lastScan ? `last checked ${lastScan.toLocaleTimeString()}` : "starting scan…"}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Custom match (process not in GAMES list) ───────────────────────────────
+  if (customFound && !runningGame) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 overflow-hidden"
+      >
+        <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+            <span className="text-sm font-bold text-yellow-300">Now Playing</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 font-mono uppercase tracking-wide">
+              Custom Game
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => doScan(false)}
+            disabled={scanning}
+            className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
+          >
+            <RefreshCw className={cn("w-3 h-3", scanning && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+        <div className="px-4 py-4 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-yellow-500/20 flex items-center justify-center shrink-0">
+            <Play className="w-6 h-6 text-yellow-400" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white font-mono">{customFound}</p>
+            <p className="text-xs text-yellow-400/70 mt-0.5">Running — not in the supported games list</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              General Windows optimizations from your script still apply. A future update may add full support for this game.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Game detected ──────────────────────────────────────────────────────────
+  const missingTweaks = enabled ? [] : runningGame!.tweaks;
+
+  return (
+    <motion.div
+      key={runningGame!.id}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "rounded-xl border overflow-hidden",
+        enabled
+          ? "border-red-500/40 shadow-[0_0_24px_-6px_rgba(239,68,68,0.3)]"
+          : "border-yellow-500/30 shadow-[0_0_20px_-6px_rgba(234,179,8,0.2)]"
+      )}
+    >
+      {/* Cover strip + info row */}
+      <div className="flex items-stretch gap-0 min-h-[100px]">
+        {/* Cover thumbnail */}
+        <div className="relative w-[140px] shrink-0 overflow-hidden">
+          {showCover ? (
+            <img
+              src={runningGame!.coverUrl}
+              alt={runningGame!.name}
+              onError={() => setImgErr(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className={cn(
+              "w-full h-full bg-gradient-to-br",
+              runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800"
+            )} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-zinc-950/90" />
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 px-4 py-3 bg-zinc-950 flex flex-col justify-between gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wide bg-red-600 text-white">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  NOW PLAYING
+                </span>
+                {enabled && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                    Optimized
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-display font-bold text-white leading-tight">{runningGame!.name}</h3>
+              <p className="text-[11px] text-zinc-500">{runningGame!.publisher}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                data-testid="button-refresh-nowplaying"
+                size="sm"
+                variant="outline"
+                onClick={() => doScan(false)}
+                disabled={scanning}
+                className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
+              >
+                <RefreshCw className={cn("w-3 h-3", scanning && "animate-spin")} />
+              </Button>
+              {!enabled && (
+                <Button
+                  data-testid="button-enable-running-game"
+                  size="sm"
+                  onClick={() => setTweak(runningGame!.id, true)}
+                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 flex items-center gap-1.5"
+                >
+                  <Zap className="w-3 h-3" />
+                  Enable Optimizations
+                </Button>
+              )}
+              {enabled && (
+                <Button
+                  data-testid="button-disable-running-game"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setTweak(runningGame!.id, false)}
+                  className="h-7 px-3 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs"
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Tweak status */}
+          {enabled ? (
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-xs text-emerald-400 font-medium">
+                All {runningGame!.tweaks.length} optimizations active — included in your next script download
+              </span>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[11px] text-yellow-400/80 font-medium mb-1.5">
+                {missingTweaks.length} optimization{missingTweaks.length !== 1 ? "s" : ""} not yet enabled:
+              </p>
+              <div className="flex flex-col gap-1">
+                {missingTweaks.slice(0, 3).map((t, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <XCircle className="w-3 h-3 text-zinc-600 shrink-0 mt-0.5" />
+                    <span className="text-[10px] text-zinc-400 leading-snug">{t}</span>
+                  </div>
+                ))}
+                {missingTweaks.length > 3 && (
+                  <p className="text-[10px] text-zinc-600 pl-4">
+                    +{missingTweaks.length - 3} more — click Enable to apply all
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Custom path footer (always accessible) */}
+      <div
+        className="px-4 py-2 bg-zinc-900/60 border-t border-white/5 flex items-center gap-3 cursor-pointer hover:bg-zinc-900 transition-colors"
+        onClick={() => setShowCustom(v => !v)}
+      >
+        <FolderOpen className="w-3.5 h-3.5 text-zinc-600" />
+        <span className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors">
+          Game not showing? Add a custom process path
+        </span>
+      </div>
+      <AnimatePresence>
+        {showCustom && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-zinc-900/80 border-t border-white/5 flex items-center gap-3">
+              <input
+                data-testid="input-custom-game-process"
+                type="text"
+                value={customInput}
+                onChange={e => setCustomInput(e.target.value)}
+                placeholder="Enter process name (e.g. MyGame.exe)"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-md px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
+              />
+              <Button
+                size="sm"
+                onClick={() => doScan(false)}
+                disabled={scanning || !customInput.trim()}
+                className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 shrink-0"
+              >
+                Detect
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Game Card ────────────────────────────────────────────────────────────────
+
 function GameCard({ game }: { game: GameEntry }) {
   const { tweaks, setTweak } = useOptimizationStore();
   const enabled = tweaks[game.id] || false;
@@ -596,6 +985,9 @@ export default function GameDetection() {
             </p>
           </div>
         </motion.div>
+
+        {/* Now Playing Panel — always shown at top */}
+        <NowPlayingPanel />
 
         {/* Detection banner — shown when no scan has been run yet */}
         {!isFiltered && (
