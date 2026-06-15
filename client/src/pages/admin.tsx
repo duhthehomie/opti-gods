@@ -3469,7 +3469,7 @@ export default function Admin() {
   }, [codesQuery.data, friendsQuery.data]);
 
   function dmTemplate(code: string): string {
-    return `Hey! Here's your Opti Gods Pro key: ${code}\n\nRedeem at: ${getAppOrigin()}\nThanks for purchasing — enjoy the gains! 🔥`;
+    return `Hey! Here's your Opti Gods Pro key: ${code}\n\nDownload + redeem at: https://optigods.com\nOpen the app → click GET PRO → enter your code. Takes 10 seconds.\n\nThanks for purchasing — enjoy the gains! 🔥`;
   }
 
   if (!authed) {
