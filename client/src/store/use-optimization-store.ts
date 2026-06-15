@@ -277,7 +277,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   MemGPUSchedulerTweak: false,
   // Game Detection
   game_valorant: false,
-  game_cs2: false,
+  game_cod: false,
   game_apex: false,
   game_warzone: false,
   game_lol: false,

@@ -78,11 +78,25 @@ function buildScript(label: string, ids: string[]): string {
   return header + body + `\r\n\r\nWrite-Host "Smoke OK"\r\n`;
 }
 
+// Cross-category sample — exercises the full script-generation path with
+// tweaks from NVIDIA, AMD, and MSI categories in one combined fixture.
+// CI parses this with the PowerShell AST to catch any TWEAK_COMMANDS regressions.
+const MIXED_SAMPLE = [
+  "NvTextureFilterHighPerf",
+  "NvLowLatencyUltra",
+  "NvPowerMgmtMax",
+  "AmdTextureFilterPerf",
+  "AmdSurfaceFormatOpt",
+  "AmdRadeonBoostOff",
+  "EnableMSIMode_Safe",
+];
+
 const fixtures: Array<[string, string[]]> = [
   ["nvidia-all", NVIDIA_REAPPLY],
   ["amd-all", AMD_REAPPLY],
   ["nvidia-frame-custom", ["NvFrameLimitCustom"]],
   ["msi-safe-only", ["EnableMSIMode_Safe"]],
+  ["mixed-cross-category", MIXED_SAMPLE],
 ];
 
 let total = 0;

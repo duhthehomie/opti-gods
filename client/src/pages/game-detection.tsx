@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isNative, scanTaskManager } from "@/lib/tauri-bridge";
+import { getTweakMeta } from "@/lib/tweak-registry";
 
 interface GameEntry {
   id: string;
@@ -37,7 +38,7 @@ const GAMES: GameEntry[] = [
     tweaks: ["Above Normal CPU priority (IFEO persistent)", "High I/O priority for asset streaming", "Disable Riot Vanguard telemetry service"],
   },
   {
-    id: "game_cs2",
+    id: "game_cod",
     name: "Call of Duty",
     publisher: "Activision",
     accentBorder: "border-l-orange-600",
@@ -397,6 +398,44 @@ const GAMES: GameEntry[] = [
   },
 ];
 
+// ─── Per-game tweak ID map ────────────────────────────────────────────────────
+// Maps each game ID to the real tweak IDs from the registry that apply to it.
+// Games not listed here fall back to showing their text-description tweaks.
+const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
+  game_fivem: [
+    "FiveMCacheClear", "FiveMHighPriority", "FiveMNetworkBuffer",
+    "FiveMQueueFix", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions",
+    "FiveMRenderingBoost", "FiveMGPUPriorityStack", "FiveMDisableLSO",
+    "FiveMEnableRSS", "FiveMReduceNPCDensity", "FiveMReduceShadowQuality",
+    "FiveMCommandLineTweaks", "FiveMDisableMPO", "FiveMMenuFpsUncap",
+  ],
+  game_fortnite: [
+    "FortniteHighPriority", "FortniteUncapLobbyFPS", "FortniteUncapGameFPS",
+    "FortniteDisableVSync", "FortniteEngineStreaming", "FortniteDisableMotionBlur",
+    "FortniteNetworkBuffer", "FortniteLowShadows", "FortniteDisableLumen",
+    "FortniteGameMode", "FortniteDisableThrottling", "CpuFortniteIFEO",
+  ],
+  game_cod: [
+    "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy",
+    "CodFramePacing", "CodMemPriority", "CpuCodIFEO",
+  ],
+  game_warzone: [
+    "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy",
+    "CodFramePacing", "CodMemPriority", "CpuCodIFEO",
+  ],
+  game_gta5: [
+    "FiveMHighPriority", "FiveMNetworkBuffer", "FiveMWorkingSet",
+    "FiveMReduceNPCDensity", "FiveMReduceShadowQuality",
+    "FiveMCommandLineTweaks", "FiveMGPUPriorityStack",
+  ],
+  game_valorant: ["CpuGenericGameIFEO"],
+  game_apex:     ["CpuGenericGameIFEO"],
+  game_siege:    ["CpuGenericGameIFEO"],
+  game_pubg:     ["CpuGenericGameIFEO"],
+  game_tarkov:   ["CpuGenericGameIFEO"],
+  game_rust:     ["CpuGenericGameIFEO"],
+};
+
 // ─── Now Playing Panel ────────────────────────────────────────────────────────
 
 function NowPlayingPanel() {
@@ -447,13 +486,25 @@ function NowPlayingPanel() {
     }
   }, [native, processMap, customInput]);
 
-  // Poll every 5 s in native mode
+  // Poll every 5 s in native mode; pause automatically when app is in background
   useEffect(() => {
     if (!native) return;
     doScan(true);
-    pollRef.current = setInterval(() => doScan(true), 5000);
+    const startPoll = () => {
+      if (!pollRef.current) pollRef.current = setInterval(() => doScan(true), 5000);
+    };
+    const stopPoll = () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+    const onVisibility = () => {
+      if (document.hidden) stopPoll();
+      else { doScan(true); startPoll(); }
+    };
+    startPoll();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [native, doScan]);
 
@@ -620,7 +671,21 @@ function NowPlayingPanel() {
   }
 
   // ── Game detected ──────────────────────────────────────────────────────────
-  const missingTweaks = enabled ? [] : runningGame!.tweaks;
+  const gameTweakIds = GAME_TWEAK_IDS[runningGame!.id] ?? [];
+  const hasSpecificTweaks = gameTweakIds.length > 0;
+  // "all enabled" = all individual tweak IDs are on (for games with a specific map),
+  // or the master game toggle (for games using text-description fallback).
+  const allTweaksEnabled = hasSpecificTweaks
+    ? gameTweakIds.every(id => !!(tweaks[id as keyof typeof tweaks]))
+    : enabled;
+  const enableAllGameTweaks = () => {
+    setTweak(runningGame!.id, true);
+    if (hasSpecificTweaks) gameTweakIds.forEach(id => setTweak(id, true));
+  };
+  const disableAllGameTweaks = () => {
+    setTweak(runningGame!.id, false);
+    if (hasSpecificTweaks) gameTweakIds.forEach(id => setTweak(id, false));
+  };
 
   return (
     <motion.div
@@ -629,7 +694,7 @@ function NowPlayingPanel() {
       animate={{ opacity: 1, y: 0 }}
       className={cn(
         "rounded-xl border overflow-hidden",
-        enabled
+        allTweaksEnabled
           ? "border-red-500/40 shadow-[0_0_24px_-6px_rgba(239,68,68,0.3)]"
           : "border-yellow-500/30 shadow-[0_0_20px_-6px_rgba(234,179,8,0.2)]"
       )}
@@ -683,23 +748,23 @@ function NowPlayingPanel() {
               >
                 <RefreshCw className={cn("w-3 h-3", scanning && "animate-spin")} />
               </Button>
-              {!enabled && (
+              {!allTweaksEnabled && (
                 <Button
                   data-testid="button-enable-running-game"
                   size="sm"
-                  onClick={() => setTweak(runningGame!.id, true)}
+                  onClick={enableAllGameTweaks}
                   className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 flex items-center gap-1.5"
                 >
                   <Zap className="w-3 h-3" />
-                  Enable Optimizations
+                  Enable All
                 </Button>
               )}
-              {enabled && (
+              {allTweaksEnabled && (
                 <Button
                   data-testid="button-disable-running-game"
                   size="sm"
                   variant="outline"
-                  onClick={() => setTweak(runningGame!.id, false)}
+                  onClick={disableAllGameTweaks}
                   className="h-7 px-3 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs"
                 >
                   Remove
@@ -708,8 +773,44 @@ function NowPlayingPanel() {
             </div>
           </div>
 
-          {/* Tweak status */}
-          {enabled ? (
+          {/* Tweak status — per-tweak toggle rows when IDs are known */}
+          {hasSpecificTweaks ? (
+            <div className="flex flex-col gap-1 mt-1">
+              {gameTweakIds.map(id => {
+                const meta = getTweakMeta(id);
+                const on = !!(tweaks[id as keyof typeof tweaks]);
+                return (
+                  <div
+                    key={id}
+                    data-testid={`tweak-row-${id}`}
+                    className="flex items-center justify-between gap-2 px-1 py-0.5 rounded hover:bg-white/3 transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {on
+                        ? <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                        : <XCircle className="w-3 h-3 text-zinc-600 shrink-0" />}
+                      <span className={cn("text-[10px] truncate leading-snug", on ? "text-zinc-300" : "text-zinc-500")}>
+                        {meta?.title ?? id}
+                      </span>
+                    </div>
+                    <button
+                      data-testid={`toggle-tweak-${id}`}
+                      onClick={() => setTweak(id, !on)}
+                      className={cn(
+                        "shrink-0 w-7 h-4 rounded-full transition-colors relative",
+                        on ? "bg-red-600" : "bg-zinc-700"
+                      )}
+                    >
+                      <span className={cn(
+                        "absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform",
+                        on ? "translate-x-3.5" : "translate-x-0.5"
+                      )} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : allTweaksEnabled ? (
             <div className="flex items-center gap-1.5">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span className="text-xs text-emerald-400 font-medium">
@@ -719,18 +820,18 @@ function NowPlayingPanel() {
           ) : (
             <div>
               <p className="text-[11px] text-yellow-400/80 font-medium mb-1.5">
-                {missingTweaks.length} optimization{missingTweaks.length !== 1 ? "s" : ""} not yet enabled:
+                {runningGame!.tweaks.length} optimization{runningGame!.tweaks.length !== 1 ? "s" : ""} not yet enabled:
               </p>
               <div className="flex flex-col gap-1">
-                {missingTweaks.slice(0, 3).map((t, i) => (
+                {runningGame!.tweaks.slice(0, 3).map((t, i) => (
                   <div key={i} className="flex items-start gap-1.5">
                     <XCircle className="w-3 h-3 text-zinc-600 shrink-0 mt-0.5" />
                     <span className="text-[10px] text-zinc-400 leading-snug">{t}</span>
                   </div>
                 ))}
-                {missingTweaks.length > 3 && (
+                {runningGame!.tweaks.length > 3 && (
                   <p className="text-[10px] text-zinc-600 pl-4">
-                    +{missingTweaks.length - 3} more — click Enable to apply all
+                    +{runningGame!.tweaks.length - 3} more — click Enable All to apply
                   </p>
                 )}
               </div>

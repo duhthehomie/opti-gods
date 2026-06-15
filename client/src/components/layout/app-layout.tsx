@@ -253,24 +253,24 @@ function MobileShowcase() {
             Try Opti Gods AI
           </button>
         </Link>
-        <a href="https://discord.gg/optigods" target="_blank" rel="noopener noreferrer">
-          <button
-            data-testid="button-mobile-discord"
-            className="w-full py-3 rounded-xl bg-zinc-800 border border-white/10 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-all flex items-center justify-center gap-2 mt-3"
-          >
-            Join Discord
-            <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
-          </button>
-        </a>
-        <Link href="/get-code">
+        <Link href="/showcase">
           <button
             data-testid="button-mobile-get-pro"
             className="w-full py-3 rounded-xl bg-zinc-900 border border-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/10 transition-all flex items-center justify-center gap-2 mt-3"
           >
             <Zap className="w-4 h-4" />
-            Get Pro — $15
+            Get Pro — $15 (Pay &amp; DM leaq)
           </button>
         </Link>
+        <a href="https://discord.gg/optigods" target="_blank" rel="noopener noreferrer">
+          <button
+            data-testid="button-mobile-discord"
+            className="w-full py-3 rounded-xl bg-indigo-600/15 border border-indigo-500/25 text-indigo-300 text-sm font-bold hover:bg-indigo-600/25 transition-all flex items-center justify-center gap-2 mt-3"
+          >
+            Join Discord — Get Your Key
+            <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+          </button>
+        </a>
       </div>
     </div>
   );
