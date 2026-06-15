@@ -18,6 +18,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getStoredToken } from "@/lib/pro-status";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 
 interface ScriptDialogProps {
   open: boolean;
@@ -112,10 +113,11 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       const sessionToken = getStoredToken();
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
+        credentials: "include",
       });
-      if (res.status === 403) throw new Error("Pro access required — enter your activation code first.");
+      if (res.status === 403) throw new Error("Pro access required — log in with Discord or enter your activation code first.");
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();
       const blob = new Blob([text], { type: "application/octet-stream" });
@@ -144,8 +146,9 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       const sessionToken = getStoredToken();
       const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();
@@ -173,8 +176,9 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       const sessionToken = getStoredToken();
       const res = await fetch(apiUrl("/api/script/download"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ tweaks, nvidiaPreset, sessionToken }),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to generate script");
       const text = await res.text();

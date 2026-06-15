@@ -4135,8 +4135,8 @@ export default function Admin() {
                       const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null; discordManuallyLinked?: boolean };
                       if (cx.discordLinked) {
                         return (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={cx.discordManuallyLinked ? "Manually linked by admin" : `Discord: ${cx.discordUsername || "linked"}`}>
-                            🔗 {cx.discordManuallyLinked ? "Manually Linked" : (cx.discordUsername || "Discord")}
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={cx.discordManuallyLinked ? `Manually linked by admin — Discord: ${cx.discordUsername || cx.discordUserId || "linked"}` : `Discord: ${cx.discordUsername || "linked"}`}>
+                            🔒 Locked to Discord
                           </span>
                         );
                       }
