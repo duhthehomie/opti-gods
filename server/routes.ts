@@ -99,6 +99,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   // CPU
   Win32PrioritySeparation: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26`,
   DisableHungAppDetection: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '1000'`,
+  DisableCTFMonTracking: `$p = 'HKLM:\\SOFTWARE\\Microsoft\\Input'; If (!(Test-Path $p)) { New-Item -Path $p -Force | Out-Null }; Set-ItemProperty -Path $p -Name 'InputServiceEnabled' -Value 0 -Type DWord -Force; Set-ItemProperty -Path $p -Name 'InputServiceEnabledForCCI' -Value 0 -Type DWord -Force; Write-Host "[OK] CTF Monitor keystroke tracking disabled — InputServiceEnabled=0, InputServiceEnabledForCCI=0. Keyboard input works normally, ctfmon.exe watchdog goes idle." -ForegroundColor Green`,
   SetTimerResolution: `bcdedit /set disabledynamictick yes 2>$null; bcdedit /deletevalue useplatformtick 2>$null; bcdedit /deletevalue useplatformclock 2>$null; Write-Host "[OK] Dynamic tick disabled (safe timer precision boost — no useplatformtick boot-hang risk)" -ForegroundColor Green`,
   DisablePagefileEncryption: `fsutil behavior set encryptpagingfile 0`,
   // Network

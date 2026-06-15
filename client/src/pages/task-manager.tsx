@@ -177,9 +177,9 @@ const DEBLOAT_BG_PROCESSES = new Set([
 const WINDOWS_PROTECTED_STARTUP_NAMES = new Set([
   "securityhealth", "windows defender", "windowsdefender", "mrt", "mscares",
   "microsoftsecurityappbroker", "windowssecuritynotification", "windowsdefendernotificationiconsettings",
-  // ctfmon = CTF (Collaborative Translation Framework) language bar — disabling it
-  // entirely breaks text input for ALL languages/IMEs system-wide. Never safe to remove.
-  "ctfmon",
+  // ctfmon was previously protected here — removed. InputServiceEnabled=0 in registry
+  // stops the keystroke-tracking pipeline at the source, so ctfmon.exe becomes safe to kill
+  // from startup without breaking keyboard functionality. See DisableCTFMonTracking tweak.
 ]);
 
 // ── HKLM entries that are third-party software safe to disable directly (no BAT needed) ──
