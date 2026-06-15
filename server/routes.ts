@@ -2220,7 +2220,7 @@ while (Test-Path $outPath) { $outPath = Join-Path $desktop "${baseName}_$n.json"
 
 # ─── Save JSON ───────────────────────────────────────────────────────────────
 $json = $result | ConvertTo-Json -Depth 5
-[IO.File]::WriteAllText($outPath, $json, [Text.Encoding]::UTF8)
+[IO.File]::WriteAllText($outPath, $json, [System.Text.UTF8Encoding]::new($false))
 $fname = Split-Path $outPath -Leaf
 
 # ─── Results display ─────────────────────────────────────────────────────────

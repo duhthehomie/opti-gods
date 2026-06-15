@@ -334,7 +334,7 @@ function HwMonitorPanel() {
   const parseJson = (text: string) => {
     setParseError(null);
     try {
-      const data = JSON.parse(text) as HwMonitorData;
+      const data = JSON.parse(text.replace(/^\uFEFF/, "")) as HwMonitorData;
       if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
       setHw(data);
     } catch {
