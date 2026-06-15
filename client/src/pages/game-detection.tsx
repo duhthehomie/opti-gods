@@ -702,21 +702,23 @@ function NowPlayingPanel() {
       {/* Cover strip + info row */}
       <div className="flex items-stretch gap-0 min-h-[100px]">
         {/* Cover thumbnail */}
-        <div className="relative w-[140px] shrink-0 overflow-hidden">
+        <div className={cn(
+          "relative shrink-0 overflow-hidden flex items-center justify-center",
+          showCover ? "w-[160px]" : "w-[120px]"
+        )}>
+          <div className={cn(
+            "absolute inset-0 bg-gradient-to-br",
+            runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800"
+          )} />
           {showCover ? (
             <img
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="w-full h-full object-cover"
+              className="relative z-10 w-full h-full object-contain p-3"
             />
-          ) : (
-            <div className={cn(
-              "w-full h-full bg-gradient-to-br",
-              runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800"
-            )} />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-zinc-950/90" />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-zinc-950/80" />
         </div>
 
         {/* Info */}
