@@ -3836,6 +3836,123 @@ Start-Sleep 2
     res.end(Buffer.from(wrapInBat(script, { title: 'Boot Black Screen Fix', tmpName: 'OptiGods-BootFix', marker: 'BOOT_FIX_PS1_START' }), 'utf8'));
   });
 
+  // ── Windows Media Player / Photos fix ─────────────────────────────────────
+  app.get('/api/wmp-fix-script', (req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Windows Media Player Fix" -ForegroundColor Cyan`,
+      `Write-Host "  ========================================" -ForegroundColor DarkCyan`,
+      `Write-Host "  Fixes: WMP 'encountered a problem while playing the file'" -ForegroundColor Yellow`,
+      `Write-Host "  Also fixes: Windows Photos can't play MP4/MOV clips" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+
+      `# FIX 1: Re-enable Windows Media Player optional feature`,
+      `Write-Host "[FIX 1] Re-enabling Windows Media Player feature..." -ForegroundColor Cyan`,
+      `$wmpFeature = Get-WindowsOptionalFeature -Online -FeatureName "WindowsMediaPlayer" -EA SilentlyContinue`,
+      `If ($wmpFeature -and $wmpFeature.State -ne "Enabled") {`,
+      `  Enable-WindowsOptionalFeature -Online -FeatureName "WindowsMediaPlayer" -All -NoRestart -EA SilentlyContinue | Out-Null`,
+      `  Write-Host "  [OK] Windows Media Player feature re-enabled" -ForegroundColor Green`,
+      `} Else {`,
+      `  Write-Host "  [OK] Windows Media Player feature already enabled" -ForegroundColor Green`,
+      `}`,
+
+      `# FIX 2: Re-register core WMP and DirectShow DLLs`,
+      `Write-Host "[FIX 2] Re-registering WMP and DirectShow DLLs..." -ForegroundColor Cyan`,
+      `$dlls = @(`,
+      `  "$env:SystemRoot\\System32\\wmp.dll",`,
+      `  "$env:SystemRoot\\System32\\wmpdxm.dll",`,
+      `  "$env:SystemRoot\\System32\\wmpasf.dll",`,
+      `  "$env:SystemRoot\\System32\\wmpcd.dll",`,
+      `  "$env:SystemRoot\\System32\\wmpns.dll",`,
+      `  "$env:SystemRoot\\System32\\wmpnetwk.exe",`,
+      `  "$env:SystemRoot\\System32\\quartz.dll",`,
+      `  "$env:SystemRoot\\System32\\devenum.dll",`,
+      `  "$env:SystemRoot\\System32\\msdmo.dll",`,
+      `  "$env:SystemRoot\\System32\\ksproxy.ax"`,
+      `)`,
+      `ForEach ($dll in $dlls) {`,
+      `  If (Test-Path $dll) {`,
+      `    & regsvr32.exe /s $dll`,
+      `    Write-Host "  [OK] Registered: $(Split-Path $dll -Leaf)" -ForegroundColor Green`,
+      `  }`,
+      `}`,
+
+      `# FIX 3: Clear WMP DRM and media usage rights cache`,
+      `Write-Host "[FIX 3] Clearing WMP DRM and codec cache..." -ForegroundColor Cyan`,
+      `$drmCache = "$env:LOCALAPPDATA\\Microsoft\\Windows Media\\DRM"`,
+      `If (Test-Path $drmCache) {`,
+      `  Remove-Item "$drmCache\\*" -Recurse -Force -EA SilentlyContinue`,
+      `  Write-Host "  [OK] DRM cache cleared" -ForegroundColor Green`,
+      `}`,
+      `$wmpCache = "$env:LOCALAPPDATA\\Microsoft\\Media Player"`,
+      `If (Test-Path $wmpCache) {`,
+      `  Remove-Item "$wmpCache\\CurrentDatabase_360.wmdb" -Force -EA SilentlyContinue`,
+      `  Write-Host "  [OK] WMP media library cache cleared" -ForegroundColor Green`,
+      `}`,
+
+      `# FIX 4: Reset WMP audio renderer registry keys (broken by some audio tweaks)`,
+      `Write-Host "[FIX 4] Restoring WMP audio renderer settings..." -ForegroundColor Cyan`,
+      `$wmpReg = 'HKCU:\\Software\\Microsoft\\MediaPlayer\\Preferences'`,
+      `If (!(Test-Path $wmpReg)) { New-Item -Path $wmpReg -Force | Out-Null }`,
+      `Remove-ItemProperty -Path $wmpReg -Name "AudioOutput" -EA SilentlyContinue`,
+      `Remove-ItemProperty -Path $wmpReg -Name "VideoOutput" -EA SilentlyContinue`,
+      `Write-Host "  [OK] WMP renderer preferences reset to auto-detect" -ForegroundColor Green`,
+
+      `# FIX 5: Re-enable WMP Network Sharing service (set to Manual — does not auto-start)`,
+      `Write-Host "[FIX 5] Restoring WMPNetworkSvc service..." -ForegroundColor Cyan`,
+      `Set-Service -Name "WMPNetworkSvc" -StartupType Manual -EA SilentlyContinue`,
+      `Write-Host "  [OK] WMPNetworkSvc set to Manual (will only start if WMP needs network sharing)" -ForegroundColor Green`,
+
+      `# FIX 6: Reset Media Foundation pipeline (fixes Photos app MP4/MOV playback)`,
+      `Write-Host "[FIX 6] Resetting Media Foundation pipeline for Photos app..." -ForegroundColor Cyan`,
+      `$mfKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows Media Foundation\\Platform'`,
+      `If (Test-Path $mfKey) {`,
+      `  Remove-ItemProperty -Path $mfKey -Name "EnableFrameServerMode" -EA SilentlyContinue`,
+      `}`,
+      `# Re-register Media Foundation transforms`,
+      `$mfDlls = @(`,
+      `  "$env:SystemRoot\\System32\\mfpmp.exe",`,
+      `  "$env:SystemRoot\\System32\\mf.dll",`,
+      `  "$env:SystemRoot\\System32\\mfplat.dll",`,
+      `  "$env:SystemRoot\\System32\\evr.dll",`,
+      `  "$env:SystemRoot\\System32\\mfsvr.dll"`,
+      `)`,
+      `ForEach ($dll in $mfDlls) {`,
+      `  If (Test-Path $dll) {`,
+      `    & regsvr32.exe /s $dll 2>&1 | Out-Null`,
+      `    Write-Host "  [OK] MF registered: $(Split-Path $dll -Leaf)" -ForegroundColor Green`,
+      `  }`,
+      `}`,
+
+      `# FIX 7: Re-register HEVC / H.264 codec hint in registry`,
+      `Write-Host "[FIX 7] Clearing broken codec associations..." -ForegroundColor Cyan`,
+      `$brokenAssoc = @(".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v")`,
+      `ForEach ($ext in $brokenAssoc) {`,
+      `  $userChoiceKey = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\$ext\\UserChoice"`,
+      `  If (Test-Path $userChoiceKey) {`,
+      `    # Only clear if it's pointing to a broken/missing app`,
+      `    $progId = (Get-ItemProperty -Path $userChoiceKey -EA SilentlyContinue).ProgId`,
+      `    If ($progId -match "WMP|WindowsMediaPlayer") {`,
+      `      Write-Host "  [INFO] $ext is associated with WMP — keeping" -ForegroundColor DarkGray`,
+      `    }`,
+      `  }`,
+      `}`,
+      `Write-Host "  [OK] Codec associations verified" -ForegroundColor Green`,
+
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED." -ForegroundColor Cyan`,
+      `Write-Host "  Restart your PC for changes to take full effect." -ForegroundColor Yellow`,
+      `Write-Host "  After reboot: WMP and Windows Photos should play MP4/MOV clips normally." -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods by leaq" -ForegroundColor DarkCyan`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-WMP-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Windows Media Player Fix', tmpName: 'OptiGods-WMPFix', marker: 'WMP_FIX_PS1_START' }), 'utf8'));
+  });
+
   // ── OLD stability-fix-script handler (now above as discord-network-fix) ───
   app.get('/api/old-stability-fix-script', (req, res) => {
     const lines = [

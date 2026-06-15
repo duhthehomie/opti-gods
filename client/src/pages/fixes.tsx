@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2, ShieldAlert,
-  ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff, Gamepad,
+  ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff, Gamepad, Film,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -316,6 +316,7 @@ export default function Fixes() {
   const [downloadingDiscordFix, setDownloadingDiscordFix] = useState(false);
   const [downloadingXboxFix, setDownloadingXboxFix] = useState(false);
   const [downloadingBootFix, setDownloadingBootFix] = useState(false);
+  const [downloadingWmpFix, setDownloadingWmpFix] = useState(false);
 
   const dlFix = async (endpoint: string, filename: string, title: string, desc: string, setter: (v: boolean) => void) => {
     setter(true);
@@ -340,6 +341,7 @@ export default function Fixes() {
   const downloadDiscordFix     = () => dlFix("/api/discord-network-fix-script", "OptiGods-Discord-Fix.bat", "Discord Fix Downloaded", "Re-enables IPv6. Restart Discord + PC.", setDownloadingDiscordFix);
   const downloadXboxFix        = () => dlFix("/api/xbox-gamepass-fix-script", "OptiGods-Xbox-Fix.bat", "Xbox Fix Downloaded", "Re-enables Game Bar & Xbox services. Restart PC.", setDownloadingXboxFix);
   const downloadBootFix        = () => dlFix("/api/boot-fix-script", "OptiGods-Boot-Fix.bat", "Boot Fix Downloaded", "Resets bcdedit + VBS. Restart PC.", setDownloadingBootFix);
+  const downloadWmpFix         = () => dlFix("/api/wmp-fix-script", "OptiGods-WMP-Fix.bat", "WMP Fix Downloaded", "Re-registers codecs + DLLs. Restart PC.", setDownloadingWmpFix);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -591,6 +593,45 @@ export default function Fixes() {
                 <Download className="w-4 h-4 mr-2" />{downloadingBootFix ? "Generating..." : "Download Boot Fix"}
               </Button>
               <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → reboot PC</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── CARD: Windows Media Player / Photos ──────────────────────────── */}
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.038 }}
+          className="rounded-2xl border-2 border-sky-500/40 bg-sky-950/30 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-sky-600/20 border-b border-sky-500/30">
+            <Film className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-sky-400">Windows Media Player / Photos — Can't Play Video Files</span>
+            <span className="ml-auto text-[9px] text-sky-400/60 font-mono">Affected tweaks: DebloatZune · ServiceWMPNetworkSvc · audio renderer keys</span>
+          </div>
+          <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="text-sm font-bold text-white leading-snug">
+                Getting <span className="text-sky-300">"Windows Media Player encountered a problem while playing the file"</span>? Or Windows Photos won't play MP4/MOV clips?
+              </p>
+              <div className="space-y-1">
+                {[
+                  ["Re-enables Windows Media Player optional feature via DISM", "Some debloat tools disable WMP as a Windows Feature — this re-enables it without a reinstall."],
+                  ["Re-registers WMP + DirectShow DLLs (wmp.dll, quartz.dll, devenum.dll…)", "Codec registrations can break after driver updates or debloating. regsvr32 re-links them to Windows."],
+                  ["Clears DRM cache + media library database", "Corrupted DRM rights cache or stale .wmdb causes WMP to fail on files it played before."],
+                  ["Resets WMP audio/video renderer back to auto-detect", "Some audio tweaks write a broken renderer preference — resetting it lets WMP pick the right output again."],
+                  ["Resets Media Foundation pipeline (fixes Windows Photos MP4/MOV playback)", "FiveM players trimming and posting clips need Photos + WMP working. This fixes both at once."],
+                ].map(([bold, rest]) => (
+                  <div key={bold} className="flex items-start gap-2">
+                    <CheckCheck className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-zinc-300 leading-snug"><span className="text-white font-semibold">{bold}</span> — {rest}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-500">Safe for all systems. Takes ~15 seconds. Restart PC after running.</p>
+            </div>
+            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+              <Button data-testid="button-download-wmp-fix" onClick={downloadWmpFix} disabled={downloadingWmpFix}
+                className="bg-sky-700 hover:bg-sky-600 text-white font-black text-sm px-5 py-2.5 border border-sky-500/40 shadow-[0_0_24px_-4px_rgba(14,165,233,0.5)] whitespace-nowrap">
+                <Download className="w-4 h-4 mr-2" />{downloadingWmpFix ? "Generating..." : "Download WMP Fix"}
+              </Button>
+              <p className="text-[9px] text-zinc-600 text-center">Double-click → allow UAC → restart PC</p>
             </div>
           </div>
         </motion.div>
