@@ -170,7 +170,9 @@ fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
 fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let result = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
@@ -180,6 +182,7 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 "-Command",
                 snippet,
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
         match result {
             Ok(out) if out.status.success() => TweakResult {

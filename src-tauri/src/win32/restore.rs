@@ -111,7 +111,9 @@ pub fn restore(sequence_number: i64) -> Result<()> {
 /// Requires admin rights (Opti Gods app.manifest already requests them).
 /// Best-effort — if it fails, we log the error and continue.
 pub fn ensure_enabled() -> anyhow::Result<()> {
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     // 1. Clear the policy key that disables System Restore
     //    HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore DisableSR = 0
@@ -124,12 +126,13 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
             "/d", "0",
             "/f",
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok();
 
     // 2. Set srservice (System Restore) to Manual start and start it
-    Command::new("sc").args(["config", "srservice", "start=", "demand"]).output().ok();
-    Command::new("sc").args(["start", "srservice"]).output().ok();
+    Command::new("sc").args(["config", "srservice", "start=", "demand"]).creation_flags(CREATE_NO_WINDOW).output().ok();
+    Command::new("sc").args(["start", "srservice"]).creation_flags(CREATE_NO_WINDOW).output().ok();
 
     // 3. Enable System Restore on C:\ via PowerShell
     Command::new("powershell")
@@ -137,6 +140,7 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
             "Enable-ComputerRestore -Drive 'C:\\' -EA SilentlyContinue",
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok();
 
