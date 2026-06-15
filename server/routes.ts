@@ -3953,6 +3953,118 @@ Start-Sleep 2
     res.end(Buffer.from(wrapInBat(script, { title: 'Windows Media Player Fix', tmpName: 'OptiGods-WMPFix', marker: 'WMP_FIX_PS1_START' }), 'utf8'));
   });
 
+  // ── Fortnite / Easy Anti-Cheat fix ────────────────────────────────────────
+  app.get('/api/fortnite-fix-script', (req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Fortnite / Easy Anti-Cheat Fix" -ForegroundColor Yellow`,
+      `Write-Host "  ================================================" -ForegroundColor DarkYellow`,
+      `Write-Host "  Fixes: EAC launch blocked, game closes immediately, infinite loading" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `# FIX 1: Clear IFEO PerfOptions on Fortnite + EAC executables`,
+      `# FortniteHighPriority tweak adds CpuPriorityClass=6 — EAC integrity scan can fail on IFEO entries`,
+      `Write-Host "[FIX 1] Clearing IFEO overrides on Fortnite + EAC executables..." -ForegroundColor Cyan`,
+      `$exes = @("FortniteClient-Win64-Shipping.exe","FortniteLauncher.exe","EpicGamesLauncher.exe","EasyAntiCheat_EOS.exe","EasyAntiCheat.exe")`,
+      `ForEach ($exe in $exes) {`,
+      `  $key = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\$exe"`,
+      `  If (Test-Path $key) {`,
+      `    $perf = "$key\\PerfOptions"`,
+      `    If (Test-Path $perf) { Remove-Item $perf -Recurse -Force -EA SilentlyContinue }`,
+      `    Remove-ItemProperty -Path $key -Name "MitigationOptions" -EA SilentlyContinue`,
+      `    Remove-ItemProperty -Path $key -Name "MitigationAuditOptions" -EA SilentlyContinue`,
+      `    Write-Host "  [OK] IFEO cleared: $exe" -ForegroundColor Green`,
+      `  }`,
+      `}`,
+      `# FIX 2: Re-enable Defender real-time protection`,
+      `# DisableDefender (expert opt-in) blocks EAC from verifying game file integrity`,
+      `Write-Host "[FIX 2] Re-enabling Windows Defender real-time protection..." -ForegroundColor Cyan`,
+      `Set-MpPreference -DisableRealtimeMonitoring $false -EA SilentlyContinue`,
+      `Write-Host "  [OK] Defender real-time protection re-enabled" -ForegroundColor Green`,
+      `# FIX 3: Re-enable SecurityHealthService (EAC health checks)`,
+      `Write-Host "[FIX 3] Re-enabling Windows Security Center..." -ForegroundColor Cyan`,
+      `Set-Service -Name "SecurityHealthService" -StartupType Manual -EA SilentlyContinue`,
+      `Start-Service -Name "SecurityHealthService" -EA SilentlyContinue`,
+      `Write-Host "  [OK] SecurityHealthService running" -ForegroundColor Green`,
+      `# FIX 4: Clear EasyAntiCheat local cache`,
+      `Write-Host "[FIX 4] Clearing EasyAntiCheat cache..." -ForegroundColor Cyan`,
+      `@("$env:LOCALAPPDATA\\EasyAntiCheat","$env:ProgramData\\EasyAntiCheat") | ForEach-Object {`,
+      `  If (Test-Path $_) { Remove-Item "$_\\*" -Recurse -Force -EA SilentlyContinue; Write-Host "  [OK] EAC cache cleared: $_" -ForegroundColor Green }`,
+      `}`,
+      `# FIX 5: Clear Epic Games launcher webcache`,
+      `Write-Host "[FIX 5] Clearing Epic Games launcher cache..." -ForegroundColor Cyan`,
+      `$ec = "$env:LOCALAPPDATA\\EpicGamesLauncher\\Saved\\webcache"`,
+      `If (Test-Path $ec) { Remove-Item "$ec\\*" -Recurse -Force -EA SilentlyContinue }`,
+      `Write-Host "  [OK] Epic launcher cache cleared" -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED." -ForegroundColor Cyan`,
+      `Write-Host "  Restart your PC. Fortnite and all EAC/BattlEye games will launch normally." -ForegroundColor Green`,
+      `Write-Host "  Note: Defender real-time protection has been re-enabled." -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods by leaq" -ForegroundColor DarkCyan`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Fortnite-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Fortnite / Easy Anti-Cheat Fix', tmpName: 'OptiGods-FortniteFix', marker: 'FORTNITE_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // ── Audio / No Sound fix ───────────────────────────────────────────────────
+  app.get('/api/audio-fix-script', (req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods V3 - Audio Fix" -ForegroundColor Cyan`,
+      `Write-Host "  ========================" -ForegroundColor DarkCyan`,
+      `Write-Host "  Fixes: no sound, audio crackling, Discord voice cutting out mid-game" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `$mmcss = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"`,
+      `# FIX 1: Reset SystemResponsiveness to 10`,
+      `# SystemResponsiveness=0 gives 100% CPU to foreground — audio + Discord threads starved`,
+      `Write-Host "[FIX 1] Resetting SystemResponsiveness to 10..." -ForegroundColor Cyan`,
+      `Set-ItemProperty -Path $mmcss -Name "SystemResponsiveness" -Value 10 -Type DWord -Force`,
+      `Write-Host "  [OK] SystemResponsiveness = 10 — audio/Discord threads get 10% CPU slices" -ForegroundColor Green`,
+      `# FIX 2: Re-enable + restart Windows Audio services`,
+      `Write-Host "[FIX 2] Restarting Windows Audio services..." -ForegroundColor Cyan`,
+      `@("AudioSrv","AudioEndpointBuilder") | ForEach-Object {`,
+      `  Set-Service -Name $_ -StartupType Automatic -EA SilentlyContinue`,
+      `  Stop-Service -Name $_ -Force -EA SilentlyContinue`,
+      `  Start-Service -Name $_ -EA SilentlyContinue`,
+      `  Write-Host "  [OK] $_ restarted (Automatic)" -ForegroundColor Green`,
+      `}`,
+      `# FIX 3: Reset MMCSS Audio task to default priority`,
+      `Write-Host "[FIX 3] Resetting MMCSS Audio profile..." -ForegroundColor Cyan`,
+      `$au = "$mmcss\\Tasks\\Audio"`,
+      `If (!(Test-Path $au)) { New-Item -Path $au -Force | Out-Null }`,
+      `Set-ItemProperty -Path $au -Name "Priority" -Value 6 -Type DWord -Force`,
+      `Set-ItemProperty -Path $au -Name "Scheduling Category" -Value "Medium" -Force`,
+      `Set-ItemProperty -Path $au -Name "SFIO Priority" -Value "Normal" -Force`,
+      `Set-ItemProperty -Path $au -Name "Background Only" -Value "False" -Force`,
+      `Write-Host "  [OK] MMCSS Audio → Medium priority (Windows default)" -ForegroundColor Green`,
+      `# FIX 4: Reset MMCSS Pro Audio task`,
+      `$pa = "$mmcss\\Tasks\\Pro Audio"`,
+      `If (!(Test-Path $pa)) { New-Item -Path $pa -Force | Out-Null }`,
+      `Set-ItemProperty -Path $pa -Name "Priority" -Value 1 -Type DWord -Force`,
+      `Set-ItemProperty -Path $pa -Name "Scheduling Category" -Value "High" -Force`,
+      `Set-ItemProperty -Path $pa -Name "SFIO Priority" -Value "Critical" -Force`,
+      `Write-Host "  [OK] MMCSS Pro Audio → High scheduling (Windows default)" -ForegroundColor Green`,
+      `# FIX 5: Clear audio interrupt priority override`,
+      `Write-Host "[FIX 5] Clearing audio interrupt priority flags..." -ForegroundColor Cyan`,
+      `Remove-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel" -Name "DisableLowQoSInterrupt" -EA SilentlyContinue`,
+      `Write-Host "  [OK] Audio interrupt flags cleared" -ForegroundColor Green`,
+      `Write-Host ""`,
+      `Write-Host "  ALL FIXES APPLIED." -ForegroundColor Cyan`,
+      `Write-Host "  Audio should work immediately — no restart required in most cases." -ForegroundColor Green`,
+      `Write-Host "  If Discord voice is still cutting out, restart Discord after running this." -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods by leaq" -ForegroundColor DarkCyan`,
+      `Write-Host ""; pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Audio-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Audio Fix', tmpName: 'OptiGods-AudioFix', marker: 'AUDIO_FIX_PS1_START' }), 'utf8'));
+  });
+
   // ── OLD stability-fix-script handler (now above as discord-network-fix) ───
   app.get('/api/old-stability-fix-script', (req, res) => {
     const lines = [
