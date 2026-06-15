@@ -407,21 +407,21 @@ export default function Fixes() {
         </motion.div>
 
         {/* ════════════════════════════════════════════════════════════════════ */}
-        {/* SECTION 1 — GAME CRASH FIXES                                       */}
+        {/* SECTION 1 — PER-GAME CRASH FIXES                                   */}
         {/* ════════════════════════════════════════════════════════════════════ */}
-        <SectionHeader
-          icon={Gamepad2} iconClass="text-red-400"
-          title="Game Crash Fixes"
-          desc="One-click .bat for specific games — run as Admin, restart PC after"
-        />
 
-        {/* FiveM & GTA V */}
+        {/* ── FiveM & GTA V ─────────────────────────────────────────────────── */}
+        <SectionHeader
+          icon={Siren} iconClass="text-red-400"
+          title="FiveM & GTA V"
+          desc="Memory write crash · productId assert · GPU hang · CEF browser exits"
+        />
         <FixCard
           testId="button-download-fivem-crash-fix"
           accent="red"
           urgent
           icon={Siren}
-          title="FiveM & GTA V — Memory / GPU Crash"
+          title="FiveM & GTA V — Memory / GPU Crash Fix"
           subtitle="Silent exits · 'memory could not be written' · productId != ProductID::INVALID"
           tweaks="DisablePagingExecutive · IFEO GpuPriorityClass · PagingAllocation · TDR"
           bullets={[
@@ -437,12 +437,17 @@ export default function Fixes() {
           onDownload={() => dlFix("fivem", "/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.")}
         />
 
-        {/* Valorant / Vanguard */}
+        {/* ── Valorant / Vanguard ───────────────────────────────────────────── */}
+        <SectionHeader
+          icon={Shield} iconClass="text-purple-400"
+          title="Valorant / Vanguard"
+          desc="Anti-cheat blocked · VBS required on Win 11 · BattlEye integrity error"
+        />
         <FixCard
           testId="button-download-valorant-fix"
           accent="purple"
           icon={Shield}
-          title="Valorant / Vanguard — Anti-Cheat Blocked"
+          title="Valorant / Vanguard — Anti-Cheat Blocked Fix"
           subtitle="'This game requires VBS' · game black-screens at launch · BattlEye integrity error"
           tweaks="Expert tweaks only: Win11DisableVBS · Win11DisableHVCI · SysHypervisorOff"
           bullets={[
@@ -457,12 +462,17 @@ export default function Fixes() {
           onDownload={() => dlFix("valorant", "/api/valorant-fix-script", "OptiGods-Valorant-Fix.bat", "Valorant Fix Downloaded", "Re-enables VBS/HVCI. Reboot required.")}
         />
 
-        {/* Fortnite / EAC — NEW */}
+        {/* ── Fortnite / Easy Anti-Cheat ────────────────────────────────────── */}
+        <SectionHeader
+          icon={Target} iconClass="text-orange-400"
+          title="Fortnite / Easy Anti-Cheat"
+          desc="EAC fails to load · Defender required · infinite loading · EasyAntiCheat_EOS error"
+        />
         <FixCard
           testId="button-download-fortnite-fix"
           accent="orange"
           icon={Target}
-          title="Fortnite / Easy Anti-Cheat — Launch Blocked"
+          title="Fortnite / EAC — Launch Blocked Fix"
           subtitle="EAC fails to load · game closes immediately · infinite loading · 'EasyAntiCheat_EOS error'"
           tweaks="FortniteHighPriority IFEO · DisableDefender (expert) · ProcessLasso IFEO"
           bullets={[
@@ -478,12 +488,17 @@ export default function Fixes() {
           onDownload={() => dlFix("fortnite", "/api/fortnite-fix-script", "OptiGods-Fortnite-Fix.bat", "Fortnite Fix Downloaded", "Re-enables Defender + clears EAC cache. Restart PC.")}
         />
 
-        {/* Xbox Game Pass */}
+        {/* ── Xbox Game Pass ────────────────────────────────────────────────── */}
+        <SectionHeader
+          icon={Gamepad} iconClass="text-teal-400"
+          title="Xbox Game Pass"
+          desc="Games won't launch · DRM validation fail · Store games crash after debloat"
+        />
         <FixCard
           testId="button-download-xbox-fix"
           accent="teal"
           icon={Gamepad}
-          title="Xbox Game Pass / Microsoft Store Games Won't Launch"
+          title="Xbox Game Pass / Microsoft Store — Won't Launch Fix"
           subtitle="Game closes after clicking Play · Store games crash at launch · Xbox cloud gaming broken"
           tweaks="Tweaks: DisableXboxGameBar · Xbox services via Debloat"
           bullets={[
@@ -498,12 +513,17 @@ export default function Fixes() {
           onDownload={() => dlFix("xbox", "/api/xbox-gamepass-fix-script", "OptiGods-Xbox-Fix.bat", "Xbox Fix Downloaded", "Re-enables Game Bar & Xbox services. Restart PC.")}
         />
 
-        {/* Discord Voice */}
+        {/* ── Discord ───────────────────────────────────────────────────────── */}
+        <SectionHeader
+          icon={WifiOff} iconClass="text-blue-400"
+          title="Discord"
+          desc="Voice drops mid-game · FiveM auth broken · Xbox party failing · IPv6 ICE failure"
+        />
         <FixCard
           testId="button-download-discord-fix"
           accent="blue"
           icon={WifiOff}
-          title="Discord Voice Drops / FiveM Auth / Xbox Party Chat"
+          title="Discord Voice Drops / FiveM Auth / Xbox Party Chat Fix"
           subtitle="Voice relay disconnecting mid-game · Xbox party failing · FiveM auth broken after clean install"
           tweaks="Expert opt-in ONLY: DisableIPv6"
           bullets={[
