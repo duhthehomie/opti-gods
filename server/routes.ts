@@ -2216,7 +2216,7 @@ if (-not $desktop -or -not (Test-Path $desktop -PathType Container)) {
 $baseName = 'OptiGods-HW-Monitor'
 $outPath  = Join-Path $desktop "$baseName.json"
 $n = 2
-while (Test-Path $outPath) { $outPath = Join-Path $desktop "${baseName}_$n.json"; $n++ }
+while (Test-Path $outPath) { $outPath = Join-Path $desktop "\${baseName}_$n.json"; $n++ }
 
 # ─── Save JSON ───────────────────────────────────────────────────────────────
 $json = $result | ConvertTo-Json -Depth 5
@@ -3198,7 +3198,7 @@ Start-Sleep 2
 
     // Batch Discord username lookups for rigs with a linked Discord user
     const discordUserMap: Record<string, string> = {};
-    const uniqueDiscordIds = [...new Set(rigs.filter(r => r.discordUserId).map(r => r.discordUserId as string))];
+    const uniqueDiscordIds = Array.from(new Set(rigs.filter(r => r.discordUserId).map(r => r.discordUserId as string)));
     await Promise.all(uniqueDiscordIds.map(async (id) => {
       try {
         const u = await storage.getUser(id);

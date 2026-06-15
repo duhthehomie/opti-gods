@@ -4132,7 +4132,7 @@ export default function Admin() {
                       {c.usedAt ? `USED ${timeAgo(c.usedAt)}` : (c as any).usedByIp ? "PARTIAL — Reset needed" : "AVAILABLE"}
                     </span>
                     {c.usedAt && (() => {
-                      const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null; discordManuallyLinked?: boolean };
+                      const cx = c as typeof c & { discordLinked?: boolean; discordUsername?: string | null; discordManuallyLinked?: boolean; discordUserId?: string | null };
                       if (cx.discordLinked) {
                         return (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1" title={cx.discordManuallyLinked ? `Manually linked by admin — Discord: ${cx.discordUsername || cx.discordUserId || "linked"}` : `Discord: ${cx.discordUsername || "linked"}`}>

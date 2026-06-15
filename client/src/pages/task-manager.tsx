@@ -243,7 +243,7 @@ export default function TaskManagerPage() {
       // Reset kill state for any app that is running again after rescan
       setAppStates(prev => {
         const next = { ...prev };
-        for (const id of newRunningIds) {
+        for (const id of Array.from(newRunningIds)) {
           if (next[id]?.killStatus === "done") {
             next[id] = { ...next[id], killStatus: "idle" };
           }
