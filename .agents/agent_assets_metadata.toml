@@ -60,3 +60,9 @@ id = "DnwdV1AaHew32bLMDjMt6"
 uri = "file://FiveM-Scan.zip"
 type = "unspecified"
 title = "FiveM Config Scanner (Pure .bat)"
+
+[[outputs]]
+id = "zwN2kipg4oA7kLvZBoimk"
+uri = "file://exports/OptiGods_FiveM_Priority_Booster.zip"
+type = "unspecified"
+title = "OptiGods_FiveM_Priority_Booster.bat"
