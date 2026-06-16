@@ -228,82 +228,71 @@ const BACKGROUND_THROTTLE = [
   { name: "MsMpEng.exe",         action: "Throttle during game" },
 ];
 
-function generateFiveMPriorityScript(): string {
-  const ps1 = `# ============================================================
-# Opti Gods — FiveM Priority Booster
-# Run ONCE as Administrator — all changes write to registry
-# and persist across every reboot. No re-run needed.
-# ============================================================
-$ErrorActionPreference = 'SilentlyContinue'
-$Host.UI.RawUI.WindowTitle = "Opti Gods — FiveM Priority Booster"
+function toEncodedCommand(ps1: string): string {
+  // PowerShell -EncodedCommand expects UTF-16LE base64
+  let utf16 = "";
+  for (let i = 0; i < ps1.length; i++) {
+    const c = ps1.charCodeAt(i);
+    utf16 += String.fromCharCode(c & 0xff, (c >> 8) & 0xff);
+  }
+  return btoa(utf16);
+}
 
+function generateFiveMPriorityScript(): string {
+  const ps1 = `$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = "Opti Gods - FiveM Priority Booster"
 Write-Host ""
 Write-Host " OPTI GODS - FiveM Priority Booster" -ForegroundColor Red
 Write-Host " =====================================" -ForegroundColor DarkRed
-Write-Host " Run once — all changes persist in registry permanently." -ForegroundColor DarkCyan
 Write-Host ""
 
-# ─── [1/3] IFEO PerfOptions: FiveM/GTA always launch at High CPU + IO priority ───
-Write-Host " [1/3] Writing permanent CPU + IO priority via IFEO..." -ForegroundColor Cyan
-Write-Host "        FiveM auto-launches at High priority after this — no re-run needed." -ForegroundColor DarkGray
-\$ifeoBase = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options"
-\$targets = @("FiveM_b3323_GTAProcess","FiveM_GTAProcess","GTA5","FiveM","FiveMApp","FXServer","ROSLauncher")
-foreach (\$exe in \$targets) {
-    \$k = "\$ifeoBase\\\$exe.exe\\PerfOptions"
+Write-Host " [1/3] Setting CPU Priority to HIGH..." -ForegroundColor Cyan
+$ifeoBase = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options"
+$targets = @("FiveM_b3323_GTAProcess","FiveM_GTAProcess","GTA5","FiveM","FiveMApp","FXServer","ROSLauncher")
+foreach ($exe in $targets) {
+    $k = "$ifeoBase\\$exe.exe\\PerfOptions"
     try {
-        New-Item -Path \$k -Force -EA Stop | Out-Null
-        Set-ItemProperty -Path \$k -Name "CpuPriorityClass" -Value 3 -Type DWord -Force
-        Set-ItemProperty -Path \$k -Name "IoPriority"       -Value 3 -Type DWord -Force
-        Write-Host "   [OK] \$exe.exe -> High CPU + High IO (IFEO — persists across reboots)" -ForegroundColor Green
+        New-Item -Path $k -Force -EA Stop | Out-Null
+        Set-ItemProperty -Path $k -Name "CpuPriorityClass" -Value 3 -Type DWord -Force
+        Set-ItemProperty -Path $k -Name "IoPriority"       -Value 3 -Type DWord -Force
+        Write-Host "   [OK] $exe.exe -> High CPU + High IO" -ForegroundColor Green
     } catch {
-        Write-Host "   [SKIP] \$exe.exe could not be written (access denied?)" -ForegroundColor Yellow
+        Write-Host "   [SKIP] $exe.exe" -ForegroundColor Yellow
     }
 }
 
-# ─── [2/3] MMCSS Games: GPU + CPU + Scheduling priority ───
 Write-Host ""
-Write-Host " [2/3] Setting GPU + Scheduling priority via MMCSS..." -ForegroundColor Cyan
-\$gamesKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games"
-if (-not (Test-Path \$gamesKey)) { New-Item -Path \$gamesKey -Force | Out-Null }
-Set-ItemProperty -Path \$gamesKey -Name "GPU Priority"        -Value 8      -Type DWord  -Force
-Set-ItemProperty -Path \$gamesKey -Name "Priority"            -Value 6      -Type DWord  -Force
-Set-ItemProperty -Path \$gamesKey -Name "Scheduling Category" -Value "High" -Type String -Force
-Set-ItemProperty -Path \$gamesKey -Name "SFIO Priority"       -Value "High" -Type String -Force
-Write-Host "   [OK] MMCSS Games -> GPU=8, CPU=6, Scheduling=High (persistent)" -ForegroundColor Green
+Write-Host " [2/3] Setting GPU Priority to 8 (max)..." -ForegroundColor Cyan
+$gamesKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games"
+if (-not (Test-Path $gamesKey)) { New-Item -Path $gamesKey -Force | Out-Null }
+Set-ItemProperty -Path $gamesKey -Name "GPU Priority"        -Value 8      -Type DWord  -Force
+Set-ItemProperty -Path $gamesKey -Name "Priority"            -Value 6      -Type DWord  -Force
+Set-ItemProperty -Path $gamesKey -Name "Scheduling Category" -Value "High" -Type String -Force
+Set-ItemProperty -Path $gamesKey -Name "SFIO Priority"       -Value "High" -Type String -Force
+Write-Host "   [OK] MMCSS Games -> GPU=8, CPU=6, Scheduling=High" -ForegroundColor Green
 
-# ─── [3/3] Win32PrioritySeparation: Gaming-optimal CPU scheduler ───
 Write-Host ""
-Write-Host " [3/3] Applying gaming-optimal CPU scheduler settings..." -ForegroundColor Cyan
+Write-Host " [3/3] Throttling background processes..." -ForegroundColor Cyan
 Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
-Write-Host "   [OK] Win32PrioritySeparation = 26 (short quanta, max foreground boost, persistent)" -ForegroundColor Green
+Write-Host "   [OK] Win32PrioritySeparation = 26" -ForegroundColor Green
 
 Write-Host ""
 Write-Host " =====================================" -ForegroundColor DarkRed
-Write-Host " Done! All tweaks saved to registry." -ForegroundColor Green
-Write-Host " FiveM will automatically launch at maximum priority." -ForegroundColor Green
-Write-Host " You do NOT need to run this again." -ForegroundColor Cyan
+Write-Host " Done! Re-run this before launching FiveM each time." -ForegroundColor Green
 Write-Host ""
-Read-Host "Press Enter to close"
-`;
+Read-Host "Press Enter to exit"`;
 
+  const encoded = toEncodedCommand(ps1);
   const bat = `@echo off
-title Opti Gods — FiveM Priority Booster
-echo.
-echo  Setting up FiveM Priority Booster...
-echo.
+title Opti Gods - FiveM Priority Booster
 
-:: Write embedded PowerShell script to temp
-set "PS_TEMP=%TEMP%\\optigods_fivem_priority.ps1"
-powershell -Command "Set-Content -Path '%PS_TEMP%' -Value (Get-Content -Raw -Encoding UTF8 '%~f0' | Select-String -Pattern '(?s)#PSSTART(.*)#PSEND' | ForEach-Object { \$_.Matches[0].Groups[1].Value })" 2>nul
+net session >nul 2>&1
+if %errorlevel% == 0 goto :isadmin
+powershell -Command "Start-Process -FilePath '%%~f0' -Verb RunAs"
+exit /b
 
-:: Fallback: write directly via echo (more reliable)
-(
-${ps1.split('\n').map(l => `echo ${l.replace(/[&<>|^]/g, '^$&')}`).join('\n')}
-) > "%PS_TEMP%"
-
-:: Elevate and run
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PS_TEMP%"
-del "%PS_TEMP%" 2>nul
+:isadmin
+powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}
 exit /b 0
 `;
   return bat;
@@ -339,106 +328,8 @@ export default function ProcessLasso() {
   const handleDownloadScript = async () => {
     setDownloading(true);
     try {
-      const ps1Content = `# Opti Gods — FiveM Priority Booster
-# Run ONCE as Administrator — all changes write to registry
-# and persist across every reboot. No re-run needed.
-
-$ErrorActionPreference = 'SilentlyContinue'
-$Host.UI.RawUI.WindowTitle = "Opti Gods - FiveM Priority Booster"
-
-Write-Host ""
-Write-Host " OPTI GODS - FiveM Priority Booster" -ForegroundColor Red
-Write-Host " =====================================" -ForegroundColor DarkRed
-Write-Host " Run once — all changes persist in registry permanently." -ForegroundColor DarkCyan
-Write-Host ""
-
-# [1/3] IFEO PerfOptions — FiveM/GTA always launch at High CPU + IO priority
-Write-Host " [1/3] Writing permanent CPU + IO priority via IFEO..." -ForegroundColor Cyan
-Write-Host "        FiveM auto-launches at High priority — no re-run needed." -ForegroundColor DarkGray
-$ifeoBase = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options"
-$targets = @("FiveM_b3323_GTAProcess","FiveM_GTAProcess","GTA5","FiveM","FiveMApp","FXServer","ROSLauncher")
-foreach ($exe in $targets) {
-    $k = "$ifeoBase\\$exe.exe\\PerfOptions"
-    try {
-        New-Item -Path $k -Force -EA Stop | Out-Null
-        Set-ItemProperty -Path $k -Name "CpuPriorityClass" -Value 3 -Type DWord -Force
-        Set-ItemProperty -Path $k -Name "IoPriority"       -Value 3 -Type DWord -Force
-        Write-Host "   [OK] $exe.exe -> High CPU + High IO (IFEO — persists across reboots)" -ForegroundColor Green
-    } catch {
-        Write-Host "   [SKIP] $exe.exe - could not write IFEO (access denied?)" -ForegroundColor Yellow
-    }
-}
-
-# [2/3] MMCSS Games — GPU + Scheduling priority
-Write-Host ""
-Write-Host " [2/3] Setting GPU + Scheduling priority via MMCSS..." -ForegroundColor Cyan
-$gamesKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games"
-if (-not (Test-Path $gamesKey)) { New-Item -Path $gamesKey -Force | Out-Null }
-Set-ItemProperty -Path $gamesKey -Name "GPU Priority"        -Value 8      -Type DWord  -Force
-Set-ItemProperty -Path $gamesKey -Name "Priority"            -Value 6      -Type DWord  -Force
-Set-ItemProperty -Path $gamesKey -Name "Scheduling Category" -Value "High" -Type String -Force
-Set-ItemProperty -Path $gamesKey -Name "SFIO Priority"       -Value "High" -Type String -Force
-Write-Host "   [OK] MMCSS Games -> GPU=8, CPU=6, Scheduling=High (persistent)" -ForegroundColor Green
-
-# [3/3] Win32PrioritySeparation — Gaming-optimal CPU scheduler
-Write-Host ""
-Write-Host " [3/3] Applying gaming-optimal CPU scheduler settings..." -ForegroundColor Cyan
-Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
-Write-Host "   [OK] Win32PrioritySeparation = 26 (short quanta, max foreground boost, persistent)" -ForegroundColor Green
-
-Write-Host ""
-Write-Host " =====================================" -ForegroundColor DarkRed
-Write-Host " Done! All tweaks saved to registry." -ForegroundColor Green
-Write-Host " FiveM will automatically launch at maximum priority." -ForegroundColor Green
-Write-Host " You do NOT need to run this again." -ForegroundColor Cyan
-Write-Host ""
-Read-Host "Press Enter to close"`;
-
-      const bat = `@echo off
-title Opti Gods - FiveM Priority Booster
-
-:: ── Self-elevate to Administrator if not already ──────────────────
-net session >nul 2>&1
-if %errorLevel% == 0 goto :ISADMIN
-echo  Requesting Administrator privileges...
-powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
-exit /b 0
-
-:ISADMIN
-cd /d "%~dp0"
-set "TMPPS=%TEMP%\\optigods_fivem_%RANDOM%.ps1"
-
-:: Extract embedded PS1 block and run it
-powershell -Command "$c=[System.IO.File]::ReadAllText('%~f0'); $s=$c.IndexOf('#PS1START')+9; $e=$c.IndexOf('#PS1END'); [System.IO.File]::WriteAllText('%TMPPS%', $c.Substring($s,$e-$s).Trim())" 2>nul
-if exist "%TMPPS%" (
-  powershell -ExecutionPolicy Bypass -NoProfile -File "%TMPPS%"
-  del "%TMPPS%" 2>nul
-  exit /b 0
-)
-
-:: Fallback: inline execution if extraction failed
-powershell -ExecutionPolicy Bypass -NoProfile -Command "& {
-$ErrorActionPreference = 'SilentlyContinue'
-$targets = @('FiveM_b3323_GTAProcess','FiveM_GTAProcess','GTA5','FiveM','FiveMApp','FXServer')
-foreach($p in $targets){$x=Get-Process $p -EA SilentlyContinue;if($x){try{$x.PriorityClass='High'}catch{}}}
-$k='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'
-if(!(Test-Path $k)){New-Item $k -Force|Out-Null}
-Set-ItemProperty $k 'GPU Priority' 8 -Type DWord -Force
-Set-ItemProperty $k 'Priority' 6 -Type DWord -Force
-Set-ItemProperty $k 'Scheduling Category' 'High' -Type String -Force
-Set-ItemProperty $k 'SFIO Priority' 'High' -Type String -Force
-Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' Win32PrioritySeparation 26 -Type DWord -Force
-Write-Host '' ; Write-Host ' Done! FiveM priority set to maximum.' -ForegroundColor Red ; Write-Host ''
-Read-Host 'Press Enter to exit'
-}"
-exit /b 0
-
-REM #PS1START
-${ps1Content}
-REM #PS1END`;
-
-      downloadScript(bat, "OptiGods_FiveM_Priority_Booster.bat");
-      toast({ title: "Script downloaded!", description: "Run OptiGods_FiveM_Priority_Booster.bat as Administrator once — all tweaks write to registry and persist automatically." });
+      downloadScript(generateFiveMPriorityScript(), "OptiGods_FiveM_Priority_Booster.bat");
+      toast({ title: "Script downloaded!", description: "Run OptiGods_FiveM_Priority_Booster.bat as Administrator — right-click → Run as administrator." });
     } finally {
       setDownloading(false);
     }
