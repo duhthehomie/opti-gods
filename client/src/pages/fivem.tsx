@@ -78,7 +78,7 @@ export default function Fivem() {
     { id: "FiveMStreamDistance", title: "Cap Streaming Distance (500 units)", desc: "Sets StreamingDistance=500 in CitizenFX.ini — reduces LOD pop-in and micro-stutter on city servers.", impact: "MED" },
     { id: "FiveMStreamPool", title: "Set CitizenFX Stream Pool to 128", desc: "Updates CitizenFX.ini StreamPool setting to 128 — improves streaming stability on high-asset servers.", impact: "MED" },
     { id: "FiveMDisableNvidiaTelemetry", title: "Disable NVIDIA Telemetry Service", desc: "Stops NvTelemetryContainer service — eliminates the background GPU perf overhead it causes.", badge: "NVIDIA ONLY", impact: "MED" },
-    { id: "FiveMMenuFpsUncap", title: "Uncap FiveM Menu FPS (+set fps_max 0 launch arg)", desc: "Patches your FiveM desktop/Start Menu shortcut to add +set fps_max 0 as a launch argument — fully uncaps FPS in menus and loading screens on every launch. Also sets NVIDIA OpenGL GDI Compatibility = Prefer Performance as a secondary layer. If no shortcut is found automatically, follow the on-screen manual instruction.", badge: "ALL GPUs", impact: "HIGH", recommended: true },
+    { id: "FiveMMenuFpsUncap", title: "Uncap FiveM Menu FPS (legacy — pre-v31050 only)", desc: "Writes nui_maxFramerate 9999 to fivem.cfg and patches your FiveM shortcut with +set fps_max 0. NOTE: FiveM v31050+ (beta/release 2026) locked the nui_maxFramerate convar in production mode — this tweak is no longer effective on current builds. Still applied for in-game fps_max and NVIDIA OpenGL GDI layer on older installs.", badge: "ALL GPUs", impact: "LOW", recommended: false },
   ];
 
   const WINDOWS_TWEAKS: Tweak[] = [
