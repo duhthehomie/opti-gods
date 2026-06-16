@@ -5127,7 +5127,7 @@ export default function Admin() {
                                 {s.createdAt ? timeAgo(s.createdAt) : "—"}
                               </p>
                               <p className="text-[10px] text-zinc-700">
-                                <span className="text-zinc-600">Last seen: </span>
+                                <span className="text-zinc-600">Last active: </span>
                                 {s.lastCheckedAt ? timeAgo(s.lastCheckedAt) : "—"}
                               </p>
                               <p className="text-[10px] text-zinc-800 font-mono">Token: {s.tokenMasked}</p>

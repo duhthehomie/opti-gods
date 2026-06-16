@@ -3065,19 +3065,29 @@ Start-Sleep 2
       return res.json({ valid: true, sessionToken, discordSaved });
     }
 
-    // Path 2: Code exists in DB and was already redeemed — reject.
-    // Codes are strictly single-use. The original buyer restores their Pro by
-    // logging in with Discord (their entitlement was saved to their Discord
-    // account at first redemption). If they redeemed as a guest (no Discord),
-    // admin can Reset the code so they can re-enter it.
-    // Return `reason: "already_used"` so the frontend can surface the right
-    // recovery message instead of a generic "invalid code" error.
+    // Path 2: Code exists in DB and was already redeemed.
+    // If the requester is the Discord-linked owner of this code, issue them a
+    // fresh session token so they can restore Pro on any device without admin
+    // intervention. Otherwise reject with "already_used" so the Discord restore
+    // flow is surfaced. If they redeemed as a guest (no Discord), admin can
+    // Reset the code so they can re-enter it.
     const allCodes = await storage.getAllCodes();
     const matchingCode = allCodes.find(c => c.code === normalizedCode);
     // Catch both fully-used codes (usedAt set) AND partial-state codes where usedByIp
     // was written by an older version of the code but usedAt was never committed.
-    // Both cases mean the code slot is taken — surface the Discord restore path.
+    // Both cases mean the code slot is taken — check ownership before rejecting.
     if (matchingCode?.usedAt || matchingCode?.usedByIp) {
+      // Owner self-restore: if the requester's Discord account has an entitlement
+      // whose notes reference this exact code, they ARE the original buyer.
+      // Issue a fresh session — no admin revive needed.
+      if (redeemerDiscordId) {
+        const ent = await storage.getProEntitlement(redeemerDiscordId);
+        if (ent && !ent.revokedAt && ent.notes && ent.notes.includes(`code:${normalizedCode}`)) {
+          const sessionToken = await storage.createProSession(normalizedCode);
+          log(`[pro/verify] Owner self-restore via Discord: ${redeemerDiscordId} re-entered code ${normalizedCode}`, "pro");
+          return res.json({ valid: true, sessionToken, discordSaved: true });
+        }
+      }
       return res.json({ valid: false, reason: "already_used" });
     }
 
