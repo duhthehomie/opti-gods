@@ -241,6 +241,7 @@ jobs:
           $diff = git diff --cached --name-only
           if ($diff) {
             git commit -m "chore: pin Cargo.lock after successful build v${{ steps.version.outputs.version }}"
+            git pull --rebase origin main
             git push origin HEAD:main
             Write-Host "Cargo.lock committed and pushed — versions now pinned."
           } else {
