@@ -1515,26 +1515,30 @@ export async function registerRoutes(
         return res.redirect(302, envUrl);
       }
 
-      // Local bundled installer — highest priority after env-var override.
-      // Dropping a new .exe into client/public/downloads/ immediately wins.
-      const dir = join(process.cwd(), "client", "public", "downloads");
-      if (existsSync(dir)) {
+      // Local bundled installer — check root-level downloads/ first (served directly
+      // by Express so it never goes through the Vite build pipeline), then fall back
+      // to client/public/downloads/ for legacy compatibility.
+      const searchDirs = [
+        join(process.cwd(), "downloads"),
+        join(process.cwd(), "client", "public", "downloads"),
+      ];
+      for (const dir of searchDirs) {
+        if (!existsSync(dir)) continue;
         const entries = readdirSync(dir)
           .filter((f) => /\.(exe|msi)$/i.test(f))
           .map((f) => {
             const full = join(dir, f);
-            try {
-              return { name: f, full, mtime: statSync(full).mtimeMs };
-            } catch {
-              return null;
-            }
+            try { return { name: f, full, mtime: statSync(full).mtimeMs }; }
+            catch { return null; }
           })
           .filter((x): x is { name: string; full: string; mtime: number } => x !== null)
           .sort((a, b) => b.mtime - a.mtime);
         if (entries.length > 0) {
-          const { name } = entries[0];
-          console.log(`[download] Redirecting to static file: ${name}`);
-          return res.redirect(302, `/downloads/${name}`);
+          const { name, full } = entries[0];
+          console.log(`[download] Serving directly: ${full}`);
+          res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
+          res.setHeader("Content-Type", "application/octet-stream");
+          return res.sendFile(full);
         }
       }
 
@@ -1581,8 +1585,12 @@ export async function registerRoutes(
         return res.json({ source: "env", version: null, url: envUrl });
       }
 
-      const dir = join(process.cwd(), "client", "public", "downloads");
-      if (existsSync(dir)) {
+      const versionDirs = [
+        join(process.cwd(), "downloads"),
+        join(process.cwd(), "client", "public", "downloads"),
+      ];
+      for (const dir of versionDirs) {
+        if (!existsSync(dir)) continue;
         const entries = readdirSync(dir)
           .filter((f) => /\.(exe|msi)$/i.test(f))
           .map((f) => {
@@ -1595,7 +1603,7 @@ export async function registerRoutes(
         if (entries.length > 0) {
           const { name } = entries[0];
           const verMatch = name.match(/(\d+\.\d+[\d.]*)/);
-          return res.json({ source: "local", version: verMatch?.[1] ?? null, url: `/downloads/${name}`, filename: name });
+          return res.json({ source: "local", version: verMatch?.[1] ?? null, url: `/api/download/latest`, filename: name });
         }
       }
 
