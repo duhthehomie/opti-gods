@@ -46,6 +46,8 @@ export interface HardwareInfo {
   cpuGeneration: number;      // best-effort gen (0 = unknown)
   // System type
   isLaptop: boolean;          // detected via battery API
+  // System model (from scan, e.g. "HP Pavilion Gaming Desktop TG01-0xxx")
+  systemModel: string;
   // Other
   resolution: string;
   loading: boolean;
@@ -60,6 +62,7 @@ export interface ScannedSysInfo {
   RAM_GB?: number;
   OsName?: string;
   OsBuild?: number;
+  SystemModel?: string;
 }
 
 const SCAN_KEY = "optigods-sysinfo";
@@ -341,6 +344,7 @@ export function useHardwareInfo(): HardwareInfo {
     isIntelCore: false,
     cpuGeneration: 0,
     isLaptop: false,
+    systemModel: "",
     resolution: "",
     loading: true,
     scanned: false,
@@ -434,6 +438,8 @@ export function useHardwareInfo(): HardwareInfo {
     // Hybrid GPU is a near-certain laptop signal too (Intel iGPU + NVIDIA dGPU).
     const isLaptop = isHybridGpu && hasIntegratedGpu && (isNvidia || isAmdGpu);
 
+    const systemModel = scanned?.SystemModel?.trim() || "";
+
     setInfo({
       cpuCores,
       cpuPhysicalCores: physicalCores,
@@ -460,6 +466,7 @@ export function useHardwareInfo(): HardwareInfo {
       isIntelCore: cpuInfo.isIntelCore,
       cpuGeneration: cpuInfo.cpuGeneration,
       isLaptop,
+      systemModel,
       resolution,
       loading: false,
       scanned: !!scanned,

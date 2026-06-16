@@ -34,6 +34,7 @@ export interface NativeHardwareScan {
   refresh_hz: number | null;
   nic_vendor: string | null;
   anticheats: string[];
+  system_model?: string | null;
 }
 
 export interface NativeRestorePoint {

@@ -7,7 +7,7 @@ import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
-  Download, Upload, X,
+  Download, Upload, X, MonitorCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -769,6 +769,28 @@ export default function SystemScanPage() {
               : "Browser-level hardware detection. Run a native scan for full accuracy including temps and fan count."}
           </p>
         </header>
+
+        {/* My PC — system model banner (shown when scan data includes model) */}
+        {(() => {
+          const model = (nativeScan?.system_model || hw.systemModel || "").trim();
+          if (!model) return null;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              data-testid="banner-my-pc"
+              className="flex items-center gap-4 px-5 py-3.5 rounded-2xl border border-white/8 bg-zinc-900/70"
+            >
+              <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-white/8 shrink-0">
+                <MonitorCheck className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-0.5">My PC</p>
+                <p className="text-white font-semibold text-sm truncate" data-testid="text-system-model">{model}</p>
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* Loading */}
         {loading && (
