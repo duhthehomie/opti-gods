@@ -48,6 +48,8 @@ export interface HardwareInfo {
   isLaptop: boolean;          // detected via battery API
   // System model (from scan, e.g. "HP Pavilion Gaming Desktop TG01-0xxx")
   systemModel: string;
+  // RAM speed (0 = unknown)
+  ramMhz: number;
   // Other
   resolution: string;
   loading: boolean;
@@ -60,6 +62,7 @@ export interface ScannedSysInfo {
   Cores?: number;
   Threads?: number;
   RAM_GB?: number;
+  RAM_MHz?: number;
   OsName?: string;
   OsBuild?: number;
   SystemModel?: string;
@@ -345,6 +348,7 @@ export function useHardwareInfo(): HardwareInfo {
     cpuGeneration: 0,
     isLaptop: false,
     systemModel: "",
+    ramMhz: 0,
     resolution: "",
     loading: true,
     scanned: false,
@@ -373,10 +377,12 @@ export function useHardwareInfo(): HardwareInfo {
     let ramLabel = "Unknown";
     let ramNote = "Browser API unavailable";
 
+    const ramMhz = scanned?.RAM_MHz && scanned.RAM_MHz > 0 ? scanned.RAM_MHz : 0;
+
     if (scanned?.RAM_GB && scanned.RAM_GB > 0) {
       ramGB = scanned.RAM_GB;
       ramLabel = `${scanned.RAM_GB} GB`;
-      ramNote = "Detected via hardware scan";
+      ramNote = ramMhz > 0 ? `${ramMhz} MHz — detected via hardware scan` : "Detected via hardware scan";
     } else if (rawRamGB > 0) {
       if (rawRamGB >= 8) {
         ramLabel = "8+ GB";
@@ -467,6 +473,7 @@ export function useHardwareInfo(): HardwareInfo {
       cpuGeneration: cpuInfo.cpuGeneration,
       isLaptop,
       systemModel,
+      ramMhz,
       resolution,
       loading: false,
       scanned: !!scanned,

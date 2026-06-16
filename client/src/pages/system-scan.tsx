@@ -31,11 +31,31 @@ interface HwMonitorData {
   ram_total_gb?: number;
   ram_free_gb?: number;
   ram_used_pct?: number;
+  ram_mhz?: number | null;
   disks?: Array<{ drive: string; free_gb: number; size_gb: number; used_pct: number }>;
   fans?: Array<{ name: string; speed_pct?: number | null; speed_rpm?: number | null }>;
   fan_count?: number;
   timestamp?: string;
   cpu_temp_note?: string;
+  system_model?: string | null;
+}
+
+// ── Animated number (counts up when value first appears) ─────────────────────
+function AnimatedNum({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const [displayed, setDisplayed] = useState(0);
+  useEffect(() => {
+    const end = value;
+    const duration = 700;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayed(Math.round(end * eased));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [value]);
+  return <>{displayed}{suffix}</>;
 }
 
 // ── Stat card ────────────────────────────────────────────────────────────────
@@ -473,6 +493,16 @@ function HwMonitorPanel() {
       `        $result.ram_used_pct = [math]::Round(100*(1-$os2.FreePhysicalMemory/$os2.TotalVisibleMemorySize),1)`,
       `    }`,
       `} catch {}`,
+      `try {`,
+      `    $ramSpd = (Get-WmiObject Win32_PhysicalMemory -EA SilentlyContinue | Where-Object { $_.ConfiguredClockSpeed -gt 0 } | Measure-Object -Property ConfiguredClockSpeed -Maximum).Maximum`,
+      `    if ($ramSpd -gt 0) { $result.ram_mhz = [int]$ramSpd }`,
+      `} catch {}`,
+      ``,
+      `# System model`,
+      `try {`,
+      `    $cs2 = Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue`,
+      `    if ($cs2) { $result.system_model = ($cs2.Manufacturer.Trim() + ' ' + $cs2.Model.Trim()).Trim() }`,
+      `} catch {}`,
       ``,
       `# Disks`,
       `try {`,
@@ -636,6 +666,13 @@ function HwMonitorPanel() {
           {hw.timestamp && (
             <p className="text-[10px] text-zinc-600">Snapshot: {hw.timestamp}</p>
           )}
+          {hw.system_model && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/5 bg-zinc-900/60">
+              <MonitorCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 shrink-0">My PC</span>
+              <span className="text-white text-xs font-semibold truncate">{hw.system_model}</span>
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {hw.gpu_name && (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
@@ -647,21 +684,31 @@ function HwMonitorPanel() {
             {hw.gpu_temp_c != null && (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Thermometer className="w-3 h-3" /> GPU Temp</p>
-                <p className={cn("font-mono text-lg font-black", tempColor(hw.gpu_temp_c))}>{hw.gpu_temp_c}°C</p>
-                {hw.gpu_load_pct != null && <p className="text-zinc-500 text-[10px]">{hw.gpu_load_pct}% load</p>}
+                <p className={cn("font-mono text-lg font-black", tempColor(hw.gpu_temp_c))}>
+                  <AnimatedNum value={hw.gpu_temp_c} suffix="°C" />
+                </p>
+                {hw.gpu_load_pct != null && (
+                  <p className="text-zinc-500 text-[10px]"><AnimatedNum value={hw.gpu_load_pct} suffix="%" /> load</p>
+                )}
               </div>
             )}
             {hw.gpu_fan_pct != null && (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Wind className="w-3 h-3" /> GPU Fan</p>
-                <p className="font-mono text-lg font-black text-white">{hw.gpu_fan_pct}%</p>
+                <p className="font-mono text-lg font-black text-white">
+                  <AnimatedNum value={hw.gpu_fan_pct} suffix="%" />
+                </p>
               </div>
             )}
             {hw.cpu_temp_c != null ? (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
-                <p className={cn("font-mono text-lg font-black", tempColor(hw.cpu_temp_c))}>{hw.cpu_temp_c}°C</p>
-                {hw.cpu_load_pct != null && <p className="text-zinc-500 text-[10px]">{hw.cpu_load_pct}% load</p>}
+                <p className={cn("font-mono text-lg font-black", tempColor(hw.cpu_temp_c))}>
+                  <AnimatedNum value={hw.cpu_temp_c} suffix="°C" />
+                </p>
+                {hw.cpu_load_pct != null && (
+                  <p className="text-zinc-500 text-[10px]"><AnimatedNum value={hw.cpu_load_pct} suffix="%" /> load</p>
+                )}
               </div>
             ) : (
               <div className="p-3 rounded-lg border border-amber-500/10 bg-amber-500/[0.03]">
@@ -673,28 +720,43 @@ function HwMonitorPanel() {
             {hw.ram_used_pct != null && (
               <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
-                <p className={cn("font-mono text-lg font-black", usedColor(hw.ram_used_pct))}>{hw.ram_used_pct}%</p>
+                <p className={cn("font-mono text-lg font-black", usedColor(hw.ram_used_pct))}>
+                  <AnimatedNum value={hw.ram_used_pct} suffix="%" />
+                </p>
                 {hw.ram_total_gb && hw.ram_free_gb != null && (
-                  <p className="text-zinc-500 text-[10px]">{hw.ram_free_gb} GB free / {hw.ram_total_gb} GB</p>
+                  <p className="text-zinc-500 text-[10px]">{hw.ram_free_gb} GB free / {hw.ram_total_gb} GB
+                    {hw.ram_mhz && hw.ram_mhz > 0 ? ` · ${hw.ram_mhz} MHz` : ""}
+                  </p>
                 )}
               </div>
             )}
           </div>
           {hw.fans && hw.fans.length > 0 && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-              {hw.fans.map((f, i) => (
-                <div key={i} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1">
-                    <Wind className="w-3 h-3" /> Fan {i + 1}
-                  </p>
-                  <p className="text-white font-mono text-xs font-semibold truncate">{f.name}</p>
-                  {f.speed_rpm != null && f.speed_rpm > 0
-                    ? <p className="text-zinc-500 text-[10px]">{f.speed_rpm} RPM</p>
-                    : f.speed_pct != null
-                      ? <p className="text-zinc-500 text-[10px]">{f.speed_pct}%</p>
-                      : null}
-                </div>
-              ))}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+                Fans detected: {hw.fan_count ?? hw.fans.length}
+              </p>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                {hw.fans.map((f, i) => (
+                  <div key={i} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1">
+                      <Wind className="w-3 h-3" /> Fan {i + 1}
+                    </p>
+                    <p className="text-white font-mono text-xs font-semibold truncate">{f.name}</p>
+                    {f.speed_rpm != null && f.speed_rpm > 0 ? (
+                      <p className="text-zinc-500 text-[10px]">
+                        <AnimatedNum value={f.speed_rpm} /> RPM
+                      </p>
+                    ) : f.speed_pct != null ? (
+                      <p className="text-zinc-500 text-[10px]">
+                        <AnimatedNum value={f.speed_pct} suffix="%" />
+                      </p>
+                    ) : (
+                      <p className="text-zinc-600 text-[10px]">Speed not exposed via WMI</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {hw.disks && hw.disks.length > 0 && (
