@@ -7,7 +7,7 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { Button } from "@/components/ui/button";
-import { Crosshair, AlertTriangle, Info, FileCode, Zap } from "lucide-react";
+import { Crosshair, AlertTriangle, Info, FileCode, Zap, MonitorPlay, Cpu } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
@@ -93,6 +93,17 @@ export default function Fortnite() {
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
 
+  const gpuLabel = hw.gpuName && hw.gpuName !== "Detecting..." ? hw.gpuName : "Your GPU";
+  const isNvidia = hw.isNvidia;
+  const isLowVram = hw.nvidiaIsLowEnd;
+  const isRTX = hw.nvidiaIsRTX;
+  const isAmdGpu = hw.isAmdGpu;
+  const isAmdCpu = hw.cpuBrand === "amd";
+  const isIntelCpu = hw.cpuBrand === "intel";
+  const isIgpu = hw.isAmdApu || hw.isIntel;
+  const cpuLabel = isAmdCpu ? "AMD Ryzen" : isIntelCpu ? "Intel Core" : "Your CPU";
+  const detected = !hw.loading && hw.gpuName !== "Detecting...";
+
   return (
     <AppLayout>
       <div className="space-y-8 w-full pb-10">
@@ -109,6 +120,64 @@ export default function Fortnite() {
             <p className="text-zinc-500 text-sm">Deep performance tweaks, FPS uncap, and config patching for competitive play</p>
           </div>
         </motion.div>
+
+        {/* Hardware-aware callout */}
+        {detected && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.04 }}
+            className="rounded-xl border border-white/5 bg-zinc-900/60 p-4"
+          >
+            <div className="flex items-start gap-3">
+              <Info className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {isNvidia && !isIgpu && (
+                    <span className="flex items-center gap-1 text-[11px] bg-green-500/10 border border-green-500/25 text-green-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {gpuLabel}
+                    </span>
+                  )}
+                  {isAmdGpu && !isIgpu && (
+                    <span className="flex items-center gap-1 text-[11px] bg-red-500/10 border border-red-500/25 text-red-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {gpuLabel}
+                    </span>
+                  )}
+                  {isIgpu && (
+                    <span className="flex items-center gap-1 text-[11px] bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {gpuLabel} (iGPU)
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] bg-zinc-800 border border-white/10 text-zinc-300 rounded px-2 py-0.5 font-bold">
+                    <Cpu className="w-3 h-3" /> {cpuLabel}
+                  </span>
+                  {isRTX && (
+                    <span className="text-[11px] bg-blue-500/10 border border-blue-500/25 text-blue-400 rounded px-2 py-0.5 font-bold">
+                      RTX — DX12 recommended
+                    </span>
+                  )}
+                  {isLowVram && !isRTX && (
+                    <span className="text-[11px] bg-orange-500/10 border border-orange-500/25 text-orange-400 rounded px-2 py-0.5 font-bold">
+                      Limited VRAM
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  {isIgpu
+                    ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> (iGPU) has no dedicated VRAM. Lumen GI, SSR, and high shadow quality consume shared memory that directly competes with your game's rendering. <span className="text-amber-300 font-semibold">Disable Lumen, SSR, and shadows first</span> — these are your highest-impact tweaks.</>
+                    : isLowVram && !isRTX
+                    ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> has 4–6GB VRAM. Shadow quality, Lumen GI, and SSR are the biggest VRAM consumers in Fortnite. <span className="text-orange-300 font-semibold">Disable all three</span> for the largest GPU headroom gain — then uncap FPS on top.</>
+                    : isRTX
+                    ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> supports DirectX 12 — enable it for better async compute and multi-core CPU utilisation in Fortnite. Lumen and SSR disables still apply for competitive FPS regardless of GPU tier.</>
+                    : isAmdGpu
+                    ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> detected. Fortnite on AMD GPUs performs best with Lumen off and shadows minimal. Skip the DX12 tweak — AMD's DX12 driver overhead in Fortnite is higher than DX11 on most RX cards.</>
+                    : <>Your <span className="text-white font-semibold">{gpuLabel}</span> detected. All Engine.ini and CPU priority tweaks apply fully. FPS uncap, motion blur off, and shadow reduction are the highest-impact group for your hardware.</>
+                  }
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* FPS Uncap Hero Card */}
         <motion.div
@@ -147,9 +216,21 @@ export default function Fortnite() {
           label="Fortnite"
           context="Tweaks patch Engine.ini, GameUserSettings.ini, and Windows registry for Fortnite process. The script runs as Administrator and backs up config files before modifying them."
           tips={[
-            "Uncap Lobby FPS is the biggest single win — Fortnite's 120fps menu cap causes stutters when transitioning into matches.",
+            isIgpu
+              ? `Your ${gpuLabel} (iGPU) benefits most from disabling Lumen, SSR, and shadows — they all consume shared memory your game needs for rendering.`
+              : isLowVram && !isRTX
+              ? `Your ${gpuLabel} has limited VRAM — Lumen off + Low Shadows + No SSR together free the most GPU headroom. Apply those before FPS uncap.`
+              : isRTX
+              ? `Your ${gpuLabel} supports DX12 — enable it alongside Lumen off for RTX async compute gains. FPS uncap is still the top priority.`
+              : isAmdGpu
+              ? `Your ${gpuLabel}: skip DX12 (DX11 is faster on most RX cards in Fortnite). Lumen off and FPS uncap are your biggest wins.`
+              : "Uncap Lobby FPS is the biggest single win — Fortnite's 120fps menu cap causes stutters when transitioning into matches.",
             "Force disable VSync — any VSync in Fortnite adds 1–2 frames of input latency.",
-            "Physical core affinity helps on Intel Hyper-Threading CPUs where cache thrashing is common.",
+            isAmdCpu
+              ? `Your ${cpuLabel}: physical core affinity removes SMT sibling threads — tighter frametimes in build fights.`
+              : isIntelCpu
+              ? `Physical core affinity helps on Intel HT CPUs — removes hyperthreaded virtual cores that cause cache thrashing.`
+              : "Physical core affinity helps on HT/SMT CPUs where cache thrashing is common in build-fight scenarios.",
           ]}
         />
 
@@ -174,9 +255,9 @@ export default function Fortnite() {
             <SectionHeader title="CPU & Process Priority" sectionKey="cpu" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
             <div className="space-y-4">
               {[
-                { id: "FortniteHighPriority", title: "Set Fortnite to Above Normal CPU Priority", desc: "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots.", badge: "RECOMMENDED", impact: "HIGH" as const },
-                { id: "FortniteAffinityPhysical", title: "Pin Fortnite to Physical Cores Only", desc: "Removes hyperthreaded virtual cores from Fortnite's affinity mask — reduces cache thrashing on Intel HT CPUs.", impact: "MED" as const },
-                { id: "FortniteDisableThrottling", title: "Disable CPU Throttling for Fortnite", desc: "Disables power throttling via registry for Fortnite's process — ensures sustained clock speeds.", impact: "HIGH" as const },
+                { id: "FortniteHighPriority", title: `Set Fortnite to Above Normal CPU Priority (${cpuLabel})`, desc: isAmdCpu ? `Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) + IoPriority=3 (High) — persistent across reboots. On ${cpuLabel}, Fortnite competes with background apps at Normal priority. Above Normal ensures Fortnite's render thread is scheduled first during frame budget windows — tighter frametimes in build fights.` : "Registers FortniteClient-Win64-Shipping.exe in IFEO with CpuPriorityClass=6 (Above Normal) — persistent across reboots. Ensures Windows always schedules Fortnite threads above background apps.", badge: "RECOMMENDED", impact: "HIGH" as const },
+                { id: "FortniteAffinityPhysical", title: "Pin Fortnite to Physical Cores Only", desc: isAmdCpu ? `Sets CPU affinity for FortniteClient-Win64-Shipping.exe to physical cores only — removes SMT sibling threads from the affinity mask. On ${cpuLabel}, Fortnite's render thread can spill onto SMT siblings causing cache contention between the render and physics threads. Pinning to physical cores gives cleaner frametimes during heavy build fights.` : isIntelCpu ? "Removes hyperthreaded virtual cores from Fortnite's affinity mask — reduces cache thrashing on Intel HT CPUs where Fortnite's render and physics threads compete on the same physical core." : "Removes hyperthreaded/SMT virtual cores from Fortnite's affinity mask — reduces cache thrashing on HT CPUs.", impact: "MED" as const },
+                { id: "FortniteDisableThrottling", title: "Disable CPU Throttling for Fortnite", desc: isAmdCpu ? `Disables Windows power throttling for FortniteClient-Win64-Shipping.exe. On ${cpuLabel}, Windows can throttle Fortnite's thread power allocation between frames — this forces full clock speed for Fortnite threads at all times, removing the micro-stutter pattern caused by governor ramp-up during rapid frame bursts.` : "Disables power throttling via registry for Fortnite's process — ensures sustained clock speeds and prevents Windows from quietly reducing power to Fortnite threads during low-load moments.", impact: "HIGH" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   badge={item.badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />
@@ -191,8 +272,8 @@ export default function Fortnite() {
                 { id: "FortniteEngineStreaming", title: "Optimize Streaming Pool & Asset Loading", desc: "Sets r.Streaming.PoolSize=2048 and enables async bulk data loading — reduces texture pop-in and asset streaming hitches.", impact: "MED" as const },
                 { id: "FortniteDisableMotionBlur", title: "Disable Motion Blur & Lens Flare", desc: "Adds r.MotionBlurQuality=0 and r.LensFlareQuality=0 to Engine.ini — removes blur and gains back ~3–5% GPU performance.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteLowShadows", title: "Force Minimal Shadow Quality", desc: "Sets r.Shadow.MaxResolution=512 and r.ShadowQuality=0 in Engine.ini — significant GPU savings, especially at high resolutions.", badge: "RECOMMENDED", impact: "HIGH" as const },
-                { id: "FortniteDisableLumen", title: "Disable Lumen Global Illumination", desc: "Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI for a significant FPS boost on mid-range GPUs.", impact: "HIGH" as const },
-                { id: "FortniteDisableSSR", title: "Disable Screen-Space Reflections", desc: "Sets r.ssr.quality=0 and r.ReflectionCaptureResolution=64 in Engine.ini — SSR is computed every frame and costs 5–15% GPU on mid-range cards. Disabling it has zero competitive impact.", badge: "RECOMMENDED", impact: "MED" as const },
+                { id: "FortniteDisableLumen", title: "Disable Lumen Global Illumination", desc: isIgpu ? `Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI. On your ${gpuLabel} (iGPU), Lumen runs ray-marching passes on the same shared memory as rendering — disabling it frees significant shared-memory bandwidth every frame. This is your highest-priority Engine.ini tweak.` : isLowVram ? `Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI. On your ${gpuLabel}, Lumen's ray-marching passes consume meaningful VRAM headroom every frame. Disabling it frees GPU budget for higher sustained FPS.` : "Forces r.DynamicGlobalIlluminationMethod=0 — disables Lumen GI for a significant FPS boost. No competitive impact — Lumen GI only affects environmental lighting quality at the cost of GPU compute.", impact: isIgpu ? "HIGH" as const : isLowVram ? "HIGH" as const : "HIGH" as const },
+                { id: "FortniteDisableSSR", title: "Disable Screen-Space Reflections", desc: isLowVram || isIgpu ? `Sets r.ssr.quality=0 and r.ReflectionCaptureResolution=64 in Engine.ini. On your ${gpuLabel}, SSR's per-frame depth buffer sampling consumes ${isIgpu ? "shared memory bandwidth" : "VRAM bandwidth"} that your game needs for texture streaming. Disabling it frees 5–15% GPU per frame with zero competitive impact.` : "Sets r.ssr.quality=0 and r.ReflectionCaptureResolution=64 in Engine.ini — SSR is computed every frame and costs 5–15% GPU on mid-range cards. Disabling it has zero competitive impact.", badge: "RECOMMENDED", impact: "MED" as const },
                 { id: "FortniteRawInput", title: "Enable Raw Mouse Input", desc: "Sets bEnableMouseSmoothing=False, bViewAccelerationEnabled=False, and WindowsMouseSpeedFix=False in Engine.ini — bypasses Unreal's input smoothing pipeline for 1:1 mouse-to-crosshair tracking. Essential for competitive play.", badge: "RECOMMENDED", impact: "HIGH" as const },
                 { id: "FortniteDisableRecording", title: "Disable Background Video Recording", desc: "Disables Fortnite's built-in replay/recording via Engine.ini — frees GPU encoder bandwidth.", impact: "MED" as const },
               ].map((item, i) => (
@@ -206,7 +287,7 @@ export default function Fortnite() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">Graphics API</h2>
             <div className="space-y-4">
               {[
-                { id: "FortniteForceDirectX12", title: "Force DirectX 12 Mode", desc: "Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute. Recommended for RTX cards.", badge: "RTX USERS", impact: "MED" as const },
+                { id: "FortniteForceDirectX12", title: "Force DirectX 12 Mode", desc: isRTX ? `Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute on your ${gpuLabel}. RTX cards benefit most from DX12's async compute pipeline — especially noticeable in late-game scenarios with many players and effects.` : isAmdGpu ? `Note: AMD GPUs generally perform better in DX11 mode in Fortnite due to DX12 driver overhead. Skip this tweak unless you've tested DX12 yourself and confirmed it's faster on your ${gpuLabel}.` : isLowVram ? `Adds -dx12 to Fortnite's launch config. On your ${gpuLabel}, DX12 may or may not help — test both modes. DX12 reduces driver overhead but also increases memory usage slightly. Try DX11 first if VRAM usage is your main concern.` : "Adds -dx12 to Fortnite's launch config — DX12 enables better multi-core CPU utilization and async compute. Most beneficial on RTX 2000+ cards.", badge: isRTX ? "RECOMMENDED" : isAmdGpu ? "SKIP ON AMD" : "RTX USERS", impact: "MED" as const },
               ].map((item, i) => (
                 <TweakRow key={item.id} id={item.id} title={item.title} description={item.desc}
                   badge={item.badge} impact={item.impact} checked={tweaks[item.id] || false} onCheckedChange={(v) => setTweak(item.id, v)} delay={i + 1} />

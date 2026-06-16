@@ -5,7 +5,7 @@ import { TabSmartBar } from "@/components/tab-smart-bar";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield, Gamepad2 } from "lucide-react";
+import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield, Gamepad2, MonitorPlay } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
@@ -330,13 +330,62 @@ export default function Discord() {
           </div>
         </motion.div>
 
+        {/* Hardware-aware callout */}
+        {!hw.loading && hw.gpuName !== "Detecting..." && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="rounded-xl border border-white/5 bg-zinc-900/60 p-4"
+          >
+            <div className="flex items-start gap-3">
+              <Info className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {hw.isNvidia && (
+                    <span className="flex items-center gap-1 text-[11px] bg-green-500/10 border border-green-500/25 text-green-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {hw.gpuName}
+                    </span>
+                  )}
+                  {hw.isAmdGpu && !hw.isNvidia && (
+                    <span className="flex items-center gap-1 text-[11px] bg-red-500/10 border border-red-500/25 text-red-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {hw.gpuName}
+                    </span>
+                  )}
+                  {(hw.isAmdApu || hw.isIntel) && (
+                    <span className="flex items-center gap-1 text-[11px] bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded px-2 py-0.5 font-bold">
+                      <MonitorPlay className="w-3 h-3" /> {hw.gpuName} (iGPU)
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] bg-zinc-800 border border-white/10 text-zinc-300 rounded px-2 py-0.5 font-bold">
+                    <Cpu className="w-3 h-3" />
+                    {hw.cpuBrand === "amd" ? "AMD Ryzen" : hw.cpuBrand === "intel" ? "Intel Core" : "CPU"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  {hw.nvidiaIsLowEnd
+                    ? <>Your <span className="text-white font-semibold">{hw.gpuName}</span> has limited VRAM (4–6GB). Discord's hardware acceleration hooks into the same GPU compositor as your game — on low-VRAM cards this directly cuts into your game's rendering budget. <span className="text-red-300 font-semibold">Disable Hardware Acceleration first</span> — it's the single highest-impact tweak for your hardware.</>
+                    : hw.isAmdApu || hw.isIntel
+                    ? <>Your <span className="text-white font-semibold">{hw.gpuName}</span> shares memory with your CPU. Discord's GPU compositor competes with your game on the same shared memory bus — significantly more impactful than on discrete GPUs. <span className="text-amber-300 font-semibold">Disable Hardware Acceleration</span> — it frees shared memory bandwidth your game needs.</>
+                    : <>Your <span className="text-white font-semibold">{hw.gpuName}</span> detected. Disabling Discord's hardware acceleration and de-prioritizing its CPU threads ensures your game gets maximum scheduling priority — every tweak here applies fully to your hardware.</>
+                  }
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <TabSmartBar
           tweakIds={ALL_DISCORD_IDS}
           recommendedIds={recIds}
           label="Discord"
           context="These tweaks modify Windows priority registry entries and Discord's local settings.json file. Discord settings (HW accel, codec, animations) take effect on the next Discord launch. Priority tweaks take effect immediately on next Discord start."
           tips={[
-            "Disable Hardware Acceleration first — it's the single biggest cause of GPU lag during screenshares.",
+            hw.nvidiaIsLowEnd
+              ? `Your ${hw.gpuName} has limited VRAM — Discord's hardware acceleration competes directly with your game for GPU budget. Disable it first.`
+              : hw.isAmdApu || hw.isIntel
+              ? `Your ${hw.gpuName} (iGPU) shares memory — Discord's HW acceleration is especially costly. Disable it before anything else.`
+              : "Disable Hardware Acceleration first — it's the single biggest cause of GPU lag during screenshares.",
             "De-prioritize Discord CPU + GPU so Windows always hands scheduling priority to your game.",
             "Clear the Discord cache if you're experiencing audio glitches, black screens in screenshares, or slow loading.",
           ]}

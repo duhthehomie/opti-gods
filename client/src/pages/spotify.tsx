@@ -1,10 +1,19 @@
 import { motion } from "framer-motion";
-import { Music, Monitor, RefreshCw, Info, AlertTriangle } from "lucide-react";
+import { Music, Monitor, RefreshCw, Info, AlertTriangle, MonitorPlay, Cpu } from "lucide-react";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 
 export default function SpotifyPage() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const hw = useHardwareInfo();
+
+  const gpuLabel = hw.gpuName && hw.gpuName !== "Detecting..." ? hw.gpuName : null;
+  const isLowVram = hw.nvidiaIsLowEnd;
+  const isIgpu = hw.isAmdApu || hw.isIntel;
+  const isAmdCpu = hw.cpuBrand === "amd";
+  const cpuLabel = isAmdCpu ? "AMD Ryzen" : hw.cpuBrand === "intel" ? "Intel Core" : "Your CPU";
+  const detected = !hw.loading && gpuLabel;
 
   return (
     <div className="space-y-6 px-5 py-4">
@@ -19,14 +28,57 @@ export default function SpotifyPage() {
         </div>
       </div>
 
+      {/* Hardware-aware callout — shown once detection completes */}
+      {detected && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-white/5 bg-zinc-900/60 p-4"
+        >
+          <div className="flex items-start gap-3">
+            <Info className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                {hw.isNvidia && (
+                  <span className="flex items-center gap-1 text-[11px] bg-green-500/10 border border-green-500/25 text-green-400 rounded px-2 py-0.5 font-bold">
+                    <MonitorPlay className="w-3 h-3" /> {gpuLabel}
+                  </span>
+                )}
+                {hw.isAmdGpu && !hw.isNvidia && (
+                  <span className="flex items-center gap-1 text-[11px] bg-red-500/10 border border-red-500/25 text-red-400 rounded px-2 py-0.5 font-bold">
+                    <MonitorPlay className="w-3 h-3" /> {gpuLabel}
+                  </span>
+                )}
+                {isIgpu && (
+                  <span className="flex items-center gap-1 text-[11px] bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded px-2 py-0.5 font-bold">
+                    <MonitorPlay className="w-3 h-3" /> {gpuLabel} (iGPU)
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-[11px] bg-zinc-800 border border-white/10 text-zinc-300 rounded px-2 py-0.5 font-bold">
+                  <Cpu className="w-3 h-3" /> {cpuLabel}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                {isIgpu
+                  ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> shares memory with the CPU. Spotify's GPU compositor directly competes on the same shared memory bus — significantly more costly than on a discrete GPU. <span className="text-amber-300 font-semibold">Disabling GPU acceleration</span> is your highest-priority tweak and will free shared memory bandwidth your game needs.</>
+                  : isLowVram
+                  ? <>Your <span className="text-white font-semibold">{gpuLabel}</span> has 4–6GB VRAM. Spotify's Chromium GPU compositor hooks into the same VRAM pool as your game — on limited-VRAM cards this directly reduces the rendering budget available for FPS. <span className="text-red-300 font-semibold">Disable GPU Acceleration first.</span></>
+                  : <>Your <span className="text-white font-semibold">{gpuLabel}</span> detected. Spotify's compositor and CPU priority tweaks apply to your hardware — the GPU acceleration disable frees compositor overhead and the CPU de-priority ensures your game threads are always scheduled first.</>
+                }
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Why Spotify hurts FPS */}
       <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="text-xs font-bold text-amber-300">Why Spotify tanks FPS</p>
           <p className="text-[11px] text-zinc-400 leading-relaxed">
-            Spotify uses a <span className="text-white font-semibold">Chromium-based UI</span> that grabs the GPU compositor by default, consuming VRAM and GPU cycles on 4-8GB cards.
-            It also runs at <span className="text-white font-semibold">Normal CPU priority</span> — same as your game — meaning it competes directly for thread time during frame bursts.
+            Spotify uses a <span className="text-white font-semibold">Chromium-based UI</span> that grabs the GPU compositor by default, consuming VRAM and GPU cycles{isLowVram || isIgpu ? <span className="text-amber-300 font-semibold"> — especially costly on your {isIgpu ? "shared-memory" : "limited-VRAM"} setup</span> : " on 4–8GB cards"}.
+            It also runs at <span className="text-white font-semibold">Normal CPU priority</span> — same as your game — meaning it competes directly for {isAmdCpu ? <>thread time on your <span className="text-white font-semibold">{cpuLabel}</span></> : "thread time"} during frame bursts.
             The tweaks below solve both without closing Spotify.
           </p>
         </div>
@@ -38,8 +90,12 @@ export default function SpotifyPage() {
         <div className="space-y-4">
           <TweakRow
             id="SpotifyLowPriority"
-            title="Set Spotify to Below Normal CPU Priority"
-            description="Registers Spotify.exe in Windows IFEO (Image File Execution Options) with Below Normal CPU priority + Low I/O priority. Persists across every reboot — Spotify stays open for music but won't compete with your game's threads for frame time. This is the single biggest Spotify FPS fix."
+            title={`Set Spotify to Below Normal CPU Priority${isAmdCpu ? ` (${cpuLabel})` : ""}`}
+            description={
+              isAmdCpu
+                ? `Registers Spotify.exe in Windows IFEO with Below Normal CPU priority + Low I/O priority. Persists across every reboot. On ${cpuLabel}, Spotify competes with your game on the same physical cores — frame-time spikes occur when Spotify's audio decode thread runs at equal priority. This fix ensures Spotify audio threads never steal scheduler time from your game.`
+                : "Registers Spotify.exe in Windows IFEO with Below Normal CPU priority + Low I/O priority. Persists across every reboot — Spotify stays open for music but won't compete with your game's threads for frame time. This is the single biggest Spotify FPS fix."
+            }
             badge="FPS SAVER"
             impact="HIGH"
             checked={tweaks["SpotifyLowPriority"] || false}
@@ -60,8 +116,14 @@ export default function SpotifyPage() {
           <TweakRow
             id="SpotifyDisableGPU"
             title="Disable Spotify Hardware GPU Acceleration"
-            description="Spotify's Chromium UI uses hardware GPU acceleration by default — it hooks into your GPU's compositor layer, wasting VRAM and creating DPC interrupt overhead. On 4-6GB VRAM cards (GTX 1060, 1650, RX 580) this directly reduces the VRAM budget available to your game. Writes hardware_acceleration=false to Spotify's prefs file. Restart Spotify once to apply."
-            badge="GPU FIX"
+            description={
+              isIgpu
+                ? `Spotify's Chromium UI uses GPU hardware acceleration by default — on your ${gpuLabel || "iGPU"} (shared memory), this compositor runs on the same memory bus as your game. Every frame Spotify renders competes for shared bandwidth. Writes hardware_acceleration=false to Spotify's prefs file. Restart Spotify once to apply — largest single-tweak FPS gain on shared-memory setups.`
+                : isLowVram
+                ? `Spotify's Chromium UI hooks into your ${gpuLabel || "GPU"}'s compositor layer, consuming VRAM and creating DPC interrupt overhead. On your ${gpuLabel}, this directly reduces the VRAM budget available to your game. Writes hardware_acceleration=false to Spotify's prefs file. Restart Spotify once to apply.`
+                : "Spotify's Chromium UI uses hardware GPU acceleration by default — it hooks into your GPU's compositor layer, wasting VRAM and creating DPC interrupt overhead. Writes hardware_acceleration=false to Spotify's prefs file. Restart Spotify once to apply."
+            }
+            badge={isIgpu ? "IGPU PRIORITY" : isLowVram ? "VRAM FIX" : "GPU FIX"}
             impact="HIGH"
             checked={tweaks["SpotifyDisableGPU"] || false}
             onCheckedChange={v => setTweak("SpotifyDisableGPU", v)}
