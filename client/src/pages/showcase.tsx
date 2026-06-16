@@ -82,7 +82,7 @@ const STATS = [
   { icon: Zap, value: TOTAL_TWEAKS_LABEL, label: "Optimization Tweaks", color: "text-red-400" },
   { icon: TrendingUp, value: "8×", label: "Avg FPS Multiplier", color: "text-green-400" },
   { icon: Cpu, value: "100%", label: "Hardware Utilized", color: "text-blue-400" },
-  { icon: Monitor, value: "<5min", label: "Setup Time", color: "text-yellow-400" },
+  { icon: Star, value: "5★", label: "Verified Reviews", color: "text-yellow-400" },
   { icon: Wifi, value: "−30%", label: "Network Latency", color: "text-cyan-400" },
   { icon: HardDrive, value: "0", label: "Bloat Left Behind", color: "text-purple-400" },
 ];
@@ -90,7 +90,7 @@ const STATS = [
 const STEPS = [
   {
     n: "01",
-    title: "Pay $15 — CashApp or PayPal",
+    title: "Pay $20 — CashApp or PayPal",
     desc: "One-time payment. Lifetime access. Use the buttons below.",
   },
   {
@@ -171,7 +171,7 @@ export default function Showcase() {
 
         {/* ── Get Pro — mobile purchase flow ─────────────────────── */}
         <div className="px-5 py-7 border-b border-white/5 bg-red-950/10">
-          <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold mb-1 text-center">Get Pro — $15 Lifetime</p>
+          <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold mb-1 text-center">Get Pro — $20 Lifetime</p>
           <h2 className="text-xl font-black text-white text-center mb-1">Want These Results?</h2>
           <p className="text-xs text-zinc-400 text-center mb-6 leading-relaxed">
             Pay below → DM leaq on Discord with proof → receive your key within minutes

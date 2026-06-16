@@ -59,7 +59,7 @@ export default function ProPage() {
                       className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-6 text-base shadow-[0_0_30px_-5px_rgba(239,68,68,0.6)] pointer-events-none"
                     >
                       <Lock className="w-4 h-4 mr-2" />
-                      Unlock Pro — $15
+                      Unlock Pro — $20
                     </Button>
                   </ProUnlockButton>
                   <span className="text-xs text-zinc-500">CashApp · PayPal · Card · Access Code</span>
@@ -119,7 +119,7 @@ export default function ProPage() {
                 Card (Stripe)
               </span>
               <span className="text-red-400 font-bold text-xs group-hover:text-red-300 transition-colors">
-                $15 — Pay with Card →
+                $20 — Pay with Card →
               </span>
             </button>
 

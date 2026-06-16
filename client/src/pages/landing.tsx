@@ -81,7 +81,7 @@ const FAQS = [
   },
   {
     q: "Is this a one-time purchase?",
-    a: "Yes. $15 one-time gets you lifetime Pro access — all current and future tweaks, presets, AI assistant, and updates. No subscription, ever.",
+    a: "Yes. $20 one-time gets you lifetime Pro access — all current and future tweaks, presets, AI assistant, and updates. No subscription, ever.",
   },
   {
     q: "What's the refund policy?",
@@ -296,7 +296,7 @@ function LandingDesktop() {
               <Shield className="w-3.5 h-3.5 text-emerald-400" /> Safe &amp; Reversible
             </span>
             <span className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-red-400" /> Lifetime $15
+              <Zap className="w-3.5 h-3.5 text-red-400" /> Lifetime $20
             </span>
             <span className="flex items-center gap-1.5">
               <Star className="w-3.5 h-3.5 text-yellow-400" /> 5-star verified reviews
@@ -373,7 +373,7 @@ function LandingDesktop() {
           <div className="text-center mb-8">
             <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-400">Pro Access</span>
             <div className="flex items-baseline justify-center gap-1 mt-3">
-              <span className="text-5xl md:text-6xl font-display font-black text-white">$15</span>
+              <span className="text-5xl md:text-6xl font-display font-black text-white">$20</span>
               <span className="text-sm text-zinc-500 ml-1">one-time · lifetime</span>
             </div>
             <p className="text-sm text-zinc-400 mt-3 max-w-md mx-auto">
@@ -403,7 +403,7 @@ function LandingDesktop() {
                 data-testid="button-unlock-pro-landing"
                 className="w-full bg-red-600 hover:bg-red-500 text-white font-display font-bold py-5 text-sm tracking-wide rounded-lg"
               >
-                <Sparkles className="w-4 h-4 mr-2" /> Unlock Pro — $15 Lifetime
+                <Sparkles className="w-4 h-4 mr-2" /> Unlock Pro — $20 Lifetime
               </Button>
             </ProUnlockButton>
 

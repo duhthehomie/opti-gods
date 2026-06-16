@@ -60,7 +60,7 @@ export function ProPaymentDialog({
     staleTime: 60_000,
   });
 
-  const basePrice = pricing?.price ?? 15;
+  const basePrice = pricing?.price ?? 20;
   const isWeekend = pricing?.isWeekendDeal ?? false;
   const price = withSession ? basePrice + 20 : basePrice;
 
@@ -331,7 +331,7 @@ export function ProPaymentDialog({
               { icon: "📄", text: "Your custom PowerShell script — download in seconds" },
               { icon: "🔁", text: "14 games auto-detected · preset save/load" },
               { icon: "✅", text: "Lifetime access — pay once, never pay again", bold: true },
-              { icon: "📧", text: "Code in your inbox within 5 minutes of payment" },
+              { icon: "📧", text: "Code emailed automatically after card payment — just enter it in the app" },
             ].map((f: { icon: string; text: string; bold?: boolean; highlight?: boolean }, i) => (
               <div key={i} className={cn("flex items-start gap-2.5 text-xs", f.highlight && "bg-red-500/5 border border-red-500/15 rounded-lg p-2 -mx-1")}>
                 <span className="text-sm shrink-0 leading-none mt-0.5">{f.icon}</span>
@@ -346,8 +346,7 @@ export function ProPaymentDialog({
           <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <p className="text-[11px] text-emerald-300 font-semibold leading-snug">
-              <>Code delivered automatically within <span className="text-emerald-200">5 minutes or less</span> — just pay below, then request it</>
-            
+              Card payments deliver your code automatically — CashApp/PayPal buyers DM leaq on Discord with proof
             </p>
           </div>
 
@@ -568,7 +567,7 @@ export function ProPaymentDialog({
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-500 text-center -mt-1 px-2 leading-snug">
-                    leaq personally optimizes your PC. After paying, open a Discord ticket to schedule.
+                    leaq connects via Parsec and personally sets up ReviOS, applies all registry/GPU/driver tweaks, and fully optimizes your PC. Takes 20–30 min or more if drivers or Windows need updating. Open a Discord ticket after paying to schedule.
                   </p>
 
                   <a

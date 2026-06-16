@@ -3004,9 +3004,9 @@ Start-Sleep 2
     }
   }
 
-  // Flat $15 pricing (good pricing for everyone)
+  // Flat $20 pricing
   app.get('/api/pricing', (_req, res) => {
-    res.json({ price: 15, isWeekendDeal: false });
+    res.json({ price: 20, isWeekendDeal: false });
   });
 
   // Pro code verify — checks DB only (no legacy env var fallback)
@@ -3685,7 +3685,7 @@ Start-Sleep 2
     if (!code || typeof code !== 'string') return res.json({ valid: false });
     const dc = await storage.validateDiscountCode(String(code).trim());
     if (!dc) return res.json({ valid: false, error: 'Invalid or expired discount code' });
-    const basePrice = 15;
+    const basePrice = 20;
     const discountedPrice = Math.max(1, Math.round(basePrice * (1 - dc.percentOff / 100) * 100) / 100);
     res.json({ valid: true, percentOff: dc.percentOff, discountedPrice, code: dc.code });
   });
@@ -4705,7 +4705,7 @@ Start-Sleep 2
       return res.status(503).json({ error: 'Stripe not configured on this server.' });
     }
 
-    // Two tiers: 'pro' = the standard $15 one-time Pro access (uses STRIPE_PRICE_ID),
+    // Two tiers: 'pro' = the standard $20 one-time Pro access (uses STRIPE_PRICE_ID),
     // 'manual' = the $25 done-for-you Manual Opti service (priced inline so it
     // doesn't need a separate Price object in Stripe).
     const tier: 'pro' | 'manual' = req.body?.tier === 'manual' ? 'manual' : 'pro';
@@ -4731,7 +4731,7 @@ Start-Sleep 2
       const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
       const origin = `${protocol}://${host}`;
 
-      const BASE_PRO_CENTS = 1500; // $15.00
+      const BASE_PRO_CENTS = 2000; // $20.00
       const proLineItem = appliedDiscount
         ? [{
             price_data: {
@@ -5618,8 +5618,8 @@ try {
     if (!parsed.success) return res.status(400).json({ error: "All fields are required." });
     const { email, paymentMethod, paymentRef, discordUsername, amountPaid } = parsed.data;
 
-    // Validate amount against current flat price of $15
-    const todayPrice = 15;
+    // Validate amount against current flat price of $20
+    const todayPrice = 20;
     if (amountPaid !== todayPrice) {
       return res.status(400).json({
         error: `Incorrect amount. Pro is a flat $${todayPrice}. Please enter the exact amount you paid.`

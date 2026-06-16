@@ -246,7 +246,7 @@ export default function GetCode() {
                     <input
                       data-testid="input-getcode-amount"
                       type="number"
-                      placeholder={price ? String(price) : "15"}
+                      placeholder={price ? String(price) : "20"}
                       value={amountPaid}
                       onChange={e => setAmountPaid(e.target.value)}
                       className="w-full bg-black border border-zinc-700 focus:border-red-500/50 rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors"

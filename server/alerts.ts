@@ -195,7 +195,7 @@ export async function notifySale(opts: {
   discordWebhookUrl?: string | null;
 }): Promise<void> {
   const { tier, email, code, amount, stripeSessionId, adminPanelUrl, discordWebhookUrl } = opts;
-  const label = tier === "manual" ? "Manual Opti ($25)" : "Pro ($15)";
+  const label = tier === "manual" ? "Manual Opti ($25)" : "Pro ($20)";
   const amountStr = `$${(amount / 100).toFixed(2)}`;
 
   if (discordWebhookUrl) {

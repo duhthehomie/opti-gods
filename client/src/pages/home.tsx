@@ -93,7 +93,7 @@ export default function HomePage() {
             <Card href="/tweaks" icon={Settings2} title="Tweaks" desc="All optimization toggles, grouped" testid="card-tweaks" />
             <Card href="/tools" icon={Wrench} title="Tools & Fixes" desc="Crash fixes, game scanner, Custom OS" testid="card-tools" />
             <Card href="/ai" icon={Bot} title="Opti Gods AI" desc="Chat your way to the perfect preset" accent="violet" testid="card-ai" />
-            <Card href="/pro" icon={Crown} title="Pro" desc={isPro ? "Manage your Pro unlock" : "Unlock everything for $15"} accent="amber" testid="card-pro" />
+            <Card href="/pro" icon={Crown} title="Pro" desc={isPro ? "Manage your Pro unlock" : "Unlock everything for $20"} accent="amber" testid="card-pro" />
           </div>
         </section>
 
