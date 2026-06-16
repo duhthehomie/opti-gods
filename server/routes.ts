@@ -3461,9 +3461,10 @@ Start-Sleep 2
   // Admin — list all codes (enriched with last session IP for tracking)
   app.get('/api/admin/codes', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [codes, proUsers] = await Promise.all([
+    const [codes, proUsers, allIpLogs] = await Promise.all([
       storage.getAllCodes(),
       storage.listProUsers(),
+      storage.getIpLogs(),
     ]);
     // Build lookup: code value → Discord user info from entitlement notes.
     // Checks ALL sources (code, admin, cashapp, etc.) for a "code:XXXX" pattern
@@ -3483,12 +3484,24 @@ Start-Sleep 2
         }
       }
     }
+    // Build lookup: code value → most-recent IP location
+    const codeToLocation: Record<string, { city: string | null; region: string | null; country: string | null; seenAt: string | null }> = {};
+    for (const log of allIpLogs) {
+      if (!log.codeRef) continue;
+      const existing = codeToLocation[log.codeRef];
+      if (!existing || new Date(log.seenAt ?? 0) >= new Date(existing.seenAt ?? 0)) {
+        codeToLocation[log.codeRef] = { city: log.city, region: log.region, country: log.country, seenAt: log.seenAt ?? null };
+      }
+    }
     const enriched = codes.map(c => ({
       ...c,
       discordLinked: !!codeToDiscord[c.code],
       discordUserId: codeToDiscord[c.code]?.discordUserId ?? null,
       discordUsername: codeToDiscord[c.code]?.discordUsername ?? null,
       discordManuallyLinked: codeToDiscord[c.code]?.manuallyLinked ?? false,
+      ipCity: codeToLocation[c.code]?.city ?? null,
+      ipRegion: codeToLocation[c.code]?.region ?? null,
+      ipCountry: codeToLocation[c.code]?.country ?? null,
     }));
     res.json(enriched);
   });

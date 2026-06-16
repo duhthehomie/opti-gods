@@ -2879,7 +2879,7 @@ export default function Admin() {
     refetchInterval: 60000,
   });
 
-  const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null; sessionIp: string | null })[]>({
+  const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null; sessionIp: string | null; ipCity: string | null; ipRegion: string | null; ipCountry: string | null })[]>({
     queryKey: ["/api/admin/codes", key],
     queryFn: () => fetch(apiUrl("/api/admin/codes"), { headers }).then(r => {
       if (!r.ok) throw new Error("Unauthorized");
@@ -3461,10 +3461,26 @@ export default function Admin() {
   const activityItems = useMemo(() => {
     const codeEvents = (codesQuery.data || [])
       .filter(c => c.usedAt)
-      .map(c => ({ type: "code" as const, label: c.note || c.code, detail: c.code, at: c.usedAt! }));
+      .map(c => ({
+        type: "code" as const,
+        label: c.note || c.code,
+        detail: c.code,
+        at: c.usedAt!,
+        city: c.ipCity ?? null,
+        region: c.ipRegion ?? null,
+        country: c.ipCountry ?? null,
+      }));
     const friendEvents = (friendsQuery.data || [])
       .filter(f => f.usedAt)
-      .map(f => ({ type: "friend" as const, label: f.note || f.token.slice(0, 8) + "…", detail: f.token, at: f.usedAt! }));
+      .map(f => ({
+        type: "friend" as const,
+        label: f.note || f.token.slice(0, 8) + "…",
+        detail: f.token,
+        at: f.usedAt!,
+        city: null as string | null,
+        region: null as string | null,
+        country: null as string | null,
+      }));
     return [...codeEvents, ...friendEvents]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 30);
@@ -4679,7 +4695,10 @@ export default function Admin() {
                 ? activityItems.filter(item =>
                     item.label.toLowerCase().includes(q) ||
                     item.detail.toLowerCase().includes(q) ||
-                    item.type.toLowerCase().includes(q)
+                    item.type.toLowerCase().includes(q) ||
+                    (item.city ?? "").toLowerCase().includes(q) ||
+                    (item.region ?? "").toLowerCase().includes(q) ||
+                    (item.country ?? "").toLowerCase().includes(q)
                   )
                 : activityItems;
               return filtered.length === 0 ? (
@@ -4707,6 +4726,12 @@ export default function Admin() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-white font-medium truncate">{item.label}</p>
                       <p className="text-[10px] text-zinc-600 font-mono truncate">{item.detail}</p>
+                      {(item.city || item.country) && (
+                        <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                          {countryFlag(item.country)}{countryFlag(item.country) ? " " : ""}
+                          {[item.city, item.region, item.country].filter(Boolean).join(", ")}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className={cn(
