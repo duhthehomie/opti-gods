@@ -48,3 +48,9 @@ id = "Hg4FMe_DfzLRb0gwlQUiR"
 uri = "file://scripts/output/OptiGods-COD-7800X3D-RTX5070-Streamer.zip"
 type = "unspecified"
 title = "OptiGods — Streamer Build (7800X3D + RTX 5070)"
+
+[[outputs]]
+id = "y6cT3OIPWVEGKzhom3kPR"
+uri = "file://FiveM-MenuFPS-Uncap-Test.zip"
+type = "unspecified"
+title = "FiveM Menu FPS Uncap — Test Script (.bat inside)"
