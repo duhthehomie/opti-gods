@@ -2788,6 +2788,7 @@ export default function Admin() {
   const [importCodeNote, setImportCodeNote] = useState("");
   const [searchCode, setSearchCode] = useState("");
   const [searchFriend, setSearchFriend] = useState("");
+  const [searchActivity, setSearchActivity] = useState("");
   const [filterCode, setFilterCode] = useState<"all" | "available" | "used" | "discord" | "no-discord">("all");
   const [filterFriend, setFilterFriend] = useState<"all" | "available" | "used">("all");
   const [confirmPurgeCodes, setConfirmPurgeCodes] = useState(false);
@@ -4651,13 +4652,43 @@ export default function Admin() {
         {/* ─── ACTIVITY TAB ─────────────────────────────────────────── */}
         {tab === "activity" && (
           <div className="space-y-3">
-            {activityItems.length === 0 ? (
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 pointer-events-none" />
+              <input
+                data-testid="input-search-activity"
+                type="text"
+                placeholder="Search by name, code, or type…"
+                value={searchActivity}
+                onChange={e => setSearchActivity(e.target.value)}
+                className="w-full bg-zinc-900/70 border border-white/8 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/40 transition-colors"
+              />
+              {searchActivity && (
+                <button
+                  onClick={() => setSearchActivity("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {(() => {
+              const q = searchActivity.trim().toLowerCase();
+              const filtered = q
+                ? activityItems.filter(item =>
+                    item.label.toLowerCase().includes(q) ||
+                    item.detail.toLowerCase().includes(q) ||
+                    item.type.toLowerCase().includes(q)
+                  )
+                : activityItems;
+              return filtered.length === 0 ? (
               <div className="p-12 text-center text-xs text-zinc-600">
-                No redemptions yet — activity shows here once codes or links are used.
+                {q ? `No activity matching "${searchActivity}"` : "No redemptions yet — activity shows here once codes or links are used."}
               </div>
             ) : (
               <div className="rounded-xl border border-white/5 overflow-hidden">
-                {activityItems.map((item, i) => (
+                {filtered.map((item, i) => (
                   <div
                     key={i}
                     className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-zinc-900/30 transition-colors"
@@ -4689,7 +4720,8 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
-            )}
+            );
+            })()}
 
             {activityItems.length > 0 && (
               <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-xl flex items-center justify-between">
