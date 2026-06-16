@@ -1,67 +1,63 @@
 @echo off
 setlocal enabledelayedexpansion
 echo ============================================
-echo  FiveM Menu FPS Uncap Test - by leaq
+echo  FiveM Menu FPS Uncap - Multi Method Test
+echo  by leaq
 echo ============================================
 echo.
+echo NOTE: Run as Administrator. Reboot required
+echo after bcdedit change. Test each section.
+echo.
 
-:: --- NVIDIA OpenGL GDI Compatibility = Prefer Performance ---
-echo [1/2] Setting NVIDIA OpenGL GDI Compatibility...
-set "found=0"
+:: ─────────────────────────────────────────────
+:: METHOD 1: NVIDIA OpenGL GDI (original method)
+:: ─────────────────────────────────────────────
+echo [1/3] NVIDIA OpenGL GDI Compatibility...
+set "nv_found=0"
 for /L %%i in (0,1,3) do (
     set "key=HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\000%%i"
     reg query "!key!" /v DriverDesc 2>nul | findstr /i "NVIDIA" >nul 2>&1
     if !errorlevel!==0 (
         reg add "!key!" /v OpenGLCompatibilityMode /t REG_DWORD /d 0 /f >nul 2>&1
-        echo [NVIDIA] OpenGL GDI Compatibility = Prefer Performance on key 000%%i
-        set "found=1"
+        echo     [OK] Prefer Performance set on NVIDIA key 000%%i
+        set "nv_found=1"
     )
 )
-if "!found!"=="0" echo [SKIP] No NVIDIA GPU class key found
-
+if "!nv_found!"=="0" echo     [SKIP] NVIDIA key not found
 echo.
-echo [2/2] Patching FiveM shortcuts...
 
-:: Write temp PowerShell script to TEMP folder
-set "ps1=%TEMP%\fivem_fps_patch.ps1"
-(
-echo $wsh = New-Object -ComObject WScript.Shell
-echo $paths = @(
-echo     "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\FiveM.lnk",
-echo     "$env:PUBLIC\Desktop\FiveM.lnk",
-echo     "$env:USERPROFILE\Desktop\FiveM.lnk",
-echo     "$env:OneDrive\Desktop\FiveM.lnk"
-echo ^)
-echo $updated = 0
-echo foreach ^($p in $paths^) {
-echo     if ^(Test-Path $p^) {
-echo         try {
-echo             $sc = $wsh.CreateShortcut^($p^)
-echo             if ^($sc.Arguments -notmatch 'fps_max'^) {
-echo                 $sc.Arguments = ^($sc.Arguments + ' +set fps_max 0'^).Trim^(^)
-echo                 $sc.Save^(^)
-echo                 Write-Host ^("[OK] Patched: " + $p^) -ForegroundColor Green
-echo             } else {
-echo                 Write-Host ^("[OK] Already patched: " + $p^) -ForegroundColor DarkGray
-echo             }
-echo             $updated++
-echo         } catch {
-echo             Write-Host ^("[FAIL] Could not patch: " + $p^) -ForegroundColor Yellow
-echo         }
-echo     }
-echo }
-echo if ^($updated -eq 0^) {
-echo     Write-Host "[!] No FiveM shortcuts found automatically." -ForegroundColor Yellow
-echo     Write-Host "[>] Manual fix: right-click FiveM shortcut -> Properties -> Target -> append:  +set fps_max 0" -ForegroundColor Cyan
-echo }
-) > "%ps1%"
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ps1%"
-del "%ps1%" >nul 2>&1
-
+:: ─────────────────────────────────────────────
+:: METHOD 2: Force Fullscreen Exclusive in CitizenFX.ini
+:: CEF in exclusive fullscreen bypasses DWM frame cap
+:: ─────────────────────────────────────────────
+echo [2/3] Forcing Fullscreen Exclusive in CitizenFX.ini...
+set "ini=%LOCALAPPDATA%\FiveM\FiveM.app\CitizenFX.ini"
+if exist "!ini!" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='!ini!'; $c=Get-Content $f -Raw; if($c -match 'Fullscreen=false'){$c=$c -replace 'Fullscreen=false','Fullscreen=true'; Set-Content $f $c -Encoding UTF8; Write-Host '    [OK] Changed Fullscreen=false -> Fullscreen=true'} elseif($c -notmatch 'Fullscreen=true'){Add-Content $f 'Fullscreen=true'; Write-Host '    [OK] Added Fullscreen=true'} else {Write-Host '    [OK] Already Fullscreen=true'}"
+) else (
+    echo     [SKIP] CitizenFX.ini not found at !ini!
+    echo     Launch FiveM once first to generate it.
+)
 echo.
+
+:: ─────────────────────────────────────────────
+:: METHOD 3: Disable Dynamic Tick (timer resolution)
+:: CEF internal frame timer depends on Windows tick
+:: Requires reboot to take effect
+:: ─────────────────────────────────────────────
+echo [3/3] Disabling dynamic tick (improves timer resolution)...
+bcdedit /set disabledynamictick yes >nul 2>&1
+if !errorlevel!==0 (
+    echo     [OK] disabledynamictick=yes set — REBOOT REQUIRED
+) else (
+    echo     [FAIL] bcdedit failed — must run as Administrator
+)
+echo.
+
 echo ============================================
-echo  Done. Close FiveM fully then relaunch via
-echo  the patched shortcut to test menu FPS.
+echo  REBOOT your PC then launch FiveM via the
+echo  desktop shortcut and check menu FPS.
+echo  If still capped, reply with your monitor
+echo  Hz and whether you use borderless/fullscreen
 echo ============================================
 pause
