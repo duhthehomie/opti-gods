@@ -1,78 +1,81 @@
 @echo off
 setlocal enabledelayedexpansion
 echo ============================================
-echo  FiveM Menu FPS Uncap - DX11 / DWM Methods
+echo  FiveM Menu FPS Uncap - Win10 / v31050 Fix
 echo  by leaq
 echo ============================================
 echo.
 
 :: ─────────────────────────────────────────────
-:: METHOD 1: Disable "Optimised for windowed gaming"
-:: Win11 feature that caps windowed DX app FPS to monitor Hz
+:: METHOD 1: Patch FiveM shortcut with NUI framerate convars
+:: nui_maxFramerate and nui_framerate are FiveM-internal
+:: controls for the CEF/NUI renderer frame rate
 :: ─────────────────────────────────────────────
-echo [1/4] Disabling "Optimised for windowed gaming" (Win11)...
-reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v DirectXUserGlobalSettings /t REG_SZ /d "SwapEffectUpgradeEnable=0;" /f >nul 2>&1
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f >nul 2>&1
-echo     [OK] Windowed gaming optimisation disabled
-
+echo [1/3] Patching FiveM shortcut with NUI framerate args...
+set "ps1=%TEMP%\fivem_nui_patch.ps1"
+(
+echo $wsh = New-Object -ComObject WScript.Shell
+echo $paths = @(
+echo     "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\FiveM.lnk",
+echo     "$env:PUBLIC\Desktop\FiveM.lnk",
+echo     "$env:USERPROFILE\Desktop\FiveM.lnk"
+echo ^)
+echo $args_to_add = '+set nui_maxFramerate 0 +set nui_framerate 0 +set fps_max 0'
+echo $updated = 0
+echo foreach ^($p in $paths^) {
+echo     if ^(Test-Path $p^) {
+echo         try {
+echo             $sc = $wsh.CreateShortcut^($p^)
+echo             $current = $sc.Arguments
+echo             # Strip old fps_max / nui args first to avoid duplicates
+echo             $current = $current -replace '\+set nui_maxFramerate \S+',''-replace '\+set nui_framerate \S+',''-replace '\+set fps_max \S+',''
+echo             $sc.Arguments = ^($current.Trim^(^) + ' ' + $args_to_add^).Trim^(^)
+echo             $sc.Save^(^)
+echo             Write-Host ^("[OK] Patched: " + $p^) -ForegroundColor Green
+echo             $updated++
+echo         } catch {
+echo             Write-Host ^("[FAIL] " + $p^) -ForegroundColor Yellow
+echo         }
+echo     }
+echo }
+echo if ^($updated -eq 0^) {
+echo     Write-Host "[!] No shortcuts found. Add manually to Target:" -ForegroundColor Yellow
+echo     Write-Host "    +set nui_maxFramerate 0 +set nui_framerate 0 +set fps_max 0" -ForegroundColor Cyan
+echo }
+) > "%ps1%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ps1%"
+del "%ps1%" >nul 2>&1
 echo.
 
 :: ─────────────────────────────────────────────
-:: METHOD 2: Disable Hardware Accelerated GPU Scheduling (HAGS)
-:: HAGS in newer NVIDIA drivers can cap windowed DX present rate
+:: METHOD 2: NVIDIA OpenGL GDI + SwapInterval=0
 :: ─────────────────────────────────────────────
-echo [2/4] Disabling HAGS (Hardware Accelerated GPU Scheduling)...
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 1 /f >nul 2>&1
-echo     [OK] HAGS disabled (HwSchMode=1)
-
-echo.
-
-:: ─────────────────────────────────────────────
-:: METHOD 3: Force NVIDIA Vsync OFF globally
-:: Ensures driver doesn't override app with vsync
-:: ─────────────────────────────────────────────
-echo [3/4] NVIDIA global Vsync = Off + OpenGL GDI Prefer Performance...
+echo [2/3] NVIDIA OpenGL GDI Prefer Performance + SwapInterval=0...
 for /L %%i in (0,1,3) do (
     set "key=HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\000%%i"
     reg query "!key!" /v DriverDesc 2>nul | findstr /i "NVIDIA" >nul 2>&1
     if !errorlevel!==0 (
         reg add "!key!" /v OpenGLCompatibilityMode /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "!key!" /v OpenGLDefaultSwapInterval /t REG_DWORD /d 0 /f >nul 2>&1
-        echo     [OK] NVIDIA key 000%%i: OpenGL GDI=PerfMode, SwapInterval=0 (no vsync^)
+        echo     [OK] NVIDIA key 000%%i patched
     )
 )
-
 echo.
 
 :: ─────────────────────────────────────────────
-:: METHOD 4: NVIDIA FiveM.exe per-app profile Vsync Off
-:: via NVCP DRS registry profile
+:: METHOD 3: Disable HAGS (Win10 2004+ has this)
+:: Newer NVIDIA drivers + HAGS can cap present rate
 :: ─────────────────────────────────────────────
-echo [4/4] Setting NVIDIA per-app Vsync Off for FiveM.exe...
-set "ps1=%TEMP%\nv_fivem_vsync.ps1"
-(
-echo $profileKey = 'HKCU:\Software\NVIDIA Corporation\Global\NvTweak'
-echo $vsyncOff = 0x100000
-echo # Write vsync=0 to the NVIDIA user settings store
-echo $base = 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices'
-echo $null = New-Item -Path $base -Force -EA SilentlyContinue
-echo # Also set via DirectX layer
-echo reg add 'HKCU\Software\NVIDIA Corporation\Global\NvTweak' /v Vsync /t REG_DWORD /d 0 /f 2>$null
-echo # Force NVIDIA "Ultra Low Latency" mode which bypasses present queue (helps uncap menu FPS^)
-echo $drs = 'HKLM:\SOFTWARE\NVIDIA Corporation\Global\FTS'
-echo Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak' -Name 'Vsync' -Value 0 -Type DWord -Force -EA SilentlyContinue
-echo Write-Host '    [OK] NVIDIA driver vsync override set to Off'
-) > "%ps1%"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ps1%" 2>nul
-del "%ps1%" >nul 2>&1
-
+echo [3/3] Disabling Hardware Accelerated GPU Scheduling (HAGS)...
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 1 /f >nul 2>&1
+echo     [OK] HAGS disabled - REBOOT REQUIRED
 echo.
+
 echo ============================================
-echo  REBOOT required for HAGS change to apply.
-echo  After reboot: open FiveM and check top-left
-echo  FPS counter. Should now exceed 165fps.
+echo  REBOOT then launch FiveM from the shortcut.
 echo.
-echo  If STILL capped after reboot, reply and we
-echo  will try RTSS (RivaTuner) framerate removal.
+echo  Check top-left FPS in the menu.
+echo  Tell leaq the result — if still 165fps we
+echo  go the NVCP Manual route (3D Settings).
 echo ============================================
 pause
