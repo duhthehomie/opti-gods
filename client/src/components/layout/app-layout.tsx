@@ -39,6 +39,12 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "45+",
     highlights: ["Win32 Priority Separation", "Timer Resolution 0.5ms", "Nagle Algorithm Bypass", "DPC Latency Fix", "MSI Mode"],
   },
+  "/bond007": {
+    title: "007: First Light",
+    desc: "IO Interactive UE5 title — Engine.ini patches (Lumen, Virtual Shadows, Volumetric Fog, RT off), process priority, shader cache clear, and NVIDIA driver tweaks.",
+    tweakCount: "13",
+    highlights: ["UE5 Engine.ini Patch", "Lumen / RT OFF", "Process Priority", "Shader Cache Clear", "NVIDIA Low Latency"],
+  },
   "/fivem": {
     title: "FiveM Optimization",
     desc: "Dedicated FiveM/GTA V tweaks: priority scheduling, cache management, streaming distance, network buffers, and GPU-specific performance stacks.",

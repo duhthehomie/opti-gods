@@ -5,7 +5,7 @@ import { EmbeddedProvider } from "@/lib/embedded-context";
 import {
   ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
   Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
-  Swords, Blocks, Target, Eye, Music, X, Zap,
+  Swords, Blocks, Target, Eye, Music, X, Zap, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
@@ -14,6 +14,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 
 const Registry         = lazy(() => import("@/pages/registry"));
+const Bond007          = lazy(() => import("@/pages/bond-007"));
 const CallOfDuty       = lazy(() => import("@/pages/call-of-duty"));
 const Fivem            = lazy(() => import("@/pages/fivem"));
 const Fortnite         = lazy(() => import("@/pages/fortnite"));
@@ -70,6 +71,9 @@ const SECTIONS: Section[] = [
     id: "laptop", title: "Laptop Optimizer", desc: "Thermal, GPU switching, USB suspend, fan curve",
     icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"],
     hardwareFilter: (hw) => hw.isLaptop,
+  },
+  { id: "bond007",      title: "007: First Light",              desc: "UE5 Engine.ini, Lumen off, process priority, shader cache",  icon: Shield,        group: "games",   Component: Bond007,            categories: [] as TweakCategory[],
+    tweakIds: ["game_007firstlight","CodShaderCacheClear","CodPagefileOptimize","CodDisableHAGS","Cod1650LowLatency","NvidiaD3DOptimize","NvidiaPCIeGen3Force","Cod3500PowerPlan","Cod3500CoreUnpark","CodMemPriority","CodFramePacing","CodTdrDelay","CodMMCSS"],
   },
   { id: "cod",          title: "Call of Duty (BO6 / Warzone)", desc: "Textures, VRAM overflow, HAGS, network, CPU boost",         icon: Target,        group: "games",   Component: CallOfDuty,         categories: ["cod"] },
   { id: "fivem",        title: "FiveM / GTA V",                desc: "Priority, cache, streaming, network buffers",               icon: Gamepad2,      group: "games",   Component: Fivem,              categories: ["fivem"] },
