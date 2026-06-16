@@ -8,60 +8,51 @@ echo.
 
 set "CFG=%APPDATA%\CitizenFX\fivem.cfg"
 
-if not exist "%CFG%" (
-    echo [!] fivem.cfg not found at:
-    echo     %CFG%
-    echo     Creating it fresh...
-    echo. > "%CFG%"
+if not exist "%APPDATA%\CitizenFX" (
+    echo [!] CitizenFX folder not found at %APPDATA%\CitizenFX
+    echo     Creating...
+    mkdir "%APPDATA%\CitizenFX"
 )
 
-echo [1/2] Patching fivem.cfg...
+if not exist "%CFG%" (
+    echo [!] fivem.cfg not found - creating fresh one...
+    type nul > "%CFG%"
+)
 
-:: Read file, strip old nui lines, write back clean
-set "TMP=%TEMP%\fivem_cfg_tmp.txt"
+echo Patching: %CFG%
+echo.
+
+set "TMP=%TEMP%\fivem_cfg_clean.txt"
 if exist "%TMP%" del "%TMP%"
 
-for /f "usebackq delims=" %%L in ("%CFG%") do (
+:: Copy file, skipping any existing nui_ framerate lines
+for /f "usebackq tokens=* delims=" %%L in ("%CFG%") do (
     set "LINE=%%L"
-    echo !LINE! | findstr /i "nui_maxFramerate nui_framerate" >nul 2>&1
+    echo !LINE! | findstr /i /c:"nui_maxFramerate" /c:"nui_framerate" >nul 2>&1
     if errorlevel 1 (
         echo !LINE!>> "%TMP%"
+    ) else (
+        echo     [Removed old line]: !LINE!
     )
 )
 
-:: Append the correct convar syntax
+:: Append correct convar syntax
 echo set nui_maxFramerate 9999>> "%TMP%"
 echo set nui_framerate 9999>> "%TMP%"
+echo set nui_useD3D11 0>> "%TMP%"
 
 copy /y "%TMP%" "%CFG%" >nul
 del "%TMP%" >nul 2>&1
-echo     [OK] fivem.cfg patched
-echo.
 
-:: Show the result
-echo Current fivem.cfg contents:
-echo ----------------------------------------
-type "%CFG%"
-echo ----------------------------------------
-echo.
-
-echo [2/2] Patching FiveM shortcut args...
-set "PATCHED=0"
-for %%P in (
-    "%APPDATA%\Microsoft\Windows\Start Menu\Programs\FiveM.lnk"
-    "%USERPROFILE%\Desktop\FiveM.lnk"
-    "%PUBLIC%\Desktop\FiveM.lnk"
-) do (
-    if exist %%P (
-        echo     Found: %%~P
-        set "PATCHED=1"
-    )
-)
-if "!PATCHED!"=="0" echo     [!] No shortcuts found
-
+echo [OK] fivem.cfg updated
 echo.
 echo ============================================
-echo  DONE. Launch FiveM from the SHORTCUT.
-echo  Check top-left FPS in the main menu.
+echo  Current fivem.cfg:
+echo ============================================
+type "%CFG%"
+echo.
+echo ============================================
+echo  Launch FiveM from shortcut and check FPS.
+echo  Path patched: %CFG%
 echo ============================================
 pause

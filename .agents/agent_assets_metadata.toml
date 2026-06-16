@@ -53,7 +53,7 @@ title = "OptiGods — Streamer Build (7800X3D + RTX 5070)"
 id = "y6cT3OIPWVEGKzhom3kPR"
 uri = "file://FiveM-MenuFPS-Uncap-Test.zip"
 type = "unspecified"
-title = "FiveM Menu FPS Uncap — fivem.cfg Fix"
+title = "FiveM Menu FPS Uncap — fivem.cfg Fix (verbose)"
 
 [[outputs]]
 id = "DnwdV1AaHew32bLMDjMt6"
