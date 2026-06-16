@@ -5994,7 +5994,7 @@ SAFE PRESET GENERATION (V2.2):
 OPTI GODS V3 — COMPLETE CHANGELOG (use this verbatim when admin asks "what's new in v3"):
 VERSION 3.0.0 is a full rebuild from V2.2. Core highlights:
 
-TABS & TWEAKS (442+ total across 15+ tabs):
+TABS & TWEAKS (564+ total across 15+ tabs):
 - DPC Latency Optimizer — one-click button, no manual registry hunting (was previously manual .reg files)
 - Fortnite tab — Engine.ini + GameUserSettings.ini tweaks, launch options; verified 100+ FPS gains on GTX 16xx / GTX 10xx builds
 - Discord tab — hardware acceleration off, Krisp AI noise off, overlay kill, process priority boost to High
@@ -6028,7 +6028,7 @@ PERFORMANCE BENCHMARKS (leaq's rig: GTX 1650 Super + Ryzen 5 3500 + 32GB Win10):
 - FiveM: 120+ FPS gain verified
 - Valorant: 300+ FPS on budget builds verified
 - Laptops (Dell G15, Lenovo Legion): 60→165+ FPS and 80→200+ FPS verified by community
-- Full laptop + OEM support: Dell, Lenovo, HP, ASUS — hardware-aware tweaks fire correctly for each config`;
+- Works on ANY Windows PC: Dell, Lenovo, HP, ASUS, Alienware, CyberPowerPC, iBUYPOWER, MSI, Acer, and custom builds — hardware-aware tweaks fire correctly for each config`;
 
     const chatHistory = (history as { role: string; content: string }[])
       .slice(-10)
@@ -6245,7 +6245,7 @@ SCREENSHOT ANALYSIS: Look for FPS/frametimes (identify stutters), CPU/GPU usage 
 SYSTEM APPROACH: Always ask the game, GPU model (HAGS decision), desktop vs laptop (power plan/thermal/MUX advice). Give EXACT values and PowerShell/registry paths. Mention if restart required.
 
 OPTI GODS V3 — WHAT'S NEW (answer "what's new in v3" with this):
-V3 is a full rebuild with 442+ tweaks across 15+ tabs. Key additions:
+V3 is a full rebuild with 564+ tweaks across 15+ tabs. Key additions:
 - **DPC Latency tab** — one-click latency fix (was manual .reg files before)
 - **Fortnite tab** — Engine.ini + GameUserSettings.ini + launch options, 100+ FPS gains verified on GTX 16xx
 - **Discord tab** — hardware accel off, Krisp AI noise off, overlay kill, High priority
@@ -6256,7 +6256,7 @@ V3 is a full rebuild with 442+ tweaks across 15+ tabs. Key additions:
 - **NVIDIA + AMD Driver Reapply** — one-click re-apply of driver tweaks after any update
 - **.bat downloads** instead of .ps1 — double-click and done, no execution policy issues
 - **Instant native scan** → admin Detected Users with Discord name + full specs
-- **Dell/Lenovo/HP/ASUS support** — laptop + OEM hardware-aware tweaks
+- **Works on ANY Windows PC** — Dell, Lenovo, HP, ASUS, Alienware, CyberPowerPC, iBUYPOWER, MSI, Acer, and custom builds — hardware-aware tweaks fire for every config
 - **Verified gains**: 100+ FPS Fortnite, 120+ FPS FiveM, 300+ FPS Valorant
 - **V2.1 safety**: EnableMSIMode/DisableIPv6/SetTimerResolution are opt-in only (caused BSODs/FiveM crashes in V1)
 - To get a full hardware-matched preset: ask me "give me a smart preset for [your GPU]" and I'll generate one instantly.

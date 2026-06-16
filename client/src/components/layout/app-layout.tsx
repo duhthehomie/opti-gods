@@ -213,7 +213,7 @@ function MobileShowcase() {
         </h1>
         <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">by leaq</p>
         <p className="text-sm text-zinc-400 mt-3 max-w-xs mx-auto leading-relaxed">
-          The ultimate Windows 10/11 PC optimizer. {TOTAL_TWEAKS_LABEL} tweaks. One script. Maximum FPS with lowest latency.
+          The ultimate Windows 10/11 PC optimizer. {TOTAL_TWEAKS_LABEL} tweaks. Maximum FPS with lowest latency.
         </p>
       </div>
 

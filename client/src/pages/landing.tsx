@@ -27,7 +27,7 @@ const FEATURES = [
   {
     icon: Cpu,
     title: "Hardware-Aware — Every Rig",
-    desc: `${TOTAL_TWEAKS_LABEL} tweaks matched to your exact GPU, CPU, and RAM. NVIDIA, AMD, Intel iGPU, AMD Vega — desktops, laptops, Dell, Lenovo, HP, ASUS — all covered.`,
+    desc: `${TOTAL_TWEAKS_LABEL} tweaks matched to your exact GPU, CPU, and RAM. NVIDIA, AMD, Intel iGPU, AMD Vega — Alienware, CyberPowerPC, Dell, Lenovo, HP, ASUS, iBUYPOWER — any Windows PC covered.`,
   },
   {
     icon: Zap,
@@ -64,8 +64,8 @@ const FAQS = [
     a: "Real results from the community: 100+ FPS gains on Fortnite (including laptops with integrated graphics), 120+ FPS gains on FiveM, and up to 300+ FPS on Valorant. Results depend on your hardware — the optimizer detects your exact rig and only applies tweaks that help it. Laptop users running Intel or AMD integrated graphics typically see the largest percentage gains because those configs are the most under-optimized out of the box.",
   },
   {
-    q: "Does Opti Gods work on laptops and OEM PCs like Dell and Lenovo?",
-    a: "Yes — fully. Opti Gods has a dedicated Laptop tab, a separate Intel iGPU tab, and a separate AMD integrated graphics (Vega) tab. It auto-detects Dell, Lenovo, HP, ASUS, and other OEM builds and applies the correct tweaks. The same WMI-based hardware detection that works on custom desktops works on every OEM laptop — if something isn't supported on your hardware, the tweak is automatically skipped.",
+    q: "Does Opti Gods work on any PC — Alienware, CyberPowerPC, Dell, Lenovo?",
+    a: "Yes — any Windows PC. Opti Gods works on custom desktops, Alienware, CyberPowerPC, iBUYPOWER, MSI, Dell, Lenovo, HP, ASUS, Acer, and any other OEM build. It has a dedicated Laptop tab, Intel iGPU tab, and AMD iGPU (Vega) tab. WMI-based hardware detection automatically skips tweaks that don't apply to your rig — nothing unsafe is ever applied.",
   },
   {
     q: "Is this safe for my PC?",
@@ -276,7 +276,7 @@ function LandingDesktop() {
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-[10px] font-bold tracking-[0.3em] uppercase text-red-300 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {TOTAL_TWEAKS_LABEL} tweaks · Desktops · Laptops · Dell · Lenovo · v3
+            {TOTAL_TWEAKS_LABEL} tweaks · Any Windows PC · Desktops · Laptops · v3
           </div>
 
           <h1 className="text-4xl md:text-6xl font-display font-black tracking-tight leading-[1.05] mb-5 max-w-3xl mx-auto">
@@ -285,7 +285,7 @@ function LandingDesktop() {
           </h1>
           <p className="text-base md:text-lg text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             <span className="text-white font-semibold">100+ FPS on Fortnite. 120+ on FiveM. 300+ on Valorant.</span>{" "}
-            Desktops, Laptops, Dell, Lenovo, HP, ASUS — every rig covered.
+            Alienware, CyberPowerPC, Dell, Lenovo, HP, ASUS — any Windows PC.
             Built by leaq, verified by thousands.
           </p>
 
