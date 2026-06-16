@@ -78,7 +78,7 @@ export default function Fivem() {
     { id: "FiveMStreamDistance", title: "Cap Streaming Distance (500 units)", desc: "Sets StreamingDistance=500 in CitizenFX.ini — reduces LOD pop-in and micro-stutter on city servers.", impact: "MED" },
     { id: "FiveMStreamPool", title: "Set CitizenFX Stream Pool to 128", desc: "Updates CitizenFX.ini StreamPool setting to 128 — improves streaming stability on high-asset servers.", impact: "MED" },
     { id: "FiveMDisableNvidiaTelemetry", title: "Disable NVIDIA Telemetry Service", desc: "Stops NvTelemetryContainer service — eliminates the background GPU perf overhead it causes.", badge: "NVIDIA ONLY", impact: "MED" },
-    { id: "FiveMMenuFpsUncap", title: "Uncap FiveM Menu & Loading Screen FPS (autoexec.cfg)", desc: "Writes fps_max 0 to %APPDATA%\\CitizenFX\\autoexec.cfg — FiveM executes this on every launch, fully uncapping FPS in menus, loading screens, and in-game. Replaces the old NVIDIA OpenGL GDI registry method which stopped working after FiveM's CEF/NUI update in late 2024.", badge: "ALL GPUs", impact: "HIGH", recommended: true },
+    { id: "FiveMMenuFpsUncap", title: "Uncap FiveM Menu FPS (+set fps_max 0 launch arg)", desc: "Patches your FiveM desktop/Start Menu shortcut to add +set fps_max 0 as a launch argument — fully uncaps FPS in menus and loading screens on every launch. Also sets NVIDIA OpenGL GDI Compatibility = Prefer Performance as a secondary layer. If no shortcut is found automatically, follow the on-screen manual instruction.", badge: "ALL GPUs", impact: "HIGH", recommended: true },
   ];
 
   const WINDOWS_TWEAKS: Tweak[] = [
