@@ -54,3 +54,9 @@ id = "y6cT3OIPWVEGKzhom3kPR"
 uri = "file://FiveM-MenuFPS-Uncap-Test.zip"
 type = "unspecified"
 title = "FiveM Menu FPS Uncap — No Reboot (9999 fix)"
+
+[[outputs]]
+id = "DnwdV1AaHew32bLMDjMt6"
+uri = "file://FiveM-Scan.zip"
+type = "unspecified"
+title = "FiveM Config Scanner"
