@@ -167,7 +167,12 @@ function ReviewsCarousel() {
 
 function DownloadButton() {
   const onClick = () => {
-    window.location.href = apiUrl("/api/download/latest");
+    const a = document.createElement("a");
+    a.href = apiUrl("/api/download/latest");
+    a.download = `OptiGods-Setup-${APP_VERSION}.exe`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -181,7 +186,7 @@ function DownloadButton() {
         Download for Windows
       </Button>
       <p className="text-[11px] text-zinc-500" data-testid="text-download-version">
-        Windows 10 / 11 · 64-bit · v{APP_VERSION} · ~127 MB
+        Windows 10 / 11 · 64-bit · v{APP_VERSION} · ~139 MB
       </p>
     </div>
   );

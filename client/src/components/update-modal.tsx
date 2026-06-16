@@ -51,41 +51,22 @@ export function UpdateModal() {
       window.setTimeout(dismiss, 3000);
     } catch (err) {
       console.warn("[update] native updater failed, using download fallback:", err);
-      await fallbackDownload();
+      fallbackDownload();
     }
   }
 
-  async function fallbackDownload() {
+  function fallbackDownload() {
     if (!data?.updaterCmdUrl) { dismiss(); return; }
-    setProgress(5);
-    const tick = window.setInterval(() => {
-      setProgress(p => {
-        if (p >= 84) { window.clearInterval(tick); return 84; }
-        return p + Math.random() * 3.5 + 0.5;
-      });
-    }, 160);
-    try {
-      const targetUrl = apiUrl(data.updaterCmdUrl);
-      const res = await fetch(targetUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf = await res.arrayBuffer();
-      const blob = new Blob([buf], { type: "application/octet-stream" });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `OptiGods-Setup-${data.latestVersion ?? "latest"}.exe`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(data?.updaterCmdUrl, "_blank", "noopener,noreferrer");
-    } finally {
-      window.clearInterval(tick);
-    }
+    const targetUrl = apiUrl(data.updaterCmdUrl);
+    const a = document.createElement("a");
+    a.href = targetUrl;
+    a.download = `OptiGods-Setup-${data.latestVersion ?? "latest"}.exe`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     setProgress(100);
     setPhase("done");
-    window.setTimeout(dismiss, 4000);
+    window.setTimeout(dismiss, 3000);
   }
 
   function dismiss() {
