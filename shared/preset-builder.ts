@@ -137,48 +137,301 @@ function isHardwareCompatible(id: string, hw: PresetHardware): { ok: boolean; re
 }
 
 /**
- * Universal core: every Windows gaming PC benefits. Mirrors the post-V2.1
- * CORE list from `client/src/lib/smart-recommendations.ts` but trimmed to the
- * highest-confidence, hardware-agnostic IDs the AI is allowed to auto-apply.
+ * Universal core: every Windows gaming PC benefits.
  */
 const UNIVERSAL_CORE: string[] = [
-  "Win32PrioritySeparation",
-  "SetResponsiveness",
-  "GameModeTweaks",
-  "DisableHungAppDetection",
-  "NetworkThrottling",
-  "DisableNagle",
-  "InputLagTCP",
-  "SetDNSPriority",
-  "DisableNDU",
-  "EnableTCPAutoTuning",
-  "OptimizeTCP",
-  "DisablePowerThrottling",
-  "DisablePowerThrottlingAdv",
-  "DisableXboxGameBar",
-  "DisableGameDVR",
-  "DisableAnimations",
-  "SysVisualBestPerf",
-  "SysHibernateOff",
-  "DisableFastStartup",
-  "DisableWindowsError",
-  "SetHighPerformancePlan",
-  "DisableUSBSuspend",
-  "DisableCoreParking",
-  "DisableDynamicTick",
-  "OptimizeRAMUsage",
-  "DisablePrefetch",
-  "MemTrimStandbyList",
-  "MemTrimOnMinimize",
-  "NetDNSCloudflare",
-  "NetDisableQoS",
-  "NetInterruptModeration",
-  "NetRSSQueues",
-  "NetAdapterPowerSave",
-  "ProcMMCSSGaming",
-  "ProcGPUSchedulerHigh",
-  "PrivacyTelemetry",
-  "PrivacyAdvertisingID",
+  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
+  "DisableHungAppDetection", "NetworkThrottling", "DisableNagle",
+  "InputLagTCP", "SetDNSPriority", "DisableNDU", "EnableTCPAutoTuning",
+  "OptimizeTCP", "DisablePowerThrottling", "DisablePowerThrottlingAdv",
+  "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
+  "SysVisualBestPerf", "SysHibernateOff", "DisableFastStartup",
+  "DisableWindowsError", "SetHighPerformancePlan", "DisableUSBSuspend",
+  "DisableCoreParking", "DisableDynamicTick", "OptimizeRAMUsage",
+  "DisablePrefetch", "MemTrimStandbyList", "MemTrimOnMinimize",
+  "NetDNSCloudflare", "NetDisableQoS", "NetInterruptModeration",
+  "NetRSSQueues", "NetAdapterPowerSave", "ProcMMCSSGaming",
+  "ProcGPUSchedulerHigh", "PrivacyTelemetry", "PrivacyAdvertisingID",
+  "DisablePointerPrecision", "DisableAutoUpdate",
+];
+
+/** Extra network tweaks — safe for any gaming PC */
+const NET_EXTRA: string[] = [
+  "NetMTUAutotune", "NetTCPAutotuneAggressive", "NetRSSTuning",
+  "NetDisableLargeSendOffload", "NetTCPChimneyOffload",
+  "ProcNUMAAware", "ProcAffinityFPS",
+];
+
+/** Extra memory tweaks — safe for any gaming PC */
+const MEMORY_EXTRA: string[] = [
+  "MemFixedPagefile", "MemSystemCacheBoost", "MemSetWorkingSetSize",
+  "MemDisableHeapTermination", "MemGPUOptimize", "EnableLargeSystemCache",
+  "MemGPUSchedulerTweak", "MemDisableKernelPaging", "MemDisableSuperfetch",
+  "MemLargePageSupport",
+];
+
+/** Registry / system tuning — safe for any gaming PC */
+const REGISTRY_SYSTEM: string[] = [
+  "RegistryNTFSOptimize", "RegistryIOPageLock", "RegistryDPCLatency",
+  "RegistryLargePageHeap",
+];
+
+/** Privacy extras beyond telemetry/ad-ID */
+const PRIVACY_EXTRA: string[] = [
+  "PrivacyActivityHistory", "PrivacyLocationTracking", "PrivacyDiagFeedback",
+];
+
+/** Windows debloat — safe app + UWP removal */
+const DEBLOAT_TWEAKS: string[] = [
+  "DebloatCortana", "DebloatOneDrive", "DebloatXboxApp", "DebloatXboxGameBar",
+  "DebloatXboxIdentity", "DebloatBing", "DebloatWeather", "DebloatNews",
+  "DebloatMaps", "DebloatSolitaire", "DebloatMixedReality", "DebloatSkype",
+  "DebloatZune", "DebloatGrooveMusic", "DebloatOfficeHub", "DebloatFeedback",
+  "DebloatGetHelp", "DebloatMSPaint3D", "DebloatWindowsCamera",
+  "DebloatYourPhone", "DebloatClipchamp", "DebloatPowerAutomate",
+  "DebloatQuickAssist", "DebloatTeamsConsumer", "DebloatAlarmsAndClock",
+];
+
+/** Service optimizations — clearly non-essential services */
+const SERVICE_SAFE: string[] = [
+  "ServiceDiagTrack", "ServiceWMPNetworkSvc", "ServiceFax",
+  "ServiceRetailDemo", "ServiceMapsBroker", "ServiceTrkWks",
+  "ServiceLltdsvc", "ServiceAeLookupSvc", "ServiceWbioSrvc",
+  "ServiceFDHost", "ServiceDusmSvc", "ServicePcaSvc",
+  "ServiceDPS", "ServiceSysMain", "ServiceRemoteReg",
+  "ServiceTabletInput", "ServiceWerSvc", "ServiceWSearch",
+  "ServicePrintSpooler",
+];
+
+/** Startup app tweaks — disable launchers from auto-starting */
+const STARTUP_TWEAKS: string[] = [
+  "su_ea_app", "su_epic", "su_ubisoft", "su_battlenet",
+  "su_razer", "su_chrome", "su_firefox", "su_edge_startup", "su_obs",
+  "su_steam", "su_discord", "su_nvidia", "su_amdradeon", "su_onedrive",
+  "su_spotify", "su_teams", "su_zoom", "su_skype", "su_logitech",
+  "su_corsair", "su_msiab", "su_rtss", "su_ccleaner", "su_realtek",
+];
+
+/** Discord While Gaming — reduce Discord's CPU/GPU overhead while in-game */
+const DISCORD_TWEAKS: string[] = [
+  "DiscordDisableRichPresence", "DiscordDisableGifAutoplay",
+  "DiscordMinimizeBgLoad", "DiscordSuppressNotifications",
+  "DiscordDisableSpellcheck", "DiscordClearCache",
+  "DiscordDisableAnimations", "DiscordDisableClips",
+  "DiscordDisableCrashHandler", "DiscordDisableHWAccel",
+  "DiscordDisableOverlay", "DiscordDisableStreaming",
+  "DiscordDisableUpdateCheck", "DiscordDisableVAD",
+  "DiscordLowerVoiceQuality", "DiscordLowPriority",
+  "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
+];
+
+/** Process extras — working set trim, error reporting, hung process kill */
+const PROCESS_EXTRA: string[] = [
+  "ProcessTrimWorkingSet", "ProcessDisableWindowsErrorReporting",
+  "ProcessAutoKillHung",
+];
+
+/** CPU game priority tweaks — IFEO-based for common launchers */
+const CPU_GAME_IFEO: string[] = [
+  "CpuFortniteIFEO", "CpuCodIFEO", "CpuGenericGameIFEO",
+  "CpuBoostModeAggressive", "CpuIdleMin100",
+];
+
+/** FiveM tweaks safe for any GPU/CPU */
+const FIVEM_UNIVERSAL: string[] = [
+  "FiveMCacheClear", "FiveMHighPriority", "FiveMExtendedMemory",
+  "FiveMNetworkBuffer", "FiveMDisableVSync", "FiveMStreamDistance",
+  "FiveMDisableFullscreen", "FiveMDisableDWM", "FiveMAffinityMask",
+  "FiveMIOPriority", "FiveMDisableP2P", "FiveMDNSOverride",
+  "FiveMQueueFix", "FiveMWorkingSet", "FiveMStreamPool",
+  "FiveMMenuFpsUncap", "FiveMDisableLSO", "FiveMEnableRSS",
+  "FiveMReduceNPCDensity", "FiveMReduceShadowQuality",
+  "FiveMCommandLineTweaks", "FiveMFullPerfStack",
+  "FiveMGTAProcessPerfOptions", "FiveMGameModeAdd",
+  "FiveMRenderingBoost", "FiveMCitizenDisableMedia",
+  "FiveMSteamChildOff", "FiveMCommandlineMax",
+  "FiveMSteamOverlayOff", "FiveMMMCSSAudio", "FiveMDisableMPO",
+  "FiveMFixProductId",
+  "FiveM3500CoreAffinity", "FiveM3500PerfPlan",
+  "FiveM5600CoreAffinity", "FiveM5600PowerPlan",
+];
+
+/** FiveM tweaks that require NVIDIA */
+const FIVEM_NVIDIA: string[] = [
+  "FiveMDisablePhysX", "FiveMDisableNvidiaTelemetry",
+  "FiveMFixNvidiaOverlay", "FiveMGPUPriorityStack",
+];
+
+/** Fortnite performance pack */
+const FORTNITE_TWEAKS: string[] = [
+  "FortniteHighPriority", "FortniteUncapLobbyFPS", "FortniteUncapGameFPS",
+  "FortniteDisableVSync", "FortniteEngineStreaming", "FortniteDisableMotionBlur",
+  "FortniteNetworkBuffer", "FortniteLowShadows", "FortniteDisableLumen",
+  "FortniteForceDirectX12", "FortniteDisableRecording", "FortniteAffinityPhysical",
+  "FortniteInputLatency", "FortniteGameMode", "FortniteDisableThrottling",
+];
+
+/** Rust performance pack */
+const RUST_TWEAKS: string[] = [
+  "RustHighPriority", "RustDisableThrottling", "RustGameMode",
+  "RustFPSUncap", "RustDisableVSync", "RustLowShadows",
+  "RustDisableBloom", "RustDisableMotionBlur", "RustWaterOff",
+  "RustGrassShadowOff", "RustNetworkBuffer", "RustOcclusionOff",
+];
+
+/** Roblox performance pack */
+const ROBLOX_TWEAKS: string[] = [
+  "RobloxHighPriority", "RobloxDisableThrottling", "RobloxGameMode",
+  "RobloxFPSUnlock", "RobloxDisablePostFX", "RobloxReduceLightUpdates",
+  "RobloxNetworkBuffer", "RobloxDisableSSAO", "RobloxNagleOff",
+];
+
+/** Game detection packs — auto-detect install path and apply targeted tweaks */
+const GAME_DETECT_PACKS: string[] = [
+  "game_valorant", "game_cod", "game_apex", "game_warzone",
+  "game_lol", "game_overwatch", "game_siege", "game_rust",
+  "game_minecraft", "game_roblox", "game_tarkov", "game_dbd",
+  "game_dota2", "game_warframe", "game_forza", "game_readyornot",
+  "game_phasmo", "game_battlefield", "game_gta5", "game_fivem",
+  "game_rocketleague", "game_arcraiders", "game_marvelrivals",
+  "game_007firstlight", "game_fortnite", "game_pubg",
+];
+
+/** Universal system tweaks not in the core arrays */
+const SYSTEM_EXTRA: string[] = [
+  "DisableAutoMaintenance", "DisableCTFMonTracking",
+  "DisableSearchIndexer", "DisableTelemetry",
+  "OOShutupPrivacy", "EnableMSIMode_Safe",
+  "ToolDPCLatencyCheck",
+];
+
+/** Anti-cheat / overlay detection scans (read-only, safe) */
+const AC_DETECT: string[] = [
+  "ACDetectVanguard", "ACDetectEAC", "ACDetectBattlEyeFACEIT",
+  "SecDetectVBSStatus",
+];
+
+/** Input quality checks (USB polling, raw accel) */
+const INPUT_DETECT: string[] = [
+  "InputUSBPollingCheck", "InputRawAccelBanner", "InputMousePollHzVerify",
+];
+
+/** Spotify while gaming — reduce background resource usage */
+const SPOTIFY_TWEAKS: string[] = [
+  "SpotifyDisableAutoUpdate", "SpotifyDisableGPU",
+  "SpotifyLimitBandwidth", "SpotifyLowPriority",
+];
+
+/** Process Lasso extras */
+const PROCESS_LASSO: string[] = [
+  "ProcessLassoProBalance", "ProcessLassoSmartTrim",
+  "ProcessLassoRestrain", "ProcessLassoAffinityGaming",
+  "ProcessLassoInstanceBalancer",
+];
+
+/** WinTitus/CTT quality-of-life tweaks */
+const WINTITUS_TWEAKS: string[] = [
+  "WinTitusBgApps", "WinTitusConsumerFeatures", "WinTitusDiskCleanup",
+  "WinTitusDisplayPerf", "WinTitusEdgeDebloat", "WinTitusFullscreenOpt",
+  "WinTitusHibernation", "WinTitusIPv4Prefer", "WinTitusNotifTray",
+  "WinTitusPosh7Telemetry", "WinTitusServicesManual",
+  "WinTitusShowExtensions", "WinTitusShowHidden", "WinTitusStorageSense",
+  "WinTitusTeredo", "WinTitusWPBT", "WinTitusXboxComponents",
+  "WinTitusAdobeBlock", "WinTitusClassicMenu", "WinTitusEdgeRemove",
+  "WinTitusRazerBlock",
+];
+
+/** Extra network DNS options */
+const NET_DNS_EXTRA: string[] = [
+  "NetDNSGoogle", "NetDNSQuad9",
+];
+
+/** ProcSvc_ service batch tweaks */
+const PROCSVC_TWEAKS: string[] = [
+  "ProcSvc_DiagTrack", "ProcSvc_WerSvc", "ProcSvc_DPS", "ProcSvc_DusmSvc",
+  "ProcSvc_DoSvc", "ProcSvc_XblAuth", "ProcSvc_XblGame",
+  "ProcSvc_XboxNet", "ProcSvc_XboxGip", "ProcSvc_SSDP",
+  "ProcSvc_FDServices", "ProcSvc_Lltdsvc", "ProcSvc_WbioSrvc",
+  "ProcSvc_TabletInput", "ProcSvc_BthServ", "ProcSvc_Fax",
+  "ProcSvc_MapsBroker", "ProcSvc_lfsvc", "ProcSvc_PhoneSvc",
+  "ProcSvc_RetailDemo", "ProcSvc_WMPNet", "ProcSvc_TrkWks",
+  "ProcSvc_W32Time", "ProcSvc_BITS", "ProcSvc_WSearch",
+  "ProcSvc_SysMain", "ProcSvc_RemoteReg", "ProcSvc_OneSyncSvc",
+  "ProcSvc_CDPSvc", "ProcSvc_WpnService", "ProcSvc_cbdhsvc",
+  "ProcSvc_dmwappushsvc", "ProcSvc_PushToInstall", "ProcSvc_AJRouter",
+  "ProcSvc_SharedRealitySvc", "ProcSvc_icssvc", "ProcSvc_WFDSConMgr",
+  "ProcSvc_p2pimsvc", "ProcSvc_EapHost", "ProcSvc_seclogon",
+  "ProcSvc_SCardSvr", "ProcSvc_AppReadiness", "ProcSvc_PcaSvc",
+  "ProcSvc_PrintNotify", "ProcSvc_SharedAccess", "ProcSvc_WinRM",
+  "ProcSvc_ApplyAll",
+];
+
+/** Extra COD tweaks */
+const COD_EXTRA_UNIVERSAL: string[] = [
+  "CodDirectXQueue", "CodDisableXboxCapture", "CodGPUPriority",
+  "CodRawInput", "CodVRAMShaderBudget",
+];
+
+/** Fortnite extra tweaks */
+const FORTNITE_EXTRA: string[] = [
+  "FortniteDisableSSR", "FortniteRawInput",
+];
+
+/** Rust extra tweaks */
+const RUST_EXTRA: string[] = [
+  "RustDisableAniso", "RustNagleOff",
+];
+
+/** AMD GPU driver reapply tweaks (FRTC, texture filter, surface format, tess) */
+const AMD_DRIVER_REAPPLY: string[] = [
+  "AmdTextureFilterPerf", "AmdSurfaceFormatOpt", "AmdTessOverride16x",
+  "AmdRadeonBoostOff", "AmdFRTC60", "AmdFRTC144", "AmdFRTC240",
+];
+
+/** RX 9000 (RDNA 4) specific AMD tweaks */
+const AMD_RX9000: string[] = [
+  "RX9000RDNA4AFMF2", "RX9000HyprRX", "RX9000AntiLag2NextGen",
+  "RX9000PowerSlider", "RX9000Adrenalin2025TelemetryOff", "RX9000SAMVerify",
+];
+
+/** AMD iGPU extra tweaks */
+const AMD_IGPU_EXTRA: string[] = [
+  "IGpu_CloseBrowserGPU", "IGpu_DisableAnimations",
+  "IGpu_DisableDWMColorSpace", "IGpu_DisableFullscreenOpt",
+  "IGpu_DisableHDR", "IGpu_DisableNightLight", "IGpu_DisableSysMain",
+  "IGpu_DisableTransparency", "IGpu_DisableXboxGameBar",
+  "IGpu_SetTimerResolution", "IGpu_DisableSysMain",
+];
+
+/** Intel Arrow Lake / lunar lake CPU extras */
+const INTEL_ARROW_TWEAKS: string[] = [
+  "ArrowAPOOptIn", "ArrowThreadDirectorHint", "ArrowEcoreParkPolicy",
+  "ArrowLunarLakePowerPlan", "ArrowITDTelemetryOff",
+  "IntelOldGenPowerOpt",
+];
+
+/** Intel laptop CPU tweaks */
+const LAPTOP_INTEL: string[] = [
+  "Lap_Intel_DisableTurboLimits", "Lap_Intel_DisableSpeedShift",
+  "Lap_Net_DisableAutoTuning", "Lap_TimerResolution",
+  "Lap_DisableHAGS",
+];
+
+/** Zen 5 CPU specific tweaks */
+const ZEN5_TWEAKS: string[] = [
+  "Zen5CurveOptimizer", "Zen5PBOScalarLock",
+  "Zen5SMTSchedulerHint", "Zen5AGESACStatePolicy", "Zen5X3DCachePin",
+];
+
+/** NVIDIA frame limit / driver reapply options (all variants) */
+const NVIDIA_FRAME_LIMITS: string[] = [
+  "NvFrameLimit30", "NvFrameLimit60", "NvFrameLimit120",
+  "NvFrameLimit144", "NvFrameLimit240", "NvFrameLimitCustom",
+];
+
+/** RTX 50 extra driver tweaks */
+const NVIDIA_RTX50_EXTRA: string[] = [
+  "RTX50BlackwellDriverOpt", "RTX50ComputeSm120",
 ];
 
 const NVIDIA_CORE: string[] = [
@@ -186,14 +439,39 @@ const NVIDIA_CORE: string[] = [
   "NvidiaPowerMizer", "NvidiaReflexEnable", "NvidiaTripleBufferOff",
   "NvidiaDisableOverlay", "NvidiaForceVSyncOff", "NvidiaShaderCache",
   "NvidiaMaxPerfMode", "NvidiaAnisoFiltering", "NvidiaThreadedOpt",
+  "NvidiaOptimizeLatency", "NvidiaGSyncOptimize", "NvidiaOpenGLOpt",
+  "NvidiaVRAMMax", "NvidiaDisableAnsel", "NvidiaDisableContainerLS",
+  "NvidiaDisableShadowPlay", "NvidiaShaderCacheUnlimited",
+  "NvidiaFrameBufferOpt", "NvidiaGpuBgOptimize", "NvidiaCUDAPriority",
+  "NvidiaDisableHDMIAudio",
+  "NvLowLatencyUltra", "NvTextureFilterHighPerf", "NvThreadedOptOn",
+  "NvPowerMgmtMax", "NvFrameLimitOff",
+  "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
 ];
-const NVIDIA_RTX_EXTRA: string[] = ["EnableHAGS", "NvidiaRTXVideoOff"];
-const NVIDIA_GTX_EXTRA: string[] = ["NvShaderDiskCache", "NvTextureFilterPerf", "NvFXAADriverOff"];
+const NVIDIA_RTX_EXTRA: string[] = [
+  "EnableHAGS", "NvidiaRTXVideoOff",
+  "RTX50DLSS4FrameGen", "RTX50Reflex2", "RTX50PowerModeLock",
+  "RTX50ShaderCacheBump", "RTX50NVCPSettings", "RTX50NvidiaAppTelemetryOff",
+];
+const NVIDIA_GTX_EXTRA: string[] = [
+  "NvShaderDiskCache", "NvTextureFilterPerf", "NvFXAADriverOff",
+  "FiveM1650DisableHAGS", "FiveM1650VRAMBudget",
+  "FiveM1650DisableAnsel", "FiveM1650LowLatencyMode",
+  "FiveM1060VRAMFlag", "FiveM1060DisableHAGS", "FiveM1060AnselDisable",
+];
 
 const AMD_DGPU_CORE: string[] = [
   "EnableHAGS", "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
   "AmdMaxClockState", "AmdForcePerformancePowerPlan", "AmdOptimizeLatency",
   "AmdDisableTelemetry", "AmdShaderCache",
+  "AmdDisableVSR", "AmdDisableCrashDefender", "AmdDisableFreeSyncCompetitive",
+  "AmdDisableVariBright", "AmdImageSharpening", "AmdAntiLag",
+  "AmdDisableStartupApps", "AmdTDRTweak", "AmdSmartAccessMemory",
+  "AmdAntiLagPlus", "AmdFluidMotionFrames", "AmdResizableBAR",
+  "AmdRadeonBoost", "AmdEnhancedSync", "AmdDisableHDMIAudio",
+  "AmdDisableReLive", "AmdD3DOptimize", "AmdPCIeOptimize",
+  "AmdCpuCoalescingOff", "AmdCpuPowerPinMax", "AmdCpuCStatePolicy",
+  "AmdCpuCapabilities", "AmdCpuSchedulerHint",
 ];
 
 const AMD_IGPU_CORE: string[] = [
@@ -202,6 +480,7 @@ const AMD_IGPU_CORE: string[] = [
   "IGpu_DisableMPO", "IGpu_AmdTdrLevel", "IGpu_UltimatePerformancePlan",
   "IGpu_MaxProcessorState", "IGpu_DisableCoreParking", "IGpu_GameModeOn",
   "IGpu_NetworkThrottling", "IGpu_DisableHAGSForIGpu",
+  "IGpu_AmdDisableHDCP", "IGpu_AmdVegaAudioOff",
 ];
 
 const INTEL_IGPU_CORE: string[] = [
@@ -215,24 +494,42 @@ const LAPTOP_CORE: string[] = [
   "Lap_UltimatePerformance", "Lap_DisableCoreParking", "Lap_DisableThrottleStates",
   "Lap_MaxProcessorStateAC", "Lap_USBPowerSave", "Lap_WifiPerfMode",
   "Lap_DisablePowerThrottling", "Lap_MMCSS_Games", "Lap_DisableHibernate",
+  "Lap_DisableTurboOnBattery", "Lap_DisableAdaptiveBrightness",
+  "Lap_Net_DisableNagle", "Lap_Net_DisableThrottle", "Lap_Net_OptimizeDNS",
+  "Lap_Net_DisableUSBSelSuspend", "Lap_Net_WiFiPerfMode",
+  "Lap_DisableXboxGameBar", "Lap_DisableFullscreenOpt",
+  "Lap_DisableMPO", "Lap_VisualPerformance",
+];
+
+/** Laptop tweaks specific to AMD GPU laptops */
+const LAPTOP_AMD: string[] = [
+  "Lap_AMD_DisableULPS", "Lap_AMD_DisableVariBright",
+  "Lap_AMD_DisableDeepSleep", "Lap_AMD_DisableDynamicVoltage",
+  "Lap_AMD_ForcePerformance",
+];
+
+/** Laptop tweaks specific to NVIDIA GPU laptops */
+const LAPTOP_NVIDIA: string[] = [
+  "Lap_NVIDIA_MaxPerformance", "Lap_NVIDIA_DisableVsync",
+  "Lap_NVIDIA_LowLatency", "Lap_NVIDIA_ThreadedOpt",
+  "Lap_NVIDIA_DisableMaxQThrottle",
 ];
 
 const WIN11_CORE: string[] = [
   "Win11TeamsChat", "Win11Widgets", "Win11Copilot", "Win11BingSearch",
   "Win11AdsInStart", "Win11OneDriveBackup", "Win11StartRecommended",
+  "Win11EdgeSidebar", "Win11ChatIcon", "Win11NotepadAI",
+  "Win11Snap", "Win11TPMAlert",
+  "Win11ParkingCoreOverride", "Win11ProcessorIdleMin",
 ];
 
 /** COD / Warzone tweaks — universal (no GPU prefix); safe to include for any gaming PC */
 const COD_UNIVERSAL: string[] = [
-  "CodHighPriority",
-  "CodGameMode",
-  "CodShaderCacheClear",
-  "CodPagefileOptimize",
-  "CodDisableHAGS",
-  "CodNetworkBuffer",
-  "CodDisableLSO",
-  "CodTCPOptimize",
-  "CodBattlenetOptimize",
+  "CodHighPriority", "CodGameMode", "CodShaderCacheClear",
+  "CodPagefileOptimize", "CodDisableHAGS", "CodNetworkBuffer",
+  "CodDisableLSO", "CodTCPOptimize", "CodBattlenetOptimize",
+  "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS",
+  "CodQoSPolicy", "CodFramePacing", "CodMemPriority",
 ];
 /** COD tweaks that only apply on NVIDIA hardware */
 const COD_NVIDIA: string[] = ["Cod1650LowLatency", "Cod1650DisableAnsel"];
@@ -289,50 +586,110 @@ export function buildSafePreset(
 
   // 1. Collect candidates by hardware
   const candidates = new Set<string>(UNIVERSAL_CORE);
-  reasons.push(`${UNIVERSAL_CORE.length} universal core tweaks (safe for every Windows gaming PC)`);
+
+  // Universal category packs — safe for any Windows gaming PC
+  NET_EXTRA.forEach(id => candidates.add(id));
+  NET_DNS_EXTRA.forEach(id => candidates.add(id));
+  MEMORY_EXTRA.forEach(id => candidates.add(id));
+  REGISTRY_SYSTEM.forEach(id => candidates.add(id));
+  PRIVACY_EXTRA.forEach(id => candidates.add(id));
+  DEBLOAT_TWEAKS.forEach(id => candidates.add(id));
+  SERVICE_SAFE.forEach(id => candidates.add(id));
+  PROCSVC_TWEAKS.forEach(id => candidates.add(id));
+  STARTUP_TWEAKS.forEach(id => candidates.add(id));
+  DISCORD_TWEAKS.forEach(id => candidates.add(id));
+  SPOTIFY_TWEAKS.forEach(id => candidates.add(id));
+  PROCESS_EXTRA.forEach(id => candidates.add(id));
+  PROCESS_LASSO.forEach(id => candidates.add(id));
+  CPU_GAME_IFEO.forEach(id => candidates.add(id));
+  SYSTEM_EXTRA.forEach(id => candidates.add(id));
+  AC_DETECT.forEach(id => candidates.add(id));
+  INPUT_DETECT.forEach(id => candidates.add(id));
+  WINTITUS_TWEAKS.forEach(id => candidates.add(id));
+  FIVEM_UNIVERSAL.forEach(id => candidates.add(id));
+  FORTNITE_TWEAKS.forEach(id => candidates.add(id));
+  FORTNITE_EXTRA.forEach(id => candidates.add(id));
+  RUST_TWEAKS.forEach(id => candidates.add(id));
+  RUST_EXTRA.forEach(id => candidates.add(id));
+  ROBLOX_TWEAKS.forEach(id => candidates.add(id));
+  GAME_DETECT_PACKS.forEach(id => candidates.add(id));
+  COD_EXTRA_UNIVERSAL.forEach(id => candidates.add(id));
+
+  reasons.push(`${candidates.size} universal tweaks (core, memory, network, debloat, FiveM, Fortnite, Rust, Roblox, COD, game-detect, Discord, Spotify, services, ProcSvc, startup, WinTitus, input)`);
 
   if (hw.gpuVendor === "nvidia") {
     NVIDIA_CORE.forEach(id => candidates.add(id));
+    FIVEM_NVIDIA.forEach(id => candidates.add(id));
+    NVIDIA_FRAME_LIMITS.forEach(id => candidates.add(id));
     const isRtx = !!hw.gpuName && /rtx|\b(20|30|40|50)\d{2}\b/i.test(hw.gpuName);
+    const isRtx50 = !!hw.gpuName && /rtx\s*50\d{2}|blackwell/i.test(hw.gpuName);
     if (isRtx) {
       NVIDIA_RTX_EXTRA.forEach(id => candidates.add(id));
-      reasons.push(`NVIDIA RTX detected (${hw.gpuName ?? "RTX"}) — HAGS enabled, full RTX stack`);
+      if (isRtx50) {
+        NVIDIA_RTX50_EXTRA.forEach(id => candidates.add(id));
+        reasons.push(`NVIDIA RTX 50 (Blackwell) detected (${hw.gpuName ?? "RTX 50"}) — HAGS, full RTX stack, Blackwell driver extras, DLSS4`);
+      } else {
+        reasons.push(`NVIDIA RTX detected (${hw.gpuName ?? "RTX"}) — HAGS enabled, full RTX stack, RTX video off`);
+      }
     } else {
       NVIDIA_GTX_EXTRA.forEach(id => candidates.add(id));
-      reasons.push(`NVIDIA GTX-class detected (${hw.gpuName ?? "GTX"}) — HAGS skipped (causes stutters on Pascal/Turing)`);
+      reasons.push(`NVIDIA GTX-class detected (${hw.gpuName ?? "GTX"}) — HAGS skipped (causes stutters on Pascal/Turing), GTX shader/texture/FiveM GTX extras`);
+    }
+    if (hw.isLaptop) {
+      LAPTOP_NVIDIA.forEach(id => candidates.add(id));
+      reasons.push("NVIDIA laptop detected — Max-Q throttle fix, low-latency, threaded opt, vsync off");
     }
   } else if (hw.gpuVendor === "amd" && hw.hasDiscreteGpu !== false) {
-    // AMD discrete Radeon — desktop OR laptop. Gaming laptops with discrete
-    // Radeon (e.g. RX 6800M) still want the full Radeon optimisation suite;
-    // laptop-specific power/Wi-Fi tweaks compose cleanly via LAPTOP_CORE below.
+    // AMD discrete Radeon — desktop OR laptop
     AMD_DGPU_CORE.forEach(id => candidates.add(id));
-    reasons.push(`AMD discrete GPU detected (${hw.gpuName ?? "Radeon"})${hw.isLaptop ? " on laptop" : ""} — full Radeon optimisation suite`);
+    AMD_DRIVER_REAPPLY.forEach(id => candidates.add(id));
+    const isRx9000 = !!hw.gpuName && /rx\s*9\d{3}/i.test(hw.gpuName);
+    if (isRx9000) {
+      AMD_RX9000.forEach(id => candidates.add(id));
+      reasons.push(`AMD RX 9000 (RDNA 4) detected (${hw.gpuName}) — Hypr-RX, AFMF2, Anti-Lag 2, SAM verify, power slider`);
+    }
+    reasons.push(`AMD discrete GPU detected (${hw.gpuName ?? "Radeon"})${hw.isLaptop ? " on laptop" : ""} — full Radeon suite + driver reapply (FRTC, texture filter, surface format, tess) + Anti-Lag`);
+    if (hw.isLaptop) {
+      LAPTOP_AMD.forEach(id => candidates.add(id));
+      reasons.push("AMD laptop detected — ULPS/VariBright/DeepSleep/DynamicVoltage disabled, forced performance");
+    }
   } else if (hw.gpuVendor === "amd") {
     AMD_IGPU_CORE.forEach(id => candidates.add(id));
-    reasons.push(`AMD APU/iGPU detected (${hw.gpuName ?? "Vega"}) — Vega/APU tweaks, HAGS disabled`);
+    AMD_IGPU_EXTRA.forEach(id => candidates.add(id));
+    reasons.push(`AMD APU/iGPU detected (${hw.gpuName ?? "Vega"}) — Vega/APU tweaks, HAGS disabled, HDCP off, audio co-proc gated, browser GPU close, transparency off`);
   } else if (hw.gpuVendor === "intel") {
     INTEL_IGPU_CORE.forEach(id => candidates.add(id));
-    reasons.push(`Intel iGPU detected (${hw.gpuName ?? "Intel"}) — Intel driver TDR fix, Panel Fitter off`);
+    INTEL_ARROW_TWEAKS.forEach(id => candidates.add(id));
+    reasons.push(`Intel iGPU detected (${hw.gpuName ?? "Intel"}) — Intel driver TDR fix, Panel Fitter off, Arrow Lake / Lunar Lake extras`);
+    if (hw.isLaptop) {
+      LAPTOP_INTEL.forEach(id => candidates.add(id));
+      reasons.push("Intel laptop detected — speed shift / turbo limits / timer / HAGS tweaks");
+    }
   } else {
     reasons.push("GPU vendor unknown — vendor-specific tweaks skipped, safe defaults only");
   }
 
+  // Zen 5 CPU extras — Ryzen 9000 series only (e.g. 9600X, 9700X, 9950X)
+  // Do NOT match "Ryzen 5 3500" — require explicit 9xxx model number after tier digit
+  if (hw.cpuBrand === "amd" && !!hw.cpuLabel && /ryzen\s+[579]\s+9[0-9]{3}[a-z]*\b/i.test(hw.cpuLabel)) {
+    ZEN5_TWEAKS.forEach(id => candidates.add(id));
+    reasons.push(`Zen 5 CPU detected (${hw.cpuLabel}) — Curve Optimizer, PBO scalar lock, SMT scheduler hint, AGESA C-State, X3D cache pin`);
+  }
+
   if (hw.isLaptop) {
     LAPTOP_CORE.forEach(id => candidates.add(id));
-    reasons.push("Laptop detected — power/Wi-Fi/USB laptop suite included");
+    reasons.push("Laptop detected — power/Wi-Fi/USB/throttle/MPO/adaptive brightness laptop suite included");
   }
   if (hw.osVersion === "win11") {
     WIN11_CORE.forEach(id => candidates.add(id));
-    reasons.push("Windows 11 detected — Win11 debloat included");
+    reasons.push("Windows 11 detected — Win11 debloat + Edge sidebar + Snap + TPM alert + parking override + NotepadAI off");
   }
 
-  // COD / Warzone game pack — always included (process priority, shader cache,
-  // network buffer, Battle.net agent kill, pagefile). Vendor-specific extras
-  // (1650 low-latency, Ryzen 3500 power plan) respect GPU/CPU vendor gating.
+  // COD / Warzone game pack — always included
   COD_UNIVERSAL.forEach(id => candidates.add(id));
   if (hw.gpuVendor === "nvidia") COD_NVIDIA.forEach(id => candidates.add(id));
   if (hw.cpuBrand === "amd") COD_AMD_CPU.forEach(id => candidates.add(id));
-  reasons.push("COD/Warzone pack: process priority, network buffer, shader cache, Battle.net agent kill, pagefile");
+  reasons.push("COD/Warzone pack: priority, network, shader cache, Battle.net agent kill, pagefile, TDR delay, MMCSS, QoS, frame pacing, GPU priority, raw input, VRAM shader budget");
 
   // 2. Goal-driven nudges (advisory: tighten or relax)
   if (goal === "stability") {
