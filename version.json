@@ -1,4 +1,4 @@
 {
-  "version": "3.1.1",
-  "notes": "V3.1.1 — FiveM Priority Booster fixed (no more flash-and-close), activity log location search, price updated to $20, Discord code self-restore on any device."
+  "version": "3.1.2",
+  "notes": "V3.1.2 — Mushy face/hands texture fix (streaming pool expanded), FiveM Graphics pack: weather/time freeze now server-proof (every-frame Lua), blood decals fully zeroed (12 keys), GTA 6 Vibes clouds removed. GTX 1650 Super HAGS OFF stability: Low Latency Mode upgraded to Ultra, new HAGS OFF Stability Pack (DXGI AllowTearing + frame pipeline), DPC latency callout for aim spike fix."
 }
