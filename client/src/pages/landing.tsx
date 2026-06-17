@@ -276,7 +276,7 @@ function LandingDesktop() {
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-[10px] font-bold tracking-[0.3em] uppercase text-red-300 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {TOTAL_TWEAKS_LABEL} tweaks · Any Windows PC · Desktops · Laptops · v3
+            {TOTAL_TWEAKS_LABEL} tweaks · Desktops · Laptops · Dell · Lenovo · v3
           </div>
 
           <h1 className="text-4xl md:text-6xl font-display font-black tracking-tight leading-[1.05] mb-5 max-w-3xl mx-auto">
@@ -285,7 +285,7 @@ function LandingDesktop() {
           </h1>
           <p className="text-base md:text-lg text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             <span className="text-white font-semibold">100+ FPS on Fortnite. 120+ on FiveM. 300+ on Valorant.</span>{" "}
-            Alienware, CyberPowerPC, Dell, Lenovo, HP, ASUS — any Windows PC.
+            Desktops, Laptops, Dell, Lenovo, HP, ASUS — every rig covered.
             Built by leaq, verified by thousands.
           </p>
 
