@@ -494,7 +494,7 @@ function HwMonitorPanel() {
       `    }`,
       `} catch {}`,
       `try {`,
-      `    $ramSpd = (Get-WmiObject Win32_PhysicalMemory -EA SilentlyContinue | Where-Object { $_.ConfiguredClockSpeed -gt 0 } | Measure-Object -Property ConfiguredClockSpeed -Maximum).Maximum`,
+      `    $ramSpd = (((Get-WmiObject Win32_PhysicalMemory -EA SilentlyContinue) | ForEach-Object { [Math]::Max([int]$_.ConfiguredClockSpeed,[int]$_.Speed) }) | Measure-Object -Maximum).Maximum`,
       `    if ($ramSpd -gt 0) { $result.ram_mhz = [int]$ramSpd }`,
       `} catch {}`,
       ``,
