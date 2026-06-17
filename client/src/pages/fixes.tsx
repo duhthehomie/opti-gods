@@ -430,8 +430,9 @@ export default function Fixes() {
             ["Removes GpuPriorityClass=8 + DisableRenderingContextPreemption", "Real-time GPU starved the CEF browser, blocked GPU hang recovery → silent black screen exits"],
             ["Restores DisablePagingExecutive=0 + re-enables Memory Compression", "memory write crash fix + FiveM_ChromeBrowser 0xe0000008 heap failure fix"],
             ["Restores GPU VRAM paging + safe TDR delay (8s)", "PagingAllocation=0 killed game silently on VRAM fill; TdrDelay=60s caused display to go black with no report"],
+            ["Fixes mushy / low-res face & hand textures", "adds +set streaming_useLargerPool 1 to FiveM commandline.txt — expands the texture streaming pool so high-res skin LODs load correctly"],
           ]}
-          footer="Universal fix — safe for all systems. Covers all 13 FiveM build numbers. ~5 seconds."
+          footer="Universal fix — safe for all systems. Covers all 13 FiveM build numbers + mushy texture fix. ~5 seconds."
           btnLabel="Download FiveM Fix"
           downloading={!!dlState["fivem"]}
           onDownload={() => dlFix("fivem", "/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.")}
