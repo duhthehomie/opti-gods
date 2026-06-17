@@ -67,7 +67,8 @@ export default function ToolsFixesPage() {
         clearAllApplied();
         toast({ title: "System Restore launched", description: "Confirm in the wizard — your PC will reboot to the pre-optimization state." });
       } catch (e) {
-        toast({ title: "Restore failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+        const msg = e instanceof Error ? e.message : (e != null ? String(e) : "Restore point command failed — run as Administrator and try again.");
+        toast({ title: "Restore failed", description: msg, variant: "destructive" });
       } finally {
         setRestoring(false);
       }
@@ -83,10 +84,9 @@ export default function ToolsFixesPage() {
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.message || `Failed (${res.status})`);
+        throw new Error(err?.message || `Server error ${res.status} — make sure you are logged in as Pro`);
       }
-      const text = await res.text();
-      const blob = new Blob([text], { type: "text/plain" });
+      const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = "OptiGods-Restore-Last-Working-State.bat";
@@ -97,7 +97,8 @@ export default function ToolsFixesPage() {
       clearAllApplied();
       toast({ title: "Restore script downloaded", description: "Run as Administrator. Windows will reboot to roll back to the last OptiGods restore point." });
     } catch (e) {
-      toast({ title: "Restore failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      const msg = e instanceof Error ? e.message : (e != null ? String(e) : "Download failed — check your connection and Pro status.");
+      toast({ title: "Restore failed", description: msg, variant: "destructive" });
     } finally {
       setRestoring(false);
     }

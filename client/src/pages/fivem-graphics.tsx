@@ -1112,32 +1112,48 @@ export default function FivemGraphics() {
         {/* ── Pre-Made Packs ── */}
         {activeTab === "packs" && (
           <section className="space-y-5">
-            {/* Hero */}
-            <div className="relative rounded-2xl overflow-hidden h-72 md:h-96 border border-white/8 group">
-              <img src="/reshade-presets/preview-gunsrz2.png" alt="FiveM aerial view" className="w-full h-full object-cover object-center" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-              <div className="absolute inset-0 flex items-end p-6">
+            {/* Hero — live sky preview: leaq's vivid blue noon pack */}
+            <div className="relative rounded-2xl overflow-hidden border border-white/8">
+              <SkyPreview
+                skyColorKey="vivid_blue" skyBrightness={75}
+                cloudThickness={0} jetStreams={0}
+                freezeTime={true} freezeHour={12}
+                disableRain={true} disableSnow={true}
+                aerialClouds={false} aerialDensity={0}
+                lightRays={false} lightRayIntensity={0}
+                sunIntensity={65} atmosphereHaze={false}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 flex items-end p-6 pointer-events-none">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-bold mb-1">Opti Gods · Graphics Studio</p>
                   <h2 className="text-2xl md:text-3xl font-display font-black text-white leading-tight mb-2">
                     FiveM looks like this.<br /><span className="text-red-400">Yours can too.</span>
                   </h2>
-                  <p className="text-xs text-zinc-300/80">Real screenshots. Real FPS gains. No BS.</p>
+                  <p className="text-xs text-zinc-300/80">Live sky preview — exact colours in-game. No BS.</p>
                 </div>
               </div>
             </div>
 
-            {/* Gallery strip — all images equal size, larger */}
+            {/* Gallery strip — 4 live sky previews matching real pack themes */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { src: "/reshade-presets/preview-sunrise.png",  label: "Golden Sunrise" },
-                { src: "/reshade-presets/preview-dusk.png",     label: "Moody Dusk"     },
-                { src: "/reshade-presets/preview-dawn.png",     label: "Pre-Dawn"       },
-                { src: "/reshade-presets/preview-gunsrz1.png",  label: "Sunset Clouds"  },
-              ].map(({ src, label }) => (
-                <div key={label} className="relative rounded-xl overflow-hidden h-36 md:h-44 border border-white/8 hover:border-white/25 transition-all cursor-default group">
-                  <img src={src} alt={label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-3">
+              {([
+                { key: "vivid_blue",  brightness: 65, hour: 17, label: "Golden Sunrise",  lightRays: true,  lightRayIntensity: 45 },
+                { key: "navy",        brightness: 40, hour: 20, label: "Moody Dusk",       lightRays: false, lightRayIntensity: 0  },
+                { key: "deep_blue",   brightness: 30, hour: 5,  label: "Pre-Dawn",         lightRays: false, lightRayIntensity: 0  },
+                { key: "rose",        brightness: 80, hour: 18, label: "Sunset Clouds",    lightRays: true,  lightRayIntensity: 35 },
+              ] as Array<{ key: SkyColorKey; brightness: number; hour: number; label: string; lightRays: boolean; lightRayIntensity: number }>).map(({ key, brightness, hour, label, lightRays: lr, lightRayIntensity: lri }) => (
+                <div key={label} className="relative rounded-xl overflow-hidden border border-white/8 hover:border-white/25 transition-all cursor-default group">
+                  <SkyPreview
+                    skyColorKey={key} skyBrightness={brightness}
+                    cloudThickness={0} jetStreams={0}
+                    freezeTime={true} freezeHour={hour}
+                    disableRain={true} disableSnow={true}
+                    aerialClouds={false} aerialDensity={0}
+                    lightRays={lr} lightRayIntensity={lri}
+                    sunIntensity={60} atmosphereHaze={false}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none flex items-end p-3">
                     <span className="text-[10px] font-bold text-white/95 uppercase tracking-wider">{label}</span>
                   </div>
                 </div>
@@ -1145,7 +1161,19 @@ export default function FivemGraphics() {
             </div>
 
             {/* leaq's pack */}
-            <div className="rounded-2xl border border-white/8 hover:border-red-500/30 transition-all bg-zinc-900/70">
+            <div className="rounded-2xl border border-white/8 hover:border-red-500/30 transition-all bg-zinc-900/70 overflow-hidden">
+              {/* Live preview of leaq's exact pack */}
+              <div className="overflow-hidden pointer-events-none" style={{ height: 140 }}>
+                <SkyPreview
+                  skyColorKey="vivid_blue" skyBrightness={75}
+                  cloudThickness={0} jetStreams={0}
+                  freezeTime={true} freezeHour={12}
+                  disableRain={true} disableSnow={true}
+                  aerialClouds={false} aerialDensity={0}
+                  lightRays={false} lightRayIntensity={0}
+                  sunIntensity={65} atmosphereHaze={false}
+                />
+              </div>
               <div className="p-6 md:p-8">
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -1184,30 +1212,41 @@ export default function FivemGraphics() {
               <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-3">More Pack Themes → Opens in Builder</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {PACK_THEMES.slice(2).map(theme => {
-                  const colorMap: Record<string, string> = {
-                    pink: "border-pink-500/25 hover:border-pink-500/50 text-pink-300",
-                    amber: "border-amber-500/25 hover:border-amber-500/50 text-amber-300",
-                    indigo: "border-indigo-500/25 hover:border-indigo-500/50 text-indigo-300",
-                    fuchsia: "border-fuchsia-500/25 hover:border-fuchsia-500/50 text-fuchsia-300",
-                    cyan: "border-cyan-500/25 hover:border-cyan-500/50 text-cyan-300",
-                    slate: "border-slate-500/25 hover:border-slate-500/50 text-slate-300",
-                    blue: "border-blue-500/25 hover:border-blue-500/50 text-blue-300",
-                    emerald: "border-emerald-500/25 hover:border-emerald-500/50 text-emerald-300",
-                  };
+                  const s = theme.settings;
                   const ThemeIcon = theme.icon;
                   return (
                     <button
                       key={theme.key}
                       onClick={() => { applyTheme(theme.settings); }}
                       data-testid={`button-theme-${theme.key}`}
-                      className={cn(
-                        "flex flex-col items-start gap-2 px-3 py-3.5 rounded-xl border bg-zinc-900/50 transition-all text-left",
-                        colorMap[theme.color] ?? "border-white/10 hover:border-white/25 text-zinc-300"
-                      )}
+                      className="flex flex-col rounded-xl border border-white/10 hover:border-white/30 bg-zinc-900/50 transition-all text-left overflow-hidden"
                     >
-                      <ThemeIcon className="w-4 h-4" />
-                      <span className="text-[11px] font-black text-white leading-tight">{theme.label}</span>
-                      <span className="text-[9px] opacity-60 leading-snug">{theme.desc}</span>
+                      {/* Live mini preview — clipped to 90px, shows sky portion */}
+                      <div className="w-full pointer-events-none overflow-hidden" style={{ height: 90 }}>
+                        <SkyPreview
+                          skyColorKey={(s.skyColorKey as SkyColorKey) ?? "vivid_blue"}
+                          skyBrightness={s.skyBrightness ?? 70}
+                          cloudThickness={s.cloudThickness ?? 0}
+                          jetStreams={s.jetStreams ?? 0}
+                          freezeTime={s.freezeTime ?? false}
+                          freezeHour={s.freezeHour ?? 12}
+                          disableRain={s.disableRain ?? true}
+                          disableSnow={s.disableSnow ?? true}
+                          aerialClouds={s.aerialClouds ?? false}
+                          aerialDensity={s.aerialDensity ?? 0}
+                          lightRays={s.lightRays ?? false}
+                          lightRayIntensity={s.lightRayIntensity ?? 0}
+                          sunIntensity={s.sunIntensity ?? 60}
+                          atmosphereHaze={s.atmosphereHaze ?? false}
+                        />
+                      </div>
+                      <div className="px-3 py-2.5 flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <ThemeIcon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                          <span className="text-[11px] font-black text-white leading-tight">{theme.label}</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-500 leading-snug">{theme.desc.split("—")[0].trim()}</span>
+                      </div>
                     </button>
                   );
                 })}
