@@ -21,7 +21,7 @@ const ALL_FIVEM_IDS = [
   "FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable","FiveM5600CoreAffinity","FiveM5600PowerPlan",
   "FiveMCitizenDisableMedia","FiveMSteamChildOff","FiveMCommandlineMax","FiveMSteamOverlayOff","FiveMMMCSSAudio",
   "FiveMFixProductId","FiveMFixNvidiaOverlay","FiveMDisableMPO",
-  "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode",
+  "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode","FiveM1650HAGSOffPack",
   "FiveM3500CoreAffinity","FiveM3500PerfPlan",
   "FiveM2060VRAMBudget","FiveMi5CoreAffinity",
 ];
@@ -123,9 +123,10 @@ export default function Fivem() {
       { id: "FiveM1060AnselDisable", title: "Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel from injecting into GTA V every frame — on older cards this overhead is measurable. Disabling it frees a consistent amount of GPU time per frame.", badge: "GPU DRIVER", impact: "MED" as const },
     ] : []),
     ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? [
-      { id: "FiveM1650DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS was designed for RTX 2000+ and RX 6000+ — on Turing 16xx cards it adds frame-time variance instead of reducing it. Turning it off is measurably better in crowded FiveM servers. Reboot required.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS was designed for RTX 2000+ and RX 6000+ — on Turing 16xx cards it adds frame-time variance instead of reducing it. Turning it off is the correct call for GTX 1650 Super. Apply all three companion tweaks below for full stability: Low Latency Ultra + HAGS OFF Pack + DPC fixes. Reboot required.", badge: "GPU DRIVER", impact: "HIGH" as const },
       { id: "FiveM1650DisableAnsel", title: "Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 in NVIDIA registry. Ansel injects into every render frame — disabling removes hook overhead and keeps the display container stable.", badge: "GPU DRIVER", impact: "MED" as const },
-      { id: "FiveM1650LowLatencyMode", title: "Enable Driver-Level Low Latency Mode", desc: "Forces FlipQueueSize=1, PerfLevelSrc=max, PowerMizerLevel=1 in the GPU class registry. Locks the driver to max-performance, ultra-low-latency mode — reduces input lag by 1-3 frames vs default driver behavior.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650LowLatencyMode", title: "Low Latency Mode = Ultra (Driver-Level)", desc: "Sets RmLowLatencyMode=2 (Ultra), FlipQueueSize=1, PowerMizer P0 in both the GPU class registry and global NVTweak. Equivalent to NVCP Ultra but applied at the driver level so it survives NVCP resets. Critical companion to HAGS OFF — without it the render queue can back up and cause the 160→60 FPS drop pattern.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650HAGSOffPack", title: "HAGS OFF Stability Pack — DXGI + Frame Pipeline", desc: "Applies three fixes that HAGS OFF requires to work cleanly: (1) DXGI AllowTearing=1 + MaxFrameLatency=1 — enables immediate present without HAGS so frames don't queue up and dump all at once causing the 60 FPS cliff. (2) RenderThrottlingOff=1 + GpuIdleEnabled=0 + PowerSavingVsyncOn=0 on all GTA5/FiveM process IFEO keys — prevents the driver from throttling render submission between heavy frames. (3) MMCSS Games PreRenderedFrames=1 — keeps the system multimedia profile aligned with the driver setting.", badge: "HAGS OFF", impact: "HIGH" as const },
     ] : []),
   ];
 
@@ -291,10 +292,33 @@ export default function Fivem() {
           {/* FiveM Client Config — CitizenFX.ini, commandline.txt, Steam overlay */}
           {renderSection("FiveM Client Config Tweaks", FIVEM_CLIENT_TWEAKS)}
 
+          {/* HAGS OFF DPC callout — shown for GTX 1650 Super users */}
+          {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") && (
+            <motion.a
+              href="/tools-fixes#dpc-latency"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start gap-3 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/50 transition-all group cursor-pointer"
+            >
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 mt-0.5">
+                <Zap className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-300 group-hover:text-amber-200 transition-colors">Gun aiming in the air? FPS spike on kills? → DPC Latency Fixes</p>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Random aim input spikes and the 160→60 FPS cliff during action are caused by <span className="text-white font-medium">DPC latency bursts</span> — GPU interrupts and Ryzen C-state ACPI wake events dumping buffered inputs all at once.
+                  Apply the <span className="text-amber-300 font-medium">NVIDIA DPC Fix</span> (MSI mode) and <span className="text-amber-300 font-medium">Ryzen C-State Fix</span> in the DPC Latency tab — these are separate downloadable scripts, not toggles.
+                </p>
+                <p className="text-[11px] text-amber-500/70 mt-2 font-medium">Click to open Tools & Fixes → DPC Latency tab →</p>
+              </div>
+            </motion.a>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { title: "Stutters with High Priority?", body: "If you experience micro-stutters with High Priority enabled, your CPU may be saturated. Disable it and use 'Pin to Physical Cores' instead for stable frametimes." },
               { title: "Cache Clearing", body: "Clearing FiveM cache fixes most crash/texture issues. Re-downloading server assets on first join is expected — it rebuilds the cache." },
+              { title: "HAGS OFF on GTX 1650 Super — Full Stack", body: "HAGS OFF alone isn't enough. You need all four companion tweaks: Disable HAGS → Low Latency Ultra → HAGS OFF Stability Pack → NVIDIA + Ryzen DPC fixes in the DPC Latency tab. All four together eliminate the 160→60 drop and aim input spikes." },
             ].map((c, i) => (
               <motion.div key={c.title} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 + i * 0.1 }}
                 className="p-5 rounded-lg bg-red-500/5 border border-red-500/20">
