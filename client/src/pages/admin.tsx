@@ -1458,7 +1458,7 @@ function AdminPresetGenerator({
       const cpu = parseCpuModel(hw.cpuModel);
       const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
         body: JSON.stringify({
           hardware: {
             gpuVendor: hw.gpuVendor,
@@ -1506,7 +1506,7 @@ function AdminPresetGenerator({
     try {
       const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
         body: JSON.stringify({
           hardware: {
             gpuVendor,
