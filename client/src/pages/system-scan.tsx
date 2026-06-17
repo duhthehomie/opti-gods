@@ -104,12 +104,16 @@ function MissingRow({ label, gain }: { label: string; gain: string }) {
 }
 
 // ── Fan display helper ────────────────────────────────────────────────────────
-function fanLabel(scan: NativeHardwareScan): { label: string; sub?: string } {
-  if (scan.fan_count && scan.fan_count > 0) {
+// countOverride: from HW Monitor JSON import — used when it detects more fans
+// than the native WMI scan (WMI Win32_Fan misses fans on many AMD systems).
+function fanLabel(scan: NativeHardwareScan, countOverride?: number | null): { label: string; sub?: string } {
+  const native  = scan.fan_count ?? 0;
+  const count   = (countOverride != null && countOverride > native) ? countOverride : native;
+  if (count > 0) {
     const chassis = (scan.chassis || "").toLowerCase();
     const isLaptop = chassis === "laptop" || chassis === "notebook";
     return {
-      label: `${scan.fan_count} Fan${scan.fan_count === 1 ? "" : "s"}`,
+      label: `${count} Fan${count === 1 ? "" : "s"}`,
       sub: isLaptop ? "Laptop cooling" : "Air cooled",
     };
   }
@@ -246,13 +250,17 @@ function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: 
 }
 
 // ── Full native scan results ──────────────────────────────────────────────────
-function NativeScanResults({ scan, onRescan, rescanning }: {
+function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   scan: NativeHardwareScan;
   onRescan: () => void;
   rescanning: boolean;
+  hwMonitor?: HwMonitorData | null;
 }) {
   const os = useOsDetection();
-  const fan = fanLabel(scan);
+  // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
+  const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
+  // Use HW Monitor ram_mhz if native scan didn't capture it
+  const ramMhz = scan.ram_mhz || (hwMonitor?.ram_mhz ?? null);
   const isLaptop = (scan.chassis || "").toLowerCase() === "laptop";
 
   return (
@@ -263,7 +271,7 @@ function NativeScanResults({ scan, onRescan, rescanning }: {
         <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
         <Stat icon={MemoryStick} label="RAM"
           value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
-          sub={scan.ram_mhz ? `${scan.ram_mhz} MHz` : undefined} highlight />
+          sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight />
         <Stat icon={HardDrive} label="OS" value={os.os || "Detecting…"}
           sub={os.build ? `Build ${os.build}` : undefined} />
         <Stat icon={Sparkles} label="Form Factor"
@@ -344,7 +352,7 @@ function NativeScanResults({ scan, onRescan, rescanning }: {
 }
 
 // ── HW Monitor Panel ─────────────────────────────────────────────────────────
-function HwMonitorPanel() {
+function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
   const [hw, setHw] = useState<HwMonitorData | null>(null);
   const [dragging, setDragging] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -357,6 +365,7 @@ function HwMonitorPanel() {
       const data = JSON.parse(text.replace(/^\uFEFF/, "")) as HwMonitorData;
       if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
       setHw(data);
+      onData?.(data);
     } catch {
       setParseError("Invalid file — drop the OptiGods-HW-Monitor.json produced by the BAT script.");
     }
@@ -524,6 +533,27 @@ function HwMonitorPanel() {
       `        $wf=@(Get-WmiObject Win32_Fan -EA SilentlyContinue); $pf=@(Get-WmiObject Win32_PnPEntity -Filter "PNPClass='Fan'" -EA SilentlyContinue)`,
       `        $seen=[System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)`,
       `        foreach($f in ($wf+$pf)){$n=if($f.Name){$f.Name}else{"Fan"}; if($seen.Add($n)){$rpm=if($f.PSObject.Properties['DesiredSpeed']-and $f.DesiredSpeed-gt 0){[int]$f.DesiredSpeed}else{$null}; $fanList.Add([ordered]@{name=$n;speed_pct=$null;speed_rpm=$rpm})}}`,
+      `    } catch {}`,
+      `}`,
+      `# Fan fallback 2 — LibreHardwareMonitor WMI namespace (broader driver support than OHM)`,
+      `if (-not $ohmDone) {`,
+      `    try {`,
+      `        $lhm = Get-WmiObject -Namespace "root\\LibreHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Fan" }`,
+      `        if ($lhm) {`,
+      `            $lhmSeen=[System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)`,
+      `            foreach($s in @($lhm)){ if($lhmSeen.Add($s.Name)){ $fanList.Add([ordered]@{name=$s.Name;speed_pct=$null;speed_rpm=[math]::Round($s.Value)}) } }`,
+      `            $ohmDone=$true`,
+      `        }`,
+      `    } catch {}`,
+      `}`,
+      `# Fan fallback 3 — ACPI FAN* registry nodes (correct count even without RPM, works on most BIOS)`,
+      `if ($fanList.Count -eq 0) {`,
+      `    try {`,
+      `        $acpiFans = @(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\ACPI' -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^FAN' })`,
+      `        if ($acpiFans.Count -gt 0) {`,
+      `            $fi = 1`,
+      `            foreach ($af in $acpiFans) { $fanList.Add([ordered]@{name=("Fan "+[string]$fi);speed_pct=$null;speed_rpm=$null}); $fi++ }`,
+      `        }`,
       `    } catch {}`,
       `}`,
       `if ($fanList.Count -gt 0) { $result.fans = $fanList.ToArray() }`,
@@ -789,6 +819,8 @@ export default function SystemScanPage() {
   const [nativeScan, setNativeScan] = useState<NativeHardwareScan | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  // HW Monitor JSON data lifted from HwMonitorPanel so top-level stats can use it
+  const [hwMonitorData, setHwMonitorData] = useState<HwMonitorData | null>(null);
   const native = isNative();
 
   const runScan = useCallback(() => {
@@ -868,6 +900,7 @@ export default function SystemScanPage() {
             scan={nativeScan}
             onRescan={runScan}
             rescanning={scanning}
+            hwMonitor={hwMonitorData}
           />
         )}
 
@@ -909,34 +942,44 @@ export default function SystemScanPage() {
                 sub={[hw.isNvidia && "NVIDIA", hw.isAmd && "AMD", hw.isIntel && "Intel"].filter(Boolean).join(" · ") || undefined} />
               <Stat icon={Cpu} label="CPU" value={hw.cpuLabel || "Unknown"}
                 sub={hw.cpuCores ? `${hw.cpuCores} threads` : undefined} />
-              <Stat icon={MemoryStick} label="RAM" value={hw.ramGB ? `${hw.ramGB} GB` : "Browser-limited"} />
+              <Stat icon={MemoryStick} label="RAM"
+                value={hw.ramGB ? `${hw.ramGB} GB` : "Browser-limited"}
+                sub={hwMonitorData?.ram_mhz ? `${hwMonitorData.ram_mhz} MHz` : undefined} />
               <Stat icon={HardDrive} label="OS" value={os.os || "Detecting…"}
                 sub={os.build ? `Build ${os.build}` : undefined} />
               <Stat icon={Sparkles} label="Form Factor" value={hw.isLaptop ? "Laptop" : "Desktop"} />
+              {/* Cooling — populated from HW Monitor BAT JSON once the user imports it */}
+              {hwMonitorData && (hwMonitorData.fan_count ?? 0) > 0 && (
+                <Stat icon={Wind} label="Cooling"
+                  value={`${hwMonitorData.fan_count} Fan${hwMonitorData.fan_count === 1 ? "" : "s"}`}
+                  sub="From HW Monitor scan" />
+              )}
             </div>
 
-            {/* Unlock deeper scan hint */}
-            <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Wind className="w-4 h-4 text-zinc-600 shrink-0" />
-                <p className="text-[11px] text-zinc-500">
-                  Fan count and CPU temperature require the native Opti Gods app (deep WMI scan).
-                </p>
+            {/* Unlock deeper scan hint — hide once HW Monitor data is loaded */}
+            {!hwMonitorData && (
+              <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Wind className="w-4 h-4 text-zinc-600 shrink-0" />
+                  <p className="text-[11px] text-zinc-500">
+                    Fan count and CPU temperature require the native app — or run the HW Monitor BAT below.
+                  </p>
+                </div>
+                <a
+                  href="https://github.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 flex items-center gap-1 text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Get the app <ChevronRight className="w-3 h-3" />
+                </a>
               </div>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noreferrer"
-                className="shrink-0 flex items-center gap-1 text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors"
-              >
-                Get the app <ChevronRight className="w-3 h-3" />
-              </a>
-            </div>
+            )}
           </div>
         )}
 
         {/* HW Monitor — always visible, lets any user import sensor data */}
-        {!loading && <HwMonitorPanel />}
+        {!loading && <HwMonitorPanel onData={setHwMonitorData} />}
       </div>
     </AppLayout>
   );
