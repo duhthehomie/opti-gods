@@ -3300,7 +3300,10 @@ Start-Sleep 2
     const codeValueToDiscordFromEnt: Record<string, string> = {};
     const codeValueToDiscordId: Record<string, string> = {};
     const codeValueToAvatarUrl: Record<string, string> = {};
+    // Direct Discord ID → avatar URL fallback (used when notes don't carry code:XXXX)
+    const discordIdToAvatarUrl: Record<string, string> = {};
     for (const ent of proUsers) {
+      if (ent.discordUserId && ent.avatarUrl) discordIdToAvatarUrl[ent.discordUserId] = ent.avatarUrl;
       if (!ent.notes) continue;
       const match = ent.notes.match(/(?:^|[| ])code:([A-Z0-9_-]+)/i);
       if (match) {
@@ -3338,7 +3341,12 @@ Start-Sleep 2
           ? (codeValueToDiscordFromEmail[s.codeRef] ?? codeValueToDiscordFromEnt[s.codeRef] ?? null)
           : null,
         discordId: s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null,
-        discordAvatarUrl: s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null,
+        discordAvatarUrl: (() => {
+          const byCode = s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null;
+          if (byCode) return byCode;
+          const did = s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null;
+          return did ? (discordIdToAvatarUrl[did] ?? null) : null;
+        })(),
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
         tokenMasked: s.sessionToken.slice(0, 8) + "…",
         ipCity: loc?.city ?? null,

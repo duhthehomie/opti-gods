@@ -4357,6 +4357,36 @@ export default function Admin() {
                           <UserX className="w-3 h-3" /> <span className="hidden sm:inline">Unlink</span>
                         </button>
                       )}
+                      {(c as any).discordLinked && (c as any).discordUserId && (() => {
+                        const did: string = (c as any).discordUserId;
+                        const hasGrant = graphicsGrantedIds.has(did);
+                        return (
+                          <button
+                            data-testid={`button-graphics-code-${c.id}`}
+                            onClick={() => {
+                              const name = (c as any).discordUsername || did;
+                              if (hasGrant) {
+                                if (confirm(`Revoke FiveM Graphics Studio from ${name}?`))
+                                  revokeGraphicsStudio.mutate(did);
+                              } else {
+                                if (confirm(`Grant FiveM Graphics Studio to ${name}?`))
+                                  grantGraphicsStudio.mutate(did);
+                              }
+                            }}
+                            disabled={grantGraphicsStudio.isPending || revokeGraphicsStudio.isPending}
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                              hasGrant
+                                ? "text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                                : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                            )}
+                            title={hasGrant ? "Revoke FiveM Graphics Studio" : "Grant FiveM Graphics Studio"}
+                          >
+                            <Palette className="w-3 h-3" />
+                            <span className="hidden sm:inline">{hasGrant ? "Studio ✓" : "Studio"}</span>
+                          </button>
+                        );
+                      })()}
                       {c.usedAt && (
                         <button
                           data-testid={`button-kill-code-${c.id}`}
