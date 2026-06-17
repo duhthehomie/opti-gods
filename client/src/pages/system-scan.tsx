@@ -501,7 +501,7 @@ function HwMonitorPanel() {
       `# System model`,
       `try {`,
       `    $cs2 = Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue`,
-      `    if ($cs2) { $result.system_model = ($cs2.Manufacturer.Trim() + ' ' + $cs2.Model.Trim()).Trim() }`,
+      `    if ($cs2) { $mfr2=$cs2.Manufacturer.Trim(); $mdl2=$cs2.Model.Trim(); $result.system_model = if($mdl2 -like "$mfr2 *" -or $mdl2 -eq $mfr2){$mdl2}else{"$mfr2 $mdl2".Trim()} }`,
       `} catch {}`,
       ``,
       `# Disks`,
