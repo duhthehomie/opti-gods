@@ -3202,7 +3202,7 @@ export default function Admin() {
   type SessionRow = {
     id: number; sessionToken: string; tokenMasked: string;
     codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
-    email: string | null; discordUsername: string | null; discordId: string | null;
+    email: string | null; discordUsername: string | null; discordId: string | null; discordAvatarUrl: string | null;
     codeNote: string | null;
     ipCity: string | null; ipRegion: string | null; ipCountry: string | null;
   };
@@ -5056,33 +5056,89 @@ export default function Admin() {
               )}
 
               {/* Summary bar */}
-              <div className="flex items-center gap-3 p-3 bg-zinc-900/40 border border-white/5 rounded-xl">
-                <Users className="w-4 h-4 text-zinc-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white">{sessions.length} active Pro session{sessions.length !== 1 ? "s" : ""}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">
-                    {onlineCount > 0
-                      ? <><span className="text-emerald-400 font-bold">{onlineCount} online</span> right now (pinged in the last 15 min)</>
-                      : "Nobody active in the last 15 minutes"}
-                  </p>
+              <div className="rounded-xl border border-white/5 bg-zinc-900/40 overflow-hidden">
+                {/* Top row: count + actions */}
+                <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white/5">
+                  <Users className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white">{sessions.length} active Pro session{sessions.length !== 1 ? "s" : ""}</p>
+                  </div>
+                  <button
+                    data-testid="button-sweep-orphans-quiet"
+                    onClick={() => sweepOrphans.mutate()}
+                    disabled={sweepOrphans.isPending}
+                    title="Sweep orphan sessions (sessions with no matching code)"
+                    className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    data-testid="button-refresh-sessions"
+                    onClick={() => sessionsQuery.refetch()}
+                    className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", sessionsQuery.isFetching && "animate-spin")} />
+                  </button>
                 </div>
-                <button
-                  data-testid="button-sweep-orphans-quiet"
-                  onClick={() => sweepOrphans.mutate()}
-                  disabled={sweepOrphans.isPending}
-                  title="Sweep orphan sessions (sessions with no matching code)"
-                  className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  data-testid="button-refresh-sessions"
-                  onClick={() => sessionsQuery.refetch()}
-                  className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors"
-                  title="Refresh"
-                >
-                  <RefreshCw className={cn("w-3.5 h-3.5", sessionsQuery.isFetching && "animate-spin")} />
-                </button>
+
+                {/* Online now panel */}
+                <div className="px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.7)]" />
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-400">
+                      {onlineCount > 0 ? `${onlineCount} online now` : "Nobody online right now"}
+                    </p>
+                    <span className="text-[9px] text-zinc-700 ml-1">· last 15 min</span>
+                  </div>
+
+                  {onlineCount === 0 ? (
+                    <p className="text-[10px] text-zinc-700 italic">No users have checked in recently.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {sessions
+                        .filter(isOnline)
+                        .sort((a, b) =>
+                          new Date(b.lastCheckedAt ?? 0).getTime() - new Date(a.lastCheckedAt ?? 0).getTime()
+                        )
+                        .map(s => {
+                          const name = s.discordUsername ?? s.email?.split("@")[0] ?? s.codeNote?.split(" | ")[0] ?? s.tokenMasked;
+                          const minutesAgo = s.lastCheckedAt
+                            ? Math.floor((Date.now() - new Date(s.lastCheckedAt).getTime()) / 60_000)
+                            : null;
+                          return (
+                            <div
+                              key={s.id}
+                              data-testid={`chip-online-${s.id}`}
+                              className="flex items-center gap-1.5 bg-emerald-950/30 border border-emerald-500/20 rounded-lg px-2 py-1"
+                              title={`Last seen: ${minutesAgo === 0 ? "just now" : `${minutesAgo}m ago`}${s.ipCity ? ` · ${[s.ipCity, s.ipCountry].filter(Boolean).join(", ")}` : ""}`}
+                            >
+                              {s.discordAvatarUrl ? (
+                                <img
+                                  src={s.discordAvatarUrl}
+                                  alt={name}
+                                  className="w-5 h-5 rounded-full ring-1 ring-emerald-500/30 shrink-0"
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                                  <span className="text-[8px] text-zinc-500 font-bold uppercase">
+                                    {name.charAt(0)}
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-[11px] text-emerald-300 font-semibold max-w-[120px] truncate">{name}</span>
+                              {minutesAgo !== null && (
+                                <span className="text-[9px] text-emerald-600 shrink-0">
+                                  {minutesAgo === 0 ? "now" : `${minutesAgo}m`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Session breakdown — shows exactly where all sessions come from */}

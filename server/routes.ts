@@ -3299,6 +3299,7 @@ Start-Sleep 2
     // This catches users who redeemed a code directly (no email request) but are Discord-linked
     const codeValueToDiscordFromEnt: Record<string, string> = {};
     const codeValueToDiscordId: Record<string, string> = {};
+    const codeValueToAvatarUrl: Record<string, string> = {};
     for (const ent of proUsers) {
       if (!ent.notes) continue;
       const match = ent.notes.match(/(?:^|[| ])code:([A-Z0-9_-]+)/i);
@@ -3306,6 +3307,7 @@ Start-Sleep 2
         const key = match[1].toUpperCase();
         if (ent.username && !codeValueToDiscordFromEnt[key]) codeValueToDiscordFromEnt[key] = ent.username;
         if (ent.discordUserId && !codeValueToDiscordId[key]) codeValueToDiscordId[key] = ent.discordUserId;
+        if (ent.avatarUrl && !codeValueToAvatarUrl[key]) codeValueToAvatarUrl[key] = ent.avatarUrl;
       }
     }
 
@@ -3336,6 +3338,7 @@ Start-Sleep 2
           ? (codeValueToDiscordFromEmail[s.codeRef] ?? codeValueToDiscordFromEnt[s.codeRef] ?? null)
           : null,
         discordId: s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null,
+        discordAvatarUrl: s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null,
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
         tokenMasked: s.sessionToken.slice(0, 8) + "…",
         ipCity: loc?.city ?? null,
