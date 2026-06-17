@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
@@ -142,6 +142,11 @@ export interface IStorage {
   persistNativeToken(token: string, userId: string, expiresAt: number): Promise<void>;
   lookupNativeToken(token: string): Promise<{ userId: string; expiresAt: number } | null>;
   purgeExpiredNativeTokens(): Promise<void>;
+  // Graphics Studio per-user grants (Discord-ID-locked, admin-granted)
+  grantGraphicsStudio(discordUserId: string, grantedBy?: string | null, notes?: string | null): Promise<void>;
+  revokeGraphicsStudio(discordUserId: string): Promise<void>;
+  hasGraphicsStudio(discordUserId: string): Promise<boolean>;
+  listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1168,6 +1173,26 @@ export class DatabaseStorage implements IStorage {
 
   async purgeExpiredNativeTokens(): Promise<void> {
     await db.delete(nativeTokensTable).where(lt(nativeTokensTable.expiresAt, Date.now()));
+  }
+
+  async grantGraphicsStudio(discordUserId: string, grantedBy?: string | null, notes?: string | null): Promise<void> {
+    await db.insert(graphicsStudioGrants)
+      .values({ discordUserId, grantedBy: grantedBy ?? null, notes: notes ?? null })
+      .onConflictDoNothing();
+  }
+
+  async revokeGraphicsStudio(discordUserId: string): Promise<void> {
+    await db.delete(graphicsStudioGrants).where(eq(graphicsStudioGrants.discordUserId, discordUserId));
+  }
+
+  async hasGraphicsStudio(discordUserId: string): Promise<boolean> {
+    const rows = await db.select({ d: graphicsStudioGrants.discordUserId })
+      .from(graphicsStudioGrants).where(eq(graphicsStudioGrants.discordUserId, discordUserId));
+    return rows.length > 0;
+  }
+
+  async listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]> {
+    return db.select().from(graphicsStudioGrants).orderBy(desc(graphicsStudioGrants.grantedAt));
   }
 }
 

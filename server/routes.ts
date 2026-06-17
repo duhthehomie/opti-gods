@@ -3298,12 +3298,14 @@ Start-Sleep 2
     // Build codeRef → discord from pro_entitlements notes (e.g. "code:XXXX" pattern)
     // This catches users who redeemed a code directly (no email request) but are Discord-linked
     const codeValueToDiscordFromEnt: Record<string, string> = {};
+    const codeValueToDiscordId: Record<string, string> = {};
     for (const ent of proUsers) {
-      if (!ent.notes || !ent.username) continue;
+      if (!ent.notes) continue;
       const match = ent.notes.match(/(?:^|[| ])code:([A-Z0-9_-]+)/i);
       if (match) {
         const key = match[1].toUpperCase();
-        if (!codeValueToDiscordFromEnt[key]) codeValueToDiscordFromEnt[key] = ent.username;
+        if (ent.username && !codeValueToDiscordFromEnt[key]) codeValueToDiscordFromEnt[key] = ent.username;
+        if (ent.discordUserId && !codeValueToDiscordId[key]) codeValueToDiscordId[key] = ent.discordUserId;
       }
     }
 
@@ -3333,6 +3335,7 @@ Start-Sleep 2
         discordUsername: s.codeRef
           ? (codeValueToDiscordFromEmail[s.codeRef] ?? codeValueToDiscordFromEnt[s.codeRef] ?? null)
           : null,
+        discordId: s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null,
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
         tokenMasked: s.sessionToken.slice(0, 8) + "…",
         ipCity: loc?.city ?? null,
@@ -6720,6 +6723,45 @@ Rules:
       console.error("[ai/graphics-pack] error:", err);
       return res.status(500).json({ error: "AI request failed" });
     }
+  });
+
+  // ── Graphics Studio — Discord-ID-locked per-user access ─────────────────────
+
+  // User — check if current Discord session has Graphics Studio access
+  app.get("/api/graphics-studio/status", async (req, res) => {
+    const userId: string | undefined = (req as any).session?.userId;
+    if (!userId) return res.json({ granted: false, reason: "not_logged_in" });
+    const has = await storage.hasGraphicsStudio(userId);
+    return res.json({ granted: has, discordId: userId });
+  });
+
+  // Admin — list all Graphics Studio grants
+  app.get("/api/admin/graphics-studio/grants", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const grants = await storage.listGraphicsStudioGrants();
+    return res.json(grants);
+  });
+
+  // Admin — grant Graphics Studio access to a Discord user
+  app.post("/api/admin/graphics-studio/grant", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { discordId, notes } = req.body ?? {};
+    if (!discordId || typeof discordId !== "string" || discordId.length < 4) {
+      return res.status(400).json({ error: "discordId required" });
+    }
+    await storage.grantGraphicsStudio(discordId, "admin", notes ?? null);
+    log(`[admin] Granted Graphics Studio to Discord user ${discordId}`, "admin");
+    return res.json({ ok: true });
+  });
+
+  // Admin — revoke Graphics Studio access from a Discord user
+  app.delete("/api/admin/graphics-studio/revoke/:discordId", async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const { discordId } = req.params;
+    if (!discordId || discordId.length < 4) return res.status(400).json({ error: "discordId required" });
+    await storage.revokeGraphicsStudio(discordId);
+    log(`[admin] Revoked Graphics Studio from Discord user ${discordId}`, "admin");
+    return res.json({ ok: true });
   });
 
   // Load AI chat session history

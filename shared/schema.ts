@@ -396,3 +396,12 @@ export const nativeTokensTable = pgTable("native_tokens", {
   createdAt: bigint("created_at", { mode: "number" }).notNull(),
 });
 export type NativeToken = typeof nativeTokensTable.$inferSelect;
+
+// Graphics Studio per-user grants — Discord-ID-locked, granted manually by admin
+export const graphicsStudioGrants = pgTable("graphics_studio_grants", {
+  discordUserId: text("discord_user_id").primaryKey(),
+  grantedAt: timestamp("granted_at").defaultNow(),
+  grantedBy: text("granted_by"),
+  notes: text("notes"),
+});
+export type GraphicsStudioGrant = typeof graphicsStudioGrants.$inferSelect;

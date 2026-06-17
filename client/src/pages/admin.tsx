@@ -15,7 +15,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
-  Percent, Crown, UserX,
+  Percent, Crown, UserX, Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -3202,7 +3202,7 @@ export default function Admin() {
   type SessionRow = {
     id: number; sessionToken: string; tokenMasked: string;
     codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
-    email: string | null; discordUsername: string | null;
+    email: string | null; discordUsername: string | null; discordId: string | null;
     codeNote: string | null;
     ipCity: string | null; ipRegion: string | null; ipCountry: string | null;
   };
@@ -3233,6 +3233,36 @@ export default function Admin() {
           ? "All sessions with no matching code have been deleted. Those users lost Pro access instantly."
           : "Every session already has a valid matching code.",
       });
+    },
+  });
+
+  // Graphics Studio grants
+  type GraphicsGrant = { discordUserId: string; grantedAt: string | null; grantedBy: string | null; notes: string | null };
+  const graphicsGrantsQuery = useQuery<GraphicsGrant[]>({
+    queryKey: ["/api/admin/graphics-studio/grants", key],
+    queryFn: () => fetch(apiUrl("/api/admin/graphics-studio/grants"), { headers }).then(r => r.json()),
+    enabled: authed,
+  });
+  const graphicsGrantedIds = new Set((graphicsGrantsQuery.data ?? []).map(g => g.discordUserId));
+
+  const grantGraphicsStudio = useMutation({
+    mutationFn: (discordId: string) => fetch(apiUrl("/api/admin/graphics-studio/grant"), {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ discordId }),
+    }).then(r => r.json()),
+    onSuccess: (_data, discordId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/graphics-studio/grants", key] });
+      toast({ title: "Graphics Studio granted", description: `Discord ID ${discordId} now has access.` });
+    },
+  });
+
+  const revokeGraphicsStudio = useMutation({
+    mutationFn: (discordId: string) => fetch(apiUrl(`/api/admin/graphics-studio/revoke/${encodeURIComponent(discordId)}`), {
+      method: "DELETE", headers,
+    }).then(r => r.json()),
+    onSuccess: (_data, discordId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/graphics-studio/grants", key] });
+      toast({ title: "Graphics Studio revoked", description: `Discord ID ${discordId} access removed.` });
     },
   });
 
@@ -5150,6 +5180,30 @@ export default function Admin() {
                             )}>
                               {online ? "ONLINE" : "OFFLINE"}
                             </span>
+                            {s.discordId && (
+                              <button
+                                data-testid={`button-graphics-studio-${s.id}`}
+                                onClick={() => {
+                                  if (graphicsGrantedIds.has(s.discordId!)) {
+                                    if (confirm(`Revoke Graphics Studio from ${s.discordUsername ?? s.discordId}?`))
+                                      revokeGraphicsStudio.mutate(s.discordId!);
+                                  } else {
+                                    if (confirm(`Grant Graphics Studio to ${s.discordUsername ?? s.discordId}?`))
+                                      grantGraphicsStudio.mutate(s.discordId!);
+                                  }
+                                }}
+                                disabled={grantGraphicsStudio.isPending || revokeGraphicsStudio.isPending}
+                                className={cn(
+                                  "p-1.5 rounded transition-colors shrink-0",
+                                  graphicsGrantedIds.has(s.discordId)
+                                    ? "text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                                    : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                                )}
+                                title={graphicsGrantedIds.has(s.discordId) ? "Revoke Graphics Studio" : "Grant Graphics Studio"}
+                              >
+                                <Palette className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               data-testid={`button-revoke-session-${s.id}`}
                               onClick={() => {

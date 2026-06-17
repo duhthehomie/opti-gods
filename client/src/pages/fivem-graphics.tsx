@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { zipSync, strToU8 } from "fflate";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Slider } from "@/components/ui/slider";
@@ -12,9 +12,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-
-// ── Gate ─────────────────────────────────────────────────────────────────────
-const GATE_CODE = "4258";
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 function lerp(a: number, b: number, t: number) {
@@ -928,61 +925,49 @@ const RESHADE_PRESETS = [
   },
 ];
 
-// ── Gate ─────────────────────────────────────────────────────────────────────
-function CodeGate({ onUnlock }: { onUnlock: () => void }) {
-  const [code,  setCode]  = useState("");
-  const [error, setError] = useState(false);
-  const [shake, setShake] = useState(false);
+// ── Discord Gate ──────────────────────────────────────────────────────────────
+type GateState = "checking" | "granted" | "not_logged_in" | "not_granted";
 
-  const handleSubmit = () => {
-    if (code.trim() === GATE_CODE) { onUnlock(); }
-    else {
-      setError(true); setShake(true);
-      setTimeout(() => setShake(false), 500);
-      setCode("");
-    }
-  };
-
+function DiscordGate() {
   return (
     <div className="min-h-[70vh] flex items-center justify-center">
-      <motion.div
-        animate={shake ? { x: [-8, 8, -6, 6, -4, 4, 0] } : { x: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-80 rounded-2xl border border-red-500/20 bg-[#0a0a0a] shadow-2xl shadow-red-900/20 p-8 text-center"
-      >
+      <div className="w-80 rounded-2xl border border-red-500/20 bg-[#0a0a0a] shadow-2xl shadow-red-900/20 p-8 text-center">
         <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
           <Lock className="w-6 h-6 text-red-500" />
         </div>
         <p className="text-[10px] uppercase tracking-[0.2em] text-red-500 font-bold mb-1">Restricted Access</p>
         <h2 className="text-xl font-display font-black text-white mb-1">Graphics Studio</h2>
-        <p className="text-xs text-zinc-500 mb-6">Enter your access code to continue</p>
-        <input
-          autoFocus type="password" value={code}
-          onChange={e => { setCode(e.target.value); setError(false); }}
-          onKeyDown={e => e.key === "Enter" && handleSubmit()}
-          placeholder="• • • •"
-          data-testid="input-graphics-code"
-          className={cn(
-            "w-full bg-zinc-900/80 border rounded-xl px-4 py-3 text-white text-center text-xl font-mono tracking-[0.5em] outline-none transition-all mb-3",
-            error
-              ? "border-red-500/70 focus:border-red-500 shadow-[0_0_20px_-4px_rgba(239,68,68,0.4)]"
-              : "border-white/10 focus:border-red-500/40"
-          )}
-          maxLength={6}
-        />
-        {error && <p className="text-[11px] text-red-400 mb-3">Incorrect code</p>}
-        <Button onClick={handleSubmit} data-testid="button-graphics-unlock"
-          className="w-full bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl py-2.5">
-          Unlock
-        </Button>
-      </motion.div>
+        <p className="text-xs text-zinc-400 mb-3">This feature is granted per-user by admins.</p>
+        <p className="text-xs text-zinc-500 mb-6">
+          You must be logged in with the Discord account that has been granted access.
+          If you believe you have access, log out and log back in via Discord.
+        </p>
+        <a
+          href="/api/auth/discord"
+          data-testid="link-graphics-discord-login"
+          className="block w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold rounded-xl py-2.5 text-sm transition-colors"
+        >
+          Log in with Discord
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function GateChecking() {
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-zinc-500">
+        <div className="w-6 h-6 border-2 border-zinc-700 border-t-red-500 rounded-full animate-spin" />
+        <p className="text-xs">Checking access…</p>
+      </div>
     </div>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FivemGraphics() {
-  const [unlocked, setUnlockedState] = useState(false);
+  const [gateState, setGateState] = useState<GateState>("checking");
   const [cloudThickness, setCloudThickness] = useState(0);
   const [jetStreams,      setJetStreams]     = useState(0);
   const [skyColorKey,    setSkyColorKey]    = useState<SkyColorKey>("vivid_blue");
@@ -1014,7 +999,16 @@ export default function FivemGraphics() {
 
   const [activeTab, setActiveTab] = useState<"packs" | "builder" | "reshade" | "info">("packs");
 
-  const handleUnlock = useCallback(() => setUnlockedState(true), []);
+  useEffect(() => {
+    fetch("/api/graphics-studio/status", { credentials: "include" })
+      .then(r => r.json())
+      .then((data: { granted: boolean; reason?: string }) => {
+        if (data.granted) setGateState("granted");
+        else if (data.reason === "not_logged_in") setGateState("not_logged_in");
+        else setGateState("not_granted");
+      })
+      .catch(() => setGateState("not_logged_in"));
+  }, []);
 
   const applyTheme = (settings: Partial<PackOpts>) => {
     if (settings.skyColorKey    != null) setSkyColorKey(settings.skyColorKey);
@@ -1133,8 +1127,11 @@ export default function FivemGraphics() {
     }
   };
 
-  if (!unlocked) {
-    return <AppLayout><CodeGate onUnlock={handleUnlock} /></AppLayout>;
+  if (gateState === "checking") {
+    return <AppLayout><GateChecking /></AppLayout>;
+  }
+  if (gateState === "not_logged_in" || gateState === "not_granted") {
+    return <AppLayout><DiscordGate /></AppLayout>;
   }
 
   return (
