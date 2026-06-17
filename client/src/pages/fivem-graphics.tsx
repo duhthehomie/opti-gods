@@ -37,6 +37,8 @@ const SKY_COLORS = {
   hot_pink:    { label: "Hot Pink",      r: 195, g: 42,  b: 110, group: "pink",  swatch: "#C32A6E" },
   rose:        { label: "Rose Pink",     r: 165, g: 30,  b: 80,  group: "pink",  swatch: "#A51E50" },
   magenta:     { label: "Deep Magenta",  r: 90,  g: 6,   b: 72,  group: "pink",  swatch: "#5A0648" },
+  // Warm / Sunset
+  warm_amber:  { label: "Warm Amber",    r: 200, g: 108, b: 30,  group: "warm",  swatch: "#C86C1E" },
   // Grey / Mono
   steel_grey:  { label: "Steel Grey",    r: 78,  g: 88,  b: 102, group: "grey",  swatch: "#4E5866" },
   dark_grey:   { label: "Dark Grey",     r: 28,  g: 30,  b: 38,  group: "grey",  swatch: "#1C1E26" },
@@ -103,11 +105,11 @@ function buildTimecycleXml(opts: {
     let aerialVal = aerialHat;
     let rayVal    = rayStrength;
 
-    // Freeze Time → clear all weather (no cloud draw calls = big FPS gain)
+    // Freeze Time → zero ground clouds only (biggest GPU draw-call saving).
+    // Contrail density (jets) and aerial hat are static overlays — they don't
+    // participate in weather simulation, so they stay at whatever the user set.
     if (opts.freezeTime) {
-      cloudVal  = num(0);
-      jetVal    = num(0);
-      aerialVal = num(0);
+      cloudVal = num(0);
     }
     if (opts.disableRain && RAIN_WEATHER.includes(w)) {
       cloudVal  = num(0);
@@ -374,22 +376,27 @@ const PACK_THEMES: Array<{
     settings: { skyColorKey: "rose", skyBrightness: 80, cloudThickness: 0, jetStreams: 0, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 12, disableRain: true, disableSnow: true, keepProps: true },
   },
   {
-    key: "golden_hour", label: "Golden Hour", desc: "Warm dusk frozen at 18:00 — cinematic look",
+    key: "golden_hour", label: "Golden Hour", desc: "Warm amber dusk frozen at 18:00 — cinematic golden sky",
     icon: Flame, color: "amber",
-    settings: { skyColorKey: "vivid_blue", skyBrightness: 65, cloudThickness: 15, jetStreams: 0, aerialClouds: false, lightRays: true, lightRayIntensity: 38, atmosphereHaze: false, freezeTime: true, freezeHour: 18, disableRain: true, disableSnow: true, keepProps: true },
+    settings: { skyColorKey: "warm_amber", skyBrightness: 80, cloudThickness: 12, jetStreams: 0, aerialClouds: false, lightRays: true, lightRayIntensity: 45, atmosphereHaze: true, freezeTime: true, freezeHour: 18, disableRain: true, disableSnow: true, keepProps: true, sunIntensity: 85 },
   },
   {
-    key: "night_drive", label: "Night Drive", desc: "Midnight frozen — perfect stars, moon, clean dark sky",
+    key: "night_drive", label: "Night Drive", desc: "Midnight frozen — stars, moon, clean dark sky",
     icon: Moon, color: "indigo",
     settings: { skyColorKey: "navy", skyBrightness: 40, cloudThickness: 0, jetStreams: 0, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 0, disableRain: true, disableSnow: true, keepProps: true },
   },
   {
     key: "bubblegum_sky", label: "Bubblegum Sky", desc: "Pastel pink-purple dawn — unique and stunning",
     icon: Star, color: "fuchsia",
-    settings: { skyColorKey: "bubblegum", skyBrightness: 70, cloudThickness: 10, jetStreams: 0, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 7, disableRain: true, disableSnow: true, keepProps: true },
+    settings: { skyColorKey: "bubblegum", skyBrightness: 70, cloudThickness: 10, jetStreams: 22, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 7, disableRain: true, disableSnow: true, keepProps: true },
   },
   {
-    key: "snow_pack", label: "Snow Pack", desc: "Steel grey, snow ON, frozen noon — winter themed",
+    key: "gta6_pink", label: "GTA 6 Vibes", desc: "Hot pink sunset + thick jet streams + light rays — the showstopper",
+    icon: Sparkles, color: "pink",
+    settings: { skyColorKey: "hot_pink", skyBrightness: 88, cloudThickness: 18, jetStreams: 70, aerialClouds: false, aerialDensity: 0, lightRays: true, lightRayIntensity: 55, atmosphereHaze: true, freezeTime: true, freezeHour: 19, disableRain: true, disableSnow: true, keepProps: true, sunIntensity: 82 },
+  },
+  {
+    key: "snow_pack", label: "Snow Pack", desc: "Steel grey, snow ON, frozen noon — winter vibes",
     icon: Snowflake, color: "cyan",
     settings: { skyColorKey: "steel_grey", skyBrightness: 65, cloudThickness: 25, jetStreams: 0, aerialClouds: true, aerialDensity: 40, lightRays: false, atmosphereHaze: true, freezeTime: true, freezeHour: 12, disableRain: true, disableSnow: false, keepProps: true },
   },
@@ -509,7 +516,9 @@ function SkyPreview({
   const { r, g, B } = skyRgb(skyColorKey, skyBrightness);
   const colorGroup = SKY_COLORS[skyColorKey].group;
   const effectiveClouds = (freezeTime) ? 0 : cloudThickness;
-  const effectiveJets   = (freezeTime) ? 0 : jetStreams;
+  // Jets (contrails) are static sky overlays — NOT zeroed by freeze time.
+  // The actual citizen XML also keeps contrailDensity regardless of freeze.
+  const effectiveJets = jetStreams;
   const hour = freezeTime ? freezeHour : 12;
 
   const isDawn     = hour >= 5  && hour <= 7;
@@ -535,19 +544,38 @@ function SkyPreview({
       skyMid = `rgb(${Math.min(r+12,255)},${Math.min(g+12,255)},${Math.min(B+14,255)})`;
       skyBot = `rgb(${Math.max(r-15,0)},${Math.max(g-15,0)},${Math.max(B-12,0)})`;
     }
+  } else if (colorGroup === "warm") {
+    // Warm / Amber / Sunset — always orange-gold tones regardless of hour
+    if (isNight) {
+      skyTop = `rgb(${Math.round(r*0.06)},${Math.round(g*0.04)},${Math.round(B*0.02)})`;
+      skyMid = `rgb(${Math.round(r*0.14)},${Math.round(g*0.09)},${Math.round(B*0.04)})`;
+      skyBot = `rgb(5,3,1)`;
+    } else if (isDawn || isGolden) {
+      // Deep golden dawn / sunset — most vivid warm rendering
+      skyTop = `rgb(${Math.round(r*0.55)},${Math.round(g*0.4)},${Math.round(B*0.08)})`;
+      skyMid = `rgb(${r},${g},${Math.round(B*0.35)})`;
+      skyBot = `rgb(${Math.min(r+40,255)},${Math.round(g*0.55)},4)`;
+    } else {
+      // Daytime — warm amber sky
+      skyTop = `rgb(${Math.round(r*0.7)},${Math.round(g*0.58)},${Math.round(B*0.22)})`;
+      skyMid = `rgb(${r},${g},${Math.round(B*0.48)})`;
+      skyBot = `rgb(${Math.min(r+25,255)},${Math.min(g+18,255)},${Math.round(B*0.55)})`;
+    }
   } else if (colorGroup === "pink") {
     if (isNight) {
       skyTop = `rgb(${Math.round(r*0.12)},${Math.round(g*0.05)},${Math.round(B*0.12)})`;
       skyMid = `rgb(${Math.round(r*0.25)},${Math.round(g*0.12)},${Math.round(B*0.25)})`;
       skyBot = `rgb(8,4,10)`;
     } else if (isDawn || isGolden) {
-      skyTop = `rgb(${Math.round(r*0.6)},${Math.round(g*0.3)},${Math.round(B*0.55)})`;
+      // GTA 6-style sunset: deep magenta top → vivid pink mid → warm orange horizon
+      skyTop = `rgb(${Math.round(r*0.55)},${Math.round(g*0.22)},${Math.round(B*0.5)})`;
       skyMid = `rgb(${r},${g},${B})`;
-      skyBot = `rgb(100,30,55)`;
+      skyBot = `rgb(210,85,18)`;
     } else {
-      skyTop = `rgb(${r},${g},${B})`;
-      skyMid = `rgb(${Math.min(r+20,255)},${Math.min(g+18,255)},${Math.min(B+22,255)})`;
-      skyBot = `rgb(${Math.max(r-20,0)},${Math.max(g-15,0)},${Math.max(B-18,0)})`;
+      // Daytime pink — pure pink gradient, no hue drift
+      skyTop = `rgb(${Math.round(r*0.85)},${Math.round(g*0.7)},${Math.round(B*0.85)})`;
+      skyMid = `rgb(${r},${g},${B})`;
+      skyBot = `rgb(${Math.min(r+15,255)},${Math.min(g+12,255)},${Math.min(B+18,255)})`;
     }
   } else {
     // Blues
@@ -582,9 +610,13 @@ function SkyPreview({
   const siMul  = (sunIntensity ?? 60) / 60;
 
   const hGlow = isDawn
-    ? colorGroup === "pink" ? "rgba(255,80,140,0.5)" : "rgba(255,110,40,0.45)"
+    ? colorGroup === "pink"  ? "rgba(255,80,140,0.55)"
+      : colorGroup === "warm" ? "rgba(255,130,20,0.6)"
+      : "rgba(255,110,40,0.45)"
     : isGolden
-    ? colorGroup === "pink" ? "rgba(255,100,160,0.55)" : "rgba(255,140,30,0.55)"
+    ? colorGroup === "pink"  ? "rgba(255,90,150,0.65)"
+      : colorGroup === "warm" ? "rgba(255,155,10,0.65)"
+      : "rgba(255,140,30,0.55)"
     : isTwilight
     ? "rgba(220,80,20,0.3)"
     : "transparent";
@@ -592,7 +624,9 @@ function SkyPreview({
 
   const cloudCount = Math.min(Math.ceil(effectiveClouds / 14), 7);
   const cloudColor = colorGroup === "pink"
-    ? isNight ? "rgba(160,80,140,0.35)" : isGolden || isDawn ? "rgba(255,180,210,0.55)" : "rgba(240,180,220,0.55)"
+    ? isNight ? "rgba(160,80,140,0.35)" : isGolden || isDawn ? "rgba(255,160,200,0.6)" : "rgba(240,175,215,0.58)"
+    : colorGroup === "warm"
+    ? isNight ? "rgba(80,40,10,0.4)" : isGolden || isDawn ? "rgba(255,200,100,0.62)" : "rgba(255,215,130,0.55)"
     : colorGroup === "grey"
     ? isNight ? "rgba(60,62,70,0.45)" : "rgba(150,155,165,0.5)"
     : isNight ? "rgba(140,150,185,0.3)" : isGolden || isDawn ? "rgba(255,215,160,0.55)" : "rgba(255,255,255,0.58)";
@@ -654,7 +688,9 @@ function SkyPreview({
                 width: "3px",
                 height: "170%",
                 background: colorGroup === "pink"
-                  ? "linear-gradient(to bottom, rgba(255,180,230,0.7) 0%, transparent 60%)"
+                  ? "linear-gradient(to bottom, rgba(255,170,220,0.75) 0%, transparent 60%)"
+                  : colorGroup === "warm"
+                  ? "linear-gradient(to bottom, rgba(255,205,100,0.78) 0%, transparent 60%)"
                   : "linear-gradient(to bottom, rgba(255,252,200,0.65) 0%, transparent 60%)",
                 transform: `rotate(${(i - 3) * 9}deg)`,
                 transformOrigin: "top center",
@@ -671,10 +707,14 @@ function SkyPreview({
           style={{
             width: "24px", height: "24px",
             background: colorGroup === "pink"
-              ? isDawn || isGolden ? "#ffaacc" : "#ffe8f5"
+              ? isDawn || isGolden ? "#ffb0d0" : "#ffe8f5"
+              : colorGroup === "warm"
+              ? isDawn || isGolden ? "#ffdf50" : "#ffe888"
               : isDawn || isGolden ? "#ffcc44" : "#fffde6",
             boxShadow: colorGroup === "pink"
-              ? `0 0 ${38*siMul}px ${16*siMul}px rgba(255,120,180,0.5)`
+              ? `0 0 ${44*siMul}px ${20*siMul}px rgba(255,100,165,0.58)`
+              : colorGroup === "warm"
+              ? `0 0 ${46*siMul}px ${22*siMul}px rgba(255,165,20,0.65)`
               : isDawn || isGolden
               ? `0 0 ${40*siMul}px ${18*siMul}px rgba(255,170,30,0.55)`
               : `0 0 ${36*siMul}px ${14*siMul}px rgba(255,252,190,0.4)`,
@@ -692,14 +732,16 @@ function SkyPreview({
         </div>
       )}
 
-      {/* Aerial clouds */}
-      {aerialClouds && !freezeTime && (
+      {/* Aerial clouds — shown whenever aerialClouds is true (contrails/aerial are static, not weather-simulation) */}
+      {aerialClouds && (
         <div className="absolute inset-0 pointer-events-none"
           style={{ opacity: (aerialDensity ?? 60) / 100 * 0.42 }}>
           <div className="absolute inset-0"
             style={{
               background: colorGroup === "pink"
-                ? "radial-gradient(ellipse 55% 12% at 22% 18%, rgba(255,200,230,0.6) 0%, transparent 100%), radial-gradient(ellipse 45% 10% at 78% 26%, rgba(255,180,215,0.4) 0%, transparent 100%)"
+                ? "radial-gradient(ellipse 55% 12% at 22% 18%, rgba(255,195,225,0.65) 0%, transparent 100%), radial-gradient(ellipse 45% 10% at 78% 26%, rgba(255,175,215,0.45) 0%, transparent 100%)"
+                : colorGroup === "warm"
+                ? "radial-gradient(ellipse 55% 12% at 22% 18%, rgba(255,220,160,0.6) 0%, transparent 100%), radial-gradient(ellipse 45% 10% at 78% 25%, rgba(255,200,120,0.4) 0%, transparent 100%)"
                 : "radial-gradient(ellipse 55% 12% at 22% 18%, rgba(255,255,255,0.55) 0%, transparent 100%), radial-gradient(ellipse 45% 10% at 78% 25%, rgba(255,255,255,0.38) 0%, transparent 100%)",
               filter: "blur(3px)",
             }} />
@@ -724,11 +766,57 @@ function SkyPreview({
         </div>
       )}
 
-      {/* Jet streams */}
+      {/* Jet streams — thick, real contrail look. Scale count + width with slider. */}
       {effectiveJets > 4 && (
-        <div className="absolute pointer-events-none" style={{ top: "18%", left: "8%", right: "8%", opacity: effectiveJets / 100 * 0.72 }}>
-          <div style={{ height: "1px", background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.9) 30%, rgba(255,255,255,0.9) 70%, transparent 100%)", filter: "blur(0.5px)" }} />
-          <div style={{ height: "1px", width: "58%", marginLeft: "20%", marginTop: "16px", background: "linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent)", filter: "blur(0.6px)" }} />
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ opacity: 0.3 + (effectiveJets / 100) * 0.68 }}>
+          {/* Main thick contrail */}
+          <div style={{
+            position: "absolute", top: "17%", left: "5%", right: "5%",
+            height: "3px",
+            background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.92) 18%, rgba(255,255,255,0.95) 82%, transparent 100%)",
+            filter: "blur(1px)",
+          }} />
+          {/* Soft spread (thick look) */}
+          <div style={{
+            position: "absolute", top: "16.2%", left: "8%", right: "8%",
+            height: "8px",
+            background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.35) 20%, rgba(255,255,255,0.38) 80%, transparent 100%)",
+            filter: "blur(3.5px)",
+          }} />
+          {/* Second trail — only when jets ≥ 35 */}
+          {effectiveJets >= 35 && (
+            <>
+              <div style={{
+                position: "absolute", top: "30%", left: "18%", right: "12%",
+                height: "2.5px",
+                background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.8) 22%, rgba(255,255,255,0.85) 78%, transparent 100%)",
+                filter: "blur(1px)",
+              }} />
+              <div style={{
+                position: "absolute", top: "29.3%", left: "18%", right: "12%",
+                height: "7px",
+                background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.28) 22%, rgba(255,255,255,0.3) 78%, transparent 100%)",
+                filter: "blur(3px)",
+              }} />
+            </>
+          )}
+          {/* Third trail — only when jets ≥ 60 (thick setting) */}
+          {effectiveJets >= 60 && (
+            <>
+              <div style={{
+                position: "absolute", top: "44%", left: "28%", right: "5%",
+                height: "2px",
+                background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.7) 25%, rgba(255,255,255,0.72) 75%, transparent 100%)",
+                filter: "blur(0.8px)",
+              }} />
+              <div style={{
+                position: "absolute", top: "43.5%", left: "28%", right: "5%",
+                height: "6px",
+                background: "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.22) 25%, rgba(255,255,255,0.24) 75%, transparent 100%)",
+                filter: "blur(2.5px)",
+              }} />
+            </>
+          )}
         </div>
       )}
 
@@ -1437,6 +1525,26 @@ export default function FivemGraphics() {
                     <p className="text-[9px] uppercase tracking-wider text-pink-500/70 font-bold mb-2">Pinks</p>
                     <div className="flex flex-wrap gap-2">
                       {(["bubblegum","hot_pink","rose","magenta"] as SkyColorKey[]).map(k => (
+                        <button
+                          key={k}
+                          onClick={() => setSkyColorKey(k)}
+                          data-testid={`color-${k}`}
+                          title={SKY_COLORS[k].label}
+                          className={cn(
+                            "w-8 h-8 rounded-full border-2 transition-all",
+                            skyColorKey === k ? "border-white scale-110 shadow-lg" : "border-white/20 hover:border-white/50 hover:scale-105"
+                          )}
+                          style={{ background: SKY_COLORS[k].swatch }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Group: Warm / Sunset */}
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-amber-500/70 font-bold mb-2">Warm / Sunset</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(["warm_amber"] as SkyColorKey[]).map(k => (
                         <button
                           key={k}
                           onClick={() => setSkyColorKey(k)}
