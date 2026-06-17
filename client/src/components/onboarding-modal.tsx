@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Shield, Zap, Cpu, Search, ChevronRight, X, Terminal, CheckCircle2 } from "lucide-react";
 import { getScannedInfo } from "@/hooks/use-hardware-info";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ONBOARDING_KEY = "optigods_onboarded_v1";
 
@@ -41,7 +42,7 @@ export function OnboardingModal() {
     const scanned = getScannedInfo();
     const isAdmin = window.location.pathname.startsWith("/admin");
     const isMobile = window.innerWidth < 768;
-    if (!already && !scanned && !isAdmin && !isMobile) {
+    if (!already && !scanned && !isAdmin && !isMobile && !isNative()) {
       const t = setTimeout(() => setOpen(true), 800);
       return () => clearTimeout(t);
     }

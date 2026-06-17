@@ -15,9 +15,11 @@ import {
   envInfo,
   startProBalance,
   showMainWindow,
+  scanHardware,
   isNative,
   type NativeEnvInfo,
 } from "@/lib/tauri-bridge";
+import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 
 export interface NativeBootResult {
   native: boolean;
@@ -69,6 +71,20 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       await withTimeout(startProBalance(), 5_000, "startProBalance");
     } catch (err) {
       console.warn("[native] startProBalance failed", err);
+    }
+
+    // Step 3 — silent auto-scan if no hardware data exists yet.
+    // Replaces the web onboarding wizard entirely in the .exe.
+    if (!getScannedInfo()) {
+      try {
+        const hw = await withTimeout(scanHardware(), 10_000, "autoScan");
+        if (hw) {
+          saveScannedInfo({ GPU: hw.gpu, CPU: hw.cpu, RAM_GB: hw.ram_gb ?? undefined });
+          console.info("[native] Auto-scan complete — hardware stored silently");
+        }
+      } catch (err) {
+        console.warn("[native] Auto-scan failed (non-fatal)", err);
+      }
     }
 
     return { native: true, env };
