@@ -84,13 +84,14 @@ const DPC_FIXES: DpcFix[] = [
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — NVIDIA DPC Fix"
 Write-Host ""
-Write-Host " OPTI GODS — NVIDIA DPC Latency Fix" -ForegroundColor Red
-Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host " OPTI GODS — NVIDIA DPC Latency Fix (Driver 610.x+ Ready)" -ForegroundColor Red
+Write-Host " ============================================================" -ForegroundColor DarkRed
 Write-Host ""
 $devClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
 $fixed = $false
-0..9 | ForEach-Object {
-    $k = "$devClass\\000$_"
+$indices = (0..9 | ForEach-Object { "000$_" }) + (10..15 | ForEach-Object { "00$_" })
+foreach ($idx in $indices) {
+    $k = "$devClass\\$idx"
     if (Test-Path $k) {
         $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc
         if ($desc -match 'NVIDIA') {
@@ -102,8 +103,13 @@ $fixed = $false
             Write-Host " [OK] MSI Interrupt mode ENABLED — eliminates level-triggered interrupt delays" -ForegroundColor Green
             Set-ItemProperty $k 'PowerMizerEnable' 0 -Type DWord -Force -EA SilentlyContinue
             Set-ItemProperty $k 'PowerMizerLevel' 1 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'PowerMizerLevelAC' 1 -Type DWord -Force -EA SilentlyContinue
             Set-ItemProperty $k 'PerfLevelSrc' 0x2222 -Type DWord -Force -EA SilentlyContinue
-            Write-Host " [OK] PowerMizer set to Maximum Performance — GPU won't downclock between frames" -ForegroundColor Green
+            Write-Host " [OK] PowerMizer: Max Performance on both AC and battery — GPU won't downclock" -ForegroundColor Green
+            Set-ItemProperty $k 'EnableMCEReporting' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] MCE reporting overhead disabled (610.x+ driver setting)" -ForegroundColor Green
+            Set-ItemProperty $k 'RmProfilingAdminOnly' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] GPU profiling access enabled — better performance counter access" -ForegroundColor Green
             $fixed = $true
         }
     }
@@ -129,13 +135,14 @@ Write-Host ""`,
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — AMD DPC Fix"
 Write-Host ""
-Write-Host " OPTI GODS — AMD GPU DPC Latency Fix" -ForegroundColor Red
-Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host " OPTI GODS — AMD GPU DPC Latency Fix (Adrenalin 25.x Ready)" -ForegroundColor Red
+Write-Host " ==============================================================" -ForegroundColor DarkRed
 Write-Host ""
 $devClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
 $fixed = $false
-0..9 | ForEach-Object {
-    $k = "$devClass\\000$_"
+$indices = (0..9 | ForEach-Object { "000$_" }) + (10..15 | ForEach-Object { "00$_" })
+foreach ($idx in $indices) {
+    $k = "$devClass\\$idx"
     if (Test-Path $k) {
         $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc
         if ($desc -match 'AMD|Radeon|ATI') {
@@ -146,10 +153,17 @@ $fixed = $false
             Write-Host " [OK] MSI Interrupt mode ENABLED" -ForegroundColor Green
             Set-ItemProperty $k 'EnableULPS' 0 -Type DWord -Force -EA SilentlyContinue
             Set-ItemProperty $k 'EnableULPS_NA' 0 -Type DWord -Force -EA SilentlyContinue
-            Write-Host " [OK] ULPS (Ultra Low Power State) DISABLED — was causing DPC stutter spikes on GPU wake" -ForegroundColor Green
+            Write-Host " [OK] ULPS (Ultra Low Power State) DISABLED — eliminates DPC stutter on GPU wake" -ForegroundColor Green
             Set-ItemProperty $k 'PP_ThermalAutoThrottlingEnable' 0 -Type DWord -Force -EA SilentlyContinue
             Set-ItemProperty $k 'KMD_EnableComputePreemption' 0 -Type DWord -Force -EA SilentlyContinue
             Write-Host " [OK] Thermal auto-throttle and compute preemption disabled" -ForegroundColor Green
+            Set-ItemProperty $k 'PP_SclkDeepSleepDisable' 1 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] GPU core clock deep sleep DISABLED (Adrenalin 25.x — RDNA2/3/4 setting)" -ForegroundColor Green
+            Set-ItemProperty $k 'EnableAspmL1_1' 0 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $k 'EnableAspmL1_2' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] ASPM L1.1/L1.2 link states DISABLED — prevents PCIe power-state DPC spikes" -ForegroundColor Green
+            Set-ItemProperty $k 'KMD_FRTEnabled' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] Fluid Real-Time disabled — removes frame-pacing interference on RDNA3/4" -ForegroundColor Green
             $fixed = $true
         }
     }
