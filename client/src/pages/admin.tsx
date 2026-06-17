@@ -1428,10 +1428,14 @@ function AdminPresetGenerator({
       cpuLabel: cpu.cpuLabel, cpuCores: cores, cpuPhysicalCores: physCores,
       ramGB: ram, ramLabel, ramNote: "",
       isNvidia, isAmdGpu, isAmdApu, isAMD, isIntel, isLaptop,
+      isAmd: isAMD,
       nvidiaIsRTX, nvidiaIsLowEnd,
       cpuBrand: cpu.brand, isRyzen: cpu.isRyzen, isIntelCore: cpu.isIntelCore,
       cpuGeneration: cpu.generation,
       resolution: "1920x1080",
+      gpus: [],
+      hasIntegratedGpu: isIntel || isAmdApu,
+      isHybridGpu: false,
     } as HardwareInfo;
   };
 
@@ -1504,37 +1508,33 @@ function AdminPresetGenerator({
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
-        body: JSON.stringify({
-          hardware: {
-            gpuVendor,
-            gpuName,
-            cpuBrand: parseCpuModel(cpuModel).brand,
-            cpuLabel: cpuModel,
-            cpuCores: actualThreads > 0 ? actualThreads : parseCpuModel(cpuModel).threads,
-            ramGB: parseInt(ramGB) || 16,
-            osVersion,
-            isLaptop,
-            hasDiscreteGpu: gpuVendor === "nvidia" || gpuVendor === "amd",
-          },
-          goal: "balanced",
-          optInFlags: includeAllExpert ? [] : Array.from(adminOptInIds),
-        }),
-      });
-      if (!safePresetRes.ok) throw new Error("Safe preset build failed");
-      const preset = (await safePresetRes.json()) as SafePresetResponse;
-      setSafePreset(preset);
+      const fakeHW = buildFakeHW();
+      const fakeOS = buildFakeOS();
 
+      // computeSmartRecs sweeps ALL TWEAK_REGISTRY entries via its catch-all pass,
+      // giving the most comprehensive hardware-gated preset possible (600+ on some rigs).
+      const recs = computeSmartRecs(fakeHW, fakeOS);
       const tweakMap: Record<string, boolean> = {};
-      preset.core.forEach(id => { tweakMap[id] = true; });
-      // When includeAllExpert is on, include ALL expert tweaks (lazy-user full preset)
+      recs.ids.forEach(id => { tweakMap[id] = true; });
+
+      // Include expert / risk tweaks when the admin "include all expert" toggle is on.
       if (includeAllExpert) {
-        preset.expert.forEach(id => { tweakMap[id] = true; });
+        const expertCandidates = [
+          "DisableMemoryCompression", "MemDisableCompression", "DisablePagefileEncryption",
+          "DisableDefender", "SysHypervisorOff",
+          ...(fakeOS.isWindows11 ? ["Win11DisableVBS", "Win11DisableHVCI"] : []),
+          ...(fakeHW.isLaptop && fakeHW.isIntelCore ? ["Lap_Intel_DisableECores"] : []),
+        ];
+        expertCandidates.forEach(id => { tweakMap[id] = true; });
+        // Also pull any expert IDs from the V2.2 safePreset preview if it was loaded.
+        if (safePreset) safePreset.expert.forEach(id => { tweakMap[id] = true; });
       } else {
-        preset.expert.forEach(id => { if (adminOptInIds.has(id)) tweakMap[id] = true; });
+        adminOptInIds.forEach(id => { tweakMap[id] = true; });
       }
+
+      // Belt-and-suspenders: merge safePreset core so server-resolved IDs aren't missed.
+      if (safePreset) safePreset.core.forEach(id => { tweakMap[id] = true; });
+
       const tweakIds = Object.keys(tweakMap);
 
       const res = await fetch(apiUrl("/api/script/download-bat"), {
@@ -1554,7 +1554,7 @@ function AdminPresetGenerator({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setGenerated({ name: preset.profile, tweakCount: tweakIds.length });
+      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
       toast({
         title: `Preset generated — ${tweakIds.length} tweaks`,
         description: `Send the .bat file to the user — they just double-click it.`,
