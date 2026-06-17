@@ -24,6 +24,7 @@ struct Win32VideoController {
 struct Win32PhysicalMemory {
     capacity: Option<u64>,
     speed: Option<u32>,
+    configured_clock_speed: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -80,7 +81,7 @@ pub fn scan() -> Result<HardwareScan> {
         .raw_query("SELECT Name, AdapterRAM FROM Win32_VideoController")
         .context("query Win32_VideoController")?;
     let memory: Vec<Win32PhysicalMemory> = wmi
-        .raw_query("SELECT Capacity, Speed FROM Win32_PhysicalMemory")
+        .raw_query("SELECT Capacity, Speed, ConfiguredClockSpeed FROM Win32_PhysicalMemory")
         .context("query Win32_PhysicalMemory")?;
     let boards: Vec<Win32BaseBoard> = wmi
         .raw_query("SELECT Manufacturer, Product FROM Win32_BaseBoard")
@@ -158,7 +159,9 @@ pub fn scan() -> Result<HardwareScan> {
     } else {
         None
     };
-    let ram_mhz = memory.iter().filter_map(|m| m.speed).max();
+    let ram_mhz = memory.iter().map(|m| {
+        m.speed.unwrap_or(0).max(m.configured_clock_speed.unwrap_or(0))
+    }).filter(|&v| v > 0).max();
 
     let motherboard = boards.first().map(|b| {
         format!(
