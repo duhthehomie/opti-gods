@@ -73,16 +73,15 @@ const SAFE_TWEAKS = [
 ];
 
 // ── Max FPS Gaming ─────────────────────────────────────────────────────────
-// Everything Safe plus aggressive timer, full service list, COD/FiveM/Fortnite packs, startup cleanup.
+// Everything Safe plus power-throttle removal, full service list, COD/FiveM/Fortnite packs, startup cleanup.
 const MAX_FPS_TWEAKS = [
   ...SAFE_TWEAKS,
-  // Aggressive timer & power throttle removal
-  "SetTimerResolution", "DisableDynamicTick",
+  // Power throttle removal
   "DisablePowerThrottling", "DisablePowerThrottlingAdv",
   // Hardware interrupts
   "DisableUSBSuspend",
   // Network full stack
-  "OptimizeTCP", "EnableTCPAutoTuning", "DisableIPv6",
+  "OptimizeTCP", "EnableTCPAutoTuning",
   // Visual & search overhead
   "DisableAnimations", "ServiceWSearch", "DisableSearchIndexer",
   // Windows background services — individually safe, collectively frees significant CPU/RAM
@@ -94,7 +93,7 @@ const MAX_FPS_TWEAKS = [
   "WinTitusServicesManual", "WinTitusPosh7Telemetry", "WinTitusShowHidden",
   "WinTitusWPBT", "WinTitusRazerBlock",
   // Memory deep tuning
-  "DisablePagefileEncryption", "DisablePrefetch", "MemFixedPagefile",
+  "DisablePrefetch", "MemFixedPagefile",
   // FiveM full pack (no-op if not installed)
   "FiveMHighPriority", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMRenderingBoost",
   "FiveMGPUPriorityStack", "FiveMDisableMPO", "FiveMReduceNPCDensity", "FiveMCommandLineTweaks",
@@ -107,7 +106,7 @@ const MAX_FPS_TWEAKS = [
   "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodDisableXboxCapture",
   "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
   "CodTdrDelay", "CodFramePacing", "CodPagefileOptimize", "CodShaderCacheClear",
-  "CodDisableHAGS", "CodBattlenetOptimize", "CodMemPriority",
+  "CodBattlenetOptimize", "CodMemPriority",
   // Spotify full pack
   "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
   // Fortnite FPS pack (no-op if not installed)
@@ -146,8 +145,6 @@ const COMPETITIVE_TWEAKS = [
   "DiscordLowPriority", "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
   "DiscordDisableVAD", "DiscordDisableClips", "DiscordDisableUpdateCheck",
   "DiscordDisableCrashHandler", "DiscordDisableAnimations",
-  // Memory — safe on 16 GB+ systems; script auto-warns on low-RAM rigs
-  "DisableMemoryCompression",
 ];
 
 // ── Streamer Mode ──────────────────────────────────────────────────────────
@@ -155,7 +152,7 @@ const COMPETITIVE_TWEAKS = [
 // Deliberately OMITS DisableXboxGameBar / DisableGameDVR — some capture setups need them.
 const STREAMER_TWEAKS = [
   // CPU scheduling — balanced between game priority and encoder threads
-  "Win32PrioritySeparation", "SetResponsiveness", "SetTimerResolution", "GameModeTweaks",
+  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
   // Power — sustained high clocks for both game + encoder (no throttling)
   "SetHighPerformancePlan", "DisableCoreParking",
   "DisablePowerThrottling", "DisablePowerThrottlingAdv",
