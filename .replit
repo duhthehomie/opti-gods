@@ -50,9 +50,9 @@ STRIPE_SECRET_KEY = "sk_live_51TDwlYLcJlSyMFAkRtrR4AOBELHEQyWNuowvjBo09lFUWJOpMk
 STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
 SITE_URL = "https://optigods.com"
 DISCORD_REDIRECT_URI = "https://optigods.com/api/auth/discord/callback"
+DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v3.1.2/OptiGods-Setup-3.1.2.exe"
 
 [userenv.production]
-DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v2.3.7/OptiGods-Setup-2.3.7.exe"
 
 [postMerge]
 path = "scripts/post-merge.sh"
