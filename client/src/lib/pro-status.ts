@@ -155,9 +155,22 @@ export function useProStatus(): boolean {
       attemptLegacyMigration();
     }
 
+    // Re-ping the server every 30s (same cadence as the GET refetch) so that
+    // lastCheckedAt stays fresh and the admin "online" panel never goes stale.
+    // Without this, verifyLegacyWithServer only fires once on mount.
+    const pingInterval = getStoredToken()
+      ? setInterval(() => {
+          _legacyVerifyPromise = verifyLegacyWithServer().then(valid => {
+            _legacyVerified = valid;
+            return valid;
+          });
+        }, 30_000)
+      : null;
+
     return () => {
       window.removeEventListener(PRO_EVENT, update);
       window.removeEventListener("storage", update);
+      if (pingInterval) clearInterval(pingInterval);
     };
   }, [entitled]);
 
