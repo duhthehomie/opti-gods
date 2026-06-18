@@ -3860,10 +3860,8 @@ export default function Admin() {
             <Zap className="w-3 h-3" /> paypal.me/accountslg
           </a>
           <button onClick={() => {
-            fetch(apiUrl("/api/create-checkout"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
-              .then(r => r.json())
-              .then(d => { if (d.url) { if (isNative()) { openExternal(d.url); } else { window.location.href = d.url; } } })
-              .catch(() => alert("Stripe checkout failed"));
+            const link = "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
+            if (isNative()) { openExternal(link); } else { window.open(link, "_blank"); }
           }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">
             <CreditCard className="w-3 h-3" /> Stripe (Card)

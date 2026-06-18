@@ -107,11 +107,11 @@ export default function ProPage() {
               <span className="text-white font-mono text-xs">{import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg"}</span>
             </div>
 
-            {/* Card (Stripe) — opens ProPaymentDialog directly */}
+            {/* Card (Stripe) — direct payment link */}
             <button
               data-testid="button-pro-page-stripe"
               type="button"
-              onClick={() => setPaymentOpen(true)}
+              onClick={() => window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank")}
               className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-white/[0.03] transition-colors group"
             >
               <span className="flex items-center gap-2 text-zinc-400 font-semibold group-hover:text-white transition-colors">

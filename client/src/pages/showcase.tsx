@@ -9,7 +9,7 @@ import { apiUrl } from "@/lib/api-base";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG || "$my1ik";
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg";
-const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
+
 
 const RESULTS = [
   {
@@ -113,29 +113,8 @@ const STEPS = [
 ];
 
 function ShowcaseStripeCard() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handlePay = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl("/api/create-checkout"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        setError("Couldn't start checkout. Try again.");
-      }
-    } catch {
-      setError("Connection error. Try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handlePay = () => {
+    window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank");
   };
 
   return (
@@ -147,13 +126,11 @@ function ShowcaseStripeCard() {
       <button
         data-testid="button-stripe-showcase"
         onClick={handlePay}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-60 text-white text-sm font-bold transition-colors"
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold transition-colors"
       >
         <CreditCard className="w-3.5 h-3.5" />
-        {loading ? "Loading…" : "Pay with Card"}
+        Pay with Card
       </button>
-      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
     </div>
   );
 }
@@ -294,8 +271,8 @@ export default function Showcase() {
               </div>
             </div>
 
-            {/* Stripe — shown when VITE_STRIPE_ENABLED=true */}
-            {STRIPE_ENABLED && <ShowcaseStripeCard />}
+            {/* Stripe — always shown */}
+            <ShowcaseStripeCard />
           </div>
 
           {/* Discord CTA */}

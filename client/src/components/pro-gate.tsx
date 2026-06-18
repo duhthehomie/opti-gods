@@ -219,49 +219,13 @@ export function ProPaymentDialog({
     };
   }, []);
 
-  const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
-    if (tier === "manual") setManualLoading(true); else setStripeLoading(true);
-    const activeDiscount = tier === "pro" ? discountData : manualDiscountData;
-    try {
-      const res = await fetch(apiUrl("/api/create-checkout"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, ...(activeDiscount ? { discountCode: activeDiscount.code } : {}) }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        if (isNative() && data.sessionId) {
-          // Native (.exe) mode: open Stripe in the system browser, then poll
-          // the server until the payment completes and activate Pro here.
-          await openExternal(data.url);
-          setNativeSessionId(data.sessionId);
-          setAwaitingNativePayment(true);
-          if (nativePollRef.current) clearInterval(nativePollRef.current);
-          nativePollRef.current = setInterval(async () => {
-            try {
-              const vRes = await fetch(apiUrl(`/api/verify-payment?session_id=${encodeURIComponent(data.sessionId)}`));
-              const vData = await vRes.json();
-              if (vData.paid) {
-                clearInterval(nativePollRef.current!);
-                nativePollRef.current = null;
-                setAwaitingNativePayment(false);
-                if (vData.sessionToken) setProSession(vData.sessionToken);
-                setProStatus(true);
-                fireCelebration();
-                onOpenChange(false);
-              }
-            } catch { /* keep polling */ }
-          }, 3000);
-        } else {
-          window.location.href = data.url;
-        }
-      } else {
-        setError("Failed to create checkout session. Please try again.");
-      }
-    } catch {
-      setError("Connection error. Please try again.");
-    } finally {
-      if (tier === "manual") setManualLoading(false); else setStripeLoading(false);
+  const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
+
+  const handleStripeCheckout = (_tier: "pro" | "manual" = "pro") => {
+    if (isNative()) {
+      openExternal(STRIPE_PAYMENT_LINK);
+    } else {
+      window.open(STRIPE_PAYMENT_LINK, "_blank");
     }
   };
 

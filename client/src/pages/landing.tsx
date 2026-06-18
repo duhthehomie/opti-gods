@@ -428,12 +428,15 @@ function LandingDesktop() {
               </a>
             </div>
 
-            {STRIPE_ENABLED && (
-              <p className="text-[11px] text-zinc-500 text-center pt-2 flex items-center justify-center gap-1.5">
-                <CreditCard className="w-3 h-3" />
-                Card payments processed by Stripe via the Unlock button above.
-              </p>
-            )}
+            <a
+              href="https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400"
+              target="_blank"
+              rel="noreferrer"
+              data-testid="link-landing-stripe"
+              className="flex items-center justify-center gap-2 py-3 rounded-lg bg-red-600/10 border border-red-500/30 hover:bg-red-600/20 text-red-400 text-xs font-bold transition-colors"
+            >
+              <CreditCard className="w-4 h-4" /> Pay with Card — Stripe
+            </a>
           </div>
         </motion.div>
       </section>
