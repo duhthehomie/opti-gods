@@ -3162,7 +3162,12 @@ Start-Sleep 2
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
     const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-    const discordUserId: string | undefined = req.session?.userId;
+    // Resolve Discord ID from cookie session (web) OR native bearer token (.exe)
+    let discordUserId: string | null = req.session?.userId ?? null;
+    if (!discordUserId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") discordUserId = await validateNativeToken(nativeToken);
+    }
     const valid = await storage.verifyProSession(sessionToken, ip, discordUserId);
     if (valid) {
       // Fire-and-forget: log IP if it's new for this code (used for code sharing detection)
