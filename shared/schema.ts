@@ -111,6 +111,7 @@ export const proSessions = pgTable("pro_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
   lastCheckedAt: timestamp("last_checked_at").defaultNow(),
   ipAddress: text("ip_address"), // last seen IP address
+  discordUserId: text("discord_user_id"), // stamped on verify when Discord session is active
 });
 export type ProSession = typeof proSessions.$inferSelect;
 

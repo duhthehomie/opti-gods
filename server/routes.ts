@@ -3162,7 +3162,8 @@ Start-Sleep 2
     const { sessionToken } = req.body || {};
     if (!sessionToken || typeof sessionToken !== "string") return res.json({ valid: false });
     const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-    const valid = await storage.verifyProSession(sessionToken, ip);
+    const discordUserId: string | undefined = req.session?.userId;
+    const valid = await storage.verifyProSession(sessionToken, ip, discordUserId);
     if (valid) {
       // Fire-and-forget: log IP if it's new for this code (used for code sharing detection)
       const sessions = await storage.getAllProSessions();
@@ -3336,16 +3337,20 @@ Start-Sleep 2
       return {
         ...s,
         email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
-        // Discord: prefer email_requests source, fall back to entitlements link
-        discordUsername: s.codeRef
-          ? (codeValueToDiscordFromEmail[s.codeRef] ?? codeValueToDiscordFromEnt[s.codeRef] ?? null)
-          : null,
-        discordId: s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null,
+        discordId: s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null),
         discordAvatarUrl: (() => {
+          // Priority: direct discordUserId stamp on session row → code-notes lookup → fallback by id
+          const did = s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null);
           const byCode = s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null;
-          if (byCode) return byCode;
-          const did = s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null;
-          return did ? (discordIdToAvatarUrl[did] ?? null) : null;
+          return byCode ?? (did ? (discordIdToAvatarUrl[did] ?? null) : null);
+        })(),
+        discordUsername: (() => {
+          const byEmail = s.codeRef ? (codeValueToDiscordFromEmail[s.codeRef] ?? null) : null;
+          const byEnt = s.codeRef ? (codeValueToDiscordFromEnt[s.codeRef] ?? null) : null;
+          const did = s.discordUserId ?? null;
+          // If session has a direct discordUserId stamp, look up username from proUsers
+          const byId = did ? (proUsers.find(u => u.discordUserId === did)?.username ?? null) : null;
+          return byEmail ?? byEnt ?? byId;
         })(),
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
         tokenMasked: s.sessionToken.slice(0, 8) + "…",
