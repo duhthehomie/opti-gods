@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api-base";
+import { isNative, openExternal } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import type { HardwareInfo } from "@/hooks/use-hardware-info";
 import type { OsInfo } from "@/hooks/use-os-detection";
@@ -3861,7 +3862,7 @@ export default function Admin() {
           <button onClick={() => {
             fetch(apiUrl("/api/create-checkout"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
               .then(r => r.json())
-              .then(d => { if (d.url) window.location.href = d.url; })
+              .then(d => { if (d.url) { if (isNative()) { openExternal(d.url); } else { window.location.href = d.url; } } })
               .catch(() => alert("Stripe checkout failed"));
           }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">

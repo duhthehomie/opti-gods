@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
-import { Zap, Trophy, TrendingUp, Star, Cpu, Monitor, Wifi, HardDrive, AlertTriangle, CheckCircle, ExternalLink, Copy } from "lucide-react";
+import { Zap, Trophy, TrendingUp, Star, Cpu, Monitor, Wifi, HardDrive, AlertTriangle, CheckCircle, ExternalLink, Copy, CreditCard } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api-base";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG || "$my1ik";
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg";
+const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
 
 const RESULTS = [
   {
@@ -109,6 +111,52 @@ const STEPS = [
     desc: "Paste your access code in the app — all 580+ tweaks unlocked instantly.",
   },
 ];
+
+function ShowcaseStripeCard() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePay = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl("/api/create-checkout"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError("Couldn't start checkout. Try again.");
+      }
+    } catch {
+      setError("Connection error. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-white/8 bg-zinc-900/70 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Card</span>
+        <span className="text-xs font-black text-rose-400">Stripe — instant</span>
+      </div>
+      <button
+        data-testid="button-stripe-showcase"
+        onClick={handlePay}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-60 text-white text-sm font-bold transition-colors"
+      >
+        <CreditCard className="w-3.5 h-3.5" />
+        {loading ? "Loading…" : "Pay with Card"}
+      </button>
+      {error && <p className="text-[11px] text-red-400 mt-1.5">{error}</p>}
+    </div>
+  );
+}
 
 export default function Showcase() {
   const [copied, setCopied] = useState<"cashapp" | "paypal" | null>(null);
@@ -245,6 +293,9 @@ export default function Showcase() {
                 </button>
               </div>
             </div>
+
+            {/* Stripe — shown when VITE_STRIPE_ENABLED=true */}
+            {STRIPE_ENABLED && <ShowcaseStripeCard />}
           </div>
 
           {/* Discord CTA */}
