@@ -5144,20 +5144,20 @@ export default function Admin() {
                               className="flex items-center gap-1.5 bg-emerald-950/30 border border-emerald-500/20 rounded-lg px-2 py-1"
                               title={`Last seen: ${minutesAgo === 0 ? "just now" : `${minutesAgo}m ago`}${s.ipCity ? ` · ${[s.ipCity, s.ipCountry].filter(Boolean).join(", ")}` : ""}`}
                             >
-                              {s.discordAvatarUrl ? (
-                                <img
-                                  src={s.discordAvatarUrl}
-                                  alt={name}
-                                  className="w-5 h-5 rounded-full ring-1 ring-emerald-500/30 shrink-0"
-                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                                />
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
-                                  <span className="text-[8px] text-zinc-500 font-bold uppercase">
-                                    {name.charAt(0)}
-                                  </span>
+                              {/* Avatar: letter fallback always rendered underneath; img overlays it and hides on error */}
+                              <div className="relative w-5 h-5 shrink-0">
+                                <div className="absolute inset-0 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                                  <span className="text-[8px] text-zinc-500 font-bold uppercase">{name.charAt(0)}</span>
                                 </div>
-                              )}
+                                {s.discordAvatarUrl && (
+                                  <img
+                                    src={s.discordAvatarUrl}
+                                    alt={name}
+                                    className="absolute inset-0 w-5 h-5 rounded-full ring-1 ring-emerald-500/30 object-cover"
+                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                )}
+                              </div>
                               <span className="text-[11px] text-emerald-300 font-semibold max-w-[120px] truncate">{name}</span>
                               {minutesAgo !== null && (
                                 <span className="text-[9px] text-emerald-600 shrink-0">
