@@ -1,4 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { loginWithDiscord } from "@/hooks/use-auth";
+import { apiUrl } from "@/lib/api-base";
 import { zipSync, strToU8 } from "fflate";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Slider } from "@/components/ui/slider";
@@ -929,6 +932,24 @@ const RESHADE_PRESETS = [
 type GateState = "checking" | "granted" | "not_logged_in" | "not_granted";
 
 function DiscordGate() {
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (isNative()) {
+        const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        const { clientId } = await cfgRes.json();
+        await discordLogin(clientId);
+      } else {
+        loginWithDiscord();
+      }
+    } catch {
+      setLoading(false);
+    }
+  }, [loading]);
+
   return (
     <div className="min-h-[70vh] flex items-center justify-center">
       <div className="w-80 rounded-2xl border border-red-500/20 bg-[#0a0a0a] shadow-2xl shadow-red-900/20 p-8 text-center">
@@ -942,13 +963,14 @@ function DiscordGate() {
           You must be logged in with the Discord account that has been granted access.
           If you believe you have access, log out and log back in via Discord.
         </p>
-        <a
-          href="/api/auth/discord"
-          data-testid="link-graphics-discord-login"
-          className="block w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold rounded-xl py-2.5 text-sm transition-colors"
+        <button
+          data-testid="button-graphics-discord-login"
+          onClick={handleLogin}
+          disabled={loading}
+          className="block w-full bg-[#5865F2] hover:bg-[#4752c4] disabled:opacity-60 text-white font-bold rounded-xl py-2.5 text-sm transition-colors"
         >
-          Log in with Discord
-        </a>
+          {loading ? "Opening Discord…" : "Log in with Discord"}
+        </button>
       </div>
     </div>
   );
