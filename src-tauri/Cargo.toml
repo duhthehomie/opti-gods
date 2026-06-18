@@ -1,6 +1,6 @@
 [package]
 name = "opti-gods"
-version = "3.1.1"
+version = "3.1.4"
 description = "Opti Gods — Windows PC optimizer (Tauri shell)"
 authors = ["leaq"]
 license = "Proprietary"
