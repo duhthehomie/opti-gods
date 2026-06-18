@@ -124,7 +124,7 @@ export function useProStatus(): boolean {
   const { data } = useQuery<ProStatusResponse>({
     queryKey: PRO_STATUS_KEY,
     staleTime: 60_000,
-    refetchInterval: 3 * 60_000, // ping every 3 min → keeps lastCheckedAt fresh for admin "online" panel
+    refetchInterval: 30_000, // ping every 30s → keeps lastCheckedAt fresh for admin "online" panel
   });
   const entitled = !!data?.isPro;
   // If the logged-in user was explicitly revoked by an admin, we hard-deny
