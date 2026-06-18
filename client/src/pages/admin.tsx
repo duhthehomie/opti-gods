@@ -5040,9 +5040,9 @@ export default function Admin() {
         {tab === "sessions" && (() => {
           const sessions = sessionsQuery.data ?? [];
           const now = Date.now();
-          // "Online" = last ping within 15 min (pro-status check fires on every page load + navigate)
+          // "Online" = last ping within 2 hours (covers .exe users who ping once on open)
           const isOnline = (s: { lastCheckedAt: string | null }) =>
-            s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 15 * 60_000 : false;
+            s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 2 * 60 * 60_000 : false;
           const onlineCount = sessions.filter(isOnline).length;
 
           // Orphan sessions: codeRef doesn't start with admin-/friend: AND doesn't match any real code
