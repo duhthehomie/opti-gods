@@ -3279,13 +3279,17 @@ Start-Sleep 2
   // Admin — list all active Pro sessions, enriched with email, Discord, and IP location
   app.get('/api/admin/sessions', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [sessions, emailReqs, codes, proUsers, allIpLogs] = await Promise.all([
+    const [sessions, emailReqs, codes, proUsers, allIpLogs, allDiscordUsers] = await Promise.all([
       storage.getAllProSessions(),
       storage.getEmailRequests(),
       storage.getAllCodes(),
       storage.listProUsers(),
       storage.getIpLogs(),
+      storage.listDiscordUsers(),
     ]);
+    // Direct Discord ID → user map (covers ALL logged-in Discord users, including admin with no entitlement row)
+    const discordUserById: Record<string, { username: string; globalName: string | null; avatarUrl: string | null }> = {};
+    for (const u of allDiscordUsers) discordUserById[u.discordId] = u;
 
     // Build codeRef → email from email_requests
     const codeValueToEmail: Record<string, string> = {};
@@ -3344,17 +3348,17 @@ Start-Sleep 2
         email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
         discordId: s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null),
         discordAvatarUrl: (() => {
-          // Priority: direct discordUserId stamp on session row → code-notes lookup → fallback by id
           const did = s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null);
           const byCode = s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null;
-          return byCode ?? (did ? (discordIdToAvatarUrl[did] ?? null) : null);
+          // Final fallback: direct users table lookup (catches admin + any Discord-logged-in user)
+          return byCode ?? (did ? (discordIdToAvatarUrl[did] ?? discordUserById[did]?.avatarUrl ?? null) : null);
         })(),
         discordUsername: (() => {
           const byEmail = s.codeRef ? (codeValueToDiscordFromEmail[s.codeRef] ?? null) : null;
           const byEnt = s.codeRef ? (codeValueToDiscordFromEnt[s.codeRef] ?? null) : null;
           const did = s.discordUserId ?? null;
-          // If session has a direct discordUserId stamp, look up username from proUsers
-          const byId = did ? (proUsers.find(u => u.discordUserId === did)?.username ?? null) : null;
+          // Final fallback: direct users table lookup (covers admin with no entitlement row)
+          const byId = did ? (discordUserById[did]?.globalName ?? discordUserById[did]?.username ?? null) : null;
           return byEmail ?? byEnt ?? byId;
         })(),
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,

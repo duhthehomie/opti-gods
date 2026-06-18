@@ -138,6 +138,7 @@ export interface IStorage {
   // gating (requirePaidPro, GET /api/pro/status) to avoid full-table scans.
   getProEntitlement(discordUserId: string): Promise<ProEntitlement | null>;
   listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
+  listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null }[]>;
   // Native bearer tokens — persisted so .exe users survive server restarts
   persistNativeToken(token: string, userId: string, expiresAt: number): Promise<void>;
   lookupNativeToken(token: string): Promise<{ userId: string; expiresAt: number } | null>;
@@ -1130,6 +1131,15 @@ export class DatabaseStorage implements IStorage {
     const rows = await db.select().from(proEntitlements)
       .where(eq(proEntitlements.discordUserId, discordUserId));
     return rows[0] ?? null;
+  }
+
+  async listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null }[]> {
+    return db.select({
+      discordId: users.discordId,
+      username: users.username,
+      globalName: users.globalName,
+      avatarUrl: users.avatarUrl,
+    }).from(users);
   }
 
   async listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]> {
