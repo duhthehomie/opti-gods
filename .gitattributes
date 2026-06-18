@@ -20,3 +20,5 @@ attached_assets/OptiGods-Setup-3.0.0_1781072834814.exe filter=lfs diff=lfs merge
 attached_assets/opti-gods_1781237964111.exe filter=lfs diff=lfs merge=lfs -text
 attached_assets/OptiGods-Setup-3.0.0_1781569803090.exe filter=lfs diff=lfs merge=lfs -text
 downloads/OptiGods-Setup-3.0.0.exe filter=lfs diff=lfs merge=lfs -text
+attached_assets/OptiGods-Setup-3.1.2_1781756810421.exe filter=lfs diff=lfs merge=lfs -text
+downloads/OptiGods-Setup-3.1.4.exe filter=lfs diff=lfs merge=lfs -text
