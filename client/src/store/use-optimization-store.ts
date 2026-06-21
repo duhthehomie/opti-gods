@@ -52,6 +52,18 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   SysHypervisorOff: false,
   EnableHAGS: false,
   DisablePointerPrecision: false,
+  // Mouse
+  MousePointerSpeed611: false,
+  MouseDataQueueSize: false,
+  MouseHoverTimeMin: false,
+  MouseHIDPowerSave: false,
+  // Keyboard
+  KeyboardRepeatRateMax: false,
+  KeyboardRepeatDelayMin: false,
+  KeyboardDisableFilterKeys: false,
+  KeyboardDisableStickyKeys: false,
+  KeyboardDataQueueSize: false,
+  KeyboardHIDPowerSave: false,
   DisableFastStartup: false,
   DisableWindowsError: false,
   DisableAutoUpdate: false,

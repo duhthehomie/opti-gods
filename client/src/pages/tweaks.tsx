@@ -5,7 +5,7 @@ import { EmbeddedProvider } from "@/lib/embedded-context";
 import {
   ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
   Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
-  Swords, Blocks, Target, Eye, Music, X, Zap, Shield,
+  Swords, Blocks, Target, Eye, Music, X, Zap, Shield, Mouse, Keyboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
@@ -33,6 +33,8 @@ const Debloat          = lazy(() => import("@/pages/debloat"));
 const WinTitus         = lazy(() => import("@/pages/wintitus"));
 const SpotifyPage      = lazy(() => import("@/pages/spotify"));
 const CpuPage          = lazy(() => import("@/pages/cpu"));
+const MouseTweaks      = lazy(() => import("@/pages/mouse-tweaks"));
+const KeyboardTweaks   = lazy(() => import("@/pages/keyboard-tweaks"));
 
 type GroupId = "windows" | "network" | "gpu" | "cpu" | "games" | "system";
 
@@ -91,6 +93,12 @@ const SECTIONS: Section[] = [
       "FiveMFullPerfStack","CpuFortniteIFEO","CpuCodIFEO","CpuGenericGameIFEO","ProcNUMAAware","ProcAffinityFPS",
       "SysHypervisorOff","Win11DisableVBS","Win11DisableHVCI","CpuDisableSpectreMitigation","IntelOldGenPowerOpt",
     ],
+  },
+  { id: "mouse",        title: "Mouse Tweaks",                  desc: "Pointer precision, input buffer, HID power — lowest click latency", icon: Mouse, group: "system",  Component: MouseTweaks,        categories: ["mouse"],
+    tweakIds: ["DisablePointerPrecision","MousePointerSpeed611","MouseDataQueueSize","MouseHIDPowerSave","DisableUSBSuspend","MouseHoverTimeMin"],
+  },
+  { id: "keyboard",     title: "Keyboard Tweaks",               desc: "Filter Keys, repeat rate, input buffer, HID power",         icon: Keyboard,      group: "system",  Component: KeyboardTweaks,     categories: ["keyboard"],
+    tweakIds: ["KeyboardDisableFilterKeys","KeyboardDisableStickyKeys","KeyboardRepeatRateMax","KeyboardRepeatDelayMin","KeyboardDataQueueSize","KeyboardHIDPowerSave","DisableUSBSuspend"],
   },
   { id: "memory",       title: "Memory & Pagefile",             desc: "Pagefile, compression, standby trim, RAM profile",          icon: MemoryStick,   group: "system",  Component: Memory,             categories: ["memory"] },
   { id: "startup",      title: "Startup Apps",                  desc: "Disable boot-time apps",                                    icon: Power,         group: "system",  Component: StartupApps,        categories: ["startup"] },
