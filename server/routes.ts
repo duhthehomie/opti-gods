@@ -6669,32 +6669,52 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       return res.status(400).json({ error: "description required (max 500 chars)" });
     }
 
-    const systemPrompt = `You are a FiveM graphics pack generator. Given a plain-English description of a desired visual style, output ONLY valid JSON with these fields (no extra text, no markdown):
+    const systemPrompt = `You are a FiveM graphics pack generator. Output ONLY a JSON object — no prose, no markdown fences.
+
+Required fields:
 {
-  "packName": string (short creative name, max 30 chars),
-  "cloudThickness": number (0-100, 0=no clouds best FPS),
-  "jetStreams": number (0-100, 0=no contrails),
-  "blueDepth": number (0-100, 0=dark navy, 100=vivid cyan sky),
-  "aerialClouds": boolean (true=enable high-altitude clouds),
-  "aerialDensity": number (10-100, density of aerial clouds if enabled),
-  "lightRays": boolean (true=god rays / sun shafts, costs 5-15 FPS),
-  "lightRayIntensity": number (10-100, intensity if enabled),
-  "sunIntensity": number (0-100, 0=dim overcast, 100=blazing warm),
-  "atmosphereHaze": boolean (true=horizon haze/depth fog),
-  "freezeWeather": boolean (true=lock to clear/sunny, big FPS gain),
+  "packName": string (creative name, max 30 chars),
+  "cloudThickness": number 0-100 (0=no clouds = best FPS),
+  "jetStreams": number 0-100 (0=no contrails),
+  "skyColorKey": string (MUST be exactly one of: vivid_blue, sky_blue, cyan, deep_blue, navy, bubblegum, hot_pink, rose, magenta, warm_amber, steel_grey, dark_grey, black_sky),
+  "skyBrightness": number 35-100 (35=very dark/dim, 75=natural, 100=max vivid),
+  "aerialClouds": boolean,
+  "aerialDensity": number 10-100,
+  "lightRays": boolean (god rays, costs 5-15 FPS),
+  "lightRayIntensity": number 10-100,
+  "sunIntensity": number 0-100 (0=dim overcast, 60=natural, 100=blazing),
+  "atmosphereHaze": boolean (horizon depth fog),
+  "freezeTime": boolean (true = lock time AND weather to clear, +30-45 FPS),
+  "freezeHour": number 0-23 (hour to lock at: 12=noon best FPS, 18=sunset, 0=midnight),
   "disableRain": boolean,
   "disableSnow": boolean,
-  "mood": string (one sentence describing the visual result, e.g. "Golden sunrise with dramatic god rays and high FPS")
+  "mood": string (one sentence, e.g. "Vivid blue noon sky, zero clouds, max FPS")
 }
 
+Sky color key guide (pick the closest match to the description):
+- vivid_blue    : bright royal blue — daily driver, clear sky (skyBrightness 65-85)
+- sky_blue      : softer lighter blue (skyBrightness 60-80)
+- cyan          : bright aqua/teal (skyBrightness 65-90)
+- deep_blue     : rich deep blue (skyBrightness 45-65)
+- navy          : very dark navy — almost black-blue (skyBrightness 35-55)
+- bubblegum     : soft pastel pink-purple (skyBrightness 65-85)
+- hot_pink      : vivid hot pink / Miami / GTA 6 vibes (skyBrightness 75-95)
+- rose          : deep rose pink (skyBrightness 70-90)
+- magenta       : dark purple-magenta (skyBrightness 40-70)
+- warm_amber    : golden sunset/sunrise orange (skyBrightness 65-90)
+- steel_grey    : cool steel overcast grey (skyBrightness 50-75)
+- dark_grey     : dark stormy grey (skyBrightness 40-65)
+- black_sky     : void black sky (skyBrightness 35-55)
+
 Rules:
-- "high FPS" / "performance" descriptions → low cloudThickness (0-20), no lightRays, no atmosphereHaze, freezeWeather=true
-- "cinematic" / "beautiful" → can enable lightRays, aerialClouds, higher cloudThickness
-- "sunrise" / "golden" → sunIntensity 70-90, blueDepth 40-60, lightRays=true, lightRayIntensity 50-70
-- "night" → blueDepth 0-20, sunIntensity 10-30, freezeWeather=false
-- "foggy" / "moody" → atmosphereHaze=true, cloudThickness 40-70, blueDepth 20-40
-- "clear" / "sunny" → cloudThickness 0, jetStreams 0, freezeWeather=true, blueDepth 60-90
-- Always output valid parseable JSON. No prose outside JSON.`;
+- performance / fps / max frames: vivid_blue, skyBrightness 70, cloudThickness 0, lightRays false, atmosphereHaze false, freezeTime true, freezeHour 12, disableRain true, disableSnow true
+- night / midnight: navy or deep_blue, skyBrightness 35-45, freezeHour 0 or 23
+- golden hour / sunset / sunrise: warm_amber, skyBrightness 80-90, lightRays true, lightRayIntensity 55, atmosphereHaze true, freezeHour 17-19, sunIntensity 80
+- hot pink / Miami / GTA 6 vibes: hot_pink, skyBrightness 85-92, jetStreams 60-80, lightRays true, freezeHour 18-20, sunIntensity 78
+- pink / pastel / bubblegum: bubblegum or rose, skyBrightness 70-85
+- stormy / dark / moody: dark_grey, cloudThickness 50-80, atmosphereHaze true, freezeTime true, freezeHour 12
+- clear / sunny / blue sky: vivid_blue or sky_blue, cloudThickness 0, freezeTime true, freezeHour 12
+- winter / snow: steel_grey or dark_grey, disableSnow false, aerialClouds true`;
 
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -6710,7 +6730,8 @@ Rules:
             { role: "user", content: `Generate a FiveM graphics pack for: "${description}"` },
           ],
           temperature: 0.4,
-          max_tokens: 400,
+          max_tokens: 500,
+          response_format: { type: "json_object" },
         }),
       });
 
@@ -6740,18 +6761,24 @@ Rules:
       };
       const bool = (v: unknown, def: boolean) => typeof v === "boolean" ? v : def;
 
+      const VALID_SKY_KEYS = ["vivid_blue","sky_blue","cyan","deep_blue","navy","bubblegum","hot_pink","rose","magenta","warm_amber","steel_grey","dark_grey","black_sky"] as const;
+      const rawKey = typeof parsed.skyColorKey === "string" ? parsed.skyColorKey.trim().toLowerCase().replace(/\s+/g,"_") : "";
+      const skyColorKey = VALID_SKY_KEYS.includes(rawKey as typeof VALID_SKY_KEYS[number]) ? rawKey : "vivid_blue";
+
       return res.json({
         packName:          typeof parsed.packName === "string" ? parsed.packName.slice(0, 30) : "Custom Pack",
         cloudThickness:    clamp(parsed.cloudThickness,    0, 100, 0),
         jetStreams:         clamp(parsed.jetStreams,         0, 100, 0),
-        blueDepth:          clamp(parsed.blueDepth,          0, 100, 60),
+        skyColorKey,
+        skyBrightness:      clamp(parsed.skyBrightness,     35, 100, 70),
         aerialClouds:       bool(parsed.aerialClouds, false),
         aerialDensity:      clamp(parsed.aerialDensity,      10, 100, 60),
         lightRays:          bool(parsed.lightRays, false),
         lightRayIntensity:  clamp(parsed.lightRayIntensity,  10, 100, 50),
         sunIntensity:       clamp(parsed.sunIntensity,       0, 100, 60),
         atmosphereHaze:     bool(parsed.atmosphereHaze, false),
-        freezeWeather:      bool(parsed.freezeWeather, false),
+        freezeTime:         bool(parsed.freezeTime, false),
+        freezeHour:         clamp(parsed.freezeHour,         0,  23, 12),
         disableRain:        bool(parsed.disableRain, false),
         disableSnow:        bool(parsed.disableSnow, false),
         mood: typeof parsed.mood === "string" ? parsed.mood.slice(0, 200) : "Pack generated — review sliders in the Builder tab.",
