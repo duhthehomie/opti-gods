@@ -438,6 +438,27 @@ export default function Fixes() {
           onDownload={() => dlFix("fivem", "/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.")}
         />
 
+        {/* ── Mushy Face / Arms Texture Fix ────────────────────────────────── */}
+        <FixCard
+          testId="button-download-mushy-face-fix"
+          accent="orange"
+          icon={MonitorPlay}
+          title="Fix Mushy / Blurry Face & Arm Textures"
+          subtitle="Character faces look soft or smeared · skin textures low-res even at max in-game settings"
+          tweaks="Driver: PS_TexFilterQuality=2 (NVIDIA) / TFQ=2 (AMD) · streaming_useLargerPool · pedlod"
+          bullets={[
+            ["Root cause: GPU driver texture filtering set to High Performance", "The NVIDIA / AMD 'High Performance' texture filter mode samples skin textures at reduced quality — looks mushy even when in-game settings are maxed. This fix sets the driver to High Quality sampling."],
+            ["NVIDIA fix: PS_TexFilterQuality=2 in NVTweak + GPU class key", "Sets High Quality texture filtering in both HKLM and HKCU NVTweak paths. Also disables AnisoOptimization and enables negative LOD bias allow — gives sharper skin on faces and arms."],
+            ["AMD fix: TFQ=2 + CatalystAI=1 in GPU class key", "Sets Texture Filtering Quality to High Quality in the AMD driver class registry. Re-enables CatalystAI quality decisions that the Performance mode turns off."],
+            ["Also expands FiveM texture streaming pool", "Adds +set streaming_useLargerPool 1 to FiveM commandline.txt — lets the game load higher-res skin LODs instead of falling back to the compressed version."],
+            ["Auto-detects NVIDIA or AMD — no manual choice needed", "The script reads your GPU class registry and applies the right block. Safe on all systems. Conflicts with 'Texture Filter High Performance' tweak (FPS trade-off — disable that if you applied it)."],
+          ]}
+          footer="Restart FiveM / GTA V after running. If you had the High Performance texture tweak applied, this reverses it — small FPS trade for correct face quality."
+          btnLabel="Download Face Fix"
+          downloading={!!dlState["mushy-face"]}
+          onDownload={() => dlFix("mushy-face", "/api/mushy-face-fix-script", "OptiGods-MushyFace-Fix.bat", "Face Texture Fix Downloaded", "Double-click → allow UAC → restart FiveM.")}
+        />
+
         {/* ── Valorant / Vanguard ───────────────────────────────────────────── */}
         <SectionHeader
           icon={Shield} iconClass="text-purple-400"
