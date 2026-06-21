@@ -1979,6 +1979,84 @@ export default function FivemGraphics() {
                     <Toggle on={fixFaceQuality} onToggle={() => setFixFaceQuality(v => !v)} testId="toggle-fix-face-quality" />
                   </div>
 
+                  {/* Driver-level texture quality fix */}
+                  <div className="ml-9 mt-1 mb-2 bg-red-500/5 border border-red-500/15 rounded-xl px-3 py-2.5 space-y-2">
+                    <div>
+                      <p className="text-[10px] text-red-300 font-semibold">Driver-Level Fix (stronger)</p>
+                      <p className="text-[10px] text-zinc-500 leading-relaxed mt-0.5">
+                        The citizen folder fix above raises LOD distance. But if your NVIDIA or AMD driver is set to
+                        {" "}<span className="text-zinc-300 font-mono">High Performance</span> texture filtering — which the optimizer's NVIDIA/AMD tab enables for FPS — it <span className="text-zinc-300">degrades the actual texture samples</span> on skin/faces at the source.
+                        Download this PS1 to flip the driver to <span className="text-zinc-300 font-mono">High Quality</span> texture filtering, which directly fixes the mushy look on faces and arms.
+                      </p>
+                      <p className="text-[10px] text-zinc-600 mt-1">Note: conflicts with "Texture Filter = High Performance" tweak in NVIDIA/AMD tab (FPS trade-off).</p>
+                    </div>
+                    <button
+                      data-testid="btn-download-driver-face-fix"
+                      onClick={() => {
+                        const ps1 = [
+                          "# Opti Gods — Driver Texture Quality Fix (Fix Mushy Face / Arms)",
+                          "# Run as Administrator. Fixes blurry/mushy character textures in FiveM & GTA V.",
+                          "# Auto-detects NVIDIA or AMD and applies High Quality texture filtering.",
+                          "",
+                          "$gpuClass = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'",
+                          "$isNvidia = $false; $isAmd = $false",
+                          "0,1,2,3 | ForEach-Object {",
+                          "  $k = \"$gpuClass\\00$_\"",
+                          "  $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc",
+                          "  If ($desc -match 'NVIDIA') { $isNvidia = $true }",
+                          "  If ($desc -match 'AMD|Radeon') { $isAmd = $true }",
+                          "}",
+                          "",
+                          "If ($isNvidia) {",
+                          "  Write-Host '[NVIDIA] Applying High Quality texture filtering...' -ForegroundColor Cyan",
+                          "  @('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object {",
+                          "    If (!(Test-Path $_)) { New-Item $_ -Force | Out-Null }",
+                          "    Set-ItemProperty -Path $_ -Name 'PS_TexFilterQuality'     -Value 2 -Type DWord -Force -EA SilentlyContinue",
+                          "    Set-ItemProperty -Path $_ -Name 'PS_TexFilterAnisoOptOn'  -Value 0 -Type DWord -Force -EA SilentlyContinue",
+                          "    Set-ItemProperty -Path $_ -Name 'PS_TexFilterLODBiasAllow' -Value 1 -Type DWord -Force -EA SilentlyContinue",
+                          "    Set-ItemProperty -Path $_ -Name 'PS_TexFilterNoNeg'        -Value 0 -Type DWord -Force -EA SilentlyContinue",
+                          "  }",
+                          "  0,1,2,3 | ForEach-Object {",
+                          "    $k = \"$gpuClass\\00$_\"",
+                          "    If ((Test-Path $k) -and (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') {",
+                          "      Set-ItemProperty $k 'TextureFilterQuality'  2 -Type DWord -Force -EA SilentlyContinue",
+                          "      Set-ItemProperty $k 'ForcedMipmapsMinLod'   0 -Type DWord -Force -EA SilentlyContinue",
+                          "      Write-Host \"[NVIDIA] High Quality texture filtering applied on $k\" -ForegroundColor Green",
+                          "    }",
+                          "  }",
+                          "} ElseIf ($isAmd) {",
+                          "  Write-Host '[AMD] Applying High Quality texture filtering...' -ForegroundColor Cyan",
+                          "  Get-ChildItem $gpuClass -EA SilentlyContinue | Where-Object {",
+                          "    (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'AMD|Radeon'",
+                          "  } | ForEach-Object {",
+                          "    Set-ItemProperty $_.PSPath -Name 'TFQ'        -Value 2 -Type DWord -Force -EA SilentlyContinue",
+                          "    Set-ItemProperty $_.PSPath -Name 'CatalystAI' -Value 1 -Type DWord -Force -EA SilentlyContinue",
+                          "    Set-ItemProperty $_.PSPath -Name 'TextureOpt' -Value 0 -Type DWord -Force -EA SilentlyContinue",
+                          "    Write-Host '[AMD] High Quality texture filtering applied — TFQ=2, CatalystAI=1' -ForegroundColor Green",
+                          "  }",
+                          "} Else {",
+                          "  Write-Host '[WARN] No NVIDIA or AMD GPU detected in driver class registry.' -ForegroundColor Yellow",
+                          "  Write-Host '       Apply manually: NVCP > Manage 3D Settings > Texture filtering quality = High quality' -ForegroundColor Yellow",
+                          "}",
+                          "",
+                          "Write-Host '' ",
+                          "Write-Host 'Done! Restart FiveM/GTA V for changes to take effect.' -ForegroundColor Green",
+                          "Write-Host 'Note: disable the High Performance texture tweak in Opti Gods NVIDIA/AMD tab if you applied it.' -ForegroundColor Yellow",
+                          "Pause",
+                        ].join("\r\n");
+                        const blob = new Blob([ps1], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url; a.download = "OptiGods-DriverTextureFix.ps1"; a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-300 text-[11px] font-semibold hover:bg-red-500/18 hover:border-red-500/40 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Driver Texture Fix (.ps1)
+                    </button>
+                  </div>
+
                   <ToggleRow icon={Eye} label="Keep Props" on={keepProps} onToggle={() => setKeepProps(v => !v)}
                     sub="Full world props — recommended" testId="toggle-keep-props" />
                 </div>
