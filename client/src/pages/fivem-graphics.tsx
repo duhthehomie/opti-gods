@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { loginWithDiscord } from "@/hooks/use-auth";
 import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { zipSync, strToU8 } from "fflate";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Slider } from "@/components/ui/slider";
@@ -931,7 +932,7 @@ const RESHADE_PRESETS = [
 // ── Discord Gate ──────────────────────────────────────────────────────────────
 type GateState = "checking" | "granted" | "not_logged_in" | "not_granted";
 
-function DiscordGate() {
+function DiscordGate({ notGranted = false }: { notGranted?: boolean }) {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = useCallback(async () => {
@@ -958,19 +959,31 @@ function DiscordGate() {
         </div>
         <p className="text-[10px] uppercase tracking-[0.2em] text-red-500 font-bold mb-1">Restricted Access</p>
         <h2 className="text-xl font-display font-black text-white mb-1">Graphics Studio</h2>
-        <p className="text-xs text-zinc-400 mb-3">This feature is granted per-user by admins.</p>
-        <p className="text-xs text-zinc-500 mb-6">
-          You must be logged in with the Discord account that has been granted access.
-          If you believe you have access, log out and log back in via Discord.
-        </p>
-        <button
-          data-testid="button-graphics-discord-login"
-          onClick={handleLogin}
-          disabled={loading}
-          className="block w-full bg-[#5865F2] hover:bg-[#4752c4] disabled:opacity-60 text-white font-bold rounded-xl py-2.5 text-sm transition-colors"
-        >
-          {loading ? "Opening Discord…" : "Log in with Discord"}
-        </button>
+        {notGranted ? (
+          <>
+            <p className="text-xs text-zinc-400 mb-3">You're logged in but haven't been granted access yet.</p>
+            <p className="text-xs text-zinc-500 mb-6">
+              Contact the admin to have your Discord account added to the allowlist,
+              or grant yourself access in the Admin Panel → Graphics Studio tab.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-zinc-400 mb-3">This feature is granted per-user by admins.</p>
+            <p className="text-xs text-zinc-500 mb-6">
+              You must be logged in with the Discord account that has been granted access.
+              If you believe you have access, log out and log back in via Discord.
+            </p>
+            <button
+              data-testid="button-graphics-discord-login"
+              onClick={handleLogin}
+              disabled={loading}
+              className="block w-full bg-[#5865F2] hover:bg-[#4752c4] disabled:opacity-60 text-white font-bold rounded-xl py-2.5 text-sm transition-colors"
+            >
+              {loading ? "Opening Discord…" : "Log in with Discord"}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1022,7 +1035,7 @@ export default function FivemGraphics() {
   const [activeTab, setActiveTab] = useState<"packs" | "builder" | "reshade" | "info">("packs");
 
   useEffect(() => {
-    fetch("/api/graphics-studio/status", { credentials: "include" })
+    fetch(apiUrl("/api/graphics-studio/status"), { credentials: "include", headers: getNativeAuthHeaders() })
       .then(r => r.json())
       .then((data: { granted: boolean; reason?: string }) => {
         if (data.granted) setGateState("granted");
@@ -1152,8 +1165,11 @@ export default function FivemGraphics() {
   if (gateState === "checking") {
     return <AppLayout><GateChecking /></AppLayout>;
   }
-  if (gateState === "not_logged_in" || gateState === "not_granted") {
+  if (gateState === "not_logged_in") {
     return <AppLayout><DiscordGate /></AppLayout>;
+  }
+  if (gateState === "not_granted") {
+    return <AppLayout><DiscordGate notGranted /></AppLayout>;
   }
 
   return (

@@ -6754,10 +6754,15 @@ Rules:
 
   // User — check if current Discord session has Graphics Studio access
   app.get("/api/graphics-studio/status", async (req, res) => {
+    const adminKey = process.env.ADMIN_KEY;
+    const providedKey = req.headers['x-admin-key'];
+    if (adminKey && providedKey === adminKey) {
+      return res.json({ granted: true, discordId: "admin" });
+    }
     const userId: string | undefined = (req as any).session?.userId;
     if (!userId) return res.json({ granted: false, reason: "not_logged_in" });
     const has = await storage.hasGraphicsStudio(userId);
-    return res.json({ granted: has, discordId: userId });
+    return res.json({ granted: has, reason: has ? undefined : "not_granted", discordId: userId });
   });
 
   // Admin — list all Graphics Studio grants
