@@ -1,6 +1,6 @@
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useLiveStats } from "@/hooks/use-live-stats";
 import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
@@ -17,10 +17,19 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
-const HW_MONITOR_KEY = "optigods-hwmonitor-data";
+const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
+const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
 
 function loadHwMonitor(): HwMonitorData | null {
   try { const r = localStorage.getItem(HW_MONITOR_KEY); return r ? JSON.parse(r) as HwMonitorData : null; } catch { return null; }
+}
+
+function loadNativeScan(): import("@/lib/tauri-bridge").NativeHardwareScan | null {
+  try { const r = localStorage.getItem(NATIVE_SCAN_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
+}
+
+function saveNativeScan(data: import("@/lib/tauri-bridge").NativeHardwareScan) {
+  try { localStorage.setItem(NATIVE_SCAN_KEY, JSON.stringify(data)); } catch {}
 }
 
 // ── HW Monitor import data shape ─────────────────────────────────────────────
@@ -1024,7 +1033,7 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
 export default function SystemScanPage() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
-  const [nativeScan, setNativeScan] = useState<NativeHardwareScan | null>(null);
+  const [nativeScan, setNativeScan] = useState<NativeHardwareScan | null>(() => loadNativeScan());
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   // HW Monitor JSON data — seeded from localStorage so temps/fans persist across sessions
@@ -1039,6 +1048,15 @@ export default function SystemScanPage() {
         setNativeScan(data);
         setScanError(null);
         if (data) {
+          saveNativeScan(data);
+          // Bridge native scan into optigods-sysinfo so smart-recs on every page use WMI data
+          saveScannedInfo({
+            GPU:         data.gpu  || undefined,
+            CPU:         data.cpu  || undefined,
+            RAM_GB:      data.ram_gb    ?? undefined,
+            RAM_MHz:     data.ram_mhz   ?? undefined,
+            SystemModel: data.system_model ?? undefined,
+          });
           // Submit to backend so admin can see this rig and generate a preset
           const sessionToken = localStorage.getItem("optigods_session_v2") ?? undefined;
           fetch("/api/hardware/scan", {

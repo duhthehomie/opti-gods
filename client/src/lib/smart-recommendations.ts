@@ -183,8 +183,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     }
   } else if (hw.isIntelCore) {
     if (hw.cpuGeneration >= 12) {
-      ["FiveMAffinityMask","ProcessLassoAffinityGaming"].forEach(id => ids.add(id));
-      reasons.push(`Intel ${hw.cpuGeneration}th gen (has E-cores) — P-core affinity for gaming`);
+      ["FiveMAffinityMask","ProcessLassoAffinityGaming","FiveMIntel14PcoreAffinity","FiveMIntel14PowerPlan"].forEach(id => ids.add(id));
+      reasons.push(`Intel ${hw.cpuGeneration}th gen (has E-cores) — P-core affinity for gaming, Ultra Performance plan`);
     } else if (hw.cpuGeneration >= 6 && hw.cpuGeneration < 12) {
       // 6th–11th gen Intel desktop (Skylake / Kaby Lake / Coffee Lake / Comet Lake / Rocket Lake)
       // No E-cores — max all cores, aggressive C-state suppression, full turbo
@@ -240,7 +240,13 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       // HAGS only benefits RTX 2000+ on Windows 11 — safe to enable
       ids.add("EnableHAGS");
       ids.add("NvidiaRTXVideoOff");
-      reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS enabled (RTX 2000+), full RTX optimization suite + DPC latency reduction`);
+      // RTX 5000 series (Ada Lovelace successor) — specific VRAM/HAGS/LL tweaks
+      if (hw.gpuName && /506[0-9]|507[0-9]|508[0-9]|509[0-9]|50[7-9][0-9]/i.test(hw.gpuName)) {
+        ["FiveM5060VRAMBudget","FiveM5060EnableHAGS","FiveM5060LowLatency"].forEach(id => ids.add(id));
+        reasons.push(`RTX 5000 series (${hw.gpuName}) — VRAM budget maximised, HAGS enabled, Low Latency Ultra`);
+      } else {
+        reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS enabled (RTX 2000+), full RTX optimization suite + DPC latency reduction`);
+      }
     } else {
       // Mid-range GTX (non-Pascal/Turing low-end, non-RTX) — enable HAGS conservatively
       ids.add("EnableHAGS");
