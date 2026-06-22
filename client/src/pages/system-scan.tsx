@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
@@ -819,7 +820,7 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
   const { toast } = useToast();
 
   const downloadLiveBat = () => {
-    const postUrl = window.location.origin + '/api/hw-live';
+    const postUrl = apiUrl('/api/hw-live');
     const markerKey = '##LIVE_MONITOR_PS1##';
     const markerSearchPs = `'##LIVE_MON'+'ITOR_PS1##'`;
 
