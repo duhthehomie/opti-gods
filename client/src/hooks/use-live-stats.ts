@@ -11,6 +11,7 @@ export interface LiveStats {
   cpuHistory: number[];
   gpuHistory: number[];
   isLive: boolean;
+  isStale: boolean;
 }
 
 interface HwLiveResponse {
@@ -36,34 +37,36 @@ function clamp(val: number, min: number, max: number): number {
 export function useLiveStats(ramGB: number): LiveStats {
   const totalRAM = ramGB > 0 ? ramGB : 16;
 
-  const cpuRef    = useRef(clamp(40 + Math.random() * 30, 20, 90));
-  const gpuRef    = useRef(clamp(30 + Math.random() * 40, 10, 85));
+  const cpuRef     = useRef(clamp(40 + Math.random() * 30, 20, 90));
+  const gpuRef     = useRef(clamp(30 + Math.random() * 40, 10, 85));
   const baseRAMRef = useRef(clamp(totalRAM * 0.42 + Math.random() * 1.5, 1, totalRAM - 0.5));
   const cpuHistRef = useRef<number[]>(Array(30).fill(cpuRef.current));
   const gpuHistRef = useRef<number[]>(Array(30).fill(gpuRef.current));
 
+  // Last snapshot received from the BAT — kept forever so data never blanks out
+  const lastRealRef = useRef<LiveStats | null>(null);
+
   const [stats, setStats] = useState<LiveStats>({
-    cpuUsage: cpuRef.current,
-    gpuUsage: gpuRef.current,
-    ramUsedGB: baseRAMRef.current,
+    cpuUsage:   cpuRef.current,
+    gpuUsage:   gpuRef.current,
+    ramUsedGB:  baseRAMRef.current,
     ramTotalGB: totalRAM,
-    ramPct: (baseRAMRef.current / totalRAM) * 100,
-    cpuTemp: null,
-    gpuTemp: null,
+    ramPct:     (baseRAMRef.current / totalRAM) * 100,
+    cpuTemp:    null,
+    gpuTemp:    null,
     cpuHistory: cpuHistRef.current,
     gpuHistory: gpuHistRef.current,
-    isLive: false,
+    isLive:     false,
+    isStale:    false,
   });
 
   useEffect(() => {
     let cpuTarget = cpuRef.current;
     let gpuTarget = gpuRef.current;
-    let isReallyLive = false;
 
     const tick = async () => {
       if (document.hidden) return;
 
-      // Try to fetch real data from the live monitor script
       let realData: HwLiveResponse | null = null;
       try {
         const resp = await fetch("/api/hw-live", { signal: AbortSignal.timeout(1500) });
@@ -72,11 +75,10 @@ export function useLiveStats(ramGB: number): LiveStats {
           if (json.live) realData = json;
         }
       } catch {
-        // server unreachable or stale — fall through to simulation
+        // server unreachable or stale — fall through
       }
 
       if (realData) {
-        isReallyLive = true;
         const ramTotal = realData.ram_total_gb ?? totalRAM;
         const ramFree  = realData.ram_free_gb ?? 0;
         const ramUsed  = ramTotal - ramFree;
@@ -89,7 +91,7 @@ export function useLiveStats(ramGB: number): LiveStats {
         cpuHistRef.current.shift(); cpuHistRef.current.push(cpu);
         gpuHistRef.current.shift(); gpuHistRef.current.push(gpu);
 
-        setStats({
+        const snap: LiveStats = {
           cpuUsage:   Math.round(cpu),
           gpuUsage:   Math.round(gpu),
           ramUsedGB:  Math.round(ramUsed * 10) / 10,
@@ -99,15 +101,21 @@ export function useLiveStats(ramGB: number): LiveStats {
           gpuTemp:    realData.gpu_temp_c ?? null,
           cpuHistory: [...cpuHistRef.current],
           gpuHistory: [...gpuHistRef.current],
-          isLive: true,
-        });
+          isLive:     true,
+          isStale:    false,
+        };
+        lastRealRef.current = snap;
+        setStats(snap);
         return;
       }
 
-      // Simulation fallback
-      if (isReallyLive) {
-        isReallyLive = false;
+      // No fresh data — if we have a previous snapshot, show it frozen (isStale)
+      if (lastRealRef.current) {
+        setStats({ ...lastRealRef.current, isLive: true, isStale: true });
+        return;
       }
+
+      // Never had real data — run simulation
       const cpuDrift = (Math.random() - 0.5) * 18;
       const gpuDrift = (Math.random() - 0.5) * 22;
       cpuTarget = clamp(cpuTarget + cpuDrift, 12, 94);
@@ -117,7 +125,7 @@ export function useLiveStats(ramGB: number): LiveStats {
       cpuHistRef.current.shift(); cpuHistRef.current.push(cpuRef.current);
       gpuHistRef.current.shift(); gpuHistRef.current.push(gpuRef.current);
 
-      const base = baseRAMRef.current;
+      const base    = baseRAMRef.current;
       const ramUsed = clamp(base + (Math.random() - 0.5) * 0.4, 1, totalRAM - 0.2);
 
       setStats({
@@ -130,12 +138,13 @@ export function useLiveStats(ramGB: number): LiveStats {
         gpuTemp:    null,
         cpuHistory: [...cpuHistRef.current],
         gpuHistory: [...gpuHistRef.current],
-        isLive: false,
+        isLive:     false,
+        isStale:    false,
       });
     };
 
     const id = setInterval(tick, 2000);
-    tick(); // immediate first read
+    tick();
     return () => clearInterval(id);
   }, [totalRAM]);
 

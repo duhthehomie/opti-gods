@@ -877,7 +877,13 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
       `setlocal`,
       `set "SELF=%~f0"`,
       `set "TMPPS1=%TEMP%\\OptiGods-Live-Monitor.ps1"`,
+      `set "DESKTOP=%USERPROFILE%\\Desktop"`,
       `title Opti Gods -- Live Hardware Monitor`,
+      `:: Copy to Desktop for easy re-use (only if not already there)`,
+      `if not exist "%DESKTOP%\\OptiGods-Live-Monitor.bat" (`,
+      `  copy "%SELF%" "%DESKTOP%\\OptiGods-Live-Monitor.bat" >nul 2>&1`,
+      `  if not errorlevel 1 echo [OK] Saved to Desktop for quick re-use.`,
+      `)`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m=${markerSearchPs};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       `if not exist "%TMPPS1%" (echo [ERROR] Extraction failed & pause & exit /b 1)`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
@@ -906,12 +912,17 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
       className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-2">
-          <Radio className={cn("w-4 h-4", stats.isLive ? "text-emerald-400" : "text-zinc-600")} />
+          <Radio className={cn("w-4 h-4", stats.isLive && !stats.isStale ? "text-emerald-400" : stats.isStale ? "text-amber-400" : "text-zinc-600")} />
           <span className="text-sm font-bold text-white">Live Monitor</span>
-          {stats.isLive ? (
+          {stats.isLive && !stats.isStale ? (
             <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Live
+            </span>
+          ) : stats.isStale ? (
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Paused
             </span>
           ) : (
             <span className="text-[10px] text-zinc-600">BAT not running</span>
@@ -946,10 +957,19 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
             <p className="font-mono text-lg font-black text-white">{stats.ramPct}%</p>
             <p className="text-zinc-500 text-[10px]">{stats.ramUsedGB} / {stats.ramTotalGB} GB</p>
           </div>
-          <div className="p-3 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.03]">
-            <p className="text-[10px] uppercase tracking-wider text-emerald-500/70 mb-1 flex items-center gap-1"><Activity className="w-3 h-3" /> Status</p>
-            <p className="text-emerald-400 font-mono text-xs font-bold">Streaming</p>
-            <p className="text-zinc-600 text-[10px]">Updates every 2s</p>
+          <div className={cn("p-3 rounded-lg border", stats.isStale ? "border-amber-500/10 bg-amber-500/[0.03]" : "border-emerald-500/10 bg-emerald-500/[0.03]")}>
+            <p className={cn("text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1", stats.isStale ? "text-amber-500/70" : "text-emerald-500/70")}><Activity className="w-3 h-3" /> Status</p>
+            {stats.isStale ? (
+              <>
+                <p className="text-amber-400 font-mono text-xs font-bold">Paused</p>
+                <p className="text-zinc-600 text-[10px]">Last values shown</p>
+              </>
+            ) : (
+              <>
+                <p className="text-emerald-400 font-mono text-xs font-bold">Streaming</p>
+                <p className="text-zinc-600 text-[10px]">Updates every 2s</p>
+              </>
+            )}
           </div>
         </div>
       ) : (
