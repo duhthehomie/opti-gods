@@ -1979,6 +1979,31 @@ export default function FivemGraphics() {
                     <Toggle on={fixFaceQuality} onToggle={() => setFixFaceQuality(v => !v)} testId="toggle-fix-face-quality" />
                   </div>
 
+                  {/* Mushy face full fix download */}
+                  <div className="mt-1 rounded-lg border border-orange-500/25 bg-orange-500/5 px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-orange-300 leading-tight">Full texture fix script</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">Patches GPU driver + wipes FiveM cache + auto-sets GTA texture quality. Run once as admin.</p>
+                    </div>
+                    <button
+                      data-testid="button-download-mushy-face-fix-graphics"
+                      onClick={async () => {
+                        const res = await fetch('/api/mushy-face-fix-script');
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'OptiGods-MushyFace-Fix.bat';
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-orange-700 hover:bg-orange-600 border border-orange-500/40 text-white text-[11px] font-bold transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Fix
+                    </button>
+                  </div>
+
                   <ToggleRow icon={Eye} label="Keep Props" on={keepProps} onToggle={() => setKeepProps(v => !v)}
                     sub="Full world props — recommended" testId="toggle-keep-props" />
                 </div>

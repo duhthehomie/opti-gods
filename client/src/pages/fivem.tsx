@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -42,6 +43,23 @@ export default function Fivem() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
+  const [dlMushyFace, setDlMushyFace] = useState(false);
+
+  async function downloadMushyFix() {
+    setDlMushyFace(true);
+    try {
+      const res = await fetch('/api/mushy-face-fix-script');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'OptiGods-MushyFace-Fix.bat';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setTimeout(() => setDlMushyFace(false), 2500);
+    }
+  }
 
   const fivemRecommended = [
     "FiveMHighPriority","FiveMCacheClear","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions",
@@ -223,6 +241,26 @@ export default function Fivem() {
             <span>Open Graphics Hub</span>
           </div>
         </a>
+
+        {/* Mushy Face / Blurry Arms Fix */}
+        <div className="rounded-xl border border-orange-500/25 bg-orange-500/5 p-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Visual Fix</span>
+            </div>
+            <p className="text-sm font-bold text-white leading-tight">Fix Mushy / Blurry Face &amp; Arm Textures</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Patches GPU driver · wipes FiveM cache · auto-sets GTA texture quality · scans for conflicting mods</p>
+          </div>
+          <button
+            data-testid="button-download-mushy-face-fix-fivem"
+            onClick={downloadMushyFix}
+            disabled={dlMushyFace}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-700 hover:bg-orange-600 disabled:opacity-60 border border-orange-500/40 text-white text-xs font-bold transition-colors"
+          >
+            {dlMushyFace ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Download className="w-4 h-4" />}
+            {dlMushyFace ? "Downloaded!" : "Download Fix"}
+          </button>
+        </div>
 
         {/* Hardware-optimized recommendation banner */}
         {!hw.loading && (
