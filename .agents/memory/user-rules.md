@@ -14,6 +14,8 @@ description: Explicit rules leaq has stated — violating these causes repeated 
 ## GitHub / deployment
 - **The GitHub Actions workflow (build-windows.yml) handles everything automatically** — build, sign, write latest.json, create GitHub Release, upload the .exe. Never describe these as things leaq needs to do manually. Never imply they are future work when the workflow already covers them.
 - **Never attempt a raw `git push` if the last push was rejected** — always pull/rebase first or tell leaq to run the commands in shell.
+- **Use `HUB_TOKEN` for all GitHub push operations** — `GITHUB_PERSONAL_ACCESS_TOKEN` is the old/stale secret. `HUB_TOKEN` is the active PAT. Never use the old key again.
+- **build-windows.yml triggers on `push: branches: [main]`** — no tag push required to start a build; pushing main is sufficient.
 
 ## Communication
 - **Do not re-explain things leaq already confirmed or built** — if it's in the workflow/codebase, it's done. Don't describe it as upcoming.
