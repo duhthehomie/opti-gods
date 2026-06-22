@@ -1035,7 +1035,33 @@ export default function SystemScanPage() {
     setScanning(true);
     setScanError(null);
     scanHardware()
-      .then(data => { setNativeScan(data); setScanError(null); })
+      .then(data => {
+        setNativeScan(data);
+        setScanError(null);
+        if (data) {
+          // Submit to backend so admin can see this rig and generate a preset
+          const sessionToken = localStorage.getItem("optigods_session_v2") ?? undefined;
+          fetch("/api/hardware/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              cpu: data.cpu,
+              gpu: data.gpu,
+              vramMb: data.vram_mb ?? undefined,
+              ramGb: data.ram_gb ?? undefined,
+              ramMhz: data.ram_mhz ?? undefined,
+              motherboard: data.motherboard ?? undefined,
+              chassis: data.chassis ?? undefined,
+              coolingType: data.cooling_type ?? undefined,
+              refreshHz: data.refresh_hz ?? undefined,
+              nicVendor: data.nic_vendor ?? undefined,
+              anticheats: data.anticheats ?? [],
+              sessionToken,
+            }),
+          }).catch(() => {}); // fire-and-forget — never block the UI
+        }
+      })
       .catch(err => { setScanError(String(err)); })
       .finally(() => setScanning(false));
   }, []);

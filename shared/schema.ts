@@ -287,6 +287,7 @@ export const hardwareRigs = pgTable("hardware_rigs", {
   id: serial("id").primaryKey(),
   hash: varchar("hash", { length: 64 }).notNull().unique(),
   discordUserId: text("discord_user_id"),
+  proCode: text("pro_code"),
   cpu: text("cpu").notNull(),
   gpu: text("gpu").notNull(),
   vramMb: integer("vram_mb"),
@@ -324,6 +325,7 @@ export const hardwareScanPayloadSchema = z.object({
   nicVendor: z.string().max(100).optional(),
   storageSummary: z.record(z.unknown()).optional(),
   anticheats: z.array(z.string().max(50)).optional(),
+  sessionToken: z.string().max(128).optional(),
 });
 export type HardwareScanPayload = z.infer<typeof hardwareScanPayloadSchema>;
 

@@ -118,7 +118,8 @@ export interface IStorage {
   useDiscountCode(code: string): Promise<void>;
   deleteDiscountCode(id: number): Promise<void>;
   // Hardware rigs / tweak suggestions / NVIDIA drivers (V2 Hardware DB)
-  upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }>;
+  getProCodeForToken(sessionToken: string): Promise<string | null>;
+  upsertRig(payload: HardwareScanPayload, discordUserId?: string | null, proCode?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }>;
   markRigAlertSent(hash: string): Promise<void>;
   getRigByHash(hash: string): Promise<HardwareRig | null>;
   getRigById(id: number): Promise<HardwareRig | null>;
@@ -962,7 +963,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(discountCodes).where(eq(discountCodes.id, id));
   }
 
-  async upsertRig(payload: HardwareScanPayload, discordUserId?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }> {
+  async getProCodeForToken(sessionToken: string): Promise<string | null> {
+    try {
+      const rows = await db.select({ codeRef: proSessions.codeRef })
+        .from(proSessions)
+        .where(eq(proSessions.sessionToken, sessionToken))
+        .limit(1);
+      return rows[0]?.codeRef ?? null;
+    } catch { return null; }
+  }
+
+  async upsertRig(payload: HardwareScanPayload, discordUserId?: string | null, proCode?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }> {
     const hash = computeRigHash(payload);
     const existing = await db.select().from(hardwareRigs).where(eq(hardwareRigs.hash, hash)).limit(1);
     if (existing.length) {
@@ -971,6 +982,7 @@ export class DatabaseStorage implements IStorage {
           lastSeenAt: new Date(),
           seenCount: sql`${hardwareRigs.seenCount} + 1`,
           ...(discordUserId !== undefined ? { discordUserId: discordUserId ?? null } : {}),
+          ...(proCode ? { proCode } : {}),
           cpu: payload.cpu,
           gpu: payload.gpu,
           vramMb: payload.vramMb ?? null,
@@ -991,6 +1003,7 @@ export class DatabaseStorage implements IStorage {
     const [rig] = await db.insert(hardwareRigs).values({
       hash,
       discordUserId: discordUserId ?? null,
+      proCode: proCode ?? null,
       cpu: payload.cpu,
       gpu: payload.gpu,
       vramMb: payload.vramMb ?? null,

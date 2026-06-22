@@ -69,7 +69,9 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
       r.gpu.toLowerCase().includes(q) ||
       (r.chassis ?? "").toLowerCase().includes(q) ||
       (r.motherboard ?? "").toLowerCase().includes(q) ||
-      r.hash.includes(q)
+      r.hash.includes(q) ||
+      (r.proCode ?? "").toLowerCase().includes(q) ||
+      (r.discordUserId ?? "").includes(q)
     );
   }, [rigs, search]);
 
@@ -135,7 +137,7 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
             data-testid="input-search-rigs"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by CPU, GPU, chassis, hash…"
+            placeholder="Search by CPU, GPU, code (NENG-B8KK-GT6B), hash…"
             className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-900/70 border border-white/5 text-xs text-white placeholder:text-zinc-700 focus:outline-none focus:border-zinc-500/30"
           />
         </div>
@@ -173,12 +175,11 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
           <table className="w-full text-[11px]">
             <thead className="bg-zinc-900/70 text-zinc-500 text-[9px] uppercase tracking-widest">
               <tr>
+                <th className="text-left px-3 py-2 font-bold">Code</th>
                 <th className="text-left px-3 py-2 font-bold">CPU</th>
                 <th className="text-left px-3 py-2 font-bold">GPU</th>
-                <th className="text-right px-3 py-2 font-bold">VRAM</th>
-                <th className="text-right px-3 py-2 font-bold">RAM</th>
+                <th className="text-right px-3 py-2 font-bold hidden md:table-cell">RAM</th>
                 <th className="text-left px-3 py-2 font-bold hidden md:table-cell">Chassis</th>
-                <th className="text-right px-3 py-2 font-bold hidden md:table-cell">Seen</th>
                 <th className="text-right px-3 py-2 font-bold">Last</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -191,12 +192,19 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
                   onClick={() => setOpenRig(r)}
                   className="hover:bg-white/5 cursor-pointer"
                 >
-                  <td className="px-3 py-2 text-zinc-200">{r.cpu}</td>
-                  <td className="px-3 py-2 text-zinc-200">{r.gpu}</td>
-                  <td className="px-3 py-2 text-right text-zinc-400">{r.vramMb ? `${r.vramMb} MB` : "—"}</td>
-                  <td className="px-3 py-2 text-right text-zinc-400">{r.ramGb ? `${r.ramGb}GB${r.ramMhz ? ` @ ${r.ramMhz}` : ""}` : "—"}</td>
+                  <td className="px-3 py-2">
+                    {r.proCode ? (
+                      <span className="font-mono text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                        {r.proCode}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-700 text-[9px]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-200 max-w-[160px] truncate">{r.cpu}</td>
+                  <td className="px-3 py-2 text-zinc-200 max-w-[160px] truncate">{r.gpu}</td>
+                  <td className="px-3 py-2 text-right text-zinc-400 hidden md:table-cell">{r.ramGb ? `${r.ramGb}GB` : "—"}</td>
                   <td className="px-3 py-2 text-zinc-500 hidden md:table-cell">{r.chassis ?? "—"}</td>
-                  <td className="px-3 py-2 text-right text-zinc-400 hidden md:table-cell">{r.seenCount}</td>
                   <td className="px-3 py-2 text-right text-zinc-500">{timeAgo(r.lastSeenAt)}</td>
                   <td className="px-3 py-2 text-right">
                     <Eye className="w-3.5 h-3.5 text-zinc-600 inline" />

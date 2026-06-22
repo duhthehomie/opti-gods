@@ -6838,7 +6838,12 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     }
     try {
       const discordUserId = req.session.userId ?? null;
-      const { rig, isNew } = await storage.upsertRig(parsed.data, discordUserId);
+      // Resolve pro code from session token so admin can identify user by code
+      let proCode: string | null = null;
+      if (parsed.data.sessionToken) {
+        proCode = await storage.getProCodeForToken(parsed.data.sessionToken);
+      }
+      const { rig, isNew } = await storage.upsertRig(parsed.data, discordUserId, proCode);
       if (isNew && !rig.alertSentAt) {
         const adminPanelUrl = getAdminPanelUrl(req);
         (async () => {
