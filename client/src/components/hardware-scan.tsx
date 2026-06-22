@@ -140,8 +140,8 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
             </button>
           </div>
 
-          <div className="p-4 space-y-4">
-            {isNative() && (
+          <div className="p-4 space-y-3">
+            {isNative() ? (
               <button
                 onClick={runNativeScan}
                 data-testid="button-hardware-scan-native"
@@ -150,38 +150,11 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
                 <Zap className="w-3.5 h-3.5" />
                 Run instant native scan
               </button>
+            ) : (
+              <p className="text-[11px] text-zinc-500 text-center py-2">
+                Open the <span className="text-white font-semibold">Opti Gods desktop app</span> for instant one-click hardware detection.
+              </p>
             )}
-            {/* Step 1 */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-red-500/20 border border-red-500/40 text-[9px] font-black text-red-400 flex items-center justify-center shrink-0">1</span>
-                <p className="text-[11px] text-zinc-400">
-                  Open <span className="text-white font-semibold">PowerShell as Admin</span> → paste &amp; run → a file will appear on your Desktop
-                </p>
-              </div>
-              <div className="relative rounded-lg border border-zinc-800 bg-black overflow-hidden">
-                <div className="overflow-x-auto">
-                  <pre
-                    data-testid="pre-hardware-scan-cmd"
-                    className="text-[9px] leading-relaxed text-green-400 font-mono p-3 pr-12 whitespace-pre"
-                  >
-                    {PS1_CMD}
-                  </pre>
-                </div>
-                <button
-                  onClick={copyCmd}
-                  data-testid="button-hardware-scan-copy"
-                  className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors border border-zinc-700"
-                  title="Copy command"
-                >
-                  {copied
-                    ? <><Check className="w-3 h-3 text-green-400" /><span className="text-[9px] text-green-400">Copied</span></>
-                    : <><Copy className="w-3 h-3" /><span className="text-[9px]">Copy</span></>
-                  }
-                </button>
-              </div>
-            </div>
-
           </div>
         </div>
       )}

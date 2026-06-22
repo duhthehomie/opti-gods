@@ -16,6 +16,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+// ── Persistent key for HW Monitor scan data ──────────────────────────────────
+const HW_MONITOR_KEY = "optigods-hwmonitor-data";
+
+function loadHwMonitor(): HwMonitorData | null {
+  try { const r = localStorage.getItem(HW_MONITOR_KEY); return r ? JSON.parse(r) as HwMonitorData : null; } catch { return null; }
+}
+
 // ── HW Monitor import data shape ─────────────────────────────────────────────
 interface HwMonitorData {
   gpu_temp_c?: number | null;
@@ -355,17 +362,25 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 
 // ── HW Monitor Panel ─────────────────────────────────────────────────────────
 function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
-  const [hw, setHw] = useState<HwMonitorData | null>(null);
+  const [hw, setHw] = useState<HwMonitorData | null>(() => loadHwMonitor());
   const [dragging, setDragging] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Seed parent on first render if we already have cached data
+  useEffect(() => {
+    const cached = loadHwMonitor();
+    if (cached) onData?.(cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const parseJson = (text: string) => {
     setParseError(null);
     try {
       const data = JSON.parse(text.replace(/^\uFEFF/, "")) as HwMonitorData;
       if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
+      try { localStorage.setItem(HW_MONITOR_KEY, JSON.stringify(data)); } catch {}
       setHw(data);
       onData?.(data);
     } catch {
@@ -657,12 +672,15 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-2">
           <Thermometer className="w-4 h-4 text-red-400" />
-          <span className="text-sm font-bold text-white">Live Sensor Monitor</span>
-          <span className="text-[10px] text-zinc-600">CPU + GPU temps via BAT script</span>
+          <span className="text-sm font-bold text-white">Sensor Scan</span>
+          {hw
+            ? <span className="text-[10px] text-emerald-500/80">Saved — drag again to refresh</span>
+            : <span className="text-[10px] text-zinc-600">Drag JSON once — saves permanently</span>
+          }
         </div>
         <div className="flex items-center gap-2">
           {hw && (
-            <button onClick={() => setHw(null)} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors">
+            <button onClick={() => { try { localStorage.removeItem(HW_MONITOR_KEY); } catch {} setHw(null); onData?.(null as unknown as HwMonitorData); }} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors" title="Clear saved scan">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -689,8 +707,9 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
             onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
           <Upload className="w-5 h-5 text-zinc-600" />
           <p className="text-[11px] text-zinc-500 text-center px-6">
-            Drag <span className="font-mono text-zinc-400">OptiGods-HW-Monitor.json</span> here (saved to Desktop)
+            Drag <span className="font-mono text-zinc-400">OptiGods-HW-Monitor.json</span> here — saved to localStorage permanently
           </p>
+          <p className="text-[10px] text-zinc-600 text-center px-6">Download the BAT above, run it once, drag the JSON — done forever</p>
           {parseError && <p className="text-[10px] text-red-400">{parseError}</p>}
         </div>
       ) : (
@@ -999,8 +1018,8 @@ export default function SystemScanPage() {
   const [nativeScan, setNativeScan] = useState<NativeHardwareScan | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  // HW Monitor JSON data lifted from HwMonitorPanel so top-level stats can use it
-  const [hwMonitorData, setHwMonitorData] = useState<HwMonitorData | null>(null);
+  // HW Monitor JSON data — seeded from localStorage so temps/fans persist across sessions
+  const [hwMonitorData, setHwMonitorData] = useState<HwMonitorData | null>(() => loadHwMonitor());
   const native = isNative();
 
   const runScan = useCallback(() => {
@@ -1158,8 +1177,8 @@ export default function SystemScanPage() {
           </div>
         )}
 
-        {/* Live Monitor — real-time CPU/GPU/RAM via background BAT script */}
-        {!loading && <LiveMonitorPanel ramGB={nativeScan?.ram_gb ?? hw.ramGB} />}
+        {/* Sensor Scan — drag OptiGods-HW-Monitor.json once, persists permanently */}
+        {!loading && !native && <HwMonitorPanel onData={d => setHwMonitorData(d ?? null)} />}
       </div>
     </AppLayout>
   );
