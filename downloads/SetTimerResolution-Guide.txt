@@ -1,0 +1,47 @@
+─────────────────────────────────────────
+  OPTI GODS — Set Timer Resolution Guide
+─────────────────────────────────────────
+
+Your timer is currently at 1ms resolution.
+That is the Windows global minimum — it is working correctly.
+
+The ~1ms delta you see on Sleep(1) is normal OS scheduling
+overhead, not a problem. At 1ms resolution this is expected.
+
+─────────────────────────────────────────
+  HOW TO PUSH TO 0.5ms (ADVANCED OPT-IN)
+─────────────────────────────────────────
+
+In Opti Gods:
+  1. Open the app
+  2. Go to the REGISTRY tab
+  3. Scroll down to find "Set Timer Resolution"
+  4. Toggle it ON
+  5. Download and run the generated .ps1 script
+  6. REBOOT
+
+This calls NtSetTimerResolution directly (bypasses the
+standard Windows timeBeginPeriod limit) and sets a
+persistent 0.5ms system timer.
+
+─────────────────────────────────────────
+  IMPORTANT NOTES
+─────────────────────────────────────────
+
+  • This tweak is OPT-IN for a reason.
+    On some Ryzen APU and older Intel chipsets it can
+    cause boot delays or instability. If anything goes
+    wrong after reboot, run this to revert:
+
+    bcdedit /deletevalue disabledynamictick
+
+  • You DO NOT need "useplatformtick" — that version
+    caused issues on Ryzen 3000/5000 series. Opti Gods
+    uses the safe "disabledynamictick" method.
+
+  • After applying, re-run your timer resolution tester.
+    You should see Resolution: 0.5000ms
+
+─────────────────────────────────────────
+  optigods.replit.app
+─────────────────────────────────────────

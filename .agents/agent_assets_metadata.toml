@@ -66,3 +66,9 @@ id = "zwN2kipg4oA7kLvZBoimk"
 uri = "file://exports/OptiGods_FiveM_Priority_Booster.zip"
 type = "unspecified"
 title = "OptiGods_FiveM_Priority_Booster.bat (fixed v2)"
+
+[[outputs]]
+id = "sZz68n4DpkNSzBKJBbEwQ"
+uri = "file://downloads/SetTimerResolution-Guide.txt"
+type = "text"
+title = "SetTimerResolution Guide for five"
