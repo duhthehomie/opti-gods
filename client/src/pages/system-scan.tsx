@@ -630,6 +630,15 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
       ``,
       `title Opti Gods by leaq  --  Hardware Monitor`,
       ``,
+      `:: Self-copy to Desktop on first run so user can re-run anytime`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command ^`,
+      `  "$d=$null;try{$r=(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -EA SilentlyContinue).Desktop;if($r){$d=[Environment]::ExpandEnvironmentVariables($r)}}catch{};if(-not $d -or -not(Test-Path $d)){try{$d=[Environment]::GetFolderPath('Desktop')}catch{}};if(-not $d -or -not(Test-Path $d)){$d=Join-Path $env:USERPROFILE 'Desktop'};$dst=Join-Path $d 'OptiGods-HW-Monitor.bat';if(-not(Test-Path $dst)){Copy-Item $env:SELF $dst -Force -EA SilentlyContinue}"`,
+      ``,
+      `:: Opti Gods website shortcut (.url) on Desktop`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command ^`,
+      `  "$d=$null;try{$r=(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -EA SilentlyContinue).Desktop;if($r){$d=[Environment]::ExpandEnvironmentVariables($r)}}catch{};if(-not $d -or -not(Test-Path $d)){try{$d=[Environment]::GetFolderPath('Desktop')}catch{}};if(-not $d -or -not(Test-Path $d)){$d=Join-Path $env:USERPROFILE 'Desktop'};$dst=Join-Path $d 'Opti Gods.url';if(-not(Test-Path $dst)){[IO.File]::WriteAllText($dst,[char]91+'InternetShortcut'+[char]93+[char]13+[char]10+'URL=https://optigods.com'+[char]13+[char]10,[Text.Encoding]::ASCII)}"`,
+      ``,
+      `:: Extract embedded PS1`,
       `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m=${markerSearchPs};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
       ``,
       `if not exist "%TMPPS1%" (`,
@@ -672,23 +681,23 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-2">
           <Thermometer className="w-4 h-4 text-red-400" />
-          <span className="text-sm font-bold text-white">Sensor Scan</span>
+          <span className="text-sm font-bold text-white">Live Hardware Monitor</span>
           {hw
-            ? <span className="text-[10px] text-emerald-500/80">Saved — drag again to refresh</span>
-            : <span className="text-[10px] text-zinc-600">Drag JSON once — saves permanently</span>
+            ? <span className="text-[10px] text-emerald-500/80">Data saved — drag again to refresh</span>
+            : <span className="text-[10px] text-zinc-500">Download BAT → run it → drag the JSON here</span>
           }
         </div>
         <div className="flex items-center gap-2">
           {hw && (
-            <button onClick={() => { try { localStorage.removeItem(HW_MONITOR_KEY); } catch {} setHw(null); onData?.(null as unknown as HwMonitorData); }} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors" title="Clear saved scan">
+            <button onClick={() => { try { localStorage.removeItem(HW_MONITOR_KEY); } catch {} setHw(null); onData?.(null as unknown as HwMonitorData); }} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors" title="Clear saved data">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
           <button
             data-testid="button-download-hw-monitor"
             onClick={downloadBat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 border border-red-500/60 text-white text-[10px] font-bold uppercase tracking-wider transition-colors">
-            <Download className="w-3 h-3" /> Download BAT
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 border border-red-500/60 text-white text-xs font-bold uppercase tracking-wider transition-colors">
+            <Download className="w-3.5 h-3.5" /> Download BAT
           </button>
         </div>
       </div>
