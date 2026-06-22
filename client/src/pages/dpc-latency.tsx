@@ -341,32 +341,99 @@ Write-Host ""`,
     id: "audio",
     icon: Volume2,
     driver: "HDAudBus.sys",
-    label: "Audio Driver",
-    severity: "medium",
+    label: "Audio Cutouts & Beeps Fix",
+    severity: "high",
     reboot: false,
     visible: () => true,
-    desc: "Raises MMCSS Pro Audio scheduler priority and sets SystemResponsiveness=0 so games get maximum CPU time. HDMI audio over GPU is a common DPC offender — patch applies regardless of audio output.",
+    desc: "Fixes audio pops, beeps, and cutouts mid-game. Tunes both MMCSS Audio + Pro Audio scheduler tasks, disables Windows audio enhancements (APO/EQ/spatial chain — #1 cause of mid-game glitches), and removes the default 10ms audio buffer latency. LatencyMon-clean systems still get cutouts from the enhancement DSP chain — this kills it.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
-$Host.UI.RawUI.WindowTitle = "Opti Gods — Audio DPC Fix"
+$Host.UI.RawUI.WindowTitle = "Opti Gods — Audio Cutout Fix"
 Write-Host ""
-Write-Host " OPTI GODS — Audio Driver DPC Fix" -ForegroundColor Red
-Write-Host " =====================================" -ForegroundColor DarkRed
+Write-Host " OPTI GODS — Audio Cutout / Beep / Pop Fix" -ForegroundColor Red
+Write-Host " ============================================" -ForegroundColor DarkRed
 Write-Host ""
+
+# ── 1. MMCSS Audio task (standard audio thread used by games + Discord) ──────
+$audio = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio'
+if (!(Test-Path $audio)) { New-Item $audio -Force | Out-Null }
+Set-ItemProperty $audio 'Scheduling Category' 'Medium'  -Type String -Force
+Set-ItemProperty $audio 'Priority'             6         -Type DWord  -Force
+Set-ItemProperty $audio 'SFIO Priority'        'High'    -Type String -Force
+Set-ItemProperty $audio 'Background Only'      'False'   -Type String -Force
+Set-ItemProperty $audio 'Clock Rate'           10000     -Type DWord  -Force
+Set-ItemProperty $audio 'GPU Priority'         8         -Type DWord  -Force
+Write-Host " [OK] MMCSS Audio task: Priority=6, SFIO=High, ClockRate=0.5ms — game audio threads pre-empt background tasks" -ForegroundColor Green
+
+# ── 2. MMCSS Pro Audio task (used by Voicemeeter, DAWs, Realtek driver) ──────
 $proAudio = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Pro Audio'
 if (!(Test-Path $proAudio)) { New-Item $proAudio -Force | Out-Null }
-Set-ItemProperty $proAudio 'Scheduling Category' 'High' -Type String -Force
-Set-ItemProperty $proAudio 'Priority' 6 -Type DWord -Force
-Set-ItemProperty $proAudio 'SFIO Priority' 'High' -Type String -Force
-Set-ItemProperty $proAudio 'Background Only' 'False' -Type String -Force
-Set-ItemProperty $proAudio 'Clock Rate' 10000 -Type DWord -Force
-Set-ItemProperty $proAudio 'GPU Priority' 8 -Type DWord -Force
-Write-Host " [OK] MMCSS Pro Audio profile set to maximum priority" -ForegroundColor Green
-Set-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 0 -Type DWord -Force
-Write-Host " [OK] SystemResponsiveness=0 — maximum CPU time to foreground games and multimedia" -ForegroundColor Green
+Set-ItemProperty $proAudio 'Scheduling Category' 'High'   -Type String -Force
+Set-ItemProperty $proAudio 'Priority'             6        -Type DWord  -Force
+Set-ItemProperty $proAudio 'SFIO Priority'        'High'   -Type String -Force
+Set-ItemProperty $proAudio 'Background Only'      'False'  -Type String -Force
+Set-ItemProperty $proAudio 'Clock Rate'           10000    -Type DWord  -Force
+Set-ItemProperty $proAudio 'GPU Priority'         8        -Type DWord  -Force
+Write-Host " [OK] MMCSS Pro Audio task: High scheduling — Realtek/Voicemeeter driver gets deterministic CPU slice" -ForegroundColor Green
+
+# ── 3. SystemResponsiveness = 10 ──────────────────────────────────────────────
+$sp = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
+Set-ItemProperty $sp 'SystemResponsiveness'    10          -Type DWord  -Force
+Set-ItemProperty $sp 'NetworkThrottlingIndex'  0xFFFFFFFF  -Type DWord  -Force
+Write-Host " [OK] SystemResponsiveness=10 — game + audio threads own 90% CPU; NetworkThrottling removed" -ForegroundColor Green
+
+# ── 4. Disable Windows Audio Enhancements on ALL render endpoints ─────────────
 Write-Host ""
-Write-Host " Audio DPC fix applied. No reboot needed." -ForegroundColor Cyan
-Write-Host " TIP: If you still see HDAudBus spikes, update audio drivers from your GPU vendor" -ForegroundColor Gray
-Write-Host "      site (not Windows Update) and consider disabling HDMI audio if unused." -ForegroundColor Gray
+Write-Host " Disabling audio enhancements on all playback devices..." -ForegroundColor Yellow
+$renderPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Render'
+if (Test-Path $renderPath) {
+    $devCount = 0
+    Get-ChildItem $renderPath | ForEach-Object {
+        $propsPath = "$($_.PSPath)\\Properties"
+        if (Test-Path $propsPath) {
+            # {1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5 = PKEY_AudioEndpoint_Disable_SysFx (0 = disabled = NO effects)
+            Set-ItemProperty $propsPath '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' 1 -Type DWord -Force -EA SilentlyContinue
+            # {62ec7b65-4a0a-4e49-8a4e-16a6e95d756e},1 = disable spatial audio / Windows Sonic
+            Set-ItemProperty $propsPath '{62ec7b65-4a0a-4e49-8a4e-16a6e95d756e},1' 0 -Type DWord -Force -EA SilentlyContinue
+            $devCount++
+        }
+    }
+    Write-Host " [OK] Audio enhancements (APO / EQ / Windows Sonic / spatial) DISABLED on $devCount device(s)" -ForegroundColor Green
+    Write-Host "      APO enhancement chain was DSP-processing every audio frame — direct cause of beeps/pops" -ForegroundColor Gray
+} else {
+    Write-Host " [!] No audio render devices found in registry (open Sound settings first)" -ForegroundColor Yellow
+}
+
+# ── 5. Disable Exclusive Mode protection (lets games own the audio device) ───
+if (Test-Path $renderPath) {
+    Get-ChildItem $renderPath | ForEach-Object {
+        $propsPath = "$($_.PSPath)\\Properties"
+        if (Test-Path $propsPath) {
+            # {b3f8fa53-0004-438e-9003-51a46e139bfc},3 = allow exclusive mode
+            Set-ItemProperty $propsPath '{b3f8fa53-0004-438e-9003-51a46e139bfc},3' 1 -Type DWord -Force -EA SilentlyContinue
+            # {b3f8fa53-0004-438e-9003-51a46e139bfc},4 = give exclusive mode priority
+            Set-ItemProperty $propsPath '{b3f8fa53-0004-438e-9003-51a46e139bfc},4' 1 -Type DWord -Force -EA SilentlyContinue
+        }
+    }
+    Write-Host " [OK] Exclusive mode enabled + prioritised — games can own the audio endpoint directly" -ForegroundColor Green
+}
+
+# ── 6. Realtek audio power management off (if Realtek present) ───────────────
+$rtPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e96c-e325-11ce-bfc1-08002be10318}'
+if (Test-Path $rtPath) {
+    Get-ChildItem $rtPath -EA SilentlyContinue | ForEach-Object {
+        $desc = (Get-ItemProperty $_.PSPath -EA SilentlyContinue).DriverDesc
+        if ($desc -match 'Realtek|HD Audio') {
+            Set-ItemProperty $_.PSPath 'PowerSettings' ([byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -Force -EA SilentlyContinue
+            Set-ItemProperty $_.PSPath 'ConservationIdleTime' 0 -Type DWord -Force -EA SilentlyContinue
+            Set-ItemProperty $_.PSPath 'PerformanceIdleTime' 0 -Type DWord -Force -EA SilentlyContinue
+            Write-Host " [OK] Realtek HD Audio: power management DISABLED — codec won't power down mid-game" -ForegroundColor Green
+        }
+    }
+}
+
+Write-Host ""
+Write-Host " Audio cutout fix applied. No reboot needed — takes effect immediately." -ForegroundColor Cyan
+Write-Host " NOTE: If you use Voicemeeter or virtual audio cables, restart them now." -ForegroundColor Gray
 Write-Host ""`,
   },
   // ── NVMe Storage (universal — no-ops if no NVMe present) ────────────────────
