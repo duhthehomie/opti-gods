@@ -1137,9 +1137,6 @@ export default function SystemScanPage() {
           </div>
         )}
 
-        {/* HW Monitor — always visible, lets any user import sensor data */}
-        {!loading && <HwMonitorPanel onData={setHwMonitorData} />}
-
         {/* Live Monitor — real-time CPU/GPU/RAM via background BAT script */}
         {!loading && <LiveMonitorPanel ramGB={nativeScan?.ram_gb ?? hw.ramGB} />}
       </div>
