@@ -339,6 +339,11 @@ const GAMES: GameEntry[] = [
       "F:\\SteamLibrary\\steamapps\\common\\007 First Light",
       "C:\\Program Files\\IO Interactive\\007 First Light",
       "D:\\Games\\007 First Light",
+      "D:\\Games\\007 First Light\\Retail",
+      "C:\\Games\\007 First Light",
+      "C:\\Games\\007 First Light\\Retail",
+      "E:\\Games\\007 First Light",
+      "F:\\Games\\007 First Light",
     ],
     processName: "007FirstLight-Win64-Shipping.exe",
     tweaks: [
@@ -471,11 +476,37 @@ function NowPlayingPanel() {
         return found;
       });
       setLastScan(new Date());
-      // Custom process name search across all_processes
+      // Custom process name / path search
       if (customInput.trim()) {
         const needle = customInput.trim().toLowerCase();
-        const hit = result.all_processes.find(p => p.name.toLowerCase().includes(needle));
-        setCustomFound(hit ? hit.name : null);
+        const isPath = needle.includes('\\') || needle.includes('/');
+
+        if (isPath) {
+          // First: try to match against a known game's detectPaths
+          const pathGame = GAMES.find(g =>
+            g.detectPaths.some(dp => {
+              const dpL = dp.toLowerCase();
+              return needle.startsWith(dpL) || dpL.startsWith(needle);
+            })
+          ) ?? null;
+          if (pathGame) {
+            // Path confirmed — surface the game card directly
+            setRunningGame(prev => {
+              if (prev?.id !== pathGame.id) setImgErr(false);
+              return pathGame;
+            });
+            setCustomFound(null);
+          } else {
+            // Fall back: search by last path segment (the exe/folder name)
+            const segments = needle.replace(/\//g, '\\').split('\\').filter(Boolean);
+            const lastName = segments[segments.length - 1];
+            const hit = result.all_processes.find(p => p.name.toLowerCase().includes(lastName));
+            setCustomFound(hit ? hit.name : null);
+          }
+        } else {
+          const hit = result.all_processes.find(p => p.name.toLowerCase().includes(needle));
+          setCustomFound(hit ? hit.name : null);
+        }
       } else {
         setCustomFound(null);
       }
@@ -604,7 +635,10 @@ function NowPlayingPanel() {
               </div>
               {customFound === null && customInput.trim() && !scanning && lastScan && (
                 <div className="px-4 py-2 text-[11px] text-zinc-500 bg-zinc-900/40 border-b border-white/5">
-                  <span className="text-red-400 font-medium">Not found</span> — "{customInput}" is not in the running process list. Make sure the game is open and try again.
+                  <span className="text-red-400 font-medium">Not found</span> — "{customInput}" did not match any known game path or running process.{" "}
+                  {(customInput.includes('\\') || customInput.includes('/'))
+                    ? "Paste the exact install folder (e.g. D:\\Games\\007 First Light) or just type the .exe name (e.g. 007FirstLight.exe)."
+                    : "Make sure the game is open and the .exe name is correct, then try again."}
                 </div>
               )}
             </motion.div>
