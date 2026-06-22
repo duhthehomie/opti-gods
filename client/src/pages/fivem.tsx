@@ -25,6 +25,8 @@ const ALL_FIVEM_IDS = [
   "FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode","FiveM1650HAGSOffPack",
   "FiveM3500CoreAffinity","FiveM3500PerfPlan",
   "FiveM2060VRAMBudget","FiveMi5CoreAffinity",
+  "FiveMIntel14PcoreAffinity","FiveMIntel14PowerPlan",
+  "FiveM5060VRAMBudget","FiveM5060EnableHAGS","FiveM5060LowLatency",
 ];
 
 type Impact = "HIGH" | "MED" | "LOW";
@@ -69,6 +71,8 @@ export default function Fivem() {
     ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? ["FiveM1060VRAMFlag","FiveM1060DisableHAGS"] : []),
     ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? ["FiveM1650VRAMBudget","FiveM1650DisableHAGS","FiveM1650LowLatencyMode"] : []),
     ...(hw.gpuName.toLowerCase().includes("2060") ? ["FiveM2060VRAMBudget"] : []),
+    ...(hw.isIntelCore && hw.cpuGeneration >= 12 ? ["FiveMIntel14PcoreAffinity","FiveMIntel14PowerPlan"] : []),
+    ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? ["FiveM5060VRAMBudget","FiveM5060EnableHAGS","FiveM5060LowLatency"] : []),
   ];
 
   const PROCESS_TWEAKS: Tweak[] = [
@@ -87,6 +91,10 @@ export default function Fivem() {
     ] : []),
     ...(hw.isIntelCore && hw.cpuGeneration === 4 ? [
       { id: "FiveMi5CoreAffinity", title: "Pin GTA5 + FiveM to All Physical Cores (0xF)", desc: "Sets CPU affinity mask 0xF for GTA5.exe and FiveM.exe — covers all 4 physical cores. Applied via IFEO (CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off). Prevents any background process from stealing a core mid-gunfight.", badge: "CPU AFFINITY", impact: "HIGH" as const },
+    ] : []),
+    ...(hw.isIntelCore && hw.cpuGeneration >= 12 ? [
+      { id: "FiveMIntel14PcoreAffinity", title: `Pin GTA5 + FiveM to P-Cores Only — Skip E-Cores (Intel ${hw.cpuGeneration}th Gen)`, desc: `Intel ${hw.cpuGeneration}th gen has both Performance-cores (fast, HT-enabled) and Efficiency-cores (slower background cores). GTA V's render + physics threads run best on P-cores — pinning to mask 0xFFF (threads 0-11, the 6 P-cores × 2 HT threads) tells Windows to never schedule GTA5.exe or FiveM.exe on an E-core. Eliminates the frametime variance caused by the game landing on a slower E-core thread between frames. Applied persistently via IFEO so it survives restarts.`, badge: "P-CORE AFFINITY", impact: "HIGH" as const },
+      { id: "FiveMIntel14PowerPlan", title: `Ultra Performance Power Plan — Intel ${hw.cpuGeneration}th Gen`, desc: `Activates Ultra Performance plan (falls back to High Performance) and pins CPU Min/Max state to 100% with Aggressive boost. Also sets HeteroPolicy=1 so Intel Thread Director aggressively prefers P-cores for all foreground threads. Prevents the 12th/13th/14th gen governor from dropping P-core clocks between frames — the main cause of irregular frametimes on hybrid-core Intel CPUs during GTA V.`, badge: "POWER PLAN", impact: "MED" as const },
     ] : []),
   ];
 
@@ -128,6 +136,9 @@ export default function Fivem() {
     ...(hw.gpuName.toLowerCase().includes("2060") ? [
       { id: "FiveM2060VRAMBudget", title: "Unlock Full GPU VRAM Budget for GTA V", desc: "Appends -availablevidmem 6144 -percentvidmem 100 to GTA V commandline.txt. Stops GTA V from under-reporting VRAM on some Turing GPU setups — eliminates texture pop-in on high-asset FiveM servers.", badge: "COMMANDLINE", impact: "HIGH" as const },
     ] : []),
+    ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? [
+      { id: "FiveM5060VRAMBudget", title: "Unlock Full 8GB VRAM Budget for GTA V (RTX 5060)", desc: "Appends -availablevidmem 8192 -percentvidmem 100 to GTA V commandline.txt. Forces GTA V to use the full 8GB GDDR7 VRAM — eliminates the VRAM under-reporting that causes texture pop-in and hitching on high-asset FiveM servers. Blackwell architecture VRAM management is more aggressive than Turing/Ampere; telling the engine the full budget upfront prevents mid-session texture unloads.", badge: "COMMANDLINE", impact: "HIGH" as const },
+    ] : []),
   ];
 
   const PERF_OPTIONS_TWEAKS: Tweak[] = [
@@ -145,6 +156,10 @@ export default function Fivem() {
       { id: "FiveM1650DisableAnsel", title: "Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 in NVIDIA registry. Ansel injects into every render frame — disabling removes hook overhead and keeps the display container stable.", badge: "GPU DRIVER", impact: "MED" as const },
       { id: "FiveM1650LowLatencyMode", title: "Low Latency Mode = Ultra (Driver-Level)", desc: "Sets RmLowLatencyMode=2 (Ultra), FlipQueueSize=1, PowerMizer P0 in both the GPU class registry and global NVTweak. Equivalent to NVCP Ultra but applied at the driver level so it survives NVCP resets. Critical companion to HAGS OFF — without it the render queue can back up and cause the 160→60 FPS drop pattern.", badge: "GPU DRIVER", impact: "HIGH" as const },
       { id: "FiveM1650HAGSOffPack", title: "HAGS OFF Stability Pack — DXGI + Frame Pipeline", desc: "Applies three fixes that HAGS OFF requires to work cleanly: (1) DXGI AllowTearing=1 + MaxFrameLatency=1 — enables immediate present without HAGS so frames don't queue up and dump all at once causing the 60 FPS cliff. (2) RenderThrottlingOff=1 + GpuIdleEnabled=0 + PowerSavingVsyncOn=0 on all GTA5/FiveM process IFEO keys — prevents the driver from throttling render submission between heavy frames. (3) MMCSS Games PreRenderedFrames=1 — keeps the system multimedia profile aligned with the driver setting.", badge: "HAGS OFF", impact: "HIGH" as const },
+    ] : []),
+    ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? [
+      { id: "FiveM5060EnableHAGS", title: "Enable Hardware-Accelerated GPU Scheduling (RTX 5060 — Correct ON)", desc: "Sets HwSchMode=2 (enabled) in the graphics drivers registry. Unlike older Pascal/Turing cards where HAGS hurt frametimes, Blackwell (RTX 5000-series) is architecturally optimized for HAGS — the GPU manages its own DMA work queue without CPU intervention. Reboot required after applying.", badge: "HAGS ON", impact: "HIGH" as const },
+      { id: "FiveM5060LowLatency", title: "Low Latency Mode = Ultra + Flip Queue = 1 (RTX 5060)", desc: "Sets RmLowLatencyMode=2 (Ultra) and FlipQueueSize=1 both per-adapter and globally in NVTweak. Equivalent to NVCP Low Latency = Ultra but survives NVCP resets. On GDDR7 RTX 5060, pairing Low Latency Ultra with HAGS ON gives the tightest possible frame-to-display pipeline — the GPU pre-renders exactly 1 frame ahead, eliminating input lag from queued frames.", badge: "GPU DRIVER", impact: "HIGH" as const },
     ] : []),
   ];
 
