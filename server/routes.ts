@@ -4605,6 +4605,28 @@ Start-Sleep 2
     res.end(Buffer.from(script, 'utf8'));
   });
 
+  // ── Live Hardware Monitor — in-memory feed from OptiGods-Live-Monitor.bat ───
+  // No auth required: data is non-sensitive usage metrics posted from localhost.
+  let _hwLiveData: {
+    ts: number;
+    cpu_load_pct?: number; gpu_load_pct?: number;
+    ram_total_gb?: number; ram_free_gb?: number; ram_used_pct?: number;
+    cpu_temp_c?: number | null; gpu_temp_c?: number | null;
+  } | null = null;
+
+  app.post('/api/hw-live', (req, res) => {
+    const b = req.body || {};
+    _hwLiveData = { ts: Date.now(), ...b };
+    res.json({ ok: true });
+  });
+
+  app.get('/api/hw-live', (_req, res) => {
+    if (!_hwLiveData || Date.now() - _hwLiveData.ts > 8000) {
+      return res.json({ live: false });
+    }
+    return res.json({ live: true, ..._hwLiveData });
+  });
+
   // ── Mushy Face / Arms Texture Fix ────────────────────────────────────────
   app.get('/api/mushy-face-fix-script', (req, res) => {
     const ps1Lines = [
@@ -4649,6 +4671,40 @@ Start-Sleep 2
       `  }`,
       `  If (-not $found) {`,
       `    Write-Host "  [WARN] GPU class key not found. Open NVCP > Manage 3D Settings > Texture filtering quality = High quality" -ForegroundColor Yellow`,
+      `  }`,
+      `  # ── Also write to nvlddmkm driver path (bypasses NVIDIA Inspector global profile) ──`,
+      `  $drvPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Global\\NVTweak'`,
+      `  If (!(Test-Path $drvPath)) { New-Item $drvPath -Force | Out-Null }`,
+      `  Set-ItemProperty -Path $drvPath -Name 'PS_TexFilterQuality'      -Value 2 -Type DWord -Force -EA SilentlyContinue`,
+      `  Set-ItemProperty -Path $drvPath -Name 'PS_TexFilterAnisoOptOn'   -Value 0 -Type DWord -Force -EA SilentlyContinue`,
+      `  Set-ItemProperty -Path $drvPath -Name 'PS_TexFilterLODBiasAllow' -Value 1 -Type DWord -Force -EA SilentlyContinue`,
+      `  Set-ItemProperty -Path $drvPath -Name 'PS_TexFilterNoNeg'        -Value 0 -Type DWord -Force -EA SilentlyContinue`,
+      `  Write-Host "  [OK] nvlddmkm driver registry path patched — this overrides any NVIDIA Inspector global profile" -ForegroundColor Green`,
+      `  # ── Detect NVIDIA Inspector / Profile Inspector ──────────────────────────`,
+      `  $niExe = $null`,
+      `  @(`,
+      `    "$env:LocalAppData\\NVIDIA Inspector\\nvidiaProfileInspector.exe",`,
+      `    "$env:ProgramFiles\\NVIDIA Inspector\\nvidiaProfileInspector.exe",`,
+      `    "$env:ProgramFiles(x86)\\NVIDIA Inspector\\nvidiaProfileInspector.exe",`,
+      `    "$env:LocalAppData\\nvidiaProfileInspector.exe",`,
+      `    "$env:USERPROFILE\\Desktop\\nvidiaProfileInspector.exe",`,
+      `    "$env:USERPROFILE\\Downloads\\nvidiaProfileInspector.exe",`,
+      `    "$env:USERPROFILE\\Downloads\\nvidiaInspector\\nvidiaProfileInspector.exe"`,
+      `  ) | ForEach-Object { If (-not $niExe -and (Test-Path $_)) { $niExe = $_ } }`,
+      `  If ($niExe) {`,
+      `    Write-Host ""`,
+      `    Write-Host "  [!] NVIDIA Profile Inspector detected:" -ForegroundColor Yellow`,
+      `    Write-Host "      $niExe" -ForegroundColor DarkYellow`,
+      `    Write-Host "  Its global or per-app profile may still override texture quality." -ForegroundColor Yellow`,
+      `    Write-Host "  To fix in NVIDIA Profile Inspector:" -ForegroundColor White`,
+      `    Write-Host "    1. Open nvidiaProfileInspector.exe" -ForegroundColor Gray`,
+      `    Write-Host "    2. Profile dropdown: select 'Base Profile' (global)" -ForegroundColor Gray`,
+      `    Write-Host "    3. Search for 'Texture filtering - Quality'" -ForegroundColor Gray`,
+      `    Write-Host "    4. Set value to 'High quality (2)' -> Apply changes" -ForegroundColor Gray`,
+      `    Write-Host "    5. Repeat for 'Grand Theft Auto V' and 'FiveM' app profiles" -ForegroundColor Gray`,
+      `    Write-Host ""`,
+      `  } Else {`,
+      `    Write-Host "  [OK] NVIDIA Profile Inspector not found — no third-party profile conflict" -ForegroundColor DarkGray`,
       `  }`,
       `} ElseIf ($isAmd) {`,
       `  Write-Host "[FIX 1] AMD detected — applying High Quality texture filtering..." -ForegroundColor Cyan`,

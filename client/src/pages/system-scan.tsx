@@ -1,13 +1,14 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { useLiveStats } from "@/hooks/use-live-stats";
 import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
-  Download, Upload, X, MonitorCheck,
+  Download, Upload, X, MonitorCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -812,6 +813,164 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
   );
 }
 
+// ── Live Monitor Panel ────────────────────────────────────────────────────────
+function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
+  const stats = useLiveStats(ramGB);
+  const { toast } = useToast();
+
+  const downloadLiveBat = () => {
+    const postUrl = window.location.origin + '/api/hw-live';
+    const markerKey = '##LIVE_MONITOR_PS1##';
+    const markerSearchPs = `'##LIVE_MON'+'ITOR_PS1##'`;
+
+    const ps1Lines = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `$postUrl = '${postUrl}'`,
+      ``,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods -- Live Hardware Monitor" -ForegroundColor Red`,
+      `Write-Host "  Posts real-time CPU/GPU/RAM stats to: $postUrl" -ForegroundColor DarkGray`,
+      `Write-Host "  Press Ctrl+C to stop." -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      ``,
+      `# Locate nvidia-smi`,
+      `$smiExe = $null`,
+      `$smiCmd = Get-Command "nvidia-smi.exe" -EA SilentlyContinue`,
+      `if ($smiCmd) { $smiExe = $smiCmd.Source }`,
+      `else { @("$env:SystemRoot\\System32\\nvidia-smi.exe","C:\\Windows\\System32\\nvidia-smi.exe","$env:ProgramFiles\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe") | ForEach-Object { if (!$smiExe -and (Test-Path $_)) { $smiExe = $_ } } }`,
+      `if ($smiExe) { Write-Host "  [NVIDIA] nvidia-smi found: $smiExe" -ForegroundColor Green }`,
+      `else { Write-Host "  [INFO] nvidia-smi not found — GPU load/temp will be omitted (NVIDIA driver not installed or GTX card)" -ForegroundColor DarkGray }`,
+      `Write-Host ""`,
+      ``,
+      `while ($true) {`,
+      `  $d = @{}`,
+      `  # GPU`,
+      `  if ($smiExe) {`,
+      `    $raw = (& $smiExe --query-gpu=temperature.gpu --format=csv,noheader 2>$null).Trim()`,
+      `    if ($raw -match '^\\d+$') { $d.gpu_temp_c = [int]$raw }`,
+      `    $raw = (& $smiExe --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>$null).Trim()`,
+      `    if ($raw -match '^\\d+$') { $d.gpu_load_pct = [int]$raw }`,
+      `  }`,
+      `  # CPU load`,
+      `  try {`,
+      `    $ld = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1 -EA SilentlyContinue).CounterSamples[0].CookedValue`,
+      `    if ($null -ne $ld) { $d.cpu_load_pct = [math]::Round($ld,1) }`,
+      `  } catch {}`,
+      `  # CPU temp (ACPI / OHM / LHM)`,
+      `  $cpuT = $null`,
+      `  try { $z = Get-WmiObject -Namespace "root\\wmi" -Class MSAcpi_ThermalZoneTemperature -EA SilentlyContinue; if ($z) { $temps = $z | ForEach-Object { [math]::Round($_.CurrentTemperature/10-273.15,1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 }; if ($temps) { $cpuT = ($temps | Measure-Object -Maximum).Maximum } } } catch {}`,
+      `  if (-not $cpuT) { try { $ohm = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "CPU Package|CPU Core|Tdie|CPU CCD" }; if ($ohm) { $v=($ohm|Measure-Object -Property Value -Maximum).Maximum; if($v-gt 5 -and $v-lt 120){$cpuT=[math]::Round($v,1)} } } catch {} }`,
+      `  if (-not $cpuT) { try { $lhm = Get-WmiObject -Namespace "root\\LibreHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "CPU Package|Core|Tdie" }; if ($lhm) { $v=($lhm|Measure-Object -Property Value -Maximum).Maximum; if($v-gt 5 -and $v-lt 120){$cpuT=[math]::Round($v,1)} } } catch {} }`,
+      `  if ($null -ne $cpuT) { $d.cpu_temp_c = $cpuT }`,
+      `  # RAM`,
+      `  try { $os2 = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue; if ($os2) { $d.ram_total_gb=[math]::Round($os2.TotalVisibleMemorySize/1MB,1); $d.ram_free_gb=[math]::Round($os2.FreePhysicalMemory/1MB,1); $d.ram_used_pct=[math]::Round(100*(1-$os2.FreePhysicalMemory/$os2.TotalVisibleMemorySize),1) } } catch {}`,
+      `  # POST to Opti Gods`,
+      `  $json = $d | ConvertTo-Json -Compress`,
+      `  try { Invoke-WebRequest -Uri $postUrl -Method POST -Body $json -ContentType 'application/json' -UseBasicParsing -TimeoutSec 3 | Out-Null } catch {}`,
+      `  Start-Sleep -Seconds 2`,
+      `}`,
+    ].join('\r\n');
+
+    const batLines = [
+      `@echo off`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-Live-Monitor.ps1"`,
+      `title Opti Gods -- Live Hardware Monitor`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m=${markerSearchPs};$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `if not exist "%TMPPS1%" (echo [ERROR] Extraction failed & pause & exit /b 1)`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -File "%TMPPS1%"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      markerKey,
+      ps1Lines,
+    ].join('\r\n');
+
+    const blob = new Blob([batLines], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "OptiGods-Live-Monitor.bat";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast({ title: "Live Monitor downloaded", description: "Keep the window open while gaming — Opti Gods will show real CPU/GPU stats." });
+  };
+
+  const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+      className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <Radio className={cn("w-4 h-4", stats.isLive ? "text-emerald-400" : "text-zinc-600")} />
+          <span className="text-sm font-bold text-white">Live Monitor</span>
+          {stats.isLive ? (
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </span>
+          ) : (
+            <span className="text-[10px] text-zinc-600">BAT not running</span>
+          )}
+        </div>
+        <button
+          data-testid="button-download-live-monitor"
+          onClick={downloadLiveBat}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/8 hover:border-white/15 text-zinc-300 text-[10px] font-bold uppercase tracking-wider transition-colors">
+          <Download className="w-3 h-3" /> Download BAT
+        </button>
+      </div>
+
+      {stats.isLive ? (
+        <div className="p-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</p>
+            <p className="font-mono text-lg font-black text-white">{stats.cpuUsage}%</p>
+            {stats.cpuTemp != null && (
+              <p className={cn("text-[10px]", tempColor(stats.cpuTemp))}>{stats.cpuTemp}°C</p>
+            )}
+          </div>
+          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3" /> GPU</p>
+            <p className="font-mono text-lg font-black text-white">{stats.gpuUsage}%</p>
+            {stats.gpuTemp != null && (
+              <p className={cn("text-[10px]", tempColor(stats.gpuTemp))}>{stats.gpuTemp}°C</p>
+            )}
+          </div>
+          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
+            <p className="font-mono text-lg font-black text-white">{stats.ramPct}%</p>
+            <p className="text-zinc-500 text-[10px]">{stats.ramUsedGB} / {stats.ramTotalGB} GB</p>
+          </div>
+          <div className="p-3 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.03]">
+            <p className="text-[10px] uppercase tracking-wider text-emerald-500/70 mb-1 flex items-center gap-1"><Activity className="w-3 h-3" /> Status</p>
+            <p className="text-emerald-400 font-mono text-xs font-bold">Streaming</p>
+            <p className="text-zinc-600 text-[10px]">Updates every 2s</p>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-zinc-800/60 border border-white/5 shrink-0">
+            <Download className="w-4 h-4 text-zinc-500" />
+          </div>
+          <div>
+            <p className="text-sm text-zinc-300 font-medium mb-0.5">Real-time CPU / GPU / RAM stats</p>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Download the BAT above, run it while gaming, and this page will show live temps and usage — updated every 2 seconds from your actual hardware.
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-1.5">
+              Uses <span className="font-mono text-zinc-500">nvidia-smi</span> for GPU · WMI for CPU/RAM · ACPI/OHM for CPU temp
+            </p>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function SystemScanPage() {
   const hw = useHardwareInfo();
@@ -980,6 +1139,9 @@ export default function SystemScanPage() {
 
         {/* HW Monitor — always visible, lets any user import sensor data */}
         {!loading && <HwMonitorPanel onData={setHwMonitorData} />}
+
+        {/* Live Monitor — real-time CPU/GPU/RAM via background BAT script */}
+        {!loading && <LiveMonitorPanel ramGB={nativeScan?.ram_gb ?? hw.ramGB} />}
       </div>
     </AppLayout>
   );
