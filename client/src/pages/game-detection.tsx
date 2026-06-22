@@ -345,7 +345,7 @@ const GAMES: GameEntry[] = [
       "E:\\Games\\007 First Light",
       "F:\\Games\\007 First Light",
     ],
-    processName: "007FirstLight-Win64-Shipping.exe",
+    processName: "007FirstLight.exe",
     tweaks: [
       "Process priority: CPU=AboveNormal, IO=High, GPU Priority=8, EnergyThrottlingEnabled=0, ForegroundBoostPolicy=1 — persistent via IFEO across every relaunch",
       "UE5 Engine.ini tuning: motion blur off, chromatic aberration off, SSR disabled, Lumen GI quality=1 + SDFs off, shadow res capped at 512, streaming pool expanded to 1536MB for open-world asset streaming",
