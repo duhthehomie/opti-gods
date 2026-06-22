@@ -1397,10 +1397,21 @@ function AdminPresetGenerator({
     setFixGenerated(null);
   };
 
+  const getHwLabel = (hw: CustomerHW) => {
+    const codeNote = allCodes.find(c => c.code === hw.codeRef)?.note?.split(" | stripe:")[0];
+    if (codeNote) return codeNote;
+    if (hw.codeRef.startsWith("scan-")) return "Guest";
+    if (hw.codeRef.startsWith("rig-")) {
+      const id = hw.codeRef.split("-")[1];
+      return `Scanner #${id}`;
+    }
+    return hw.codeRef;
+  };
+
   const filteredHW = allHardware.filter(hw => {
     if (!hwSearch.trim()) return true;
     const q = hwSearch.toLowerCase();
-    const label = allCodes.find(c => c.code === hw.codeRef)?.note || hw.codeRef;
+    const label = getHwLabel(hw);
     return label.toLowerCase().includes(q)
       || (hw.gpuName || "").toLowerCase().includes(q)
       || (hw.cpuModel || "").toLowerCase().includes(q)
@@ -1676,8 +1687,7 @@ function AdminPresetGenerator({
               {filteredHW.length === 0 ? (
                 <p className="text-[10px] text-zinc-600 px-4 py-3">No users match your search</p>
               ) : filteredHW.map(hw => {
-                const codeData = allCodes.find(c => c.code === hw.codeRef);
-                const label = codeData?.note?.split(" | stripe:")[0] || hw.codeRef;
+                const label = getHwLabel(hw);
                 const isSelected = selectedUser === hw.codeRef;
                 const vendorColor = hw.gpuVendor === "nvidia" ? "bg-green-500" : hw.gpuVendor === "amd" ? "bg-red-500" : "bg-blue-500";
                 const vendorText = hw.gpuVendor === "nvidia" ? "text-green-400 border-green-500/30 bg-green-500/10" : hw.gpuVendor === "amd" ? "text-red-400 border-red-500/30 bg-red-500/10" : "text-blue-400 border-blue-500/30 bg-blue-500/10";
