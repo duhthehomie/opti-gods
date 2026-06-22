@@ -1178,7 +1178,7 @@ export default function SystemScanPage() {
         )}
 
         {/* Sensor Scan — drag OptiGods-HW-Monitor.json once, persists permanently */}
-        {!loading && !native && <HwMonitorPanel onData={d => setHwMonitorData(d ?? null)} />}
+        {!loading && <HwMonitorPanel onData={d => setHwMonitorData(d ?? null)} />}
       </div>
     </AppLayout>
   );
