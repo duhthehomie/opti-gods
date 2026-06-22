@@ -75,11 +75,16 @@ export default function KeyboardTweaksPage() {
       <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-red-500/20 bg-red-500/5">
         <Zap className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <p className="text-xs font-bold text-red-300">Target: lowest possible keystroke latency</p>
+          <p className="text-xs font-bold text-red-300">We re-engineer your system's interrupt handling to eliminate input lag at the source.</p>
           <p className="text-[11px] text-zinc-400 leading-relaxed">
-            Windows adds artificial delays at multiple points in the keyboard stack — Filter Keys, Sticky Keys shortcuts, and HID power management all contribute.
-            These tweaks strip every unnecessary delay out, leaving you with the raw hardware polling speed of your keyboard.
+            This is not about FPS — it is about <span className="text-white font-semibold">"zero-ms" responsiveness</span>.
+            Every unnecessary delay in the Windows keyboard stack is stripped: Filter Keys, HID power management, input buffering, and driver queue overhead.
           </p>
+          <div className="pt-1 space-y-0.5">
+            <p className="text-[11px] text-zinc-300"><span className="text-red-400 font-bold">• Input Fidelity:</span> Achieve &lt;0.02ms keyboard latency.</p>
+            <p className="text-[11px] text-zinc-300"><span className="text-red-400 font-bold">• Movement Precision:</span> Clean, snappy strafe mechanics with zero input buffering.</p>
+            <p className="text-[11px] text-zinc-300"><span className="text-red-400 font-bold">• Baseline:</span> Includes an Extremely Stripped Windows foundation.</p>
+          </div>
         </div>
       </div>
 
