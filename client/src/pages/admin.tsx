@@ -1436,7 +1436,10 @@ function AdminPresetGenerator({
       resolution: "1920x1080",
       gpus: [],
       hasIntegratedGpu: isIntel || isAmdApu,
+      hasDiscreteGpu: isNvidia || isAmdGpu,
       isHybridGpu: false,
+      systemModel: "",
+      ramMhz: 0,
     } as HardwareInfo;
   };
 

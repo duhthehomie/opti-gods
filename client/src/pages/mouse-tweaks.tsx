@@ -95,9 +95,8 @@ export default function MouseTweaksPage() {
             description={t.desc}
             badge={t.badge}
             impact={t.impact}
-            recommended={t.recommended}
-            enabled={!!tweaks[t.id]}
-            onToggle={(v) => setTweak(t.id, v)}
+            checked={!!tweaks[t.id]}
+            onCheckedChange={(v: boolean) => setTweak(t.id, v)}
           />
         ))}
       </div>

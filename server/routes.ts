@@ -3533,7 +3533,7 @@ Start-Sleep 2
       if (!log.codeRef) continue;
       const existing = codeToLocation[log.codeRef];
       if (!existing || new Date(log.seenAt ?? 0) >= new Date(existing.seenAt ?? 0)) {
-        codeToLocation[log.codeRef] = { city: log.city, region: log.region, country: log.country, seenAt: log.seenAt ?? null };
+        codeToLocation[log.codeRef] = { city: log.city, region: log.region, country: log.country, seenAt: log.seenAt ? log.seenAt.toISOString() : null };
       }
     }
     const enriched = codes.map(c => ({
@@ -4743,7 +4743,7 @@ Start-Sleep 2
       `$added = @()`,
       `ForEach ($flag in $flags) {`,
       `  If ($cmdlineContent -notmatch [regex]::Escape($flag)) {`,
-      `    Add-Content $cmdlinePath "`n$flag" -Encoding UTF8`,
+      `    Add-Content $cmdlinePath "\`n$flag" -Encoding UTF8`,
       `    $added += $flag`,
       `  }`,
       `}`,
