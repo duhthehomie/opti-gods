@@ -1055,6 +1055,18 @@ export default function SystemScanPage() {
                 Native — Deep Scan
               </span>
             )}
+            {native && (
+              <button
+                data-testid="button-instant-scan-header"
+                onClick={runScan}
+                disabled={scanning}
+                className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-colors"
+              >
+                {scanning
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning…</>
+                  : <><Zap className="w-3.5 h-3.5" /> Instant Scan</>}
+              </button>
+            )}
           </div>
           <p className="text-sm text-zinc-500">
             {native
@@ -1130,7 +1142,7 @@ export default function SystemScanPage() {
 
         {/* Web — not detected, show CTA */}
         {!loading && !native && notDetected && (
-          <NotDetectedPanel onScan={() => {}} scanning={false} />
+          <NotDetectedPanel onScan={runScan} scanning={scanning} />
         )}
 
         {/* Web — partial/full browser detection */}
