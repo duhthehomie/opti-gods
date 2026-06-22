@@ -252,8 +252,17 @@ const FIVEM_UNIVERSAL: string[] = [
   "FiveMSteamChildOff", "FiveMCommandlineMax",
   "FiveMSteamOverlayOff", "FiveMMMCSSAudio", "FiveMDisableMPO",
   "FiveMFixProductId",
+];
+
+/** FiveM Ryzen CPU affinity tweaks — AMD only */
+const FIVEM_RYZEN_AFFINITY: string[] = [
   "FiveM3500CoreAffinity", "FiveM3500PerfPlan",
   "FiveM5600CoreAffinity", "FiveM5600PowerPlan",
+];
+
+/** FiveM Intel 12th–14th gen hybrid CPU tweaks (P-core affinity + Ultra perf plan) */
+const FIVEM_INTEL_12_14: string[] = [
+  "FiveMIntel14PcoreAffinity", "FiveMIntel14PowerPlan",
 ];
 
 /** FiveM tweaks that require NVIDIA */
@@ -429,9 +438,10 @@ const NVIDIA_FRAME_LIMITS: string[] = [
   "NvFrameLimit144", "NvFrameLimit240", "NvFrameLimitCustom",
 ];
 
-/** RTX 50 extra driver tweaks */
+/** RTX 50 extra driver tweaks + FiveM RTX 5060 targeted pack */
 const NVIDIA_RTX50_EXTRA: string[] = [
   "RTX50BlackwellDriverOpt", "RTX50ComputeSm120",
+  "FiveM5060VRAMBudget", "FiveM5060EnableHAGS", "FiveM5060LowLatency",
 ];
 
 const NVIDIA_CORE: string[] = [
@@ -667,6 +677,18 @@ export function buildSafePreset(
     }
   } else {
     reasons.push("GPU vendor unknown — vendor-specific tweaks skipped, safe defaults only");
+  }
+
+  // AMD CPU — Ryzen FiveM affinity tweaks (3500/5600 core-count specific)
+  if (hw.cpuBrand === "amd") {
+    FIVEM_RYZEN_AFFINITY.forEach(id => candidates.add(id));
+    reasons.push("AMD Ryzen CPU — FiveM Ryzen core affinity + performance plan tweaks added");
+  }
+
+  // Intel 12th–14th gen hybrid CPU — P-core affinity + Ultra Performance plan for FiveM
+  if (hw.cpuBrand === "intel" && hw.cpuGeneration && hw.cpuGeneration >= 12) {
+    FIVEM_INTEL_12_14.forEach(id => candidates.add(id));
+    reasons.push(`Intel ${hw.cpuGeneration}th gen hybrid CPU detected — FiveM P-core affinity + Ultra Performance plan added`);
   }
 
   // Zen 5 CPU extras — Ryzen 9000 series only (e.g. 9600X, 9700X, 9950X)
