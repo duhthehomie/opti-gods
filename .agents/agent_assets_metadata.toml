@@ -78,3 +78,9 @@ id = "cQkzpgI6EPSKkH8Mp0UVv"
 uri = "file://downloads/OptiGods-TimerFix-0.5ms.zip"
 type = "unspecified"
 title = "OptiGods-TimerFix-0.5ms.ps1"
+
+[[outputs]]
+id = "hN41O1C8b82rSq2TT4VaW"
+uri = "file://downloads/OptiGods-TimerFix-0.5ms-bat.zip"
+type = "unspecified"
+title = "OptiGods-TimerFix-0.5ms.bat"
