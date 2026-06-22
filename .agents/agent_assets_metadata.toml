@@ -72,3 +72,9 @@ id = "sZz68n4DpkNSzBKJBbEwQ"
 uri = "file://downloads/SetTimerResolution-Guide.txt"
 type = "text"
 title = "SetTimerResolution Guide for five"
+
+[[outputs]]
+id = "cQkzpgI6EPSKkH8Mp0UVv"
+uri = "file://downloads/OptiGods-TimerFix-0.5ms.zip"
+type = "unspecified"
+title = "OptiGods-TimerFix-0.5ms.ps1"
