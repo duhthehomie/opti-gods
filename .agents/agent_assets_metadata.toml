@@ -84,3 +84,9 @@ id = "hN41O1C8b82rSq2TT4VaW"
 uri = "file://downloads/OptiGods-TimerFix-0.5ms-bat.zip"
 type = "unspecified"
 title = "OptiGods-TimerFix-0.5ms.bat"
+
+[[outputs]]
+id = "JKtDFruPeISDXEKH2Nwpj"
+uri = "file://downloads/OptiGods-AudioFix-bat.zip"
+type = "unspecified"
+title = "OptiGods-AudioFix.bat"
