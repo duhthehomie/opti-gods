@@ -90,3 +90,9 @@ id = "JKtDFruPeISDXEKH2Nwpj"
 uri = "file://downloads/OptiGods-AudioFix-bat.zip"
 type = "unspecified"
 title = "OptiGods-AudioFix.bat"
+
+[[outputs]]
+id = "IuHvioIfLm8_d_-lqlxC7"
+uri = "file://downloads/OptiGods-Preset-i5-12600K-RTX4060Ti.zip"
+type = "unspecified"
+title = "OptiGods-Preset-i5-12600K-RTX4060Ti.bat"
