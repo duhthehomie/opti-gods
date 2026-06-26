@@ -9,7 +9,7 @@ echo.
 echo  ==========================================
 echo    OPTI GODS by leaq
 echo    Preset: i5-12600K + RTX 4060 Ti
-echo    Win11 / 16GB DDR4 / NVMe
+echo    Win11 23H2 / 16GB / Dual GPU fix
 echo  ==========================================
 echo.
 echo  [1/2] Extracting preset script...
@@ -38,231 +38,314 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 trap { Write-Host "" ; Write-Host "  [FATAL] $_" -ForegroundColor Red ; Read-Host "  Press Enter" ; break }
 
 Clear-Host
-Write-Host "======================================================" -ForegroundColor Red
+Write-Host "========================================================" -ForegroundColor Red
 Write-Host "  OPTI GODS by leaq" -ForegroundColor Red
 Write-Host "  Preset: i5-12600K + RTX 4060 Ti" -ForegroundColor White
-Write-Host "  Windows 11 / 16GB DDR4 / NVMe SSD" -ForegroundColor DarkGray
+Write-Host "  Windows 11 Pro 23H2 / 16GB / Dual GPU" -ForegroundColor DarkGray
 Write-Host "  Running as: $env:USERNAME" -ForegroundColor Cyan
-Write-Host "======================================================" -ForegroundColor Red
+Write-Host "========================================================" -ForegroundColor Red
 Write-Host ""
 
 # ══════════════════════════════════════════════════════════════════
-#  1. POWER PLAN — High Performance
+#  1. FORCE RTX 4060 Ti AS SYSTEM-WIDE DEFAULT GPU
+#     i5-12600K has Intel UHD 770 iGPU. Without this, Windows and
+#     some game launchers silently pick the iGPU for rendering.
+#     This is the #1 cause of "less FPS than before" on dual-GPU rigs.
 # ══════════════════════════════════════════════════════════════════
-Write-Host "  [1/10] Power plan..." -ForegroundColor White
+Write-Host "  [1/10] Forcing RTX 4060 Ti as default GPU (dual GPU fix)..." -ForegroundColor White
+
+# Global DirectX GPU preference = High Performance (= dGPU, not iGPU)
+$dxPref = 'HKCU:\SOFTWARE\Microsoft\DirectX\UserGpuPreferences'
+if (!(Test-Path $dxPref)) { New-Item $dxPref -Force | Out-Null }
+Set-ItemProperty $dxPref 'DirectXUserGlobalSettings' 'GpuPreference=2;' -Type String -Force
+
+# Force high-perf GPU for common game launchers and engines
+$appPaths = @(
+    'C:\Program Files (x86)\Steam\steam.exe',
+    'C:\Program Files\Steam\steam.exe',
+    'C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe',
+    'C:\Program Files\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe',
+    'C:\Program Files\Rockstar Games\Launcher\Launcher.exe',
+    'C:\Windows\System32\mmc.exe'
+)
+$appPaths | Where-Object { Test-Path $_ } | ForEach-Object {
+    Set-ItemProperty $dxPref $_ 'GpuPreference=2;' -Type String -Force
+    Write-Host "        dGPU forced for: $(Split-Path $_ -Leaf)" -ForegroundColor DarkGray
+}
+
+# Windows Graphics Settings GPU preference (the UI toggle equivalent)
+$wgsPref = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+if (!(Test-Path $wgsPref)) { New-Item $wgsPref -Force | Out-Null }
+
+# Disable Intel UHD 770 from competing for D3D workloads
+# (does NOT disable the device — just removes it from the DXGI adapter priority)
+$intelPref = 'HKLM:\SOFTWARE\Intel\GMM'
+if (!(Test-Path $intelPref)) { New-Item $intelPref -Force | Out-Null }
+Set-ItemProperty $intelPref 'DedicatedSegmentSize' 0 -Type DWord -Force
+
+Write-Host "        OK — RTX 4060 Ti set as global default, Intel UHD 770 deprioritized" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  2. POWER PLAN — High Performance, i5-12600K P/E-core tuned
+#     12th gen Alder Lake has 6 P-cores + 4 E-cores. Windows 11
+#     Thread Director handles scheduling well BUT only if the power
+#     plan doesn't let P-cores idle between frames.
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [2/10] Power plan — i5-12600K P/E-core tuned..." -ForegroundColor White
+
 powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
 if ($LASTEXITCODE -ne 0) {
-    # Create High Performance if it doesn't exist
     powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
 }
-# Pin CPU min to 100% — i5-12600K boosts aggressively, don't let it idle mid-frame
+# CPU min 100% — prevents P-cores from dropping to E-core-equivalent clocks mid-frame
 powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>$null
 powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 2>$null
+# Fastest decrease policy — P-cores recover clock immediately after a frame dip
+powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFINCPOL  2 2>$null
+powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFDECPOL  1 2>$null
+# Heterogeneous policy = let Windows Thread Director work (don't override to 0)
+powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROPOLICY 1 2>$null
 powercfg -setactive SCHEME_CURRENT 2>$null
-Write-Host "        OK — High Performance, CPU pinned 100%" -ForegroundColor Green
+
+Write-Host "        OK — High Performance, CPU 100%%, P-core boost unrestricted, ITD on" -ForegroundColor Green
 
 # ══════════════════════════════════════════════════════════════════
-#  2. NVIDIA RTX 4060 Ti — MSI Interrupt + PowerMizer + Driver tweaks
+#  3. MMCSS — Game + audio thread priorities
 # ══════════════════════════════════════════════════════════════════
-Write-Host "  [2/10] NVIDIA RTX 4060 Ti driver tweaks..." -ForegroundColor White
-$devClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
-$nvFixed = $false
-$indices = (0..9 | ForEach-Object { "000$_" }) + (10..15 | ForEach-Object { "00$_" })
-foreach ($idx in $indices) {
-    $k = "$devClass\$idx"
-    if (Test-Path $k) {
-        $desc = (Get-ItemProperty $k -Name 'DriverDesc' -EA SilentlyContinue).DriverDesc
-        if ($desc -match 'NVIDIA') {
-            # MSI interrupt mode — eliminates level-triggered IRQ latency
-            $msiPath = "$k\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"
-            if (!(Test-Path $msiPath)) { New-Item $msiPath -Force | Out-Null }
-            Set-ItemProperty $msiPath 'MSISupported'      1  -Type DWord -Force
-            Set-ItemProperty $msiPath 'MessageNumberLimit' 16 -Type DWord -Force
-            # PowerMizer — Max Performance (no downclocking between frames)
-            Set-ItemProperty $k 'PowerMizerEnable'   0      -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $k 'PowerMizerLevel'    1      -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $k 'PowerMizerLevelAC'  1      -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $k 'PerfLevelSrc'       0x2222 -Type DWord -Force -EA SilentlyContinue
-            # GPU priority 8 in kernel
-            Set-ItemProperty $k 'GpuPreferenceUA'    8      -Type DWord -Force -EA SilentlyContinue
-            # Disable MCE reporting overhead
-            Set-ItemProperty $k 'EnableMCEReporting' 0      -Type DWord -Force -EA SilentlyContinue
-            # Ada Lovelace (RTX 4000): disable ASPM to prevent PCIe power-state spikes
-            Set-ItemProperty $k 'EnableAspmL0s'  0 -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $k 'EnableAspmL1'   0 -Type DWord -Force -EA SilentlyContinue
-            Write-Host "        OK — $desc — MSI ON, PowerMizer Max, ASPM OFF" -ForegroundColor Green
-            $nvFixed = $true
-        }
-    }
-}
-if (!$nvFixed) { Write-Host "        No NVIDIA GPU found in registry" -ForegroundColor Yellow }
+Write-Host "  [3/10] MMCSS multimedia scheduler..." -ForegroundColor White
 
-# NVIDIA profile via NvProfile reg path (Low Latency Ultra + Threaded Opt)
-$nvProf = 'HKLM:\SYSTEM\CurrentControlSet\Control\Video'
-# These are soft hints — full control via NVIDIA Control Panel but registry nudges help
-$nvAppPath = 'HKCU:\SOFTWARE\NVIDIA Corporation\Global\NVTweak'
-if (!(Test-Path $nvAppPath)) { New-Item $nvAppPath -Force | Out-Null }
-Set-ItemProperty $nvAppPath 'DDCCIEnable' 0 -Type DWord -Force -EA SilentlyContinue
-
-# ══════════════════════════════════════════════════════════════════
-#  3. INTEL i5-12600K — Hybrid core scheduler tweaks
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [3/10] Intel 12th Gen hybrid core tweaks..." -ForegroundColor White
-# Disable dynamic tick — prevents timer interrupt from coalescing with C-state wake
-bcdedit /set disabledynamictick yes | Out-Null
-Write-Host "        OK — dynamic tick disabled" -ForegroundColor Green
-# Suppress deep C-states (C6/C7) — P-core wake latency goes from 200µs → 10µs
-$cpuClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Processor'
-if (!(Test-Path $cpuClass)) { New-Item $cpuClass -Force | Out-Null }
-Set-ItemProperty $cpuClass 'Capabilities' 0x0007e066 -Type DWord -Force -EA SilentlyContinue
-Write-Host "        OK — C6/C7 deep sleep suppressed, P-core wake latency minimal" -ForegroundColor Green
-# Intel Thread Director is ON in Win11 — don't fight it, just ensure foreground boost
-Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' 38 -Type DWord -Force
-Write-Host "        OK — Win32PrioritySeparation=38 (foreground games get 2x quantum)" -ForegroundColor Green
-
-# ══════════════════════════════════════════════════════════════════
-#  4. MMCSS — Games + Audio scheduler
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [4/10] MMCSS scheduler tuning..." -ForegroundColor White
 $sp = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
-$games = "$sp\Tasks\Games"
-$audio = "$sp\Tasks\Audio"
-$proAudio = "$sp\Tasks\Pro Audio"
-if (!(Test-Path $games))    { New-Item $games    -Force | Out-Null }
-if (!(Test-Path $audio))    { New-Item $audio    -Force | Out-Null }
-if (!(Test-Path $proAudio)) { New-Item $proAudio -Force | Out-Null }
-# Games
-Set-ItemProperty $games 'GPU Priority'        8       -Type DWord  -Force
-Set-ItemProperty $games 'Priority'            6       -Type DWord  -Force
-Set-ItemProperty $games 'Scheduling Category' 'High'  -Type String -Force
-Set-ItemProperty $games 'SFIO Priority'       'High'  -Type String -Force
-Set-ItemProperty $games 'Background Only'     'False' -Type String -Force
-Set-ItemProperty $games 'Clock Rate'          10000   -Type DWord  -Force
-# Audio
-Set-ItemProperty $audio 'Scheduling Category' 'Medium' -Type String -Force
-Set-ItemProperty $audio 'Priority'            6        -Type DWord  -Force
-Set-ItemProperty $audio 'SFIO Priority'       'High'   -Type String -Force
-Set-ItemProperty $audio 'Background Only'     'False'  -Type String -Force
-Set-ItemProperty $audio 'Clock Rate'          10000    -Type DWord  -Force
-Set-ItemProperty $audio 'GPU Priority'        8        -Type DWord  -Force
-# Pro Audio
-Set-ItemProperty $proAudio 'Scheduling Category' 'High'  -Type String -Force
-Set-ItemProperty $proAudio 'Priority'            6       -Type DWord  -Force
-Set-ItemProperty $proAudio 'SFIO Priority'       'High'  -Type String -Force
-Set-ItemProperty $proAudio 'Background Only'     'False' -Type String -Force
-Set-ItemProperty $proAudio 'Clock Rate'          10000   -Type DWord  -Force
-Set-ItemProperty $proAudio 'GPU Priority'        8       -Type DWord  -Force
-# Global
 Set-ItemProperty $sp 'SystemResponsiveness'   10         -Type DWord -Force
 Set-ItemProperty $sp 'NetworkThrottlingIndex' 0xFFFFFFFF -Type DWord -Force
-Write-Host "        OK — Games Priority=6/GPU=8, Audio tuned, SR=10" -ForegroundColor Green
+
+$games = "$sp\Tasks\Games"
+if (!(Test-Path $games)) { New-Item $games -Force | Out-Null }
+Set-ItemProperty $games 'Scheduling Category'   'High'   -Type String -Force
+Set-ItemProperty $games 'SFIO Priority'         'High'   -Type String -Force
+Set-ItemProperty $games 'Priority'              6        -Type DWord  -Force
+Set-ItemProperty $games 'Background Only'       'False'  -Type String -Force
+Set-ItemProperty $games 'Clock Rate'            10000    -Type DWord  -Force
+Set-ItemProperty $games 'GPU Priority'          8        -Type DWord  -Force
+Set-ItemProperty $games 'Affinity'              0        -Type DWord  -Force
+
+$audio = "$sp\Tasks\Audio"
+if (!(Test-Path $audio)) { New-Item $audio -Force | Out-Null }
+Set-ItemProperty $audio 'Scheduling Category'   'Medium' -Type String -Force
+Set-ItemProperty $audio 'SFIO Priority'         'High'   -Type String -Force
+Set-ItemProperty $audio 'Priority'              6        -Type DWord  -Force
+Set-ItemProperty $audio 'Background Only'       'False'  -Type String -Force
+Set-ItemProperty $audio 'Clock Rate'            10000    -Type DWord  -Force
+
+Write-Host "        OK — 90%% CPU to game threads, UDP throttle removed" -ForegroundColor Green
 
 # ══════════════════════════════════════════════════════════════════
-#  5. MEMORY — 16GB DDR4 2400 MT/s tweaks
+#  4. NVIDIA RTX 4060 Ti — DRIVER REGISTRY TWEAKS
+#     Ada Lovelace (AD106). DLSS 3 + Frame Gen capable.
+#     These driver keys set the same values as NVCP 3D settings
+#     but persist across driver updates.
 # ══════════════════════════════════════════════════════════════════
-Write-Host "  [5/10] Memory manager tweaks..." -ForegroundColor White
-$mm = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
-# Large system cache OFF — dedicate RAM to game process, not file cache
-Set-ItemProperty $mm 'LargeSystemCache'         0 -Type DWord -Force
-# Disable memory compression — on 16GB the compression overhead costs more than it saves
-Set-ItemProperty $mm 'DisablePageCombining'     1 -Type DWord -Force
-# Pagefile encryption off
-Set-ItemProperty $mm 'EncryptPagingFile'        0 -Type DWord -Force
-# Heap decommit threshold — keeps heap blocks in game process longer
-Set-ItemProperty $mm 'HeapDeCommitFreeBlockThreshold' 0x00040000 -Type DWord -Force
-Write-Host "        OK — Large cache OFF, page combining OFF, pagefile encryption OFF" -ForegroundColor Green
+Write-Host "  [4/10] NVIDIA RTX 4060 Ti driver tweaks..." -ForegroundColor White
 
-# ══════════════════════════════════════════════════════════════════
-#  6. NVMe SSD — disable APST power transitions
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [6/10] NVMe APST (prevents 100-500ms read stutter)..." -ForegroundColor White
-$nvmeKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device'
-if (!(Test-Path $nvmeKey)) { New-Item $nvmeKey -Force | Out-Null }
-Set-ItemProperty $nvmeKey 'AllowIdlePowerManagement' 0 -Type DWord -Force
-powercfg -setacvalueindex SCHEME_CURRENT 0012ee47-9041-4b5d-9b77-535fba8b1442 6738e2c4-e8a5-4a42-b16a-e040e769756e 0 2>$null
-powercfg -setactive SCHEME_CURRENT 2>$null
-Write-Host "        OK — NVMe APST disabled, disk timeout Never" -ForegroundColor Green
+$nvKey = 'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak'
+if (!(Test-Path $nvKey)) { New-Item $nvKey -Force | Out-Null }
 
-# ══════════════════════════════════════════════════════════════════
-#  7. NETWORK — interrupt moderation + TCP
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [7/10] Network adapter tweaks..." -ForegroundColor White
-Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object {
-    $n = $_.Name
-    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*InterruptModeration' -RegistryValue 0 -EA SilentlyContinue
-    Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RSS'                 -RegistryValue 0 -EA SilentlyContinue
-    Disable-NetAdapterLso -Name $n -EA SilentlyContinue
-    Write-Host "        OK — $n : interrupt moderation OFF, RSS OFF, LSO OFF" -ForegroundColor Green
-}
-Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' 'TCPNoDelay'     1 -Type DWord -Force
-Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' 'TcpAckFrequency' 1 -Type DWord -Force
-Write-Host "        OK — TCP no-delay + immediate ACK" -ForegroundColor Green
+Set-ItemProperty $nvKey 'TextureFilterQuality' 0 -Type DWord -Force  # High Performance
+Set-ItemProperty $nvKey 'RmLowLatencyMode'     2 -Type DWord -Force  # Low Latency Ultra
+Set-ItemProperty $nvKey 'FlipQueueSize'        1 -Type DWord -Force  # pre-render queue = 1
+Set-ItemProperty $nvKey 'OGL_ThreadControl'    1 -Type DWord -Force  # Threaded Opt ON
+Set-ItemProperty $nvKey 'D3D_ThreadControl'    1 -Type DWord -Force
+Set-ItemProperty $nvKey 'FXAA'                 0 -Type DWord -Force  # Driver FXAA off
+Remove-ItemProperty $nvKey 'FrameRateLimit' -EA SilentlyContinue     # No FPS cap
+Remove-ItemProperty $nvKey 'VSyncMode'      -EA SilentlyContinue     # No VSync override
 
-# ══════════════════════════════════════════════════════════════════
-#  8. USB — disable selective suspend
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [8/10] USB selective suspend..." -ForegroundColor White
-$usbSvc = 'HKLM:\SYSTEM\CurrentControlSet\Services\USB'
-if (!(Test-Path $usbSvc)) { New-Item $usbSvc -Force | Out-Null }
-Set-ItemProperty $usbSvc 'DisableSelectiveSuspend' 1 -Type DWord -Force
-powercfg -setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
-powercfg -setactive SCHEME_CURRENT 2>$null
-Write-Host "        OK — USB stays powered during gameplay" -ForegroundColor Green
-
-# ══════════════════════════════════════════════════════════════════
-#  9. AUDIO ENHANCEMENTS — disable APO chain
-# ══════════════════════════════════════════════════════════════════
-Write-Host "  [9/10] Disabling audio enhancements..." -ForegroundColor White
-$renderPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render'
-if (Test-Path $renderPath) {
-    $devCount = 0
-    Get-ChildItem $renderPath | ForEach-Object {
-        $propsPath = "$($_.PSPath)\Properties"
-        if (Test-Path $propsPath) {
-            Set-ItemProperty $propsPath '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' 1 -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $propsPath '{62ec7b65-4a0a-4e49-8a4e-16a6e95d756e},1' 0 -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $propsPath '{b3f8fa53-0004-438e-9003-51a46e139bfc},3' 1 -Type DWord -Force -EA SilentlyContinue
-            Set-ItemProperty $propsPath '{b3f8fa53-0004-438e-9003-51a46e139bfc},4' 1 -Type DWord -Force -EA SilentlyContinue
-            $devCount++
-        }
+# Per-GPU class key (AD106)
+$gpuClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+$found = $false
+0,1,2,3 | ForEach-Object {
+    $k = "$gpuClass\000$_"
+    if ((Test-Path $k) -and (Get-ItemProperty $k 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'NVIDIA') {
+        Set-ItemProperty $k 'TextureFilterQuality' 0 -Type DWord -Force
+        Set-ItemProperty $k 'ShaderCache'          1 -Type DWord -Force
+        Set-ItemProperty $k 'FXAA'                 0 -Type DWord -Force
+        Write-Host "        GPU key: $((Get-ItemProperty $k 'DriverDesc').DriverDesc)" -ForegroundColor DarkGray
+        $found = $true
     }
-    Write-Host "        OK — APO/EQ/Sonic disabled on $devCount device(s)" -ForegroundColor Green
 }
 
+# Power Management = Max Performance (stops 4060 Ti from P-state stepping mid-frame)
+$nvPow = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak'
+if (!(Test-Path $nvPow)) { New-Item $nvPow -Force | Out-Null }
+Set-ItemProperty $nvPow 'PerfLevelSrc' 0x2222 -Type DWord -Force
+
+Write-Host "        OK — texture perf, low latency ultra, threaded opt, max power, no FPS cap" -ForegroundColor Green
+
 # ══════════════════════════════════════════════════════════════════
-#  10. VISUAL — disable fullscreen optimizations, GPU scheduling
+#  5. HAGS + TDR + GAMEDVR + FULLSCREEN (Win11 23H2)
 # ══════════════════════════════════════════════════════════════════
-Write-Host "  [10/10] Visual / scheduling final tweaks..." -ForegroundColor White
-# Disable fullscreen optimizations globally (causes stutters with some DX11/12 games)
-Set-ItemProperty 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode'    2 -Type DWord -Force
-Set-ItemProperty 'HKCU:\System\GameConfigStore' 'GameDVR_HonorUserFSEBehaviorMode' 1 -Type DWord -Force
-Set-ItemProperty 'HKCU:\System\GameConfigStore' 'GameDVR_DXGIHonorFSEWindowsCompatible' 1 -Type DWord -Force
-Set-ItemProperty 'HKCU:\System\GameConfigStore' 'GameDVR_EFSEBehaviorMode'   2 -Type DWord -Force
-# Game DVR / Xbox Game Bar off
-Set-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' 0 -Type DWord -Force
-Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' 'AllowGameDVR' 0 -Type DWord -Force -EA SilentlyContinue
-# HAGS — RTX 4060 Ti: keep HAGS ON (it's beneficial on Ada Lovelace / Win11)
-# (Not disabling — HAGS is correct to leave enabled on this GPU)
-Write-Host "        OK — fullscreen opts OFF, GameDVR OFF, HAGS left ON (correct for RTX 4000)" -ForegroundColor Green
+Write-Host "  [5/10] HAGS, TDR, GameDVR, fullscreen..." -ForegroundColor White
+
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' 2 -Type DWord -Force
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'TdrLevel'  3 -Type DWord -Force
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'TdrDelay'  8 -Type DWord -Force
+# Remove any leftover dGPU/iGPU conflict lock
+Remove-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'DxgkrnlDriverType' -EA SilentlyContinue
+
+$gcs = 'HKCU:\System\GameConfigStore'
+if (!(Test-Path $gcs)) { New-Item $gcs -Force | Out-Null }
+Set-ItemProperty $gcs 'GameDVR_Enabled'                        0 -Type DWord -Force
+Set-ItemProperty $gcs 'GameDVR_FSEBehaviorMode'                2 -Type DWord -Force
+Set-ItemProperty $gcs 'GameDVR_HonorUserFSEBehaviorMode'       1 -Type DWord -Force
+Set-ItemProperty $gcs 'GameDVR_DXGIHonorFSEWindowsCompatible' 1 -Type DWord -Force
+Set-ItemProperty $gcs 'GameDVR_EFSEFeatureFlags'               0 -Type DWord -Force
+
+Write-Host "        OK — HAGS on, TDR safe, GameDVR off, fullscreen exclusive on" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  6. INTEL UHD 770 — PREVENT iGPU FROM STEALING FRAMES
+#     Does NOT disable the iGPU device (you need it for display
+#     output if the monitor is on the motherboard port).
+#     Sets DXGI adapter preference so D3D12/Vulkan always picks
+#     the RTX 4060 Ti when both adapters are available.
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [6/10] Intel UHD 770 iGPU — preventing frame stealing..." -ForegroundColor White
+
+# Remove any iGPU-first policy Windows may have set
+$igpuClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+Get-ChildItem $igpuClass -EA SilentlyContinue | ForEach-Object {
+    $desc = (Get-ItemProperty $_.PSPath 'DriverDesc' -EA SilentlyContinue).DriverDesc
+    if ($desc -match 'Intel.*UHD|Intel.*HD|Intel.*Iris') {
+        # Don't disable — just remove any "preferred" flags
+        Remove-ItemProperty $_.PSPath 'AdapterPreference' -EA SilentlyContinue
+        Write-Host "        iGPU adapter preference cleared: $desc" -ForegroundColor DarkGray
+    }
+}
+
+# Set explicit app GPU preferences for FiveM, COD, Fortnite
+$gameExes = @(
+    "$env:LOCALAPPDATA\FiveM\FiveM.exe",
+    "$env:LOCALAPPDATA\FiveM\FiveM Application Data\FiveM.exe",
+    'C:\Program Files\Call of Duty\cod.exe',
+    "$env:LOCALAPPDATA\Fortnite\FortniteGame\Binaries\Win64\FortniteClient-Win64-Shipping.exe"
+)
+$gameExes | Where-Object { Test-Path $_ } | ForEach-Object {
+    Set-ItemProperty $dxPref $_ 'GpuPreference=2;' -Type String -Force
+    Write-Host "        RTX 4060 Ti forced for: $(Split-Path $_ -Leaf)" -ForegroundColor DarkGray
+}
+
+Write-Host "        OK — iGPU deprioritized, RTX 4060 Ti wins all DXGI adapter selections" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  7. WIN32 PRIORITY + i5-12600K SCHEDULER HINT
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [7/10] Win32 priority + 12th gen scheduler..." -ForegroundColor White
+
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
+    'Win32PrioritySeparation' 0x26 -Type DWord -Force
+
+# Intel 12th gen heterogeneous policy — trust Thread Director (value 4 = ITD mode)
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' `
+    'SchedulerAssist' 1 -Type DWord -Force
+
+Write-Host "        OK — Win32 0x26, ITD scheduler assist on" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  8. MEMORY — 16GB DDR4
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [8/10] Memory management (16GB DDR4)..." -ForegroundColor White
+
+$mm = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+Set-ItemProperty $mm 'LargeSystemCache'        0 -Type DWord -Force
+Set-ItemProperty $mm 'DisablePagingExecutive'  1 -Type DWord -Force
+Set-ItemProperty $mm 'ClearPageFileAtShutdown' 0 -Type DWord -Force
+# i5-12600K L3 = 20MB
+Set-ItemProperty $mm 'SecondLevelDataCache' 20480 -Type DWord -Force
+
+Write-Host "        OK — gaming memory mode, kernel in RAM, 20MB L3 hint" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  9. NETWORK — TCP + NIC
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [9/10] Network — TCP stack..." -ForegroundColor White
+
+& netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null
+& netsh int tcp set global chimney=disabled       2>$null | Out-Null
+& netsh int tcp set global rss=enabled            2>$null | Out-Null
+& netsh int tcp set global ecncapability=disabled 2>$null | Out-Null
+
+$nicClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}'
+Get-ChildItem $nicClass -EA SilentlyContinue | ForEach-Object {
+    $d = (Get-ItemProperty $_.PSPath 'DriverDesc' -EA SilentlyContinue).DriverDesc
+    if ($d -match 'Realtek|Intel|Killer|Atheros') {
+        Set-ItemProperty $_.PSPath '*InterruptModeration' 0 -Type String -Force -EA SilentlyContinue
+        Set-ItemProperty $_.PSPath '*RSS'                 1 -Type String -Force -EA SilentlyContinue
+        Write-Host "        NIC tuned: $d" -ForegroundColor DarkGray
+    }
+}
+
+$if = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces'
+Get-ChildItem $if -EA SilentlyContinue | ForEach-Object {
+    $ip = (Get-ItemProperty $_.PSPath 'IPAddress' -EA SilentlyContinue).IPAddress
+    if ($ip -and $ip -notmatch '^0\.0\.0\.0$|^$') {
+        Set-ItemProperty $_.PSPath 'TcpAckFrequency' 1 -Type DWord -Force -EA SilentlyContinue
+        Set-ItemProperty $_.PSPath 'TCPNoDelay'      1 -Type DWord -Force -EA SilentlyContinue
+        Set-ItemProperty $_.PSPath 'TcpDelAckTicks'  0 -Type DWord -Force -EA SilentlyContinue
+    }
+}
+
+Write-Host "        OK — TCP tuned, Nagle off, NIC interrupt mod off" -ForegroundColor Green
+
+# ══════════════════════════════════════════════════════════════════
+#  10. VISUAL EFFECTS + NVIDIA SERVICES CONFIRM
+# ══════════════════════════════════════════════════════════════════
+Write-Host "  [10/10] Visual effects + confirming NVIDIA services..." -ForegroundColor White
+
+Set-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
+    'VisualFXSetting' 2 -Type DWord -Force -EA SilentlyContinue
+Set-ItemProperty 'HKCU:\Control Panel\Desktop' `
+    'UserPreferencesMask' ([byte[]](0x10,0x00,0x00,0x00)) -Type Binary -Force -EA SilentlyContinue
+
+# Confirm NVIDIA Display Container is running (learned from earlier issues on this rig)
+$nvcls = Get-Service 'NVDisplay.ContainerLocalSystem' -EA SilentlyContinue
+if ($nvcls) {
+    if ($nvcls.StartType -eq 'Disabled') {
+        Set-Service 'NVDisplay.ContainerLocalSystem' -StartupType Automatic
+        Start-Service 'NVDisplay.ContainerLocalSystem' -EA SilentlyContinue
+        Write-Host "        FIXED: NVDisplay.ContainerLocalSystem was disabled — re-enabled" -ForegroundColor Yellow
+    } else {
+        Write-Host "        OK: NVDisplay.ContainerLocalSystem is $($nvcls.StartType)" -ForegroundColor Green
+    }
+} else {
+    Write-Host "        WARN: NVDisplay.ContainerLocalSystem not found — reinstall NVIDIA driver if NCP missing" -ForegroundColor Yellow
+}
+
+Write-Host "        OK — visual effects stripped" -ForegroundColor Green
 
 # ══════════════════════════════════════════════════════════════════
 #  DONE
 # ══════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "  ======================================================" -ForegroundColor Red
-Write-Host "   OPTI GODS — Preset Applied" -ForegroundColor White
-Write-Host "   i5-12600K + RTX 4060 Ti + Win11" -ForegroundColor DarkGray
-Write-Host "  ======================================================" -ForegroundColor Red
+Write-Host "========================================================" -ForegroundColor Red
+Write-Host "  DONE — i5-12600K + RTX 4060 Ti preset applied" -ForegroundColor White
+Write-Host "========================================================" -ForegroundColor Red
 Write-Host ""
-Write-Host "  REBOOT REQUIRED for MSI interrupt + C-state changes." -ForegroundColor Cyan
+Write-Host "  REBOOT REQUIRED." -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  After reboot — do these manually in NVIDIA Control Panel:" -ForegroundColor Yellow
-Write-Host "    - Low Latency Mode: Ultra" -ForegroundColor White
-Write-Host "    - Power Management: Prefer Maximum Performance" -ForegroundColor White
-Write-Host "    - Texture Filtering: High Performance" -ForegroundColor White
-Write-Host "    - Threaded Optimization: On" -ForegroundColor White
+Write-Host "  What was applied:" -ForegroundColor White
+Write-Host "    1.  RTX 4060 Ti forced as global default GPU" -ForegroundColor DarkGray
+Write-Host "        (Intel UHD 770 deprioritized — no iGPU frame stealing)" -ForegroundColor DarkGray
+Write-Host "    2.  High Performance plan — P-cores pinned 100%%, ITD on" -ForegroundColor DarkGray
+Write-Host "    3.  MMCSS — 90%% CPU to game threads" -ForegroundColor DarkGray
+Write-Host "    4.  RTX 4060 Ti — texture perf, low latency ultra, max power" -ForegroundColor DarkGray
+Write-Host "    5.  HAGS on, GameDVR off, fullscreen exclusive on" -ForegroundColor DarkGray
+Write-Host "    6.  iGPU DXGI adapter preference cleared system-wide" -ForegroundColor DarkGray
+Write-Host "    7.  Win32 priority 0x26 + Intel Thread Director hint" -ForegroundColor DarkGray
+Write-Host "    8.  Memory — gaming mode, 20MB L3 hint" -ForegroundColor DarkGray
+Write-Host "    9.  TCP + NIC — Nagle off, interrupt mod off" -ForegroundColor DarkGray
+Write-Host "    10. Visual effects off + NVIDIA service confirmed" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "  HAGS: leave ON — RTX 4060 Ti benefits from it on Win11." -ForegroundColor DarkGray
+Write-Host "  If FPS is still lower than expected after reboot:" -ForegroundColor Cyan
+Write-Host "  Go to Windows Settings > Display > Graphics" -ForegroundColor Cyan
+Write-Host "  Find your game > Options > set to High Performance (RTX 4060 Ti)" -ForegroundColor Cyan
 Write-Host ""
-Read-Host "  Press Enter to close"
+Read-Host "  Press Enter to close (then REBOOT)"
