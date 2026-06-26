@@ -108,3 +108,9 @@ id = "cVXlzE_zgBWL9Oxmdx7R9"
 uri = "file://downloads/OptiGods-NvidiaFix.zip"
 type = "unspecified"
 title = "OptiGods-NvidiaFix.bat"
+
+[[outputs]]
+id = "pQjsNVj7Hfk46E9TAtdUm"
+uri = "file://downloads/OptiGods-ConflictFix.zip"
+type = "unspecified"
+title = "OptiGods-ConflictFix.bat"
