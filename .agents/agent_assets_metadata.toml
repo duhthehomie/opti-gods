@@ -114,3 +114,9 @@ id = "pQjsNVj7Hfk46E9TAtdUm"
 uri = "file://downloads/OptiGods-ConflictFix.zip"
 type = "unspecified"
 title = "OptiGods-ConflictFix.bat"
+
+[[outputs]]
+id = "HPC4MgBenK3ldQ-Ytzvsq"
+uri = "file://downloads/OptiGods-Preset-R7-2700-GTX1650.zip"
+type = "unspecified"
+title = "OptiGods-Preset-R7-2700-GTX1650.bat"
