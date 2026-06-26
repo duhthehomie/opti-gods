@@ -102,3 +102,9 @@ id = "gM67shTirjJEnBmHRVxJI"
 uri = "file://downloads/OptiGods-FullRestore.zip"
 type = "unspecified"
 title = "OptiGods-FullRestore.bat"
+
+[[outputs]]
+id = "cVXlzE_zgBWL9Oxmdx7R9"
+uri = "file://downloads/OptiGods-NvidiaFix.zip"
+type = "unspecified"
+title = "OptiGods-NvidiaFix.bat"
