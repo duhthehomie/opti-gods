@@ -30,7 +30,7 @@ const ALL_AMD_IDS = [
   // New AMD Tweaks
   "AmdResizableBAR","AmdRadeonBoost","AmdEnhancedSync",
   // V2.2 driver reapply tweaks
-  "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff","AmdFRTC60","AmdFRTC144","AmdFRTC240",
+  "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff",
   "EnableMSIMode_Safe",
   // DirectX & PCIe
   "AmdD3DOptimize","AmdPCIeOptimize",
@@ -41,9 +41,6 @@ const AMD_DRIVER_REAPPLY_TWEAKS = [
   { id: "AmdSurfaceFormatOpt",  title: "Surface Format Optimization = ON",            desc: "Sets EnableSurfaceFormatReplacements=1 + KMD_EnableSFR=1. Lets the driver substitute lower-precision render targets where the game won't visibly suffer — saves ~1-3% memory bandwidth.", badge: "RECOMMENDED", impact: "MED" as const },
   { id: "AmdTessOverride16x",   title: "Tessellation Mode = AMD Optimized (16x cap)", desc: "Caps tessellation at 16x on legacy titles (Witcher 3, Crysis 3, GTA V) where game-side tessellation is wastefully high. Big FPS win on RDNA1/Polaris, no visible quality loss.", badge: "RECOMMENDED", impact: "MED" as const },
   { id: "AmdRadeonBoostOff",    title: "Radeon Boost = OFF (force disable)",          desc: "Force-disables Radeon Boost via registry. Use this if Boost is causing texture pop / blur in competitive shooters where you want consistent image quality. Overrides the 'Enable Radeon Boost' toggle above.", badge: "OPTIONAL",    impact: "LOW" as const },
-  { id: "AmdFRTC60",            title: "Frame Rate Target Control = 60 FPS",          desc: "Adrenalin FRTC capped at 60. Best for 60Hz panels. Only enable ONE FRTC toggle.", badge: "60Hz",  impact: "MED" as const },
-  { id: "AmdFRTC144",           title: "Frame Rate Target Control = 144 FPS",         desc: "Adrenalin FRTC capped at 144. Best for 144Hz panels. Only enable ONE FRTC toggle.", badge: "144Hz", impact: "MED" as const },
-  { id: "AmdFRTC240",           title: "Frame Rate Target Control = 240 FPS",         desc: "Adrenalin FRTC capped at 240. Best for 240Hz competitive panels. Only enable ONE FRTC toggle.", badge: "240Hz", impact: "MED" as const },
   { id: "EnableMSIMode_Safe",   title: "Safe MSI Mode (multi-device, BSOD-safe)",     desc: "V2.2 replacement for the V1 EnableMSIMode toggle that BSOD'd users. Enables Message Signaled Interrupts on AMD GPU + active NICs + NVMe controllers, while explicitly WIPING the dangerous DevicePolicy/DevicePriority/AssignmentSetOverride keys. Skips GPU on hybrid iGPU+dGPU systems.", badge: "V2.2 SAFE", impact: "HIGH" as const },
 ];
 
