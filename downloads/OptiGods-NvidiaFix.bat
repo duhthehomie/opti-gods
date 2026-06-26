@@ -1,197 +1,196 @@
 @echo off
-setlocal
-set "SELF=%~f0"
-set "TMPPS1=%TEMP%\OptiGods-NvidiaFix.ps1"
+setlocal EnableDelayedExpansion
 
-title Opti Gods by leaq  --  NVIDIA + Display Fix
-
-echo.
-echo  ==========================================
-echo    OPTI GODS by leaq  --  NVIDIA Fix
-echo    Fixes NCP, refresh rate, 30fps feel
-echo  ==========================================
-echo.
-echo  [1/2] Extracting fix script...
-PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##PS1'+'_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"
-if not exist "%TMPPS1%" (
-  echo.
-  echo  [ERROR] Script extraction failed. Please re-download from the website.
-  echo.
-  pause
-  exit /b 1
-)
-echo  [2/2] A Windows security prompt will appear.
-echo       Click "Yes" to fix NVIDIA as Administrator.
-echo.
-PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled or launch failed: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"
-del "%TMPPS1%" 2>nul
-exit /b 0
-##PS1_START##
-$ErrorActionPreference = 'SilentlyContinue'
-
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host ""
-    Write-Host "  !! This script must run as Administrator !!" -ForegroundColor Red
-    Write-Host "  Please re-download and run the .bat file." -ForegroundColor Yellow
-    Write-Host ""
-    Read-Host "  Press Enter to close"
-    exit 1
-}
-
-trap {
-    Write-Host ""
-    Write-Host "  [FATAL ERROR] $_" -ForegroundColor Red
-    Write-Host ""
-    Read-Host "  Press Enter to close"
-    break
-}
-
-Clear-Host
-Write-Host "======================================================" -ForegroundColor Red
-Write-Host "  OPTI GODS by leaq  --  NVIDIA + Display Fix" -ForegroundColor Red
-Write-Host "  Fixes: NCP not opening, refresh rate stuck, 30fps" -ForegroundColor White
-Write-Host "  Running as: $env:USERNAME (Admin)" -ForegroundColor Cyan
-Write-Host "======================================================" -ForegroundColor Red
-Write-Host ""
-
-# ── 1. Re-enable & start NVIDIA services ───────────────────────────────────
-Write-Host "  [1/7] Re-enabling NVIDIA services..." -ForegroundColor White
-
-$nvServices = @(
-    'NVDisplay.ContainerLocalSystem',   # NVIDIA Display Container LS (NCP needs this)
-    'NvContainerLocalSystem',           # fallback name on some builds
-    'NVSvc',                            # NVIDIA Driver Helper
-    'nvsvc',
-    'NvTelemetryContainer',
-    'nvagent',
-    'NvModuleTracker'
+:: ── Self-elevate without PowerShell (works even when PS is blocked) ──────────
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Set oShell = CreateObject("Shell.Application") > "%temp%\og_elev.vbs"
+    echo oShell.ShellExecute "%~f0", "", "", "runas", 1 >> "%temp%\og_elev.vbs"
+    cscript //nologo "%temp%\og_elev.vbs"
+    del "%temp%\og_elev.vbs" >nul 2>&1
+    exit /b
 )
 
-$fixed = 0
-foreach ($svc in $nvServices) {
-    $s = Get-Service -Name $svc -EA SilentlyContinue
-    if ($s) {
-        Set-Service $svc -StartupType Automatic -EA SilentlyContinue
-        if ($s.Status -ne 'Running') {
-            Start-Service $svc -EA SilentlyContinue
-        }
-        Write-Host "        OK — $svc enabled + started" -ForegroundColor Green
-        $fixed++
-    }
-}
-if ($fixed -eq 0) {
-    Write-Host "        No NVIDIA services found — driver may need reinstall" -ForegroundColor Yellow
-} else {
-    Write-Host "        $fixed NVIDIA service(s) restored" -ForegroundColor Green
-}
+:: ── Admin confirmed ──────────────────────────────────────────────────────────
+title Opti Gods NVIDIA Fix  [RUNNING AS ADMIN]
+color 4F
+set "LOG=%USERPROFILE%\Desktop\OptiGods-Fix-Log.txt"
 
-# ── 2. Remove display refresh rate override (OO ShutUp can cap this) ────────
-Write-Host "  [2/7] Clearing display refresh rate overrides..." -ForegroundColor White
-$displayPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-Remove-ItemProperty $displayPath 'DxgkrnlDriverType'   -EA SilentlyContinue
-Remove-ItemProperty $displayPath 'TdrLevel'            -EA SilentlyContinue
+echo ============================================================ > "%LOG%"
+echo   OPTI GODS NVIDIA FIX LOG >> "%LOG%"
+echo   %DATE%  %TIME% >> "%LOG%"
+echo   Computer: %COMPUTERNAME% >> "%LOG%"
+echo ============================================================ >> "%LOG%"
+echo. >> "%LOG%"
 
-# Clear any per-monitor refresh rate caps
-$configPath = 'HKCU:\Control Panel\Desktop'
-$currentRef = (Get-ItemProperty $configPath -EA SilentlyContinue).LogPixels
-Remove-ItemProperty 'HKCU:\Control Panel\Desktop' 'Win8DpiScaling' -EA SilentlyContinue
+cls
+echo.
+echo  ============================================================
+echo    OPTI GODS by leaq  --  NVIDIA Fix  [Admin OK]
+echo    Log being written to your Desktop: OptiGods-Fix-Log.txt
+echo  ============================================================
+echo.
+echo  Press any key to start...
+pause >nul
 
-# Remove any WinUtil-set resolution/refresh locks
-$monPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e96e-e325-11ce-bfc1-08002be10318}'
-if (Test-Path $monPath) {
-    Get-ChildItem $monPath -EA SilentlyContinue | ForEach-Object {
-        Remove-ItemProperty $_.PSPath 'UserModeDriverName' -EA SilentlyContinue
-    }
-}
-Write-Host "        OK — refresh rate registry locks cleared" -ForegroundColor Green
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 1: Checking if NVIDIA driver is installed at all ────
+echo  ── STEP 1 ─────────────────────────────────────────── >> "%LOG%"
 
-# ── 3. Remove WinUtil/OO ShutUp NVIDIA-breaking registry entries ─────────────
-Write-Host "  [3/7] Removing debloat entries that break NVIDIA..." -ForegroundColor White
+set "NV_FOUND=0"
+sc query "NVDisplay.ContainerLocalSystem" >nul 2>&1
+if %errorlevel% equ 0 set "NV_FOUND=1"
 
-# OO ShutUp sometimes disables NVIDIA telemetry via these keys which also breaks NCP
-Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions' 'DenyDeviceIDs' -EA SilentlyContinue
-Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions' 'DenyDeviceIDsRetroactive' -EA SilentlyContinue
+if "!NV_FOUND!"=="1" (
+    echo  [OK] NVIDIA service exists on this PC.
+    echo  NVIDIA service EXISTS >> "%LOG%"
+) else (
+    echo  [!!] NVIDIA Display Container service NOT FOUND.
+    echo  [!!] This means the NVIDIA driver is not installed or is corrupt.
+    echo  [!!] No bat file can fix this. You need to reinstall the driver.
+    echo.
+    echo  NVIDIA SERVICE NOT FOUND - DRIVER MISSING OR CORRUPT >> "%LOG%"
+    echo.
+    echo  ── WHAT TO DO ──────────────────────────────────────────────
+    echo   1. Download DDU: https://www.wagnardsoft.com
+    echo   2. Download your driver: https://www.nvidia.com/drivers
+    echo   3. Boot into Safe Mode (hold Shift + Restart)
+    echo   4. Run DDU, select GPU, click "Clean and restart"
+    echo   5. Install the driver you downloaded
+    echo  ────────────────────────────────────────────────────────────
+    echo.
+    echo  WHAT TO DO: DDU + clean driver install >> "%LOG%"
+    echo  DDU: https://www.wagnardsoft.com >> "%LOG%"
+    echo  Drivers: https://www.nvidia.com/drivers >> "%LOG%"
+    goto :DONE
+)
 
-# Re-allow device installation (WinUtil sometimes disables this)
-$devInstall = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions'
-if (Test-Path $devInstall) {
-    Remove-ItemProperty $devInstall 'DenyRemovableDevices' -EA SilentlyContinue
-    Remove-ItemProperty $devInstall 'DenyDeviceClasses' -EA SilentlyContinue
-}
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 2: Checking service status ──────────────────────────
+echo  ── STEP 2 ─────────────────────────────────────────── >> "%LOG%"
 
-# Remove any GPU scheduling forced-off (can cause 30fps feel)
-Remove-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' -EA SilentlyContinue
-# Re-enable HAGS (should always be ON for NVIDIA on Win11)
-Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' 2 -Type DWord -Force
-Write-Host "        OK — HAGS re-enabled, device install restrictions cleared" -ForegroundColor Green
+sc query "NVDisplay.ContainerLocalSystem" >> "%LOG%" 2>&1
+sc query "NVDisplay.ContainerLocalSystem"
+echo.
 
-# ── 4. Fix GameDVR / Fullscreen optimisations (OO ShutUp breaks these) ──────
-Write-Host "  [4/7] Restoring fullscreen & GameDVR settings..." -ForegroundColor White
-$gDVR = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR'
-if (!(Test-Path $gDVR)) { New-Item $gDVR -Force | Out-Null }
-Set-ItemProperty $gDVR 'AppCaptureEnabled' 0 -Type DWord -Force
+:: ════════════════════════════════════════════════════════════════════════════
+echo  ── STEP 3: Re-enabling + starting all NVIDIA services ───────
+echo  ── STEP 3 ─────────────────────────────────────────── >> "%LOG%"
+echo.
 
-# Fullscreen optimizations — keep them ON (improves refresh rate switching)
-$compatPath = 'HKCU:\System\GameConfigStore'
-if (!(Test-Path $compatPath)) { New-Item $compatPath -Force | Out-Null }
-Set-ItemProperty $compatPath 'GameDVR_Enabled' 0 -Type DWord -Force
-Set-ItemProperty $compatPath 'GameDVR_FSEBehaviorMode' 2 -Type DWord -Force
-Set-ItemProperty $compatPath 'GameDVR_HonorUserFSEBehaviorMode' 1 -Type DWord -Force
-Set-ItemProperty $compatPath 'GameDVR_DXGIHonorFSEWindowsCompatible' 1 -Type DWord -Force
-Write-Host "        OK — fullscreen exclusive mode restored" -ForegroundColor Green
+for %%S in (
+    "NVDisplay.ContainerLocalSystem"
+    "NvContainerLocalSystem"
+    "NVSvc"
+    "nvsvc"
+    "NvTelemetryContainer"
+    "NvContainerNetworkService"
+    "nvagent"
+    "NvModuleTracker"
+) do (
+    sc config %%S start= auto  >nul 2>&1
+    sc start  %%S              >nul 2>&1
+    sc query  %%S              >> "%LOG%" 2>&1
+    sc query  %%S
+    echo.
+)
 
-# ── 5. Remove NVIDIA driver-side FPS cap if one was set ─────────────────────
-Write-Host "  [5/7] Removing any NVIDIA driver-level FPS cap..." -ForegroundColor White
-$nvProfile = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak'
-if (Test-Path $nvProfile) {
-    Remove-ItemProperty $nvProfile 'FrameRateLimit' -EA SilentlyContinue
-}
-# Also clear via DRS path
-$drsPath = 'HKCU:\SOFTWARE\NVIDIA Corporation\Global\NVTweak'
-if (Test-Path $drsPath) {
-    Remove-ItemProperty $drsPath 'FrameRateLimit' -EA SilentlyContinue
-}
-# Clear DX9/OGL vsync overrides that could feel like 30fps
-$nvDrs = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak'
-Remove-ItemProperty $nvDrs 'VSyncMode' -EA SilentlyContinue
-Write-Host "        OK — FPS cap and VSync override cleared" -ForegroundColor Green
+:: ════════════════════════════════════════════════════════════════════════════
+echo  ── STEP 4: Removing policy blocks (OO ShutUp / WinUtil) ─────
+echo  ── STEP 4 ─────────────────────────────────────────── >> "%LOG%"
+echo.
 
-# ── 6. Re-enable Xbox Game Bar / presence writer (WinUtil kills these) ───────
-Write-Host "  [6/7] Restoring Xbox services (needed for NVIDIA overlay comms)..." -ForegroundColor White
-$xboxServices = @('XblAuthManager','XblGameSave','XboxGipSvc','XboxNetApiSvc')
-foreach ($svc in $xboxServices) {
-    $s = Get-Service -Name $svc -EA SilentlyContinue
-    if ($s) {
-        Set-Service $svc -StartupType Manual -EA SilentlyContinue
-        Write-Host "        OK — $svc set to Manual (won't auto-start, won't block NCP)" -ForegroundColor DarkGray
-    }
-}
-Write-Host "        OK — Xbox services unblocked" -ForegroundColor Green
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions" /v DenyDeviceIDs            /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions" /v DenyDeviceIDsRetroactive /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions" /v DenyDeviceClasses        /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"              /v ExcludeWUDriversInQualityUpdate /f >nul 2>&1
+echo  Device install restrictions cleared >> "%LOG%"
+echo  [OK] Device install restrictions cleared.
 
-# ── 7. Restart NVIDIA Display Container LS ──────────────────────────────────
-Write-Host "  [7/7] Restarting NVIDIA Display Container LS (opens NCP)..." -ForegroundColor White
-$nvcls = Get-Service -Name 'NVDisplay.ContainerLocalSystem' -EA SilentlyContinue
-if ($nvcls) {
-    Restart-Service 'NVDisplay.ContainerLocalSystem' -Force -EA SilentlyContinue
-    Start-Sleep -Seconds 2
-    $nvcls.Refresh()
-    if ($nvcls.Status -eq 'Running') {
-        Write-Host "        OK — NVDisplay.ContainerLocalSystem is running" -ForegroundColor Green
-    } else {
-        Write-Host "        Service did not start — try rebooting" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "        Service not found — NVIDIA driver may need reinstall" -ForegroundColor Yellow
-}
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 5: HAGS, TDR, FPS cap ───────────────────────────────
+echo  ── STEP 5 ─────────────────────────────────────────── >> "%LOG%"
+echo.
 
-# ── Done ────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "  ======================================================" -ForegroundColor Red
-Write-Host "   DONE — NVIDIA fix applied" -ForegroundColor White
-Write-Host "   REBOOT REQUIRED to fully restore refresh rate." -ForegroundColor Yellow
-Write-Host "  ======================================================" -ForegroundColor Red
-Write-Host ""
-Write-Host "  After reboot, right-click desktop -> NVIDIA Control Panel." -ForegroundColor DarkGray
-Write-Host "  If NCP still missing: reinstall NVIDIA driver (clean install)." -ForegroundColor DarkGray
-Write-Host ""
-Read-Host "  Press Enter to close"
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLevel  /t REG_DWORD /d 3 /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay  /t REG_DWORD /d 8 /f
+reg delete "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v DxgkrnlDriverType /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak" /v FrameRateLimit /f >nul 2>&1
+reg delete "HKCU\SOFTWARE\NVIDIA Corporation\Global\NVTweak"                /v FrameRateLimit /f >nul 2>&1
+echo  HAGS=2, TDR safe, FPS cap cleared >> "%LOG%"
+echo  [OK] HAGS re-enabled, TDR reset, FPS cap cleared.
+
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 6: Re-register NVIDIA Control Panel shell extension ─
+echo  ── STEP 6 ─────────────────────────────────────────── >> "%LOG%"
+echo.
+
+regsvr32 /s "%SystemRoot%\System32\nvshext.dll"
+if %errorlevel% equ 0 (
+    echo  [OK] nvshext.dll registered - NCP will appear in right-click menu.
+    echo  nvshext.dll registered OK >> "%LOG%"
+) else (
+    echo  [!!] nvshext.dll NOT found - driver reinstall required.
+    echo  nvshext.dll NOT FOUND - driver reinstall needed >> "%LOG%"
+)
+
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 7: Power plan + Xbox services ───────────────────────
+echo  ── STEP 7 ─────────────────────────────────────────── >> "%LOG%"
+echo.
+
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+powercfg /setacvalueindex 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c sub_processor PROCTHROTTLEMIN 100
+powercfg /setacvalueindex 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c sub_processor PROCTHROTTLEMAX 100
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+powercfg /getactivescheme >> "%LOG%" 2>&1
+echo  [OK] High Performance plan set, CPU 100%%.
+
+sc config "XblAuthManager" start= demand >nul 2>&1
+sc config "XblGameSave"    start= demand >nul 2>&1
+sc config "XboxGipSvc"     start= demand >nul 2>&1
+sc config "XboxNetApiSvc"  start= demand >nul 2>&1
+sc config "Winmgmt"        start= auto   >nul 2>&1
+sc start  "Winmgmt"                      >nul 2>&1
+echo  [OK] Xbox services restored to Manual. WMI service started.
+echo  Xbox + WMI services restored >> "%LOG%"
+
+:: ════════════════════════════════════════════════════════════════════════════
+echo.
+echo  ── STEP 8: Final NVIDIA service restart ─────────────────────
+echo  ── STEP 8 ─────────────────────────────────────────── >> "%LOG%"
+echo.
+
+sc stop  "NVDisplay.ContainerLocalSystem" >nul 2>&1
+echo  Waiting 3 seconds...
+timeout /t 3 /nobreak >nul
+sc start "NVDisplay.ContainerLocalSystem"
+timeout /t 2 /nobreak >nul
+sc query "NVDisplay.ContainerLocalSystem"
+sc query "NVDisplay.ContainerLocalSystem" >> "%LOG%" 2>&1
+
+:: ════════════════════════════════════════════════════════════════════════════
+:DONE
+echo.
+echo  ============================================================
+echo   COMPLETE. Log saved to: %LOG%
+echo.
+echo   NEXT STEPS:
+echo    1. REBOOT NOW
+echo    2. After reboot: right-click desktop - NVIDIA Control Panel
+echo    3. If NCP still missing: you need a clean driver reinstall
+echo       - DDU: https://www.wagnardsoft.com
+echo       - Driver: https://www.nvidia.com/drivers
+echo    4. Send the log file on your Desktop to leaq
+echo       (OptiGods-Fix-Log.txt) so he can see what happened
+echo  ============================================================
+echo.
+echo  DONE %DATE% %TIME% >> "%LOG%"
+echo.
+pause
