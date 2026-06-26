@@ -120,3 +120,9 @@ id = "HPC4MgBenK3ldQ-Ytzvsq"
 uri = "file://downloads/OptiGods-Preset-R7-2700-GTX1650.zip"
 type = "unspecified"
 title = "OptiGods-Preset-R7-2700-GTX1650.bat"
+
+[[outputs]]
+id = "2ehwm32PCZMRkKnUT4Rn7"
+uri = "file://downloads/OptiGods-Preset-i5-4590-RTX2060.zip"
+type = "unspecified"
+title = "OptiGods-Preset-i5-4590-RTX2060.bat"
