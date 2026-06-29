@@ -3243,7 +3243,12 @@ export default function Admin() {
 
   const customerHardwareQuery = useQuery<CustomerHW[]>({
     queryKey: ["/api/admin/customer-hardware", key],
-    queryFn: () => fetch(apiUrl("/api/admin/customer-hardware"), { headers }).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetch(apiUrl("/api/admin/customer-hardware"), { headers });
+      if (!r.ok) throw new Error(`customer-hardware ${r.status}`);
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: authed,
     retry: false,
     refetchInterval: 30000,
@@ -3252,10 +3257,15 @@ export default function Admin() {
   // Native scan users from hardware_rigs table (instant native scan → detected users)
   const rigsDetectedQuery = useQuery<CustomerHW[]>({
     queryKey: ["/api/admin/rigs-detected", key],
-    queryFn: () => fetch(apiUrl("/api/admin/rigs-detected"), { headers }).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetch(apiUrl("/api/admin/rigs-detected"), { headers });
+      if (!r.ok) throw new Error(`rigs-detected ${r.status}`);
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: authed,
     retry: false,
-    refetchInterval: 15000,
+    refetchInterval: 10000,
   });
 
   const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
@@ -5769,12 +5779,18 @@ export default function Admin() {
           <AdminPresetGenerator
             key={presetFillKey}
             initialValues={presetFillData ?? undefined}
-            allHardware={[
-              // Native scan rigs first (most recent, richest data — from instant native scan)
-              ...(rigsDetectedQuery.data || []).map(r => ({ ...r, source: "rig" as const })),
-              // Then code-linked hardware snapshots (may have OS version info)
-              ...(customerHardwareQuery.data || []).map(h => ({ ...h, source: "hw" as const })),
-            ]}
+            allHardware={(() => {
+              // Merge both sources, dedup by codeRef (rig wins — richer data)
+              const seen = new Set<string>();
+              const merged: CustomerHW[] = [];
+              for (const r of (Array.isArray(rigsDetectedQuery.data) ? rigsDetectedQuery.data : [])) {
+                if (!seen.has(r.codeRef)) { seen.add(r.codeRef); merged.push({ ...r, source: "rig" as const }); }
+              }
+              for (const h of (Array.isArray(customerHardwareQuery.data) ? customerHardwareQuery.data : [])) {
+                if (!seen.has(h.codeRef)) { seen.add(h.codeRef); merged.push({ ...h, source: "hw" as const }); }
+              }
+              return merged;
+            })()}
             allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
             apiKey={key}
             onRefresh={() => {

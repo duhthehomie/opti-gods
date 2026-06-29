@@ -3237,7 +3237,7 @@ Start-Sleep 2
   // Admin — rigs from native scan (hardware_rigs table) formatted for the preset generator
   app.get('/api/admin/rigs-detected', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const rigs = await storage.listRigs({ limit: 300, offset: 0 });
+    const rigs = await storage.listRigs({ limit: 1000, offset: 0 });
 
     // Batch Discord username lookups for rigs with a linked Discord user
     const discordUserMap: Record<string, string> = {};
