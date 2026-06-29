@@ -126,3 +126,9 @@ id = "2ehwm32PCZMRkKnUT4Rn7"
 uri = "file://downloads/OptiGods-Preset-i5-4590-RTX2060.zip"
 type = "unspecified"
 title = "OptiGods-Preset-i5-4590-RTX2060-V2.bat"
+
+[[outputs]]
+id = "3OxCD0rcZwCcw8rP8NNx5"
+uri = "file://downloads/OptiGods-Preset-R5-5600X-RTX4060.zip"
+type = "unspecified"
+title = "OptiGods-Preset-R5-5600X-RTX4060.zip"
