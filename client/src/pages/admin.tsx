@@ -1355,11 +1355,13 @@ function AdminPresetGenerator({
   allHardware = [],
   allCodes = [],
   apiKey = "",
+  onRefresh,
 }: {
   initialValues?: PresetInitValues;
   allHardware?: CustomerHW[];
   allCodes?: Array<{ code: string; note: string | null }>;
   apiKey?: string;
+  onRefresh?: () => void;
 }) {
   const { toast } = useToast();
   const [gpuVendor, setGpuVendor] = useState<"nvidia" | "amd" | "intel">(initialValues?.gpuVendor ?? "nvidia");
@@ -1377,6 +1379,7 @@ function AdminPresetGenerator({
   const [fixGenerated, setFixGenerated] = useState<{ name: string; tweakCount: number } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generatingFix, setGeneratingFix] = useState(false);
+  const [downloadingRig, setDownloadingRig] = useState<string | null>(null);
   // V2.2 — server-resolved preset preview + admin opt-in selections
   const [safePreset, setSafePreset] = useState<SafePresetResponse | null>(null);
   const [adminOptInIds, setAdminOptInIds] = useState<Set<string>>(new Set());
@@ -1515,9 +1518,80 @@ function AdminPresetGenerator({
       gpuName: hw.gpuName || "",
       cpuModel: hw.cpuModel || "",
       ramGb: hw.ramGb || 16,
-      osVersion: hw.osVersion === "win11" ? "win11" : "win10",
+      // Default to Win11 when no OS data — modern gaming rigs are almost all Win11.
+      // Only use Win10 if explicitly known. This unlocks ~30+ extra Win11-specific tweaks.
+      osVersion: hw.osVersion === "win11" ? "win11" : hw.osVersion === "win10" ? "win10" : "win11",
       isLaptop: hw.isLaptop || false,
     });
+  };
+
+  // One-click insane preset download per rig — no form interaction needed.
+  // Uses computeSmartRecs (max coverage) + all expert tweaks, defaults Win11.
+  const instantDownload = async (hw: CustomerHW, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const vendor = (hw.gpuVendor && ["nvidia","amd","intel"].includes(hw.gpuVendor)) ? hw.gpuVendor as "nvidia"|"amd"|"intel" : "nvidia";
+    const osVer: "win11"|"win10" = hw.osVersion === "win10" ? "win10" : "win11";
+    setDownloadingRig(hw.codeRef);
+    try {
+      const cpu = parseCpuModel(hw.cpuModel || "");
+      const isNvidia = vendor === "nvidia";
+      const isAmdGpu = vendor === "amd";
+      const isIntel = vendor === "intel";
+      const gpuNameLower = (hw.gpuName || "").toLowerCase();
+      const nvidiaIsRTX = isNvidia && (gpuNameLower.includes("rtx") || gpuNameLower.includes(" 30") || gpuNameLower.includes(" 40") || gpuNameLower.includes(" 50"));
+      const fakeHW = {
+        loading: false, scanned: true,
+        gpuName: hw.gpuName || (isNvidia ? "NVIDIA GPU" : isAmdGpu ? "AMD GPU" : "Intel GPU"),
+        gpuVendor: vendor,
+        cpuLabel: hw.cpuModel || "Unknown CPU",
+        cpuCores: hw.cpuThreads ?? cpu.threads,
+        cpuPhysicalCores: hw.cpuCores ?? cpu.cores,
+        ramGB: hw.ramGb || 16, ramLabel: `${hw.ramGb || 16}GB`, ramNote: "",
+        isNvidia, isAmdGpu, isAmdApu: false, isAMD: isAmdGpu, isIntel, isLaptop: hw.isLaptop || false,
+        isAmd: isAmdGpu, nvidiaIsRTX, nvidiaIsLowEnd: isNvidia && !nvidiaIsRTX,
+        cpuBrand: cpu.brand, isRyzen: cpu.isRyzen, isIntelCore: cpu.isIntelCore,
+        cpuGeneration: cpu.generation, resolution: "1920x1080", gpus: [],
+        hasIntegratedGpu: isIntel, hasDiscreteGpu: isNvidia || isAmdGpu,
+        isHybridGpu: false, systemModel: "", ramMhz: hw.ramMhz || 0,
+      } as HardwareInfo;
+      const fakeOS = {
+        loading: false,
+        os: osVer === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
+        displayName: osVer === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
+        isWindows: true, isWindows11: osVer === "win11", isWindows10: osVer === "win10",
+        build: osVer === "win11" ? "22631" : "19045",
+      } as OsInfo;
+      const recs = computeSmartRecs(fakeHW, fakeOS);
+      const tweakMap: Record<string, boolean> = {};
+      recs.ids.forEach(id => { tweakMap[id] = true; });
+      // All expert tweaks — admin preset, no safety holding back
+      const expertCandidates = [
+        "DisableMemoryCompression", "MemDisableCompression", "DisablePagefileEncryption",
+        "DisableDefender", "SysHypervisorOff",
+        ...(osVer === "win11" ? ["Win11DisableVBS", "Win11DisableHVCI"] : []),
+        ...(fakeHW.isLaptop && fakeHW.isIntelCore ? ["Lap_Intel_DisableECores"] : []),
+      ];
+      expertCandidates.forEach(id => { tweakMap[id] = true; });
+      const res = await fetch(apiUrl("/api/script/download-bat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
+      });
+      if (!res.ok) throw new Error("Script generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safe = (hw.gpuName || vendor).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 24);
+      a.download = `OptiGods_${safe}_${osVer.toUpperCase()}.bat`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: `⚡ ${Object.keys(tweakMap).length} tweaks — downloaded`, description: `${hw.gpuName || vendor.toUpperCase()} · ${osVer === "win11" ? "Win11" : "Win10"}` });
+    } catch (err) {
+      toast({ title: "Download failed", description: String(err), variant: "destructive" });
+    } finally {
+      setDownloadingRig(null);
+    }
   };
 
   const handleGenerate = async () => {
@@ -1653,14 +1727,26 @@ function AdminPresetGenerator({
             <span className="text-[11px] font-black uppercase tracking-widest text-red-400">Detected Users</span>
             <span className="text-[10px] text-zinc-600 font-mono">({allHardware.length})</span>
           </div>
-          {allHardware.length > 0 && selectedUser && (
-            <button
-              onClick={() => { setSelectedUser(null); }}
-              className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              Clear selection
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {allHardware.length > 0 && selectedUser && (
+              <button
+                onClick={() => { setSelectedUser(null); }}
+                className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                Clear selection
+              </button>
+            )}
+            {onRefresh && (
+              <button
+                data-testid="button-refresh-rigs"
+                onClick={onRefresh}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider transition-all"
+                title="Refresh detected users"
+              >
+                <RefreshCw className="w-3 h-3" /> Refresh
+              </button>
+            )}
+          </div>
         </div>
 
         {allHardware.length === 0 ? (
@@ -1683,7 +1769,7 @@ function AdminPresetGenerator({
                 />
               </div>
             </div>
-            <div className="max-h-64 overflow-y-auto divide-y divide-white/4">
+            <div className="max-h-96 overflow-y-auto divide-y divide-white/4">
               {filteredHW.length === 0 ? (
                 <p className="text-[10px] text-zinc-600 px-4 py-3">No users match your search</p>
               ) : filteredHW.map(hw => {
@@ -1761,14 +1847,27 @@ function AdminPresetGenerator({
                           {hw.refreshHz && (
                             <span className="text-[9px] text-zinc-700">{hw.refreshHz}Hz</span>
                           )}
-                          <span className={cn(
-                            "ml-auto text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded transition-all",
-                            isSelected
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-zinc-800/0 text-zinc-700 group-hover:bg-red-600 group-hover:text-white border border-transparent group-hover:border-red-500"
-                          )}>
-                            {isSelected ? (generating ? "⟳ Generating…" : "✓ Loaded") : "Load + Gen →"}
-                          </span>
+                          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                            {/* ⚡ Instant download — no form needed */}
+                            <button
+                              data-testid={`button-instant-dl-${hw.codeRef}`}
+                              onClick={e => instantDownload(hw, e)}
+                              disabled={downloadingRig === hw.codeRef}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-red-600/80 hover:bg-red-500 text-white border border-red-500/50 transition-all disabled:opacity-60"
+                              title="Download insane preset instantly"
+                            >
+                              {downloadingRig === hw.codeRef ? "⟳" : "⚡"} {downloadingRig === hw.codeRef ? "…" : "DL"}
+                            </button>
+                            {/* Load into form for preview/customisation */}
+                            <span className={cn(
+                              "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded transition-all",
+                              isSelected
+                                ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                : "bg-zinc-800/0 text-zinc-700 group-hover:bg-zinc-700 group-hover:text-white border border-transparent group-hover:border-zinc-600"
+                            )}>
+                              {isSelected ? (generating ? "⟳ Gen…" : "✓ Loaded") : "Load →"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -5678,6 +5777,10 @@ export default function Admin() {
             ]}
             allCodes={(codesQuery.data || []).map(c => ({ code: c.code, note: c.note ?? null }))}
             apiKey={key}
+            onRefresh={() => {
+              rigsDetectedQuery.refetch();
+              customerHardwareQuery.refetch();
+            }}
           />
         )}
 
