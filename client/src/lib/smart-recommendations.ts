@@ -12,6 +12,26 @@ export interface SmartRecs {
   cpuLabel: string;
   osLabel: string;
   ready: boolean;
+  categories: { performance: number; latency: number; internet: number; stability: number };
+}
+
+// Tweak IDs that are primarily about reducing latency/input delay (not raw FPS)
+const LATENCY_TWEAK_IDS = new Set([
+  "DisableNagle","InputLagTCP","SetDNSPriority","DisableNDU","RegistryDPCLatency",
+  "DisableDynamicTick","SetTimerResolution","IGpu_SetTimerResolution","Lap_TimerResolution",
+  "FiveMMMCSSAudio","ProcMMCSSGaming","Lap_MMCSS_Games",
+  "NvidiaLowLatency","NvidiaOptimizeLatency","NvidiaPreRenderedFrames","NvidiaReflexEnable",
+  "NvidiaCUDAPriority","AmdOptimizeLatency","AmdAntiLag","AmdAntiLagPlus",
+  "EnableMSIMode","EnableMSIMode_Safe","FiveMDisableLSO","FiveMEnableRSS",
+  "FiveMRenderingBoost","FiveMDisableMPO","FiveM1650LowLatencyMode",
+  "FiveM1060DisableHAGS","FiveM1650DisableHAGS",
+]);
+
+function classifyTweak(id: string, category: string): "performance" | "latency" | "internet" | "stability" {
+  if (LATENCY_TWEAK_IDS.has(id) || /Latency|InputLag|DPC|MMCSS|Reflex|TimerRes|LowLatency|AntiLag/i.test(id)) return "latency";
+  if (category === "service" || category === "debloat" || category === "privacy" || category === "startup") return "stability";
+  if (category === "network") return "internet";
+  return "performance";
 }
 
 export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
@@ -482,5 +502,13 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   const cpuLabel = hw.loading ? "Detecting..." : hw.cpuCores > 0 ? hw.cpuLabel : "Unknown";
   const osLabel  = os.loading ? "Detecting..." : os.displayName || os.os;
 
-  return { ids, profile, profileColor, reasons, gpuLabel, ramLabel, cpuLabel, osLabel, ready };
+  // ===== CATEGORY BREAKDOWN =====
+  const categories = { performance: 0, latency: 0, internet: 0, stability: 0 };
+  Array.from(ids).forEach(id => {
+    const tweak = TWEAK_REGISTRY.find(t => t.id === id);
+    const cat = tweak?.category ?? "registry";
+    categories[classifyTweak(id, cat)]++;
+  });
+
+  return { ids, profile, profileColor, reasons, gpuLabel, ramLabel, cpuLabel, osLabel, ready, categories };
 }

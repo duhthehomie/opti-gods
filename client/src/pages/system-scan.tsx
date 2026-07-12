@@ -2,6 +2,7 @@ import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { useLiveStats } from "@/hooks/use-live-stats";
 import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
@@ -366,6 +367,68 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         </button>
       </div>
     </div>
+  );
+}
+
+// ── Smart Recs Breakdown Panel ────────────────────────────────────────────────
+function SmartRecsBreakdown() {
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const recs = computeSmartRecs(hw, os);
+
+  const total = recs.ids.size;
+  const cats = recs.categories;
+
+  const buckets = [
+    { key: "performance", label: "Performance", sub: "FPS · CPU · GPU · Memory", color: "text-red-400", border: "border-red-500/20", bg: "bg-red-500/[0.04]", glow: "shadow-red-500/10", icon: "⚡" },
+    { key: "latency",     label: "Latency",     sub: "Input · DPC · Timer · MSI", color: "text-amber-400", border: "border-amber-500/20", bg: "bg-amber-500/[0.04]", glow: "shadow-amber-500/10", icon: "🎯" },
+    { key: "Internet",    label: "Internet",    sub: "TCP · DNS · NIC · Throttle", color: "text-blue-400", border: "border-blue-500/20", bg: "bg-blue-500/[0.04]", glow: "shadow-blue-500/10", icon: "🌐" },
+    { key: "stability",   label: "Stability",   sub: "Services · Debloat · Privacy", color: "text-emerald-400", border: "border-emerald-500/20", bg: "bg-emerald-500/[0.04]", glow: "shadow-emerald-500/10", icon: "🛡" },
+  ] as const;
+
+  if (!recs.ready || total === 0) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-red-400" />
+          <span className="text-sm font-bold text-white">Smart Recommendations</span>
+          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded border", recs.profileColor.replace("text-", "text-").replace("400", "300"),
+            "bg-zinc-900 border-white/10")}>{recs.profile}</span>
+        </div>
+        <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
+      </div>
+
+      {/* 4-bucket breakdown */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {buckets.map(b => {
+          const count = b.key === "Internet" ? cats.internet : cats[b.key as keyof typeof cats];
+          return (
+            <div key={b.key} className={cn("rounded-xl border p-4 text-center shadow-sm", b.border, b.bg, b.glow)}>
+              <div className="text-xl mb-1">{b.icon}</div>
+              <div className={cn("text-3xl font-display font-black tabular-nums", b.color)}>{count}</div>
+              <div className="text-xs font-bold text-white mt-1">{b.label}</div>
+              <div className="text-[9px] text-zinc-500 mt-0.5 leading-tight">{b.sub}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Why these tweaks */}
+      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Why these tweaks were selected</p>
+        <div className="flex flex-wrap gap-1.5">
+          {recs.reasons.map((r, i) => (
+            <span key={i} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-zinc-800/60 border border-white/5 text-zinc-400">
+              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+              {r}
+            </span>
+          ))}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -1167,6 +1230,9 @@ export default function SystemScanPage() {
             hwMonitor={hwMonitorData}
           />
         )}
+
+        {/* Smart Recs Breakdown — shown for both native and web after hardware is known */}
+        {!loading && <SmartRecsBreakdown />}
 
         {/* Native error */}
         {!loading && native && scanError && (

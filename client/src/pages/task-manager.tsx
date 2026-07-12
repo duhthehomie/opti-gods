@@ -247,6 +247,117 @@ const DEBLOAT_BG_PROCESSES = new Set([
   "fshoster32.exe", "igccexe.exe", "igccp.exe",
 ]);
 
+// ── Startup program identity map — raw registry name → human info ────────────
+type StartupCat = "gaming" | "browser" | "communication" | "cloud" | "media" | "vpn" | "peripheral" | "manufacturer" | "security" | "windows" | "unknown";
+interface StartupIdentity { label: string; cat: StartupCat; desc: string; impact: "HIGH" | "MED" | "LOW"; safe: boolean }
+const STARTUP_IDENTITY_MAP: Record<string, StartupIdentity> = {
+  // ── Gaming ──
+  "steam":                    { label: "Steam",               cat: "gaming",        desc: "Steam client + web helper. Safe to remove — opens on game launch.", impact: "MED", safe: true },
+  "epicgameslauncher":        { label: "Epic Games",          cat: "gaming",        desc: "Epic launcher polls for updates on every boot. Safe to disable.", impact: "MED", safe: true },
+  "eadesktop":                { label: "EA App",              cat: "gaming",        desc: "EA App telemetry and updater. Safe to disable.", impact: "MED", safe: true },
+  "eaapp":                    { label: "EA App",              cat: "gaming",        desc: "EA App background service.", impact: "MED", safe: true },
+  "ubisoft connect":          { label: "Ubisoft Connect",     cat: "gaming",        desc: "Ubisoft launcher + updater background service.", impact: "LOW", safe: true },
+  "upc":                      { label: "Ubisoft Connect",     cat: "gaming",        desc: "Ubisoft Connect client.", impact: "LOW", safe: true },
+  "battle.net":               { label: "Battle.net",          cat: "gaming",        desc: "Blizzard Agent runs update checks every boot. Heavy CPU spikes.", impact: "HIGH", safe: true },
+  "rockstar games launcher":  { label: "Rockstar Launcher",   cat: "gaming",        desc: "Rockstar Services background process.", impact: "LOW", safe: true },
+  "gog galaxy":               { label: "GOG Galaxy",          cat: "gaming",        desc: "GOG launcher + galaxy-service background process.", impact: "LOW", safe: true },
+  "playnite":                 { label: "Playnite",            cat: "gaming",        desc: "Game library manager. Safe to remove from startup.", impact: "LOW", safe: true },
+  "xboxapp":                  { label: "Xbox App",            cat: "gaming",        desc: "Xbox companion app with background Game Bar hooks.", impact: "MED", safe: true },
+  "gamingservices":           { label: "Xbox Gaming Services",cat: "gaming",        desc: "Xbox Gaming Services overlay. Safe to disable.", impact: "LOW", safe: true },
+  // ── Browsers ──
+  "google chrome":            { label: "Google Chrome",       cat: "browser",       desc: "Chrome Background mode + crash handler. 150-400MB RAM idle.", impact: "HIGH", safe: true },
+  "microsoftedge":            { label: "Microsoft Edge",      cat: "browser",       desc: "Edge Startup Boost keeps 2+ processes alive 24/7.", impact: "HIGH", safe: true },
+  "msedge":                   { label: "Microsoft Edge",      cat: "browser",       desc: "Edge background startup boost process.", impact: "HIGH", safe: true },
+  "brave":                    { label: "Brave Browser",       cat: "browser",       desc: "Brave background updater and service.", impact: "MED", safe: true },
+  "opera":                    { label: "Opera",               cat: "browser",       desc: "Opera background crash handler.", impact: "LOW", safe: true },
+  "firefox":                  { label: "Firefox",             cat: "browser",       desc: "Firefox maintenance service.", impact: "LOW", safe: true },
+  // ── Communication ──
+  "discord":                  { label: "Discord",             cat: "communication", desc: "Overlay, video codec, crash handler — 3+ processes at startup.", impact: "MED", safe: true },
+  "teams":                    { label: "Microsoft Teams",     cat: "communication", desc: "Teams runs 4-8 processes at idle, 300-500MB RAM.", impact: "HIGH", safe: true },
+  "com.squirrel.slack.slack": { label: "Slack",               cat: "communication", desc: "Electron app — 200-400MB RAM at idle.", impact: "MED", safe: true },
+  "slack":                    { label: "Slack",               cat: "communication", desc: "Slack background helper.", impact: "MED", safe: true },
+  "zoom":                     { label: "Zoom",                cat: "communication", desc: "Zoom background helper and crash monitor.", impact: "LOW", safe: true },
+  "teamviewer":               { label: "TeamViewer",          cat: "communication", desc: "Maintains persistent remote access socket. Not needed during gaming.", impact: "LOW", safe: true },
+  "skype":                    { label: "Skype",               cat: "communication", desc: "Skype background process.", impact: "LOW", safe: true },
+  // ── Cloud ──
+  "onedrive":                 { label: "OneDrive",            cat: "cloud",         desc: "File sync causes constant disk I/O competing with game assets.", impact: "HIGH", safe: true },
+  "dropbox":                  { label: "Dropbox",             cat: "cloud",         desc: "Background sync disk I/O spikes.", impact: "MED", safe: true },
+  "googledrivefs":            { label: "Google Drive",        cat: "cloud",         desc: "Continuous cloud sync in background.", impact: "MED", safe: true },
+  "icloud":                   { label: "iCloud",              cat: "cloud",         desc: "Drive sync + Photo Library indexing.", impact: "LOW", safe: true },
+  // ── Media ──
+  "spotify":                  { label: "Spotify",             cat: "media",         desc: "4-6 Chromium-based helper processes. 200-450MB RAM.", impact: "HIGH", safe: true },
+  "itunes":                   { label: "iTunes",              cat: "media",         desc: "iTunes Helper + AppleMobileDeviceService run even when closed.", impact: "LOW", safe: true },
+  "adobegcinvoker-1.0":       { label: "Adobe CC",            cat: "media",         desc: "CC Desktop + Genuine Checker + updater = 3 processes, 150MB RAM.", impact: "MED", safe: true },
+  "adobecreativitygclient":   { label: "Adobe Creative Cloud",cat: "media",         desc: "Adobe background service.", impact: "MED", safe: true },
+  // ── VPN ──
+  "nordvpn":                  { label: "NordVPN",             cat: "vpn",           desc: "VPN client + service runs 24/7 even when not connected.", impact: "MED", safe: true },
+  "expressvpn":               { label: "ExpressVPN",          cat: "vpn",           desc: "Background service runs at all times when installed.", impact: "MED", safe: true },
+  "mullvad vpn":              { label: "Mullvad VPN",         cat: "vpn",           desc: "Mullvad daemon runs persistently at boot.", impact: "LOW", safe: true },
+  "protonvpn":                { label: "ProtonVPN",           cat: "vpn",           desc: "ProtonVPN background service.", impact: "LOW", safe: true },
+  // ── Peripheral ──
+  "lghub":                    { label: "Logitech G HUB",      cat: "peripheral",    desc: "RGB + profile service. Hardware keeps working after kill.", impact: "LOW", safe: true },
+  "logitune":                 { label: "Logi Tune",           cat: "peripheral",    desc: "Logitech camera/webcam software.", impact: "LOW", safe: true },
+  "rzsynapse":                { label: "Razer Synapse",        cat: "peripheral",    desc: "Razer device profiles and RGB sync.", impact: "LOW", safe: true },
+  "razercentral":             { label: "Razer Central",        cat: "peripheral",    desc: "Razer app hub. Safe to remove.", impact: "LOW", safe: true },
+  "icue":                     { label: "Corsair iCUE",         cat: "peripheral",    desc: "Corsair RGB and profile service.", impact: "LOW", safe: true },
+  "steelseriesgg":            { label: "SteelSeries GG",      cat: "peripheral",    desc: "SteelSeries device profile service.", impact: "LOW", safe: true },
+  "ngenuity":                 { label: "HyperX NGenuity",     cat: "peripheral",    desc: "HyperX lighting and profiles.", impact: "LOW", safe: true },
+  // ── Manufacturer bloat ──
+  "armourycrate":             { label: "ASUS Armoury Crate",  cat: "manufacturer",  desc: "ASUS RGB + fan control + bloatware hub. High background CPU.", impact: "HIGH", safe: true },
+  "armoury crate service":    { label: "ASUS Armoury Crate",  cat: "manufacturer",  desc: "ASUS Armoury background service.", impact: "HIGH", safe: true },
+  "msidragon":                { label: "MSI Dragon Center",   cat: "manufacturer",  desc: "MSI system monitor + RGB. Frees ~80MB RAM when removed.", impact: "MED", safe: true },
+  "msicenter":                { label: "MSI Center",          cat: "manufacturer",  desc: "MSI Center background monitoring service.", impact: "MED", safe: true },
+  "lenovovantage":            { label: "Lenovo Vantage",      cat: "manufacturer",  desc: "Lenovo system updates + telemetry. Safe to remove.", impact: "MED", safe: true },
+  "dellsupportassist":        { label: "Dell SupportAssist",  cat: "manufacturer",  desc: "Dell diagnostics and telemetry. High background usage.", impact: "HIGH", safe: true },
+  "hpsupport":                { label: "HP Support",          cat: "manufacturer",  desc: "HP diagnostic and update agent.", impact: "MED", safe: true },
+  "inteldsasw":               { label: "Intel Driver Support",cat: "manufacturer",  desc: "Intel DSA auto-update service.", impact: "LOW", safe: true },
+  "realtekusbgaming":         { label: "Realtek Audio",       cat: "manufacturer",  desc: "Realtek audio tray agent.", impact: "LOW", safe: true },
+  "realtekhd":                { label: "Realtek HD Audio",    cat: "manufacturer",  desc: "Realtek audio tray controller.", impact: "LOW", safe: true },
+  // ── Security (don't auto-disable) ──
+  "windowsdefender":          { label: "Windows Defender",    cat: "security",      desc: "Windows real-time protection — do not disable.", impact: "LOW", safe: false },
+  "windowssecurity":          { label: "Windows Security",    cat: "security",      desc: "Windows Security notification service.", impact: "LOW", safe: false },
+  "mbamservice":              { label: "Malwarebytes",        cat: "security",      desc: "Real-time scanning. Disable temporarily for gaming only.", impact: "MED", safe: false },
+  "avp":                      { label: "Kaspersky",           cat: "security",      desc: "Kaspersky real-time protection.", impact: "HIGH", safe: false },
+  "avgui":                    { label: "AVG Antivirus",       cat: "security",      desc: "AVG background scan agent.", impact: "HIGH", safe: false },
+};
+
+const STARTUP_CAT_META: Record<StartupCat, { label: string; color: string; borderColor: string }> = {
+  gaming:       { label: "Game Launchers",     color: "text-orange-400",   borderColor: "border-orange-500/20" },
+  browser:      { label: "Browsers",           color: "text-blue-400",     borderColor: "border-blue-500/20" },
+  communication:{ label: "Communication",      color: "text-indigo-400",   borderColor: "border-indigo-500/20" },
+  cloud:        { label: "Cloud & Sync",       color: "text-cyan-400",     borderColor: "border-cyan-500/20" },
+  media:        { label: "Media",              color: "text-pink-400",     borderColor: "border-pink-500/20" },
+  vpn:          { label: "VPN",                color: "text-purple-400",   borderColor: "border-purple-500/20" },
+  peripheral:   { label: "Peripheral Software",color: "text-green-400",    borderColor: "border-green-500/20" },
+  manufacturer: { label: "Manufacturer Bloat", color: "text-red-400",      borderColor: "border-red-500/20" },
+  security:     { label: "Security",           color: "text-amber-400",    borderColor: "border-amber-500/20" },
+  windows:      { label: "Windows",            color: "text-zinc-400",     borderColor: "border-zinc-500/20" },
+  unknown:      { label: "Other Programs",     color: "text-zinc-500",     borderColor: "border-zinc-700/40" },
+};
+
+function identifyStartup(entry: { name: string; command?: string }): StartupIdentity {
+  const key = entry.name.toLowerCase().trim();
+  if (STARTUP_IDENTITY_MAP[key]) return STARTUP_IDENTITY_MAP[key];
+  // Fuzzy match — partial name
+  for (const [k, v] of Object.entries(STARTUP_IDENTITY_MAP)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  // Guess from command path
+  const cmd = (entry.command || "").toLowerCase();
+  if (cmd.includes("steam"))    return STARTUP_IDENTITY_MAP["steam"];
+  if (cmd.includes("discord"))  return STARTUP_IDENTITY_MAP["discord"];
+  if (cmd.includes("epic"))     return STARTUP_IDENTITY_MAP["epicgameslauncher"];
+  if (cmd.includes("spotify"))  return STARTUP_IDENTITY_MAP["spotify"];
+  if (cmd.includes("onedrive")) return STARTUP_IDENTITY_MAP["onedrive"];
+  if (cmd.includes("teams"))    return STARTUP_IDENTITY_MAP["teams"];
+  if (cmd.includes("chrome"))   return STARTUP_IDENTITY_MAP["google chrome"];
+  if (cmd.includes("msedge") || cmd.includes("microsoft\\edge")) return STARTUP_IDENTITY_MAP["microsoftedge"];
+  if (cmd.includes("nordvpn"))  return STARTUP_IDENTITY_MAP["nordvpn"];
+  if (cmd.includes("dropbox"))  return STARTUP_IDENTITY_MAP["dropbox"];
+  // Fallback
+  return { label: entry.name, cat: "unknown", desc: "Unknown startup program.", impact: "LOW", safe: true };
+}
+
 // ── HKLM startup entries that are genuine Windows system entries (never offer script) ──
 const WINDOWS_PROTECTED_STARTUP_NAMES = new Set([
   "securityhealth", "windows defender", "windowsdefender", "mrt", "mscares",
@@ -481,6 +592,25 @@ export default function TaskManagerPage() {
       setStartupDisableStates(prev => ({ ...prev, [key]: "error" }));
     }
   };
+
+  // ── Disable all safe (non-essential) startup entries in one click ──────────
+  const handleDisableAllSafe = useCallback(async () => {
+    const safeEntries = allStartupEntries.filter(e => {
+      if (WINDOWS_PROTECTED_STARTUP_NAMES.has(e.name.toLowerCase())) return false;
+      const identity = identifyStartup(e);
+      if (!identity.safe) return false;
+      const directState = startupDisableStates[e.name] ?? "idle";
+      const matchedApp = ALL_APPS.find(a => a.startupKey?.toLowerCase() === e.name.toLowerCase());
+      const aState = matchedApp ? appStates[matchedApp.id] : undefined;
+      if (aState?.startupStatus === "done" || directState === "done") return false;
+      return true;
+    });
+    if (safeEntries.length === 0) { toast({ title: "All done", description: "No more safe entries to disable." }); return; }
+    toast({ title: `Disabling ${safeEntries.length} startup entries…`, description: "Working through each one" });
+    for (const entry of safeEntries) {
+      await handleDisableStartupEntry(entry).catch(() => {});
+    }
+  }, [allStartupEntries, startupDisableStates, appStates, toast, handleDisableStartupEntry]);
 
   // ── Web handlers ───────────────────────────────────────────────────────────
   const toggleKill = (id: string) => setKillSet(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -1042,94 +1172,212 @@ export default function TaskManagerPage() {
         {/* ════════════════════════════════════════════════════════════════
             STARTUP APPS section
         ════════════════════════════════════════════════════════════════ */}
-        {native && scanned && activeSection === "startup" && (
-          <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        {activeSection === "startup" && (
+          <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-4">
 
-            {allStartupEntries.length === 0 ? (
-              <div className="rounded-xl border border-white/5 bg-zinc-900/60 px-5 py-8 text-center">
-                <Power className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-                <p className="text-sm text-zinc-500">No startup entries detected.</p>
-              </div>
-            ) : (
-              <>
-                {/* Legend */}
-                <div className="mb-3 rounded-lg border border-white/5 bg-zinc-900/40 px-3 py-2 flex flex-wrap items-center gap-4 text-[10px] text-zinc-500">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500/60" />
-                    <span>HKCU — user-level, safe to disable</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-purple-500/60" />
-                    <span>HKLM — system-level, read-only for safety</span>
-                  </div>
+            {/* ── NATIVE: full OS startup entries ─────────────────────────── */}
+            {native && scanned && (() => {
+              if (allStartupEntries.length === 0) return (
+                <div className="rounded-xl border border-white/5 bg-zinc-900/60 px-5 py-8 text-center">
+                  <Power className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-500">No startup entries detected.</p>
                 </div>
+              );
 
-                <div className="space-y-2">
-                  {allStartupEntries.map((entry) => {
-                    const matchedApp = ALL_APPS.find(a => a.startupKey?.toLowerCase() === entry.name.toLowerCase());
-                    const aState = matchedApp ? appStates[matchedApp.id] : undefined;
-                    const directState = startupDisableStates[entry.name] ?? "idle";
-                    const isDisablePending = (aState?.startupStatus === "pending") || directState === "pending";
-                    const isDisableDone    = (aState?.startupStatus === "done")    || directState === "done";
+              // Enrich entries with identity
+              const enriched = allStartupEntries.map(e => ({ entry: e, id: identifyStartup(e) }));
+              const safeRemaining = enriched.filter(({ entry, id }) => {
+                if (WINDOWS_PROTECTED_STARTUP_NAMES.has(entry.name.toLowerCase())) return false;
+                if (!id.safe) return false;
+                const ds = startupDisableStates[entry.name] ?? "idle";
+                const ma = ALL_APPS.find(a => a.startupKey?.toLowerCase() === entry.name.toLowerCase());
+                return (appStates[ma?.id ?? ""]?.startupStatus !== "done") && ds !== "done";
+              });
 
+              // Group by category
+              const catOrder: StartupCat[] = ["gaming","browser","communication","cloud","media","vpn","peripheral","manufacturer","security","windows","unknown"];
+              const groups = new Map<StartupCat, typeof enriched>();
+              for (const item of enriched) {
+                const c = item.id.cat;
+                if (!groups.has(c)) groups.set(c, []);
+                groups.get(c)!.push(item);
+              }
+
+              return (
+                <>
+                  {/* Top bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Power className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-bold text-white">{allStartupEntries.length} startup entries detected</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {safeRemaining.length > 0 && (
+                        <button
+                          data-testid="button-disable-all-safe"
+                          onClick={handleDisableAllSafe}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-600/80 border-amber-500 text-white hover:bg-amber-700 transition-colors shadow-sm shadow-amber-600/20"
+                        >
+                          <WifiOff className="w-3 h-3" /> Disable All Non-Essential ({safeRemaining.length})
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="rounded-lg border border-white/5 bg-zinc-900/40 px-3 py-2 flex flex-wrap items-center gap-4 text-[10px] text-zinc-500">
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500/60" /><span>HKCU — user-level, safe to disable</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500/60" /><span>HKLM — system-level (BAT script needed)</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-600/60" /><span>Protected — Windows core, do not touch</span></div>
+                  </div>
+
+                  {/* Categorised groups */}
+                  {catOrder.map(cat => {
+                    const items = groups.get(cat);
+                    if (!items || items.length === 0) return null;
+                    const meta = STARTUP_CAT_META[cat];
                     return (
-                      <div key={`${entry.location}-${entry.name}`}
-                        data-testid={`card-startup-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
-                        className={cn("rounded-xl border bg-zinc-900/60 transition-all",
-                          isDisableDone ? "border-emerald-500/20" : "border-white/5 hover:border-white/10")}>
-                        <div className="flex items-center gap-3 px-4 py-3">
-                          <div className={cn("w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 text-[11px] font-black font-display",
-                            entry.can_disable ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-zinc-500 bg-zinc-800 border-zinc-700/50")}>
-                            {entry.name.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <span className="text-sm font-semibold text-white">{entry.name}</span>
-                              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider",
-                                entry.location === "HKCU"
-                                  ? "text-blue-400 bg-blue-500/10 border-blue-500/30"
-                                  : "text-purple-400 bg-purple-500/10 border-purple-500/30")}>
-                                {entry.location}
-                              </span>
-                              {isDisableDone && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border-emerald-500/30">✓ REMOVED</span>}
-                            </div>
-                            <p className="text-[10px] text-zinc-600 font-mono truncate">{entry.command}</p>
-                          </div>
-                          <div className="shrink-0 ml-2">
-                            {(entry.can_disable || HKLM_SAFE_DISABLE_NAMES.has(entry.name.toLowerCase())) ? (
-                              <button
-                                data-testid={`button-disable-startup-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
-                                onClick={() => handleDisableStartupEntry(entry)}
-                                disabled={isDisablePending || isDisableDone}
-                                className={cn("px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap flex items-center gap-1",
-                                  isDisableDone ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400 cursor-default"
-                                  : "bg-amber-600/80 border-amber-500 text-white hover:bg-amber-700 shadow-sm shadow-amber-600/20")}>
-                                {isDisablePending ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Removing…</>
-                                : isDisableDone   ? "✓ Removed"
-                                : <><WifiOff className="w-2.5 h-2.5" /> Disable</>}
-                              </button>
-                            ) : entry.location === "HKLM" && !WINDOWS_PROTECTED_STARTUP_NAMES.has(entry.name.toLowerCase()) ? (
-                              <button
-                                data-testid={`button-hklm-script-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
-                                onClick={() => handleDisableHklmStartup(entry.name)}
-                                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap flex items-center gap-1 bg-zinc-800/80 border-zinc-600 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300"
-                                title="Downloads a BAT script — run as Administrator to disable this system-level startup entry">
-                                <Download className="w-2.5 h-2.5" /> Script
-                              </button>
-                            ) : (
-                              <span className="text-[9px] text-zinc-600 px-2 py-1.5 rounded border border-zinc-800 flex items-center gap-1 whitespace-nowrap">
-                                <Lock className="w-2.5 h-2.5" />
-                                Protected
-                              </span>
-                            )}
-                          </div>
+                      <div key={cat}>
+                        <div className="flex items-center gap-2 mb-2 px-1">
+                          <span className={cn("text-[10px] font-bold uppercase tracking-wider", meta.color)}>{meta.label}</span>
+                          <span className="text-[10px] text-zinc-600">{items.length}</span>
+                        </div>
+                        <div className="rounded-xl border overflow-hidden divide-y divide-white/5" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                          {items.map(({ entry, id }) => {
+                            const matchedApp = ALL_APPS.find(a => a.startupKey?.toLowerCase() === entry.name.toLowerCase());
+                            const aState = matchedApp ? appStates[matchedApp.id] : undefined;
+                            const directState = startupDisableStates[entry.name] ?? "idle";
+                            const isDisablePending = (aState?.startupStatus === "pending") || directState === "pending";
+                            const isDisableDone    = (aState?.startupStatus === "done")    || directState === "done";
+                            const impactColors: Record<string, string> = { HIGH: "text-red-400 bg-red-500/10 border-red-500/30", MED: "text-amber-400 bg-amber-500/10 border-amber-500/30", LOW: "text-zinc-500 bg-zinc-800 border-zinc-700/50" };
+                            const iColor = impactColors[id.impact] ?? impactColors.LOW;
+
+                            return (
+                              <div key={`${entry.location}-${entry.name}`}
+                                data-testid={`card-startup-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
+                                className={cn("flex items-center gap-3 px-4 py-3 bg-zinc-900/60 hover:bg-zinc-900/80 transition-colors",
+                                  isDisableDone && "opacity-50")}>
+                                <div className={cn("w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 text-[10px] font-black font-display", iColor)}>
+                                  {id.label.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                    <span className={cn("text-sm font-semibold", isDisableDone ? "text-zinc-500 line-through" : "text-white")}>{id.label !== entry.name ? id.label : entry.name}</span>
+                                    {id.label !== entry.name && <span className="text-[9px] text-zinc-600 font-mono truncate max-w-[120px]">{entry.name}</span>}
+                                    <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider",
+                                      entry.location === "HKCU" ? "text-blue-400 bg-blue-500/10 border-blue-500/20" : "text-purple-400 bg-purple-500/10 border-purple-500/20")}>
+                                      {entry.location}
+                                    </span>
+                                    <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider", iColor)}>
+                                      {id.impact}
+                                    </span>
+                                    {isDisableDone && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border-emerald-500/30">✓ REMOVED</span>}
+                                  </div>
+                                  <p className="text-[10px] text-zinc-500 leading-relaxed">{id.desc}</p>
+                                  <p className="text-[9px] text-zinc-700 font-mono truncate mt-0.5">{entry.command}</p>
+                                </div>
+                                <div className="shrink-0 ml-2">
+                                  {(entry.can_disable || HKLM_SAFE_DISABLE_NAMES.has(entry.name.toLowerCase())) ? (
+                                    <button
+                                      data-testid={`button-disable-startup-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
+                                      onClick={() => handleDisableStartupEntry(entry)}
+                                      disabled={isDisablePending || isDisableDone}
+                                      className={cn("px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap flex items-center gap-1",
+                                        isDisableDone ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400 cursor-default"
+                                        : "bg-amber-600/80 border-amber-500 text-white hover:bg-amber-700 shadow-sm shadow-amber-600/20")}>
+                                      {isDisablePending ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Removing…</>
+                                      : isDisableDone   ? "✓ Removed"
+                                      : <><WifiOff className="w-2.5 h-2.5" /> Disable</>}
+                                    </button>
+                                  ) : entry.location === "HKLM" && !WINDOWS_PROTECTED_STARTUP_NAMES.has(entry.name.toLowerCase()) ? (
+                                    <button
+                                      data-testid={`button-hklm-script-${entry.name.replace(/\s+/g, "-").toLowerCase()}`}
+                                      onClick={() => handleDisableHklmStartup(entry.name)}
+                                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap flex items-center gap-1 bg-zinc-800/80 border-zinc-600 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300"
+                                      title="Downloads a BAT script — run as Administrator">
+                                      <Download className="w-2.5 h-2.5" /> Script
+                                    </button>
+                                  ) : (
+                                    <span className="text-[9px] text-zinc-600 px-2 py-1.5 rounded border border-zinc-800 flex items-center gap-1 whitespace-nowrap">
+                                      <Lock className="w-2.5 h-2.5" /> Protected
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
                   })}
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
+
+            {/* ── WEB: curated startup app list ──────────────────────────── */}
+            {!native && (() => {
+              const allStartupApps = CATEGORIES.flatMap(c => c.apps.filter(a => a.startupKey));
+              const selected = allStartupApps.filter(a => startupSet.has(a.id));
+              return (
+                <>
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] px-4 py-3 flex items-start gap-3">
+                    <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-zinc-400 leading-relaxed">
+                      <span className="text-amber-300 font-semibold">Web mode:</span> Select which apps to remove from startup, then download the script.
+                      For live disable buttons and ALL real startup entries, use the native app.
+                    </div>
+                  </div>
+
+                  {selected.length > 0 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] text-zinc-400">{selected.length} app{selected.length !== 1 ? "s" : ""} selected</span>
+                      <div className="flex gap-2">
+                        <button onClick={handleClearAll} className="px-3 py-1.5 rounded-lg text-[10px] font-bold border border-zinc-700 text-zinc-400 hover:border-zinc-500 transition-colors">Clear</button>
+                        <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold border bg-amber-600/80 border-amber-500 text-white hover:bg-amber-700 transition-colors">
+                          {downloading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Download className="w-2.5 h-2.5" />}
+                          Download Script
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {allStartupApps.map(app => {
+                      const isSelected = startupSet.has(app.id);
+                      const iColor = app.impact === "HIGH" ? "text-red-400 bg-red-500/10 border-red-500/30"
+                        : app.impact === "MED" ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
+                        : "text-zinc-500 bg-zinc-800 border-zinc-700/50";
+                      return (
+                        <div key={app.id} data-testid={`card-web-startup-${app.id}`}
+                          className={cn("rounded-xl border bg-zinc-900/60 transition-all",
+                            isSelected ? "border-amber-500/30" : "border-white/5 hover:border-white/10")}>
+                          <div className="flex items-center gap-3 px-4 py-3">
+                            <div className={cn("w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 text-[10px] font-black font-display", iColor)}>
+                              {app.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                <span className="text-sm font-semibold text-white">{app.name}</span>
+                                <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider", iColor)}>{app.impact}</span>
+                                {app.recommended && <span className="text-[9px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border-emerald-500/30">REC</span>}
+                              </div>
+                              <p className="text-[10px] text-zinc-500">{app.description}</p>
+                            </div>
+                            <button onClick={() => toggleStartup(app.id)} data-testid={`button-web-startup-${app.id}`}
+                              className={cn("px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all whitespace-nowrap shrink-0",
+                                isSelected ? "bg-amber-600/80 border-amber-500 text-white shadow-sm shadow-amber-600/20"
+                                : "bg-transparent border-zinc-700 text-zinc-500 hover:border-amber-500/40 hover:text-amber-400")}>
+                              {isSelected ? "✓ Selected" : "Select"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
           </motion.section>
         )}
 
