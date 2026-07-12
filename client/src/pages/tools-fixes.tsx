@@ -47,7 +47,7 @@ export default function ToolsFixesPage() {
     // When running as the installed .exe, find the most recent OptiGods restore
     // point (auto-created on startup) and trigger rstrui.exe to roll back to it.
     if (isNative()) {
-      if (!window.confirm("Roll back to the OptiGods V3 pre-optimization restore point?\n\nWindows will launch the System Restore wizard — confirm there and your PC will reboot.")) return;
+      if (!window.confirm("Roll back to the OptiGods V4 pre-optimization restore point?\n\nWindows will launch the System Restore wizard — confirm there and your PC will reboot.")) return;
       setRestoring(true);
       try {
         const points = await listRestorePoints();

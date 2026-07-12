@@ -356,7 +356,7 @@ export default function TweaksPage() {
                 </span>
               ) : null}
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide">
-                V3.0.0
+                V4.0.0
               </span>
               {gpuChip && !showAll && (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">

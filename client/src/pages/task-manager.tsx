@@ -134,10 +134,35 @@ const CATEGORIES: AppCategory[] = [
   {
     label: "Background Bloat", icon: Music2, color: "text-red-400",
     apps: [
-      { id: "tm_spotify",      name: "Spotify",             processName: "Spotify.exe",       startupKey: "Spotify",             description: "4-6 Chromium-based helper processes at all times. 200-450MB RAM.", impact: "HIGH", recommended: true, relatedProcesses: ["SpotifyWebHelper.exe", "SpotifyCrashService.exe"] },
-      { id: "tm_itunes",       name: "iTunes / Apple Music", processName: "iTunes.exe",        startupKey: "iTunes",              description: "iTunes Helper + AppleMobileDeviceService run even when iTunes is closed.", impact: "LOW", recommended: true, relatedProcesses: ["iTunesHelper.exe", "AppleMobileDeviceService.exe", "ApplePushService.exe"] },
-      { id: "tm_adobecc",      name: "Adobe Creative Cloud", processName: "Creative Cloud.exe",startupKey: "AdobeGCInvoker-1.0", description: "CC Desktop + Genuine Checker + updater = 3 processes, 150MB RAM min.", impact: "MED", recommended: true, relatedProcesses: ["AdobeUpdateService.exe", "AGMService.exe", "AGSService.exe", "AdobeIPCBroker.exe"] },
-      { id: "tm_malwarebytes", name: "Malwarebytes",         processName: "MBAMService.exe",   description: "Real-time scanning causes I/O overhead during game loads.", impact: "MED", warning: "Do not disable permanently — real-time protection matters." },
+      { id: "tm_spotify",      name: "Spotify",              processName: "Spotify.exe",        startupKey: "Spotify",             description: "4-6 Chromium-based helper processes at all times. 200-450MB RAM.", impact: "HIGH", recommended: true, relatedProcesses: ["SpotifyWebHelper.exe", "SpotifyCrashService.exe"] },
+      { id: "tm_itunes",       name: "iTunes / Apple Music",  processName: "iTunes.exe",         startupKey: "iTunes",              description: "iTunes Helper + AppleMobileDeviceService run even when iTunes is closed.", impact: "LOW", recommended: true, relatedProcesses: ["iTunesHelper.exe", "AppleMobileDeviceService.exe", "ApplePushService.exe"] },
+      { id: "tm_adobecc",      name: "Adobe Creative Cloud",  processName: "Creative Cloud.exe", startupKey: "AdobeGCInvoker-1.0", description: "CC Desktop + Genuine Checker + updater = 3 processes, 150MB RAM min.", impact: "MED", recommended: true, relatedProcesses: ["AdobeUpdateService.exe", "AGMService.exe", "AGSService.exe", "AdobeIPCBroker.exe"] },
+      { id: "tm_malwarebytes", name: "Malwarebytes",          processName: "MBAMService.exe",    description: "Real-time scanning causes I/O overhead during game loads.", impact: "MED", warning: "Do not disable permanently — real-time protection matters." },
+      { id: "tm_nordvpn",      name: "NordVPN",               processName: "NordVPN.exe",        startupKey: "NordVPN",             description: "VPN client + service runs 24/7 even when not connected. 80-200MB RAM.", impact: "MED", recommended: true, relatedProcesses: ["NordVPN Service.exe"] },
+      { id: "tm_expressvpn",   name: "ExpressVPN",            processName: "ExpressVPN.exe",     startupKey: "ExpressVPN",          description: "Background service runs at all times when installed.", impact: "MED", recommended: true, relatedProcesses: ["ExpressVPNService.exe"] },
+      { id: "tm_obs",          name: "OBS Studio",            processName: "obs64.exe",          startupKey: "OBS Studio",          description: "Virtual camera + browser source use GPU even when not recording.", impact: "MED", recommended: true, relatedProcesses: ["obs-browser-page.exe"] },
+    ],
+  },
+  {
+    label: "Windows Bloat", icon: Monitor, color: "text-orange-400",
+    apps: [
+      { id: "tm_cortana",      name: "Cortana",               processName: "Cortana.exe",                description: "AI assistant + search indexing runs in the background permanently.", impact: "MED", recommended: true },
+      { id: "tm_yourphone",    name: "Phone Link",            processName: "YourPhone.exe",       startupKey: "YourPhone",           description: "Phone sync daemon runs constantly. 80-120MB RAM at idle.", impact: "LOW", recommended: true, relatedProcesses: ["PhoneExperienceHost.exe"] },
+      { id: "tm_xbox_app",     name: "Xbox App / Game Pass",  processName: "XboxPcApp.exe",       startupKey: "Microsoft.Xbox",      description: "Game Pass overlay + Xbox services. Not needed unless you use Game Pass.", impact: "MED", recommended: true, relatedProcesses: ["GamingServices.exe", "GamingServicesNet.exe"] },
+      { id: "tm_searchindex",  name: "Windows Search Indexer",processName: "SearchIndexer.exe",              description: "Disk I/O spikes while indexing. Safe to kill before gaming — will restart.", impact: "HIGH", recommended: true, relatedProcesses: ["SearchFilterHost.exe", "SearchProtocolHost.exe"] },
+      { id: "tm_wuapihost",    name: "Windows Update Agent", processName: "wuapihost.exe",                description: "Background update downloader. Often active at bad times.", impact: "MED", recommended: true, relatedProcesses: ["usocoreworker.exe", "waasmedicagent.exe"] },
+    ],
+  },
+  {
+    label: "Manufacturer Bloat", icon: Cpu, color: "text-purple-400",
+    apps: [
+      { id: "tm_asus_armoury", name: "ASUS Armoury Crate",    processName: "ArmourySW.exe",       startupKey: "ASUS Armoury Crate", description: "RGB + fan control software. 3-4 processes, 200MB RAM idle. Fan curves still apply after kill if set in BIOS.", impact: "MED", recommended: true, relatedProcesses: ["asus_framework.service.exe", "armsvc.exe", "ASUSLinkClient.exe"] },
+      { id: "tm_msi_center",   name: "MSI Center / Dragon",   processName: "MSICenter.exe",       startupKey: "MSI Center",         description: "MSI Dragon Center + NAA Service. Runs 2-3 background processes.", impact: "MED", recommended: true, relatedProcesses: ["Dragon_Center.exe", "NAAService.exe"] },
+      { id: "tm_lenovo_vantage",name: "Lenovo Vantage",       processName: "LenovoVantage.exe",   startupKey: "Lenovo Vantage",     description: "Lenovo system services + update checks run at startup.", impact: "LOW", recommended: true, relatedProcesses: ["LenovoVantageService.exe"] },
+      { id: "tm_dell_supportassist",name: "Dell SupportAssist",processName: "SupportAssist.exe",  startupKey: "Dell SupportAssist", description: "Dell diagnostics + telemetry runs constantly in background.", impact: "MED", recommended: true, relatedProcesses: ["DellDataVaultWiz.exe", "SupportAssistAgent.exe"] },
+      { id: "tm_hp_wildworks", name: "HP Wolf Security / Wildworks",processName: "HpWildworks.exe",startupKey: "HP Wolf Security",  description: "HP security overlay adds CPU overhead even on desktop PCs.", impact: "MED", recommended: true, relatedProcesses: ["HpAudioSwitch.exe"] },
+      { id: "tm_intel_dsa",    name: "Intel Driver Support Assistant",processName: "DSAUpdateService.exe",      description: "Intel update checker. Zero gaming benefit — runs perpetually in background.", impact: "LOW", recommended: true },
+      { id: "tm_razer_central",name: "Razer Central",          processName: "RazerCentral.exe",    startupKey: "Razer Central",      description: "Razer device hub + 3 helper processes. RGB settings stay after kill.", impact: "MED", recommended: true, relatedProcesses: ["RzUpdater.exe", "Razer_Installer.exe"] },
     ],
   },
 ];
@@ -154,23 +179,72 @@ const PROCESS_PAGE_SIZE = 50;
 
 // ── Known background bloat processes (update agents, telemetry, crash reporters) ──
 const DEBLOAT_BG_PROCESSES = new Set([
-  "googleupdate.exe", "googleupdatebroker.exe", "googlecrashhandler.exe", "googlecrashhandler64.exe",
-  "adobearm.exe", "agmservice.exe", "agsservice.exe", "adobeipcbroker.exe", "adobeupdateservice.exe",
-  "microsoftedgeupdate.exe",
+  // Google bloat
+  "googleupdate.exe", "googleupdatebroker.exe", "googleupdateondemand.exe",
+  "googlecrashhandler.exe", "googlecrashhandler64.exe", "chrome_crashpad_handler.exe",
+  // Adobe bloat
+  "adobearm.exe", "agmservice.exe", "agsservice.exe", "adobeipcbroker.exe",
+  "adobeupdateservice.exe", "adobecollabsync.exe", "adobenotificationmanager.exe",
+  "adobedesktopservice.exe", "cefsharp.browsersubprocess.exe",
+  // Microsoft Edge
+  "microsoftedgeupdate.exe", "msedgewebview2.exe",
+  // Steam
   "steamwebhelper.exe", "gameoverlayu.exe", "steamservice.exe",
-  "epicwebhelper.exe", "epicgamesservices.exe",
-  "rockstarservice.exe",
+  // Epic
+  "epicwebhelper.exe", "epicgamesservices.exe", "epiconlineservices.exe",
+  "eosbootstrapper.exe", "epicgamesstore.exe",
+  // Rockstar
+  "rockstarservice.exe", "rsganalyticsservice.exe",
+  // Windows telemetry / bloat
   "compattelrunner.exe", "musnotification.exe", "wuapihost.exe",
-  "nvspcaps64.exe", "nvsphelper64.exe", "nvcontainer.exe", "nvsync.exe", "nv_hostengine.exe",
+  "usocoreworker.exe", "waasmedicagent.exe", "sihclient.exe",
+  "wsappx.exe", "wlidsvc.exe",
+  // NVIDIA extras (not the driver itself)
+  "nvspcaps64.exe", "nvsphelper64.exe", "nvcontainer.exe", "nvsync.exe",
+  "nv_hostengine.exe", "nvsettings.exe",
+  // Discord extras
   "discordcrashhandler.exe", "discordptb.exe", "discordcanary.exe",
+  // Phone / Cortana / Xbox
   "yourphone.exe", "phoneexperiencehost.exe", "cortana.exe",
-  "officeclicktorun.exe", "sdxhelper.exe",
+  "xboxpcapp.exe", "gamingservices.exe", "gamingservicesnet.exe",
+  "xgpuinjectioncomponent.exe", "xboxidpprovider.exe",
+  // Office
+  "officeclicktorun.exe", "sdxhelper.exe", "msoia.exe",
+  "otelemetry.exe", "officesvcmgr.exe", "officefeedbackbr.exe",
+  // Malwarebytes
   "mbamtray.exe", "mbamupdateui.exe",
-  "spotifywebhelper.exe",
-  "dropboxupdate.exe", "onedriveupdater.exe",
+  // Spotify
+  "spotifywebhelper.exe", "spotifycrashservice.exe",
+  // Cloud sync
+  "dropboxupdate.exe", "onedriveupdater.exe", "onedrivemediaplayer.exe",
+  // Zoom / Teams
   "zoomnotus.exe", "zoom_launcher.exe",
-  "teams.exe", "ms-teams.exe", "teamsupdatedaemon.exe",
-  "searchfilterhost.exe", "searchprotocolhost.exe",
+  "teams.exe", "ms-teams.exe", "teamsupdatedaemon.exe", "teamsmeetingaddin.exe",
+  // Windows Search (heavy indexer)
+  "searchfilterhost.exe", "searchprotocolhost.exe", "searchindexer.exe",
+  // ASUS bloat
+  "armoury.exe", "armourysw.exe", "asus_framework.service.exe",
+  "armsvc.exe", "asusupdatecheck.exe", "asuslinkclient.exe",
+  "asus_gpu_tweak.exe", "gptweak3.exe",
+  // MSI bloat
+  "msicenter.exe", "dragon_center.exe", "naaservice.exe",
+  // Razer bloat
+  "razercentral.exe", "razer_installer.exe", "rzupdater.exe",
+  // SteelSeries
+  "steelseriesgg.exe", "gamemanager.exe",
+  // Logitech extra services
+  "lghub_updater.exe", "logioverlay.exe", "logi_notify.exe",
+  // Antivirus update processes (NOT the main protection — just updaters)
+  "avgui.exe", "avguard.exe", "avscan.exe", "avconfig.exe",
+  "bitdefenderagent.exe", "bdagent.exe",
+  "nortonsecurity.exe", "nsbu.exe",
+  // VPN clients (heavy when idle)
+  "nordvpn.exe", "nordvpn-service.exe",
+  "expressvpn.exe", "expressvpnservice.exe",
+  "privateinternetaccess.exe",
+  // Misc
+  "wbengine.exe", "wermgr.exe", "sqmapi.dll", "dinotify.exe",
+  "fshoster32.exe", "igccexe.exe", "igccp.exe",
 ]);
 
 // ── HKLM startup entries that are genuine Windows system entries (never offer script) ──

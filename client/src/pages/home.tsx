@@ -42,7 +42,7 @@ export default function HomePage() {
           <div className="relative">
             <div className="flex items-center gap-2 mb-4">
               <Zap className="w-4 h-4 text-red-400" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v3</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v4</span>
             </div>
             <div className="mb-6">
               <OptiGodsWordmark variant="hero" />
@@ -102,11 +102,11 @@ export default function HomePage() {
           <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-red-500/70 mb-4">What's new</h2>
           <div className="rounded-xl border border-white/5 bg-zinc-950/40 divide-y divide-white/5">
             {[
-              { tag: "V3", title: "564+ tweaks across 15+ dedicated tabs", desc: "DPC Latency · Fortnite · Discord While Gaming · Game Detection · Background Manager · Laptop · AMD iGPU · Intel iGPU" },
+              { tag: "V4", title: "580+ tweaks across 15+ dedicated tabs — nothing missed", desc: "DPC Latency · Fortnite · Discord While Gaming · Game Detection · Background Manager · Laptop · AMD iGPU · Intel iGPU · full audit every system" },
               { tag: "PERF", title: "100+ FPS Fortnite · 120+ FPS FiveM · 300+ FPS Valorant", desc: "Verified on GTX 1650 Super + Ryzen 5 3500. Works on any Windows PC — Alienware, CyberPowerPC, Dell, Lenovo, HP, ASUS, iBUYPOWER & more" },
               { tag: "BAT", title: ".bat downloads — double-click and done", desc: "No PowerShell execution policy issues. Hardware-matched preset from native scan." },
-              { tag: "AI", title: "Opti Gods AI — ask 'give me a smart preset'", desc: "Screenshot analysis, vision mode, streaming chat. V3 changelog aware." },
-              { tag: "FIX", title: "V2.1 stability surgery applied", desc: "EnableMSIMode / DisableIPv6 / SetTimerResolution moved to opt-in — no more BSODs or FiveM crashes" },
+              { tag: "AI", title: "Opti Gods AI — ask 'give me a smart preset'", desc: "Screenshot analysis, vision mode, streaming chat. V4 changelog aware." },
+              { tag: "FIX", title: "FiveM Graphics mesh fix + freeze time in every pack", desc: "No more meshy faces/arms from graphics packs. Freeze time toggle ships in every pack." },
             ].map(n => (
               <div key={n.title} className="flex items-start gap-3 px-4 py-3">
                 <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/25 shrink-0 mt-0.5">{n.tag}</span>

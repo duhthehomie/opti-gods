@@ -549,7 +549,7 @@ export default function Fixes() {
           subtitle="Voice relay disconnecting mid-game · Xbox party failing · FiveM auth broken after clean install"
           tweaks="Expert opt-in ONLY: DisableIPv6"
           bullets={[
-            ["Only applies if you opted in to DisableIPv6", "V3's core preset uses the safe prefer-IPv4 method instead. Only run this if you manually enabled DisableIPv6."],
+            ["Only applies if you opted in to DisableIPv6", "V4's core preset uses the safe prefer-IPv4 method instead. Only run this if you manually enabled DisableIPv6."],
             ["DisableIPv6 breaks Discord voice relay ICE negotiation", "Discord uses IPv6 TURN/STUN relay addresses when IPv4 relay is saturated — disabling IPv6 causes mid-call drops."],
             ["Also breaks Xbox party chat + FiveM Rockstar entitlement check", "Rockstar Social Club + Xbox Live both negotiate via IPv6 endpoints → authentication fails silently."],
             ["Also fixes SystemResponsiveness=0 starving Discord audio threads", "Sets SystemResponsiveness=10 (10% reserved for audio/background) — prevents Discord audio pipeline from dying under CPU load."],
@@ -579,7 +579,7 @@ export default function Fixes() {
           tweaks="Expert tweaks: SysHypervisorOff · Win11DisableVBS · bcdedit DisableDynamicTick"
           bullets={[
             ["SysHypervisorOff + Win11DisableVBS on hybrid GPU / Optimus laptops causes boot black screen", "When the hypervisor is disabled, the display driver can't load its kernel component on resume — manifests as a black screen requiring a hard reboot."],
-            ["DisableDynamicTick (bcdedit) can cause boot hang on AMD Ryzen APUs and some Intel platforms", "V3 uses the safer disabledynamictick=yes — but on a few AMD APU models this still causes slow boot. This fix removes the BCD override entirely."],
+            ["DisableDynamicTick (bcdedit) can cause boot hang on AMD Ryzen APUs and some Intel platforms", "V4 uses the safer disabledynamictick=yes — but on a few AMD APU models this still causes slow boot. This fix removes the BCD override entirely."],
             ["Resets bcdedit disabledynamictick, restores hypervisorlaunchtype=Auto, resets TDR to 2s", "Removes useplatformtick and uselegacyapicmode overrides. Re-enables VBS via registry. Resets MPO (multi-plane overlay) that causes post-wake black screen on NVIDIA+Intel combos."],
             ["Safe for all PCs — only removes bcdedit overrides, does not touch game tweaks", "Your performance settings, registry tweaks, and scheduler config are untouched. Only the boot config is reset."],
           ]}

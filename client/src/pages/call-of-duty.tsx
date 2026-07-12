@@ -21,7 +21,7 @@ const ALL_COD_IDS = [
   "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
   "AmdD3DOptimize", "AmdPCIeOptimize",
   "Cod3500PowerPlan", "Cod3500CoreUnpark",
-  // V3 additions
+  // V4 additions
   "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy", "CodRawInput",
   "CodFramePacing", "CodMemPriority",
 ];
@@ -450,9 +450,9 @@ export default function CallOfDuty() {
             </section>
 
 
-            {/* V3 — Advanced Optimizations */}
+            {/* V4 — Advanced Optimizations */}
             <section>
-              <SectionHeader title="🔬 Advanced — V3 Optimizations" sectionKey="advanced" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
+              <SectionHeader title="🔬 Advanced — V4 Optimizations" sectionKey="advanced" tweaks={tweaks} setTweak={setTweak} smartRecIds={smartRecs.ids} />
               <div className="mb-3 flex items-start gap-2 bg-zinc-900/50 border border-white/8 rounded-lg px-3 py-2">
                 <Zap className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
                 <p className="text-[11px] text-zinc-400">

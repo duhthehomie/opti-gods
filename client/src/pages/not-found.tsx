@@ -56,7 +56,7 @@ export default function NotFound() {
           </Button>
         </div>
 
-        <p className="text-[10px] text-zinc-700 font-mono">OPTI GODS — V3</p>
+        <p className="text-[10px] text-zinc-700 font-mono">OPTI GODS — V4</p>
       </div>
     </div>
   );

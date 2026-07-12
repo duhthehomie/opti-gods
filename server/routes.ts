@@ -6976,7 +6976,7 @@ Required fields:
   "packName": string (creative name, max 30 chars),
   "cloudThickness": number 0-100 (0=no clouds = best FPS),
   "jetStreams": number 0-100 (0=no contrails),
-  "skyColorKey": string (MUST be exactly one of: vivid_blue, sky_blue, cyan, deep_blue, navy, bubblegum, hot_pink, rose, magenta, warm_amber, steel_grey, dark_grey, black_sky),
+  "skyColorKey": string (MUST be exactly one of: vivid_blue, sky_blue, cyan, deep_blue, navy, bubblegum, hot_pink, rose, magenta, warm_amber, golden_sunset, deep_orange, coral_red, blood_orange, violet_dusk, twilight_purple, steel_grey, dark_grey, black_sky),
   "skyBrightness": number 35-100 (35=very dark/dim, 75=natural, 100=max vivid),
   "aerialClouds": boolean,
   "aerialDensity": number 10-100,
@@ -6986,35 +6986,50 @@ Required fields:
   "atmosphereHaze": boolean (horizon depth fog),
   "freezeTime": boolean (true = lock time AND weather to clear, +30-45 FPS),
   "freezeHour": number 0-23 (hour to lock at: 12=noon best FPS, 18=sunset, 0=midnight),
+  "freezeMinute": number 0-59,
   "disableRain": boolean,
   "disableSnow": boolean,
   "mood": string (one sentence, e.g. "Vivid blue noon sky, zero clouds, max FPS")
 }
 
-Sky color key guide (pick the closest match to the description):
-- vivid_blue    : bright royal blue — daily driver, clear sky (skyBrightness 65-85)
-- sky_blue      : softer lighter blue (skyBrightness 60-80)
-- cyan          : bright aqua/teal (skyBrightness 65-90)
-- deep_blue     : rich deep blue (skyBrightness 45-65)
-- navy          : very dark navy — almost black-blue (skyBrightness 35-55)
-- bubblegum     : soft pastel pink-purple (skyBrightness 65-85)
-- hot_pink      : vivid hot pink / Miami / GTA 6 vibes (skyBrightness 75-95)
-- rose          : deep rose pink (skyBrightness 70-90)
-- magenta       : dark purple-magenta (skyBrightness 40-70)
-- warm_amber    : golden sunset/sunrise orange (skyBrightness 65-90)
-- steel_grey    : cool steel overcast grey (skyBrightness 50-75)
-- dark_grey     : dark stormy grey (skyBrightness 40-65)
-- black_sky     : void black sky (skyBrightness 35-55)
+Sky color key guide — V4 palette (pick the BEST match):
+Blues:
+- vivid_blue      : bright royal blue — daily driver, clear sky (skyBrightness 65-85)
+- sky_blue        : softer lighter blue (skyBrightness 60-80)
+- cyan            : bright aqua/teal (skyBrightness 65-90)
+- deep_blue       : rich deep blue (skyBrightness 45-65)
+- navy            : very dark navy — almost black-blue (skyBrightness 35-55)
+Pinks:
+- bubblegum       : soft pastel pink-purple (skyBrightness 65-85)
+- hot_pink        : vivid hot pink / Miami / GTA 6 vibes (skyBrightness 75-95)
+- rose            : deep rose pink (skyBrightness 70-90)
+- magenta         : dark purple-magenta (skyBrightness 40-70)
+Sunsets / Warm (use these for ANY sunset, golden, orange, dusk, fire, warm request):
+- warm_amber      : soft golden amber sunset (skyBrightness 65-88) — light golden hour
+- golden_sunset   : vivid golden-yellow sunset (skyBrightness 75-92) — richest gold
+- deep_orange     : deep orange fiery dusk (skyBrightness 78-90) — intense orange
+- coral_red       : warm coral-red (skyBrightness 75-88) — red-orange sunset
+- blood_orange    : intense blood orange (skyBrightness 80-92) — maximum warm impact
+- violet_dusk     : purple twilight dusk (skyBrightness 65-82) — purple-blue gradient
+- twilight_purple : deep twilight purple (skyBrightness 55-75) — darkest purple dusk
+Grey / Dark:
+- steel_grey      : cool steel overcast grey (skyBrightness 50-75)
+- dark_grey       : dark stormy grey (skyBrightness 40-65)
+- black_sky       : void black sky (skyBrightness 35-55)
 
 Rules:
-- performance / fps / max frames: vivid_blue, skyBrightness 70, cloudThickness 0, lightRays false, atmosphereHaze false, freezeTime true, freezeHour 12, disableRain true, disableSnow true
-- night / midnight: navy or deep_blue, skyBrightness 35-45, freezeHour 0 or 23
-- golden hour / sunset / sunrise: warm_amber, skyBrightness 80-90, lightRays true, lightRayIntensity 55, atmosphereHaze true, freezeHour 17-19, sunIntensity 80
+- performance / fps / max frames: vivid_blue, skyBrightness 70, cloudThickness 0, lightRays false, atmosphereHaze false, freezeTime true, freezeHour 12, freezeMinute 0, disableRain true, disableSnow true
+- night / midnight: navy or deep_blue, skyBrightness 35-45, freezeHour 0 or 23, freezeMinute 0
+- golden hour / sunrise: golden_sunset or warm_amber, skyBrightness 82-90, lightRays true, lightRayIntensity 55, atmosphereHaze true, freezeHour 6-8 (sunrise) or 17-19 (golden hour), sunIntensity 85
+- sunset / orange sky: deep_orange or coral_red, skyBrightness 80-90, lightRays true, lightRayIntensity 60, atmosphereHaze true, freezeHour 18-20, sunIntensity 88
+- fiery / blood / intense sunset: blood_orange, skyBrightness 85-92, cloudThickness 0, freezeHour 19, sunIntensity 95
+- twilight / dusk / purple: violet_dusk or twilight_purple, skyBrightness 65-78, lightRays true, lightRayIntensity 40, atmosphereHaze true, freezeHour 20-21, sunIntensity 70
 - hot pink / Miami / GTA 6 vibes: hot_pink, skyBrightness 85-92, jetStreams 60-80, lightRays true, freezeHour 18-20, sunIntensity 78
 - pink / pastel / bubblegum: bubblegum or rose, skyBrightness 70-85
 - stormy / dark / moody: dark_grey, cloudThickness 50-80, atmosphereHaze true, freezeTime true, freezeHour 12
 - clear / sunny / blue sky: vivid_blue or sky_blue, cloudThickness 0, freezeTime true, freezeHour 12
-- winter / snow: steel_grey or dark_grey, disableSnow false, aerialClouds true`;
+- winter / snow: steel_grey or dark_grey, disableSnow false, aerialClouds true
+- beautiful / aesthetic / stunning (no specific color): pick the most visually striking option for the vibe — do NOT default to blue. Use sunset colors when ambiguous.`;
 
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -7061,7 +7076,12 @@ Rules:
       };
       const bool = (v: unknown, def: boolean) => typeof v === "boolean" ? v : def;
 
-      const VALID_SKY_KEYS = ["vivid_blue","sky_blue","cyan","deep_blue","navy","bubblegum","hot_pink","rose","magenta","warm_amber","steel_grey","dark_grey","black_sky"] as const;
+      const VALID_SKY_KEYS = [
+        "vivid_blue","sky_blue","cyan","deep_blue","navy",
+        "bubblegum","hot_pink","rose","magenta",
+        "warm_amber","golden_sunset","deep_orange","coral_red","blood_orange","violet_dusk","twilight_purple",
+        "steel_grey","dark_grey","black_sky",
+      ] as const;
       const rawKey = typeof parsed.skyColorKey === "string" ? parsed.skyColorKey.trim().toLowerCase().replace(/\s+/g,"_") : "";
       const skyColorKey = VALID_SKY_KEYS.includes(rawKey as typeof VALID_SKY_KEYS[number]) ? rawKey : "vivid_blue";
 
@@ -7079,6 +7099,7 @@ Rules:
         atmosphereHaze:     bool(parsed.atmosphereHaze, false),
         freezeTime:         bool(parsed.freezeTime, false),
         freezeHour:         clamp(parsed.freezeHour,         0,  23, 12),
+        freezeMinute:       clamp(parsed.freezeMinute,       0,  59,  0),
         disableRain:        bool(parsed.disableRain, false),
         disableSnow:        bool(parsed.disableSnow, false),
         mood: typeof parsed.mood === "string" ? parsed.mood.slice(0, 200) : "Pack generated — review sliders in the Builder tab.",

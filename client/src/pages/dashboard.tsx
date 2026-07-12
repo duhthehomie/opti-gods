@@ -37,7 +37,7 @@ const FEATURES = [
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
 
-// Quick Boost Presets — V3.2 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
+// Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
 
 // ── Safe Boost ─────────────────────────────────────────────────────────────
 // No service stops, no uninstalls — pure registry + power plan + privacy tweaks.
@@ -326,7 +326,7 @@ export default function Dashboard() {
         let nativeOk = false;
         let nativeErr = "";
         try {
-          const result = await createRestorePoint("OptiGods V3 — Before Optimization");
+          const result = await createRestorePoint("OptiGods V4 — Before Optimization");
           if (result) {
             toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — you can roll back anytime from Tools & Fixes.` });
             nativeOk = true;

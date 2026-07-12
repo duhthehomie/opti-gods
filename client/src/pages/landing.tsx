@@ -276,7 +276,7 @@ function LandingDesktop() {
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-[10px] font-bold tracking-[0.3em] uppercase text-red-300 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {TOTAL_TWEAKS_LABEL} tweaks · Desktops · Laptops · Dell · Lenovo · v3
+            {TOTAL_TWEAKS_LABEL} tweaks · Desktops · Laptops · Dell · Lenovo · v4
           </div>
 
           <h1 className="text-4xl md:text-6xl font-display font-black tracking-tight leading-[1.05] mb-5 max-w-3xl mx-auto">

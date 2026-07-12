@@ -488,7 +488,7 @@ export default function Nvidia() {
         <section data-testid="section-nvidia-driver-reapply">
           <div className="flex items-center gap-2 mb-4 px-1">
             <Layers className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V3)</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Reapplicable Driver Tweaks (V4)</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const selected = NVIDIA_DRIVER_REAPPLY_TWEAKS.filter(t => tweaks[t.id]).map(t => t.id);

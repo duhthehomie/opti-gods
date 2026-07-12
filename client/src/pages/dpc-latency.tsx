@@ -560,7 +560,7 @@ export default function DpcLatencyPage() {
           <Activity className="w-5 h-5 text-red-400" />
           <h1 className="text-xl font-display font-bold text-white">DPC Latency Tweaks</h1>
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-300 border border-red-500/25 uppercase tracking-wide">
-            V3 Click-to-Apply
+            V4 Click-to-Apply
           </span>
         </div>
         <p className="text-sm text-zinc-500">
