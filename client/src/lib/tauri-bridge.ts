@@ -438,6 +438,15 @@ export async function scanTaskManager(
 }
 
 /**
+ * Read the FiveM CitizenFX.log tail (400 lines) to detect the current server.
+ * Returns empty string when not in native shell or FiveM log not found.
+ */
+export async function readFivemLog(): Promise<string> {
+  if (!isNative()) return "";
+  try { return await invoke<string>("read_fivem_log"); } catch { return ""; }
+}
+
+/**
  * Forcibly terminate a process by image name (allowlisted in Rust).
  */
 export async function killApp(processName: string): Promise<NativeActionResult> {

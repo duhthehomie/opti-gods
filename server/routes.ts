@@ -4407,6 +4407,26 @@ Start-Sleep 2
     res.end(Buffer.from(script, 'utf8'));
   });
 
+  // Public — cfx.re server info proxy (avoids CORS issues in browser)
+  app.get('/api/fivem/server-info/:code', async (req, res) => {
+    const { code } = req.params;
+    if (!/^[A-Za-z0-9]{4,8}$/.test(code)) {
+      res.status(400).json({ error: 'Invalid server code' });
+      return;
+    }
+    try {
+      const upstream = await fetch(`https://servers-frontend.fivem.net/api/servers/single/${code}`);
+      if (!upstream.ok) {
+        res.status(upstream.status).json({ error: 'Server not found on cfx.re' });
+        return;
+      }
+      const data = await upstream.json();
+      res.json(data);
+    } catch {
+      res.status(502).json({ error: 'cfx.re unreachable' });
+    }
+  });
+
   // Public — comprehensive FiveM & GTA V crash fix (no-error silent crash + known crash causes)
   app.get('/api/fivem-crash-fix-script', (req, res) => {
     const ps1Lines = [

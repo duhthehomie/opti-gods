@@ -95,6 +95,7 @@ pub fn run() {
             commands::env::env_info,
             commands::misc::open_downloads,
             commands::misc::read_text_file,
+            commands::misc::read_fivem_log,
             commands::task_manager::scan_task_manager,
             commands::task_manager::kill_app,
             commands::task_manager::disable_startup_app,

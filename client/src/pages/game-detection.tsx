@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isNative, scanTaskManager } from "@/lib/tauri-bridge";
+import { isNative, scanTaskManager, readFivemLog } from "@/lib/tauri-bridge";
 import { getTweakMeta } from "@/lib/tweak-registry";
 
 interface GameEntry {
@@ -447,6 +447,20 @@ const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
 type SavedServer = { name: string; connect: string; iconUrl?: string };
 const OG_SERVER_EVENT = "og-server-changed";
 
+/** Strip FiveM in-game command prefixes so we always store a clean code/IP. */
+function cleanConnect(raw: string): string {
+  return raw.trim()
+    .replace(/^connect\s+/i, "")
+    .replace(/^fivem:\/\/connect\//i, "")
+    .trim();
+}
+/** Extract a bare cfx.re server code (4-8 alphanumeric chars) from any format. */
+function extractCfxCode(connect: string): string | null {
+  if (connect.includes(":")) return null;
+  const m = connect.match(/(?:cfx\.re\/join\/|join\/)?([A-Za-z0-9]{4,8})$/i);
+  return m ? m[1] : null;
+}
+
 function getActiveServerInfo(): SavedServer | null {
   try {
     const active = localStorage.getItem("og_fivem_active");
@@ -479,6 +493,49 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
     window.addEventListener(OG_SERVER_EVENT, handler);
     return () => window.removeEventListener(OG_SERVER_EVENT, handler);
   }, []);
+
+  // Auto-detect current FiveM server via CitizenFX.log when FiveM is running
+  useEffect(() => {
+    if (runningGame?.id !== "game_fivem") return;
+    let mounted = true;
+    async function detect() {
+      try {
+        const logContent = await readFivemLog();
+        if (!logContent || !mounted) return;
+        // Find last "Connecting to" line in the log
+        const matches = [...logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([A-Za-z0-9]{4,8})/gi)];
+        if (!matches.length) return;
+        const lastCode = matches[matches.length - 1][1];
+        const saved: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+        const existing = saved.find(s => extractCfxCode(s.connect) === lastCode || s.connect === lastCode);
+        if (existing) {
+          // Already saved — just mark active if nothing is active
+          if (!localStorage.getItem("og_fivem_active") && mounted) {
+            localStorage.setItem("og_fivem_active", existing.connect);
+            window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+          }
+        } else {
+          // New server — fetch info and auto-add
+          try {
+            const res = await fetch(`/api/fivem/server-info/${lastCode}`);
+            if (!res.ok || !mounted) return;
+            const data = await res.json();
+            const iv = data?.Data?.iconVersion;
+            const iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${lastCode}/${iv}.png` : undefined;
+            const hn = (data?.Data?.hostname ?? "") as string;
+            const name = hn ? hn.replace(/\^\d/g, "").trim() : lastCode;
+            const newServer: SavedServer = { name, connect: lastCode, iconUrl };
+            const updated = [...saved, newServer];
+            localStorage.setItem("og_fivem_servers", JSON.stringify(updated));
+            localStorage.setItem("og_fivem_active", lastCode);
+            if (mounted) window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+          } catch { /* no icon — that's fine */ }
+        }
+      } catch { /* no log — that's fine */ }
+    }
+    detect();
+    return () => { mounted = false; };
+  }, [runningGame?.id]);
 
   // Lift running game ID to parent
   useEffect(() => {
@@ -763,11 +820,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       )}
     >
       {/* Cover strip + info row */}
-      <div className="flex items-stretch gap-0 min-h-[140px]">
+      <div className="flex items-stretch gap-0 min-h-[200px]">
         {/* Cover thumbnail */}
         <div className={cn(
           "relative shrink-0 overflow-hidden flex items-center justify-center",
-          showCover ? "w-[160px]" : "w-[120px]"
+          showCover ? "w-[240px]" : "w-[160px]"
         )}>
           <div className={cn(
             "absolute inset-0 bg-gradient-to-br",
@@ -778,7 +835,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="relative z-10 w-full h-full object-contain"
+              className="relative z-10 w-full h-full object-cover"
             />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-zinc-950/80" />
@@ -916,11 +973,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             <img
               src={activeServer.iconUrl}
               alt=""
-              className="w-9 h-9 rounded-md object-cover shrink-0 border border-white/10"
+              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-white/10"
               onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
           ) : (
-            <div className="w-9 h-9 rounded-md bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-[11px] font-bold text-zinc-400">
+            <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-sm font-black text-zinc-400">
               {activeServer.name.slice(0, 2).toUpperCase()}
             </div>
           )}
@@ -1152,21 +1209,28 @@ function FiveMPanel() {
     window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
   };
 
+  // Auto-activate: if only 1 saved server and none is marked active, mark it automatically
+  useEffect(() => {
+    if (servers.length === 1 && !activeConnect) {
+      setActiveServer(servers[0].connect);
+    }
+  }, [servers.length]);
+
   const addServer = async () => {
-    const connect = srvConnect.trim();
-    if (!connect) return;
+    const rawInput = srvConnect.trim();
+    if (!rawInput) return;
+    const connect = cleanConnect(rawInput);
     setSrvAdding(true);
     let iconUrl: string | undefined;
     let resolvedName = srvName.trim() || connect;
-    // Auto-fetch cfx.re server info (icon + hostname) for CFX join codes
-    const cfxMatch = connect.match(/(?:cfx\.re\/join\/|join\/)?([A-Za-z0-9]{4,8})$/);
-    if (cfxMatch && !connect.includes(":")) {
+    const cfxCode = extractCfxCode(connect);
+    if (cfxCode) {
       try {
-        const res = await fetch(`https://servers-frontend.fivem.net/api/servers/single/${cfxMatch[1]}`);
+        const res = await fetch(`/api/fivem/server-info/${cfxCode}`);
         if (res.ok) {
           const data = await res.json();
           const iv = data?.Data?.iconVersion;
-          if (iv) iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxMatch[1]}/${iv}.png`;
+          if (iv) iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxCode}/${iv}.png`;
           const hn = data?.Data?.hostname as string | undefined;
           if (hn && !srvName.trim()) resolvedName = hn.replace(/\^\d/g, "").trim() || connect;
         }
@@ -1185,8 +1249,17 @@ function FiveMPanel() {
   };
 
   const joinServer = (connect: string) => {
-    const t = connect.startsWith("cfx.re") || connect.startsWith("http") ? connect : `fivem://connect/${connect}`;
-    window.open(t, "_blank");
+    const clean = cleanConnect(connect);
+    let url: string;
+    if (clean.startsWith("http")) {
+      url = clean;
+    } else if (clean.includes(":")) {
+      url = `fivem://connect/${clean}`;
+    } else {
+      const code = extractCfxCode(clean) ?? clean;
+      url = `https://cfx.re/join/${code}`;
+    }
+    window.open(url, "_blank");
   };
 
   const genCacheScript = () => {

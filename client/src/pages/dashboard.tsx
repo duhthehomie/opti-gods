@@ -201,44 +201,60 @@ const QUICK_BOOST_PRESETS = [
     id: "safe",
     icon: Shield,
     title: "Safe Boost",
-    desc: "Pure registry tweaks — CPU scheduling, power plan, privacy, memory, and game packs. Safe for any PC.",
+    tag: "NO RISK",
+    desc: "Pure registry tweaks — CPU scheduling, power plan, privacy, memory, and game packs. Zero service stops. Safe for any PC.",
     color: "text-emerald-400",
-    border: "border-emerald-500/25 hover:border-emerald-500/50",
-    glow: "shadow-[inset_0_0_20px_-8px_rgba(52,211,153,0.1)]",
-    activeBg: "bg-emerald-500/5",
+    border: "border-emerald-500/30 hover:border-emerald-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
+    activeBg: "bg-emerald-950/30",
+    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
+    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
     tweaks: SAFE_TWEAKS,
   },
   {
     id: "maxfps",
     icon: Flame,
     title: "Max FPS Gaming",
-    desc: "Aggressive timer, full service list, all COD/FiveM/Fortnite packs, startup cleanup, and deep memory tuning.",
+    tag: "RECOMMENDED",
+    desc: "Power throttle OFF, full FiveM/COD/Fortnite packs, service cleanup, startup strip, and deep memory tuning.",
     color: "text-red-400",
-    border: "border-red-500/25 hover:border-red-500/50",
-    glow: "shadow-[inset_0_0_20px_-8px_rgba(239,68,68,0.1)]",
-    activeBg: "bg-red-500/5",
+    border: "border-red-500/30 hover:border-red-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(239,68,68,0.25)]",
+    activeBg: "bg-red-950/30",
+    accentBar: "bg-gradient-to-r from-red-600 to-red-400",
+    iconBg: "bg-red-500/10 border border-red-500/20",
+    tagBg: "bg-red-500/10 border-red-500/25 text-red-400",
     tweaks: MAX_FPS_TWEAKS,
   },
   {
     id: "competitive",
     icon: Crosshair,
     title: "Competitive Shooter",
-    desc: "All Max FPS tweaks + full NVIDIA & AMD driver packs, MSI mode, Process Lasso, and complete Discord tuning.",
+    tag: "GPU TUNED",
+    desc: "Max FPS + full NVIDIA & AMD driver packs, MSI interrupt mode, Process Lasso engine, Discord footprint crush.",
     color: "text-orange-400",
-    border: "border-orange-500/25 hover:border-orange-500/50",
-    glow: "shadow-[inset_0_0_20px_-8px_rgba(249,115,22,0.1)]",
-    activeBg: "bg-orange-500/5",
+    border: "border-orange-500/30 hover:border-orange-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(249,115,22,0.25)]",
+    activeBg: "bg-orange-950/30",
+    accentBar: "bg-gradient-to-r from-orange-600 to-amber-400",
+    iconBg: "bg-orange-500/10 border border-orange-500/20",
+    tagBg: "bg-orange-500/10 border-orange-500/25 text-orange-400",
     tweaks: COMPETITIVE_TWEAKS,
   },
   {
     id: "streamer",
     icon: Radio,
     title: "Streamer Mode",
-    desc: "Game perf + stable OBS encode + full Discord + Spotify deprioritised. Startup cleanup included.",
+    tag: "OBS STABLE",
+    desc: "Game perf balanced with stable OBS encoder threads — no stutter drops. Full Discord + Spotify yield. Boot cleanup.",
     color: "text-violet-400",
-    border: "border-violet-500/25 hover:border-violet-500/50",
-    glow: "shadow-[inset_0_0_20px_-8px_rgba(139,92,246,0.1)]",
-    activeBg: "bg-violet-500/5",
+    border: "border-violet-500/30 hover:border-violet-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(139,92,246,0.25)]",
+    activeBg: "bg-violet-950/30",
+    accentBar: "bg-gradient-to-r from-violet-600 to-violet-400",
+    iconBg: "bg-violet-500/10 border border-violet-500/20",
+    tagBg: "bg-violet-500/10 border-violet-500/25 text-violet-400",
     tweaks: STREAMER_TWEAKS,
   },
 ];
@@ -1106,22 +1122,47 @@ export default function Dashboard() {
                   onClick={() => applyQuickBoost(preset)}
                   data-testid={`button-quick-boost-${preset.id}`}
                   className={cn(
-                    "relative text-left p-4 rounded-xl border transition-all duration-300 group",
+                    "relative text-left rounded-xl border overflow-hidden transition-all duration-300 group",
                     isActive
                       ? `${preset.activeBg} ${preset.border} ${preset.glow}`
-                      : `bg-black/40 ${preset.border}`
+                      : `bg-black/50 ${preset.border}`
                   )}
                 >
-                  {isActive && (
-                    <span className="absolute top-2 right-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    </span>
-                  )}
-                  <preset.icon className={cn("w-5 h-5 mb-3 transition-transform group-hover:scale-110", preset.color)} />
-                  <h3 className="text-sm font-bold text-white mb-1">{preset.title}</h3>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed mb-3">{preset.desc}</p>
-                  <div className={cn("text-[10px] font-bold uppercase tracking-wider", preset.color)}>
-                    {preset.tweaks.length} tweaks →
+                  {/* Top accent bar */}
+                  <div className={cn("h-[3px] w-full", preset.accentBar)} />
+
+                  <div className="p-4">
+                    {/* Active check */}
+                    {isActive && (
+                      <span className="absolute top-3 right-3">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      </span>
+                    )}
+
+                    {/* Icon container */}
+                    <div className={cn(
+                      "inline-flex items-center justify-center w-10 h-10 rounded-xl mb-3 transition-transform group-hover:scale-110",
+                      preset.iconBg
+                    )}>
+                      <preset.icon className={cn("w-5 h-5", preset.color)} />
+                    </div>
+
+                    {/* Tag */}
+                    <div className={cn("inline-flex items-center mb-2 ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border align-middle", preset.tagBg)}>
+                      {preset.tag}
+                    </div>
+
+                    <h3 className="text-sm font-bold text-white mb-1.5 leading-tight">{preset.title}</h3>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed mb-4">{preset.desc}</p>
+
+                    {/* Tweak count badge */}
+                    <div className={cn(
+                      "inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                      preset.tagBg
+                    )}>
+                      <Zap className="w-2.5 h-2.5" />
+                      {preset.tweaks.length} tweaks
+                    </div>
                   </div>
                 </motion.button>
               );
