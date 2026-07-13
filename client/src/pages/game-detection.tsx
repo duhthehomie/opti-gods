@@ -443,6 +443,20 @@ const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
   game_rust:     ["CpuGenericGameIFEO"],
 };
 
+// ─── Saved server type + active-server helpers ────────────────────────────────
+type SavedServer = { name: string; connect: string; iconUrl?: string };
+const OG_SERVER_EVENT = "og-server-changed";
+
+function getActiveServerInfo(): SavedServer | null {
+  try {
+    const active = localStorage.getItem("og_fivem_active");
+    if (!active) return null;
+    const servers: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+    const found = servers.find(s => s.connect === active);
+    return found ?? { name: active, connect: active };
+  } catch { return null; }
+}
+
 // ─── Now Playing Panel ────────────────────────────────────────────────────────
 
 function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) => void }) {
@@ -457,6 +471,14 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const [customFound, setCustomFound] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Active FiveM server (set from Saved Servers tab)
+  const [activeServer, setActiveServerState] = useState<SavedServer | null>(getActiveServerInfo);
+  useEffect(() => {
+    const handler = () => setActiveServerState(getActiveServerInfo());
+    window.addEventListener(OG_SERVER_EVENT, handler);
+    return () => window.removeEventListener(OG_SERVER_EVENT, handler);
+  }, []);
 
   // Lift running game ID to parent
   useEffect(() => {
@@ -883,6 +905,46 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         </div>
       </div>
 
+      {/* Active FiveM server strip — shown when FiveM is running + server is set */}
+      {runningGame!.id === "game_fivem" && activeServer && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="flex items-center gap-3 px-4 py-2.5 border-t border-emerald-500/15 bg-emerald-950/20"
+        >
+          {activeServer.iconUrl ? (
+            <img
+              src={activeServer.iconUrl}
+              alt=""
+              className="w-9 h-9 rounded-md object-cover shrink-0 border border-white/10"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-md bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-[11px] font-bold text-zinc-400">
+              {activeServer.name.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Live on server</span>
+            </div>
+            <p className="text-[12px] font-bold text-white truncate leading-tight">{activeServer.name}</p>
+            <p className="text-[10px] font-mono text-zinc-600 truncate">{activeServer.connect}</p>
+          </div>
+          <button
+            data-testid="button-clear-active-server"
+            onClick={() => {
+              localStorage.removeItem("og_fivem_active");
+              window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+            }}
+            className="text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors shrink-0 px-2 py-1 rounded hover:bg-white/5"
+          >
+            Clear
+          </button>
+        </motion.div>
+      )}
+
       {/* Custom path footer (always accessible) */}
       <div
         className="px-4 py-2 bg-zinc-900/60 border-t border-white/5 flex items-center gap-3 cursor-pointer hover:bg-zinc-900 transition-colors"
@@ -1069,13 +1131,59 @@ function FiveMPanel() {
   const [pingTweaks, setPingTweaks] = useState({ routing: true, ctcp: true, buffers: true, stabilizer: true, dns: true });
   const togglePing = (k: keyof typeof pingTweaks) => setPingTweaks(p => ({ ...p, [k]: !p[k] }));
 
-  const [servers, setServers] = useState<{ name: string; connect: string }[]>(() => {
+  const [servers, setServers] = useState<SavedServer[]>(() => {
     try { return JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]"); } catch { return []; }
   });
-  const [srvName, setSrvName] = useState(""); const [srvConnect, setSrvConnect] = useState("");
-  const saveServers = (list: typeof servers) => { setServers(list); localStorage.setItem("og_fivem_servers", JSON.stringify(list)); };
-  const addServer = () => { if (!srvConnect.trim()) return; saveServers([...servers, { name: srvName.trim() || srvConnect.trim(), connect: srvConnect.trim() }]); setSrvName(""); setSrvConnect(""); };
-  const removeServer = (i: number) => saveServers(servers.filter((_, idx) => idx !== i));
+  const [srvName, setSrvName] = useState("");
+  const [srvConnect, setSrvConnect] = useState("");
+  const [srvAdding, setSrvAdding] = useState(false);
+  const [activeConnect, setActiveConnect] = useState<string | null>(() => localStorage.getItem("og_fivem_active"));
+
+  const saveServers = (list: SavedServer[]) => {
+    setServers(list);
+    localStorage.setItem("og_fivem_servers", JSON.stringify(list));
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+  };
+
+  const setActiveServer = (connect: string | null) => {
+    setActiveConnect(connect);
+    if (connect) localStorage.setItem("og_fivem_active", connect);
+    else localStorage.removeItem("og_fivem_active");
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+  };
+
+  const addServer = async () => {
+    const connect = srvConnect.trim();
+    if (!connect) return;
+    setSrvAdding(true);
+    let iconUrl: string | undefined;
+    let resolvedName = srvName.trim() || connect;
+    // Auto-fetch cfx.re server info (icon + hostname) for CFX join codes
+    const cfxMatch = connect.match(/(?:cfx\.re\/join\/|join\/)?([A-Za-z0-9]{4,8})$/);
+    if (cfxMatch && !connect.includes(":")) {
+      try {
+        const res = await fetch(`https://servers-frontend.fivem.net/api/servers/single/${cfxMatch[1]}`);
+        if (res.ok) {
+          const data = await res.json();
+          const iv = data?.Data?.iconVersion;
+          if (iv) iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxMatch[1]}/${iv}.png`;
+          const hn = data?.Data?.hostname as string | undefined;
+          if (hn && !srvName.trim()) resolvedName = hn.replace(/\^\d/g, "").trim() || connect;
+        }
+      } catch { /* no icon — that's fine */ }
+    }
+    saveServers([...servers, { name: resolvedName, connect, iconUrl }]);
+    setSrvName(""); setSrvConnect("");
+    setSrvAdding(false);
+  };
+
+  const removeServer = (i: number) => {
+    const removed = servers[i];
+    const next = servers.filter((_, idx) => idx !== i);
+    saveServers(next);
+    if (activeConnect === removed.connect) setActiveServer(null);
+  };
+
   const joinServer = (connect: string) => {
     const t = connect.startsWith("cfx.re") || connect.startsWith("http") ? connect : `fivem://connect/${connect}`;
     window.open(t, "_blank");
@@ -1421,7 +1529,7 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                   type="text"
                   value={srvConnect}
                   onChange={e => setSrvConnect(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && addServer()}
+                  onKeyDown={e => { if (e.key === "Enter") addServer(); }}
                   placeholder="cfx.re/join/XXXXXX or IP:Port"
                   className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
                 />
@@ -1429,12 +1537,15 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                   data-testid="button-add-server"
                   size="sm"
                   onClick={addServer}
-                  disabled={!srvConnect.trim()}
-                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white border border-red-500/30 disabled:opacity-40 shrink-0"
+                  disabled={!srvConnect.trim() || srvAdding}
+                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white border border-red-500/30 disabled:opacity-40 shrink-0 flex items-center gap-1"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  {srvAdding ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                 </Button>
               </div>
+              {srvAdding && (
+                <p className="text-[10px] text-zinc-500 animate-pulse">Fetching server info from cfx.re…</p>
+              )}
             </div>
 
             {servers.length === 0 ? (
@@ -1445,33 +1556,80 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
               </div>
             ) : (
               <div className="space-y-2">
-                {servers.map((s, i) => (
-                  <div key={i} data-testid={`server-row-${i}`} className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-900 border border-white/8">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-white truncate">{s.name}</p>
-                      <p className="text-[10px] font-mono text-zinc-600 truncate">{s.connect}</p>
+                {servers.map((s, i) => {
+                  const isActive = activeConnect === s.connect;
+                  return (
+                    <div
+                      key={i}
+                      data-testid={`server-row-${i}`}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-colors",
+                        isActive
+                          ? "bg-emerald-950/30 border-emerald-500/25"
+                          : "bg-zinc-900 border-white/8"
+                      )}
+                    >
+                      {/* Server icon / initials */}
+                      {s.iconUrl ? (
+                        <img
+                          src={s.iconUrl}
+                          alt=""
+                          className="w-8 h-8 rounded object-cover shrink-0 border border-white/10"
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-zinc-500">
+                          {s.name.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+
+                      {/* Name + connect */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+                          <p className={cn("text-[11px] font-bold truncate", isActive ? "text-emerald-300" : "text-white")}>{s.name}</p>
+                        </div>
+                        <p className="text-[10px] font-mono text-zinc-600 truncate">{s.connect}</p>
+                      </div>
+
+                      {/* Playing Now toggle */}
+                      <button
+                        data-testid={`button-playing-now-${i}`}
+                        onClick={() => setActiveServer(isActive ? null : s.connect)}
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-1 rounded border shrink-0 transition-colors whitespace-nowrap",
+                          isActive
+                            ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-600/30"
+                            : "bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500"
+                        )}
+                      >
+                        {isActive ? "✓ Playing" : "Set Active"}
+                      </button>
+
+                      {/* Join */}
+                      <Button
+                        data-testid={`button-join-server-${i}`}
+                        size="sm"
+                        onClick={() => joinServer(s.connect)}
+                        className="h-6 px-2 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white text-[10px] font-bold border border-red-500/30 transition-colors shrink-0 flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </Button>
+
+                      {/* Remove */}
+                      <button
+                        data-testid={`button-remove-server-${i}`}
+                        onClick={() => removeServer(i)}
+                        className="w-6 h-6 flex items-center justify-center text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <Button
-                      data-testid={`button-join-server-${i}`}
-                      size="sm"
-                      onClick={() => joinServer(s.connect)}
-                      className="h-6 px-2 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white text-[10px] font-bold border border-red-500/30 transition-colors shrink-0 flex items-center gap-1"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      Join
-                    </Button>
-                    <button
-                      data-testid={`button-remove-server-${i}`}
-                      onClick={() => removeServer(i)}
-                      className="w-6 h-6 flex items-center justify-center text-zinc-700 hover:text-red-400 transition-colors shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-            <p className="text-[10px] text-zinc-700 text-center">Servers saved locally in your browser — never sent anywhere</p>
+            <p className="text-[10px] text-zinc-700 text-center">Servers saved locally — never sent anywhere. Icons auto-fetched from cfx.re.</p>
           </div>
         )}
       </div>
