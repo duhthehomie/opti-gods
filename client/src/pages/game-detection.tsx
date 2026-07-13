@@ -5,7 +5,9 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   Shield, Terminal, CheckCircle, XCircle, Info,
   Gamepad, Download, RefreshCw, Search, AlertCircle, Copy,
-  Play, Zap, FolderOpen, MonitorCheck, CircleDashed
+  Play, Zap, FolderOpen, MonitorCheck, CircleDashed,
+  Server, Wifi, Trash2, Plus, ExternalLink, HardDrive,
+  Settings, Globe, Signal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -443,7 +445,7 @@ const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
 
 // ─── Now Playing Panel ────────────────────────────────────────────────────────
 
-function NowPlayingPanel() {
+function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) => void }) {
   const { tweaks, setTweak } = useOptimizationStore();
   const native = useMemo(() => isNative(), []);
 
@@ -455,6 +457,11 @@ function NowPlayingPanel() {
   const [customFound, setCustomFound] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Lift running game ID to parent
+  useEffect(() => {
+    onGameChange?.(runningGame?.id ?? null);
+  }, [runningGame?.id, onGameChange]);
 
   const processMap = useMemo(
     () => Object.fromEntries(GAMES.map(g => [g.id, g.processName])),
@@ -734,7 +741,7 @@ function NowPlayingPanel() {
       )}
     >
       {/* Cover strip + info row */}
-      <div className="flex items-stretch gap-0 min-h-[100px]">
+      <div className="flex items-stretch gap-0 min-h-[140px]">
         {/* Cover thumbnail */}
         <div className={cn(
           "relative shrink-0 overflow-hidden flex items-center justify-center",
@@ -749,7 +756,7 @@ function NowPlayingPanel() {
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="relative z-10 w-full h-full object-contain p-3"
+              className="relative z-10 w-full h-full object-contain"
             />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-zinc-950/80" />
@@ -1021,12 +1028,649 @@ function GameCard({ game }: { game: GameEntry }) {
   );
 }
 
+// ─── PS1 Download Helper ──────────────────────────────────────────────────────
+function downloadPs1(content: string, filename: string) {
+  const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ─── Reusable pill-toggle ─────────────────────────────────────────────────────
+function PillToggle({ on, onToggle, testId }: { on: boolean; onToggle: () => void; testId?: string }) {
+  return (
+    <button
+      data-testid={testId}
+      onClick={onToggle}
+      className={cn("shrink-0 w-7 h-4 rounded-full transition-colors relative", on ? "bg-red-600" : "bg-zinc-700")}
+    >
+      <span className={cn("absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform", on ? "translate-x-3.5" : "translate-x-0.5")} />
+    </button>
+  );
+}
+
+// ─── FiveM BSK Panel ──────────────────────────────────────────────────────────
+const FIVEM_PANEL_TABS = [
+  { id: "tools", label: "Quick Tools" },
+  { id: "citizenfx", label: "CitizenFX Settings" },
+  { id: "ping", label: "Ping Optimizer" },
+  { id: "servers", label: "Saved Servers" },
+] as const;
+type FiveMPanelTab = typeof FIVEM_PANEL_TABS[number]["id"];
+
+function FiveMPanel() {
+  const [tab, setTab] = useState<FiveMPanelTab>("tools");
+  const [boostDone, setBoostDone] = useState(false);
+  const [cacheDone, setCacheDone] = useState(false);
+
+  const [cfx, setCfx] = useState({ enforceSingleCore: false, customBackdrop: true, asyncLoading: true, maxBandwidth: "0" });
+
+  const [pingTweaks, setPingTweaks] = useState({ routing: true, ctcp: true, buffers: true, stabilizer: true, dns: true });
+  const togglePing = (k: keyof typeof pingTweaks) => setPingTweaks(p => ({ ...p, [k]: !p[k] }));
+
+  const [servers, setServers] = useState<{ name: string; connect: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]"); } catch { return []; }
+  });
+  const [srvName, setSrvName] = useState(""); const [srvConnect, setSrvConnect] = useState("");
+  const saveServers = (list: typeof servers) => { setServers(list); localStorage.setItem("og_fivem_servers", JSON.stringify(list)); };
+  const addServer = () => { if (!srvConnect.trim()) return; saveServers([...servers, { name: srvName.trim() || srvConnect.trim(), connect: srvConnect.trim() }]); setSrvName(""); setSrvConnect(""); };
+  const removeServer = (i: number) => saveServers(servers.filter((_, idx) => idx !== i));
+  const joinServer = (connect: string) => {
+    const t = connect.startsWith("cfx.re") || connect.startsWith("http") ? connect : `fivem://connect/${connect}`;
+    window.open(t, "_blank");
+  };
+
+  const genCacheScript = () => {
+    downloadPs1(`# OptiGods — FiveM Cache Cleaner
+# Run as Administrator
+Write-Host "=== FiveM Cache Cleaner ===" -ForegroundColor Cyan
+$d = "$env:LOCALAPPDATA\\FiveM\\FiveM.app\\data"
+$caches = @{
+    "Shader + Script Cache" = "$d\\cache"
+    "NUI / Browser Cache"   = "$d\\nui-storage"
+    "Server Resource Cache" = "$d\\server-cache"
+    "Private Server Cache"  = "$d\\priv"
+}
+$total = 0
+foreach ($c in $caches.GetEnumerator()) {
+    if (Test-Path $c.Value) {
+        $sz = (Get-ChildItem $c.Value -Recurse -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        $total += [long]$sz
+        Remove-Item "$($c.Value)\\*" -Recurse -Force -EA SilentlyContinue
+        Write-Host ("[OK] Cleared {0} ({1} MB)" -f $c.Key, [math]::Round($sz/1MB,1)) -ForegroundColor Green
+    } else {
+        Write-Host ("[--] Not found: {0}" -f $c.Key) -ForegroundColor DarkGray
+    }
+}
+Write-Host ""
+Write-Host ("Total freed: {0} MB" -f [math]::Round($total/1MB,1)) -ForegroundColor Cyan
+Write-Host "Restart FiveM for changes to take effect." -ForegroundColor White
+Pause`, "FiveM_ClearCache.ps1");
+    setCacheDone(true); setTimeout(() => setCacheDone(false), 3000);
+  };
+
+  const genBoostScript = () => {
+    downloadPs1(`# OptiGods — FiveM Pre-Session Boost
+# Run as Administrator
+Write-Host "=== FiveM Pre-Session Boost ===" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "[1/5] Flushing standby memory..." -ForegroundColor Yellow
+try {
+    $src = @"
+using System; using System.Runtime.InteropServices;
+public class OGMem { [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr h); }
+"@
+    if (-not ([System.Management.Automation.PSTypeName]'OGMem').Type) { Add-Type -TypeDefinition $src -EA SilentlyContinue }
+    Get-Process | ForEach-Object { try { [OGMem]::EmptyWorkingSet($_.Handle) } catch {} }
+    Write-Host "    Standby RAM flushed" -ForegroundColor Green
+} catch { Write-Host "    Skipped (not admin or already clean)" -ForegroundColor DarkGray }
+Write-Host "[2/5] Killing bandwidth hogs..." -ForegroundColor Yellow
+@("OneDrive","Dropbox","GoogleDriveFS","MicrosoftEdgeUpdate","SteamService","EpicGamesLauncher","SearchIndexer") |
+    ForEach-Object { if (Get-Process -Name $_ -EA SilentlyContinue) { Stop-Process -Name $_ -Force -EA SilentlyContinue; Write-Host "    Stopped: $_" -ForegroundColor Green } }
+Write-Host "[3/5] Disabling Nagle's algorithm on all NICs..." -ForegroundColor Yellow
+Get-ChildItem "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces" | ForEach-Object {
+    Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -EA SilentlyContinue
+    Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -EA SilentlyContinue
+}
+Write-Host "    Done" -ForegroundColor Green
+Write-Host "[4/5] Flushing DNS cache..." -ForegroundColor Yellow
+ipconfig /flushdns | Out-Null
+Write-Host "    Done" -ForegroundColor Green
+Write-Host "[5/5] Boosting FiveM process priority if running..." -ForegroundColor Yellow
+Get-Process -Name "FiveM" -EA SilentlyContinue | ForEach-Object { $_.PriorityClass = "AboveNormal"; Write-Host "    Boosted: $($_.Name)" -ForegroundColor Green }
+Write-Host ""
+Write-Host "Pre-session boost complete! Launch FiveM now." -ForegroundColor Cyan
+Pause`, "FiveM_PreSessionBoost.ps1");
+    setBoostDone(true); setTimeout(() => setBoostDone(false), 3000);
+  };
+
+  const genCfxScript = () => {
+    const b = (v: boolean) => v ? "true" : "false";
+    downloadPs1(`# OptiGods — CitizenFX Settings
+$p = "$env:APPDATA\\CitizenFX\\cfg.ini"
+New-Item -ItemType Directory -Force -Path (Split-Path $p) | Out-Null
+$content = @"
+# Generated by OptiGods
+game_enforceSingleCore ${b(cfx.enforceSingleCore)}
+ui_customBackdrop ${b(cfx.customBackdrop)}
+game_useAsyncLoadingTriggers ${b(cfx.asyncLoading)}
+ui_maxBandwidth ${cfx.maxBandwidth}
+"@
+Set-Content -Path $p -Value $content -Encoding UTF8
+Write-Host "CitizenFX settings written to: $p" -ForegroundColor Green
+Pause`, "FiveM_CitizenFX_Settings.ps1");
+  };
+
+  const genPingScript = () => {
+    const lines: string[] = [
+      "# OptiGods — FiveM Ping Optimizer",
+      "# Run as Administrator",
+      `Write-Host "=== FiveM Ping Optimizer ===" -ForegroundColor Cyan`,
+      "",
+    ];
+    if (pingTweaks.routing) {
+      lines.push(`netsh int ip set global defaultcurhoplimit=64 | Out-Null`);
+      lines.push(`netsh int tcp set global ecncapability=enabled | Out-Null`);
+      lines.push(`Write-Host "[OK] Optimized routing — TTL=64, ECN on" -ForegroundColor Green`);
+    }
+    if (pingTweaks.ctcp) {
+      lines.push(`netsh int tcp set supplemental template=Internet congestionprovider=ctcp | Out-Null`);
+      lines.push(`Write-Host "[OK] Congestion avoidance — CTCP enabled" -ForegroundColor Green`);
+    }
+    if (pingTweaks.buffers) {
+      lines.push(`netsh int tcp set global autotuninglevel=normal | Out-Null`);
+      lines.push(`netsh int tcp set global chimney=disabled | Out-Null`);
+      lines.push(`Write-Host "[OK] Packet loss reduction — socket buffers tuned" -ForegroundColor Green`);
+    }
+    if (pingTweaks.stabilizer) {
+      lines.push(`Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" -Name "KeepAliveTime" -Value 7200000 -Type DWord -EA SilentlyContinue`);
+      lines.push(`Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" -Name "KeepAliveInterval" -Value 1000 -Type DWord -EA SilentlyContinue`);
+      lines.push(`Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters" -Name "NodeType" -Value 2 -Type DWord -EA SilentlyContinue`);
+      lines.push(`Write-Host "[OK] Connection stabilizer — keep-alives on, NetBIOS off" -ForegroundColor Green`);
+    }
+    if (pingTweaks.dns) {
+      lines.push(`try {`);
+      lines.push(`    Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Set-DnsClientServerAddress -ServerAddresses ('1.1.1.1','8.8.8.8') -EA SilentlyContinue`);
+      lines.push(`    ipconfig /flushdns | Out-Null`);
+      lines.push(`    Write-Host "[OK] Smart DNS — Cloudflare+Google, cache flushed" -ForegroundColor Green`);
+      lines.push(`} catch { Write-Host "[SKIP] DNS — run as admin to apply" -ForegroundColor Yellow }`);
+    }
+    lines.push(``, `Write-Host ""`, `Write-Host "Ping optimizer complete! Restart FiveM for best results." -ForegroundColor Cyan`, `Pause`);
+    downloadPs1(lines.join("\n"), "FiveM_PingOptimizer.ps1");
+  };
+
+  const PING_ROWS = [
+    { key: "routing" as const, label: "Optimized routing", desc: "ECN enabled, TTL=64 for efficient packet delivery" },
+    { key: "ctcp" as const, label: "Congestion avoidance", desc: "Compound TCP (CTCP) — better throughput on lossy links" },
+    { key: "buffers" as const, label: "Packet loss reduction", desc: "Socket buffer tuning, chimney disabled" },
+    { key: "stabilizer" as const, label: "Connection stabilizer", desc: "TCP keep-alives + disable NetBIOS over TCP/IP" },
+    { key: "dns" as const, label: "Smart DNS relay", desc: "Cloudflare 1.1.1.1 + Google 8.8.8.8, flush DNS cache" },
+  ];
+
+  const CFX_ROWS = [
+    { key: "enforceSingleCore" as const, label: "game_enforceSingleCore", desc: "Force single-core scheduling — set false for multi-core perf", mono: true },
+    { key: "customBackdrop" as const, label: "ui_customBackdrop", desc: "Allow custom menu backgrounds on servers", mono: true },
+    { key: "asyncLoading" as const, label: "game_useAsyncLoadingTriggers", desc: "Async resource loading triggers — reduces micro-stutters", mono: true },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-red-500/25 bg-zinc-950 overflow-hidden shadow-[0_0_30px_-8px_rgba(239,68,68,0.18)]"
+    >
+      {/* Panel header */}
+      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-red-600/10 border-b border-red-500/20">
+        <Zap className="w-3.5 h-3.5 text-red-400 shrink-0" />
+        <span className="text-[11px] font-black text-red-300 uppercase tracking-wider">FiveM Optimizer</span>
+        <span className="text-[10px] text-zinc-600 ml-auto">OptiGods × BSK-style tools</span>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex border-b border-white/8">
+        {FIVEM_PANEL_TABS.map(t => (
+          <button
+            key={t.id}
+            data-testid={`tab-fivem-${t.id}`}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "flex-1 px-2 py-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors border-b-2",
+              tab === t.id
+                ? "text-red-400 border-red-500 bg-red-500/5"
+                : "text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/3"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4">
+        {/* ── Quick Tools ── */}
+        {tab === "tools" && (
+          <div className="space-y-3">
+            {/* Pre-Session Boost */}
+            <div className="rounded-lg border border-white/8 bg-zinc-900/60 overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
+                <Zap className="w-4 h-4 text-yellow-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white">Pre-Session Boost</p>
+                  <p className="text-[11px] text-zinc-500">Launch prep: flush RAM, kill BW hogs, disable Nagle, boost FiveM priority</p>
+                </div>
+                <Button
+                  data-testid="button-fivem-pre-boost"
+                  size="sm"
+                  onClick={genBoostScript}
+                  className={cn("h-7 px-3 text-xs font-bold border shrink-0 flex items-center gap-1.5",
+                    boostDone
+                      ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-600 hover:bg-red-700 text-white border-red-500/30"
+                  )}
+                >
+                  {boostDone ? <><CheckCircle className="w-3 h-3" />Saved!</> : <><Download className="w-3 h-3" />Download .ps1</>}
+                </Button>
+              </div>
+              <div className="px-4 py-2.5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                {["Flush standby RAM", "Kill bandwidth hogs", "Disable Nagle's algorithm", "Flush DNS cache", "Boost FiveM priority"].map(s => (
+                  <div key={s} className="flex items-center gap-1.5">
+                    <CheckCircle className="w-3 h-3 text-zinc-600 shrink-0" />
+                    <span className="text-[11px] text-zinc-500">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Cache Cleaner */}
+            <div className="rounded-lg border border-white/8 bg-zinc-900/60 overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
+                <Trash2 className="w-4 h-4 text-orange-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white">FiveM Cache Cleaner</p>
+                  <p className="text-[11px] text-zinc-500">Fixes stutters, shader recompile loops, NUI glitches — clears all 4 cache folders</p>
+                </div>
+                <Button
+                  data-testid="button-fivem-clean-cache"
+                  size="sm"
+                  onClick={genCacheScript}
+                  className={cn("h-7 px-3 text-xs font-bold border shrink-0 flex items-center gap-1.5",
+                    cacheDone
+                      ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
+                      : "bg-zinc-700 hover:bg-zinc-600 text-white border-zinc-600"
+                  )}
+                >
+                  {cacheDone ? <><CheckCircle className="w-3 h-3" />Saved!</> : <><Download className="w-3 h-3" />Download .ps1</>}
+                </Button>
+              </div>
+              <div className="px-4 py-2.5 space-y-1.5">
+                {[
+                  { label: "Shader & Script cache", path: "FiveM.app\\data\\cache" },
+                  { label: "NUI / Browser cache", path: "FiveM.app\\data\\nui-storage" },
+                  { label: "Server resource cache", path: "FiveM.app\\data\\server-cache" },
+                  { label: "Private server cache", path: "FiveM.app\\data\\priv" },
+                ].map(({ label, path }) => (
+                  <div key={label} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <HardDrive className="w-3 h-3 text-zinc-700 shrink-0" />
+                      <span className="text-[11px] text-zinc-400">{label}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-700 truncate">{path}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CitizenFX Settings ── */}
+        {tab === "citizenfx" && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Writes to <span className="font-mono text-zinc-400">%APPDATA%\CitizenFX\cfg.ini</span> — restart FiveM after applying.
+            </p>
+            <div className="space-y-2">
+              {CFX_ROWS.map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-zinc-900 border border-white/5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-mono text-zinc-300">{label}</p>
+                    <p className="text-[10px] text-zinc-600 mt-0.5">{desc}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono text-zinc-600">{cfx[key] ? "true" : "false"}</span>
+                    <PillToggle
+                      on={cfx[key]}
+                      onToggle={() => setCfx(p => ({ ...p, [key]: !p[key] }))}
+                      testId={`toggle-cfx-${key}`}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-zinc-900 border border-white/5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-mono text-zinc-300">ui_maxBandwidth</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">Max UI bandwidth in bytes/s — 0 = unlimited (recommended)</p>
+                </div>
+                <input
+                  data-testid="input-cfx-maxbandwidth"
+                  type="text"
+                  value={cfx.maxBandwidth}
+                  onChange={e => setCfx(p => ({ ...p, maxBandwidth: e.target.value.replace(/\D/g, "") || "0" }))}
+                  className="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono text-white text-center focus:outline-none focus:border-red-500/50"
+                />
+              </div>
+            </div>
+            <Button
+              data-testid="button-apply-cfx"
+              onClick={genCfxScript}
+              className="w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 flex items-center justify-center gap-2"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download cfg.ini Script
+            </Button>
+          </div>
+        )}
+
+        {/* ── Ping Optimizer ── */}
+        {tab === "ping" && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Generates a PowerShell script with selected network tweaks. Run as Administrator.
+            </p>
+            <div className="space-y-2">
+              {PING_ROWS.map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-zinc-900 border border-white/5">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <Wifi className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-zinc-200 font-medium">{label}</p>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">{desc}</p>
+                    </div>
+                  </div>
+                  <PillToggle on={pingTweaks[key]} onToggle={() => togglePing(key)} testId={`toggle-ping-${key}`} />
+                </div>
+              ))}
+            </div>
+            <Button
+              data-testid="button-apply-ping"
+              onClick={genPingScript}
+              disabled={!Object.values(pingTweaks).some(Boolean)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download Ping Optimizer Script
+            </Button>
+          </div>
+        )}
+
+        {/* ── Saved Servers ── */}
+        {tab === "servers" && (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-zinc-900 border border-white/8 p-3 space-y-2">
+              <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-wide">Add Server</p>
+              <input
+                data-testid="input-server-name"
+                type="text"
+                value={srvName}
+                onChange={e => setSrvName(e.target.value)}
+                placeholder="Server name (optional)"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
+              />
+              <div className="flex gap-2">
+                <input
+                  data-testid="input-server-connect"
+                  type="text"
+                  value={srvConnect}
+                  onChange={e => setSrvConnect(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addServer()}
+                  placeholder="cfx.re/join/XXXXXX or IP:Port"
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
+                />
+                <Button
+                  data-testid="button-add-server"
+                  size="sm"
+                  onClick={addServer}
+                  disabled={!srvConnect.trim()}
+                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white border border-red-500/30 disabled:opacity-40 shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {servers.length === 0 ? (
+              <div className="py-8 text-center">
+                <Server className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-600">No saved servers yet</p>
+                <p className="text-[11px] text-zinc-700 mt-0.5">Add a cfx.re join code or IP:Port above</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {servers.map((s, i) => (
+                  <div key={i} data-testid={`server-row-${i}`} className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-900 border border-white/8">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-white truncate">{s.name}</p>
+                      <p className="text-[10px] font-mono text-zinc-600 truncate">{s.connect}</p>
+                    </div>
+                    <Button
+                      data-testid={`button-join-server-${i}`}
+                      size="sm"
+                      onClick={() => joinServer(s.connect)}
+                      className="h-6 px-2 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white text-[10px] font-bold border border-red-500/30 transition-colors shrink-0 flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Join
+                    </Button>
+                    <button
+                      data-testid={`button-remove-server-${i}`}
+                      onClick={() => removeServer(i)}
+                      className="w-6 h-6 flex items-center justify-center text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-zinc-700 text-center">Servers saved locally in your browser — never sent anywhere</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Fortnite Panel ───────────────────────────────────────────────────────────
+function FortnitePanel() {
+  const [launchOpts, setLaunchOpts] = useState({ dx12: true, noTextureStreaming: false, noSplash: true, noManSky: false, preferD3d12: false });
+  const toggleLaunch = (k: keyof typeof launchOpts) => setLaunchOpts(p => ({ ...p, [k]: !p[k] }));
+  const [copied, setCopied] = useState(false);
+  const [perfDone, setPerfDone] = useState(false);
+
+  const LAUNCH_ROWS = [
+    { key: "dx12" as const, label: "-dx12", desc: "Force DirectX 12 — better multi-core CPU usage" },
+    { key: "preferD3d12" as const, label: "-preferD3d12", desc: "Prefer D3D12 path (newer Fortnite builds)" },
+    { key: "noTextureStreaming" as const, label: "-notexturestreaming", desc: "Disable texture streaming — reduces pop-in (needs VRAM)" },
+    { key: "noSplash" as const, label: "-nosplash", desc: "Skip Epic Games splash screen on launch" },
+    { key: "noManSky" as const, label: "-nomansky", desc: "Disable sky simulation — marginal CPU save" },
+  ];
+
+  const launchString = Object.entries(launchOpts).filter(([, v]) => v)
+    .map(([k]) => LAUNCH_ROWS.find(r => r.key === k)?.label ?? "").filter(Boolean).join(" ");
+
+  const copyLaunch = () => {
+    navigator.clipboard.writeText(launchString).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+
+  const genPerfScript = () => {
+    downloadPs1(`# OptiGods — Fortnite Performance Tweaks
+# Run as Administrator
+Write-Host "=== Fortnite Performance Tweaks ===" -ForegroundColor Cyan
+# Above Normal CPU priority for Fortnite via IFEO
+$ifeo = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FortniteClient-Win64-Shipping.exe\\PerfOptions"
+New-Item -Path $ifeo -Force | Out-Null
+Set-ItemProperty -Path $ifeo -Name "CpuPriorityClass" -Value 3 -Type DWord
+Set-ItemProperty -Path $ifeo -Name "IoPriority" -Value 3 -Type DWord
+Write-Host "[OK] CPU Above Normal priority + High I/O (IFEO persistent)" -ForegroundColor Green
+# Disable Game DVR / Xbox captures
+Set-ItemProperty "HKCU:\\System\\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Type DWord -EA SilentlyContinue
+Set-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -EA SilentlyContinue
+Write-Host "[OK] Game DVR disabled" -ForegroundColor Green
+# Flush DNS for Epic servers
+ipconfig /flushdns | Out-Null
+Write-Host "[OK] DNS flushed" -ForegroundColor Green
+Write-Host ""
+Write-Host "Done! Restart Fortnite for changes to take effect." -ForegroundColor Cyan
+Pause`, "Fortnite_Perf.ps1");
+    setPerfDone(true); setTimeout(() => setPerfDone(false), 3000);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-purple-500/20 bg-zinc-950 overflow-hidden"
+    >
+      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-purple-600/8 border-b border-purple-500/15">
+        <Zap className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+        <span className="text-[11px] font-black text-purple-300 uppercase tracking-wider">Fortnite Optimizer</span>
+      </div>
+      <div className="p-4 space-y-4">
+        {/* Launch options */}
+        <div>
+          <p className="text-xs font-bold text-zinc-300 mb-2">Launch Options</p>
+          <div className="space-y-2 mb-3">
+            {LAUNCH_ROWS.map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-zinc-900 border border-white/5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-mono text-zinc-200">{label}</p>
+                  <p className="text-[10px] text-zinc-600">{desc}</p>
+                </div>
+                <PillToggle on={launchOpts[key]} onToggle={() => toggleLaunch(key)} testId={`toggle-fn-${key}`} />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-zinc-900 border border-white/5">
+            <code className="flex-1 text-[11px] text-zinc-400 font-mono truncate">{launchString || "(no options selected)"}</code>
+            <Button
+              data-testid="button-copy-launch-opts"
+              size="sm"
+              onClick={copyLaunch}
+              disabled={!launchString}
+              className={cn("h-6 px-2 text-[10px] font-bold border shrink-0 flex items-center gap-1",
+                copied
+                  ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
+                  : "bg-zinc-700 hover:bg-zinc-600 text-white border-zinc-600"
+              )}
+            >
+              <Copy className="w-3 h-3" />
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
+          <p className="text-[10px] text-zinc-700 mt-1.5">Paste into Epic Launcher → Fortnite → Options → Additional Command Line Arguments</p>
+        </div>
+        {/* Perf script */}
+        <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-zinc-900 border border-white/5">
+          <Signal className="w-4 h-4 text-purple-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold text-white">Performance Script</p>
+            <p className="text-[10px] text-zinc-600">IFEO CPU priority, disable Game DVR, flush DNS</p>
+          </div>
+          <Button
+            data-testid="button-fortnite-perf-script"
+            size="sm"
+            onClick={genPerfScript}
+            className={cn("h-7 px-3 text-xs font-bold border shrink-0 flex items-center gap-1.5",
+              perfDone
+                ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
+                : "bg-zinc-700 hover:bg-zinc-600 text-white border-zinc-600"
+            )}
+          >
+            {perfDone ? <><CheckCircle className="w-3 h-3" />Saved!</> : <><Download className="w-3 h-3" />Download .ps1</>}
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── COD / Warzone Panel ──────────────────────────────────────────────────────
+function CodPanel() {
+  const [done, setDone] = useState(false);
+
+  const genScript = () => {
+    downloadPs1(`# OptiGods — Call of Duty Performance Tweaks
+# Run as Administrator
+Write-Host "=== COD Performance Tweaks ===" -ForegroundColor Cyan
+# IFEO CPU + I/O priority
+$ifeo = "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions"
+New-Item -Path $ifeo -Force | Out-Null
+Set-ItemProperty -Path $ifeo -Name "CpuPriorityClass" -Value 3 -Type DWord
+Set-ItemProperty -Path $ifeo -Name "IoPriority" -Value 3 -Type DWord
+Write-Host "[OK] CPU Above Normal priority + High I/O for cod.exe" -ForegroundColor Green
+# Network socket buffers (reduces packet batching lag on BR servers)
+Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters" -Name "DefaultSendWindow" -Value 262144 -Type DWord -EA SilentlyContinue
+Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters" -Name "DefaultReceiveWindow" -Value 262144 -Type DWord -EA SilentlyContinue
+Write-Host "[OK] Socket buffers set to 256 KB" -ForegroundColor Green
+# Disable TCP timestamps
+Set-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" -Name "Tcp1323Opts" -Value 0 -Type DWord -EA SilentlyContinue
+Write-Host "[OK] TCP timestamps disabled — lower RTT variance" -ForegroundColor Green
+# Disable Game DVR
+Set-ItemProperty "HKCU:\\System\\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Type DWord -EA SilentlyContinue
+Write-Host "[OK] Game DVR disabled" -ForegroundColor Green
+Write-Host ""
+Write-Host "Done! Restart COD for changes to take effect." -ForegroundColor Cyan
+Pause`, "COD_Perf.ps1");
+    setDone(true); setTimeout(() => setDone(false), 3000);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-orange-500/20 bg-zinc-950 overflow-hidden"
+    >
+      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-orange-600/8 border-b border-orange-500/15">
+        <Zap className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+        <span className="text-[11px] font-black text-orange-300 uppercase tracking-wider">COD / Warzone Optimizer</span>
+      </div>
+      <div className="p-4">
+        <div className="space-y-2 mb-4">
+          {[
+            { label: "IFEO CPU priority — Above Normal for cod.exe (persistent)", icon: <CheckCircle className="w-3 h-3 text-orange-400 shrink-0" /> },
+            { label: "Socket buffers 256 KB — reduces packet batching on BR servers", icon: <CheckCircle className="w-3 h-3 text-orange-400 shrink-0" /> },
+            { label: "TCP timestamps disabled — lower RTT variance", icon: <CheckCircle className="w-3 h-3 text-orange-400 shrink-0" /> },
+            { label: "Game DVR disabled — eliminates capture overhead", icon: <CheckCircle className="w-3 h-3 text-orange-400 shrink-0" /> },
+          ].map(({ label, icon }) => (
+            <div key={label} className="flex items-center gap-2 text-[11px] text-zinc-400">
+              {icon}{label}
+            </div>
+          ))}
+        </div>
+        <Button
+          data-testid="button-cod-perf-script"
+          onClick={genScript}
+          className={cn("w-full text-xs font-bold border flex items-center justify-center gap-2",
+            done
+              ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
+              : "bg-orange-600/80 hover:bg-orange-600 text-white border-orange-500/30"
+          )}
+        >
+          {done ? <><CheckCircle className="w-3.5 h-3.5" />Saved!</> : <><Download className="w-3.5 h-3.5" />Download COD Perf Script (.ps1)</>}
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 function downloadScannerScript() {
   window.location.href = "/api/detect-games-script";
 }
 
 export default function GameDetection() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
+
+  // Track which game is currently running (set by NowPlayingPanel)
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
 
   // Read detected game IDs + hardware params from URL (set by the scanner PS1 script)
   const [detectedIds, setDetectedIds] = useState<Set<string> | null>(null);
@@ -1124,7 +1768,26 @@ export default function GameDetection() {
         </motion.div>
 
         {/* Now Playing Panel — always shown at top */}
-        <NowPlayingPanel />
+        <NowPlayingPanel onGameChange={setCurrentGameId} />
+
+        {/* Game-specific BSK-style panels — rendered when a known game is detected */}
+        <AnimatePresence mode="wait">
+          {currentGameId === "game_fivem" && (
+            <motion.div key="fivem-panel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
+              <FiveMPanel />
+            </motion.div>
+          )}
+          {currentGameId === "game_fortnite" && (
+            <motion.div key="fortnite-panel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
+              <FortnitePanel />
+            </motion.div>
+          )}
+          {(currentGameId === "game_cod" || currentGameId === "game_warzone") && (
+            <motion.div key="cod-panel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
+              <CodPanel />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Detection banner — shown when no scan has been run yet */}
         {!isFiltered && (
