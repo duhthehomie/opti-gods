@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isNative, scanTaskManager, readFivemLog } from "@/lib/tauri-bridge";
+import { isNative, scanTaskManager, readFivemLog, openExternal } from "@/lib/tauri-bridge";
 import { getTweakMeta } from "@/lib/tweak-registry";
 
 interface GameEntry {
@@ -416,7 +416,7 @@ const GAMES: GameEntry[] = [
       "C:\\Games\\Guns RZ",
       "D:\\Games\\Guns RZ",
     ],
-    processName: "GunsRZ.exe",
+    processName: "FiveM_b3407_GTAProcess.exe",
     tweaks: [
       "Above Normal CPU priority (IFEO persistent across every relaunch)",
       "High I/O priority for fast asset streaming",
@@ -1278,9 +1278,32 @@ function FiveMPanel() {
       url = `fivem://connect/${clean}`;
     } else {
       const code = extractCfxCode(clean) ?? clean;
-      url = `https://cfx.re/join/${code}`;
+      url = `fivem://connect/cfx.re/join/${code}`;
     }
-    window.open(url, "_blank");
+    openExternal(url);
+  };
+
+  const [refreshingIdx, setRefreshingIdx] = useState<number | null>(null);
+
+  const refreshServerInfo = async (i: number) => {
+    const s = servers[i];
+    const cfxCode = extractCfxCode(s.connect);
+    if (!cfxCode) return;
+    setRefreshingIdx(i);
+    try {
+      const res = await fetch(`/api/fivem/server-info/${cfxCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        const iv = data?.Data?.iconVersion;
+        const iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxCode}/${iv}.png` : s.iconUrl;
+        const hn = data?.Data?.hostname as string | undefined;
+        const name = hn ? hn.replace(/\^\d/g, "").trim() || s.name : s.name;
+        const next = [...servers];
+        next[i] = { ...s, name, iconUrl };
+        saveServers(next);
+      }
+    } catch { /* ignore */ }
+    setRefreshingIdx(null);
   };
 
   const genCacheScript = () => {
@@ -1700,15 +1723,29 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                         {isActive ? "✓ Playing" : "Set Active"}
                       </button>
 
-                      {/* Join */}
+                      {/* Connect */}
                       <Button
                         data-testid={`button-join-server-${i}`}
                         size="sm"
-                        onClick={() => joinServer(s.connect)}
-                        className="h-6 px-2 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white text-[10px] font-bold border border-red-500/30 transition-colors shrink-0 flex items-center gap-1"
+                        onClick={() => { setActiveServer(s.connect); joinServer(s.connect); }}
+                        className="h-6 px-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[10px] font-bold border border-emerald-500/30 transition-colors shrink-0 flex items-center gap-1"
                       >
                         <ExternalLink className="w-3 h-3" />
+                        Connect
                       </Button>
+
+                      {/* Refresh server info */}
+                      {extractCfxCode(s.connect) && (
+                        <button
+                          data-testid={`button-refresh-server-${i}`}
+                          onClick={() => refreshServerInfo(i)}
+                          disabled={refreshingIdx === i}
+                          title="Refresh server name & icon from cfx.re"
+                          className="w-6 h-6 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors shrink-0 disabled:opacity-40"
+                        >
+                          <RefreshCw className={cn("w-3 h-3", refreshingIdx === i && "animate-spin")} />
+                        </button>
+                      )}
 
                       {/* Remove */}
                       <button
