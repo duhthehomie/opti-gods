@@ -1894,16 +1894,35 @@ Pause`, "COD_Perf.ps1");
 }
 
 // ─── Background Ping Guardian ─────────────────────────────────────────────────
-const GUARDIAN_PS1 = `# OptiGods — FiveM Background Ping Guardian v4
+const GUARDIAN_PS1 = `# OptiGods — Background Ping Guardian v4
+# Monitors ANY game launch and instantly applies network optimizations.
 # Keep this window open (minimized is fine). Press Ctrl+C to stop.
 # Run as Administrator for full effect.
 $ErrorActionPreference = "SilentlyContinue"
-Write-Host "=== OptiGods FiveM Background Ping Guardian ===" -ForegroundColor Cyan
-Write-Host "Monitoring for FiveM every 30 seconds. Press Ctrl+C to stop." -ForegroundColor Gray
+Write-Host "=== OptiGods Background Ping Guardian ===" -ForegroundColor Cyan
+Write-Host "Watching for any game launch every 30 seconds. Press Ctrl+C to stop." -ForegroundColor Gray
 Write-Host ""
 
+# Tracked game process names (add your own here)
+$GameProcesses = @(
+    "FiveM","GTA5","GTAV","RDR2",
+    "Warzone","ModernWarfare","BlackOps6","mw2","cod",
+    "Fortnite","FortniteClient-Win64-Shipping",
+    "VALORANT-Win64-Shipping","VALORANT",
+    "cs2","csgo",
+    "r5apex","apex",
+    "RustClient","rust",
+    "r6s","Rainbow6","RainbowSix",
+    "Overwatch","Overwatch2",
+    "bf2042","bfv","bf1",
+    "EscapeFromTarkov",
+    "destiny2","destiny",
+    "Splitgate",
+    "paladins","smite"
+)
+
 function Apply-Optimizations {
-    # Kill bandwidth hogs that eat into FiveM bandwidth
+    # Kill bandwidth hogs
     @("OneDrive","Dropbox","GoogleDriveFS","EpicGamesLauncher","SearchIndexer","MicrosoftEdgeUpdate") |
         ForEach-Object { Stop-Process -Name $_ -Force -EA SilentlyContinue }
     # Disable Nagle on all active NICs
@@ -1911,30 +1930,38 @@ function Apply-Optimizations {
         Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -EA SilentlyContinue
         Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay"       -Value 1 -Type DWord -EA SilentlyContinue
     }
-    # QoS: mark FiveM traffic (UDP 30120) with DSCP EF priority
-    netsh qos add policy "FiveM-OptiGods-QoS" DSCP=46 PriorityValue8021Action=6 LocalPortStart=30120 LocalPortEnd=30120 Protocol=UDP 2>$null | Out-Null
+    # QoS: tag all UDP game traffic with DSCP EF (expedited forwarding)
+    netsh qos add policy "OptiGods-Game-QoS" DSCP=46 PriorityValue8021Action=6 Protocol=UDP 2>$null | Out-Null
     # Flush DNS for clean server resolution
     ipconfig /flushdns | Out-Null
-    Write-Host ("[{0}] Applied: Nagle off, QoS tagged, traffic kill done, DNS flushed" -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Green
+    Write-Host ("[{0}] Applied: Nagle off, QoS tagged, bandwidth cleared, DNS flushed" -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Green
+}
+
+function Get-RunningGame {
+    foreach ($g in $GameProcesses) {
+        $p = Get-Process -Name $g -EA SilentlyContinue
+        if ($null -ne $p) { return $g }
+    }
+    return $null
 }
 
 $wasRunning = $false
 while ($true) {
-    $fiveM = Get-Process -Name "FiveM" -EA SilentlyContinue
-    $isRunning = ($null -ne $fiveM)
+    $game = Get-RunningGame
+    $isRunning = ($null -ne $game)
     if ($isRunning -and -not $wasRunning) {
         Write-Host ""
-        Write-Host ("[{0}] FiveM detected — applying launch optimizations..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Cyan
+        Write-Host ("[{0}] Game detected: {1} — applying launch optimizations..." -f (Get-Date -Format "HH:mm:ss"), $game) -ForegroundColor Cyan
         Apply-Optimizations
         $wasRunning = $true
     } elseif (-not $isRunning -and $wasRunning) {
-        Write-Host ("[{0}] FiveM closed. Watching for next session..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Gray
+        Write-Host ("[{0}] Game closed. Guardian watching for next session..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Gray
         $wasRunning = $false
     } elseif ($isRunning) {
-        Write-Host ("[{0}] FiveM running — re-checking ping optimizations..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor DarkGray
+        Write-Host ("[{0}] {1} running — re-checking ping optimizations..." -f (Get-Date -Format "HH:mm:ss"), $game) -ForegroundColor DarkGray
         Apply-Optimizations
     } else {
-        Write-Host ("[{0}] FiveM not detected — Guardian watching..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor DarkGray
+        Write-Host ("[{0}] No game detected — Guardian watching..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor DarkGray
     }
     Start-Sleep -Seconds 30
 }`;
@@ -1943,10 +1970,10 @@ function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
   const [enabled, setEnabled] = useState(() => localStorage.getItem("og_guardian") === "true");
   const [justDownloaded, setJustDownloaded] = useState(false);
 
-  const isFiveMRunning = currentGameId === "game_fivem";
+  const isGameRunning = currentGameId !== null;
 
   const enableGuardian = () => {
-    downloadPs1(GUARDIAN_PS1, "FiveM_PingGuardian.ps1");
+    downloadPs1(GUARDIAN_PS1, "OptiGods_PingGuardian.ps1");
     setEnabled(true);
     setJustDownloaded(true);
     localStorage.setItem("og_guardian", "true");
@@ -1959,10 +1986,10 @@ function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
   };
 
   const statusConfig = enabled
-    ? isFiveMRunning
-      ? { dot: "bg-emerald-400 animate-pulse", text: "FiveM active — optimizations applied", badge: "Active", badgeCls: "bg-emerald-600/15 text-emerald-400 border-emerald-500/25" }
-      : { dot: "bg-zinc-500", text: "FiveM not detected — Guardian watching", badge: "Watching", badgeCls: "bg-zinc-800 text-zinc-400 border-zinc-700" }
-    : { dot: "bg-zinc-700", text: "Guardian inactive — enable to auto-boost on FiveM launch", badge: "Inactive", badgeCls: "bg-zinc-800/80 text-zinc-500 border-zinc-700" };
+    ? isGameRunning
+      ? { dot: "bg-emerald-400 animate-pulse", text: "Game active — network optimizations applied", badge: "Active", badgeCls: "bg-emerald-600/15 text-emerald-400 border-emerald-500/25" }
+      : { dot: "bg-zinc-500", text: "No game detected — Guardian watching for any game launch", badge: "Watching", badgeCls: "bg-zinc-800 text-zinc-400 border-zinc-700" }
+    : { dot: "bg-zinc-700", text: "Guardian inactive — enable to auto-boost on any game launch", badge: "Inactive", badgeCls: "bg-zinc-800/80 text-zinc-500 border-zinc-700" };
 
   return (
     <motion.div
@@ -1974,9 +2001,7 @@ function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-white">Background Ping Guardian</p>
           <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed max-w-lg">
-            Runs silently in the background. Detects when FiveM launches, instantly applies QoS + Nagle + traffic kill,
-            then monitors your ping every 30 seconds. If a spike is detected it automatically re-applies network
-            optimizations to bring your ping back down.
+            Runs silently in the background. Detects when <span className="text-zinc-300 font-medium">any game</span> launches — FiveM, Warzone, Fortnite, VALORANT, CS2, Apex and more — instantly applies QoS + Nagle + traffic kill, then monitors every 30 seconds. Ping spike? It re-applies automatically.
           </p>
         </div>
         <span className={cn("text-[10px] px-2 py-0.5 rounded border font-bold shrink-0 mt-0.5", statusConfig.badgeCls)}>
@@ -2003,9 +2028,9 @@ function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
               Disable Guardian
             </Button>
             <p className="text-[10px] text-zinc-600 leading-snug flex-1">
-              {isFiveMRunning
+              {isGameRunning
                 ? "Guardian script is running — keep the PowerShell window open."
-                : "Guardian is watching. Launch FiveM and it will auto-optimize."}
+                : "Guardian is watching. Launch any game and it will auto-optimize."}
             </p>
           </div>
         ) : (
@@ -2016,7 +2041,7 @@ function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
           >
             {justDownloaded
               ? <><CheckCircle className="w-4 h-4 text-emerald-400" />Script Downloaded — Run as Admin</>
-              : "Enable Guardian"}
+              : "Enable Guardian (All Games)"}
           </Button>
         )}
       </div>

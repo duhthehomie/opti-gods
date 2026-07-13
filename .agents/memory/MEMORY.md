@@ -6,3 +6,5 @@
 - [FiveM freezeTime consolidation](fivem-freeze-time.md) — freezeWeather removed; freezeTime now clears weather in both XML builders. No separate "freeze weather" toggle.
 - [Reminder — repush .exe to website](reminder-exe-repush.md) — leaq asked 2026-06-17 to be reminded next session: push new tag, grab .exe from GitHub Actions, send it here, republish site.
 - [FiveM server proxy & connect helpers](fivem-server-proxy.md) — cfx.re CORS fix (backend proxy), cleanConnect/extractCfxCode helpers, correct join URL format, auto-detect from CitizenFX.log.
+- [Dashboard 100% score accuracy](dashboard-score-accuracy.md) — og_script_ran localStorage flag gates 100% display; displayScore caps at 99 until confirmed; scriptRan state + confirmScriptRan() in dashboard.tsx.
+- [Registry sections consolidation](registry-consolidation.md) — 10 sections merged to 5; DisableCoreParking and DisableDynamicTick were duplicated between CPU_TWEAKS and POWER_TWEAKS — removed from POWER_TWEAKS.

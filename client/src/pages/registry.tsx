@@ -170,10 +170,8 @@ export default function Registry() {
 
   const POWER_TWEAKS: TweakDef[] = [
     { id: "SetHighPerformancePlan", title: "Force Ultimate Performance Power Plan", desc: "Unlocks the hidden Ultimate Performance plan and sets it active — eliminates all power-saving throttling.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
-    { id: "DisableCoreParking", title: "Disable CPU Core Parking", desc: "Forces all CPU cores active — removes 1–3ms wake latency on parked cores.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableUSBSuspend", title: "Disable USB Selective Suspend", desc: "Prevents Windows from sleeping USB ports — eliminates controller and headset input stutter.", impact: "MED", recommended: true },
     { id: "DisablePowerThrottlingAdv", title: "Disable Power Throttling (Advanced Registry Path)", desc: "Targets the specific PowerSettings GUID path and disables power throttling at the driver level.", badge: "NEW", impact: "MED" },
-    { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power.", impact: "MED" },
     ...(hw.isIntelCore && hw.cpuGeneration >= 4 && hw.cpuGeneration <= 8 ? [
       { id: "IntelOldGenPowerOpt", title: "Intel 4th–8th Gen: Disable CPU Frequency Scaling + Power Throttle", desc: "Activates High Performance plan and locks CPU Min/Max processor state to 100%. Also disables Windows Power Throttling — on older Intel CPUs (Haswell through Coffee Lake) with no speed-shift hardware, this prevents the 50–150ms frequency ramp-up delay that causes frame-time spikes when shooting starts. Pair with Disable Core Parking for maximum effect.", badge: "Intel 4th–8th Gen", impact: "HIGH" as const, recommended: true },
     ] : []),
@@ -283,8 +281,11 @@ export default function Registry() {
         />
 
         <div className="space-y-10">
-          <Section heading="CPU Scheduling & Timer" tweaks={CPU_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
-          <Section heading="Network & Latency" tweaks={NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          {/* CPU + Power bundled — reduces visible section count */}
+          <Section heading="CPU, Power & Timer" tweaks={[...CPU_TWEAKS, ...POWER_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+
+          {/* Network — basic + advanced DNS/QoS bundled */}
+          <Section heading="Network & Internet" tweaks={[...NETWORK_TWEAKS, ...ADVANCED_NETWORK_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           {/* Memory section with RAM-aware safety note */}
           <div className="space-y-5">
@@ -300,38 +301,22 @@ export default function Registry() {
             )}
           </div>
 
-          {/* Visual section with GPU-aware HAGS note */}
+          {/* Visual + Kernel bundled */}
           <div className="space-y-5">
-            <Section heading="Visual Effects & Gaming" tweaks={VISUAL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+            <Section heading="Visual, Kernel & System" tweaks={[...VISUAL_TWEAKS, ...KERNEL_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.isIntel && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60">
                 <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-zinc-300 leading-relaxed">
                   <span className="text-zinc-200 font-semibold">Intel GPU detected.</span>{" "}
-                  <span className="text-white font-medium">HAGS</span> (Hardware Accelerated GPU Scheduling) has mixed results on Intel integrated graphics — it's designed primarily for discrete NVIDIA RTX 2000+ and AMD RX 6000+ GPUs. Skip this tweak if you're on Intel UHD/Iris graphics.
-                </p>
-              </div>
-            )}
-            {!hw.loading && osInfo.isWindows11 === false && !osInfo.loading && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
-                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  <span className="text-blue-400 font-semibold">Windows 10 detected.</span>{" "}
-                  HAGS requires Win10 build 2004 (May 2020 Update) or newer. If your build is older than 19041, skip the HAGS toggle.
+                  <span className="text-white font-medium">HAGS</span> has mixed results on Intel integrated graphics — designed for discrete NVIDIA RTX 2000+ and AMD RX 6000+ GPUs.
                 </p>
               </div>
             )}
           </div>
 
-          <Section heading="Power Plan & BIOS Interface" tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
-
-          <Section heading="Advanced Kernel Tweaks (NTFS / DPC / Memory)" tweaks={KERNEL_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
-
-          <Section heading="Advanced Network (DNS / QoS / RSS)" tweaks={ADVANCED_NETWORK_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
-
-          <Section heading="Windows 11 Gaming (VBS / HVCI / Core Parking)" tweaks={WIN11_GAMING_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
-
-          <Section heading="Process Scheduling (MMCSS / GPU / Affinity)" tweaks={PROCESS_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          {/* Process + Win11 bundled */}
+          <Section heading="Process Scheduling & Win11" tweaks={[...PROCESS_TWEAKS, ...WIN11_GAMING_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 mb-4">

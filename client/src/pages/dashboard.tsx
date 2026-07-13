@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Trash2,
   CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
-  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio,
+  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio, ScanLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
@@ -384,6 +384,8 @@ export default function Dashboard() {
 
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
+  const [scriptRan, setScriptRan] = useState(() => localStorage.getItem("og_script_ran") === "true");
+  const confirmScriptRan = () => { setScriptRan(true); localStorage.setItem("og_script_ran", "true"); };
 
   const applyAllRecommended = () => {
     // Enable all safe + aggressive tweaks. Expert tweaks (DisableDefender, DisableVBS,
@@ -429,8 +431,9 @@ export default function Dashboard() {
   const achievableIds = Array.from(smartRecs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
   const recApplied = achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
   const scorePercent = achievableIds.length > 0 ? Math.round((recApplied / achievableIds.length) * 100) : 0;
-  const tierLabel = scorePercent === 100 ? "100% OPTIMIZED" : scorePercent >= 90 ? "GOD TIER" : scorePercent >= 70 ? "ELITE" : scorePercent >= 46 ? "DECENT" : scorePercent >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
-  const tierColor = scorePercent === 100 ? "text-red-400" : scorePercent >= 70 ? "text-red-400" : scorePercent >= 46 ? "text-orange-400" : "text-zinc-500";
+  const displayScore = scorePercent === 100 && !scriptRan ? 99 : scorePercent;
+  const tierLabel = displayScore === 100 ? "100% OPTIMIZED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
+  const tierColor = displayScore === 100 ? "text-red-400" : displayScore >= 70 ? "text-red-400" : displayScore >= 46 ? "text-orange-400" : "text-zinc-500";
 
   return (
     <AppLayout>
@@ -515,6 +518,65 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
+        {/* ─── QUICK BOOST PRESETS ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04 }}
+          className="p-6 rounded-2xl bg-black/40 border border-white/5"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Rocket className="w-4 h-4 text-red-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
+            </div>
+            <span className="text-[10px] text-zinc-600 font-mono">one click — all tweaks enabled instantly</span>
+          </div>
+          <p className="text-xs text-zinc-500 mb-5 px-1">Pick a preset to instantly enable a curated set of tweaks, then download your script.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {QUICK_BOOST_PRESETS.map((preset, i) => {
+              const isActive = activeBoost === preset.id;
+              return (
+                <motion.button
+                  key={preset.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.06 + i * 0.05 }}
+                  onClick={() => applyQuickBoost(preset)}
+                  data-testid={`button-quick-boost-${preset.id}`}
+                  className={cn(
+                    "relative text-left rounded-xl border overflow-hidden transition-all duration-300 group",
+                    isActive
+                      ? `${preset.activeBg} ${preset.border} ${preset.glow}`
+                      : `bg-black/50 ${preset.border}`
+                  )}
+                >
+                  <div className={cn("h-[3px] w-full", preset.accentBar)} />
+                  <div className="p-4">
+                    {isActive && (
+                      <span className="absolute top-3 right-3">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      </span>
+                    )}
+                    <div className={cn("inline-flex items-center justify-center w-10 h-10 rounded-xl mb-3 transition-transform group-hover:scale-110", preset.iconBg)}>
+                      <preset.icon className={cn("w-5 h-5", preset.color)} />
+                    </div>
+                    <div className={cn("inline-flex items-center mb-2 ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border align-middle", preset.tagBg)}>
+                      {preset.tag}
+                    </div>
+                    <h3 className="text-sm font-bold text-white mb-1.5 leading-tight">{preset.title}</h3>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed mb-4">{preset.desc}</p>
+                    <div className={cn("inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border", preset.tagBg)}>
+                      <Zap className="w-2.5 h-2.5" />
+                      {preset.tweaks.length} tweaks
+                    </div>
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
+        </motion.div>
+
         {/* ─── OPTIMIZATION SCORE ─── */}
         {smartRecs.ids.size > 0 && (
           <motion.div
@@ -524,7 +586,7 @@ export default function Dashboard() {
             data-testid="card-optimization-score"
             className={cn(
               "relative rounded-2xl border overflow-hidden",
-              scorePercent >= 90
+              displayScore >= 90
                 ? "border-red-500/40 bg-gradient-to-br from-red-950/40 via-black to-black shadow-[0_0_60px_-20px_rgba(220,38,38,0.4)]"
                 : "border-white/5 bg-black/50"
             )}
@@ -536,18 +598,18 @@ export default function Dashboard() {
                   <circle cx="50" cy="50" r="40" fill="none" stroke="#18181b" strokeWidth="8" />
                   <circle
                     cx="50" cy="50" r="40" fill="none"
-                    stroke={scorePercent >= 70 ? "#ef4444" : scorePercent >= 46 ? "#f97316" : "#52525b"}
+                    stroke={displayScore >= 70 ? "#ef4444" : displayScore >= 46 ? "#f97316" : "#52525b"}
                     strokeWidth="8"
                     strokeLinecap="round"
-                    strokeDasharray={`${(scorePercent / 100) * 251.3} 251.3`}
+                    strokeDasharray={`${(displayScore / 100) * 251.3} 251.3`}
                     className="transition-all duration-700"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-2xl font-display font-black text-white leading-none">{scorePercent}%</span>
+                  <span className="text-2xl font-display font-black text-white leading-none">{displayScore}%</span>
                   <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-0.5">score</span>
                 </div>
-                {scorePercent >= 90 && (
+                {displayScore >= 90 && (
                   <div className="absolute inset-0 rounded-full blur-[24px] bg-red-500/20 pointer-events-none" />
                 )}
               </div>
@@ -558,52 +620,75 @@ export default function Dashboard() {
                   <span className={cn("text-sm font-black uppercase tracking-[0.2em]", tierColor)}>
                     {tierLabel}
                   </span>
-                  {scorePercent === 100 && (
+                  {displayScore === 100 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-400 font-black uppercase tracking-wide">🏆 100% Optimized</span>
                   )}
-                  {scorePercent >= 90 && scorePercent < 100 && (
+                  {displayScore >= 90 && displayScore < 100 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 font-black uppercase tracking-wide">🔥 Maxed</span>
                   )}
                 </div>
                 <p className="text-[11px] text-zinc-500 mb-3">
-                  {scorePercent === 100 ? (
-                    <span className="text-red-400 font-bold">All recommended tweaks enabled — max performance unlocked!</span>
+                  {displayScore === 100 ? (
+                    <span className="text-red-400 font-bold">All tweaks applied — 100% optimized!</span>
+                  ) : scorePercent === 100 && !scriptRan ? (
+                    <span className="text-amber-400 font-bold">All tweaks enabled in app — <button onClick={confirmScriptRan} className="underline text-white hover:text-amber-300 transition-colors">mark script as run ✓</button> to reach 100%</span>
                   ) : (
                     <>
                       <span className="text-white font-bold">{recApplied}</span>
                       <span className="text-zinc-600"> of </span>
                       <span className="text-white font-bold">{achievableIds.length}</span>
-                      {" "}tweaks selected — <span className="text-zinc-600">run the detect scan to verify what&apos;s actually in your registry</span>
+                      {" "}tweaks selected
                     </>
                   )}
                 </p>
-                <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs mx-auto md:mx-0">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-700",
-                      scorePercent === 100 ? "bg-gradient-to-r from-red-500 via-red-400 to-orange-400" : scorePercent >= 70 ? "bg-gradient-to-r from-red-600 to-red-400" : scorePercent >= 46 ? "bg-orange-500" : "bg-zinc-600"
-                    )}
-                    style={{ width: `${scorePercent}%` }}
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs flex-1">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-700",
+                        displayScore === 100 ? "bg-gradient-to-r from-red-500 via-red-400 to-orange-400" : displayScore >= 70 ? "bg-gradient-to-r from-red-600 to-red-400" : displayScore >= 46 ? "bg-orange-500" : "bg-zinc-600"
+                      )}
+                      style={{ width: `${displayScore}%` }}
+                    />
+                  </div>
+                  <button
+                    data-testid="button-instant-scan"
+                    onClick={() => window.location.href = '/system-scan'}
+                    className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-red-400 transition-colors shrink-0 border border-zinc-800 hover:border-red-500/30 px-2 py-1 rounded-md"
+                  >
+                    <ScanLine className="w-3 h-3" />
+                    Instant Scan
+                  </button>
                 </div>
               </div>
 
               {/* CTA */}
               <div className="shrink-0">
-                {scorePercent < 100 ? (
-                  <Button
-                    data-testid="button-boost-score"
-                    onClick={applyAllRecommended}
-                    className={cn(
-                      "font-bold text-sm px-6 transition-all",
-                      scorePercent >= 90
-                        ? "bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30"
-                        : "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)]"
+                {displayScore < 100 ? (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      data-testid="button-boost-score"
+                      onClick={applyAllRecommended}
+                      className={cn(
+                        "font-bold text-sm px-6 transition-all",
+                        displayScore >= 90
+                          ? "bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30"
+                          : "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)]"
+                      )}
+                    >
+                      <Zap className="w-4 h-4 mr-1.5" />
+                      {displayScore === 0 ? "Get Started" : "Boost My Score"}
+                    </Button>
+                    {scorePercent === 100 && !scriptRan && (
+                      <button
+                        data-testid="button-confirm-script-ran"
+                        onClick={confirmScriptRan}
+                        className="text-[10px] font-bold text-amber-500 hover:text-amber-400 border border-amber-500/30 hover:border-amber-500/60 px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        ✓ I&apos;ve Run the Script
+                      </button>
                     )}
-                  >
-                    <Zap className="w-4 h-4 mr-1.5" />
-                    {scorePercent === 0 ? "Get Started" : "Boost My Score"}
-                  </Button>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-1">
                     <button
@@ -891,35 +976,37 @@ export default function Dashboard() {
 
 
         
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">What's Included</span>
-            <div className="flex-1 h-px bg-white/5" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {FEATURES.map((feat, i) => (
-              <motion.div
-                key={feat.title}
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.18 + i * 0.04 }}
-                className="flex items-start gap-3 p-4 rounded-xl bg-black/40 border border-white/5 hover:border-red-500/15 hover:bg-red-500/3 transition-all group"
-              >
-                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 shrink-0 group-hover:bg-red-500/15 transition-colors">
-                  <feat.icon className="w-4 h-4 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">{feat.title}</h3>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">{feat.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+        {!isPro && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">What's Included</span>
+              <div className="flex-1 h-px bg-white/5" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {FEATURES.map((feat, i) => (
+                <motion.div
+                  key={feat.title}
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.18 + i * 0.04 }}
+                  className="flex items-start gap-3 p-4 rounded-xl bg-black/40 border border-white/5 hover:border-red-500/15 hover:bg-red-500/3 transition-all group"
+                >
+                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 shrink-0 group-hover:bg-red-500/15 transition-colors">
+                    <feat.icon className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white mb-1">{feat.title}</h3>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">{feat.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         
         <motion.div
@@ -947,13 +1034,9 @@ export default function Dashboard() {
                   <p className="text-sm text-zinc-400">Lifetime access — configure your tweaks and download your script.</p>
                 </div>
               </div>
-              <div className="relative z-10 mt-5 grid grid-cols-2 gap-2">
-                {PRO_BULLETS.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3 text-red-500 shrink-0" />
-                    <span className="text-xs text-zinc-400">{item}</span>
-                  </div>
-                ))}
+              <div className="relative z-10 mt-4 flex items-center gap-2 text-[11px] text-zinc-500">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                Download your script anytime — all tweaks, your rig, applied instantly.
               </div>
             </div>
           ) : (
@@ -1095,80 +1178,6 @@ export default function Dashboard() {
           </Button>
         </motion.div>
 
-        {/* Quick Boost Presets */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.33 }}
-          className="p-6 rounded-2xl bg-black/40 border border-white/5"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <Rocket className="w-4 h-4 text-red-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
-            </div>
-            <span className="text-[10px] text-zinc-600 font-mono">one click — all tweaks enabled instantly</span>
-          </div>
-          <p className="text-xs text-zinc-500 mb-5 px-1">Pick a preset to instantly enable a curated set of tweaks, then download your script.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {QUICK_BOOST_PRESETS.map((preset, i) => {
-              const isActive = activeBoost === preset.id;
-              return (
-                <motion.button
-                  key={preset.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 + i * 0.06 }}
-                  onClick={() => applyQuickBoost(preset)}
-                  data-testid={`button-quick-boost-${preset.id}`}
-                  className={cn(
-                    "relative text-left rounded-xl border overflow-hidden transition-all duration-300 group",
-                    isActive
-                      ? `${preset.activeBg} ${preset.border} ${preset.glow}`
-                      : `bg-black/50 ${preset.border}`
-                  )}
-                >
-                  {/* Top accent bar */}
-                  <div className={cn("h-[3px] w-full", preset.accentBar)} />
-
-                  <div className="p-4">
-                    {/* Active check */}
-                    {isActive && (
-                      <span className="absolute top-3 right-3">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      </span>
-                    )}
-
-                    {/* Icon container */}
-                    <div className={cn(
-                      "inline-flex items-center justify-center w-10 h-10 rounded-xl mb-3 transition-transform group-hover:scale-110",
-                      preset.iconBg
-                    )}>
-                      <preset.icon className={cn("w-5 h-5", preset.color)} />
-                    </div>
-
-                    {/* Tag */}
-                    <div className={cn("inline-flex items-center mb-2 ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border align-middle", preset.tagBg)}>
-                      {preset.tag}
-                    </div>
-
-                    <h3 className="text-sm font-bold text-white mb-1.5 leading-tight">{preset.title}</h3>
-                    <p className="text-[11px] text-zinc-500 leading-relaxed mb-4">{preset.desc}</p>
-
-                    {/* Tweak count badge */}
-                    <div className={cn(
-                      "inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                      preset.tagBg
-                    )}>
-                      <Zap className="w-2.5 h-2.5" />
-                      {preset.tweaks.length} tweaks
-                    </div>
-                  </div>
-                </motion.button>
-              );
-            })}
-          </div>
-        </motion.div>
 
 
         
