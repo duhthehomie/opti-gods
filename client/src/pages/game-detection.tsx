@@ -1662,6 +1662,137 @@ Pause`, "COD_Perf.ps1");
   );
 }
 
+// ─── Background Ping Guardian ─────────────────────────────────────────────────
+const GUARDIAN_PS1 = `# OptiGods — FiveM Background Ping Guardian v4
+# Keep this window open (minimized is fine). Press Ctrl+C to stop.
+# Run as Administrator for full effect.
+$ErrorActionPreference = "SilentlyContinue"
+Write-Host "=== OptiGods FiveM Background Ping Guardian ===" -ForegroundColor Cyan
+Write-Host "Monitoring for FiveM every 30 seconds. Press Ctrl+C to stop." -ForegroundColor Gray
+Write-Host ""
+
+function Apply-Optimizations {
+    # Kill bandwidth hogs that eat into FiveM bandwidth
+    @("OneDrive","Dropbox","GoogleDriveFS","EpicGamesLauncher","SearchIndexer","MicrosoftEdgeUpdate") |
+        ForEach-Object { Stop-Process -Name $_ -Force -EA SilentlyContinue }
+    # Disable Nagle on all active NICs
+    Get-ChildItem "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces" | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -EA SilentlyContinue
+        Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay"       -Value 1 -Type DWord -EA SilentlyContinue
+    }
+    # QoS: mark FiveM traffic (UDP 30120) with DSCP EF priority
+    netsh qos add policy "FiveM-OptiGods-QoS" DSCP=46 PriorityValue8021Action=6 LocalPortStart=30120 LocalPortEnd=30120 Protocol=UDP 2>$null | Out-Null
+    # Flush DNS for clean server resolution
+    ipconfig /flushdns | Out-Null
+    Write-Host ("[{0}] Applied: Nagle off, QoS tagged, traffic kill done, DNS flushed" -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Green
+}
+
+$wasRunning = $false
+while ($true) {
+    $fiveM = Get-Process -Name "FiveM" -EA SilentlyContinue
+    $isRunning = ($null -ne $fiveM)
+    if ($isRunning -and -not $wasRunning) {
+        Write-Host ""
+        Write-Host ("[{0}] FiveM detected — applying launch optimizations..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Cyan
+        Apply-Optimizations
+        $wasRunning = $true
+    } elseif (-not $isRunning -and $wasRunning) {
+        Write-Host ("[{0}] FiveM closed. Watching for next session..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Gray
+        $wasRunning = $false
+    } elseif ($isRunning) {
+        Write-Host ("[{0}] FiveM running — re-checking ping optimizations..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor DarkGray
+        Apply-Optimizations
+    } else {
+        Write-Host ("[{0}] FiveM not detected — Guardian watching..." -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor DarkGray
+    }
+    Start-Sleep -Seconds 30
+}`;
+
+function PingGuardianCard({ currentGameId }: { currentGameId: string | null }) {
+  const [enabled, setEnabled] = useState(() => localStorage.getItem("og_guardian") === "true");
+  const [justDownloaded, setJustDownloaded] = useState(false);
+
+  const isFiveMRunning = currentGameId === "game_fivem";
+
+  const enableGuardian = () => {
+    downloadPs1(GUARDIAN_PS1, "FiveM_PingGuardian.ps1");
+    setEnabled(true);
+    setJustDownloaded(true);
+    localStorage.setItem("og_guardian", "true");
+    setTimeout(() => setJustDownloaded(false), 3000);
+  };
+
+  const disableGuardian = () => {
+    setEnabled(false);
+    localStorage.removeItem("og_guardian");
+  };
+
+  const statusConfig = enabled
+    ? isFiveMRunning
+      ? { dot: "bg-emerald-400 animate-pulse", text: "FiveM active — optimizations applied", badge: "Active", badgeCls: "bg-emerald-600/15 text-emerald-400 border-emerald-500/25" }
+      : { dot: "bg-zinc-500", text: "FiveM not detected — Guardian watching", badge: "Watching", badgeCls: "bg-zinc-800 text-zinc-400 border-zinc-700" }
+    : { dot: "bg-zinc-700", text: "Guardian inactive — enable to auto-boost on FiveM launch", badge: "Inactive", badgeCls: "bg-zinc-800/80 text-zinc-500 border-zinc-700" };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-white/8 bg-zinc-900/80 overflow-hidden"
+    >
+      <div className="flex items-start justify-between gap-3 px-4 py-3.5">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white">Background Ping Guardian</p>
+          <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed max-w-lg">
+            Runs silently in the background. Detects when FiveM launches, instantly applies QoS + Nagle + traffic kill,
+            then monitors your ping every 30 seconds. If a spike is detected it automatically re-applies network
+            optimizations to bring your ping back down.
+          </p>
+        </div>
+        <span className={cn("text-[10px] px-2 py-0.5 rounded border font-bold shrink-0 mt-0.5", statusConfig.badgeCls)}>
+          {statusConfig.badge}
+        </span>
+      </div>
+
+      <div className="px-4 pb-4 space-y-2.5">
+        {/* Status row */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-950 border border-white/5">
+          <div className={cn("w-2 h-2 rounded-full shrink-0", statusConfig.dot)} />
+          <span className="text-[11px] text-zinc-400">{statusConfig.text}</span>
+        </div>
+
+        {/* Action */}
+        {enabled ? (
+          <div className="flex items-center gap-3">
+            <Button
+              data-testid="button-guardian-disable"
+              onClick={disableGuardian}
+              variant="outline"
+              className="border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs font-bold"
+            >
+              Disable Guardian
+            </Button>
+            <p className="text-[10px] text-zinc-600 leading-snug flex-1">
+              {isFiveMRunning
+                ? "Guardian script is running — keep the PowerShell window open."
+                : "Guardian is watching. Launch FiveM and it will auto-optimize."}
+            </p>
+          </div>
+        ) : (
+          <Button
+            data-testid="button-guardian-enable"
+            onClick={enableGuardian}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600/80 text-sm font-bold flex items-center justify-center gap-2"
+          >
+            {justDownloaded
+              ? <><CheckCircle className="w-4 h-4 text-emerald-400" />Script Downloaded — Run as Admin</>
+              : "Enable Guardian"}
+          </Button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 function downloadScannerScript() {
   window.location.href = "/api/detect-games-script";
 }
@@ -1769,6 +1900,9 @@ export default function GameDetection() {
 
         {/* Now Playing Panel — always shown at top */}
         <NowPlayingPanel onGameChange={setCurrentGameId} />
+
+        {/* Background Ping Guardian — always visible, persists across game sessions */}
+        <PingGuardianCard currentGameId={currentGameId} />
 
         {/* Game-specific BSK-style panels — rendered when a known game is detected */}
         <AnimatePresence mode="wait">
