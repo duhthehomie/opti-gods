@@ -403,6 +403,27 @@ const GAMES: GameEntry[] = [
       "Network buffer tuning for 60-tick competitive servers",
     ],
   },
+  {
+    id: "game_gunsrz",
+    name: "Guns RZ",
+    publisher: "Guns RZ",
+    accentBorder: "border-l-red-600",
+    coverGradient: "from-red-950 via-zinc-900 to-black",
+    detectPaths: [
+      "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Guns RZ",
+      "D:\\SteamLibrary\\steamapps\\common\\Guns RZ",
+      "E:\\SteamLibrary\\steamapps\\common\\Guns RZ",
+      "C:\\Games\\Guns RZ",
+      "D:\\Games\\Guns RZ",
+    ],
+    processName: "GunsRZ.exe",
+    tweaks: [
+      "Above Normal CPU priority (IFEO persistent across every relaunch)",
+      "High I/O priority for fast asset streaming",
+      "GPU Priority 8 for consistent frame delivery",
+      "Network buffers: 512KB send/receive for low-latency server connectivity",
+    ],
+  },
 ];
 
 // ─── Per-game tweak ID map ────────────────────────────────────────────────────
