@@ -403,27 +403,6 @@ const GAMES: GameEntry[] = [
       "Network buffer tuning for 60-tick competitive servers",
     ],
   },
-  {
-    id: "game_gunsrz",
-    name: "Guns RZ",
-    publisher: "Guns RZ",
-    accentBorder: "border-l-red-600",
-    coverGradient: "from-red-950 via-zinc-900 to-black",
-    detectPaths: [
-      "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Guns RZ",
-      "D:\\SteamLibrary\\steamapps\\common\\Guns RZ",
-      "E:\\SteamLibrary\\steamapps\\common\\Guns RZ",
-      "C:\\Games\\Guns RZ",
-      "D:\\Games\\Guns RZ",
-    ],
-    processName: "FiveM_b3407_GTAProcess.exe",
-    tweaks: [
-      "Above Normal CPU priority (IFEO persistent across every relaunch)",
-      "High I/O priority for fast asset streaming",
-      "GPU Priority 8 for consistent frame delivery",
-      "Network buffers: 512KB send/receive for low-latency server connectivity",
-    ],
-  },
 ];
 
 // ─── Per-game tweak ID map ────────────────────────────────────────────────────
@@ -841,26 +820,35 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       )}
     >
       {/* Cover strip + info row */}
-      <div className="flex items-stretch gap-0 min-h-[120px]">
-        {/* Cover thumbnail */}
-        <div className={cn(
-          "relative shrink-0 overflow-hidden flex items-center justify-center",
-          showCover ? "w-[96px]" : "w-[0px]"
-        )}>
-          <div className={cn(
-            "absolute inset-0 bg-gradient-to-br",
-            runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800"
-          )} />
-          {showCover ? (
+      <div className="flex items-center gap-0">
+        {/* Cover: server icon when on FiveM server, game cover otherwise */}
+        {runningGame!.id === "game_fivem" && activeServer ? (
+          <div className="relative shrink-0 w-[76px] h-[76px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
+            <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
+            {activeServer.iconUrl ? (
+              <img
+                src={activeServer.iconUrl}
+                alt={activeServer.name}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                className="relative z-10 w-full h-full object-cover"
+              />
+            ) : (
+              <span className="relative z-10 text-lg font-black text-zinc-400">
+                {activeServer.name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </div>
+        ) : showCover ? (
+          <div className="relative shrink-0 w-[76px] h-[76px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
+            <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
             <img
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
               className="relative z-10 w-full h-full object-contain p-2"
             />
-          ) : null}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-zinc-950/80" />
-        </div>
+          </div>
+        ) : null}
 
         {/* Info */}
         <div className="flex-1 px-4 py-3 bg-zinc-950 flex flex-col justify-between gap-2">
@@ -876,9 +864,24 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
                     Optimized
                   </span>
                 )}
+                {runningGame!.id === "game_fivem" && activeServer && (
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Live
+                  </span>
+                )}
               </div>
-              <h3 className="text-base font-display font-bold text-white leading-tight">{runningGame!.name}</h3>
-              <p className="text-[11px] text-zinc-500">{runningGame!.publisher}</p>
+              {runningGame!.id === "game_fivem" && activeServer ? (
+                <>
+                  <h3 className="text-base font-display font-bold text-white leading-tight">{activeServer.name}</h3>
+                  <p className="text-[11px] text-zinc-500">FiveM Server · {activeServer.connect}</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base font-display font-bold text-white leading-tight">{runningGame!.name}</h3>
+                  <p className="text-[11px] text-zinc-500">{runningGame!.publisher}</p>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button
@@ -983,33 +986,15 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         </div>
       </div>
 
-      {/* Active FiveM server strip — shown when FiveM is running + server is set */}
+      {/* Active FiveM server — compact connect-code bar */}
       {runningGame!.id === "game_fivem" && activeServer && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
-          className="flex items-center gap-3 px-4 py-2.5 border-t border-emerald-500/15 bg-emerald-950/20"
+          className="flex items-center gap-2 px-4 py-2 border-t border-emerald-500/10 bg-emerald-950/10"
         >
-          {activeServer.iconUrl ? (
-            <img
-              src={activeServer.iconUrl}
-              alt=""
-              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-white/10"
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-sm font-black text-zinc-400">
-              {activeServer.name.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Live on server</span>
-            </div>
-            <p className="text-[12px] font-bold text-white truncate leading-tight">{activeServer.name}</p>
-            <p className="text-[10px] font-mono text-zinc-600 truncate">{activeServer.connect}</p>
-          </div>
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="text-[10px] font-mono text-zinc-500 flex-1 truncate">{activeServer.connect}</span>
           <button
             data-testid="button-clear-active-server"
             onClick={() => {
