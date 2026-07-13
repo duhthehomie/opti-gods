@@ -10,7 +10,7 @@ import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
-  Download, Upload, X, MonitorCheck, Radio,
+  Download, Upload, X, MonitorCheck, Radio, ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -401,16 +401,40 @@ function SmartRecsBreakdown() {
         <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
       </div>
 
-      {/* 4-bucket breakdown */}
+      {/* 4-bucket breakdown — Before / After */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {buckets.map(b => {
           const count = b.key === "Internet" ? cats.internet : cats[b.key as keyof typeof cats];
           return (
-            <div key={b.key} className={cn("rounded-xl border p-4 text-center shadow-sm", b.border, b.bg, b.glow)}>
-              <div className="text-xl mb-1">{b.icon}</div>
-              <div className={cn("text-3xl font-display font-black tabular-nums", b.color)}>{count}</div>
-              <div className="text-xs font-bold text-white mt-1">{b.label}</div>
-              <div className="text-[9px] text-zinc-500 mt-0.5 leading-tight">{b.sub}</div>
+            <div key={b.key} className={cn("rounded-xl border shadow-sm overflow-hidden", b.border, b.bg, b.glow)}>
+              {/* Card header */}
+              <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 border-b border-white/5">
+                <span className="text-sm leading-none">{b.icon}</span>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-300 leading-tight">{b.label}</div>
+                  <div className="text-[8px] text-zinc-600 leading-tight truncate">{b.sub}</div>
+                </div>
+              </div>
+
+              {/* Before → After comparison */}
+              <div className="flex items-center px-3 py-3 gap-2">
+                {/* BEFORE column */}
+                <div className="flex-1 text-center">
+                  <div className="text-[8px] font-black uppercase tracking-widest text-zinc-600 mb-0.5">Before</div>
+                  <div className="text-2xl font-display font-black tabular-nums text-zinc-700">0</div>
+                  <div className="text-[8px] text-zinc-700 mt-0.5 leading-tight">stock</div>
+                </div>
+
+                {/* Arrow */}
+                <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+
+                {/* AFTER column */}
+                <div className="flex-1 text-center">
+                  <div className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", b.color)}>After</div>
+                  <div className={cn("text-2xl font-display font-black tabular-nums", b.color)}>{count}</div>
+                  <div className="text-[8px] text-zinc-500 mt-0.5 leading-tight">tweaks ↑</div>
+                </div>
+              </div>
             </div>
           );
         })}
