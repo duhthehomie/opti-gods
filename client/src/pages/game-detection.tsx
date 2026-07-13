@@ -820,11 +820,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       )}
     >
       {/* Cover strip + info row */}
-      <div className="flex items-stretch gap-0 min-h-[200px]">
+      <div className="flex items-stretch gap-0 min-h-[130px]">
         {/* Cover thumbnail */}
         <div className={cn(
           "relative shrink-0 overflow-hidden flex items-center justify-center",
-          showCover ? "w-[240px]" : "w-[160px]"
+          showCover ? "w-[110px]" : "w-[60px]"
         )}>
           <div className={cn(
             "absolute inset-0 bg-gradient-to-br",
@@ -835,6 +835,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
+              style={runningGame!.coverPosition ? { objectPosition: runningGame!.coverPosition } : { objectPosition: "center top" }}
               className="relative z-10 w-full h-full object-cover"
             />
           ) : null}
