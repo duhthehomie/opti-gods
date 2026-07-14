@@ -258,7 +258,7 @@ const GAMES: GameEntry[] = [
     name: "FiveM",
     publisher: "Cfx.re / Rockstar",
     accentBorder: "border-l-red-600",
-    coverUrl: "/game-covers/fivem.svg",
+    coverUrl: "/game-covers/fivem.png",
     coverGradient: "from-zinc-900 via-zinc-800 to-zinc-950",
     detectPaths: [
       "%LocalAppData%\\FiveM\\FiveM.exe",
@@ -516,13 +516,53 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const [imgErr, setImgErr] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Active FiveM server (set from Saved Servers tab)
+  // Active FiveM server + full saved list (sync with localStorage via OG_SERVER_EVENT)
   const [activeServer, setActiveServerState] = useState<SavedServer | null>(getActiveServerInfo);
+  const [savedServers, setSavedServers] = useState<SavedServer[]>(() => {
+    try { return JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]"); } catch { return []; }
+  });
+  const [npAddConnect, setNpAddConnect] = useState("");
+  const [npAdding, setNpAdding] = useState(false);
   useEffect(() => {
-    const handler = () => setActiveServerState(getActiveServerInfo());
+    const handler = () => {
+      setActiveServerState(getActiveServerInfo());
+      try { setSavedServers(JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]")); } catch { /* keep */ }
+    };
     window.addEventListener(OG_SERVER_EVENT, handler);
     return () => window.removeEventListener(OG_SERVER_EVENT, handler);
   }, []);
+
+  async function npAddServer(rawInput: string) {
+    if (!rawInput.trim() || npAdding) return;
+    const connect = cleanConnect(rawInput.trim());
+    setNpAdding(true);
+    const known = knownServerLookup(connect);
+    let name = known.name ?? connect;
+    let iconUrl: string | undefined = known.icon;
+    const cfxCode = extractCfxCode(connect);
+    if (cfxCode && !known.icon) {
+      try {
+        const res = await fetch(`/api/fivem/server-info/${cfxCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          const iv = data?.Data?.iconVersion;
+          if (iv) iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxCode}/${iv}.png`;
+          const hn = data?.Data?.hostname as string | undefined;
+          if (hn && !known.name) name = hn.replace(/\^\d/g, "").trim() || connect;
+        }
+      } catch { /* no icon */ }
+    }
+    const latest: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+    const norm = (s: string) => s.replace(/:\d+$/, "").toLowerCase().trim();
+    if (!latest.some(s => norm(s.connect) === norm(connect))) {
+      latest.push({ name, connect, iconUrl });
+      localStorage.setItem("og_fivem_servers", JSON.stringify(latest));
+    }
+    localStorage.setItem("og_fivem_active", connect);
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+    setNpAddConnect("");
+    setNpAdding(false);
+  }
 
   // Auto-detect current FiveM server via CitizenFX.log when FiveM is running.
   //
@@ -1084,6 +1124,65 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
           )}
         </div>
       </div>
+
+      {/* FiveM inline saved-server picker — visible whenever FiveM is running */}
+      {runningGame!.id === "game_fivem" && (
+        <div className="border-t border-white/5 bg-zinc-900/50 px-3 py-2 flex flex-col gap-2">
+          {savedServers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {savedServers.map((srv, i) => {
+                const isActive = activeServer?.connect === srv.connect;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (isActive) {
+                        localStorage.removeItem("og_fivem_active");
+                      } else {
+                        localStorage.setItem("og_fivem_active", srv.connect);
+                      }
+                      window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-all",
+                      isActive
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                        : "bg-zinc-800/60 border-white/5 text-zinc-400 hover:bg-zinc-700/60 hover:text-white"
+                    )}
+                  >
+                    {srv.iconUrl ? (
+                      <img src={srv.iconUrl} alt={srv.name} className="w-4 h-4 object-contain rounded-sm shrink-0" />
+                    ) : (
+                      <span className="w-4 h-4 flex items-center justify-center bg-zinc-700 rounded-sm text-[7px] font-black shrink-0">
+                        {srv.name.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    {srv.name}
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={npAddConnect}
+              onChange={e => setNpAddConnect(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && npAddServer(npAddConnect)}
+              placeholder={savedServers.length === 0 ? "Add server — cfx.re/join/… or pvp.tmfrz.com" : "Add another server…"}
+              className="flex-1 bg-zinc-800/60 border border-white/5 rounded-lg px-2.5 py-1 text-[10px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-white/20 transition-colors"
+            />
+            <button
+              onClick={() => npAddServer(npAddConnect)}
+              disabled={npAdding || !npAddConnect.trim()}
+              className="px-2.5 py-1 rounded-lg bg-red-600/20 border border-red-500/30 text-red-300 text-[10px] font-bold hover:bg-red-600/30 transition-colors disabled:opacity-40"
+            >
+              {npAdding ? "…" : "+ Add"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Active FiveM server — compact connect-code bar */}
       {runningGame!.id === "game_fivem" && activeServer && (
