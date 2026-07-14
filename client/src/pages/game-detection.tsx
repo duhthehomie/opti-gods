@@ -496,20 +496,40 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
 
   // Auto-detect current FiveM server via CitizenFX.log when FiveM is running.
   //
-  // STALE-LOG GUARD: CitizenFX.log persists across sessions. On first poll we
-  // capture the BASELINE code (last "Connecting to" in the log from a previous
-  // session) and add it to saved servers but deliberately do NOT mark it active.
-  // Only a code that appears on a SUBSEQUENT poll — meaning it arrived while
-  // FiveM is running right now — is treated as a live connection.
+  // STALE-LOG GUARD: CitizenFX.log persists across sessions, so simply reading
+  // the last "Connecting to" line on launch would always show the PREVIOUS
+  // session's server.  Strategy:
+  //   1. On FiveM launch: clear any stale og_fivem_active immediately.
+  //   2. First poll: record the last connect target in the log as the BASELINE
+  //      (previous session). Save it to the server list so it appears in
+  //      Saved Servers, but do NOT mark it active.
+  //   3. Every 12 s: if a NEW target appears that differs from baseline, the
+  //      user just joined a server in this session → mark it active.
+  //
+  // DOMAIN/IP SUPPORT: the regex captures ANY connect target, not just 4-8-char
+  // cfx.re codes.  "connect pvp.tmfrz.com" and "connect 185.x.x.x:30120" both
+  // match.  For cfx codes we also call the cfx.re API to get name + icon.
   useEffect(() => {
     if (runningGame?.id !== "game_fivem") return;
     let mounted = true;
-    let baselineCode: string | null = null;
+    let baselineConnect: string | null = null;
     let initialized = false;
 
-    async function fetchAndSave(code: string, markActive: boolean) {
+    // Clear any leftover active server from a previous session immediately
+    localStorage.removeItem("og_fivem_active");
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+
+    // Normalise a connect string for comparison: strip port + lowercase
+    function norm(s: string): string {
+      return s.replace(/:\d+$/, "").toLowerCase().trim();
+    }
+
+    // Save a server to the list and optionally mark active.
+    // Matches existing entries by normalised connect string.
+    async function fetchAndSave(rawConnect: string, markActive: boolean) {
+      const normRaw = norm(rawConnect);
       const saved: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
-      const existing = saved.find(s => extractCfxCode(s.connect) === code || s.connect === code);
+      const existing = saved.find(s => norm(s.connect) === normRaw);
       if (existing) {
         if (markActive && mounted) {
           localStorage.setItem("og_fivem_active", existing.connect);
@@ -517,49 +537,61 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         }
         return;
       }
-      // New server — fetch name + icon from cfx.re
-      try {
-        const res = await fetch(`/api/fivem/server-info/${code}`);
-        if (!res.ok || !mounted) return;
-        const data = await res.json();
-        const iv = data?.Data?.iconVersion;
-        const iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${code}/${iv}.png` : undefined;
-        const hn = (data?.Data?.hostname ?? "") as string;
-        const name = hn ? hn.replace(/\^\d/g, "").trim() : code;
-        const newServer: SavedServer = { name, connect: code, iconUrl };
-        const latest: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
-        localStorage.setItem("og_fivem_servers", JSON.stringify([...latest, newServer]));
-        if (markActive) localStorage.setItem("og_fivem_active", code);
-        if (mounted) window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
-      } catch { /* no icon — that's fine */ }
+
+      // New server — try cfx.re API if it looks like a plain cfx code
+      const isCfxCode = /^[A-Za-z0-9]{4,8}$/.test(rawConnect);
+      let name = rawConnect;
+      let iconUrl: string | undefined;
+      if (isCfxCode) {
+        try {
+          const res = await fetch(`/api/fivem/server-info/${rawConnect}`);
+          if (res.ok && mounted) {
+            const data = await res.json();
+            const iv = data?.Data?.iconVersion;
+            iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${rawConnect}/${iv}.png` : undefined;
+            const hn = (data?.Data?.hostname ?? "") as string;
+            name = hn ? hn.replace(/\^\d/g, "").trim() : rawConnect;
+          }
+        } catch { /* no icon — that's fine */ }
+      }
+
+      if (!mounted) return;
+      const newServer: SavedServer = { name, connect: rawConnect, iconUrl };
+      const latest: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+      localStorage.setItem("og_fivem_servers", JSON.stringify([...latest, newServer]));
+      if (markActive) localStorage.setItem("og_fivem_active", rawConnect);
+      window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
     }
 
     async function detect() {
       try {
         const logContent = await readFivemLog();
         if (!logContent || !mounted) return;
-        const matches = [...logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([A-Za-z0-9]{4,8})/gi)];
+        // Match any connect target: cfx codes, domains, IPs (with optional port).
+        // Examples: "88aypv", "pvp.tmfrz.com", "185.1.2.3:30120", "cfx.re/join/abc123"
+        const matches = [...logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([^\s,;]+)/gi)];
         if (!matches.length) return;
-        const lastCode = matches[matches.length - 1][1];
+        const rawConnect = matches[matches.length - 1][1];
+        if (!rawConnect || rawConnect.length < 3) return;
 
         if (!initialized) {
-          // First run: this code is from a previous session — record as baseline,
-          // save to the servers list for quick-connect, but DO NOT mark active.
-          baselineCode = lastCode;
+          // First run — this is from a previous session.
+          // Record as baseline; add to saved list but DON'T mark active.
+          baselineConnect = norm(rawConnect);
           initialized = true;
-          await fetchAndSave(lastCode, false /* markActive=false */);
+          await fetchAndSave(rawConnect, false);
           return;
         }
 
-        // Subsequent polls: only act if a NEW code appeared (user just connected)
-        if (lastCode === baselineCode) return;
-        baselineCode = lastCode;
-        await fetchAndSave(lastCode, true /* markActive=true */);
+        // Subsequent polls: only act when a NEW target appears (user just joined)
+        if (norm(rawConnect) === baselineConnect) return;
+        baselineConnect = norm(rawConnect);
+        await fetchAndSave(rawConnect, true);
       } catch { /* no log — that's fine */ }
     }
 
-    detect(); // establish baseline immediately (no active-set)
-    const interval = setInterval(detect, 12_000); // poll every 12 s for live connections
+    detect(); // establish baseline (clears active, no new active-set)
+    const interval = setInterval(detect, 12_000); // poll every 12 s
     return () => { mounted = false; clearInterval(interval); };
   }, [runningGame?.id]);
 
@@ -871,7 +903,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="relative z-10 w-full h-full object-contain p-2"
+              className="relative z-10 w-full h-full object-cover"
             />
           </div>
         ) : null}
@@ -1702,11 +1734,11 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                         <img
                           src={s.iconUrl}
                           alt=""
-                          className="w-8 h-8 rounded object-cover shrink-0 border border-white/10"
+                          className="w-10 h-10 rounded object-cover shrink-0 border border-white/10"
                           onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-zinc-500">
+                        <div className="w-10 h-10 rounded bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-xs font-bold text-zinc-400">
                           {s.name.slice(0, 2).toUpperCase()}
                         </div>
                       )}
