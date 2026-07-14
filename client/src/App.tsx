@@ -7,7 +7,6 @@ import { useEffect, lazy, Suspense } from "react";
 import { setProStatus } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
-import { OnboardingModal } from "@/components/onboarding-modal";
 import { AuthGate } from "@/components/auth-gate";
 import { UpdateModal } from "@/components/update-modal";
 import { VersionPin } from "@/components/version-pin";
@@ -250,7 +249,6 @@ function App() {
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>
-          <OnboardingModal />
           <Toaster />
           <Router />
           <UpdateModal />

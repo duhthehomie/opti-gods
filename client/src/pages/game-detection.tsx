@@ -414,7 +414,7 @@ const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
     "FiveMQueueFix", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions",
     "FiveMRenderingBoost", "FiveMGPUPriorityStack", "FiveMDisableLSO",
     "FiveMEnableRSS", "FiveMReduceNPCDensity", "FiveMReduceShadowQuality",
-    "FiveMCommandLineTweaks", "FiveMDisableMPO", "FiveMMenuFpsUncap",
+    "FiveMCommandLineTweaks", "FiveMDisableMPO",
   ],
   game_fortnite: [
     "FortniteHighPriority", "FortniteUncapLobbyFPS", "FortniteUncapGameFPS",
@@ -881,29 +881,27 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
         {runningGame!.id === "game_fivem" && activeServer ? (
-          <div className="relative shrink-0 w-[110px] h-[110px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
-            <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
+          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden flex items-center justify-center bg-zinc-900">
             {activeServer.iconUrl ? (
               <img
                 src={activeServer.iconUrl}
                 alt={activeServer.name}
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                className="relative z-10 w-full h-full object-cover"
+                className="w-full h-full object-cover"
               />
             ) : (
-              <span className="relative z-10 text-lg font-black text-zinc-400">
+              <span className="text-2xl font-black text-zinc-400">
                 {activeServer.name.slice(0, 2).toUpperCase()}
               </span>
             )}
           </div>
         ) : showCover ? (
-          <div className="relative shrink-0 w-[110px] h-[110px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
-            <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
+          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden">
             <img
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="relative z-10 w-full h-full object-cover"
+              className="w-full h-full object-cover"
             />
           </div>
         ) : null}

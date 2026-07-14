@@ -92,7 +92,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "FiveMCitizenDisableMedia","FiveMDisableDWM","FiveMDisableFullscreen",
     "FiveMDisableP2P","FiveMDNSOverride","FiveMSteamChildOff","FiveMSteamOverlayOff",
     "FiveMStreamPool","FiveMWorkingSet","FiveMExtendedMemory","FiveMAffinityMask",
-    "FiveMDisableMemCompression","FiveMMenuFpsUncap",
+    "FiveMDisableMemCompression",
     // Registry — safe kernel tweaks every gaming PC benefits from
     "RegistryNTFSOptimize","RegistryIOPageLock","RegistryLargePageHeap",
     // Scheduler precision — reduces frame time variance on all CPUs
@@ -235,7 +235,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
       "NvidiaAnisoFiltering","NvidiaOpenGLOpt","NvidiaThreadedOpt","NvidiaVRAMMax",
       "NvidiaGSyncOptimize","NvidiaDisableHDMIAudio","NvidiaGpuBgOptimize",
-      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMMenuFpsUncap","FiveMFixNvidiaOverlay",
+      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMFixNvidiaOverlay",
       "FiveMGPUPriorityStack",
       // New NVIDIA tweaks
       "NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableShadowPlay",

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BRAND, prefersReducedMotion } from "./assets";
+import { BRAND } from "./assets";
 
 const SESSION_KEY = "optigods_boot_splash_shown";
 const SHOW_MS = 3500;
@@ -12,7 +12,6 @@ export function BootSplash() {
     return "show";
   });
   const videoRef = useRef<HTMLVideoElement>(null);
-  const reduced = typeof window !== "undefined" && prefersReducedMotion();
 
   useEffect(() => {
     if (phase === "hidden") return;
@@ -37,23 +36,15 @@ export function BootSplash() {
         transition: `opacity ${FADE_MS}ms ease-out`,
       }}
     >
-      {reduced ? (
-        <img
-          src={BRAND.goldPng}
-          alt="Opti Gods"
-          className="w-44 h-44 object-contain drop-shadow-[0_0_30px_rgba(239,68,68,0.55)]"
-        />
-      ) : (
-        <video
-          ref={videoRef}
-          src={BRAND.spinRed}
-          autoPlay
-          muted
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      )}
+      <video
+        ref={videoRef}
+        src={BRAND.spinRed}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
     </div>
   );
 }
