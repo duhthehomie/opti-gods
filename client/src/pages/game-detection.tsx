@@ -523,6 +523,21 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   });
   const [npAddConnect, setNpAddConnect] = useState("");
   const [npAdding, setNpAdding] = useState(false);
+  const [showServerPicker, setShowServerPicker] = useState(false);
+
+  function resyncServers() {
+    setActiveServerState(getActiveServerInfo());
+    try { setSavedServers(JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]")); } catch { /* keep */ }
+  }
+
+  function deleteServer(connect: string) {
+    const updated: SavedServer[] = (JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]") as SavedServer[])
+      .filter(s => s.connect !== connect);
+    localStorage.setItem("og_fivem_servers", JSON.stringify(updated));
+    const active = localStorage.getItem("og_fivem_active");
+    if (active === connect) localStorage.removeItem("og_fivem_active");
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+  }
   useEffect(() => {
     const handler = () => {
       setActiveServerState(getActiveServerInfo());
@@ -812,7 +827,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               data-testid="button-refresh-nowplaying"
               size="sm"
               variant="outline"
-              onClick={() => doScan(false)}
+              onClick={() => { doScan(false); resyncServers(); }}
               disabled={scanning}
               className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
             >
@@ -964,22 +979,22 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
         {runningGame!.id === "game_fivem" && activeServer ? (
-          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden flex items-center justify-center bg-zinc-900">
+          <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden flex items-center justify-center bg-zinc-900">
             {activeServer.iconUrl ? (
               <img
                 src={activeServer.iconUrl}
                 alt={activeServer.name}
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                className="w-full h-full object-contain p-2"
+                className="w-full h-full object-contain p-3"
               />
             ) : (
-              <span className="text-2xl font-black text-zinc-400">
+              <span className="text-3xl font-black text-zinc-400">
                 {activeServer.name.slice(0, 2).toUpperCase()}
               </span>
             )}
           </div>
         ) : showCover ? (
-          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden bg-zinc-950">
+          <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden bg-zinc-950">
             <img
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
@@ -1027,7 +1042,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
                 data-testid="button-refresh-nowplaying"
                 size="sm"
                 variant="outline"
-                onClick={() => doScan(false)}
+                onClick={() => { doScan(false); resyncServers(); }}
                 disabled={scanning}
                 className="h-7 px-2.5 border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
               >
@@ -1125,85 +1140,117 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         </div>
       </div>
 
-      {/* FiveM inline saved-server picker — visible whenever FiveM is running */}
+      {/* FiveM server selector — shows active server compactly or full picker when changing */}
       {runningGame!.id === "game_fivem" && (
-        <div className="border-t border-white/5 bg-zinc-900/50 px-3 py-2 flex flex-col gap-2">
-          {savedServers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {savedServers.map((srv, i) => {
-                const isActive = activeServer?.connect === srv.connect;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      if (isActive) {
-                        localStorage.removeItem("og_fivem_active");
-                      } else {
-                        localStorage.setItem("og_fivem_active", srv.connect);
-                      }
-                      window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
-                    }}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-all",
-                      isActive
-                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
-                        : "bg-zinc-800/60 border-white/5 text-zinc-400 hover:bg-zinc-700/60 hover:text-white"
-                    )}
-                  >
-                    {srv.iconUrl ? (
-                      <img src={srv.iconUrl} alt={srv.name} className="w-4 h-4 object-contain rounded-sm shrink-0" />
-                    ) : (
-                      <span className="w-4 h-4 flex items-center justify-center bg-zinc-700 rounded-sm text-[7px] font-black shrink-0">
-                        {srv.name.slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                    {srv.name}
-                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+        <div className="border-t border-white/5 bg-zinc-900/50">
+          {activeServer && !showServerPicker ? (
+            /* Compact active-server bar */
+            <div className="px-3 py-2 flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              {activeServer.iconUrl && (
+                <img src={activeServer.iconUrl} alt={activeServer.name}
+                  className="w-4 h-4 object-contain rounded-sm shrink-0"
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              )}
+              <span className="text-[10px] text-zinc-400 flex-1 truncate min-w-0">
+                In: <span className="text-white font-bold">{activeServer.name}</span>
+                <span className="text-zinc-600 ml-1">{activeServer.connect}</span>
+              </span>
+              <button
+                onClick={() => setShowServerPicker(true)}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 px-1.5 py-0.5 rounded hover:bg-white/5"
+              >
+                change
+              </button>
+              <button
+                data-testid="button-clear-active-server"
+                onClick={() => {
+                  localStorage.removeItem("og_fivem_active");
+                  window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+                }}
+                className="text-[10px] text-zinc-700 hover:text-red-400 transition-colors shrink-0 px-1 py-0.5 rounded hover:bg-white/5"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            /* Full server picker — shown when no active server OR user clicked "change" */
+            <div className="px-3 py-2 flex flex-col gap-2">
+              {activeServer && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500">Select server:</span>
+                  <button onClick={() => setShowServerPicker(false)}
+                    className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors">
+                    cancel
                   </button>
-                );
-              })}
+                </div>
+              )}
+              {savedServers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {savedServers.map((srv, i) => {
+                    const isActive = activeServer?.connect === srv.connect;
+                    return (
+                      <div key={i} className="flex items-center gap-0">
+                        <button
+                          onClick={() => {
+                            if (isActive) {
+                              localStorage.removeItem("og_fivem_active");
+                            } else {
+                              localStorage.setItem("og_fivem_active", srv.connect);
+                            }
+                            window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+                            setShowServerPicker(false);
+                          }}
+                          className={cn(
+                            "flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-l-lg border-y border-l text-[10px] font-bold transition-all",
+                            isActive
+                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                              : "bg-zinc-800/60 border-white/5 text-zinc-400 hover:bg-zinc-700/60 hover:text-white"
+                          )}
+                        >
+                          {srv.iconUrl ? (
+                            <img src={srv.iconUrl} alt={srv.name} className="w-4 h-4 object-contain rounded-sm shrink-0"
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                          ) : (
+                            <span className="w-4 h-4 flex items-center justify-center bg-zinc-700 rounded-sm text-[7px] font-black shrink-0">
+                              {srv.name.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
+                          {srv.name}
+                          {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+                        </button>
+                        <button
+                          onClick={() => deleteServer(srv.connect)}
+                          className="px-1.5 py-1 rounded-r-lg border-y border-r border-white/5 bg-zinc-800/60 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 text-[10px] transition-all"
+                          title={`Remove ${srv.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={npAddConnect}
+                  onChange={e => setNpAddConnect(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && npAddServer(npAddConnect)}
+                  placeholder={savedServers.length === 0 ? "Add server — cfx.re/join/… or pvp.tmfrz.com" : "Add another server…"}
+                  className="flex-1 bg-zinc-800/60 border border-white/5 rounded-lg px-2.5 py-1 text-[10px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-white/20 transition-colors"
+                />
+                <button
+                  onClick={() => npAddServer(npAddConnect)}
+                  disabled={npAdding || !npAddConnect.trim()}
+                  className="px-2.5 py-1 rounded-lg bg-red-600/20 border border-red-500/30 text-red-300 text-[10px] font-bold hover:bg-red-600/30 transition-colors disabled:opacity-40"
+                >
+                  {npAdding ? "…" : "+ Add"}
+                </button>
+              </div>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={npAddConnect}
-              onChange={e => setNpAddConnect(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && npAddServer(npAddConnect)}
-              placeholder={savedServers.length === 0 ? "Add server — cfx.re/join/… or pvp.tmfrz.com" : "Add another server…"}
-              className="flex-1 bg-zinc-800/60 border border-white/5 rounded-lg px-2.5 py-1 text-[10px] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-white/20 transition-colors"
-            />
-            <button
-              onClick={() => npAddServer(npAddConnect)}
-              disabled={npAdding || !npAddConnect.trim()}
-              className="px-2.5 py-1 rounded-lg bg-red-600/20 border border-red-500/30 text-red-300 text-[10px] font-bold hover:bg-red-600/30 transition-colors disabled:opacity-40"
-            >
-              {npAdding ? "…" : "+ Add"}
-            </button>
-          </div>
         </div>
-      )}
-
-      {/* Active FiveM server — compact connect-code bar */}
-      {runningGame!.id === "game_fivem" && activeServer && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          className="flex items-center gap-2 px-4 py-2 border-t border-emerald-500/10 bg-emerald-950/10"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-          <span className="text-[10px] font-mono text-zinc-500 flex-1 truncate">{activeServer.connect}</span>
-          <button
-            data-testid="button-clear-active-server"
-            onClick={() => {
-              localStorage.removeItem("og_fivem_active");
-              window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
-            }}
-            className="text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors shrink-0 px-2 py-1 rounded hover:bg-white/5"
-          >
-            Clear
-          </button>
-        </motion.div>
       )}
 
       {/* Custom path footer (always accessible) */}

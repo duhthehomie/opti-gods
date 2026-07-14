@@ -19,6 +19,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useGenerateScript } from "@/hooks/use-script";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
 const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
 const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
@@ -382,23 +383,43 @@ function SmartRecsBreakdown() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const { toast } = useToast();
   const [applied, setApplied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const generateScript = useGenerateScript();
 
   const total = recs.ids.size;
 
   const safeIds = Array.from(recs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
+  const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
+  const missingSafeIds = safeIds.filter(id => !tweaks[id]);
   const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
-  const allOn = safeIds.length > 0 && alreadyOnCount === safeIds.length;
+  const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
 
   function handleApply() {
     const next = { ...tweaks };
-    safeIds.forEach(id => { next[id] = true; });
+    missingSafeIds.forEach(id => { next[id] = true; });
     setAllTweaks(next);
     setApplied(true);
     toast({
-      title: "Smart Recommendations applied",
-      description: `${safeIds.length} tweaks enabled — head to any tab to download your script.`,
+      title: "Missing tweaks applied",
+      description: `${missingSafeIds.length} tweaks enabled — download your script from any tab.`,
     });
     setTimeout(() => setApplied(false), 3000);
+  }
+
+  async function handleDownloadMissing() {
+    const idsToDownload = missingSafeIds.length > 0 ? missingSafeIds : safeIds;
+    if (idsToDownload.length === 0) return;
+    setDownloading(true);
+    try {
+      const tweakMap: Record<string, boolean> = {};
+      idsToDownload.forEach(id => { tweakMap[id] = true; });
+      const result = await generateScript.mutateAsync({ tweaks: tweakMap });
+      window.open(result.scriptUrl, "_blank");
+    } catch {
+      toast({ title: "Download failed", description: "Could not generate script. Make sure you have Pro access.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (!recs.ready || total === 0) return null;
@@ -416,22 +437,51 @@ function SmartRecsBreakdown() {
         <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
       </div>
 
-      {/* Apply button */}
-      <button
-        data-testid="button-apply-smart-recs"
-        onClick={handleApply}
-        disabled={allOn || applied}
-        className={cn(
-          "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
-          allOn || applied
-            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
-            : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
-        )}
-      >
-        {allOn || applied
-          ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks applied</>
-          : <><Zap className="w-4 h-4" /> Apply {safeIds.length} recommended tweaks</>}
-      </button>
+      {/* Status + action buttons */}
+      <div className="flex flex-col gap-2">
+        {/* Apply / applied button */}
+        <button
+          data-testid="button-apply-smart-recs"
+          onClick={handleApply}
+          disabled={allOn || applied || missingSafeIds.length === 0}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
+            allOn || applied || missingSafeIds.length === 0
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+              : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
+          )}
+        >
+          {allOn || missingSafeIds.length === 0
+            ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks applied</>
+            : applied
+              ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
+              : <><Zap className="w-4 h-4" /> Apply {missingSafeIds.length} missing tweaks</>}
+        </button>
+
+        {/* Download missing tweaks button */}
+        <button
+          data-testid="button-download-missing-tweaks"
+          onClick={handleDownloadMissing}
+          disabled={downloading}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all bg-zinc-800/60 border-white/8 text-zinc-300 hover:bg-zinc-700/60 hover:text-white hover:border-white/15 active:scale-[0.98]"
+        >
+          <Download className="w-4 h-4" />
+          {downloading ? "Generating…" : missingSafeIds.length > 0 ? `Download ${missingSafeIds.length} missing tweaks as PS1` : "Download all recommended tweaks as PS1"}
+        </button>
+      </div>
+
+      {/* Expert tweaks callout */}
+      {expertIds.length > 0 && (
+        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[11px] font-bold text-amber-300">{expertIds.length} expert-level tweaks not auto-applied</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">
+              These tweaks (e.g. DisableDefender, VBS/HVCI off) carry real risk and are opt-in only. Enable them individually in their respective tabs — they are included in the total count of {total}.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Why these tweaks */}
       <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
