@@ -494,47 +494,73 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
     return () => window.removeEventListener(OG_SERVER_EVENT, handler);
   }, []);
 
-  // Auto-detect current FiveM server via CitizenFX.log when FiveM is running
+  // Auto-detect current FiveM server via CitizenFX.log when FiveM is running.
+  //
+  // STALE-LOG GUARD: CitizenFX.log persists across sessions. On first poll we
+  // capture the BASELINE code (last "Connecting to" in the log from a previous
+  // session) and add it to saved servers but deliberately do NOT mark it active.
+  // Only a code that appears on a SUBSEQUENT poll — meaning it arrived while
+  // FiveM is running right now — is treated as a live connection.
   useEffect(() => {
     if (runningGame?.id !== "game_fivem") return;
     let mounted = true;
+    let baselineCode: string | null = null;
+    let initialized = false;
+
+    async function fetchAndSave(code: string, markActive: boolean) {
+      const saved: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+      const existing = saved.find(s => extractCfxCode(s.connect) === code || s.connect === code);
+      if (existing) {
+        if (markActive && mounted) {
+          localStorage.setItem("og_fivem_active", existing.connect);
+          window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+        }
+        return;
+      }
+      // New server — fetch name + icon from cfx.re
+      try {
+        const res = await fetch(`/api/fivem/server-info/${code}`);
+        if (!res.ok || !mounted) return;
+        const data = await res.json();
+        const iv = data?.Data?.iconVersion;
+        const iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${code}/${iv}.png` : undefined;
+        const hn = (data?.Data?.hostname ?? "") as string;
+        const name = hn ? hn.replace(/\^\d/g, "").trim() : code;
+        const newServer: SavedServer = { name, connect: code, iconUrl };
+        const latest: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+        localStorage.setItem("og_fivem_servers", JSON.stringify([...latest, newServer]));
+        if (markActive) localStorage.setItem("og_fivem_active", code);
+        if (mounted) window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+      } catch { /* no icon — that's fine */ }
+    }
+
     async function detect() {
       try {
         const logContent = await readFivemLog();
         if (!logContent || !mounted) return;
-        // Find last "Connecting to" line in the log
         const matches = [...logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([A-Za-z0-9]{4,8})/gi)];
         if (!matches.length) return;
         const lastCode = matches[matches.length - 1][1];
-        const saved: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
-        const existing = saved.find(s => extractCfxCode(s.connect) === lastCode || s.connect === lastCode);
-        if (existing) {
-          // Already saved — just mark active if nothing is active
-          if (!localStorage.getItem("og_fivem_active") && mounted) {
-            localStorage.setItem("og_fivem_active", existing.connect);
-            window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
-          }
-        } else {
-          // New server — fetch info and auto-add
-          try {
-            const res = await fetch(`/api/fivem/server-info/${lastCode}`);
-            if (!res.ok || !mounted) return;
-            const data = await res.json();
-            const iv = data?.Data?.iconVersion;
-            const iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${lastCode}/${iv}.png` : undefined;
-            const hn = (data?.Data?.hostname ?? "") as string;
-            const name = hn ? hn.replace(/\^\d/g, "").trim() : lastCode;
-            const newServer: SavedServer = { name, connect: lastCode, iconUrl };
-            const updated = [...saved, newServer];
-            localStorage.setItem("og_fivem_servers", JSON.stringify(updated));
-            localStorage.setItem("og_fivem_active", lastCode);
-            if (mounted) window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
-          } catch { /* no icon — that's fine */ }
+
+        if (!initialized) {
+          // First run: this code is from a previous session — record as baseline,
+          // save to the servers list for quick-connect, but DO NOT mark active.
+          baselineCode = lastCode;
+          initialized = true;
+          await fetchAndSave(lastCode, false /* markActive=false */);
+          return;
         }
+
+        // Subsequent polls: only act if a NEW code appeared (user just connected)
+        if (lastCode === baselineCode) return;
+        baselineCode = lastCode;
+        await fetchAndSave(lastCode, true /* markActive=true */);
       } catch { /* no log — that's fine */ }
     }
-    detect();
-    return () => { mounted = false; };
+
+    detect(); // establish baseline immediately (no active-set)
+    const interval = setInterval(detect, 12_000); // poll every 12 s for live connections
+    return () => { mounted = false; clearInterval(interval); };
   }, [runningGame?.id]);
 
   // Lift running game ID to parent
