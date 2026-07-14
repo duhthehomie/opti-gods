@@ -142,7 +142,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem" | "hud";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -2353,10 +2353,22 @@ function AetherAdminChat({ headers }: { headers: Record<string, string> }) {
 // ── FiveM Servers Tab ─────────────────────────────────────────────────────────
 function FivemServersTab({ headers }: { headers: Record<string, string> }) {
   const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const editFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editLogo, setEditLogo] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [editDragging, setEditDragging] = useState<Record<string, boolean>>({});
+  const [editUploading, setEditUploading] = useState<Record<string, boolean>>({});
+
+  const [addCode, setAddCode] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addLogoUrl, setAddLogoUrl] = useState("");
+  const [addDragging, setAddDragging] = useState(false);
+  const [addUploading, setAddUploading] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -2365,97 +2377,401 @@ function FivemServersTab({ headers }: { headers: Record<string, string> }) {
       if (r.ok) setServers(await r.json());
     } finally { setLoading(false); }
   };
-
   useEffect(() => { load(); }, []);
 
-  const save = async (code: string) => {
+  const uploadImage = async (file: File, target: 'add' | string): Promise<string | null> => {
+    if (!file.type.startsWith('image/')) { toast({ title: "Not an image file", variant: "destructive" }); return null; }
+    if (file.size > 6_000_000) { toast({ title: "Image too large (max 6 MB)", variant: "destructive" }); return null; }
+    if (target === 'add') setAddUploading(true);
+    else setEditUploading(p => ({ ...p, [target]: true }));
+    try {
+      const base64: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const r = await fetch('/api/admin/upload-logo', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, mimeType: file.type, filename: file.name }),
+      });
+      if (!r.ok) { toast({ title: "Upload failed", variant: "destructive" }); return null; }
+      const { url } = await r.json();
+      return url as string;
+    } catch { toast({ title: "Upload error", variant: "destructive" }); return null; }
+    finally {
+      if (target === 'add') setAddUploading(false);
+      else setEditUploading(p => ({ ...p, [target]: false }));
+    }
+  };
+
+  const handleAddDrop = async (e: React.DragEvent) => {
+    e.preventDefault(); setAddDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) { const url = await uploadImage(file, 'add'); if (url) setAddLogoUrl(url); }
+  };
+  const handleEditDrop = async (e: React.DragEvent, code: string) => {
+    e.preventDefault(); setEditDragging(p => ({ ...p, [code]: false }));
+    const file = e.dataTransfer.files[0];
+    if (file) { const url = await uploadImage(file, code); if (url) setEditLogo(p => ({ ...p, [code]: url })); }
+  };
+
+  const addServer = async () => {
+    if (!addCode.trim() || !addName.trim()) { toast({ title: "Connect code and name required", variant: "destructive" }); return; }
+    setAddSaving(true);
+    try {
+      const r = await fetch('/api/fivem/servers', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectCode: addCode.trim().toLowerCase(), name: addName.trim(), logoUrl: addLogoUrl || null }),
+      });
+      if (r.ok) { toast({ title: "Server added!" }); setAddCode(""); setAddName(""); setAddLogoUrl(""); await load(); }
+      else toast({ title: "Failed to add server", variant: "destructive" });
+    } finally { setAddSaving(false); }
+  };
+
+  const saveLogo = async (code: string) => {
     setSaving(p => ({ ...p, [code]: true }));
     try {
-      const logoUrl = editLogo[code] ?? null;
       const r = await fetch(`/api/fivem/servers/${code}/logo`, {
         method: 'PATCH',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logoUrl: logoUrl || null }),
+        body: JSON.stringify({ logoUrl: editLogo[code] ?? null }),
       });
-      if (r.ok) {
-        toast({ title: "Logo saved", description: code });
-        await load();
-      } else {
-        toast({ title: "Failed", variant: "destructive" });
-      }
+      if (r.ok) { toast({ title: "Logo saved" }); await load(); }
+      else toast({ title: "Failed", variant: "destructive" });
     } finally { setSaving(p => ({ ...p, [code]: false })); }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20 text-zinc-500 text-sm">
-      Loading…
-    </div>
-  );
-
-  if (!servers.length) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3 text-zinc-500">
-      <Server className="w-8 h-8 opacity-40" />
-      <p className="text-sm">No FiveM servers in DB yet.</p>
-      <p className="text-xs text-zinc-600">Servers are added when users connect via the Tauri app.</p>
-    </div>
-  );
-
   return (
-    <div className="p-4 space-y-3 max-w-3xl">
-      <div className="flex items-center justify-between mb-2">
+    <div className="p-4 space-y-5 max-w-3xl">
+      <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <Server className="w-4 h-4 text-red-500" /> FiveM Community Servers
+          <Server className="w-4 h-4 text-red-500" /> FiveM Servers
         </h2>
-        <button onClick={load}
-          className="text-[10px] text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
+        <button onClick={load} className="text-[10px] text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
       </div>
-      <p className="text-xs text-zinc-500 mb-4">
-        Assign logo URLs to known servers. The logo is served to all users on next connect or page reload.
-      </p>
-      <div className="space-y-2">
-        {servers.map((srv: any) => (
-          <div key={srv.connectCode}
-            className="bg-zinc-900 border border-white/6 rounded-lg p-3 flex items-center gap-3">
-            {/* Logo preview */}
-            <div className="shrink-0 w-10 h-10 rounded bg-zinc-800 border border-white/8 flex items-center justify-center overflow-hidden">
-              {srv.logoUrl ? (
-                <img src={srv.logoUrl} alt={srv.name}
-                  className="w-full h-full object-contain"
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-              ) : (
-                <span className="text-[10px] font-black text-zinc-500">
-                  {srv.name.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-            </div>
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white truncate">{srv.name}</span>
-                <span className="text-[9px] text-zinc-500 font-mono shrink-0">{srv.connectCode}</span>
+
+      {/* ── Add New Server ─────────────────────────────────── */}
+      <div className="bg-zinc-900 border border-white/8 rounded-xl p-4 space-y-3">
+        <p className="text-xs font-bold text-white">Add New Server</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input type="text" placeholder="Connect code (e.g. pggaejy)"
+            value={addCode} onChange={e => setAddCode(e.target.value)}
+            className="text-[11px] bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-2 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
+            data-testid="input-add-server-code" />
+          <input type="text" placeholder="Server name (e.g. GunzRz PvP)"
+            value={addName} onChange={e => setAddName(e.target.value)}
+            className="text-[11px] bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-2 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
+            data-testid="input-add-server-name" />
+        </div>
+        {/* Drag-and-drop upload zone */}
+        <div
+          onDragOver={e => { e.preventDefault(); setAddDragging(true); }}
+          onDragLeave={() => setAddDragging(false)}
+          onDrop={handleAddDrop}
+          onClick={() => fileRef.current?.click()}
+          data-testid="dropzone-add-logo"
+          className={cn(
+            "border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all h-28 select-none",
+            addDragging ? "border-red-500 bg-red-500/10" : "border-white/10 hover:border-white/25 bg-zinc-800/40"
+          )}>
+          {addLogoUrl ? (
+            <div className="flex items-center gap-3 px-4">
+              <img src={addLogoUrl} alt="logo preview" className="w-14 h-14 object-contain rounded-lg border border-white/10" />
+              <div className="text-left min-w-0">
+                <p className="text-[10px] text-emerald-400 font-bold">✓ Image ready</p>
+                <p className="text-[9px] text-zinc-500 break-all max-w-[180px]">{addLogoUrl.split('/').pop()}</p>
+                <button onClick={e => { e.stopPropagation(); setAddLogoUrl(""); }}
+                  className="text-[9px] text-red-400 hover:text-red-300 mt-0.5">Remove</button>
               </div>
-              <div className="flex items-center gap-2 mt-1.5">
-                <input
-                  type="text"
-                  placeholder="Logo URL (https://… or /game-covers/…)"
-                  value={editLogo[srv.connectCode] ?? srv.logoUrl ?? ""}
-                  onChange={e => setEditLogo(p => ({ ...p, [srv.connectCode]: e.target.value }))}
-                  className="flex-1 text-[10px] bg-zinc-800 border border-white/10 rounded px-2 py-1 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
-                  data-testid={`input-logo-${srv.connectCode}`}
-                />
-                <button
-                  onClick={() => save(srv.connectCode)}
-                  disabled={saving[srv.connectCode]}
-                  data-testid={`button-save-logo-${srv.connectCode}`}
-                  className="shrink-0 px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-bold transition-colors">
-                  {saving[srv.connectCode] ? "…" : "Save"}
-                </button>
+            </div>
+          ) : addUploading ? (
+            <p className="text-xs text-zinc-400">Uploading…</p>
+          ) : (
+            <>
+              <Download className="w-5 h-5 text-zinc-500" />
+              <p className="text-[10px] text-zinc-400 font-medium">Drag image from Windows Explorer here</p>
+              <p className="text-[9px] text-zinc-600">or click to browse · PNG, JPG, WEBP · max 6 MB</p>
+            </>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            onChange={async e => { const f = e.target.files?.[0]; if (f) { const u = await uploadImage(f, 'add'); if (u) setAddLogoUrl(u); } e.target.value = ""; }} />
+        </div>
+        {/* URL override + Add button */}
+        <div className="flex items-center gap-2">
+          <input type="text" placeholder="Or paste URL directly (https://… or /game-covers/…)"
+            value={addLogoUrl} onChange={e => setAddLogoUrl(e.target.value)}
+            className="flex-1 text-[10px] bg-zinc-800 border border-white/10 rounded-lg px-2.5 py-2 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
+            data-testid="input-add-logo-url" />
+          <button onClick={addServer} disabled={addSaving || !addCode.trim() || !addName.trim()}
+            data-testid="button-add-server"
+            className="shrink-0 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-[11px] font-bold transition-colors">
+            {addSaving ? "Adding…" : "Add Server"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Existing Servers ─────────────────────────────────── */}
+      {loading ? (
+        <div className="text-center py-8 text-zinc-500 text-sm">Loading…</div>
+      ) : !servers.length ? (
+        <div className="text-center py-6 text-zinc-600 text-xs">No servers yet — add one above, or wait for users to connect via the Tauri app.</div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Saved Servers ({servers.length})</p>
+          {servers.map((srv: any) => (
+            <div key={srv.connectCode} className="bg-zinc-900 border border-white/6 rounded-xl p-3 flex items-start gap-3">
+              <div className="shrink-0 w-12 h-12 rounded-lg bg-zinc-800 border border-white/8 flex items-center justify-center overflow-hidden">
+                {(editLogo[srv.connectCode] ?? srv.logoUrl) ? (
+                  <img src={editLogo[srv.connectCode] ?? srv.logoUrl} alt={srv.name}
+                    className="w-full h-full object-contain"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                ) : (
+                  <span className="text-[10px] font-black text-zinc-500">{srv.name.slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white truncate">{srv.name}</span>
+                  <span className="text-[9px] text-zinc-500 font-mono shrink-0 bg-zinc-800 px-1.5 py-0.5 rounded">{srv.connectCode}</span>
+                </div>
+                {/* Per-server drop zone */}
+                <div
+                  onDragOver={e => { e.preventDefault(); setEditDragging(p => ({ ...p, [srv.connectCode]: true })); }}
+                  onDragLeave={() => setEditDragging(p => ({ ...p, [srv.connectCode]: false }))}
+                  onDrop={e => handleEditDrop(e, srv.connectCode)}
+                  onClick={() => editFileRefs.current[srv.connectCode]?.click()}
+                  className={cn(
+                    "border border-dashed rounded-lg flex items-center justify-center gap-2 h-9 cursor-pointer transition-all text-[10px]",
+                    editDragging[srv.connectCode] ? "border-red-500 bg-red-500/10 text-red-400" : "border-white/8 hover:border-white/20 text-zinc-600 hover:text-zinc-400"
+                  )}>
+                  {editUploading[srv.connectCode] ? "Uploading…" : <><Download className="w-3 h-3" /> Drop or click to replace logo</>}
+                  <input ref={el => { editFileRefs.current[srv.connectCode] = el; }}
+                    type="file" accept="image/*" className="hidden"
+                    onChange={async e => { const f = e.target.files?.[0]; if (f) { const u = await uploadImage(f, srv.connectCode); if (u) setEditLogo(p => ({ ...p, [srv.connectCode]: u })); } e.target.value = ""; }} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="text" placeholder="Logo URL"
+                    value={editLogo[srv.connectCode] ?? srv.logoUrl ?? ""}
+                    onChange={e => setEditLogo(p => ({ ...p, [srv.connectCode]: e.target.value }))}
+                    className="flex-1 text-[10px] bg-zinc-800 border border-white/10 rounded px-2 py-1 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
+                    data-testid={`input-logo-${srv.connectCode}`} />
+                  <button onClick={() => saveLogo(srv.connectCode)} disabled={saving[srv.connectCode]}
+                    data-testid={`button-save-logo-${srv.connectCode}`}
+                    className="shrink-0 px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-bold transition-colors">
+                    {saving[srv.connectCode] ? "…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── HUD type ──────────────────────────────────────────────────────────────────
+type HudSettings = { coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean };
+const HUD_DEFAULTS: HudSettings = { coverWidth: 180, iconSize: 140, iconLeft: 50, iconTop: 50, showServerName: true };
+
+// ── HUD Editor Tab ────────────────────────────────────────────────────────────
+function HudEditorTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const [settings, setSettings] = useState<HudSettings>(HUD_DEFAULTS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const coverPreviewRef = useRef<HTMLDivElement>(null);
+  const draggingIcon = useRef(false);
+  const draggingSize = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartSize = useRef(0);
+
+  useEffect(() => {
+    fetch('/api/hud-settings', { headers })
+      .then(r => r.ok ? r.json() : HUD_DEFAULTS)
+      .then(d => { setSettings({ ...HUD_DEFAULTS, ...d }); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const onIconMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingIcon.current = true;
+    const moveFn = (ev: MouseEvent) => {
+      if (!draggingIcon.current || !coverPreviewRef.current) return;
+      const rect = coverPreviewRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
+      setSettings(p => ({ ...p, iconLeft: Math.round(x), iconTop: Math.round(y) }));
+    };
+    const upFn = () => { draggingIcon.current = false; document.removeEventListener('mousemove', moveFn); document.removeEventListener('mouseup', upFn); };
+    document.addEventListener('mousemove', moveFn);
+    document.addEventListener('mouseup', upFn);
+  }, []);
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    draggingSize.current = true;
+    dragStartX.current = e.clientX;
+    dragStartSize.current = settings.iconSize;
+    const moveFn = (ev: MouseEvent) => {
+      if (!draggingSize.current) return;
+      const delta = ev.clientX - dragStartX.current;
+      setSettings(p => ({ ...p, iconSize: Math.max(20, Math.min(300, dragStartSize.current + Math.round(delta))) }));
+    };
+    const upFn = () => { draggingSize.current = false; document.removeEventListener('mousemove', moveFn); document.removeEventListener('mouseup', upFn); };
+    document.addEventListener('mousemove', moveFn);
+    document.addEventListener('mouseup', upFn);
+  }, [settings.iconSize]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch('/api/admin/hud-settings', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (r.ok) toast({ title: "HUD saved", description: "All users see the new layout on next page load" });
+      else toast({ title: "Failed to save", variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-20 text-zinc-500 text-sm">Loading…</div>;
+
+  return (
+    <div className="p-4 space-y-5 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <Sliders className="w-4 h-4 text-red-500" /> Now Playing HUD Editor
+        </h2>
+        <span className="text-[10px] text-zinc-500">Changes apply globally to all users</span>
+      </div>
+
+      {/* Live WYSIWYG preview */}
+      <div className="bg-zinc-950 border border-white/8 rounded-xl overflow-hidden">
+        <div className="px-3 py-1.5 border-b border-white/5 flex items-center gap-2">
+          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Live Preview</span>
+          <span className="text-[10px] text-zinc-600">— drag the icon to reposition · drag ↔ handle to resize</span>
+        </div>
+        <div className="flex items-stretch" style={{ height: 110 }}>
+          {/* Cover area — draggable icon */}
+          <div ref={coverPreviewRef}
+            className="relative self-stretch overflow-hidden bg-zinc-900 flex-shrink-0 select-none"
+            style={{ width: Math.min(settings.coverWidth, 260) }}>
+            <div
+              onMouseDown={onIconMouseDown}
+              style={{
+                position: 'absolute',
+                left: `${settings.iconLeft}%`,
+                top: `${settings.iconTop}%`,
+                transform: 'translate(-50%, -50%)',
+                width: Math.min(settings.iconSize, Math.min(settings.coverWidth, 260) - 4),
+                height: Math.min(settings.iconSize, 106),
+                cursor: 'move',
+                userSelect: 'none',
+                zIndex: 10,
+              }}>
+              <div className="w-full h-full rounded-lg bg-gradient-to-br from-red-600/40 to-red-900/40 border border-red-500/40 flex items-center justify-center text-[10px] font-black text-red-300">
+                GZ
+              </div>
+              {/* Resize handle */}
+              <div
+                onMouseDown={onResizeMouseDown}
+                title="Drag ↔ to resize"
+                className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 border-2 border-zinc-900 flex items-center justify-center cursor-ew-resize"
+                style={{ zIndex: 11 }}>
+                <span className="text-white text-[8px] font-bold select-none">↔</span>
               </div>
             </div>
           </div>
-        ))}
+          {/* Info section (non-interactive mock) */}
+          <div className="flex-1 px-4 py-3 bg-zinc-950 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase bg-red-600 text-white">NOW PLAYING</span>
+              <span className="text-[9px] text-emerald-400 font-bold">● LIVE</span>
+            </div>
+            {settings.showServerName && (
+              <>
+                <p className="text-sm font-bold text-white leading-tight">GunzRz PvP</p>
+                <p className="text-[10px] text-zinc-500">FiveM Server · pggaejy</p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="bg-zinc-900 border border-white/8 rounded-xl p-4 space-y-4">
+        {/* Cover width */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] text-zinc-400 font-bold">Cover Column Width</label>
+            <span className="text-[11px] text-white font-mono bg-zinc-800 px-2 py-0.5 rounded">{settings.coverWidth}px</span>
+          </div>
+          <input type="range" min="60" max="320" value={settings.coverWidth}
+            onChange={e => setSettings(p => ({ ...p, coverWidth: Number(e.target.value) }))}
+            className="w-full accent-red-600" />
+          <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5"><span>60px</span><span>320px</span></div>
+        </div>
+        {/* Icon size */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] text-zinc-400 font-bold">Icon Size <span className="text-zinc-600 font-normal">(or drag ↔ handle in preview)</span></label>
+            <span className="text-[11px] text-white font-mono bg-zinc-800 px-2 py-0.5 rounded">{settings.iconSize}px</span>
+          </div>
+          <input type="range" min="20" max="300" value={settings.iconSize}
+            onChange={e => setSettings(p => ({ ...p, iconSize: Number(e.target.value) }))}
+            className="w-full accent-red-600" />
+          <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5"><span>20px</span><span>300px</span></div>
+        </div>
+        {/* Position fine-tune */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] text-zinc-400 font-bold">Icon Left</label>
+              <span className="text-[11px] text-white font-mono bg-zinc-800 px-2 py-0.5 rounded">{settings.iconLeft}%</span>
+            </div>
+            <input type="range" min="0" max="100" value={settings.iconLeft}
+              onChange={e => setSettings(p => ({ ...p, iconLeft: Number(e.target.value) }))}
+              className="w-full accent-red-600" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] text-zinc-400 font-bold">Icon Top</label>
+              <span className="text-[11px] text-white font-mono bg-zinc-800 px-2 py-0.5 rounded">{settings.iconTop}%</span>
+            </div>
+            <input type="range" min="0" max="100" value={settings.iconTop}
+              onChange={e => setSettings(p => ({ ...p, iconTop: Number(e.target.value) }))}
+              className="w-full accent-red-600" />
+          </div>
+        </div>
+        {/* Show server name toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-zinc-300 font-bold">Show Server Name</p>
+            <p className="text-[10px] text-zinc-500">Display name + connect code in the info panel</p>
+          </div>
+          <button onClick={() => setSettings(p => ({ ...p, showServerName: !p.showServerName }))}
+            className={cn("w-10 h-6 rounded-full transition-colors relative shrink-0", settings.showServerName ? "bg-red-600" : "bg-zinc-700")}>
+            <span className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", settings.showServerName ? "translate-x-4" : "translate-x-0.5")} />
+          </button>
+        </div>
+        {/* Reset + Save */}
+        <div className="flex items-center gap-2 pt-1 border-t border-white/5">
+          <button onClick={() => setSettings(HUD_DEFAULTS)}
+            className="px-3 py-2 rounded-lg border border-white/10 text-[11px] text-zinc-400 hover:text-white hover:border-white/25 transition-colors">
+            Reset defaults
+          </button>
+          <button onClick={save} disabled={saving} data-testid="button-save-hud"
+            className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-[11px] font-bold transition-colors">
+            {saving ? "Saving…" : "Save HUD for All Users"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -4144,7 +4460,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem", "hud"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -4164,6 +4480,7 @@ export default function Admin() {
               suggestions: Inbox,
               drivers: Monitor,
               fivem: Server,
+              hud: Sliders,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -4195,6 +4512,7 @@ export default function Admin() {
                    t === "suggestions" ? "Suggestions" :
                    t === "drivers" ? "NVIDIA Drivers" :
                    t === "fivem" ? "FiveM Servers" :
+                   t === "hud" ? "HUD Editor" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -4213,6 +4531,7 @@ export default function Admin() {
                    t === "suggestions" ? "" :
                    t === "drivers" ? "" :
                    t === "fivem" ? "" :
+                   t === "hud" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -5922,6 +6241,7 @@ export default function Admin() {
         {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}
         {tab === "drivers" && <NvidiaTrackerTab headers={headers} />}
         {tab === "fivem" && <FivemServersTab headers={headers} />}
+        {tab === "hud" && <HudEditorTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

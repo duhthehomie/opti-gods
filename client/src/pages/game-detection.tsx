@@ -539,6 +539,15 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const [npAdding, setNpAdding] = useState(false);
   const [showServerPicker, setShowServerPicker] = useState(false);
 
+  // HUD settings fetched from admin — controls Now Playing icon size/position
+  const [hudSettings, setHudSettings] = useState({ coverWidth: 180, iconSize: 140, iconLeft: 50, iconTop: 50, showServerName: true });
+  useEffect(() => {
+    fetch('/api/hud-settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setHudSettings(prev => ({ ...prev, ...d })); })
+      .catch(() => {});
+  }, []);
+
   function resyncServers() {
     setActiveServerState(getActiveServerInfo());
     try { setSavedServers(JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]")); } catch { /* keep */ }
@@ -1058,16 +1067,25 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
         {runningGame!.id === "game_fivem" && activeServer ? (
-          <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden flex items-center justify-center bg-zinc-900">
+          <div className="relative shrink-0 self-stretch overflow-hidden bg-zinc-900"
+            style={{ width: hudSettings.coverWidth }}>
             {activeServer.iconUrl && !serverIconFailed ? (
               <img
                 src={activeServer.iconUrl}
                 alt={activeServer.name}
                 onError={() => setServerIconFailed(true)}
-                className="w-full h-full object-contain p-3"
+                style={{
+                  position: 'absolute',
+                  left: `${hudSettings.iconLeft}%`,
+                  top: `${hudSettings.iconTop}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: hudSettings.iconSize,
+                  height: hudSettings.iconSize,
+                  objectFit: 'contain',
+                }}
               />
             ) : (
-              <span className="text-3xl font-black text-zinc-400">
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-zinc-400">
                 {activeServer.name.slice(0, 2).toUpperCase()}
               </span>
             )}
@@ -1106,8 +1124,12 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               </div>
               {runningGame!.id === "game_fivem" && activeServer ? (
                 <>
-                  <h3 className="text-base font-display font-bold text-white leading-tight">{activeServer.name}</h3>
-                  <p className="text-[11px] text-zinc-500">FiveM Server · {activeServer.connect}</p>
+                  {hudSettings.showServerName && (
+                    <h3 className="text-base font-display font-bold text-white leading-tight">{activeServer.name}</h3>
+                  )}
+                  {hudSettings.showServerName && (
+                    <p className="text-[11px] text-zinc-500">FiveM Server · {activeServer.connect}</p>
+                  )}
                 </>
               ) : (
                 <>

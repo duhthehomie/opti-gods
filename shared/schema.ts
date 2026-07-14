@@ -184,6 +184,8 @@ export const adminSettings = pgTable("admin_settings", {
   // to auditWebhookUrl (separate Discord channel from security alerts).
   auditLogEnabled: boolean("audit_log_enabled").notNull().default(false),
   auditWebhookUrl: text("audit_webhook_url"),
+  // HUD settings — JSON blob: { coverWidth, iconSize, iconLeft, iconTop, showServerName }
+  hudSettings: text("hud_settings"),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 

@@ -4502,6 +4502,54 @@ Start-Sleep 2
     res.json(result);
   });
 
+  // ── Serve uploaded server logos — works in both dev and production ──────────
+  app.get('/server-logos/:filename', async (req, res) => {
+    const { filename } = req.params;
+    if (!/^[\w\-]+\.(png|jpg|webp|gif)$/.test(filename)) return res.status(404).end();
+    const fpath = join(process.cwd(), 'public', 'server-logos', filename);
+    if (!existsSync(fpath)) return res.status(404).end();
+    res.sendFile(fpath);
+  });
+
+  // ── Logo upload (admin-only) — saves image to public/server-logos/ ─────────
+  app.post('/api/admin/upload-logo', async (req, res) => {
+    const key = req.headers['x-admin-key'] as string | undefined;
+    if (!key || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
+    const { base64, mimeType, filename } = req.body ?? {};
+    if (!base64 || typeof base64 !== 'string' || !mimeType) return res.status(400).json({ error: 'bad request' });
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'unsupported type' });
+    if (base64.length > 10_000_000) return res.status(413).json({ error: 'too large' });
+    const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
+    const fname = `${randomBytes(12).toString('hex')}.${ext}`;
+    const { writeFile, mkdir } = await import('fs/promises');
+    const dir = join(process.cwd(), 'public', 'server-logos');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, fname), Buffer.from(base64, 'base64'));
+    res.json({ url: `/server-logos/${fname}` });
+  });
+
+  // ── HUD settings ───────────────────────────────────────────────────────────
+  app.get('/api/hud-settings', async (_req, res) => {
+    try { res.json(await storage.getHudSettings()); }
+    catch { res.json({ coverWidth: 180, iconSize: 140, iconLeft: 50, iconTop: 50, showServerName: true }); }
+  });
+
+  app.post('/api/admin/hud-settings', async (req, res) => {
+    const key = req.headers['x-admin-key'] as string | undefined;
+    if (!key || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
+    const { coverWidth, iconSize, iconLeft, iconTop, showServerName } = req.body ?? {};
+    const s = {
+      coverWidth: Math.max(60, Math.min(320, Number(coverWidth) || 180)),
+      iconSize: Math.max(20, Math.min(300, Number(iconSize) || 140)),
+      iconLeft: Math.max(0, Math.min(100, Number(iconLeft) || 50)),
+      iconTop: Math.max(0, Math.min(100, Number(iconTop) || 50)),
+      showServerName: Boolean(showServerName ?? true),
+    };
+    try { await storage.saveHudSettings(s); res.json({ ok: true }); }
+    catch { res.status(500).json({ error: 'failed' }); }
+  });
+
   // ── FiveM community servers ────────────────────────────────────────────────
   // Public GET — any client can read (logos are not sensitive)
   app.get('/api/fivem/servers', async (_req, res) => {

@@ -153,6 +153,9 @@ export interface IStorage {
   getAllFivemServers(): Promise<FivemServer[]>;
   upsertFivemServer(connectCode: string, name: string, logoUrl?: string | null): Promise<FivemServer>;
   updateFivemServerLogo(connectCode: string, logoUrl: string | null): Promise<void>;
+  // HUD settings (single-row JSON blob in admin_settings)
+  getHudSettings(): Promise<{ coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }>;
+  saveHudSettings(s: { coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }): Promise<void>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1244,6 +1247,23 @@ export class DatabaseStorage implements IStorage {
 
   async updateFivemServerLogo(connectCode: string, logoUrl: string | null): Promise<void> {
     await db.update(fivemServers).set({ logoUrl }).where(eq(fivemServers.connectCode, connectCode));
+  }
+
+  async getHudSettings() {
+    const DEF = { coverWidth: 180, iconSize: 140, iconLeft: 50, iconTop: 50, showServerName: true };
+    const rows = await db.select({ h: adminSettings.hudSettings }).from(adminSettings).limit(1);
+    if (!rows.length || !rows[0].h) return DEF;
+    try { return { ...DEF, ...JSON.parse(rows[0].h) }; } catch { return DEF; }
+  }
+
+  async saveHudSettings(s: { coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }) {
+    const rows = await db.select({ id: adminSettings.id }).from(adminSettings).limit(1);
+    const json = JSON.stringify(s);
+    if (rows.length) {
+      await db.update(adminSettings).set({ hudSettings: json }).where(eq(adminSettings.id, rows[0].id));
+    } else {
+      await db.insert(adminSettings).values({ hudSettings: json });
+    }
   }
 }
 
