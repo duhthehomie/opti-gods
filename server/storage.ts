@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
@@ -149,6 +149,10 @@ export interface IStorage {
   revokeGraphicsStudio(discordUserId: string): Promise<void>;
   hasGraphicsStudio(discordUserId: string): Promise<boolean>;
   listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]>;
+  // FiveM community servers
+  getAllFivemServers(): Promise<FivemServer[]>;
+  upsertFivemServer(connectCode: string, name: string, logoUrl?: string | null): Promise<FivemServer>;
+  updateFivemServerLogo(connectCode: string, logoUrl: string | null): Promise<void>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1217,6 +1221,29 @@ export class DatabaseStorage implements IStorage {
 
   async listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]> {
     return db.select().from(graphicsStudioGrants).orderBy(desc(graphicsStudioGrants.grantedAt));
+  }
+
+  async getAllFivemServers(): Promise<FivemServer[]> {
+    return db.select().from(fivemServers).orderBy(desc(fivemServers.createdAt));
+  }
+
+  async upsertFivemServer(connectCode: string, name: string, logoUrl?: string | null): Promise<FivemServer> {
+    const [row] = await db
+      .insert(fivemServers)
+      .values({ connectCode, name, logoUrl: logoUrl ?? null })
+      .onConflictDoUpdate({
+        target: fivemServers.connectCode,
+        set: {
+          name: sql`EXCLUDED.name`,
+          logoUrl: sql`COALESCE(fivem_servers.logo_url, EXCLUDED.logo_url)`,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async updateFivemServerLogo(connectCode: string, logoUrl: string | null): Promise<void> {
+    await db.update(fivemServers).set({ logoUrl }).where(eq(fivemServers.connectCode, connectCode));
   }
 }
 

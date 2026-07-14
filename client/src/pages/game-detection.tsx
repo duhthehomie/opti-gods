@@ -476,6 +476,19 @@ function knownServerLookup(connect: string): { icon?: string; name?: string } {
   }
   return {};
 }
+/** Fuzzy-match a cfx.re hostname string against KNOWN_SERVER_NAMES.
+ *  Used after the cfx.re API returns a hostname like "GunzRz PvP" so we can
+ *  attach the local /game-covers/*.png logo instead of the CDN thumbnail. */
+function knownServerLookupByHostname(hostname: string): { icon?: string; name?: string } {
+  if (!hostname) return {};
+  const h = hostname.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const key of Object.keys(KNOWN_SERVER_ICONS)) {
+    const k = key.replace(/[^a-z0-9]/g, "").toLowerCase();
+    if (k.length >= 4 && (h.includes(k) || k.includes(h)))
+      return { icon: KNOWN_SERVER_ICONS[key], name: KNOWN_SERVER_NAMES[key] };
+  }
+  return {};
+}
 
 /** Strip FiveM in-game command prefixes so we always store a clean code/IP. */
 function cleanConnect(raw: string): string {
@@ -514,6 +527,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const [showCustom, setShowCustom] = useState(false);
   const [customFound, setCustomFound] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState(false);
+  const [serverIconFailed, setServerIconFailed] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Active FiveM server + full saved list (sync with localStorage via OG_SERVER_EVENT)
@@ -547,6 +561,33 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
     return () => window.removeEventListener(OG_SERVER_EVENT, handler);
   }, []);
 
+  // Reset server icon error state when active server changes
+  useEffect(() => { setServerIconFailed(false); }, [activeServer?.iconUrl]);
+
+  // On mount: sync admin-assigned logos from DB into localStorage
+  // This ensures logos leaq sets in the admin panel propagate to all users.
+  useEffect(() => {
+    fetch('/api/fivem/servers')
+      .then(r => r.ok ? r.json() : [])
+      .then((dbSrvs: Array<{ connectCode: string; logoUrl: string | null }>) => {
+        if (!dbSrvs.length) return;
+        const ls: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+        let changed = false;
+        for (const d of dbSrvs) {
+          const idx = ls.findIndex(s => s.connect.toLowerCase() === d.connectCode);
+          if (idx >= 0 && d.logoUrl && ls[idx].iconUrl !== d.logoUrl) {
+            ls[idx] = { ...ls[idx], iconUrl: d.logoUrl };
+            changed = true;
+          }
+        }
+        if (changed) {
+          localStorage.setItem("og_fivem_servers", JSON.stringify(ls));
+          window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   async function npAddServer(rawInput: string) {
     if (!rawInput.trim() || npAdding) return;
     const connect = cleanConnect(rawInput.trim());
@@ -564,6 +605,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
           if (iv) iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${cfxCode}/${iv}.png`;
           const hn = data?.Data?.hostname as string | undefined;
           if (hn && !known.name) name = hn.replace(/\^\d/g, "").trim() || connect;
+          // If cfx.re hostname matches a known server, use the local logo
+          if (!iconUrl && hn) {
+            const byHost = knownServerLookupByHostname(hn);
+            if (byHost.icon) { iconUrl = byHost.icon; if (!known.name && byHost.name) name = byHost.name; }
+          }
         }
       } catch { /* no icon */ }
     }
@@ -575,6 +621,20 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
     }
     localStorage.setItem("og_fivem_active", connect);
     window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+    // Persist to DB (fire-and-forget) — response logoUrl may carry admin-assigned logo
+    fetch('/api/fivem/servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectCode: connect.toLowerCase(), name, logoUrl: iconUrl ?? null }),
+    }).then(async r => {
+      if (!r.ok) return;
+      const dbSrv = await r.json();
+      if (dbSrv?.logoUrl && dbSrv.logoUrl !== iconUrl) {
+        const ls: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+        const idx = ls.findIndex(s => s.connect === connect);
+        if (idx >= 0) { ls[idx] = { ...ls[idx], iconUrl: dbSrv.logoUrl }; localStorage.setItem("og_fivem_servers", JSON.stringify(ls)); window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT)); }
+      }
+    }).catch(() => {});
     setNpAddConnect("");
     setNpAdding(false);
   }
@@ -637,6 +697,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             if (!iconUrl) iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${rawConnect}/${iv}.png` : undefined;
             const hn = (data?.Data?.hostname ?? "") as string;
             if (!known.name) name = hn ? hn.replace(/\^\d/g, "").trim() : rawConnect;
+            // If cfx.re hostname fuzzy-matches a known server, use the local logo
+            if (!iconUrl && hn) {
+              const byHost = knownServerLookupByHostname(hn);
+              if (byHost.icon) { iconUrl = byHost.icon; if (!known.name && byHost.name) name = byHost.name; }
+            }
           }
         } catch { /* no icon — that's fine */ }
       } else {
@@ -657,6 +722,20 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       const newServer: SavedServer = { name, connect: rawConnect, iconUrl };
       const latest: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
       localStorage.setItem("og_fivem_servers", JSON.stringify([...latest, newServer]));
+      // Persist to DB — if admin has already assigned a logo, response will carry it back
+      fetch('/api/fivem/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectCode: rawConnect.toLowerCase(), name, logoUrl: iconUrl ?? null }),
+      }).then(async r => {
+        if (!r.ok || !mounted) return;
+        const dbSrv = await r.json();
+        if (dbSrv?.logoUrl && dbSrv.logoUrl !== iconUrl) {
+          const ls: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+          const idx = ls.findIndex(s => s.connect === rawConnect);
+          if (idx >= 0) { ls[idx] = { ...ls[idx], iconUrl: dbSrv.logoUrl }; localStorage.setItem("og_fivem_servers", JSON.stringify(ls)); window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT)); }
+        }
+      }).catch(() => {});
       if (markActive) localStorage.setItem("og_fivem_active", rawConnect);
       window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
     }
@@ -980,11 +1059,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
         {runningGame!.id === "game_fivem" && activeServer ? (
           <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden flex items-center justify-center bg-zinc-900">
-            {activeServer.iconUrl ? (
+            {activeServer.iconUrl && !serverIconFailed ? (
               <img
                 src={activeServer.iconUrl}
                 alt={activeServer.name}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                onError={() => setServerIconFailed(true)}
                 className="w-full h-full object-contain p-3"
               />
             ) : (
@@ -1147,10 +1226,10 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             /* Compact active-server bar */
             <div className="px-3 py-2 flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              {activeServer.iconUrl && (
+              {activeServer.iconUrl && !serverIconFailed && (
                 <img src={activeServer.iconUrl} alt={activeServer.name}
                   className="w-4 h-4 object-contain rounded-sm shrink-0"
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                  onError={() => setServerIconFailed(true)} />
               )}
               <span className="text-[10px] text-zinc-400 flex-1 truncate min-w-0">
                 In: <span className="text-white font-bold">{activeServer.name}</span>

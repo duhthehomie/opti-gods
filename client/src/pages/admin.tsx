@@ -16,7 +16,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
-  Percent, Crown, UserX, Palette,
+  Percent, Crown, UserX, Palette, Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -142,7 +142,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -2350,6 +2350,117 @@ function AetherAdminChat({ headers }: { headers: Record<string, string> }) {
   );
 }
 
+// ── FiveM Servers Tab ─────────────────────────────────────────────────────────
+function FivemServersTab({ headers }: { headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const [servers, setServers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editLogo, setEditLogo] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/fivem/servers', { headers });
+      if (r.ok) setServers(await r.json());
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const save = async (code: string) => {
+    setSaving(p => ({ ...p, [code]: true }));
+    try {
+      const logoUrl = editLogo[code] ?? null;
+      const r = await fetch(`/api/fivem/servers/${code}/logo`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logoUrl: logoUrl || null }),
+      });
+      if (r.ok) {
+        toast({ title: "Logo saved", description: code });
+        await load();
+      } else {
+        toast({ title: "Failed", variant: "destructive" });
+      }
+    } finally { setSaving(p => ({ ...p, [code]: false })); }
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-zinc-500 text-sm">
+      Loading…
+    </div>
+  );
+
+  if (!servers.length) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-zinc-500">
+      <Server className="w-8 h-8 opacity-40" />
+      <p className="text-sm">No FiveM servers in DB yet.</p>
+      <p className="text-xs text-zinc-600">Servers are added when users connect via the Tauri app.</p>
+    </div>
+  );
+
+  return (
+    <div className="p-4 space-y-3 max-w-3xl">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <Server className="w-4 h-4 text-red-500" /> FiveM Community Servers
+        </h2>
+        <button onClick={load}
+          className="text-[10px] text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+      <p className="text-xs text-zinc-500 mb-4">
+        Assign logo URLs to known servers. The logo is served to all users on next connect or page reload.
+      </p>
+      <div className="space-y-2">
+        {servers.map((srv: any) => (
+          <div key={srv.connectCode}
+            className="bg-zinc-900 border border-white/6 rounded-lg p-3 flex items-center gap-3">
+            {/* Logo preview */}
+            <div className="shrink-0 w-10 h-10 rounded bg-zinc-800 border border-white/8 flex items-center justify-center overflow-hidden">
+              {srv.logoUrl ? (
+                <img src={srv.logoUrl} alt={srv.name}
+                  className="w-full h-full object-contain"
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              ) : (
+                <span className="text-[10px] font-black text-zinc-500">
+                  {srv.name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white truncate">{srv.name}</span>
+                <span className="text-[9px] text-zinc-500 font-mono shrink-0">{srv.connectCode}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5">
+                <input
+                  type="text"
+                  placeholder="Logo URL (https://… or /game-covers/…)"
+                  value={editLogo[srv.connectCode] ?? srv.logoUrl ?? ""}
+                  onChange={e => setEditLogo(p => ({ ...p, [srv.connectCode]: e.target.value }))}
+                  className="flex-1 text-[10px] bg-zinc-800 border border-white/10 rounded px-2 py-1 text-white placeholder-zinc-600 outline-none focus:border-red-500/60"
+                  data-testid={`input-logo-${srv.connectCode}`}
+                />
+                <button
+                  onClick={() => save(srv.connectCode)}
+                  disabled={saving[srv.connectCode]}
+                  data-testid={`button-save-logo-${srv.connectCode}`}
+                  className="shrink-0 px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-bold transition-colors">
+                  {saving[srv.connectCode] ? "…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Admin Discounts Tab ───────────────────────────────────────────────────────
 function DiscountsTab({ headers }: { headers: Record<string, string> }) {
   const { toast } = useToast();
@@ -4033,7 +4144,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -4052,6 +4163,7 @@ export default function Admin() {
               rigs: Cpu,
               suggestions: Inbox,
               drivers: Monitor,
+              fivem: Server,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -4082,6 +4194,7 @@ export default function Admin() {
                    t === "rigs" ? "Hardware DB" :
                    t === "suggestions" ? "Suggestions" :
                    t === "drivers" ? "NVIDIA Drivers" :
+                   t === "fivem" ? "FiveM Servers" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -4099,6 +4212,7 @@ export default function Admin() {
                    t === "rigs" ? "" :
                    t === "suggestions" ? "" :
                    t === "drivers" ? "" :
+                   t === "fivem" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -5807,6 +5921,7 @@ export default function Admin() {
         {tab === "rigs" && <HardwareDbTab headers={headers} />}
         {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}
         {tab === "drivers" && <NvidiaTrackerTab headers={headers} />}
+        {tab === "fivem" && <FivemServersTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

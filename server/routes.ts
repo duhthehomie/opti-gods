@@ -4502,6 +4502,39 @@ Start-Sleep 2
     res.json(result);
   });
 
+  // ── FiveM community servers ────────────────────────────────────────────────
+  // Public GET — any client can read (logos are not sensitive)
+  app.get('/api/fivem/servers', async (_req, res) => {
+    try { res.json(await storage.getAllFivemServers()); } catch { res.json([]); }
+  });
+
+  // Public POST — Tauri apps upsert on connect (no auth required)
+  app.post('/api/fivem/servers', async (req, res) => {
+    const { connectCode, name, logoUrl } = req.body ?? {};
+    if (!connectCode || typeof connectCode !== 'string' || !name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'connectCode and name required' });
+    }
+    if (connectCode.length > 200 || name.length > 200) {
+      return res.status(400).json({ error: 'value too long' });
+    }
+    try {
+      const srv = await storage.upsertFivemServer(connectCode.toLowerCase(), name, logoUrl || null);
+      res.json(srv);
+    } catch { res.status(500).json({ error: 'failed' }); }
+  });
+
+  // Admin-only PATCH — leaq assigns logos via admin panel
+  app.patch('/api/fivem/servers/:code/logo', async (req, res) => {
+    const provided = req.headers['x-admin-key'] as string | undefined;
+    if (!provided || provided !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
+    const { code } = req.params;
+    const { logoUrl } = req.body ?? {};
+    try {
+      await storage.updateFivemServerLogo(code, logoUrl ?? null);
+      res.json({ ok: true });
+    } catch { res.status(500).json({ error: 'failed' }); }
+  });
+
   // Public — comprehensive FiveM & GTA V crash fix (no-error silent crash + known crash causes)
   app.get('/api/fivem-crash-fix-script', (req, res) => {
     const ps1Lines = [

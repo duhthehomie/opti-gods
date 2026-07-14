@@ -408,3 +408,16 @@ export const graphicsStudioGrants = pgTable("graphics_studio_grants", {
   notes: text("notes"),
 });
 export type GraphicsStudioGrant = typeof graphicsStudioGrants.$inferSelect;
+
+// FiveM community servers — every user's Tauri app upserts servers they connect to;
+// leaq assigns logos via the admin "FiveM Servers" tab.
+export const fivemServers = pgTable("fivem_servers", {
+  id: serial("id").primaryKey(),
+  connectCode: text("connect_code").notNull().unique(),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type FivemServer = typeof fivemServers.$inferSelect;
+export const insertFivemServerSchema = createInsertSchema(fivemServers).omit({ id: true, createdAt: true });
+export type InsertFivemServer = z.infer<typeof insertFivemServerSchema>;
