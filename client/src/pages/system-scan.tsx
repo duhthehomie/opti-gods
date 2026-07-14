@@ -10,7 +10,7 @@ import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
-  Download, Upload, X, MonitorCheck, Radio, ArrowRight,
+  Download, Upload, X, MonitorCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -377,14 +377,6 @@ function SmartRecsBreakdown() {
   const recs = computeSmartRecs(hw, os);
 
   const total = recs.ids.size;
-  const cats = recs.categories;
-
-  const buckets = [
-    { key: "performance", label: "Performance", sub: "FPS · CPU · GPU · Memory", color: "text-red-400", border: "border-red-500/20", bg: "bg-red-500/[0.04]", glow: "shadow-red-500/10", icon: "⚡" },
-    { key: "latency",     label: "Latency",     sub: "Input · DPC · Timer · MSI", color: "text-amber-400", border: "border-amber-500/20", bg: "bg-amber-500/[0.04]", glow: "shadow-amber-500/10", icon: "🎯" },
-    { key: "Internet",    label: "Internet",    sub: "TCP · DNS · NIC · Throttle", color: "text-blue-400", border: "border-blue-500/20", bg: "bg-blue-500/[0.04]", glow: "shadow-blue-500/10", icon: "🌐" },
-    { key: "stability",   label: "Stability",   sub: "Services · Debloat · Privacy", color: "text-emerald-400", border: "border-emerald-500/20", bg: "bg-emerald-500/[0.04]", glow: "shadow-emerald-500/10", icon: "🛡" },
-  ] as const;
 
   if (!recs.ready || total === 0) return null;
 
@@ -399,45 +391,6 @@ function SmartRecsBreakdown() {
             "bg-zinc-900 border-white/10")}>{recs.profile}</span>
         </div>
         <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
-      </div>
-
-      {/* 4-bucket breakdown — Before / After */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {buckets.map(b => {
-          const count = b.key === "Internet" ? cats.internet : cats[b.key as keyof typeof cats];
-          return (
-            <div key={b.key} className={cn("rounded-xl border shadow-sm overflow-hidden", b.border, b.bg, b.glow)}>
-              {/* Card header */}
-              <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 border-b border-white/5">
-                <span className="text-sm leading-none">{b.icon}</span>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-300 leading-tight">{b.label}</div>
-                  <div className="text-[8px] text-zinc-600 leading-tight truncate">{b.sub}</div>
-                </div>
-              </div>
-
-              {/* Before → After comparison */}
-              <div className="flex items-center px-3 py-3 gap-2">
-                {/* BEFORE column */}
-                <div className="flex-1 text-center">
-                  <div className="text-[8px] font-black uppercase tracking-widest text-zinc-600 mb-0.5">Before</div>
-                  <div className="text-2xl font-display font-black tabular-nums text-zinc-700">0</div>
-                  <div className="text-[8px] text-zinc-700 mt-0.5 leading-tight">stock</div>
-                </div>
-
-                {/* Arrow */}
-                <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
-
-                {/* AFTER column */}
-                <div className="flex-1 text-center">
-                  <div className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", b.color)}>After</div>
-                  <div className={cn("text-2xl font-display font-black tabular-nums", b.color)}>{count}</div>
-                  <div className="text-[8px] text-zinc-500 mt-0.5 leading-tight">tweaks ↑</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {/* Why these tweaks */}
