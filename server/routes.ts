@@ -7093,6 +7093,9 @@ Required fields:
   "freezeMinute": number 0-59,
   "disableRain": boolean,
   "disableSnow": boolean,
+  "keepProps": boolean (true = keep world props/trees/objects — recommended; false only if user asks for max FPS),
+  "disableBloodDecals": boolean (false by default; true only if user explicitly requests no blood/gore),
+  "fixFaceQuality": boolean (true = boost character face LOD — always recommended),
   "mood": string (one sentence, e.g. "Vivid blue noon sky, zero clouds, max FPS")
 }
 
@@ -7143,7 +7146,7 @@ Rules:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
+          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a FiveM graphics pack for: "${description}"` },
@@ -7206,6 +7209,9 @@ Rules:
         freezeMinute:       clamp(parsed.freezeMinute,       0,  59,  0),
         disableRain:        bool(parsed.disableRain, false),
         disableSnow:        bool(parsed.disableSnow, false),
+        keepProps:          bool(parsed.keepProps, true),
+        disableBloodDecals: bool(parsed.disableBloodDecals, false),
+        fixFaceQuality:     bool(parsed.fixFaceQuality, true),
         mood: typeof parsed.mood === "string" ? parsed.mood.slice(0, 200) : "Pack generated — review sliders in the Builder tab.",
       });
     } catch (err) {
