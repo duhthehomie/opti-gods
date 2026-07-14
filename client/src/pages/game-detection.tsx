@@ -881,7 +881,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
         {runningGame!.id === "game_fivem" && activeServer ? (
-          <div className="relative shrink-0 w-[76px] h-[76px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
+          <div className="relative shrink-0 w-[110px] h-[110px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
             <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
             {activeServer.iconUrl ? (
               <img
@@ -897,7 +897,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             )}
           </div>
         ) : showCover ? (
-          <div className="relative shrink-0 w-[76px] h-[76px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
+          <div className="relative shrink-0 w-[110px] h-[110px] m-3 mr-0 rounded-lg overflow-hidden flex items-center justify-center border border-white/10">
             <div className={cn("absolute inset-0 bg-gradient-to-br", runningGame!.coverGradient ?? "from-zinc-900 to-zinc-800")} />
             <img
               src={runningGame!.coverUrl}
