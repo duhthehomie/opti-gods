@@ -447,6 +447,30 @@ const GAME_TWEAK_IDS: Partial<Record<string, string[]>> = {
 type SavedServer = { name: string; connect: string; iconUrl?: string };
 const OG_SERVER_EVENT = "og-server-changed";
 
+/** Add rows here whenever a new well-known server needs an instant logo/name. */
+const KNOWN_SERVER_ICONS: Record<string, string> = {
+  "pggaejy":       "/game-covers/tmfrz.png",
+  "tmfrz":         "/game-covers/tmfrz.png",
+  "pvp.tmfrz.com": "/game-covers/tmfrz.png",
+  "gunzrz":        "/game-covers/gunzrz.png",
+};
+const KNOWN_SERVER_NAMES: Record<string, string> = {
+  "pggaejy":       "TMFRZ PvP",
+  "tmfrz":         "TMFRZ PvP",
+  "pvp.tmfrz.com": "TMFRZ PvP",
+  "gunzrz":        "GunzRz",
+};
+function knownServerLookup(connect: string): { icon?: string; name?: string } {
+  const h = connect.replace(/:\d+$/, "").toLowerCase();
+  if (KNOWN_SERVER_ICONS[h] || KNOWN_SERVER_NAMES[h])
+    return { icon: KNOWN_SERVER_ICONS[h], name: KNOWN_SERVER_NAMES[h] };
+  for (const key of Object.keys(KNOWN_SERVER_ICONS)) {
+    if (h.includes(key) || key.includes(h))
+      return { icon: KNOWN_SERVER_ICONS[key], name: KNOWN_SERVER_NAMES[key] };
+  }
+  return {};
+}
+
 /** Strip FiveM in-game command prefixes so we always store a clean code/IP. */
 function cleanConnect(raw: string): string {
   return raw.trim()
@@ -538,25 +562,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         return;
       }
 
-      // Known-server static logo map — covers well-known servers without API round-trips
-      const KNOWN_COVERS: Record<string, string> = {
-        "tmfrz": "/game-covers/tmfrz.png",
-        "pvp.tmfrz.com": "/game-covers/tmfrz.png",
-        "gunzrz": "/game-covers/gunzrz.png",
-      };
-      function knownIcon(connect: string): string | undefined {
-        const h = connect.replace(/:\d+$/, "").toLowerCase();
-        if (KNOWN_COVERS[h]) return KNOWN_COVERS[h];
-        for (const key of Object.keys(KNOWN_COVERS)) {
-          if (h.includes(key)) return KNOWN_COVERS[key];
-        }
-        return undefined;
-      }
-
-      // New server — try cfx.re API if it looks like a plain cfx code, otherwise host lookup
+      // Known-server maps always win over API results for icon/name.
       const isCfxCode = /^[A-Za-z0-9]{4,8}$/.test(rawConnect);
-      let name = rawConnect;
-      let iconUrl: string | undefined = knownIcon(rawConnect);
+      const known = knownServerLookup(rawConnect);
+      let name = known.name ?? rawConnect;
+      let iconUrl: string | undefined = known.icon;
       if (isCfxCode) {
         try {
           const res = await fetch(`/api/fivem/server-info/${rawConnect}`);
@@ -565,7 +575,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             const iv = data?.Data?.iconVersion;
             if (!iconUrl) iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${rawConnect}/${iv}.png` : undefined;
             const hn = (data?.Data?.hostname ?? "") as string;
-            name = hn ? hn.replace(/\^\d/g, "").trim() : rawConnect;
+            if (!known.name) name = hn ? hn.replace(/\^\d/g, "").trim() : rawConnect;
           }
         } catch { /* no icon — that's fine */ }
       } else {
@@ -576,7 +586,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
           const res = await fetch(`/api/fivem/server-info-by-host?host=${encodeURIComponent(hostOnly)}&port=${portOnly}`);
           if (res.ok && mounted) {
             const data = await res.json();
-            if (data.name) name = data.name;
+            if (!known.name && data.name) name = data.name;
             if (!iconUrl && data.iconUrl) iconUrl = data.iconUrl;
           }
         } catch { /* unreachable — keep defaults */ }
@@ -1297,6 +1307,25 @@ function FiveMPanel() {
     else localStorage.removeItem("og_fivem_active");
     window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
   };
+
+  // One-time migration: patch any existing saved servers that match known servers
+  // but are missing logo/name (e.g. old pvp.tmfrz.com entry without logo).
+  useEffect(() => {
+    const list: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+    let changed = false;
+    const patched = list.map(s => {
+      const k = knownServerLookup(s.connect);
+      if (!k.icon && !k.name) return s;
+      const next = { ...s };
+      if (k.icon && !s.iconUrl) { next.iconUrl = k.icon; changed = true; }
+      if (k.name && s.name === s.connect) { next.name = k.name; changed = true; }
+      return next;
+    });
+    if (changed) {
+      localStorage.setItem("og_fivem_servers", JSON.stringify(patched));
+      setServers(patched);
+    }
+  }, []);
 
   // Auto-activate: if only 1 saved server and none is marked active, mark it automatically
   useEffect(() => {
