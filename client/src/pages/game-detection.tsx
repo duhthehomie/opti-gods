@@ -538,21 +538,48 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         return;
       }
 
-      // New server — try cfx.re API if it looks like a plain cfx code
+      // Known-server static logo map — covers well-known servers without API round-trips
+      const KNOWN_COVERS: Record<string, string> = {
+        "tmfrz": "/game-covers/tmfrz.png",
+        "pvp.tmfrz.com": "/game-covers/tmfrz.png",
+        "gunzrz": "/game-covers/gunzrz.png",
+      };
+      function knownIcon(connect: string): string | undefined {
+        const h = connect.replace(/:\d+$/, "").toLowerCase();
+        if (KNOWN_COVERS[h]) return KNOWN_COVERS[h];
+        for (const key of Object.keys(KNOWN_COVERS)) {
+          if (h.includes(key)) return KNOWN_COVERS[key];
+        }
+        return undefined;
+      }
+
+      // New server — try cfx.re API if it looks like a plain cfx code, otherwise host lookup
       const isCfxCode = /^[A-Za-z0-9]{4,8}$/.test(rawConnect);
       let name = rawConnect;
-      let iconUrl: string | undefined;
+      let iconUrl: string | undefined = knownIcon(rawConnect);
       if (isCfxCode) {
         try {
           const res = await fetch(`/api/fivem/server-info/${rawConnect}`);
           if (res.ok && mounted) {
             const data = await res.json();
             const iv = data?.Data?.iconVersion;
-            iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${rawConnect}/${iv}.png` : undefined;
+            if (!iconUrl) iconUrl = iv ? `https://cfx-nui-prime.akamaized.net/servers/icon/${rawConnect}/${iv}.png` : undefined;
             const hn = (data?.Data?.hostname ?? "") as string;
             name = hn ? hn.replace(/\^\d/g, "").trim() : rawConnect;
           }
         } catch { /* no icon — that's fine */ }
+      } else {
+        // Domain / IP server — fetch name + icon from our host-based proxy
+        try {
+          const hostOnly = rawConnect.replace(/:\d+$/, "");
+          const portOnly = rawConnect.match(/:(\d+)$/)?.[1] ?? "30120";
+          const res = await fetch(`/api/fivem/server-info-by-host?host=${encodeURIComponent(hostOnly)}&port=${portOnly}`);
+          if (res.ok && mounted) {
+            const data = await res.json();
+            if (data.name) name = data.name;
+            if (!iconUrl && data.iconUrl) iconUrl = data.iconUrl;
+          }
+        } catch { /* unreachable — keep defaults */ }
       }
 
       if (!mounted) return;
@@ -575,11 +602,11 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         if (!rawConnect || rawConnect.length < 3) return;
 
         if (!initialized) {
-          // First run — this is from a previous session.
-          // Record as baseline; add to saved list but DON'T mark active.
+          // First run — record baseline AND mark active.
+          // The last "Connecting to" in the log is the server the user is on NOW.
           baselineConnect = norm(rawConnect);
           initialized = true;
-          await fetchAndSave(rawConnect, false);
+          await fetchAndSave(rawConnect, true);
           return;
         }
 

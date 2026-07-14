@@ -4446,6 +4446,62 @@ Start-Sleep 2
     }
   });
 
+  // Domain/IP-based FiveM server info — queries the server directly + cfx.re search for icon
+  app.get('/api/fivem/server-info-by-host', async (req, res) => {
+    const host = ((req.query.host as string) ?? '').replace(/[^a-zA-Z0-9.\-_]/g, '').toLowerCase();
+    const port = Math.min(65535, Math.max(1, parseInt((req.query.port as string) ?? '30120') || 30120));
+    if (!host) { res.status(400).json({ error: 'host required' }); return; }
+
+    const result: { name?: string; iconUrl?: string } = {};
+
+    // 1. Fetch info.json directly from the FiveM server (server-side, no CORS)
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 3000);
+      const infoRes = await fetch(`http://${host}:${port}/info.json`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (infoRes.ok) {
+        const info = await infoRes.json() as Record<string, unknown>;
+        const vars = (info?.vars ?? {}) as Record<string, string>;
+        const raw = (vars['sv_projectName'] ?? vars['sv_hostname'] ?? '') as string;
+        if (raw) result.name = raw.replace(/\^\d/g, '').trim();
+      }
+    } catch { /* server unreachable from host — skip */ }
+
+    // 2. Try cfx.re search to find a matching server entry (icon + name fallback)
+    try {
+      const searchTerm = host.split('.')[0];
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 4000);
+      const searchRes = await fetch(
+        `https://servers-frontend.fivem.net/api/servers/search?search=${encodeURIComponent(searchTerm)}`,
+        { signal: ctrl2.signal }
+      );
+      clearTimeout(t2);
+      if (searchRes.ok) {
+        const body = await searchRes.json() as { servers?: Record<string, unknown>[] };
+        const servers: Record<string, unknown>[] = body?.servers ?? [];
+        // Find best match: server whose endpoint contains our hostname
+        const match = servers.find((s: Record<string, unknown>) => {
+          const ep = ((s.EndPoint ?? '') as string).toLowerCase();
+          return ep.includes(host) || host.includes(ep.split(':')[0]);
+        });
+        if (match) {
+          const data = (match.Data ?? {}) as Record<string, unknown>;
+          const iv = data.iconVersion;
+          const code = (match.EndPoint as string) ?? '';
+          if (iv && code) result.iconUrl = `https://cfx-nui-prime.akamaized.net/servers/icon/${code}/${iv}.png`;
+          if (!result.name) {
+            const hn = (data.hostname ?? '') as string;
+            if (hn) result.name = hn.replace(/\^\d/g, '').trim();
+          }
+        }
+      }
+    } catch { /* cfx.re unreachable */ }
+
+    res.json(result);
+  });
+
   // Public — comprehensive FiveM & GTA V crash fix (no-error silent crash + known crash causes)
   app.get('/api/fivem-crash-fix-script', (req, res) => {
     const ps1Lines = [
