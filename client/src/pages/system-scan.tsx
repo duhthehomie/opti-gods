@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { useLiveStats } from "@/hooks/use-live-stats";
 import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
@@ -371,12 +372,33 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 }
 
 // ── Smart Recs Breakdown Panel ────────────────────────────────────────────────
+const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
+
 function SmartRecsBreakdown() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const recs = computeSmartRecs(hw, os);
+  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { toast } = useToast();
+  const [applied, setApplied] = useState(false);
 
   const total = recs.ids.size;
+
+  const safeIds = Array.from(recs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
+  const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
+  const allOn = safeIds.length > 0 && alreadyOnCount === safeIds.length;
+
+  function handleApply() {
+    const next = { ...tweaks };
+    safeIds.forEach(id => { next[id] = true; });
+    setAllTweaks(next);
+    setApplied(true);
+    toast({
+      title: "Smart Recommendations applied",
+      description: `${safeIds.length} tweaks enabled — head to any tab to download your script.`,
+    });
+    setTimeout(() => setApplied(false), 3000);
+  }
 
   if (!recs.ready || total === 0) return null;
 
@@ -392,6 +414,23 @@ function SmartRecsBreakdown() {
         </div>
         <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
       </div>
+
+      {/* Apply button */}
+      <button
+        data-testid="button-apply-smart-recs"
+        onClick={handleApply}
+        disabled={allOn || applied}
+        className={cn(
+          "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
+          allOn || applied
+            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+            : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
+        )}
+      >
+        {allOn || applied
+          ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks applied</>
+          : <><Zap className="w-4 h-4" /> Apply {safeIds.length} recommended tweaks</>}
+      </button>
 
       {/* Why these tweaks */}
       <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
