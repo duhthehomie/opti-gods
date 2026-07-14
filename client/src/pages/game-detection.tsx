@@ -258,7 +258,7 @@ const GAMES: GameEntry[] = [
     name: "FiveM",
     publisher: "Cfx.re / Rockstar",
     accentBorder: "border-l-red-600",
-    coverUrl: "/game-covers/fivem.png",
+    coverUrl: "/game-covers/fivem.svg",
     coverGradient: "from-zinc-900 via-zinc-800 to-zinc-950",
     detectPaths: [
       "%LocalAppData%\\FiveM\\FiveM.exe",
@@ -924,7 +924,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
                 src={activeServer.iconUrl}
                 alt={activeServer.name}
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain p-2"
               />
             ) : (
               <span className="text-2xl font-black text-zinc-400">
@@ -933,12 +933,12 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
             )}
           </div>
         ) : showCover ? (
-          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden">
+          <div className="relative shrink-0 w-[120px] self-stretch overflow-hidden bg-zinc-950">
             <img
               src={runningGame!.coverUrl}
               alt={runningGame!.name}
               onError={() => setImgErr(true)}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           </div>
         ) : null}
