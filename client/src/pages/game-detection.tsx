@@ -453,12 +453,18 @@ const KNOWN_SERVER_ICONS: Record<string, string> = {
   "tmfrz":         "/game-covers/tmfrz.png",
   "pvp.tmfrz.com": "/game-covers/tmfrz.png",
   "gunzrz":        "/game-covers/gunzrz.png",
+  "pkrkgm":        "/game-covers/combat.png",
+  "gadvy3z":       "/game-covers/slumzrz.png",
+  "slumzrz":       "/game-covers/slumzrz.png",
 };
 const KNOWN_SERVER_NAMES: Record<string, string> = {
   "pggaejy":       "TMFRZ PvP",
   "tmfrz":         "TMFRZ PvP",
   "pvp.tmfrz.com": "TMFRZ PvP",
   "gunzrz":        "GunzRz",
+  "pkrkgm":        "Combat",
+  "gadvy3z":       "Slumz Rz",
+  "slumzrz":       "Slumz Rz",
 };
 function knownServerLookup(connect: string): { icon?: string; name?: string } {
   const h = connect.replace(/:\d+$/, "").toLowerCase();
