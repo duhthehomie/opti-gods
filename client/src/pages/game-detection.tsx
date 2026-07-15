@@ -7,7 +7,7 @@ import {
   Gamepad, Download, RefreshCw, Search, AlertCircle, Copy,
   Play, Zap, FolderOpen, MonitorCheck, CircleDashed,
   Server, Wifi, Trash2, Plus, ExternalLink, HardDrive,
-  Settings, Globe, Signal, ImagePlus
+  Settings, Globe, Signal, ImagePlus, Pencil, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -1687,6 +1687,65 @@ function FiveMPanel() {
   const [srvAdding, setSrvAdding] = useState(false);
   const [activeConnect, setActiveConnect] = useState<string | null>(() => localStorage.getItem("og_fivem_active"));
 
+  // ── Per-server inline editing ─────────────────────────────────────────────
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const editIconRef = useRef<HTMLInputElement>(null);
+  const editIconIdx = useRef<number>(-1);
+
+  const resizeForServer = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 256;
+          const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/webp', 0.85));
+        };
+        img.onerror = reject;
+        img.src = ev.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const startEditName = (i: number) => {
+    setEditingIdx(i);
+    setEditName(servers[i].name);
+  };
+
+  const saveEditName = (i: number) => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== servers[i].name) {
+      const next = [...servers];
+      next[i] = { ...next[i], name: trimmed };
+      saveServers(next);
+    }
+    setEditingIdx(null);
+  };
+
+  const handleServerIconChange = async (file: File) => {
+    const i = editIconIdx.current;
+    if (i < 0 || i >= servers.length || !file.type.startsWith('image/')) return;
+    try {
+      const dataUrl = await resizeForServer(file);
+      const next = [...servers];
+      next[i] = { ...next[i], iconUrl: dataUrl };
+      saveServers(next);
+    } catch { /* ignore */ }
+  };
+
+  const clearServerIcon = (i: number) => {
+    const next = [...servers];
+    next[i] = { ...next[i], iconUrl: undefined };
+    saveServers(next);
+  };
+
   const saveServers = (list: SavedServer[]) => {
     setServers(list);
     localStorage.setItem("og_fivem_servers", JSON.stringify(list));
@@ -2154,6 +2213,19 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
               )}
             </div>
 
+            {/* Hidden file input shared by all server rows for icon upload */}
+            <input
+              ref={editIconRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async e => {
+                const f = e.target.files?.[0];
+                if (f) await handleServerIconChange(f);
+                e.target.value = '';
+              }}
+            />
+
             {servers.length === 0 ? (
               <div className="py-8 text-center">
                 <Server className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
@@ -2164,6 +2236,7 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
               <div className="space-y-2">
                 {servers.map((s, i) => {
                   const isActive = activeConnect === s.connect;
+                  const isEditing = editingIdx === i;
                   return (
                     <div
                       key={i}
@@ -2175,30 +2248,78 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                           : "bg-zinc-900 border-white/8"
                       )}
                     >
-                      {/* Server icon / initials */}
-                      {s.iconUrl ? (
-                        <img
-                          src={s.iconUrl}
-                          alt=""
-                          className="w-10 h-10 rounded object-cover shrink-0 border border-white/10"
-                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 text-xs font-bold text-zinc-400">
-                          {s.name.slice(0, 2).toUpperCase()}
+                      {/* Server icon / initials — click to upload custom icon */}
+                      <div className="relative group/icon shrink-0 cursor-pointer"
+                        onClick={() => { editIconIdx.current = i; editIconRef.current?.click(); }}
+                        title="Click to set custom icon">
+                        {s.iconUrl ? (
+                          <img
+                            src={s.iconUrl}
+                            alt=""
+                            className="w-10 h-10 rounded object-cover border border-white/10"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-zinc-800 border border-white/10 flex items-center justify-center text-xs font-bold text-zinc-400">
+                            {s.name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 rounded bg-black/70 opacity-0 group-hover/icon:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <ImagePlus className="w-4 h-4 text-white" />
                         </div>
-                      )}
+                        {/* Clear icon button — shown if server has a custom/fetched icon */}
+                        {s.iconUrl && (
+                          <button
+                            onClick={e => { e.stopPropagation(); clearServerIcon(i); }}
+                            title="Remove icon"
+                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-white/15 text-zinc-500 hover:text-red-400 hover:border-red-500/40 text-[9px] flex items-center justify-center opacity-0 group-hover/icon:opacity-100 transition-opacity pointer-events-none group-hover/icon:pointer-events-auto">
+                            ×
+                          </button>
+                        )}
+                      </div>
 
-                      {/* Name + connect */}
+                      {/* Name + connect — name is editable inline */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           {isActive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
-                          <p className={cn("text-[11px] font-bold truncate", isActive ? "text-emerald-300" : "text-white")}>{s.name}</p>
+                          {isEditing ? (
+                            <input
+                              autoFocus
+                              value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveEditName(i);
+                                if (e.key === 'Escape') setEditingIdx(null);
+                              }}
+                              onBlur={() => saveEditName(i)}
+                              className="flex-1 min-w-0 bg-zinc-800 border border-red-500/40 rounded px-1.5 py-0.5 text-[11px] font-bold text-white focus:outline-none"
+                            />
+                          ) : (
+                            <p className={cn("text-[11px] font-bold truncate", isActive ? "text-emerald-300" : "text-white")}>
+                              {s.name}
+                            </p>
+                          )}
+                          {/* Pencil / confirm button */}
+                          {isEditing ? (
+                            <button
+                              onMouseDown={e => { e.preventDefault(); saveEditName(i); }}
+                              className="shrink-0 w-4 h-4 flex items-center justify-center text-emerald-400 hover:text-emerald-300">
+                              <Check className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => startEditName(i)}
+                              className="shrink-0 w-4 h-4 flex items-center justify-center text-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                              title="Rename server">
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          )}
                         </div>
                         <p className="text-[10px] font-mono text-zinc-600 truncate">{s.connect}</p>
                       </div>
 
-                      {/* Playing Now toggle */}
+                      {/* Playing Now toggle — ONLY way Now Playing knows which server is active */}
                       <button
                         data-testid={`button-playing-now-${i}`}
                         onClick={() => setActiveServer(isActive ? null : s.connect)}
@@ -2223,7 +2344,7 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                         Connect
                       </Button>
 
-                      {/* Refresh server info */}
+                      {/* Refresh server info from cfx.re */}
                       {extractCfxCode(s.connect) && (
                         <button
                           data-testid={`button-refresh-server-${i}`}
@@ -2249,7 +2370,7 @@ Pause`, "FiveM_CitizenFX_Settings.ps1");
                 })}
               </div>
             )}
-            <p className="text-[10px] text-zinc-700 text-center">Servers saved locally — never sent anywhere. Icons auto-fetched from cfx.re.</p>
+            <p className="text-[10px] text-zinc-700 text-center">Servers saved locally · click icon to upload logo · pencil to rename</p>
           </div>
         )}
       </div>
