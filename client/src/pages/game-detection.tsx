@@ -950,6 +950,12 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const enabled = runningGame ? (tweaks[runningGame.id] ?? false) : false;
   const showCover = runningGame?.coverUrl && !imgErr;
 
+  // Computed once here so JSX branches stay clean (no IIFE needed)
+  const npEffectiveIconSize = userIconSize ?? hudSettings.iconSize;
+  const npUserCustomIcon = activeServer ? (userIconUrls[activeServer.connect] ?? null) : null;
+  const npIconUrl = npUserCustomIcon ?? (serverIconFailed ? null : (activeServer?.iconUrl ?? null));
+  const npHasCustomisation = !!(npUserCustomIcon || userIconSize != null);
+
   // ── Non-native web fallback ────────────────────────────────────────────────
   if (!native) {
     return (
@@ -1144,91 +1150,84 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       {/* Cover strip + info row */}
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
-        {runningGame!.id === "game_fivem" && activeServer ? (() => {
-          const effectiveIconSize = userIconSize ?? hudSettings.iconSize;
-          const userCustomIcon = userIconUrls[activeServer.connect];
-          const iconUrl = userCustomIcon ?? (serverIconFailed ? null : activeServer.iconUrl);
-          const hasCustomisation = !!(userCustomIcon || userIconSize != null);
-          return (
-            <div
-              className="relative shrink-0 self-stretch overflow-hidden bg-zinc-900"
-              style={{ width: hudSettings.coverWidth }}
-              onMouseEnter={() => setIconHovered(true)}
-              onMouseLeave={() => setIconHovered(false)}>
+        {runningGame!.id === "game_fivem" && activeServer ? (
+          <div
+            className="relative shrink-0 self-stretch overflow-hidden bg-zinc-900"
+            style={{ width: hudSettings.coverWidth }}
+            onMouseEnter={() => setIconHovered(true)}
+            onMouseLeave={() => setIconHovered(false)}>
 
-              {/* Icon — user's upload takes priority, then server default */}
-              {iconUrl ? (
-                <img
-                  src={iconUrl}
-                  alt={activeServer.name}
-                  onError={() => { if (!userCustomIcon) setServerIconFailed(true); }}
-                  style={{
-                    position: 'absolute',
-                    left: `${hudSettings.iconLeft}%`,
-                    top: `${hudSettings.iconTop}%`,
-                    transform: 'translate(-50%, -50%)',
-                    width: effectiveIconSize,
-                    height: effectiveIconSize,
-                    objectFit: 'contain',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => userIconFileRef.current?.click()}
-                />
-              ) : (
-                <span
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-zinc-400 cursor-pointer"
-                  onClick={() => userIconFileRef.current?.click()}>
-                  {activeServer.name.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-
-              {/* Hover overlay — click to set/change logo */}
-              <div
-                className="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer transition-opacity duration-150"
-                style={{ background: 'rgba(0,0,0,0.7)', opacity: iconHovered ? 1 : 0, pointerEvents: iconHovered ? 'auto' : 'none' }}
-                onClick={() => userIconFileRef.current?.click()}>
-                <ImagePlus className="w-4 h-4 text-white" />
-                <span className="text-[9px] text-white font-bold">{iconUrl ? 'Change Logo' : 'Add Logo'}</span>
-                {hasCustomisation && (
-                  <button
-                    onClick={e => { e.stopPropagation(); resetUserIconCustomization(); }}
-                    className="text-[8px] text-zinc-400 hover:text-red-400 transition-colors mt-0.5">
-                    Reset to default
-                  </button>
-                )}
-              </div>
-
-              {/* Drag ↔ resize handle — always subtly visible, full on hover */}
-              <div
-                onMouseDown={onUserResizeMouseDown}
-                title="Drag right → bigger, drag left → smaller"
-                className="absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-zinc-800 border border-white/25 flex items-center justify-center cursor-ew-resize transition-opacity duration-150"
-                style={{ opacity: iconHovered ? 1 : 0.25, zIndex: 20 }}>
-                <span className="text-white text-[8px] font-bold select-none">↔</span>
-              </div>
-
-              {/* Size label — appears on hover so user knows current size */}
-              {iconHovered && userIconSize != null && (
-                <div className="absolute top-1 left-1 text-[8px] text-white/60 bg-black/50 rounded px-1 py-0.5 pointer-events-none">
-                  {userIconSize}px
-                </div>
-              )}
-
-              {/* Hidden file input */}
-              <input
-                ref={userIconFileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async e => {
-                  const f = e.target.files?.[0];
-                  if (f) await handleUserIconUpload(f);
-                  e.target.value = '';
+            {/* Icon — user's upload takes priority, then server default */}
+            {npIconUrl ? (
+              <img
+                src={npIconUrl}
+                alt={activeServer.name}
+                onError={() => { if (!npUserCustomIcon) setServerIconFailed(true); }}
+                style={{
+                  position: 'absolute',
+                  left: `${hudSettings.iconLeft}%`,
+                  top: `${hudSettings.iconTop}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: npEffectiveIconSize,
+                  height: npEffectiveIconSize,
+                  objectFit: 'contain',
+                  cursor: 'pointer',
                 }}
+                onClick={() => userIconFileRef.current?.click()}
               />
+            ) : (
+              <span
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-zinc-400 cursor-pointer"
+                onClick={() => userIconFileRef.current?.click()}>
+                {activeServer.name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+
+            {/* Hover overlay — click to set/change logo */}
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer transition-opacity duration-150"
+              style={{ background: 'rgba(0,0,0,0.7)', opacity: iconHovered ? 1 : 0, pointerEvents: iconHovered ? 'auto' : 'none' }}
+              onClick={() => userIconFileRef.current?.click()}>
+              <ImagePlus className="w-4 h-4 text-white" />
+              <span className="text-[9px] text-white font-bold">{npIconUrl ? 'Change Logo' : 'Add Logo'}</span>
+              {npHasCustomisation && (
+                <button
+                  onClick={e => { e.stopPropagation(); resetUserIconCustomization(); }}
+                  className="text-[8px] text-zinc-400 hover:text-red-400 transition-colors mt-0.5">
+                  Reset to default
+                </button>
+              )}
             </div>
-          );
-        })()
+
+            {/* Drag ↔ resize handle */}
+            <div
+              onMouseDown={onUserResizeMouseDown}
+              title="Drag right → bigger, drag left → smaller"
+              className="absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-zinc-800 border border-white/25 flex items-center justify-center cursor-ew-resize transition-opacity duration-150"
+              style={{ opacity: iconHovered ? 1 : 0.25, zIndex: 20 }}>
+              <span className="text-white text-[8px] font-bold select-none">↔</span>
+            </div>
+
+            {/* Size label on hover */}
+            {iconHovered && userIconSize != null && (
+              <div className="absolute top-1 left-1 text-[8px] text-white/60 bg-black/50 rounded px-1 py-0.5 pointer-events-none">
+                {userIconSize}px
+              </div>
+            )}
+
+            {/* Hidden file input */}
+            <input
+              ref={userIconFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async e => {
+                const f = e.target.files?.[0];
+                if (f) await handleUserIconUpload(f);
+                e.target.value = '';
+              }}
+            />
+          </div>
         ) : showCover ? (
           <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden bg-zinc-950">
             <img
