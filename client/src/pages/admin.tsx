@@ -2658,11 +2658,11 @@ function HudEditorTab({ headers }: { headers: Record<string, string> }) {
           <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Live Preview</span>
           <span className="text-[10px] text-zinc-600">— drag the icon to reposition · drag ↔ handle to resize</span>
         </div>
-        <div className="flex items-stretch" style={{ height: 110 }}>
-          {/* Cover area — draggable icon */}
+        <div className="flex items-stretch overflow-x-auto" style={{ height: 110 }}>
+          {/* Cover area — draggable icon; true WYSIWYG: same px values users see */}
           <div ref={coverPreviewRef}
             className="relative self-stretch overflow-hidden bg-zinc-900 flex-shrink-0 select-none"
-            style={{ width: Math.min(settings.coverWidth, 260) }}>
+            style={{ width: settings.coverWidth, minWidth: settings.coverWidth }}>
             <div
               onMouseDown={onIconMouseDown}
               style={{
@@ -2670,8 +2670,8 @@ function HudEditorTab({ headers }: { headers: Record<string, string> }) {
                 left: `${settings.iconLeft}%`,
                 top: `${settings.iconTop}%`,
                 transform: 'translate(-50%, -50%)',
-                width: Math.min(settings.iconSize, Math.min(settings.coverWidth, 260) - 4),
-                height: Math.min(settings.iconSize, 106),
+                width: settings.iconSize,
+                height: settings.iconSize,
                 cursor: 'move',
                 userSelect: 'none',
                 zIndex: 10,

@@ -7,7 +7,7 @@ import {
   Gamepad, Download, RefreshCw, Search, AlertCircle, Copy,
   Play, Zap, FolderOpen, MonitorCheck, CircleDashed,
   Server, Wifi, Trash2, Plus, ExternalLink, HardDrive,
-  Settings, Globe, Signal
+  Settings, Globe, Signal, ImagePlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -548,6 +548,84 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       .catch(() => {});
   }, []);
 
+  // ── User-side icon customisation (localStorage, per-user) ──────────────────
+  const userIconFileRef = useRef<HTMLInputElement>(null);
+  const userResizeDragging = useRef(false);
+  const userResizeDragStartX = useRef(0);
+  const userResizeDragStartSize = useRef(0);
+  const [iconHovered, setIconHovered] = useState(false);
+
+  // Per-user icon size override (null = use admin default)
+  const [userIconSize, setUserIconSize] = useState<number | null>(() => {
+    const s = localStorage.getItem('og_icon_size');
+    return s ? Number(s) : null;
+  });
+  // Per-server custom logo URLs keyed by connect code
+  const [userIconUrls, setUserIconUrls] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('og_user_icons') ?? '{}'); } catch { return {}; }
+  });
+
+  // Resize image using Canvas before storing (keeps localStorage small)
+  const resizeImageToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 256;
+          const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/webp', 0.85));
+        };
+        img.onerror = reject;
+        img.src = ev.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleUserIconUpload = async (file: File) => {
+    if (!activeServer || !file.type.startsWith('image/')) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      const updated = { ...userIconUrls, [activeServer.connect]: dataUrl };
+      setUserIconUrls(updated);
+      setServerIconFailed(false);
+      localStorage.setItem('og_user_icons', JSON.stringify(updated));
+    } catch { /* ignore */ }
+  };
+
+  const onUserResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    userResizeDragging.current = true;
+    userResizeDragStartX.current = e.clientX;
+    userResizeDragStartSize.current = userIconSize ?? hudSettings.iconSize;
+    const moveFn = (ev: MouseEvent) => {
+      if (!userResizeDragging.current) return;
+      const newSize = Math.max(20, Math.min(300, userResizeDragStartSize.current + Math.round(ev.clientX - userResizeDragStartX.current)));
+      setUserIconSize(newSize);
+      localStorage.setItem('og_icon_size', String(newSize));
+    };
+    const upFn = () => { userResizeDragging.current = false; document.removeEventListener('mousemove', moveFn); document.removeEventListener('mouseup', upFn); };
+    document.addEventListener('mousemove', moveFn);
+    document.addEventListener('mouseup', upFn);
+  }, [userIconSize, hudSettings.iconSize]);
+
+  const resetUserIconCustomization = () => {
+    if (!activeServer) return;
+    const updated = { ...userIconUrls };
+    delete updated[activeServer.connect];
+    setUserIconUrls(updated);
+    localStorage.setItem('og_user_icons', JSON.stringify(updated));
+    setUserIconSize(null);
+    localStorage.removeItem('og_icon_size');
+    setServerIconFailed(false);
+  };
+
   function resyncServers() {
     setActiveServerState(getActiveServerInfo());
     try { setSavedServers(JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]")); } catch { /* keep */ }
@@ -1066,30 +1144,91 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       {/* Cover strip + info row */}
       <div className="flex items-center gap-0">
         {/* Cover: server icon when on FiveM server, game cover otherwise */}
-        {runningGame!.id === "game_fivem" && activeServer ? (
-          <div className="relative shrink-0 self-stretch overflow-hidden bg-zinc-900"
-            style={{ width: hudSettings.coverWidth }}>
-            {activeServer.iconUrl && !serverIconFailed ? (
-              <img
-                src={activeServer.iconUrl}
-                alt={activeServer.name}
-                onError={() => setServerIconFailed(true)}
-                style={{
-                  position: 'absolute',
-                  left: `${hudSettings.iconLeft}%`,
-                  top: `${hudSettings.iconTop}%`,
-                  transform: 'translate(-50%, -50%)',
-                  width: hudSettings.iconSize,
-                  height: hudSettings.iconSize,
-                  objectFit: 'contain',
+        {runningGame!.id === "game_fivem" && activeServer ? (() => {
+          const effectiveIconSize = userIconSize ?? hudSettings.iconSize;
+          const userCustomIcon = userIconUrls[activeServer.connect];
+          const iconUrl = userCustomIcon ?? (serverIconFailed ? null : activeServer.iconUrl);
+          const hasCustomisation = !!(userCustomIcon || userIconSize != null);
+          return (
+            <div
+              className="relative shrink-0 self-stretch overflow-hidden bg-zinc-900"
+              style={{ width: hudSettings.coverWidth }}
+              onMouseEnter={() => setIconHovered(true)}
+              onMouseLeave={() => setIconHovered(false)}>
+
+              {/* Icon — user's upload takes priority, then server default */}
+              {iconUrl ? (
+                <img
+                  src={iconUrl}
+                  alt={activeServer.name}
+                  onError={() => { if (!userCustomIcon) setServerIconFailed(true); }}
+                  style={{
+                    position: 'absolute',
+                    left: `${hudSettings.iconLeft}%`,
+                    top: `${hudSettings.iconTop}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: effectiveIconSize,
+                    height: effectiveIconSize,
+                    objectFit: 'contain',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => userIconFileRef.current?.click()}
+                />
+              ) : (
+                <span
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-zinc-400 cursor-pointer"
+                  onClick={() => userIconFileRef.current?.click()}>
+                  {activeServer.name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+
+              {/* Hover overlay — click to set/change logo */}
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer transition-opacity duration-150"
+                style={{ background: 'rgba(0,0,0,0.7)', opacity: iconHovered ? 1 : 0, pointerEvents: iconHovered ? 'auto' : 'none' }}
+                onClick={() => userIconFileRef.current?.click()}>
+                <ImagePlus className="w-4 h-4 text-white" />
+                <span className="text-[9px] text-white font-bold">{iconUrl ? 'Change Logo' : 'Add Logo'}</span>
+                {hasCustomisation && (
+                  <button
+                    onClick={e => { e.stopPropagation(); resetUserIconCustomization(); }}
+                    className="text-[8px] text-zinc-400 hover:text-red-400 transition-colors mt-0.5">
+                    Reset to default
+                  </button>
+                )}
+              </div>
+
+              {/* Drag ↔ resize handle — always subtly visible, full on hover */}
+              <div
+                onMouseDown={onUserResizeMouseDown}
+                title="Drag right → bigger, drag left → smaller"
+                className="absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-zinc-800 border border-white/25 flex items-center justify-center cursor-ew-resize transition-opacity duration-150"
+                style={{ opacity: iconHovered ? 1 : 0.25, zIndex: 20 }}>
+                <span className="text-white text-[8px] font-bold select-none">↔</span>
+              </div>
+
+              {/* Size label — appears on hover so user knows current size */}
+              {iconHovered && userIconSize != null && (
+                <div className="absolute top-1 left-1 text-[8px] text-white/60 bg-black/50 rounded px-1 py-0.5 pointer-events-none">
+                  {userIconSize}px
+                </div>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={userIconFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async e => {
+                  const f = e.target.files?.[0];
+                  if (f) await handleUserIconUpload(f);
+                  e.target.value = '';
                 }}
               />
-            ) : (
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-zinc-400">
-                {activeServer.name.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-          </div>
+            </div>
+          );
+        })()
         ) : showCover ? (
           <div className="relative shrink-0 w-[180px] self-stretch overflow-hidden bg-zinc-950">
             <img
