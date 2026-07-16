@@ -50,6 +50,67 @@ interface HardwareScanZoneProps {
   defaultExpanded?: boolean;
 }
 
+// ── Browser Quick Scan (non-Tauri fallback) ──────────────────────────────────
+// Detects GPU via WebGL renderer string, RAM via deviceMemory, CPU count via
+// hardwareConcurrency, then posts to /api/session/hardware so the admin Preset
+// Generator's "Detected Users" panel picks it up instantly.
+function BrowserQuickScan({ onScanned, onClose }: { onScanned: (info: ScannedSysInfo) => void; onClose: () => void }) {
+  const [scanning, setScanning] = useState(false);
+  const { toast } = useToast();
+
+  const run = async () => {
+    setScanning(true);
+    try {
+      let gpuName = "";
+      try {
+        const canvas = document.createElement("canvas");
+        const gl = (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+        if (gl) {
+          const ext = gl.getExtension("WEBGL_debug_renderer_info");
+          if (ext) {
+            const raw = (gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) as string) || "";
+            gpuName = raw.split("/")[0].trim(); // "GTX 1650 SUPER/PCIe/SSE2" → "GTX 1650 SUPER"
+          }
+        }
+      } catch {}
+
+      const gpuVendor = detectGpuVendor(gpuName);
+      const cpuThreads = navigator.hardwareConcurrency || 4;
+      const ramGb = Math.max(4, Math.round((navigator as any).deviceMemory ?? 8));
+      const parsed: ScannedSysInfo = { GPU: gpuName || undefined, RAM_GB: ramGb, Threads: cpuThreads };
+
+      saveScannedInfo(parsed);
+      uploadHardwareToServer(parsed);
+      onScanned(parsed);
+      onClose();
+      toast({
+        title: "Browser scan sent to admin",
+        description: `${gpuName || "GPU unknown"} · ${ramGb}GB RAM · ${cpuThreads}T — now visible in Detected Users`,
+      });
+    } catch (err: any) {
+      toast({ title: "Scan failed", description: String(err?.message || err), variant: "destructive" });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={run}
+        disabled={scanning}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 hover:text-red-200 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+      >
+        <Zap className="w-3.5 h-3.5" />
+        {scanning ? "Detecting…" : "Quick Browser Scan"}
+      </button>
+      <p className="text-[10px] text-zinc-600 text-center">
+        Detects GPU via WebGL · RAM · CPU threads · sends to admin instantly
+      </p>
+    </div>
+  );
+}
+
 export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpanded = false }: HardwareScanZoneProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -151,9 +212,7 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
                 Run instant native scan
               </button>
             ) : (
-              <p className="text-[11px] text-zinc-500 text-center py-2">
-                Open the <span className="text-white font-semibold">Opti Gods desktop app</span> for instant one-click hardware detection.
-              </p>
+              <BrowserQuickScan onScanned={onScanned} onClose={() => setExpanded(false)} />
             )}
           </div>
         </div>

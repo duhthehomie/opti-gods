@@ -16,7 +16,7 @@ import {
   PlayCircle, ChevronRight, Eye, Bell, Megaphone, Tag, Pencil, X, CreditCard,
   MapPin, AlertTriangle, Globe, Ban, ShieldAlert, ShieldCheck, Radar,
   ServerCrash, Network, Flag, CheckCircle2, Cpu, Download, Monitor, MemoryStick, Laptop, Sliders,
-  Percent, Crown, UserX, Palette, Server,
+  Percent, Crown, UserX, Palette, Server, Gamepad2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -1350,6 +1350,14 @@ type CustomerHW = {
   refreshHz?: number | null;
 };
 
+// Game-specific tweak packs — mirrored from GAME_TWEAK_IDS in game-detection.tsx
+const GAME_PACKS: Record<string, { label: string; icon: string; ids: string[] }> = {
+  fivem:    { label: "FiveM",       icon: "🏎️", ids: ["FiveMCacheClear","FiveMHighPriority","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMRenderingBoost","FiveMGPUPriorityStack","FiveMDisableLSO","FiveMEnableRSS","FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks","FiveMDisableMPO"] },
+  fortnite: { label: "Fortnite",    icon: "⚡",  ids: ["FortniteHighPriority","FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableVSync","FortniteEngineStreaming","FortniteDisableMotionBlur","FortniteNetworkBuffer","FortniteLowShadows","FortniteDisableLumen","FortniteGameMode","FortniteDisableThrottling","CpuFortniteIFEO"] },
+  cod:      { label: "CoD / WZ",    icon: "🎯", ids: ["CodDisableTelemetry","CodTdrDelay","CodMMCSS","CodQoSPolicy","CodFramePacing","CodMemPriority","CpuCodIFEO"] },
+  gta5:     { label: "GTA V",       icon: "🚗", ids: ["FiveMHighPriority","FiveMNetworkBuffer","FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks","FiveMGPUPriorityStack"] },
+};
+
 function AdminPresetGenerator({
   initialValues,
   allHardware = [],
@@ -1385,6 +1393,9 @@ function AdminPresetGenerator({
   const [adminOptInIds, setAdminOptInIds] = useState<Set<string>>(new Set());
   // Admin always gets full preset — all expert tweaks included by default
   const [includeAllExpert, setIncludeAllExpert] = useState(true);
+  // Game-specific tweak packs to append on top of the hardware preset
+  const [includedGames, setIncludedGames] = useState<Set<string>>(new Set());
+  const toggleGame = (key: string) => setIncludedGames(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const loadUser = (hw: CustomerHW) => {
     setSelectedUser(hw.codeRef);
@@ -1572,6 +1583,8 @@ function AdminPresetGenerator({
         ...(fakeHW.isLaptop && fakeHW.isIntelCore ? ["Lap_Intel_DisableECores"] : []),
       ];
       expertCandidates.forEach(id => { tweakMap[id] = true; });
+      // Game pack tweaks selected by admin toggle
+      includedGames.forEach(g => { (GAME_PACKS[g]?.ids ?? []).forEach(id => { tweakMap[id] = true; }); });
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
@@ -1583,7 +1596,8 @@ function AdminPresetGenerator({
       const a = document.createElement("a");
       a.href = url;
       const safe = (hw.gpuName || vendor).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 24);
-      a.download = `OptiGods_${safe}_${osVer.toUpperCase()}.bat`;
+      const gamesSuffix = includedGames.size > 0 ? `_${Array.from(includedGames).join("+")}` : "";
+      a.download = `OptiGods_${safe}_${osVer.toUpperCase()}${gamesSuffix}.bat`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: `⚡ ${Object.keys(tweakMap).length} tweaks — downloaded`, description: `${hw.gpuName || vendor.toUpperCase()} · ${osVer === "win11" ? "Win11" : "Win10"}` });
@@ -1620,6 +1634,9 @@ function AdminPresetGenerator({
       } else {
         adminOptInIds.forEach(id => { tweakMap[id] = true; });
       }
+
+      // Game pack tweaks selected by admin toggle
+      includedGames.forEach(g => { (GAME_PACKS[g]?.ids ?? []).forEach(id => { tweakMap[id] = true; }); });
 
       // Belt-and-suspenders: merge safePreset core so server-resolved IDs aren't missed.
       if (safePreset) safePreset.core.forEach(id => { tweakMap[id] = true; });
@@ -1753,7 +1770,7 @@ function AdminPresetGenerator({
           <div className="px-4 py-6 text-center">
             <Cpu className="w-6 h-6 text-zinc-700 mx-auto mb-2" />
             <p className="text-xs text-zinc-600 font-semibold">No hardware scans yet</p>
-            <p className="text-[10px] text-zinc-700 mt-0.5">Customers need to drop their sysinfo.json to scan hardware</p>
+            <p className="text-[10px] text-zinc-700 mt-0.5">Go to a user's PC → open the app → System Scan → hardware sends here automatically</p>
           </div>
         ) : (
           <>
@@ -1981,6 +1998,42 @@ function AdminPresetGenerator({
         >
           <div className={cn("w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all", isLaptop ? "left-5" : "left-0.5")} />
         </button>
+      </div>
+
+      {/* Game Packs */}
+      <div className="rounded-xl border border-white/8 bg-zinc-900/60 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2">
+          <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-red-400">Game Tweaks</span>
+          <span className="text-[9px] text-zinc-600 ml-1">— added on top of hardware preset</span>
+          {includedGames.size > 0 && (
+            <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400">
+              +{Array.from(includedGames).reduce((acc, g) => acc + (GAME_PACKS[g]?.ids.length ?? 0), 0)} tweaks
+            </span>
+          )}
+        </div>
+        <div className="px-4 py-3 flex flex-wrap gap-2">
+          {Object.entries(GAME_PACKS).map(([key, pack]) => {
+            const on = includedGames.has(key);
+            return (
+              <button
+                key={key}
+                data-testid={`toggle-game-${key}`}
+                onClick={() => toggleGame(key)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all",
+                  on
+                    ? "bg-red-600/20 border-red-500/50 text-red-300"
+                    : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                <span>{pack.icon}</span>
+                {pack.label}
+                {on && <span className="text-[9px] opacity-70">({pack.ids.length})</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Preview */}
