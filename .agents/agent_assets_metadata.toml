@@ -132,3 +132,9 @@ id = "3OxCD0rcZwCcw8rP8NNx5"
 uri = "file://downloads/OptiGods-Preset-R5-5600X-RTX4060.zip"
 type = "unspecified"
 title = "OptiGods-Preset-R5-5600X-RTX4060.zip"
+
+[[outputs]]
+id = "WzaZI7uM9A-uoH1dvrZvn"
+uri = "file://OptiGods-MoviesTVFix.zip"
+type = "unspecified"
+title = "OptiGods-MoviesTVFix.zip"
