@@ -630,6 +630,27 @@ export default function Fixes() {
           onDownload={() => dlFix("wmp", "/api/wmp-fix-script", "OptiGods-WMP-Fix.bat", "WMP Fix Downloaded", "Re-registers codecs + DLLs. Restart PC.")}
         />
 
+        {/* Movies & TV — Can't Play MP4 (Error 0x8007060e) */}
+        <FixCard
+          testId="button-download-movies-fix"
+          accent="amber"
+          icon={Film}
+          title="Movies & TV — Can't Play MP4 (Error 0x8007060e)"
+          subtitle="'Can't play' on .mp4 clips · error code 0x8007060e · HEVC codec missing after debloat"
+          tweaks="msmpeg2vdec.dll · mfplat.dll · .mp4 UserChoice · Zune cache"
+          bullets={[
+            ["Root cause: Media Foundation HEVC / H.264 decoder unregistered", "Debloat tools (WinUtil, Optimizer, Atlas) can strip or break the HEVC video extension → Movies & TV fails with 0x8007060e on .mp4, .mov, and .m4v files. This re-registers the entire MF decoder stack."],
+            ["Re-registers msmpeg2vdec.dll (H.264) and core MF DLLs", "mf.dll, mfplat.dll, mfplay.dll, mfreadwrite.dll, evr.dll and the H.264 hardware decoder are all re-linked to Windows. Covers 90% of 0x8007060e cases without needing the paid HEVC Store extension."],
+            ["Resets broken .mp4 / .mov / .m4v file associations", "If another app or debloat tool hijacked the extension, the stale UserChoice key is removed so Windows falls back to the system default (Movies & TV or the correct handler)."],
+            ["Clears Movies & TV (Zune) cache + thumbnail database", "Stale thumbnail cache can cause 0x8007060e even after the codec is fixed. The Zune LocalCache and thumbcache_*.db files are purged so Movies & TV rebuilds cleanly."],
+            ["Re-adds Windows Media Feature Pack if removed by DISM debloat", "Some WinUtil / Chris Titus debloat scripts remove the Media.MediaFeaturePack capability. This adds it back silently — no reboot required for the capability step itself."],
+          ]}
+          footer="Safe on all systems. Takes ~30 seconds. Restart PC after running. If 0x8007060e persists for H.265 / HEVC files, install the free HEVC Video Extensions from the Microsoft Store (search 'HEVC Video Extensions from Device Manufacturer')."
+          btnLabel="Download Movies & TV Fix"
+          downloading={!!dlState["movies-tv"]}
+          onDownload={() => dlFix("movies-tv", "/api/movies-tv-fix-script", "OptiGods-MoviesTVFix.bat", "Movies & TV Fix Downloaded", "Re-registers HEVC/H.264 codecs. Restart PC.")}
+        />
+
         {/* ════════════════════════════════════════════════════════════════════ */}
         {/* SECTION 3 — FULL SYSTEM RESTORE                                    */}
         {/* ════════════════════════════════════════════════════════════════════ */}

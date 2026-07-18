@@ -91,6 +91,7 @@ export function AppSidebar() {
   const [tapFlash, setTapFlash] = useState(false);
   const [tapRemaining, setTapRemaining] = useState<number | null>(null);
   const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [spinVideoFailed, setSpinVideoFailed] = useState(false);
 
   const handleLogoTap = useCallback(() => {
     tapCount.current += 1;
@@ -254,7 +255,17 @@ export function AppSidebar() {
               onClick={handleLogoTap}
               data-testid="logo-admin-tap"
             >
-              <video ref={spinVideoRef} src={BRAND.spinRed} autoPlay muted loop playsInline className="w-16 h-16 object-cover pointer-events-none" />
+              {spinVideoFailed ? (
+                <Cpu className="w-8 h-8 text-red-500 animate-spin [animation-duration:4s]" />
+              ) : (
+                <video
+                  ref={spinVideoRef}
+                  src={BRAND.spinRed}
+                  autoPlay muted loop playsInline
+                  className="w-16 h-16 object-cover pointer-events-none"
+                  onError={() => setSpinVideoFailed(true)}
+                />
+              )}
               {tapRemaining !== null && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl">
                   <span className="text-red-400 font-display font-black text-2xl leading-none">{tapRemaining}</span>
