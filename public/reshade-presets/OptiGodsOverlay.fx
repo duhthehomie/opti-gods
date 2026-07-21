@@ -33,14 +33,23 @@ sampler sOptiGodsLogo
 };
 
 // ── UI ────────────────────────────────────────────────────────────────────
-uniform float2 fPosition <
+uniform float fPosX <
     ui_type    = "drag";
-    ui_label   = "Position";
-    ui_tooltip = "Move the logo anywhere on screen. (0.5, 0.5) = center.";
-    ui_min     = -0.5;
-    ui_max     =  1.5;
+    ui_label   = "Position X  (Left → Right)";
+    ui_tooltip = "0.0 = far left   0.5 = center   1.0 = far right";
+    ui_min     =  0.0;
+    ui_max     =  1.0;
     ui_step    =  0.001;
-> = float2(0.88, 0.88);
+> = 0.88;
+
+uniform float fPosY <
+    ui_type    = "drag";
+    ui_label   = "Position Y  (Top → Bottom)";
+    ui_tooltip = "0.0 = top   0.5 = center   1.0 = bottom";
+    ui_min     =  0.0;
+    ui_max     =  1.0;
+    ui_step    =  0.001;
+> = 0.88;
 
 uniform float fScale <
     ui_type    = "drag";
@@ -100,7 +109,7 @@ float4 PS_OptiGodsOverlay(float4 vpos : SV_Position, float2 uv : TEXCOORD) : SV_
     float scaleY = fScale;
     float scaleX = fScale * texAspect / screenAspect;
 
-    float2 logoUV = (uv - fPosition) / float2(scaleX, scaleY) + 0.5;
+    float2 logoUV = (uv - float2(fPosX, fPosY)) / float2(scaleX, scaleY) + 0.5;
 
     // Spin
     if (bSpin)
