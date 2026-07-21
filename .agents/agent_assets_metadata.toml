@@ -144,3 +144,9 @@ id = "lgRmMa5ZB8lAjurLaywDg"
 uri = "file://OptiGodsOverlay-ReShade.zip"
 type = "unspecified"
 title = "OptiGodsOverlay-ReShade.zip — v4 (split X/Y sliders)"
+
+[[outputs]]
+id = "iVBHvRJQzS2UBhNFgJ7ht"
+uri = "file://OptiGods-DisableXboxOverlay.zip"
+type = "unspecified"
+title = "OptiGods-DisableXboxOverlay.zip"
