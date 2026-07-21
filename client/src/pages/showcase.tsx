@@ -1,15 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
-import { Zap, Trophy, TrendingUp, Star, Cpu, Monitor, Wifi, HardDrive, AlertTriangle, CheckCircle, ExternalLink, Copy, CreditCard } from "lucide-react";
+import { Zap, Trophy, TrendingUp, Star, Cpu, Monitor, Wifi, HardDrive, CheckCircle, ExternalLink, Copy, CreditCard, Laptop } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
+import { BRAND } from "@/components/branding/assets";
 import { cn } from "@/lib/utils";
-import { apiUrl } from "@/lib/api-base";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG || "$my1ik";
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg";
-
 
 const RESULTS = [
   {
@@ -18,118 +17,99 @@ const RESULTS = [
     after: "120+ FPS",
     hw: "i7-10700 / GTX 1650 Super",
     badge: "🏆 FiveM RP",
-    color: "border-red-500/30",
-    glow: "from-red-600/10",
+    accent: "#ef4444",
+    glow: "rgba(239,68,68,0.25)",
+    border: "rgba(239,68,68,0.4)",
     stat: "2.5× improvement",
-    statColor: "text-red-400",
   },
   {
     game: "Fortnite Freebuild",
-    before: "120 FPS (capped)",
+    before: "120 FPS",
     after: "300+ FPS",
     hw: "GTX 1650 Super",
     badge: "⚡ Fortnite",
-    color: "border-blue-500/30",
-    glow: "from-blue-600/10",
+    accent: "#3b82f6",
+    glow: "rgba(59,130,246,0.25)",
+    border: "rgba(59,130,246,0.4)",
     stat: "2.5× multiplier",
-    statColor: "text-blue-400",
   },
   {
     game: "FiveM TMFRZ",
-    before: "187 FPS (capped)",
+    before: "187 FPS",
     after: "250+ FPS",
-    hw: "GTX 1650 Super / 16GB RAM",
+    hw: "GTX 1650 Super / 16GB",
     badge: "🎯 FiveM PvP",
-    color: "border-orange-500/30",
-    glow: "from-orange-600/10",
+    accent: "#f97316",
+    glow: "rgba(249,115,22,0.25)",
+    border: "rgba(249,115,22,0.4)",
     stat: "Uncapped headroom",
-    statColor: "text-orange-400",
   },
   {
     game: "Fortnite Creative",
     before: "60 FPS",
     after: "300+ FPS",
     hw: "Integrated Graphics",
-    badge: "💻 Integrated GPU",
-    color: "border-green-500/30",
-    glow: "from-green-600/10",
+    badge: "💻 iGPU",
+    accent: "#22c55e",
+    glow: "rgba(34,197,94,0.25)",
+    border: "rgba(34,197,94,0.4)",
     stat: "5× improvement",
-    statColor: "text-green-400",
   },
   {
     game: "Fortnite Battle Bus",
-    before: "120 FPS (capped)",
+    before: "120 FPS",
     after: "250–400 FPS",
-    hw: "1650 Super / High-end",
+    hw: "High-end rig",
     badge: "🚀 Max Frames",
-    color: "border-purple-500/30",
-    glow: "from-purple-600/10",
+    accent: "#a855f7",
+    glow: "rgba(168,85,247,0.25)",
+    border: "rgba(168,85,247,0.4)",
     stat: "No cap limiting",
-    statColor: "text-purple-400",
   },
   {
     game: "Multi-app Stability",
-    before: "Crashes/Stutters",
+    before: "Crashes",
     after: "Smooth + Stable",
     hw: "All systems",
     badge: "🔧 Reliability",
-    color: "border-zinc-500/30",
-    glow: "from-zinc-600/10",
-    stat: "Discord + gaming sync",
-    statColor: "text-zinc-300",
+    accent: "#eab308",
+    glow: "rgba(234,179,8,0.25)",
+    border: "rgba(234,179,8,0.4)",
+    stat: "Discord + gaming",
   },
 ];
 
 const STATS = [
-  { icon: Zap, value: TOTAL_TWEAKS_LABEL, label: "Optimization Tweaks", color: "text-red-400" },
-  { icon: TrendingUp, value: "8×", label: "Avg FPS Multiplier", color: "text-green-400" },
-  { icon: Cpu, value: "100%", label: "Hardware Utilized", color: "text-blue-400" },
-  { icon: Star, value: "5★", label: "Verified Reviews", color: "text-yellow-400" },
-  { icon: Wifi, value: "−30%", label: "Network Latency", color: "text-cyan-400" },
-  { icon: HardDrive, value: "0", label: "Bloat Left Behind", color: "text-purple-400" },
+  { icon: Zap,        value: TOTAL_TWEAKS_LABEL, label: "Tweaks",      color: "#ef4444" },
+  { icon: TrendingUp, value: "8×",               label: "Avg FPS Boost",color: "#22c55e" },
+  { icon: Cpu,        value: "100%",             label: "Hardware Used",color: "#3b82f6" },
+  { icon: Star,       value: "5★",               label: "Reviews",      color: "#eab308" },
+  { icon: Wifi,       value: "−30%",             label: "Latency",      color: "#06b6d4" },
+  { icon: HardDrive,  value: "0",                label: "Bloat Left",   color: "#a855f7" },
 ];
 
 const STEPS = [
-  {
-    n: "01",
-    title: "Pay $20 — CashApp or PayPal",
-    desc: "One-time payment. Lifetime access. Use the buttons below.",
-  },
-  {
-    n: "02",
-    title: "DM leaq on Discord with proof",
-    desc: "Screenshot your payment receipt and send it to leaq in the Opti Gods Discord.",
-  },
-  {
-    n: "03",
-    title: "Download Opti Gods on your PC",
-    desc: "Open optigods.com on your Windows PC and grab the .exe installer.",
-  },
-  {
-    n: "04",
-    title: "Enter your key & unlock Pro",
-    desc: "Paste your access code in the app — all 580+ tweaks unlocked instantly.",
-  },
+  { n: "01", title: "Pay $20 — CashApp or PayPal", desc: "One-time payment. Lifetime access. Use the buttons below." },
+  { n: "02", title: "DM leaq on Discord with proof", desc: "Screenshot your receipt and send it to leaq in the Discord server." },
+  { n: "03", title: "Open optigods.com on your PC", desc: "You MUST be on a Windows computer or laptop — not mobile — to download." },
+  { n: "04", title: "Enter your key & unlock Pro", desc: "Paste your access code in the app — all tweaks unlocked instantly." },
 ];
 
 function ShowcaseStripeCard() {
-  const handlePay = () => {
-    window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank");
-  };
-
   return (
-    <div className="rounded-xl border border-white/8 bg-zinc-900/70 p-4">
+    <div className="rounded-xl p-4" style={{ background: "rgba(20,0,0,0.6)", border: "1px solid rgba(239,68,68,0.25)" }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Card</span>
-        <span className="text-xs font-black text-rose-400">Stripe — instant</span>
+        <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>Card</span>
+        <span className="text-xs font-black" style={{ color: "#f87171" }}>Stripe — instant</span>
       </div>
       <button
         data-testid="button-stripe-showcase"
-        onClick={handlePay}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold transition-colors"
+        onClick={() => window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank")}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-all"
+        style={{ background: "linear-gradient(135deg, #dc2626, #991b1b)", boxShadow: "0 0 16px rgba(220,38,38,0.35)" }}
       >
         <CreditCard className="w-3.5 h-3.5" />
-        Pay with Card
+        Pay with Card — $20
       </button>
     </div>
   );
@@ -137,6 +117,7 @@ function ShowcaseStripeCard() {
 
 export default function Showcase() {
   const [copied, setCopied] = useState<"cashapp" | "paypal" | null>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
 
   const copy = (text: string, which: "cashapp" | "paypal") => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -146,70 +127,208 @@ export default function Showcase() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-0 min-h-screen">
+      <div className="flex flex-col" style={{ background: "#080808", minHeight: "100vh" }}>
 
-        {/* ── PC product warning ──────────────────────────────────── */}
-        <div className="bg-amber-500/12 border-b border-amber-500/25 px-4 py-2.5 flex items-start gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-amber-300 leading-relaxed">
-            <span className="font-black">This is a Windows PC app.</span>{" "}
-            Pay here on mobile → DM leaq on Discord with your receipt → get your key to use on PC.
-          </p>
-        </div>
+        {/* ── HERO ───────────────────────────────────────────────── */}
+        <div
+          className="relative overflow-hidden px-5 pt-10 pb-8 text-center"
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(200,20,20,0.18) 0%, transparent 70%)" }}
+        >
+          {/* Grid lines */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: "linear-gradient(rgba(255,30,30,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,30,30,0.05) 1px, transparent 1px)",
+              backgroundSize: "36px 36px",
+            }}
+          />
 
-        {/* ── Hero ───────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden border-b border-white/5 bg-gradient-to-b from-red-950/20 to-transparent px-6 py-9 text-center">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Trophy className="w-5 h-5 text-red-400" />
-              <span className="text-xs font-bold uppercase tracking-widest text-red-400">Real Results</span>
-              <Trophy className="w-5 h-5 text-red-400" />
+          {/* Spinning logo */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="relative z-10 mb-5 flex justify-center"
+          >
+            {videoFailed ? (
+              /* CSS ring — no white-background PNG */
+              <div style={{ position: "relative", width: 88, height: 88 }}>
+                <div style={{
+                  width: 88, height: 88, borderRadius: "50%",
+                  border: "3px solid rgba(255,30,30,0.18)",
+                  borderTopColor: "#ff1e1e",
+                  animation: "og-hero-spin 1.2s linear infinite",
+                  boxShadow: "0 0 30px rgba(255,30,30,0.5), inset 0 0 12px rgba(255,30,30,0.2)",
+                }} />
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 900, color: "#ff4444", letterSpacing: "0.05em",
+                }}>OG</div>
+                <style>{`@keyframes og-hero-spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            ) : (
+              <video
+                src={BRAND.spinWhiteGold}
+                autoPlay
+                muted
+                playsInline
+                loop
+                onError={() => setVideoFailed(true)}
+                style={{
+                  width: 96, height: 96, objectFit: "contain",
+                  filter: "drop-shadow(0 0 18px rgba(255,180,0,0.5))",
+                }}
+              />
+            )}
+          </motion.div>
+
+          {/* Neon title box */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.1 }}
+            className="relative z-10 inline-block mb-4"
+          >
+            <div
+              className="inline-block rounded-lg px-7 py-4"
+              style={{
+                border: "1px solid rgba(220,40,40,0.55)",
+                boxShadow: "0 0 35px rgba(200,20,20,0.3), inset 0 0 25px rgba(200,20,20,0.06)",
+              }}
+            >
+              <h1
+                className="text-4xl font-black tracking-[0.18em] leading-none"
+                style={{
+                  background: "linear-gradient(90deg, #ff5555 0%, #ff8888 35%, #ffbbbb 55%, #ff4444 85%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                OPTI GODS
+              </h1>
+              <p className="text-[11px] tracking-[0.55em] mt-2 uppercase font-bold" style={{ color: "rgba(255,255,255,0.35)" }}>
+                by leaq
+              </p>
             </div>
-            <h1 className="text-3xl font-black text-white mb-2">This Is What Opti Gods Does</h1>
-            <p className="text-sm text-zinc-400 max-w-lg mx-auto mb-5">
-              Unedited numbers. Real hardware. Real FPS. No fakery — just what happens when your PC is actually optimized.
+          </motion.div>
+
+          {/* Tags row */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="relative z-10 flex items-center justify-center flex-wrap gap-1 mb-5"
+          >
+            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "#ef4444" }} />
+            <span className="text-[10px] font-mono tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
+              {TOTAL_TWEAKS_LABEL} TWEAKS · DESKTOPS · LAPTOPS · DELL · LENOVO · ASUS · HP · V4
+            </span>
+          </motion.div>
+
+          {/* Headline */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="relative z-10">
+            <h2 className="text-[1.6rem] font-black text-white leading-snug mb-2">
+              The{" "}
+              <span className="text-white">#1 Windows PC</span>
+              <br />
+              <span className="text-white">optimizer</span>{" "}
+              <span style={{ color: "#ef4444" }}>that actually</span>
+              <br />
+              <span style={{ color: "#ef4444" }}>works.</span>
+            </h2>
+            <p className="text-sm leading-relaxed max-w-[320px] mx-auto" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <span className="font-black text-white">100+ FPS on Fortnite. 120+ on FiveM. 300+ on Valorant.</span>{" "}
+              Desktops, Laptops, Dell, Lenovo, HP, ASUS — every rig covered. Built by leaq, verified by thousands.
             </p>
-            <div className="flex items-center justify-center gap-5 text-xs text-zinc-500 flex-wrap">
-              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-red-400" /> {TOTAL_TWEAKS_LABEL} tweaks</span>
-              <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-green-400" /> Measurable FPS gains</span>
-              <span className="flex items-center gap-1"><Star className="w-3 h-3 text-yellow-400" /> Lifetime Pro access</span>
-            </div>
           </motion.div>
         </div>
 
-        {/* ── Stats bar ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 xl:grid-cols-6 border-b border-white/5">
+        {/* ── DESKTOP-ONLY NOTICE ─────────────────────────────────── */}
+        <div className="px-4 py-3">
+          <div
+            className="rounded-xl px-4 py-3.5 flex items-start gap-3"
+            style={{
+              background: "rgba(30,15,0,0.8)",
+              border: "1px solid rgba(251,146,60,0.5)",
+              boxShadow: "0 0 20px rgba(251,146,60,0.12)",
+            }}
+          >
+            <Monitor className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "#fb923c" }} />
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide mb-0.5" style={{ color: "#fdba74" }}>
+                ⚠️ Computer / Laptop Only
+              </p>
+              <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
+                Opti Gods can{" "}
+                <strong className="text-white">ONLY be downloaded and run on a Windows computer or laptop</strong>.
+                The app is not available on mobile devices. Pay here on mobile → DM leaq on Discord → install on your PC.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── STATS GRID ──────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 mx-4 rounded-xl overflow-hidden mb-1" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
           {STATS.map((s, i) => (
             <motion.div
               key={s.label}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="flex flex-col items-center justify-center gap-1 py-5 px-2 border-r border-white/5 last:border-r-0 text-center"
+              transition={{ delay: i * 0.04 }}
+              className="flex flex-col items-center justify-center gap-1 py-4 px-1 text-center"
+              style={{
+                background: "rgba(10,10,10,0.9)",
+                borderRight: i % 3 !== 2 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                borderBottom: i < 3 ? "1px solid rgba(255,255,255,0.06)" : "none",
+              }}
             >
-              <s.icon className={cn("w-4 h-4 mb-0.5", s.color)} />
-              <span className={cn("text-xl font-black", s.color)}>{s.value}</span>
-              <span className="text-[10px] text-zinc-600 leading-tight">{s.label}</span>
+              <s.icon className="w-3.5 h-3.5" style={{ color: s.color }} />
+              <span className="text-lg font-black" style={{ color: s.color, textShadow: `0 0 12px ${s.color}66` }}>
+                {s.value}
+              </span>
+              <span className="text-[9px] leading-tight" style={{ color: "rgba(255,255,255,0.3)" }}>
+                {s.label}
+              </span>
             </motion.div>
           ))}
         </div>
 
-        {/* ── Get Pro — mobile purchase flow ─────────────────────── */}
-        <div className="px-5 py-7 border-b border-white/5 bg-red-950/10">
-          <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold mb-1 text-center">Get Pro — $20 Lifetime</p>
-          <h2 className="text-xl font-black text-white text-center mb-1">Want These Results?</h2>
-          <p className="text-xs text-zinc-400 text-center mb-6 leading-relaxed">
+        {/* ── GET PRO ─────────────────────────────────────────────── */}
+        <div
+          className="mx-4 my-4 rounded-xl px-4 pt-5 pb-4"
+          style={{
+            background: "linear-gradient(135deg, rgba(30,0,0,0.9) 0%, rgba(10,0,0,0.95) 100%)",
+            border: "1px solid rgba(220,38,38,0.3)",
+            boxShadow: "0 0 30px rgba(220,38,38,0.1)",
+          }}
+        >
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Trophy className="w-4 h-4" style={{ color: "#fbbf24" }} />
+            <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#ef4444" }}>
+              Get Pro — $20 Lifetime
+            </p>
+            <Trophy className="w-4 h-4" style={{ color: "#fbbf24" }} />
+          </div>
+          <h3 className="text-xl font-black text-white text-center mb-1">Want These Results?</h3>
+          <p className="text-[11px] text-center mb-5 leading-relaxed" style={{ color: "rgba(255,255,255,0.35)" }}>
             Pay below → DM leaq on Discord with proof → receive your key within minutes
           </p>
 
           {/* Steps */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-2.5 mb-5">
             {STEPS.map((s) => (
-              <div key={s.n} className="flex items-start gap-3">
-                <span className="text-[10px] font-black text-red-500 font-mono mt-0.5 w-5 shrink-0">{s.n}</span>
+              <div key={s.n} className="flex items-start gap-3 px-1">
+                <span
+                  className="text-[10px] font-black font-mono mt-0.5 w-5 shrink-0"
+                  style={{ color: "#ef4444" }}
+                >
+                  {s.n}
+                </span>
                 <div>
                   <p className="text-xs font-bold text-white leading-snug">{s.title}</p>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">{s.desc}</p>
+                  <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    {s.desc}
+                  </p>
                 </div>
               </div>
             ))}
@@ -218,10 +337,12 @@ export default function Showcase() {
           {/* Payment buttons */}
           <div className="space-y-3">
             {/* CashApp */}
-            <div className="rounded-xl border border-white/8 bg-zinc-900/70 p-4">
+            <div className="rounded-xl p-4" style={{ background: "rgba(0,20,5,0.7)", border: "1px solid rgba(34,197,94,0.25)" }}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">CashApp</span>
-                <span className="text-xs font-black text-emerald-400">{CASHAPP_TAG}</span>
+                <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  CashApp
+                </span>
+                <span className="text-xs font-black" style={{ color: "#4ade80" }}>{CASHAPP_TAG}</span>
               </div>
               <div className="flex gap-2">
                 <a
@@ -229,7 +350,8 @@ export default function Showcase() {
                   target="_blank"
                   rel="noopener noreferrer"
                   data-testid="link-cashapp-pay"
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-all"
+                  style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 0 14px rgba(34,197,94,0.3)" }}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Pay {CASHAPP_TAG}
@@ -237,18 +359,21 @@ export default function Showcase() {
                 <button
                   data-testid="button-copy-cashapp"
                   onClick={() => copy(CASHAPP_TAG, "cashapp")}
-                  className="px-3 rounded-lg border border-white/10 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors"
+                  className="px-3 rounded-lg transition-colors"
+                  style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)" }}
                 >
-                  {copied === "cashapp" ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  {copied === "cashapp" ? <CheckCircle className="w-4 h-4" style={{ color: "#4ade80" }} /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             {/* PayPal */}
-            <div className="rounded-xl border border-white/8 bg-zinc-900/70 p-4">
+            <div className="rounded-xl p-4" style={{ background: "rgba(0,5,20,0.7)", border: "1px solid rgba(59,130,246,0.25)" }}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">PayPal</span>
-                <span className="text-xs font-black text-blue-400">{PAYPAL_LINK}</span>
+                <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  PayPal
+                </span>
+                <span className="text-xs font-black" style={{ color: "#60a5fa" }}>{PAYPAL_LINK}</span>
               </div>
               <div className="flex gap-2">
                 <a
@@ -256,7 +381,8 @@ export default function Showcase() {
                   target="_blank"
                   rel="noopener noreferrer"
                   data-testid="link-paypal-pay"
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-all"
+                  style={{ background: "linear-gradient(135deg, #2563eb, #1d4ed8)", boxShadow: "0 0 14px rgba(59,130,246,0.3)" }}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Pay via PayPal
@@ -264,29 +390,35 @@ export default function Showcase() {
                 <button
                   data-testid="button-copy-paypal"
                   onClick={() => copy(`https://${PAYPAL_LINK}`, "paypal")}
-                  className="px-3 rounded-lg border border-white/10 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors"
+                  className="px-3 rounded-lg transition-colors"
+                  style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)" }}
                 >
-                  {copied === "paypal" ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  {copied === "paypal" ? <CheckCircle className="w-4 h-4" style={{ color: "#60a5fa" }} /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Stripe — always shown */}
             <ShowcaseStripeCard />
           </div>
 
           {/* Discord CTA */}
-          <div className="mt-4 rounded-xl border border-indigo-500/25 bg-indigo-500/8 p-4">
-            <p className="text-xs text-indigo-300 font-bold mb-1">After payment — join Discord to get your key</p>
-            <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
-              Send leaq your payment receipt in the Opti Gods Discord server. Keys are delivered manually — usually within minutes.
+          <div
+            className="mt-4 rounded-xl p-4"
+            style={{ background: "rgba(5,5,30,0.8)", border: "1px solid rgba(99,102,241,0.3)", boxShadow: "0 0 18px rgba(99,102,241,0.1)" }}
+          >
+            <p className="text-xs font-black mb-0.5" style={{ color: "#a5b4fc" }}>
+              After payment — join Discord to get your key
+            </p>
+            <p className="text-[11px] leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Send leaq your payment receipt in the Opti Gods Discord. Keys delivered within minutes.
             </p>
             <a
               href="https://discord.gg/optigods"
               target="_blank"
               rel="noopener noreferrer"
               data-testid="link-discord-join"
-              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-colors w-full"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold w-full transition-all"
+              style={{ background: "linear-gradient(135deg, #4f46e5, #3730a3)", boxShadow: "0 0 14px rgba(99,102,241,0.35)" }}
             >
               <SiDiscord className="w-4 h-4" />
               Join the Opti Gods Discord
@@ -294,48 +426,109 @@ export default function Showcase() {
           </div>
         </div>
 
-        {/* ── Results grid ───────────────────────────────────────── */}
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 border-b border-white/5">
-          {RESULTS.map((r, i) => (
-            <motion.div
-              key={r.game}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: i * 0.06 }}
-              className={cn("rounded-xl border bg-gradient-to-br to-zinc-900/60 p-5 flex flex-col gap-3", r.color, r.glow)}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold bg-black/50 border border-white/10 px-2 py-0.5 rounded-full text-white">{r.badge}</span>
-                <span className={cn("text-[10px] font-black", r.statColor)}>{r.stat}</span>
-              </div>
-              <h3 className="text-sm font-black text-white">{r.game}</h3>
-              <div className="flex items-center gap-3">
-                <div className="flex-1 rounded-lg bg-zinc-900/80 border border-white/5 px-3 py-2 text-center">
-                  <div className="text-[9px] text-zinc-600 uppercase tracking-wider mb-0.5">Before</div>
-                  <div className="text-base font-black text-zinc-400">{r.before}</div>
+        {/* ── FPS RESULTS ─────────────────────────────────────────── */}
+        <div className="px-4 pb-1">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 h-px" style={{ background: "rgba(239,68,68,0.2)" }} />
+            <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "rgba(239,68,68,0.7)" }}>
+              Real Results
+            </p>
+            <div className="flex-1 h-px" style={{ background: "rgba(239,68,68,0.2)" }} />
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            {RESULTS.map((r, i) => (
+              <motion.div
+                key={r.game}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                className="rounded-xl p-4"
+                style={{
+                  background: `linear-gradient(135deg, rgba(10,10,10,0.95) 0%, rgba(5,5,5,1) 100%)`,
+                  border: `1px solid ${r.border}`,
+                  boxShadow: `0 0 20px ${r.glow}`,
+                }}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
+                  >
+                    {r.badge}
+                  </span>
+                  <span className="text-[10px] font-black" style={{ color: r.accent }}>
+                    {r.stat}
+                  </span>
                 </div>
-                <Zap className="w-4 h-4 text-red-500 shrink-0" />
-                <div className="flex-1 rounded-lg bg-red-950/40 border border-red-500/20 px-3 py-2 text-center">
-                  <div className="text-[9px] text-red-500/70 uppercase tracking-wider mb-0.5">After</div>
-                  <div className="text-base font-black text-white">{r.after}</div>
+                <h3 className="text-sm font-black text-white mb-2.5">{r.game}</h3>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex-1 rounded-lg px-3 py-2 text-center"
+                    style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  >
+                    <div className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>Before</div>
+                    <div className="text-base font-black" style={{ color: "rgba(255,255,255,0.5)" }}>{r.before}</div>
+                  </div>
+                  <Zap className="w-4 h-4 shrink-0" style={{ color: r.accent, filter: `drop-shadow(0 0 6px ${r.accent})` }} />
+                  <div
+                    className="flex-1 rounded-lg px-3 py-2 text-center"
+                    style={{ background: `rgba(${r.accent.replace('#','').match(/.{2}/g)?.map(h=>parseInt(h,16)).join(',')},0.12)`, border: `1px solid ${r.border}` }}
+                  >
+                    <div className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: r.accent, opacity: 0.7 }}>After</div>
+                    <div className="text-base font-black text-white">{r.after}</div>
+                  </div>
                 </div>
-              </div>
-              <p className="text-[10px] text-zinc-600">{r.hw}</p>
-            </motion.div>
-          ))}
+                <p className="text-[10px] mt-2" style={{ color: "rgba(255,255,255,0.25)" }}>{r.hw}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
 
-        {/* ── Footer ─────────────────────────────────────────────── */}
-        <div className="px-5 py-5 text-center space-y-3">
-          <p className="text-[11px] text-zinc-500">
-            Questions? Join the server — leaq answers personally.
+        {/* ── FEATURES STRIP ──────────────────────────────────────── */}
+        <div className="px-4 py-5">
+          <div
+            className="rounded-xl px-4 py-4"
+            style={{ background: "rgba(10,10,10,0.9)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>
+              What's Included
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["⚡", "580+ Registry Tweaks"],
+                ["🎮", "FiveM / Fortnite / CoD"],
+                ["🖥️", "NVIDIA + AMD GPU Tuning"],
+                ["🌐", "Network Latency Fix"],
+                ["💾", "RAM & Memory Optimizer"],
+                ["🔒", "Stable, No BSODs"],
+                ["🚀", "Startup Speed Boost"],
+                ["🛡️", "Pro Key — Lifetime"],
+              ].map(([icon, label]) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="text-sm">{icon}</span>
+                  <span className="text-[11px] text-white font-medium">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── FOOTER ──────────────────────────────────────────────── */}
+        <div className="px-4 pb-6 text-center space-y-3">
+          <div
+            className="h-px mx-8"
+            style={{ background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.3), transparent)" }}
+          />
+          <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+            Questions? leaq answers personally in the Discord.
           </p>
           <a
             href="https://discord.gg/optigods"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="link-discord-footer"
-            className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+            className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+            style={{ color: "#818cf8" }}
           >
             <SiDiscord className="w-3.5 h-3.5" />
             discord.gg/optigods
@@ -344,7 +537,8 @@ export default function Showcase() {
             <a
               href="/admin"
               data-testid="link-admin-showcase"
-              className="text-[10px] text-zinc-800 hover:text-zinc-600 transition-colors font-mono tracking-wider"
+              className="text-[10px] font-mono tracking-wider transition-colors"
+              style={{ color: "rgba(255,255,255,0.08)" }}
             >
               admin
             </a>

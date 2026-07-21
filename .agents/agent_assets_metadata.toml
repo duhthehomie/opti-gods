@@ -138,3 +138,9 @@ id = "WzaZI7uM9A-uoH1dvrZvn"
 uri = "file://OptiGods-MoviesTVFix.zip"
 type = "unspecified"
 title = "OptiGods-MoviesTVFix.zip — v2 (updated)"
+
+[[outputs]]
+id = "lgRmMa5ZB8lAjurLaywDg"
+uri = "file://OptiGodsOverlay-ReShade.zip"
+type = "unspecified"
+title = "OptiGodsOverlay-ReShade.zip — Shader + Texture"
