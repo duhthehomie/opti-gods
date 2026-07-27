@@ -72,7 +72,6 @@ export function BootSplash() {
           muted
           playsInline
           preload="auto"
-          poster={BRAND.redPng}
           onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
         />

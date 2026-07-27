@@ -151,18 +151,17 @@ export default function Showcase() {
             className="relative z-10 mb-5 flex justify-center"
           >
             {videoFailed ? (
-              /* CSS ring — no white-background PNG */
-              <div style={{ position: "relative", width: 88, height: 88 }}>
+              <div style={{ position: "relative", width: 96, height: 96 }}>
                 <div style={{
-                  width: 88, height: 88, borderRadius: "50%",
-                  border: "3px solid rgba(255,30,30,0.18)",
-                  borderTopColor: "#ff1e1e",
+                  width: 96, height: 96, borderRadius: "50%",
+                  border: "3px solid rgba(255,80,20,0.18)",
+                  borderTopColor: "#ff5010",
                   animation: "og-hero-spin 1.2s linear infinite",
-                  boxShadow: "0 0 30px rgba(255,30,30,0.5), inset 0 0 12px rgba(255,30,30,0.2)",
+                  boxShadow: "0 0 36px rgba(255,80,20,0.6), inset 0 0 14px rgba(255,80,20,0.25)",
                 }} />
                 <div style={{
                   position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 900, color: "#ff4444", letterSpacing: "0.05em",
+                  fontSize: 12, fontWeight: 900, color: "#ff6020", letterSpacing: "0.05em",
                 }}>OG</div>
                 <style>{`@keyframes og-hero-spin { to { transform: rotate(360deg); } }`}</style>
               </div>
@@ -175,38 +174,47 @@ export default function Showcase() {
                 loop
                 onError={() => setVideoFailed(true)}
                 style={{
-                  width: 96, height: 96, objectFit: "contain",
-                  filter: "drop-shadow(0 0 18px rgba(255,180,0,0.5))",
+                  width: 104, height: 104, objectFit: "contain",
+                  filter: "drop-shadow(0 0 22px rgba(255,160,30,0.65))",
                 }}
               />
             )}
           </motion.div>
 
-          {/* Neon title box */}
+          {/* Neon title box — matches reference screenshot */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.1 }}
             className="relative z-10 inline-block mb-4"
           >
+            {/* outer glow halo */}
+            <div style={{
+              position: "absolute", inset: -8, borderRadius: 18,
+              background: "radial-gradient(ellipse 90% 70% at 50% 50%, rgba(220,60,0,0.22) 0%, transparent 70%)",
+              filter: "blur(8px)",
+              pointerEvents: "none",
+            }} />
             <div
-              className="inline-block rounded-lg px-7 py-4"
+              className="inline-block rounded-xl px-8 py-4"
               style={{
-                border: "1px solid rgba(220,40,40,0.55)",
-                boxShadow: "0 0 35px rgba(200,20,20,0.3), inset 0 0 25px rgba(200,20,20,0.06)",
+                border: "1.5px solid rgba(230,80,20,0.7)",
+                boxShadow: "0 0 40px rgba(200,50,0,0.4), 0 0 80px rgba(200,50,0,0.15), inset 0 0 28px rgba(200,50,0,0.08)",
+                background: "rgba(10,3,0,0.6)",
               }}
             >
               <h1
                 className="text-4xl font-black tracking-[0.18em] leading-none"
                 style={{
-                  background: "linear-gradient(90deg, #ff5555 0%, #ff8888 35%, #ffbbbb 55%, #ff4444 85%)",
+                  background: "linear-gradient(90deg, #ffb340 0%, #ff7a20 30%, #ff4040 65%, #ff2060 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
+                  filter: "drop-shadow(0 0 8px rgba(255,100,20,0.5))",
                 }}
               >
                 OPTI GODS
               </h1>
-              <p className="text-[11px] tracking-[0.55em] mt-2 uppercase font-bold" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <p className="text-[11px] tracking-[0.55em] mt-2 uppercase font-bold text-center" style={{ color: "rgba(255,255,255,0.55)", textShadow: "0 0 8px rgba(255,255,255,0.2)" }}>
                 by leaq
               </p>
             </div>
@@ -219,24 +227,23 @@ export default function Showcase() {
             transition={{ delay: 0.2 }}
             className="relative z-10 flex items-center justify-center flex-wrap gap-1 mb-5"
           >
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "#ef4444" }} />
-            <span className="text-[10px] font-mono tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#ff5020" }} />
+            <span className="text-[10px] font-mono tracking-widest" style={{ color: "rgba(255,180,100,0.5)" }}>
               {TOTAL_TWEAKS_LABEL} TWEAKS · DESKTOPS · LAPTOPS · DELL · LENOVO · ASUS · HP · V4
             </span>
           </motion.div>
 
           {/* Headline */}
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="relative z-10">
-            <h2 className="text-[1.6rem] font-black text-white leading-snug mb-2">
-              The{" "}
-              <span className="text-white">#1 Windows PC</span>
+            <h2 className="text-[1.65rem] font-black text-white leading-snug mb-2">
+              The <span className="text-white">#1 Windows PC</span>
               <br />
               <span className="text-white">optimizer</span>{" "}
-              <span style={{ color: "#ef4444" }}>that actually</span>
+              <span style={{ color: "#ff4d20", textShadow: "0 0 20px rgba(255,77,32,0.5)" }}>that actually</span>
               <br />
-              <span style={{ color: "#ef4444" }}>works.</span>
+              <span style={{ color: "#ff4d20", textShadow: "0 0 20px rgba(255,77,32,0.5)" }}>works.</span>
             </h2>
-            <p className="text-sm leading-relaxed max-w-[320px] mx-auto" style={{ color: "rgba(255,255,255,0.45)" }}>
+            <p className="text-sm leading-relaxed max-w-[320px] mx-auto" style={{ color: "rgba(255,255,255,0.5)" }}>
               <span className="font-black text-white">100+ FPS on Fortnite. 120+ on FiveM. 300+ on Valorant.</span>{" "}
               Desktops, Laptops, Dell, Lenovo, HP, ASUS — every rig covered. Built by leaq, verified by thousands.
             </p>
@@ -268,7 +275,7 @@ export default function Showcase() {
         </div>
 
         {/* ── STATS GRID ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 mx-4 rounded-xl overflow-hidden mb-1" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="grid grid-cols-3 mx-4 rounded-xl overflow-hidden mb-1" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {STATS.map((s, i) => (
             <motion.div
               key={s.label}
@@ -277,16 +284,17 @@ export default function Showcase() {
               transition={{ delay: i * 0.04 }}
               className="flex flex-col items-center justify-center gap-1 py-4 px-1 text-center"
               style={{
-                background: "rgba(10,10,10,0.9)",
+                background: `linear-gradient(160deg, rgba(10,10,10,0.98) 0%, rgba(5,5,5,1) 100%)`,
+                boxShadow: `inset 0 0 24px ${s.color}11`,
                 borderRight: i % 3 !== 2 ? "1px solid rgba(255,255,255,0.06)" : "none",
                 borderBottom: i < 3 ? "1px solid rgba(255,255,255,0.06)" : "none",
               }}
             >
-              <s.icon className="w-3.5 h-3.5" style={{ color: s.color }} />
-              <span className="text-lg font-black" style={{ color: s.color, textShadow: `0 0 12px ${s.color}66` }}>
+              <s.icon className="w-3.5 h-3.5" style={{ color: s.color, filter: `drop-shadow(0 0 4px ${s.color})` }} />
+              <span className="text-lg font-black" style={{ color: s.color, textShadow: `0 0 16px ${s.color}99, 0 0 32px ${s.color}44` }}>
                 {s.value}
               </span>
-              <span className="text-[9px] leading-tight" style={{ color: "rgba(255,255,255,0.3)" }}>
+              <span className="text-[9px] leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>
                 {s.label}
               </span>
             </motion.div>

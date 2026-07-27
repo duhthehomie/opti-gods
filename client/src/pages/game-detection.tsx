@@ -839,11 +839,12 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         if (!rawConnect || rawConnect.length < 3) return;
 
         if (!initialized) {
-          // First run — record baseline AND mark active.
-          // The last "Connecting to" in the log is the server the user is on NOW.
+          // First run — this is BASELINE from a previous session (log persists).
+          // Save it to the server list so it appears in Saved Servers,
+          // but do NOT mark it active — the user is still in menus.
           baselineConnect = norm(rawConnect);
           initialized = true;
-          await fetchAndSave(rawConnect, true);
+          await fetchAndSave(rawConnect, false);
           return;
         }
 
