@@ -857,7 +857,13 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
 
     detect(); // establish baseline (clears active, no new active-set)
     const interval = setInterval(detect, 12_000); // poll every 12 s
-    return () => { mounted = false; clearInterval(interval); };
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      // FiveM closed — clear active server so next launch starts clean
+      localStorage.removeItem("og_fivem_active");
+      window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+    };
   }, [runningGame?.id]);
 
   // Lift running game ID to parent
