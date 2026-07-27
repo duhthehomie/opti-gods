@@ -537,6 +537,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   });
   const [npAddConnect, setNpAddConnect] = useState("");
   const [npAdding, setNpAdding] = useState(false);
+  const [justSavedServer, setJustSavedServer] = useState(false);
   const [showServerPicker, setShowServerPicker] = useState(false);
 
   // HUD settings fetched from admin — controls Now Playing icon size/position
@@ -629,6 +630,24 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   function resyncServers() {
     setActiveServerState(getActiveServerInfo());
     try { setSavedServers(JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]")); } catch { /* keep */ }
+  }
+
+  function saveActiveServerToList() {
+    if (!activeServer) return;
+    const existing: SavedServer[] = JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]");
+    const already = existing.some(s => s.connect.toLowerCase() === activeServer.connect.toLowerCase());
+    if (already) return;
+    const updated = [...existing, { name: activeServer.name, connect: activeServer.connect, iconUrl: activeServer.iconUrl }];
+    localStorage.setItem("og_fivem_servers", JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+    // Also persist to DB
+    fetch('/api/fivem/servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectCode: activeServer.connect.toLowerCase(), name: activeServer.name, logoUrl: activeServer.iconUrl ?? null }),
+    }).catch(() => {});
+    setJustSavedServer(true);
+    setTimeout(() => setJustSavedServer(false), 2000);
   }
 
   function deleteServer(connect: string) {
@@ -1284,6 +1303,28 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {/* Save to Saved Servers button — shows when active FiveM server isn't saved yet */}
+              {runningGame!.id === "game_fivem" && activeServer && (() => {
+                const alreadySaved = savedServers.some(s => s.connect.toLowerCase() === activeServer.connect.toLowerCase());
+                if (alreadySaved && !justSavedServer) return null;
+                return (
+                  <Button
+                    data-testid="button-save-active-server"
+                    size="sm"
+                    onClick={saveActiveServerToList}
+                    disabled={justSavedServer}
+                    className={cn(
+                      "h-7 px-2.5 text-xs font-bold flex items-center gap-1.5 transition-all",
+                      justSavedServer
+                        ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-600"
+                    )}
+                  >
+                    {justSavedServer ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                    {justSavedServer ? "Saved" : "Save Server"}
+                  </Button>
+                );
+              })()}
               <Button
                 data-testid="button-refresh-nowplaying"
                 size="sm"
