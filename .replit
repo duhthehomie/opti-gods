@@ -50,6 +50,7 @@ STRIPE_SECRET_KEY = "sk_live_51TDwlYLcJlSyMFAkRtrR4AOBELHEQyWNuowvjBo09lFUWJOpMk
 STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
 SITE_URL = "https://optigods.com"
 DISCORD_REDIRECT_URI = "https://optigods.com/api/auth/discord/callback"
+DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v4.0.0/OptiGods-Setup-4.0.0.exe"
 
 [userenv.production]
 
