@@ -1601,7 +1601,7 @@ export async function registerRoutes(
       join(process.cwd(), "public", "OptiGodsOverlay-ReShade.zip"),
       join(process.cwd(), "client", "public", "downloads", "OptiGodsOverlay-ReShade.zip"),
       join(process.cwd(), "downloads", "OptiGodsOverlay-ReShade.zip"),
-      join(__dirname, "public", "downloads", "OptiGodsOverlay-ReShade.zip"),
+      join(process.cwd(), "dist", "public", "downloads", "OptiGodsOverlay-ReShade.zip"),
     ];
     const found = searchPaths.find(existsSync);
     if (!found) {
