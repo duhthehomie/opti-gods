@@ -1595,6 +1595,23 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/download/reshade-overlay — serves OptiGodsOverlay-ReShade.zip
+  app.get("/api/download/reshade-overlay", (_req, res) => {
+    const searchPaths = [
+      join(process.cwd(), "public", "OptiGodsOverlay-ReShade.zip"),
+      join(process.cwd(), "client", "public", "downloads", "OptiGodsOverlay-ReShade.zip"),
+      join(process.cwd(), "downloads", "OptiGodsOverlay-ReShade.zip"),
+      join(__dirname, "public", "downloads", "OptiGodsOverlay-ReShade.zip"),
+    ];
+    const found = searchPaths.find(existsSync);
+    if (!found) {
+      return res.status(404).json({ error: "ReShade overlay not found" });
+    }
+    res.setHeader("Content-Disposition", 'attachment; filename="OptiGodsOverlay-ReShade.zip"');
+    res.setHeader("Content-Type", "application/zip");
+    return res.sendFile(found);
+  });
+
   // GET /api/download/version — returns what /api/download/latest would actually serve,
   // without performing the redirect. Used by the landing page and admin panel to show
   // the resolved installer version and source.
