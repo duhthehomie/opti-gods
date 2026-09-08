@@ -6,6 +6,7 @@ import { SiDiscord } from "react-icons/si";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { BRAND } from "@/components/branding/assets";
 import { cn } from "@/lib/utils";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG || "$my1ik";
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK || "paypal.me/accountslg";
@@ -421,7 +422,7 @@ export default function Showcase() {
               Send leaq your payment receipt in the Opti Gods Discord. Keys delivered within minutes.
             </p>
             <a
-              href="https://discord.gg/optigods"
+              href={DISCORD_INVITE}
               target="_blank"
               rel="noopener noreferrer"
               data-testid="link-discord-join"
@@ -531,7 +532,7 @@ export default function Showcase() {
             Questions? leaq answers personally in the Discord.
           </p>
           <a
-            href="https://discord.gg/optigods"
+            href={DISCORD_INVITE}
             target="_blank"
             rel="noopener noreferrer"
             data-testid="link-discord-footer"
@@ -539,7 +540,7 @@ export default function Showcase() {
             style={{ color: "#818cf8" }}
           >
             <SiDiscord className="w-3.5 h-3.5" />
-            discord.gg/optigods
+            discord.gg/nQagPU5a4Z
           </a>
           <div>
             <a

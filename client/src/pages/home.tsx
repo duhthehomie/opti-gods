@@ -4,7 +4,7 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Activity, Settings2, Wrench, Crown, Sparkles, Cpu, MonitorPlay, MemoryStick, Zap, ArrowRight, Bot } from "lucide-react";
+import { Activity, Settings2, Wrench, Crown, Sparkles, Cpu, MonitorPlay, MemoryStick, Zap, ArrowRight, Bot, Gauge, ShieldCheck, ScanLine, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
 
@@ -36,23 +36,51 @@ export default function HomePage() {
   return (
     <AppLayout>
       <div className="space-y-8">
-        {/* Hero */}
-        <div className="relative rounded-2xl border border-white/5 bg-gradient-to-br from-red-500/10 via-zinc-950 to-black p-8 overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/10 rounded-full blur-[120px] pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-4 h-4 text-red-400" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Opti Gods · v4</span>
+        {/* Control center */}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
+          <section className="relative min-h-[390px] overflow-hidden rounded-2xl border border-red-500/20 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.12),transparent_45%),linear-gradient(135deg,#0b1114,#050708)] p-6 md:p-8">
+            <div className="absolute inset-0 pointer-events-none opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.22)_1px,transparent_1px)] [background-size:52px_52px]" />
+            <div className="relative flex h-full flex-col items-center justify-between gap-8">
+              <div className="flex w-full items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-red-400">
+                    <ScanLine className="h-3.5 w-3.5" /> Performance control
+                  </div>
+                  <h1 className="mt-2 font-display text-2xl font-black text-white md:text-3xl">Welcome back.</h1>
+                  <p className="mt-1 max-w-md text-xs leading-relaxed text-zinc-500">Scan your hardware, review matched recommendations, and build a transparent script for your next session.</p>
+                </div>
+                <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex">
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" /> Ready
+                </span>
+              </div>
+
+              <div className="relative flex flex-col items-center">
+                <div className="absolute h-64 w-64 rounded-full border border-red-500/10 shadow-[0_0_80px_-18px_rgba(239,68,68,0.8)]" />
+                <div className="absolute h-52 w-52 rounded-full border border-red-500/20" />
+                <div className="relative flex h-40 w-40 flex-col items-center justify-center rounded-full border-2 border-red-400/70 bg-[#070b0d] shadow-[0_0_50px_-12px_rgba(239,68,68,0.9)]">
+                  <Gauge className="mb-2 h-5 w-5 text-red-400" />
+                  <span className="font-display text-3xl font-black tracking-tight text-red-300">START</span>
+                  <span className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-600">No changes applied</span>
+                </div>
+                <Link href="/system-scan" className="relative mt-5">
+                  <button data-testid="button-run-instant-scan" className="inline-flex items-center gap-2 rounded-full border border-red-400/40 bg-red-600/80 px-6 py-3 text-xs font-bold text-white shadow-[0_0_30px_-10px_rgba(239,68,68,0.95)] transition-colors hover:bg-red-500">
+                    <ScanLine className="h-3.5 w-3.5" /> Run instant scan <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </Link>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] text-zinc-500">
+                <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5">{os.loading ? "Detecting OS…" : os.os}</span>
+                <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5">{hw.loading ? "Detecting GPU…" : hw.gpuName || "GPU pending"}</span>
+                <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1.5">{hw.ramGB ? `${hw.ramGB} GB RAM` : "RAM pending"}</span>
+              </div>
             </div>
-            <div className="mb-6">
-              <OptiGodsWordmark variant="hero" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-display font-black text-white leading-tight">
-              Welcome back. <span className="text-red-500">Your rig is waiting.</span>
-            </h1>
-            <p className="text-zinc-400 mt-2 max-w-xl">
-              Hardware-aware tweaks, one-click fixes, and the AI assistant — all in one dashboard.
-            </p>
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <StatusCard icon={Cpu} label="System profile" value={hw.loading ? "Scanning…" : (hw.gpuName || "Run scan")} detail={hw.isLaptop ? "Laptop detected" : "Hardware-aware matching"} />
+            <StatusCard icon={ShieldCheck} label="Optimization state" value={`${enabled} selected`} detail="Review before generating a script" accent={enabled > 0} />
+            <StatusCard icon={Gamepad2} label="Current plan" value={isPro ? "Pro lifetime" : "Free plan"} detail={isPro ? "AI, presets, and updates unlocked" : "Upgrade when you are ready"} accent={isPro} href={isPro ? undefined : "/pro"} />
           </div>
         </div>
 
@@ -129,5 +157,43 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
       <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">{label}</p>
       <p className={cn("text-sm font-mono font-semibold truncate", accent ? "text-red-400" : "text-white")}>{value}</p>
     </div>
+  );
+}
+
+function StatusCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  accent,
+  href,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  detail: string;
+  accent?: boolean;
+  href?: string;
+}) {
+  const content = (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5">
+          <Icon className="h-4 w-4 text-red-300" />
+        </span>
+        {href && <ArrowRight className="h-3.5 w-3.5 text-zinc-700 transition-transform group-hover:translate-x-0.5" />}
+      </div>
+      <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-600">{label}</p>
+      <p className={cn("mt-1 truncate font-display text-lg font-black", accent ? "text-red-300" : "text-white")}>{value}</p>
+      <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">{detail}</p>
+    </>
+  );
+
+  return href ? (
+    <Link href={href} className="group rounded-2xl border border-white/[0.07] bg-[#080e10]/80 p-4 transition-colors hover:border-red-500/30 hover:bg-red-500/5">
+      {content}
+    </Link>
+  ) : (
+    <div className="rounded-2xl border border-white/[0.07] bg-[#080e10]/80 p-4">{content}</div>
   );
 }

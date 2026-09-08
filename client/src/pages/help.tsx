@@ -5,8 +5,8 @@ import {
   Shield, Zap, ChevronRight, AlertTriangle, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const DISCORD_INVITE = "https://discord.gg/optigods";
+import { SupportContact } from "@/components/support-contact";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
 const FAQ_ITEMS = [
   {
@@ -68,7 +68,7 @@ export default function Help() {
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold">Help & Support</h1>
-            <p className="text-zinc-500 text-sm">Get assistance, report issues, or request features on Discord</p>
+            <p className="text-zinc-500 text-sm">Get help by email or connect with the Opti Gods community</p>
           </div>
         </motion.div>
 
@@ -103,6 +103,8 @@ export default function Help() {
             </a>
           </div>
         </motion.div>
+
+        <SupportContact />
 
         {/* How to get help */}
         <motion.div

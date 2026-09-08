@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 import { HardwareDbTab, SuggestionsInboxTab, NvidiaTrackerTab } from "@/components/admin/hardware-db-tabs";
 import { ProPaymentDialog } from "@/components/pro-gate";
 
@@ -4468,7 +4469,7 @@ export default function Admin() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">
             <CreditCard className="w-3 h-3" /> Stripe (Card)
           </button>
-          <a href="https://discord.gg/optigods" target="_blank" rel="noreferrer"
+          <a href={DISCORD_INVITE} target="_blank" rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/20 transition-colors font-mono">
             <MessageSquare className="w-3 h-3" /> Discord
           </a>

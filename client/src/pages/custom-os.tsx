@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
 const FEATURE_PILLARS = [
   {
@@ -499,7 +500,7 @@ export default function CustomOS() {
                     Get ReviOS at revi.cc
                   </a>
                   <a
-                    href="https://discord.gg/optigods"
+                    href={DISCORD_INVITE}
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="link-discord-os"

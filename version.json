@@ -1,4 +1,4 @@
 {
-  "version": "4.0.0",
-  "notes": "V4.0.0 — Dashboard restructure (Quick Boost at top, Pro-gated sections), Ping Guardian for all games (25+ processes), Registry tweaks consolidated 10→5 sections, 100% score only after script confirmed run, Instant Scan button, desktop .url shortcut removed."
+  "version": "5.0.0",
+  "notes": "V5.0.0 — Opti Gods Performance Workspace: refreshed desktop shell, hardware-aware dashboard surfaces, dedicated Support Center with email and Discord help, and a unified red/graphite product UI."
 }

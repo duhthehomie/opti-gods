@@ -12,6 +12,7 @@ import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
 import { isNative, discordLogin, openExternal } from "@/lib/tauri-bridge";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -19,7 +20,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
-const DISCORD_LINK = "https://discord.gg/optigods";
+const DISCORD_LINK = DISCORD_INVITE;
 const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $25 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
 
 export function ProPaymentDialog({
@@ -535,7 +536,7 @@ export function ProPaymentDialog({
                   </p>
 
                   <a
-                    href="https://discord.gg/optigods"
+                    href={DISCORD_LINK}
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="link-manual-card-support"

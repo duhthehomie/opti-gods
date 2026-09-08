@@ -16,6 +16,7 @@ import { ScanGateBanner } from "@/components/scan-gate-banner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
 const MOBILE_FEATURES = [
   { icon: Zap, title: `${TOTAL_TWEAKS_LABEL} Optimizations`, desc: "Registry, GPU, network, memory, and game-specific tweaks" },
@@ -268,7 +269,7 @@ function MobileShowcase() {
             Get Pro — $20 (Pay &amp; DM leaq)
           </button>
         </Link>
-        <a href="https://discord.gg/optigods" target="_blank" rel="noopener noreferrer">
+        <a href={DISCORD_INVITE} target="_blank" rel="noopener noreferrer">
           <button
             data-testid="button-mobile-discord"
             className="w-full py-3 rounded-xl bg-indigo-600/15 border border-indigo-500/25 text-indigo-300 text-sm font-bold hover:bg-indigo-600/25 transition-all flex items-center justify-center gap-2 mt-3"
@@ -450,7 +451,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   if (isMobileDashboard) {
     return (
       <SidebarProvider>
-        <div className="flex h-screen w-full bg-[#020202] text-white overflow-hidden">
+        <div className="flex h-screen w-full bg-[#040708] text-white overflow-hidden">
           <AppSidebar />
           <div className="flex flex-col flex-1 relative z-10 overflow-hidden">
             <header className="h-14 flex items-center justify-between px-4 border-b border-white/5 bg-black/40 backdrop-blur-xl shrink-0">
@@ -476,26 +477,33 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full bg-[#020202] text-white overflow-hidden">
+      <div className="flex h-screen w-full bg-[#040708] text-white overflow-hidden">
         <AppSidebar />
         <div className="flex flex-col flex-1 relative z-10 overflow-hidden">
 
           {/* Top Header */}
-          <header className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-black/40 backdrop-blur-xl shrink-0">
+          <header className="h-16 flex items-center justify-between px-6 border-b border-white/[0.07] bg-[#071013]/80 backdrop-blur-xl shrink-0">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-zinc-400 hover:text-white" />
               <div className="h-4 w-px bg-white/10 hidden md:block" />
-              <span className="text-xs font-mono text-zinc-500 hidden md:block">
-                {osLabel} |{" "}
-                {enabledCount > 0 ? (
-                  <span className="text-red-400 font-semibold">{enabledCount} tweaks selected</span>
-                ) : (
-                  <span className="text-zinc-600">no tweaks selected yet</span>
-                )}
-              </span>
+              <div className="hidden md:block">
+                <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-red-400">Performance workspace</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  {osLabel} <span className="text-zinc-700">·</span>{" "}
+                  {enabledCount > 0 ? (
+                    <span className="text-red-300 font-semibold">{enabledCount} tweaks selected</span>
+                  ) : (
+                    <span className="text-zinc-600">ready to scan your rig</span>
+                  )}
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 lg:inline-flex">
+                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                System online
+              </span>
               {!isMobile && enabledCount > 0 && (
                 <Button
                   data-testid="button-clear-all-tweaks"
@@ -540,9 +548,9 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 relative">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 relative bg-[radial-gradient(circle_at_top_right,rgba(239,68,68,0.08),transparent_34%),linear-gradient(135deg,#040708,#060b0d)]">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]" />
-            <div className="w-full h-full space-y-6">
+            <div className="relative w-full h-full space-y-6">
               {!isMobile && <HardwareDetectionBanner compact />}
               {!isMobile && <ScanGateBanner />}
               {isMobile && MOBILE_PAGE_INFO[location] ? (

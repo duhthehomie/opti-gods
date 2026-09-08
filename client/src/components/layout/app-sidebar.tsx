@@ -32,7 +32,7 @@ type NavItem = {
   accent?: "pro" | "admin";
 };
 
-const PRIMARY: NavItem[] = [
+  const PRIMARY: NavItem[] = [
   { title: "Home", url: "/", icon: Home },
   { title: "System Scan", url: "/system-scan", icon: Activity },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
@@ -242,8 +242,8 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar className="border-r border-white/5">
-        <SidebarHeader className="p-5 border-b border-white/5">
+      <Sidebar className="border-r border-white/[0.07] bg-[#050b0d]">
+        <SidebarHeader className="p-5 border-b border-white/[0.07] bg-[#071013]">
           <div className="flex items-center gap-2.5">
             <div
               className={cn(
@@ -285,8 +285,9 @@ export function AppSidebar() {
           </div>
         </SidebarHeader>
 
-        <SidebarContent className="px-2 py-3">
+        <SidebarContent className="px-2 py-3 bg-[#050b0d]">
           <SidebarGroup>
+            <p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-zinc-600">Workspace</p>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map(renderItem)}
@@ -365,7 +366,7 @@ export function AppSidebar() {
             </div>
           )}
 
-          <div className="px-2 py-2.5 rounded-lg bg-zinc-900/60 border border-white/5">
+             <div className="px-2 py-2.5 rounded-lg bg-[#091418] border border-white/[0.07]">
             <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Detected System</p>
             <p className="text-xs text-zinc-400 font-mono truncate">
               {osInfo.loading ? "Detecting..." : osInfo.os}

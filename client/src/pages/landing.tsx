@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/accordion";
 import { OptiGodsWordmark } from "@/components/branding/opti-gods-wordmark";
 import { ProUnlockButton } from "@/components/pro-gate";
+import { SupportContact } from "@/components/support-contact";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 
-const DISCORD_INVITE = "https://discord.gg/optigods";
 const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || "$my1ik";
 const PAYPAL_LINK = (import.meta.env.VITE_PAYPAL_LINK as string | undefined) || "https://paypal.me/accountslg";
 const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED === "true";
@@ -88,7 +89,7 @@ const FAQS = [
   },
   {
     q: "How do I get support?",
-    a: "Join the Discord (discord.gg/optigods) for instant help from leaq and the community. Verified reviews, dedicated tickets channel, and most issues resolved within hours.",
+    a: "Join the official Opti Gods Discord for instant help from leaq and the community. Verified reviews, dedicated tickets channel, and most issues resolved within hours.",
   },
   {
     q: "Do I need to be technical?",
@@ -524,7 +525,7 @@ function LandingDesktop() {
         </div>
         <div className="flex justify-center">
           <a
-            href="https://discord.gg/optigods"
+            href={DISCORD_INVITE}
             target="_blank"
             rel="noreferrer"
             data-testid="link-reviews-discord"
@@ -645,6 +646,10 @@ function LandingDesktop() {
         </a>
       </section>
 
+      <section className="relative z-10 w-full px-5 py-12 md:px-10 md:py-16 xl:px-16">
+        <SupportContact />
+      </section>
+
       <section id="faq" className="relative z-10 w-full px-5 py-16 md:px-10 md:py-20 xl:px-16">
         <div className="text-center mb-10">
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-400">FAQ</span>
@@ -700,6 +705,9 @@ function LandingDesktop() {
             </Link>
             <a href="#faq" className="hover:text-white transition-colors" data-testid="link-footer-faq">
               FAQ
+            </a>
+            <a href="#support" className="hover:text-white transition-colors" data-testid="link-footer-support">
+              Support
             </a>
           </div>
         </div>

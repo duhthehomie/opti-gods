@@ -5,8 +5,9 @@ import { CheckCircle2, Zap, Loader2, XCircle, MessageCircle, User } from "lucide
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { setProStatus, setProSession } from "@/lib/pro-status";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
-const DISCORD_LINK = "https://discord.gg/optigods";
+const DISCORD_LINK = DISCORD_INVITE;
 
 type Status = "verifying" | "success" | "error";
 

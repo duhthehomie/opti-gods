@@ -3,8 +3,9 @@ import { useLocation } from "wouter";
 import { Mail, Loader2, CheckCircle2, Zap, ArrowLeft, MessageCircle, AlertTriangle, Shield, Clock, RefreshCw } from "lucide-react";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
+import { DISCORD_INVITE } from "@/lib/brand-links";
 
-const DISCORD_LINK = "https://discord.gg/optigods";
+const DISCORD_LINK = DISCORD_INVITE;
 
 export default function GetCode() {
   const [, setLocation] = useLocation();
