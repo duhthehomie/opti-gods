@@ -551,6 +551,7 @@ function LandingDesktop() {
             <h2 className="mt-3 max-w-lg font-display text-3xl font-black tracking-tight text-white md:text-5xl">Go deeper when you’re ready.</h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
               Start with the free download. Upgrade once for lifetime access to the full tweak library, AI presets, and future updates.
+            </p>
             </div>
             <div className="mt-6 flex items-baseline gap-2">
               <span className="font-display text-6xl font-black text-white">$20</span>
