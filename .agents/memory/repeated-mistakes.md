@@ -17,5 +17,6 @@ description: Mistakes that have happened more than once — check this before ac
 - **Adding expert tweaks to CORE auto-preset** — the Enable All / Smart Recs functions must filter out all 15 expert tweaks. This was broken at V2 launch and cost significant debugging time.
 - **DEFAULT_TWEAKS and TWEAK_REGISTRY out of sync** — caused Quick Boost presets to silently skip tweaks. Always verify both lists match after adding new tweaks.
 - **TypeScript errors from Discord fields on ProAccessCode type** — use `(c as any).discordLinked` etc. The DB type doesn't include those fields.
+- **Large JSX replacements** — run the TypeScript check before restarting the workflow; one mismatched tag can leave the server running while the preview cannot compile the page.
 
 **Why:** Each of these has come up more than once and caused leaq to have to correct me, repeat himself, or debug regressions that shouldn't have happened.

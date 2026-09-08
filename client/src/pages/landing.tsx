@@ -552,7 +552,6 @@ function LandingDesktop() {
             <p className="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
               Start with the free download. Upgrade once for lifetime access to the full tweak library, AI presets, and future updates.
             </p>
-            </div>
             <div className="mt-6 flex items-baseline gap-2">
               <span className="font-display text-6xl font-black text-white">$20</span>
               <span className="text-sm text-zinc-500">one-time · lifetime</span>
