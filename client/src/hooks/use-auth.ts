@@ -1,5 +1,8 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { discordCachedToken, isNative } from "@/lib/tauri-bridge";
+import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 export type AuthUser = {
   discordId: string;
@@ -15,6 +18,31 @@ export type AuthState = {
 };
 
 export function useAuth(): AuthState {
+  const native = isNative();
+  // The desktop token is restored from Windows Credential Manager
+  // asynchronously. Do not let the first /api/me request race that restore:
+  // a fast 401 would make an already signed-in desktop user fall through to
+  // Welcome while navigating between authenticated pages.
+  const [nativeAuthReady, setNativeAuthReady] = useState(() => !native);
+
+  useEffect(() => {
+    if (!native) return;
+    let active = true;
+    discordCachedToken()
+      .then((session) => {
+        if (session?.native_token) {
+          try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {
+        // A missing/unavailable keyring is handled as a normal signed-out state.
+      })
+      .finally(() => {
+        if (active) setNativeAuthReady(true);
+      });
+    return () => { active = false; };
+  }, [native]);
+
   // placeholderData ensures isLoading is never true on first render.
   // The UI shows "not authenticated" immediately and updates silently
   // once the real /api/me response arrives. This eliminates any
@@ -26,6 +54,7 @@ export function useAuth(): AuthState {
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
     placeholderData: { user: null },
+    enabled: nativeAuthReady,
   });
   const user = data?.user ?? null;
   return { user, isLoading, isAuthenticated: !!user };

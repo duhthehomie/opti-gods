@@ -2780,6 +2780,7 @@ export default function GameDetection() {
   const [isFiltered, setIsFiltered] = useState(false);
   const [hwFromUrl, setHwFromUrl] = useState<{ gpu?: string; cpu?: string; ram?: string; vendor?: string; os?: string; laptop?: string } | null>(null);
   const [adminLinkCopied, setAdminLinkCopied] = useState(false);
+  const gameLibraryRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2802,6 +2803,16 @@ export default function GameDetection() {
       setHwFromUrl({ gpu: gpu ?? undefined, cpu: cpu ?? undefined, ram: ram ?? undefined, vendor: vendor ?? undefined, os: os ?? undefined, laptop: laptop ?? undefined });
     }
   }, []);
+
+  // The scanner returns to this page with ?games=...; keep the result visible
+  // by taking the user to the horizontally scrollable library after it mounts.
+  useEffect(() => {
+    if (!isFiltered || !detectedIds || !gameLibraryRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      gameLibraryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isFiltered, detectedIds]);
 
   function copyAdminPresetLink() {
     if (!hwFromUrl) return;
@@ -3082,7 +3093,7 @@ export default function GameDetection() {
         )}
 
         {visibleGames.length > 0 && (
-          <section className="rounded-2xl border border-white/[0.07] bg-[#080d0f]/80 p-4">
+            <section ref={gameLibraryRef} id="game-library" className="scroll-mt-6 rounded-2xl border border-white/[0.07] bg-[#080d0f]/80 p-4">
             <div className="mb-4 flex items-center justify-between gap-3 px-1">
               <div>
                 <h2 className="text-sm font-bold uppercase tracking-wider text-red-400">Game Library</h2>
