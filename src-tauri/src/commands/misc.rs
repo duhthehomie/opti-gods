@@ -12,6 +12,31 @@ pub fn open_downloads() {
     }
 }
 
+/// Opens FiveM Application Data directly in Explorer.
+/// Safe: the path is derived only from LOCALAPPDATA; the renderer supplies no path.
+#[tauri::command]
+pub fn open_fivem_folder() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let local = std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA is unavailable".to_string())?;
+        let candidates = [
+            std::path::PathBuf::from(&local).join("FiveM").join("FiveM Application Data"),
+            std::path::PathBuf::from(&local).join("FiveM").join("FiveM.app"),
+        ];
+        let path = candidates.iter().find(|p| p.exists())
+            .ok_or_else(|| "FiveM Application Data was not found. Launch FiveM once, then try again.".to_string())?;
+        std::process::Command::new("explorer.exe")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Could not open FiveM folder: {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("FiveM folders are only available on Windows.".to_string())
+    }
+}
+
 /// Read a text file from an absolute path on disk.
 /// Used by the HW Monitor drop zone: Tauri intercepts OS file drops and
 /// delivers a file path; the frontend then calls this to get the content.

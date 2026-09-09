@@ -14,29 +14,21 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 
 const Registry         = lazy(() => import("@/pages/registry"));
-const Bond007          = lazy(() => import("@/pages/bond-007"));
-const CallOfDuty       = lazy(() => import("@/pages/call-of-duty"));
-const Fivem            = lazy(() => import("@/pages/fivem"));
-const Fortnite         = lazy(() => import("@/pages/fortnite"));
-const RustGame         = lazy(() => import("@/pages/rust-game"));
-const RobloxPage       = lazy(() => import("@/pages/roblox"));
 const Nvidia           = lazy(() => import("@/pages/nvidia"));
 const Amd              = lazy(() => import("@/pages/amd"));
 const IntegratedGraphics = lazy(() => import("@/pages/integrated-graphics"));
 const LaptopPage       = lazy(() => import("@/pages/laptop"));
 const ProcessLasso     = lazy(() => import("@/pages/process-lasso"));
 const ProcessesPage    = lazy(() => import("@/pages/processes"));
-const DiscordPage      = lazy(() => import("@/pages/discord"));
 const StartupApps      = lazy(() => import("@/pages/startup-apps"));
 const Memory           = lazy(() => import("@/pages/memory"));
 const Debloat          = lazy(() => import("@/pages/debloat"));
 const WinTitus         = lazy(() => import("@/pages/wintitus"));
-const SpotifyPage      = lazy(() => import("@/pages/spotify"));
 const CpuPage          = lazy(() => import("@/pages/cpu"));
 const MouseTweaks      = lazy(() => import("@/pages/mouse-tweaks"));
 const KeyboardTweaks   = lazy(() => import("@/pages/keyboard-tweaks"));
 
-type GroupId = "windows" | "network" | "gpu" | "cpu" | "games" | "system" | "peripherals";
+type GroupId = "windows" | "network" | "gpu" | "cpu" | "system" | "peripherals";
 
 type Section = {
   id: string;
@@ -74,23 +66,13 @@ const SECTIONS: Section[] = [
     icon: Laptop, group: "gpu", Component: LaptopPage, categories: ["laptop"],
     hardwareFilter: (hw) => hw.isLaptop,
   },
-  { id: "bond007",      title: "007: First Light",              desc: "UE5 Engine.ini, Lumen off, process priority, shader cache",  icon: Shield,        group: "games",   Component: Bond007,            categories: [] as TweakCategory[],
-    tweakIds: ["game_007firstlight","CodShaderCacheClear","CodPagefileOptimize","CodDisableHAGS","Cod1650LowLatency","NvidiaD3DOptimize","NvidiaPCIeGen3Force","Cod3500PowerPlan","Cod3500CoreUnpark","CodMemPriority","CodFramePacing","CodTdrDelay","CodMMCSS"],
-  },
-  { id: "cod",          title: "Call of Duty (BO6 / Warzone)", desc: "Textures, VRAM overflow, HAGS, network, CPU boost",         icon: Target,        group: "games",   Component: CallOfDuty,         categories: ["cod"] },
-  { id: "fivem",        title: "FiveM / GTA V",                desc: "Priority, cache, streaming, network buffers",               icon: Gamepad2,      group: "games",   Component: Fivem,              categories: ["fivem"] },
-  { id: "fortnite",     title: "Fortnite",                      desc: "DX12, shader precompile, input lag",                        icon: Crosshair,     group: "games",   Component: Fortnite,           categories: ["fortnite"] },
-  { id: "rust",         title: "Rust",                          desc: "FPS uncap, client.cfg tweaks, CPU priority, shadows",       icon: Swords,        group: "games",   Component: RustGame,           categories: ["rust"] },
-  { id: "roblox",       title: "Roblox",                        desc: "FPS unlock via FFlags, process priority, post-FX off",      icon: Blocks,        group: "games",   Component: RobloxPage,         categories: ["roblox"] },
-  { id: "discord",      title: "Discord While Gaming",          desc: "Stop Discord from eating FPS — process scanner, GIF, media, notifications",  icon: MessageCircle, group: "games",   Component: DiscordPage,        categories: ["discord"] },
-  { id: "spotify",      title: "Spotify While Gaming",          desc: "Stop Spotify stealing FPS — GPU, CPU priority, bandwidth",  icon: Music,         group: "games",   Component: SpotifyPage,        categories: ["spotify"] },
   { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "cpu",     Component: CpuPage,            categories: [] as TweakCategory[],
     tweakIds: [
       "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
       "ProcMMCSSGaming","ProcGPUSchedulerHigh","DisableHungAppDetection","DisableSearchIndexer","DisableAutoMaintenance",
       "SetHighPerformancePlan","DisableCoreParking","CpuBoostModeAggressive","CpuIdleMin100",
       "DisableDynamicTick","DisablePowerThrottlingAdv","DisableUSBSuspend","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
-      "FiveMFullPerfStack","CpuFortniteIFEO","CpuCodIFEO","CpuGenericGameIFEO","ProcNUMAAware","ProcAffinityFPS",
+      "ProcNUMAAware","ProcAffinityFPS",
       "SysHypervisorOff","Win11DisableVBS","Win11DisableHVCI","CpuDisableSpectreMitigation","IntelOldGenPowerOpt",
     ],
   },
@@ -131,7 +113,6 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "network", label: "Network" },
   { id: "gpu",     label: "GPU"     },
   { id: "cpu",     label: "CPU"     },
-  { id: "games",       label: "Games"       },
   { id: "peripherals", label: "Peripherals" },
   { id: "system",      label: "System"      },
 ];

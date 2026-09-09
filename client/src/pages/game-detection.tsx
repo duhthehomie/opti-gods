@@ -2770,6 +2770,7 @@ function downloadScannerScript() {
 
 export default function GameDetection() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
+  const native = useMemo(() => isNative(), []);
 
   // Track which game is currently running (set by NowPlayingPanel)
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
@@ -2895,7 +2896,7 @@ export default function GameDetection() {
         </AnimatePresence>
 
         {/* Detection banner — shown when no scan has been run yet */}
-        {!isFiltered && (
+        {!isFiltered && !native && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -3080,34 +3081,18 @@ export default function GameDetection() {
           </motion.div>
         )}
 
-        {/* Games — included/enabled */}
-        {enabledGames.length > 0 && (
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
-              Included in Script ({enabledGames.length})
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {enabledGames.map((game) => (
-                <GameCard key={game.id} game={game} />
-              ))}
+        {visibleGames.length > 0 && (
+          <section className="rounded-2xl border border-white/[0.07] bg-[#080d0f]/80 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3 px-1">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-red-400">Game Library</h2>
+                <p className="mt-1 text-[11px] text-zinc-600">{isFiltered ? `${visibleGames.length} detected games` : `${GAMES.length} supported profiles`} · scroll sideways to browse</p>
+              </div>
+              <a href="/game-profiles" className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-red-300">View profiles →</a>
             </div>
-          </section>
-        )}
-
-        {/* Games — not included */}
-        {disabledGames.length > 0 && (
-          <section>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">
-              {enabledGames.length > 0
-                ? `Not Included (${disabledGames.length})`
-                : isFiltered
-                  ? `Detected on Your PC (${disabledGames.length})`
-                  : `All Games (${GAMES.length})`
-              }
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {disabledGames.map((game, i) => (
-                <motion.div key={game.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-color:#3f3f46_transparent]">
+              {[...enabledGames, ...disabledGames].map((game, index) => (
+                <motion.div key={game.id} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(index * 0.02, 0.25) }} className="w-[210px] min-w-[210px] snap-start">
                   <GameCard game={game} />
                 </motion.div>
               ))}

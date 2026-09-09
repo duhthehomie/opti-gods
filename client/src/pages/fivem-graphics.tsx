@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { isNative, discordLogin, openFivemFolder } from "@/lib/tauri-bridge";
 import { loginWithDiscord } from "@/hooks/use-auth";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
@@ -1297,7 +1297,16 @@ export default function FivemGraphics() {
     return "heavy";
   })();
 
-  const handleOpenAppData = () => {
+  const handleOpenAppData = async () => {
+    if (isNative()) {
+      try {
+        await openFivemFolder();
+        return;
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "FiveM Application Data was not found.");
+        return;
+      }
+    }
     const bat = `@echo off\r\nstart "" "%LOCALAPPDATA%\\FiveM\\FiveM Application Data"\r\n`;
     const blob = new Blob([bat], { type: "application/octet-stream" });
     const url  = URL.createObjectURL(blob);
@@ -1427,8 +1436,8 @@ export default function FivemGraphics() {
             onClick={handleOpenAppData}
             className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold hover:bg-amber-500/20 transition-colors whitespace-nowrap"
           >
-            <Download className="w-3.5 h-3.5" />
-            Open Folder .bat
+             <FolderOpen className="w-3.5 h-3.5" />
+             Open FiveM Folder
           </button>
         </div>
 

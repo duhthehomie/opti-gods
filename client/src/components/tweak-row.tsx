@@ -1,16 +1,37 @@
 import { useState } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { CustomSwitch } from "./ui/custom-switch";
 import { Label } from "./ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ShieldAlert, X, Info, Lock, Undo2, Loader2 } from "lucide-react";
+import { AlertTriangle, ShieldAlert, X, Info, Lock, Undo2, Loader2, Zap } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getTweakMeta, SAFETY_LABEL, SAFETY_DESCRIPTION, type TweakSafety } from "@/lib/tweak-registry";
 import { useDetectedAntiCheats, type AntiCheatId } from "@/hooks/use-detected-anti-cheats";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
+import { applyTweak, createRestorePoint, isNative, undoTweak } from "@/lib/tauri-bridge";
+
+const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
+const RESTORE_CREATED_KEY = "optigods-native-restore-created";
+
+function readNativeUndoToken(id: string): string | null {
+  try {
+    const tokens = JSON.parse(localStorage.getItem(NATIVE_UNDO_KEY) || "{}") as Record<string, string>;
+    return tokens[id] || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeNativeUndoToken(id: string, token: string | null) {
+  try {
+    const tokens = JSON.parse(localStorage.getItem(NATIVE_UNDO_KEY) || "{}") as Record<string, string>;
+    if (token) tokens[id] = token;
+    else delete tokens[id];
+    localStorage.setItem(NATIVE_UNDO_KEY, JSON.stringify(tokens));
+  } catch { /* storage is best-effort */ }
+}
 
 interface TweakRowProps {
   id: string;
@@ -48,6 +69,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const plainText = plainEnglish ?? meta?.plainEnglish ?? null;
   const safetyStyle = safetyVal ? SAFETY_STYLES[safetyVal] : null;
   const [pendingEnable, setPendingEnable] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const { toast } = useToast();
 
@@ -56,6 +78,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   // download a single-tweak reversal PS1 (Pro-gated, server-generated).
   const appliedAt = useOptimizationStore((s) => s.appliedAt[id]);
   const clearApplied = useOptimizationStore((s) => s.clearApplied);
+  const markApplied = useOptimizationStore((s) => s.markApplied);
   const setTweakStore = useOptimizationStore((s) => s.setTweak);
 
   // Anti-cheat awareness: grey out tweaks that an installed AC bans.
@@ -68,10 +91,46 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac));
   const acBlocked = Boolean(blockingAC) && !checked;
 
+  const runEnable = async () => {
+    if (applying) return;
+    if (!isNative()) {
+      onCheckedChange(true);
+      toast({ title: "Tweak selected", description: "It will be included when you run your selected tweaks." });
+      return;
+    }
+
+    setApplying(true);
+    try {
+      if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
+        await createRestorePoint("Before Opti Gods tweak changes").catch(() => null);
+        sessionStorage.setItem(RESTORE_CREATED_KEY, "1");
+      }
+      const result = await applyTweak(id);
+      if (!result.ok) throw new Error(result.message || "This tweak needs the script runner.");
+      onCheckedChange(true);
+      markApplied([id]);
+      writeNativeUndoToken(id, result.undo_token);
+      toast({
+        title: "Tweak enabled",
+        description: `${result.message}${result.requires_reboot ? " Restart Windows to finish applying it." : ""}`,
+      });
+    } catch {
+      onCheckedChange(true);
+      toast({
+        title: "Added to Run Tweaks",
+        description: "This tweak needs the trusted Opti Gods script. Use Run Selected Tweaks in the top bar.",
+      });
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const handleChange = (val: boolean) => {
     if (acBlocked && val) return;
     if (val && warning && !checked) {
       setPendingEnable(true);
+    } else if (val) {
+      void runEnable();
     } else {
       onCheckedChange(val);
     }
@@ -79,7 +138,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
 
   const confirmEnable = () => {
     setPendingEnable(false);
-    onCheckedChange(true);
+    void runEnable();
   };
 
   const cancelEnable = () => {
@@ -90,6 +149,16 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     if (undoing) return;
     setUndoing(true);
     try {
+      const nativeToken = readNativeUndoToken(id);
+      if (isNative() && nativeToken) {
+        const result = await undoTweak(id, nativeToken);
+        if (!result.ok) throw new Error(result.message || "Native undo failed");
+        setTweakStore(id, false);
+        clearApplied(id);
+        writeNativeUndoToken(id, null);
+        toast({ title: "Tweak undone", description: result.message });
+        return;
+      }
       const sessionToken = getStoredToken();
       const res = await fetch(apiUrl("/api/script/undo"), {
         method: "POST",
@@ -294,31 +363,27 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
           </Tooltip>
         ) : (
           <div className="flex items-center gap-2 shrink-0" data-no-row-toggle onClick={(e) => e.stopPropagation()}>
-            {appliedAt && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid={`button-undo-${id}`}
-                    onClick={(e) => { e.stopPropagation(); handleUndo(); }}
-                    disabled={undoing}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors disabled:opacity-50"
-                  >
-                    {undoing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Undo2 className="w-3 h-3" />}
-                    UNDO
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-xs text-xs leading-snug">
-                  Download a one-tweak reversal script. Applied at {new Date(appliedAt).toLocaleString()}.
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <CustomSwitch
-              id={id}
-              checked={checked}
-              onCheckedChange={handleChange}
-              data-testid={`toggle-tweak-${id}`}
-            />
+            <button
+              type="button"
+              data-testid={`button-tweak-${id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (appliedAt) void handleUndo();
+                else handleChange(!checked);
+              }}
+              disabled={applying || undoing}
+              className={cn(
+                "inline-flex min-w-[84px] items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50",
+                appliedAt
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                  : checked
+                    ? "border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                    : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-red-500/30 hover:text-white",
+              )}
+            >
+              {applying || undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : appliedAt ? <Undo2 className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : checked ? "Queued" : "Enable"}
+            </button>
           </div>
         )}
       </motion.div>
@@ -370,7 +435,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                 </div>
 
                 <p className="ml-16 text-xs text-zinc-600 leading-relaxed">
-                  This tweak will only take effect after you download and run the PowerShell script as Administrator. You can turn it back off at any time before downloading.
+                  Opti Gods will apply this directly when a trusted native action is available. Otherwise it will add the tweak to the one-click Run Tweaks queue.
                 </p>
 
                 <div className="ml-16 flex items-center gap-3 pt-1">
@@ -379,7 +444,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                     onClick={confirmEnable}
                     className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition-colors"
                   >
-                    Enable Anyway
+                    Run Tweak
                   </button>
                   <button
                     data-testid={`button-cancel-${id}`}

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Activity, Settings2, Wrench, Crown, Download, ChevronRight, LogIn, Bot, LogOut, UserCircle, ShieldCheck, X, Monitor, Gamepad2, HelpCircle, Palette, Cpu } from "lucide-react";
+import { Home, Settings2, Crown, Download, ChevronRight, LogIn, LogOut, ShieldCheck, X, Gamepad2, HelpCircle, Palette, Cpu, Library, RefreshCw } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
@@ -33,17 +33,13 @@ type NavItem = {
 };
 
   const PRIMARY: NavItem[] = [
-  { title: "Home", url: "/", icon: Home },
-  { title: "System Scan", url: "/system-scan", icon: Activity },
+  { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
-  { title: "Tools & Fixes", url: "/tools", icon: Wrench },
-  { title: "Task Manager", url: "/task-manager", icon: Monitor },
-  { title: "FiveM Graphics", url: "/fivem-graphics", icon: Palette },
   { title: "Game Detection", url: "/game-detection", icon: Gamepad2 },
-  { title: "AI Assistant", url: "/ai", icon: Bot },
-  { title: "Pro", url: "/pro", icon: Crown, accent: "pro" },
-  { title: "Account", url: "/account", icon: UserCircle },
-  { title: "Help", url: "/help", icon: HelpCircle },
+  { title: "Game Profiles", url: "/game-profiles", icon: Library },
+  { title: "Graphics Studio", url: "/graphics-studio", icon: Palette },
+  { title: "Support", url: "/support", icon: HelpCircle },
+  { title: "Updates", url: "/updates", icon: RefreshCw },
 ];
 
 const ADMIN_NAV: NavItem = { title: "Admin", url: "/admin", icon: ShieldCheck, accent: "admin" };
@@ -174,7 +170,9 @@ export function AppSidebar() {
   }, []);
 
   const isActive = (url: string) => {
-    if (url === "/") return location === "/" || location === "/dashboard";
+    if (url === "/dashboard") return location === "/" || location === "/dashboard";
+    if (url === "/support") return location === "/support" || location === "/help";
+    if (url === "/graphics-studio") return location === "/graphics-studio" || location === "/fivem-graphics";
     return location === url || location.startsWith(url + "/");
   };
 

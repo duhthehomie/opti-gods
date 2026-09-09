@@ -39,6 +39,16 @@ const ProcessesPage  = lazy(() => import("@/pages/processes"));
 const HelpPage       = lazy(() => import("@/pages/help"));
 const TaskManagerPage    = lazy(() => import("@/pages/task-manager"));
 const FivemGraphicsPage  = lazy(() => import("@/pages/fivem-graphics"));
+const GameProfilesPage   = lazy(() => import("@/pages/game-profiles"));
+const UpdatesPage        = lazy(() => import("@/pages/updates"));
+const FivemPage          = lazy(() => import("@/pages/fivem"));
+const FortnitePage       = lazy(() => import("@/pages/fortnite"));
+const CallOfDutyPage     = lazy(() => import("@/pages/call-of-duty"));
+const Bond007Page        = lazy(() => import("@/pages/bond-007"));
+const RustGamePage       = lazy(() => import("@/pages/rust-game"));
+const RobloxPage         = lazy(() => import("@/pages/roblox"));
+const DiscordPage        = lazy(() => import("@/pages/discord"));
+const SpotifyPage        = lazy(() => import("@/pages/spotify"));
 
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 
@@ -137,10 +147,22 @@ function Router() {
         <Route path="/payment/success" component={PaymentSuccess} />
         <Route path="/payment/cancel" component={PaymentCancel} />
         <Route path="/game-detection" component={GameDetectionPage} />
+        <Route path="/game-profiles" component={GameProfilesPage} />
+        <Route path="/game-profiles/fivem" component={FivemPage} />
+        <Route path="/game-profiles/fortnite" component={FortnitePage} />
+        <Route path="/game-profiles/call-of-duty" component={CallOfDutyPage} />
+        <Route path="/game-profiles/007-first-light" component={Bond007Page} />
+        <Route path="/game-profiles/rust" component={RustGamePage} />
+        <Route path="/game-profiles/roblox" component={RobloxPage} />
+        <Route path="/game-profiles/discord" component={DiscordPage} />
+        <Route path="/game-profiles/spotify" component={SpotifyPage} />
         <Route path="/processes" component={ProcessesPage} />
         <Route path="/help" component={HelpPage} />
+        <Route path="/support" component={HelpPage} />
+        <Route path="/updates" component={UpdatesPage} />
         <Route path="/task-manager" component={TaskManagerPage} />
         <Route path="/fivem-graphics" component={FivemGraphicsPage} />
+        <Route path="/graphics-studio" component={FivemGraphicsPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

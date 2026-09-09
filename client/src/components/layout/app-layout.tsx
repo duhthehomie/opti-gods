@@ -124,6 +124,22 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "Auto",
     highlights: ["Hardware Scanner", "Game Library Detect", "Auto-Recommendations", "GPU Detection", "System Profile"],
   },
+  "/game-profiles": {
+    title: "Game Profiles",
+    desc: "Game-specific optimization controls, grouped by title instead of mixed into Windows tweaks.",
+  },
+  "/graphics-studio": {
+    title: "Graphics Studio",
+    desc: "Build, validate, and install FiveM visual packs from one focused workspace.",
+  },
+  "/support": {
+    title: "Support",
+    desc: "Get direct help by email or through the Opti Gods Discord community.",
+  },
+  "/updates": {
+    title: "Updates",
+    desc: "See release notes, relevant improvements, and available Opti Gods updates.",
+  },
   "/task-manager": {
     title: "Task Manager",
     desc: "Kill background apps and remove them from Windows startup — more RAM and CPU dedicated to your games.",
@@ -430,7 +446,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { tweaks, nvidiaPreset, reset } = useOptimizationStore();
+  const { tweaks, appliedAt, nvidiaPreset, reset } = useOptimizationStore();
   const osInfo = useOsDetection();
 
   const handleApply = () => {
@@ -445,6 +461,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
 
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const appliedCount = Object.keys(appliedAt).length;
 
   const isMobileDashboard = isMobile && location === "/";
 
@@ -491,7 +508,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
                 <p className="mt-0.5 text-[11px] text-zinc-500">
                   {osLabel} <span className="text-zinc-700">·</span>{" "}
                   {enabledCount > 0 ? (
-                    <span className="text-red-300 font-semibold">{enabledCount} tweaks selected</span>
+                    <span className="text-red-300 font-semibold">{appliedCount} applied · {Math.max(enabledCount - appliedCount, 0)} queued</span>
                   ) : (
                     <span className="text-zinc-600">ready to scan your rig</span>
                   )}

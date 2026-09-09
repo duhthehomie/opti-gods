@@ -135,8 +135,8 @@ function fanLabel(scan: NativeHardwareScan, countOverride?: number | null): { la
     const chassis = (scan.chassis || "").toLowerCase();
     const isLaptop = chassis === "laptop" || chassis === "notebook";
     return {
-      label: `${count} Fan${count === 1 ? "" : "s"}`,
-      sub: isLaptop ? "Laptop cooling" : "Air cooled",
+      label: `${count} WMI-visible fan${count === 1 ? "" : "s"}`,
+      sub: isLaptop ? "Laptop firmware report" : "Motherboard firmware report",
     };
   }
   const chassis = (scan.chassis || "").toLowerCase();

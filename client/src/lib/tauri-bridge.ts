@@ -244,6 +244,11 @@ export async function openDownloadsFolder(): Promise<void> {
   }
 }
 
+export async function openFivemFolder(): Promise<void> {
+  if (!isNative()) throw new Error("Open FiveM Folder is available in the Windows app.");
+  await invoke<void>("open_fivem_folder");
+}
+
 export async function discordLogout(): Promise<void> {
   if (!isNative()) {
     window.location.href = "/api/auth/discord/logout";

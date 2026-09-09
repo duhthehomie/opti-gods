@@ -390,6 +390,7 @@ export default function TaskManagerPage() {
   const [appStates, setAppStates] = useState<Record<string, AppState>>({});
   const [allProcesses, setAllProcesses] = useState<ProcessInfo[]>([]);
   const [allStartupEntries, setAllStartupEntries] = useState<StartupEntry[]>([]);
+  const totalProcessInstances = allProcesses.reduce((sum, process) => sum + Math.max(process.instances || 1, 1), 0);
 
   // ── Background process kill state ──────────────────────────────────────────
   const [bgKillStates, setBgKillStates] = useState<Record<string, "idle" | "pending" | "done" | "error">>({});
@@ -1028,15 +1029,15 @@ export default function TaskManagerPage() {
               <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <List className="w-4 h-4 text-zinc-500" />
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">All Background Processes</h2>
-                  <span className="text-[10px] text-zinc-600">{bgProcesses.length} processes</span>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Safe Background Process Types</h2>
+                  <span className="text-[10px] text-zinc-600">{bgProcesses.length} types · {totalProcessInstances} scanned instances</span>
                 </div>
 
                 {/* Info banner */}
                 <div className="mb-3 rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-2 flex items-start gap-2">
                   <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    These are all non-Windows processes running on your PC. <span className="text-emerald-400 font-semibold">Safe to close</span> — critical Windows processes and peripheral software are already filtered into their own sections above.
+                    Windows Task Manager counts every process instance. Opti Gods groups duplicate executables and filters protected Windows services, so this list is intentionally smaller. Only entries marked <span className="text-emerald-400 font-semibold">Safe to Kill</span> can be closed here.
                   </p>
                 </div>
 
