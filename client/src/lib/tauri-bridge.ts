@@ -277,6 +277,23 @@ export async function discordCachedToken(): Promise<NativeDiscordSession | null>
   return invoke<NativeDiscordSession | null>("discord_cached_token");
 }
 
+/**
+ * Return the native bearer token that should accompany server-authorized
+ * Windows actions. LocalStorage is the fast path; the keyring is the source
+ * of truth after a cold desktop start.
+ */
+export async function getNativeAuthToken(): Promise<string | null> {
+  try {
+    const stored = localStorage.getItem("optigods_native_auth_token");
+    if (stored) return stored;
+  } catch { /* localStorage may be unavailable */ }
+  if (!isNative()) return null;
+  const session = await discordCachedToken().catch(() => null);
+  if (!session?.native_token) return null;
+  try { localStorage.setItem("optigods_native_auth_token", session.native_token); } catch { /* best effort */ }
+  return session.native_token;
+}
+
 // ─── updater ────────────────────────────────────────────────────────────────
 
 export interface UpdateInfo {

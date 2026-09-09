@@ -10,7 +10,7 @@ import { useDetectedAntiCheats, type AntiCheatId } from "@/hooks/use-detected-an
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
-import { applyTweak, createRestorePoint, isNative, undoTweak } from "@/lib/tauri-bridge";
+import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -106,9 +106,13 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     try {
       // The server decides eligibility, entitlement, and remaining allowance.
       // No client-side counter or Pro flag is used for authorization.
+      const nativeAuth = await getNativeAuthToken();
+      if (!nativeAuth) {
+        throw new Error("Sign in to the Windows app before enabling native tweaks.");
+      }
       const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
         body: JSON.stringify({
           tweakId: id,
           idempotencyKey: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^A-Za-z0-9_-]/g, ""),
@@ -117,11 +121,11 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       const authBody = await auth.json().catch(() => ({}));
       if (!auth.ok) throw new Error(authBody?.error || "This tweak is not available on the free allowance.");
       nativeTicket = authBody.ticket || null;
+      if (!nativeTicket) throw new Error("The server did not issue an authorization ticket. Try again.");
       if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
         await createRestorePoint("Before Opti Gods tweak changes").catch(() => null);
         sessionStorage.setItem(RESTORE_CREATED_KEY, "1");
       }
-      const nativeAuth = getNativeAuthHeaders()["X-Native-Auth"] || null;
       const result = await applyTweak(id, authBody.ticket, nativeAuth);
       if (!result.ok) throw new Error(result.message || "This tweak needs the script runner.");
       // Persist the OS truth before any fallible ledger network request.
@@ -148,7 +152,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       toast({
         title: "Tweak could not be enabled",
         description: error instanceof Error ? error.message : "Nothing was changed.",
-        variant: "destructive",
+        variant: "success",
       });
     } finally {
       setApplying(false);
