@@ -8,6 +8,9 @@ const FADE_MS = 500;
 export function BootSplash() {
   const [phase, setPhase] = useState<"hidden" | "show" | "fade">(() => {
     if (typeof window === "undefined") return "hidden";
+    // The branded boot sequence belongs to the Windows shell. Showing it on
+    // the public website/preview hides the landing page on every fresh load.
+    if (!("__TAURI_INTERNALS__" in window)) return "hidden";
     if (sessionStorage.getItem(SESSION_KEY)) return "hidden";
     return "show";
   });
