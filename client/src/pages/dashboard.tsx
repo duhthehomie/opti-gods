@@ -23,6 +23,7 @@ import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
+import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
 
 // Feature categories
 const FEATURES = [
@@ -427,7 +428,7 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
-
+        <PerformanceAllowanceCard />
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}

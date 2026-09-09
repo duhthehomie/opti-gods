@@ -41,6 +41,8 @@ pub struct TweakDescriptor {
 #[derive(Deserialize)]
 pub struct ApplyArgs {
     pub id: String,
+    pub ticket: Option<String>,
+    pub native_auth: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -108,8 +110,30 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
 }
 
 #[tauri::command]
-pub fn apply_tweak(args: ApplyArgs) -> TweakResult {
-    if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
+pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
+    let ticket = match (args.ticket.as_deref(), args.native_auth.as_deref()) {
+        (Some(ticket), Some(auth)) => (ticket, auth),
+        _ => return TweakResult { ok: false, id: args.id, message: "A server authorization ticket is required.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+    };
+    let client = reqwest::Client::new();
+    let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { "https://optigods.com" };
+    let validation = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"))
+        .header("X-Native-Auth", ticket.1)
+        .json(&serde_json::json!({ "ticket": ticket.0, "tweakId": &args.id }))
+        .send().await;
+    let response = match validation {
+        Ok(response) if response.status().is_success() => response,
+        _ => return TweakResult { ok: false, id: args.id, message: "Server authorization ticket was rejected or expired.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+    };
+    let consumed: serde_json::Value = match response.json().await {
+        Ok(value) => value,
+        Err(_) => return TweakResult { ok: false, id: args.id, message: "Invalid authorization response.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+    };
+    let result_secret = match consumed.get("resultSecret").and_then(|v| v.as_str()) {
+        Some(value) => value.to_string(),
+        None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+    };
+    let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {
             Ok(undo_token) => TweakResult {
                 ok: true,
@@ -143,7 +167,22 @@ pub fn apply_tweak(args: ApplyArgs) -> TweakResult {
             requires_reboot: false,
             via_powershell: false,
         }
+    };
+    let mut acknowledged = false;
+    for attempt in 0..3 {
+        let ack = client.post(format!("{base}/api/performance-allowance/native-ticket/result"))
+            .json(&serde_json::json!({ "ticket": ticket.0, "resultSecret": result_secret, "success": result.ok }))
+            .send().await;
+        if matches!(ack, Ok(ref response) if response.status().is_success()) {
+            acknowledged = true;
+            break;
+        }
+        if attempt < 2 { tokio::time::sleep(std::time::Duration::from_millis(250)).await; }
     }
+    if !acknowledged && result.ok {
+        result.message.push_str(" ALLOWANCE_SYNC_PENDING");
+    }
+    result
 }
 
 #[tauri::command]

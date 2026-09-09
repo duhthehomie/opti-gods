@@ -22,6 +22,8 @@
     "allow-apply-tweak",
     "allow-undo-tweak",
     "allow-list-tweaks",
+    "allow-list-power-plans",
+    "allow-set-power-plan",
     "allow-scan-hardware",
     "allow-create-restore-point",
     "allow-restore-to-point",

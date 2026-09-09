@@ -19,6 +19,16 @@ description = "List all available tweaks."
 commands.allow = ["list_tweaks"]
 
 [[permission]]
+identifier = "allow-list-power-plans"
+description = "Read the Windows power plans and active plan."
+commands.allow = ["list_power_plans"]
+
+[[permission]]
+identifier = "allow-set-power-plan"
+description = "Switch the active Windows power plan by validated GUID."
+commands.allow = ["set_power_plan"]
+
+[[permission]]
 identifier = "allow-scan-hardware"
 description = "Scan hardware configuration."
 commands.allow = ["scan_hardware"]
@@ -126,6 +136,8 @@ permissions = [
   "allow-apply-tweak",
   "allow-undo-tweak",
   "allow-list-tweaks",
+  "allow-list-power-plans",
+  "allow-set-power-plan",
   "allow-scan-hardware",
   "allow-create-restore-point",
   "allow-restore-to-point",

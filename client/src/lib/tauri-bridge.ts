@@ -124,11 +124,11 @@ export async function envInfo(): Promise<NativeEnvInfo> {
 // trusted ID→script map lives entirely in Rust (`trusted_ps_snippet`).
 // Anything not in the native registry or that map returns an explicit
 // "unknown tweak id" error.
-export async function applyTweak(id: string): Promise<NativeTweakResult> {
+export async function applyTweak(id: string, ticket?: string | null, nativeAuth?: string | null): Promise<NativeTweakResult> {
   if (!isNative()) {
     return webFallbackTweak(id, "apply");
   }
-  return invoke<NativeTweakResult>("apply_tweak", { args: { id } });
+  return invoke<NativeTweakResult>("apply_tweak", { args: { id, ticket: ticket ?? null, native_auth: nativeAuth ?? null } });
 }
 
 export async function undoTweak(
@@ -146,6 +146,16 @@ export async function undoTweak(
 export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
   if (!isNative()) return {};
   return invoke<Record<string, boolean>>("detect_applied_tweaks");
+}
+
+export interface NativePowerPlan { guid: string; name: string; active: boolean; }
+export async function listPowerPlans(): Promise<NativePowerPlan[]> {
+  if (!isNative()) return [];
+  return invoke<NativePowerPlan[]>("list_power_plans");
+}
+export async function setPowerPlan(guid: string): Promise<void> {
+  if (!isNative()) throw new Error("Power plans are available in the Windows app.");
+  await invoke<void>("set_power_plan", { guid });
 }
 
 // On the web, "apply" really means "queue the tweak into the PowerShell

@@ -11,6 +11,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, isNative, undoTweak } from "@/lib/tauri-bridge";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
@@ -100,25 +101,54 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     }
 
     setApplying(true);
+    let nativeTicket: string | null = null;
+    let osApplied = false;
     try {
+      // The server decides eligibility, entitlement, and remaining allowance.
+      // No client-side counter or Pro flag is used for authorization.
+      const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({
+          tweakId: id,
+          idempotencyKey: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^A-Za-z0-9_-]/g, ""),
+        }),
+      });
+      const authBody = await auth.json().catch(() => ({}));
+      if (!auth.ok) throw new Error(authBody?.error || "This tweak is not available on the free allowance.");
+      nativeTicket = authBody.ticket || null;
       if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
         await createRestorePoint("Before Opti Gods tweak changes").catch(() => null);
         sessionStorage.setItem(RESTORE_CREATED_KEY, "1");
       }
-      const result = await applyTweak(id);
+      const nativeAuth = getNativeAuthHeaders()["X-Native-Auth"] || null;
+      const result = await applyTweak(id, authBody.ticket, nativeAuth);
       if (!result.ok) throw new Error(result.message || "This tweak needs the script runner.");
+      // Persist the OS truth before any fallible ledger network request.
+      osApplied = true;
       onCheckedChange(true);
       markApplied([id]);
       writeNativeUndoToken(id, result.undo_token);
+      if (result.message.includes("ALLOWANCE_SYNC_PENDING")) {
+        toast({ title: "Tweak applied; allowance sync pending", description: "Your Windows change succeeded, but the server did not confirm the allowance. Undo remains available.", variant: "destructive" });
+      }
       toast({
         title: "Tweak enabled",
         description: `${result.message}${result.requires_reboot ? " Restart Windows to finish applying it." : ""}`,
       });
-    } catch {
-      onCheckedChange(false);
+    } catch (error) {
+      if (nativeTicket && !osApplied) {
+        await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+          body: JSON.stringify({ ticket: nativeTicket }),
+        }).catch(() => {});
+      }
+      if (!osApplied) onCheckedChange(false);
       toast({
-        title: "Native toggle not available yet",
-        description: "Nothing was changed. This tweak will stay off until its trusted Windows action is available.",
+        title: "Tweak could not be enabled",
+        description: error instanceof Error ? error.message : "Nothing was changed.",
+        variant: "destructive",
       });
     } finally {
       setApplying(false);
@@ -251,7 +281,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
           acBlocked ? "cursor-not-allowed" : "cursor-pointer",
           checked
-            ? "bg-red-500/8 border-red-500/40 shadow-[inset_0_0_14px_-6px_rgba(239,68,68,0.25)] hover:border-red-500/55 hover:bg-red-500/10"
+            ? "bg-emerald-500/8 border-emerald-500/40 shadow-[inset_0_0_14px_-6px_rgba(52,211,153,0.22)] hover:border-emerald-500/55 hover:bg-emerald-500/10"
             : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/60"
         )}
       >
@@ -336,14 +366,14 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
             )}
 
             {checked && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wide">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide">
                 ON
               </span>
             )}
           </div>
           <p className="text-[13px] text-zinc-500 leading-loose mt-3">{description}</p>
           {relevanceWarning && (
-            <p className="text-[11px] text-zinc-600 mt-1 italic">💡 {relevanceWarning}</p>
+            <p className="text-[11px] text-zinc-600 mt-1 italic">Note: {relevanceWarning}</p>
           )}
         </div>
         {acBlocked ? (
@@ -377,7 +407,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                 appliedAt
                   ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
                   : checked
-                    ? "border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
                     : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-red-500/30 hover:text-white",
               )}
             >

@@ -16,7 +16,7 @@ import { randomBytes } from "crypto";
 import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
-import { buildSafePreset, hardwareFromRig, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
+import { buildSafePreset, hardwareFromRig, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
 import { getLatestGhRelease, bustGhCache } from "./github-release";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
@@ -1110,7 +1110,7 @@ function buildRestoreScript(categories: string[]): string {
 // `id` is a 32-byte cryptographically-strong capability token, only ever returned
 // to a Pro user via /api/script/generate (which itself requires Pro). Bound to the
 // originating Pro `sessionToken` so revoking the Pro session invalidates the URL.
-const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number; sessionToken?: string }>();
+const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number; sessionToken?: string; allowanceKey?: string; allowanceUserId?: string }>();
 const SCRIPT_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour hard TTL
 
 // Gate any tweak/script generation behind a real, admin-acknowledged Pro session.
@@ -1501,6 +1501,152 @@ export async function registerRoutes(
 
   // ── Discord OAuth + /api/me + /api/logout + /api/version (Task #27) ────────
   registerAuthRoutes(app);
+
+  // Persistent free allowance.  This is deliberately server-side: renderer
+  // flags, localStorage counters, recommendation flags, and arbitrary IDs are
+  // never trusted. Native bearer auth is resolved here because Tauri cannot
+  // use the browser session cookie.
+  // A modified desktop client could still invoke an allowlisted native action
+  // without this renderer handshake; adding a cryptographic native ticket is
+  // not safe with the current unsigned invoke infrastructure. All normal
+  // app/API paths are nevertheless closed and the Rust ID allowlist remains
+  // the native security boundary.
+  const allowanceAuth = async (req: Request): Promise<string | null> => {
+    if (!req.session.userId) {
+      const token = req.headers["x-native-auth"];
+      if (typeof token === "string") req.session.userId = await validateNativeToken(token) ?? undefined;
+    }
+    return req.session.userId ?? null;
+  };
+  const eligibleAllowanceId = (id: unknown): id is string =>
+    typeof id === "string" && /^[A-Za-z0-9_]{2,64}$/.test(id) &&
+    Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id) &&
+    !EXPERT_TWEAK_IDS.has(id);
+  // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
+  const NATIVE_EXECUTABLE_ALLOWLIST = new Set([
+    "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
+    "NetworkThrottling", "DisableNagle", "InputLagTCP", "DisableNDU",
+    "DisablePrefetch", "EnableHAGS", "DisablePointerPrecision",
+    "DisableFastStartup", "DisableXboxGameBar", "DisableGameDVR",
+    "SysVisualBestPerf", "DisableTelemetry", "SysHibernateOff",
+    "SetDNSPriority", "ClearDnsCache", "ResetTcpAutotune",
+  ]);
+
+  app.get("/api/performance-allowance", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    if (await requirePaidPro(req)) return res.json({ pro: true, used: 0, remaining: null, limit: null });
+    return res.json({ pro: false, ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
+  });
+
+  app.post("/api/performance-allowance/authorize", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    const nativeHeader = req.headers["x-native-auth"];
+    if ((typeof nativeHeader !== "string" || await validateNativeToken(nativeHeader) !== userId) && !(req.body?.mode === "best" && req.body?.preview === true)) {
+      return res.status(403).json({ error: "Free performance tweaks can only be authorized by the Windows app.", code: "NATIVE_APP_REQUIRED" });
+    }
+    const key = typeof req.body?.idempotencyKey === "string" && /^[A-Za-z0-9_-]{16,128}$/.test(req.body.idempotencyKey)
+      ? req.body.idempotencyKey : randomBytes(16).toString("hex");
+    let ids: string[] = Array.isArray(req.body?.tweakIds) ? req.body.tweakIds : [];
+    // "Best for my system" is rebuilt from the server's saved scan. Client
+    // supplied recommendation/core flags are intentionally ignored.
+    if (req.body?.mode === "best") {
+      const rig = req.body?.rigHash ? await storage.getRigByHash(String(req.body.rigHash)) : await storage.getLatestRigForUser(userId);
+      if (!rig || (rig.discordUserId && rig.discordUserId !== userId)) return res.status(400).json({ error: "A server-validated system scan is required" });
+      ids = buildSafePreset(hardwareFromRig(rig), "balanced").core
+        .filter(id => eligibleAllowanceId(id) && NATIVE_EXECUTABLE_ALLOWLIST.has(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
+      const consumed = new Set(await storage.getConsumedPerformanceTweakIds(userId));
+      const allowance = await storage.getPerformanceAllowance(userId);
+      ids = ids.filter(id => !consumed.has(id)).slice(0, allowance.remaining);
+    }
+    if (!ids.length || ids.length > 128 || ids.some(id => !eligibleAllowanceId(id))) {
+      return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance" });
+    }
+    if (req.body?.mode === "best" && req.body?.preview === true && !(await requirePaidPro(req))) {
+      return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
+    }
+    if (await requirePaidPro(req)) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
+    try {
+      const result = await storage.reservePerformanceTweaks(userId, ids, key);
+      return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...result });
+    } catch (err) {
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") {
+        return res.status(429).json({ error: "Free allowance limit reached (15 unique performance tweaks). Pro users have unlimited access.", code: "FREE_ALLOWANCE_EXHAUSTED" });
+      }
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_RESERVATION_CONFLICT") {
+        return res.status(409).json({ error: "One or more tweaks are already being authorized; retry after the active operation completes.", code: "RESERVATION_CONFLICT" });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/api/performance-allowance/complete", async (req, res) => {
+    return res.status(410).json({ error: "Results are accepted only from the native executor." });
+  });
+
+  app.post("/api/performance-allowance/native-ticket", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    if (typeof req.headers["x-native-auth"] !== "string" || await validateNativeToken(req.headers["x-native-auth"]) !== userId) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    }
+    const tweakId = req.body?.tweakId;
+    if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
+    const key = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : randomBytes(16).toString("hex");
+    if (!/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: "Invalid idempotency key" });
+    const pro = await requirePaidPro(req);
+    try {
+      const issued = await storage.authorizeNativeTweakTicket(userId, tweakId, key, !pro);
+      return res.json({ ...issued, idempotencyKey: key, pro });
+    } catch (err) {
+      if (err instanceof Error && ["FREE_ALLOWANCE_RESERVATION_CONFLICT", "NATIVE_TICKET_KEY_CONFLICT", "NATIVE_TICKET_OPERATION_FINALIZED"].includes(err.message)) {
+        return res.status(409).json({ error: "Authorization operation conflicts with an existing or finalized ticket.", code: "RESERVATION_CONFLICT" });
+      }
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free allowance limit reached (15 unique performance tweaks).", code: "FREE_ALLOWANCE_EXHAUSTED" });
+      throw err;
+    }
+  });
+
+  app.post("/api/performance-allowance/native-ticket/consume", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    const nativeHeader = req.headers["x-native-auth"];
+    if (typeof nativeHeader !== "string" || await validateNativeToken(nativeHeader) !== userId) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    }
+    const id = req.body?.tweakId;
+    const ticket = req.body?.ticket;
+    if (!eligibleAllowanceId(id) || typeof ticket !== "string") return res.status(400).json({ error: "Invalid ticket request" });
+    const result = await storage.consumeNativeTweakTicket(userId, ticket, id);
+    if (!result) return res.status(409).json({ error: "Ticket invalid, expired, or already used" });
+    return res.json({ ok: true, idempotencyKey: result.idempotencyKey, resultSecret: result.resultSecret });
+  });
+
+  app.post("/api/performance-allowance/failure", async (req, res) => {
+    return res.status(410).json({ error: "Use native ticket cancellation before execution begins." });
+  });
+  app.post("/api/performance-allowance/native-ticket/cancel", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    const header = req.headers["x-native-auth"];
+    if (typeof header !== "string" || await validateNativeToken(header) !== userId) return res.status(403).json({ error: "Native Windows authorization required" });
+    const cancelled = await storage.cancelNativeTweakTicket(userId, String(req.body?.ticket || ""));
+    return cancelled ? res.json({ ok: true }) : res.status(409).json({ error: "Ticket already consumed or invalid" });
+  });
+  app.post("/api/performance-allowance/native-ticket/result", async (req, res) => {
+    const { ticket, resultSecret, success } = req.body ?? {};
+    if (typeof ticket !== "string" || typeof resultSecret !== "string" || typeof success !== "boolean") return res.status(400).json({ error: "Invalid result" });
+    const result = await storage.finalizeNativeTweakTicket(ticket, resultSecret, success);
+    return result.ok ? res.json(result) : res.status(409).json(result);
+  });
+  const authorizeGeneratedScript = async (req: Request, res: Response, ids: string[]): Promise<boolean> => {
+    const userId = await allowanceAuth(req);
+    if (await requirePaidPro(req)) return true;
+    void userId; void ids;
+    res.status(403).json({ message: "Free performance tweaks run in the Windows app. Open Opti Gods for native apply authorization." });
+    return false;
+  };
 
   // ── Legacy optimizer routes → 302 to landing (Task #40) ────────────────────
   // The optimizer code is preserved as the Tauri webview source, but is no
@@ -2491,6 +2637,12 @@ Write-Output $json
       const input = api.script.generate.input.parse(req.body);
       const host = req.get('host') || 'localhost';
       const protocol = req.protocol || 'https';
+      const userId = await allowanceAuth(req);
+      if (!userId) return res.status(401).json({ message: "Discord login required" });
+      if (!(await requirePaidPro(req))) return res.status(403).json({ message: "Free performance tweaks run in the Windows app. Open Opti Gods for native apply authorization." });
+      const enabledIds = Object.entries(input.tweaks).filter(([, v]) => v).map(([id]) => id);
+      if (enabledIds.some(id => !eligibleAllowanceId(id))) return res.status(400).json({ message: "One or more selected tweaks are not eligible." });
+      let allowanceKey: string | undefined;
 
       // Store tweaks in session so the irm | iex URL applies the correct tweaks.
       // Bind to the originating Pro sessionToken so we can revoke later if needed.
@@ -2506,6 +2658,8 @@ Write-Output $json
         nvidiaPreset: input.nvidiaPreset || "Balanced",
         created: Date.now(),
         sessionToken: bodyToken ?? queryToken,
+        allowanceKey,
+        allowanceUserId: allowanceKey ? userId : undefined,
       });
 
       const scriptUrl = `${protocol}://${host}/api/script/session/${sessionId}`;
@@ -2561,24 +2715,26 @@ Write-Output $json
       if (!validAdmin) {
         scriptSessions.delete(id);
         res.status(403).setHeader('Content-Type', 'text/plain');
-        return res.send('# Pro access required. Please activate your code in the dashboard.');
+        return res.send('# Free performance tweaks run in the Windows app. Open Opti Gods for native apply authorization.');
       }
     }
     const enabledTweaks = Object.entries(session.tweaks).filter(([, v]) => v).map(([k]) => k);
     const content = buildScript(enabledTweaks, session.nvidiaPreset);
+    if (session.allowanceKey && session.allowanceUserId) {
+      await storage.completePerformanceTweaks(session.allowanceUserId, session.allowanceKey, enabledTweaks);
+      session.allowanceKey = undefined;
+    }
     res.setHeader('Content-Type', 'text/plain');
     res.send(content);
   });
 
   // POST version for direct download with tweaks body
   app.post('/api/script/download', async (req, res) => {
-    if (!(await requirePaidPro(req))) {
-      return res.status(403).json({ message: "Pro access required. Activate your code to download the optimization script." });
-    }
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const sessionToken: string | undefined = req.body?.sessionToken || undefined;
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    if (!(await authorizeGeneratedScript(req, res, enabledTweaks))) return;
     const scriptContent = buildScript(enabledTweaks, nvidiaPreset);
     // Record download analytics with session token for per-customer tracking
     storage.recordScriptDownload(enabledTweaks, sessionToken).catch(() => {});
@@ -2590,13 +2746,11 @@ Write-Output $json
 
   // .bat download — double-click to run, no right-click needed
   app.post('/api/script/download-bat', async (req, res) => {
-    if (!(await requirePaidPro(req))) {
-      return res.status(403).json({ message: "Pro access required. Activate your code to download the optimization script." });
-    }
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";
     const sessionToken: string | undefined = req.body?.sessionToken || undefined;
     const enabledTweaks = Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k);
+    if (!(await authorizeGeneratedScript(req, res, enabledTweaks))) return;
     // Diagnostic: log what tweaks were requested and whether TWEAK_COMMANDS has them
     console.log(`[download-bat] enabledTweaks(${enabledTweaks.length}):`, enabledTweaks.join(', ') || '(none)');
     const missing = enabledTweaks.filter(k => !TWEAK_COMMANDS[k]);
@@ -5674,7 +5828,7 @@ Start-Sleep 2
   app.get('/api/script/download', async (req, res) => {
     if (!(await requirePaidPro(req))) {
       res.status(403).setHeader('Content-Type', 'text/plain');
-      return res.send('# Pro access required. Activate your code in the Opti Gods dashboard to download the script.');
+      return res.send('# Free performance tweaks run in the Windows app. Pro users may download scripts from the dashboard.');
     }
     // Parse tweaks from query if provided
     const rawTweaks = req.query.tweaks;

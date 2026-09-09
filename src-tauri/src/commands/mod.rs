@@ -6,6 +6,7 @@ pub mod env;
 pub mod hardware;
 pub mod misc;
 pub mod process_lasso;
+pub mod power;
 pub mod restore;
 pub mod splash;
 pub mod task_manager;

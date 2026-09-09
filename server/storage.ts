@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, performanceTweakAllowance, nativeTweakTickets, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
@@ -156,6 +156,15 @@ export interface IStorage {
   // HUD settings (single-row JSON blob in admin_settings)
   getHudSettings(): Promise<{ coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }>;
   saveHudSettings(s: { coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }): Promise<void>;
+  getPerformanceAllowance(discordUserId: string): Promise<{ used: number; remaining: number }>;
+  getConsumedPerformanceTweakIds(discordUserId: string): Promise<string[]>;
+  reservePerformanceTweaks(discordUserId: string, tweakIds: string[], idempotencyKey: string): Promise<{ reservedIds: string[]; alreadyConsumed: string[]; remaining: number }>;
+  completePerformanceTweaks(discordUserId: string, idempotencyKey: string, tweakIds?: string[]): Promise<{ ok: boolean; updated: number }>;
+  failPerformanceTweaks(discordUserId: string, idempotencyKey: string): Promise<void>;
+  authorizeNativeTweakTicket(discordUserId: string, tweakId: string, idempotencyKey: string, quotaRequired: boolean): Promise<{ ticket: string; reused: boolean }>;
+  consumeNativeTweakTicket(discordUserId: string, ticket: string, tweakId: string): Promise<{ idempotencyKey: string; resultSecret: string } | null>;
+  cancelNativeTweakTicket(discordUserId: string, ticket: string): Promise<boolean>;
+  finalizeNativeTweakTicket(ticket: string, resultSecret: string, success: boolean): Promise<{ ok: boolean; status: string }>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1263,6 +1272,224 @@ export class DatabaseStorage implements IStorage {
       await db.update(adminSettings).set({ hudSettings: json }).where(eq(adminSettings.id, rows[0].id));
     } else {
       await db.insert(adminSettings).values({ hudSettings: json });
+    }
+  }
+
+  async getPerformanceAllowance(discordUserId: string): Promise<{ used: number; remaining: number }> {
+    const [row] = await db.select({ used: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
+      .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.status, "consumed")));
+    const used = row?.used ?? 0;
+    return { used, remaining: Math.max(0, 15 - used) };
+  }
+
+  async getConsumedPerformanceTweakIds(discordUserId: string): Promise<string[]> {
+    const rows = await db.select({ id: performanceTweakAllowance.tweakId }).from(performanceTweakAllowance)
+      .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.status, "consumed")));
+    return rows.map(row => row.id);
+  }
+
+  async reservePerformanceTweaks(discordUserId: string, tweakIds: string[], idempotencyKey: string): Promise<{ reservedIds: string[]; alreadyConsumed: string[]; remaining: number }> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      // A crashed renderer/native process must not hold capacity forever.
+      await tx.delete(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.status, "reserved"),
+        lt(performanceTweakAllowance.reservedAt, new Date(Date.now() - 15 * 60 * 1000)),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${nativeTweakTickets} nt
+          WHERE nt.discord_user_id = ${performanceTweakAllowance.discordUserId}
+            AND nt.idempotency_key = ${performanceTweakAllowance.idempotencyKey}
+            AND nt.consumed_at IS NOT NULL
+            AND nt.result_status IS NULL
+        )`,
+      ));
+      const ids = Array.from(new Set(tweakIds));
+      const existing = ids.length ? await tx.select().from(performanceTweakAllowance).where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), inArray(performanceTweakAllowance.tweakId, ids))) : [];
+      const consumed = existing.filter(r => r.status === "consumed").map(r => r.tweakId);
+      const reserved = existing.filter(r => r.status === "reserved").map(r => r.tweakId);
+      const conflict = existing.find(r => r.status === "reserved" && r.idempotencyKey !== idempotencyKey);
+      if (conflict) throw new Error("FREE_ALLOWANCE_RESERVATION_CONFLICT");
+      const charged = new Set([...consumed, ...reserved]);
+      const [countRow] = await tx.select({ count: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
+        .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), sql`${performanceTweakAllowance.status} IN ('consumed','reserved')`));
+      const capacity = 15 - (countRow?.count ?? 0);
+      const newIds = ids.filter(id => !charged.has(id));
+      if (newIds.length > capacity) throw new Error("FREE_ALLOWANCE_EXHAUSTED");
+      if (newIds.length) await tx.insert(performanceTweakAllowance).values(newIds.map(tweakId => ({ discordUserId, tweakId, status: "reserved", idempotencyKey }))).onConflictDoNothing();
+      return { reservedIds: [...reserved, ...newIds], alreadyConsumed: consumed, remaining: Math.max(0, capacity - newIds.length) };
+    });
+  }
+
+  async completePerformanceTweaks(discordUserId: string, idempotencyKey: string, tweakIds?: string[]): Promise<{ ok: boolean; updated: number }> {
+    const rows = await db.update(performanceTweakAllowance).set({ status: "consumed", consumedAt: new Date() })
+      .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.idempotencyKey, idempotencyKey), ...(tweakIds?.length ? [inArray(performanceTweakAllowance.tweakId, tweakIds)] : []))).returning({ id: performanceTweakAllowance.id });
+    const updated = rows.length;
+    return { ok: updated > 0, updated };
+  }
+
+  async failPerformanceTweaks(discordUserId: string, idempotencyKey: string): Promise<void> {
+    await db.delete(performanceTweakAllowance).where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.idempotencyKey, idempotencyKey), eq(performanceTweakAllowance.status, "reserved")));
+  }
+
+  async authorizeNativeTweakTicket(discordUserId: string, tweakId: string, idempotencyKey: string, quotaRequired: boolean): Promise<{ ticket: string; reused: boolean }> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      // Expired reservations can be reclaimed only when no executor has begun.
+      // This runs under the same user lock as issuance and consumption.
+      await tx.delete(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.status, "reserved"),
+        lt(performanceTweakAllowance.reservedAt, new Date(Date.now() - 15 * 60 * 1000)),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${nativeTweakTickets} nt
+          WHERE nt.discord_user_id = ${performanceTweakAllowance.discordUserId}
+            AND nt.tweak_id = ${performanceTweakAllowance.tweakId}
+            AND nt.idempotency_key = ${performanceTweakAllowance.idempotencyKey}
+            AND nt.consumed_at IS NOT NULL
+            AND nt.result_status IS NULL
+        )`,
+      ));
+      const [sameKey] = await tx.select().from(nativeTweakTickets).where(and(
+        eq(nativeTweakTickets.discordUserId, discordUserId),
+        eq(nativeTweakTickets.idempotencyKey, idempotencyKey),
+      ));
+      if (sameKey) {
+        if (sameKey.tweakId !== tweakId) throw new Error("NATIVE_TICKET_KEY_CONFLICT");
+        if (!sameKey.consumedAt && !sameKey.resultStatus && sameKey.expiresAt > new Date()) {
+          if (!quotaRequired) return { ticket: sameKey.ticket, reused: true };
+          const [allowance] = await tx.select().from(performanceTweakAllowance).where(and(
+            eq(performanceTweakAllowance.discordUserId, discordUserId),
+            eq(performanceTweakAllowance.tweakId, tweakId),
+          ));
+          const liveOwned = allowance?.status === "reserved"
+            && allowance.idempotencyKey === idempotencyKey
+            && allowance.reservedAt >= new Date(Date.now() - 15 * 60 * 1000);
+          if (liveOwned || allowance?.status === "consumed") return { ticket: sameKey.ticket, reused: true };
+          // The unconsumed ticket lost its reservation; revoke it before
+          // creating a freshly reserved operation under this same lock.
+          await tx.delete(nativeTweakTickets).where(eq(nativeTweakTickets.ticket, sameKey.ticket));
+        } else {
+          throw new Error("NATIVE_TICKET_OPERATION_FINALIZED");
+        }
+      }
+      if (quotaRequired) {
+        const [existing] = await tx.select().from(performanceTweakAllowance).where(and(
+          eq(performanceTweakAllowance.discordUserId, discordUserId),
+          eq(performanceTweakAllowance.tweakId, tweakId),
+        ));
+        if (existing?.status === "reserved" && existing.idempotencyKey !== idempotencyKey) throw new Error("FREE_ALLOWANCE_RESERVATION_CONFLICT");
+        if (!existing) {
+          const [count] = await tx.select({ n: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
+            .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), sql`${performanceTweakAllowance.status} IN ('reserved','consumed')`));
+          if ((count?.n ?? 0) >= 15) throw new Error("FREE_ALLOWANCE_EXHAUSTED");
+          await tx.insert(performanceTweakAllowance).values({ discordUserId, tweakId, idempotencyKey, status: "reserved" });
+        }
+      }
+      const ticket = randomBytes(32).toString("hex");
+      await tx.insert(nativeTweakTickets).values({
+        ticket, discordUserId, tweakId, idempotencyKey, quotaRequired,
+        expiresAt: new Date(Date.now() + 2 * 60 * 1000),
+      });
+      return { ticket, reused: false };
+    });
+  }
+
+  async consumeNativeTweakTicket(discordUserId: string, ticket: string, tweakId: string): Promise<{ idempotencyKey: string; resultSecret: string } | null> {
+    return db.transaction(async (tx) => {
+      // Serialize with issuance and stale cleanup so a reservation cannot
+      // expire/reallocate between validation and execution-begun marking.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      const [candidate] = await tx.select().from(nativeTweakTickets).where(and(
+        eq(nativeTweakTickets.ticket, ticket), eq(nativeTweakTickets.discordUserId, discordUserId),
+        eq(nativeTweakTickets.tweakId, tweakId), isNull(nativeTweakTickets.consumedAt),
+        gte(nativeTweakTickets.expiresAt, new Date()),
+      ));
+      if (!candidate) return null;
+      if (candidate.quotaRequired) {
+        const [allowance] = await tx.select().from(performanceTweakAllowance).where(and(
+          eq(performanceTweakAllowance.discordUserId, discordUserId),
+          eq(performanceTweakAllowance.tweakId, tweakId),
+        ));
+        const ownedReservation = allowance?.status === "reserved"
+          && allowance.idempotencyKey === candidate.idempotencyKey
+          && allowance.reservedAt >= new Date(Date.now() - 15 * 60 * 1000);
+        const alreadyConsumed = allowance?.status === "consumed";
+        if (!ownedReservation && !alreadyConsumed) return null;
+      }
+      const resultSecret = randomBytes(32).toString("hex");
+      const [row] = await tx.update(nativeTweakTickets).set({ consumedAt: new Date(), resultSecret }).where(and(
+        eq(nativeTweakTickets.ticket, ticket),
+        eq(nativeTweakTickets.discordUserId, discordUserId),
+        eq(nativeTweakTickets.tweakId, tweakId),
+        isNull(nativeTweakTickets.consumedAt),
+        gte(nativeTweakTickets.expiresAt, new Date()),
+      )).returning({ idempotencyKey: nativeTweakTickets.idempotencyKey, resultSecret: nativeTweakTickets.resultSecret });
+      return row?.resultSecret ? { idempotencyKey: row.idempotencyKey, resultSecret: row.resultSecret } : null;
+    });
+  }
+
+  async cancelNativeTweakTicket(discordUserId: string, ticket: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx.delete(nativeTweakTickets).where(and(
+        eq(nativeTweakTickets.ticket, ticket),
+        eq(nativeTweakTickets.discordUserId, discordUserId),
+        isNull(nativeTweakTickets.consumedAt),
+      )).returning({ key: nativeTweakTickets.idempotencyKey, tweakId: nativeTweakTickets.tweakId });
+      if (!row) return false;
+      await tx.delete(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.tweakId, row.tweakId),
+        eq(performanceTweakAllowance.idempotencyKey, row.key),
+        eq(performanceTweakAllowance.status, "reserved"),
+      ));
+      return true;
+    });
+  }
+
+  async finalizeNativeTweakTicket(ticket: string, resultSecret: string, success: boolean): Promise<{ ok: boolean; status: string }> {
+    try {
+      return await db.transaction(async (tx) => {
+      const desired = success ? "success" : "failure";
+      const [row] = await tx.update(nativeTweakTickets).set({ resultStatus: desired, resultAt: new Date() }).where(and(
+        eq(nativeTweakTickets.ticket, ticket),
+        eq(nativeTweakTickets.resultSecret, resultSecret),
+        isNotNull(nativeTweakTickets.consumedAt),
+        isNull(nativeTweakTickets.resultStatus),
+      )).returning();
+      if (!row) {
+        const [prior] = await tx.select({ status: nativeTweakTickets.resultStatus }).from(nativeTweakTickets)
+          .where(and(eq(nativeTweakTickets.ticket, ticket), eq(nativeTweakTickets.resultSecret, resultSecret)));
+        return prior?.status ? { ok: prior.status === desired, status: prior.status } : { ok: false, status: "invalid" };
+      }
+      if (success) {
+        const changed = await tx.update(performanceTweakAllowance).set({ status: "consumed", consumedAt: new Date() }).where(and(
+          eq(performanceTweakAllowance.discordUserId, row.discordUserId),
+          eq(performanceTweakAllowance.tweakId, row.tweakId),
+          eq(performanceTweakAllowance.idempotencyKey, row.idempotencyKey),
+          eq(performanceTweakAllowance.status, "reserved"),
+        )).returning({ id: performanceTweakAllowance.id });
+        if (row.quotaRequired && changed.length === 0) {
+          const [already] = await tx.select({ status: performanceTweakAllowance.status }).from(performanceTweakAllowance).where(and(
+            eq(performanceTweakAllowance.discordUserId, row.discordUserId),
+            eq(performanceTweakAllowance.tweakId, row.tweakId),
+            eq(performanceTweakAllowance.status, "consumed"),
+          ));
+          if (!already) throw new Error("NATIVE_TICKET_ACCOUNTING_MISSING");
+        }
+      } else {
+        await tx.delete(performanceTweakAllowance).where(and(
+          eq(performanceTweakAllowance.discordUserId, row.discordUserId),
+          eq(performanceTweakAllowance.tweakId, row.tweakId),
+          eq(performanceTweakAllowance.idempotencyKey, row.idempotencyKey),
+          eq(performanceTweakAllowance.status, "reserved"),
+        ));
+      }
+      return { ok: true, status: desired };
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "NATIVE_TICKET_ACCOUNTING_MISSING") return { ok: false, status: "accounting_missing" };
+      throw err;
     }
   }
 }

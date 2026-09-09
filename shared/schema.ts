@@ -1,4 +1,4 @@
-import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar, pgEnum, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, boolean, timestamp, integer, varchar, pgEnum, bigint, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -223,6 +223,42 @@ export const users = pgTable("users", {
 });
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// Server-authoritative lifetime free allowance.  A row is created only after
+// the native/script operation reports success; reserved rows close the small
+// authorize -> apply race and are removed on explicit failure.
+export const performanceTweakAllowance = pgTable("performance_tweak_allowance", {
+  id: serial("id").primaryKey(),
+  discordUserId: text("discord_user_id").notNull().references(() => users.discordId, { onDelete: "cascade" }),
+  tweakId: text("tweak_id").notNull(),
+  status: text("status").notNull().default("reserved"), // reserved | consumed
+  idempotencyKey: text("idempotency_key").notNull(),
+  reservedAt: timestamp("reserved_at").defaultNow().notNull(),
+  consumedAt: timestamp("consumed_at"),
+}, (table) => ({
+  userTweakUnique: uniqueIndex("performance_tweak_allowance_user_tweak").on(table.discordUserId, table.tweakId),
+  // A bundle shares one idempotency key across many tweak rows. It is not
+  // unique by itself; user+tweak remains the authoritative uniqueness key.
+  idempotencyLookup: index("performance_tweak_allowance_idempotency_lookup").on(table.discordUserId, table.idempotencyKey),
+}));
+export type PerformanceTweakAllowance = typeof performanceTweakAllowance.$inferSelect;
+
+export const nativeTweakTickets = pgTable("native_tweak_tickets", {
+  ticket: text("ticket").primaryKey(),
+  discordUserId: text("discord_user_id").notNull().references(() => users.discordId, { onDelete: "cascade" }),
+  tweakId: text("tweak_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  quotaRequired: boolean("quota_required").notNull().default(true),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  resultSecret: text("result_secret"),
+  resultStatus: text("result_status"), // success | failure
+  resultAt: timestamp("result_at"),
+}, (table) => ({
+  operationUnique: uniqueIndex("native_tweak_tickets_operation_unique").on(table.discordUserId, table.tweakId, table.idempotencyKey),
+  userKeyUnique: uniqueIndex("native_tweak_tickets_user_key_unique").on(table.discordUserId, table.idempotencyKey),
+}));
+export type NativeTweakTicket = typeof nativeTweakTickets.$inferSelect;
 
 // IP bans — persistent bans that survive server restarts
 export const ipBans = pgTable("ip_bans", {

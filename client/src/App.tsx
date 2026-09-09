@@ -26,6 +26,8 @@ const Admin          = lazy(() => import("@/pages/admin"));
 const TweaksPage     = lazy(() => import("@/pages/tweaks"));
 const ToolsFixesPage = lazy(() => import("@/pages/tools-fixes"));
 const SystemScanPage = lazy(() => import("@/pages/system-scan"));
+const AppliedTweaksPage = lazy(() => import("@/pages/applied-tweaks"));
+const PowerPlansPage = lazy(() => import("@/pages/power-plans"));
 const ProPage        = lazy(() => import("@/pages/pro"));
 const OptiGodsAI     = lazy(() => import("@/pages/opti-gods-ai"));
 const AccountPage    = lazy(() => import("@/pages/account"));
@@ -136,6 +138,9 @@ function Router() {
         <Route path="/tweaks" component={TweaksPage} />
         <Route path="/tools" component={ToolsFixesPage} />
         <Route path="/system-scan" component={SystemScanPage} />
+        <Route path="/ai-optimize" component={SystemScanPage} />
+        <Route path="/applied-tweaks" component={AppliedTweaksPage} />
+        <Route path="/power-plans" component={PowerPlansPage} />
         <Route path="/pro" component={ProPage} />
 
         <Route path="/ai" component={OptiGodsAI} />
