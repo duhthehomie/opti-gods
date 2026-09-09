@@ -79,6 +79,7 @@ pub fn run() {
             commands::tweaks::apply_tweak,
             commands::tweaks::undo_tweak,
             commands::tweaks::list_tweaks,
+            commands::tweaks::detect_applied_tweaks,
             commands::hardware::scan_hardware,
             commands::restore::create_restore_point,
             commands::restore::restore_to_point,

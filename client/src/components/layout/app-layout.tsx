@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
 import { DISCORD_INVITE } from "@/lib/brand-links";
+import { isNative } from "@/lib/tauri-bridge";
 
 const MOBILE_FEATURES = [
   { icon: Zap, title: `${TOTAL_TWEAKS_LABEL} Optimizations`, desc: "Registry, GPU, network, memory, and game-specific tweaks" },
@@ -445,6 +446,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const native = isNative();
 
   const { tweaks, appliedAt, nvidiaPreset, reset } = useOptimizationStore();
   const osInfo = useOsDetection();
@@ -494,7 +496,12 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full bg-[#040708] text-white overflow-hidden">
+      <div className="relative flex h-screen w-full overflow-hidden bg-[#040708] text-white">
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute -left-[12%] top-[12%] h-[32rem] w-[58rem] -rotate-12 rounded-[50%] border border-red-500/[0.06] bg-red-500/[0.025] blur-2xl" />
+          <div className="absolute -right-[18%] bottom-[-18%] h-[36rem] w-[64rem] rotate-12 rounded-[50%] border border-red-400/[0.05] bg-red-500/[0.018] blur-3xl" />
+          <div className="absolute left-[28%] top-[-28rem] h-[42rem] w-[42rem] rounded-full bg-red-500/[0.035] blur-[110px]" />
+        </div>
         <AppSidebar />
         <div className="flex flex-col flex-1 relative z-10 overflow-hidden">
 
@@ -533,7 +540,13 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
                   Unselect All
                 </Button>
               )}
-              {!isMobile && (
+              {!isMobile && native && (
+                <span className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.07] px-3.5 py-2 text-[9px] font-black uppercase tracking-[0.14em] text-red-300">
+                  <Zap className="h-3.5 w-3.5" />
+                  Instant toggles
+                </span>
+              )}
+              {!isMobile && !native && (
                 <ProGate>
                   <Button
                     data-testid="button-apply-optimizations"

@@ -62,6 +62,51 @@ pub fn list_tweaks() -> Vec<TweakDescriptor> {
         .collect()
 }
 
+/// Read-only detection for the registry-backed tweaks handled by the native engine.
+/// The renderer supplies no paths or commands.
+#[tauri::command]
+pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
+    #[cfg(windows)]
+    {
+        use crate::win32::registry::{read_value, Hive, RegValue};
+
+        let checks: &[(&str, Hive, &str, &str, u32)] = &[
+            ("Win32PrioritySeparation", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 0x26),
+            ("SetTimerResolution", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1),
+            ("SetResponsiveness", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 10),
+            ("EnableMSIMode", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "IRQ8Priority", 1),
+            ("GameModeTweaks", Hive::CurrentUser, r"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1),
+            ("NetworkThrottling", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", 0xFFFFFFFF),
+            ("DisableNagle", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpAckFrequency", 1),
+            ("InputLagTCP", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TCPNoDelay", 1),
+            ("DisableNDU", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\NDU", "Start", 4),
+            ("DisablePrefetch", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnablePrefetcher", 0),
+            ("EnableHAGS", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2),
+            ("DisablePointerPrecision", Hive::CurrentUser, r"Control Panel\Mouse", "MouseSpeed", 0),
+            ("DisableFastStartup", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled", 0),
+            ("DisableXboxGameBar", Hive::CurrentUser, r"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0),
+            ("DisableGameDVR", Hive::CurrentUser, r"System\GameConfigStore", "GameDVR_Enabled", 0),
+            ("SysVisualBestPerf", Hive::CurrentUser, r"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 2),
+            ("DisableTelemetry", Hive::LocalMachine, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0),
+            ("SysHibernateOff", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
+            ("DisableMemoryCompression", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive", 1),
+            ("SetDNSPriority", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters", "MaxCacheTtl", 86400),
+        ];
+
+        checks
+            .iter()
+            .map(|(id, hive, path, name, expected)| {
+                let applied = matches!(read_value(*hive, path, name), Ok(RegValue::Dword(value)) if value == *expected);
+                ((*id).to_string(), applied)
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        BTreeMap::new()
+    }
+}
+
 #[tauri::command]
 pub fn apply_tweak(args: ApplyArgs) -> TweakResult {
     if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {

@@ -143,6 +143,11 @@ export async function undoTweak(
   });
 }
 
+export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
+  if (!isNative()) return {};
+  return invoke<Record<string, boolean>>("detect_applied_tweaks");
+}
+
 // On the web, "apply" really means "queue the tweak into the PowerShell
 // script the user will download" — the existing flow on the dashboard
 // already handles that, so this stub just confirms the queue add.

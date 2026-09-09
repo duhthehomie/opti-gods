@@ -14,8 +14,7 @@ import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
-import { isNative, discordCachedToken, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
-import { useOptimizationStore } from "@/store/use-optimization-store";
+import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 
 // Always eager — these are the first screens the user sees
@@ -206,58 +205,6 @@ function NativeBootstrap() {
   return null;
 }
 
-function TauriFileDropHandler() {
-  const { toast } = useToast();
-  useEffect(() => {
-    if (!isNative()) return;
-    let cleanup: (() => Promise<void>) | null = null;
-    onFileDrop(async (paths) => {
-      const jsonPath = paths.find(p => p.toLowerCase().endsWith(".json"));
-      if (!jsonPath) return;
-      try {
-        const text = await readTauriTextFile(jsonPath);
-        let detected: Record<string, boolean> | null = null;
-        let rawParsed: unknown = null;
-        try {
-          rawParsed = JSON.parse(text.trim());
-        } catch {}
-        if (rawParsed && typeof rawParsed === "object") {
-          const obj = rawParsed as Record<string, unknown>;
-          // Skip HW-monitor temp files (has gpu_temp_c / cpu_temp_c)
-          if ("gpu_temp_c" in obj || "cpu_temp_c" in obj) return;
-          // Skip hardware sysinfo files (has GPU + CPU + RAM_GB but no boolean tweaks)
-          if ("GPU" in obj && "CPU" in obj && "RAM_GB" in obj) return;
-          detected = obj as Record<string, boolean>;
-        }
-        if (!detected) {
-          try {
-            const match = text.match(/OPTIGODS_STATE:([A-Za-z0-9+/=]+)/);
-            const b64 = match ? match[1] : text.trim();
-            detected = JSON.parse(atob(b64));
-          } catch {}
-        }
-        if (!detected) {
-          toast({ title: "Couldn't read file", description: "Drop OptiGods-DetectedTweaks.json from the detect script.", variant: "destructive" });
-          return;
-        }
-        const store = useOptimizationStore.getState();
-        const next = { ...store.tweaks };
-        let count = 0;
-        for (const [key, val] of Object.entries(detected)) {
-          if (key in next && typeof val === "boolean") { next[key] = val; if (val) count++; }
-        }
-        store.setAllTweaks(next);
-        window.dispatchEvent(new CustomEvent("optigods:tweaks-imported", { detail: { count } }));
-        toast({ title: "PC state loaded", description: `${count} optimizations detected as already applied.` });
-      } catch (err) {
-        toast({ title: "File read failed", description: String(err), variant: "destructive" });
-      }
-    }).then(u => { cleanup = u; });
-    return () => { cleanup?.(); };
-  }, [toast]);
-  return null;
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -267,7 +214,6 @@ function App() {
         <NativeTokenHandler />
         <NativeCachedTokenHandler />
         <NativeBootstrap />
-        <TauriFileDropHandler />
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>

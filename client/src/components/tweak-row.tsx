@@ -115,10 +115,10 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         description: `${result.message}${result.requires_reboot ? " Restart Windows to finish applying it." : ""}`,
       });
     } catch {
-      onCheckedChange(true);
+      onCheckedChange(false);
       toast({
-        title: "Added to Run Tweaks",
-        description: "This tweak needs the trusted Opti Gods script. Use Run Selected Tweaks in the top bar.",
+        title: "Native toggle not available yet",
+        description: "Nothing was changed. This tweak will stay off until its trusted Windows action is available.",
       });
     } finally {
       setApplying(false);
@@ -373,7 +373,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               }}
               disabled={applying || undoing}
               className={cn(
-                "inline-flex min-w-[84px] items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50",
+                "inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50",
                 appliedAt
                   ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
                   : checked
@@ -382,7 +382,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               )}
             >
               {applying || undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : appliedAt ? <Undo2 className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : checked ? "Queued" : "Enable"}
+              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : checked ? "Selected" : "Enable"}
             </button>
           </div>
         )}

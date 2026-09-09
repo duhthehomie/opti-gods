@@ -270,7 +270,7 @@ const HOW_TO_STEPS = [
   {
     icon: Download,
     title: "Get Your Script",
-    desc: "Click GET MY SCRIPT in the top right. Builds a personalized PowerShell script with only your enabled tweaks — nothing extra, nothing missing.",
+    desc: "Use the Enable controls in Tweaks. Supported desktop actions apply instantly and are tracked automatically.",
   },
   {
     icon: ShieldAlert,
@@ -295,6 +295,7 @@ const PRO_BULLETS = [
 ];
 
 export default function Dashboard() {
+  const native = isNative();
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
   const smartRecs = computeSmartRecs(hw, osInfo);
@@ -338,7 +339,7 @@ export default function Dashboard() {
   const handleRestorePoint = async () => {
     setCreatingRestore(true);
     try {
-      if (isNative()) {
+      if (native) {
         let nativeOk = false;
         let nativeErr = "";
         try {
@@ -351,25 +352,13 @@ export default function Dashboard() {
           nativeErr = e instanceof Error ? e.message : String(e);
         }
         if (!nativeOk) {
-          // Native call failed (System Restore disabled or insufficient policy).
-          // Fall back to BAT download so the user can create the point manually.
-          try {
-            await downloadRestorePointBat();
-            toast({
-              title: "Restore point script downloaded",
-              description: nativeErr
-                ? `Native error: ${nativeErr.replace("create_restore_point: ", "").slice(0, 120)}. Run the BAT as admin instead.`
-                : "Run OptiGods-CreateRestorePoint.bat as admin before optimizing.",
-            });
-          } catch {
-            toast({
-              title: "Restore point failed",
-              description: nativeErr
-                ? nativeErr.replace("create_restore_point: ", "").slice(0, 160)
-                : "Could not create restore point. Try running the app as administrator.",
-              variant: "destructive",
-            });
-          }
+          toast({
+            title: "Restore point failed",
+            description: nativeErr
+              ? nativeErr.replace("create_restore_point: ", "").slice(0, 160)
+              : "Could not create restore point. Check that System Restore is enabled and the app is running as administrator.",
+            variant: "destructive",
+          });
         }
       } else {
         await downloadRestorePointBat();
@@ -679,7 +668,7 @@ export default function Dashboard() {
                       <Zap className="w-4 h-4 mr-1.5" />
                       {displayScore === 0 ? "Get Started" : "Boost My Score"}
                     </Button>
-                    {scorePercent === 100 && !scriptRan && (
+                    {!native && scorePercent === 100 && !scriptRan && (
                       <button
                         data-testid="button-confirm-script-ran"
                         onClick={confirmScriptRan}
@@ -688,6 +677,11 @@ export default function Dashboard() {
                         ✓ I&apos;ve Run the Script
                       </button>
                     )}
+                  </div>
+                ) : native ? (
+                  <div className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    State tracked
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-1">
@@ -936,7 +930,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-2">
               <Rocket className={cn("w-5 h-5 shrink-0", recommendedApplied ? "text-emerald-400" : "text-red-400")} />
               <span className={cn("text-xs font-bold uppercase tracking-widest", recommendedApplied ? "text-emerald-400" : "text-red-400")}>
-                {recommendedApplied ? "Tweaks Applied — Ready to Download" : "New Here? Start Here"}
+                 {recommendedApplied ? (native ? "Tweaks Enabled" : "Tweaks Applied — Ready to Download") : "New Here? Start Here"}
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
@@ -944,8 +938,12 @@ export default function Dashboard() {
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
-                ? "Click GET MY SCRIPT (top right) to download your personalized script. Restart your PC after running it."
-                : `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`}
+                ? native
+                  ? "Your enabled and detected tweaks are tracked here automatically. Use individual controls to change them."
+                  : "Click GET MY SCRIPT (top right) to download your personalized script. Restart your PC after running it."
+                : native
+                  ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
+                  : `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`}
             </p>
           </div>
 
@@ -1150,37 +1148,6 @@ export default function Dashboard() {
           <ScanImport />
         </motion.div>
 
-        {/* System Health Report */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.32 }}
-          className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-black/40 border border-white/5 hover:border-red-500/20 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 group-hover:border-red-500/20 transition-colors">
-              <Radio className="w-4 h-4 text-red-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-zinc-200">System Health Report</p>
-              <p className="text-[11px] text-zinc-500">Download a read-only PS1 that scans 25+ registry keys — shows your optimization score and exactly which tweaks are already applied.</p>
-            </div>
-          </div>
-          <Button
-            data-testid="button-download-health-report"
-            size="sm"
-            onClick={() => { const a = document.createElement('a'); a.href = apiUrl('/api/scan/script'); a.download = 'OptiGods-ScanSystem.bat'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
-            variant="outline"
-            className="shrink-0 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 gap-1.5 font-bold uppercase tracking-wide"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Download Scan
-          </Button>
-        </motion.div>
-
-
-
-        
       </div>
     </AppLayout>
   );

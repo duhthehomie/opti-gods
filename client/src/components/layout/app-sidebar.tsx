@@ -68,6 +68,7 @@ function clearAdminKey() {
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const native = isNative();
   const { tweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
   const isPro = useProStatus();
@@ -160,14 +161,25 @@ export function AppSidebar() {
   useEffect(() => {
     const v = spinVideoRef.current;
     if (!v) return;
-    v.play().catch(() => {});
+    const keepPlaying = () => {
+      if (document.visibilityState === "visible") {
+        v.play().catch(() => {});
+      }
+    };
+    keepPlaying();
     const obs = new IntersectionObserver(
-      (entries) => { entries.forEach(e => { if (e.isIntersecting) v.play().catch(() => {}); }); },
+      (entries) => { entries.forEach(e => { if (e.isIntersecting) keepPlaying(); }); },
       { threshold: 0.1 }
     );
     obs.observe(v);
-    return () => obs.disconnect();
-  }, []);
+    document.addEventListener("visibilitychange", keepPlaying);
+    window.addEventListener("focus", keepPlaying);
+    return () => {
+      obs.disconnect();
+      document.removeEventListener("visibilitychange", keepPlaying);
+      window.removeEventListener("focus", keepPlaying);
+    };
+  }, [location]);
 
   const isActive = (url: string) => {
     if (url === "/dashboard") return location === "/" || location === "/dashboard";
@@ -241,11 +253,11 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar className="border-r border-white/[0.07] bg-[#050b0d]">
-        <SidebarHeader className="p-5 border-b border-white/[0.07] bg-[#071013]">
-          <div className="flex items-center gap-2.5">
+        <SidebarHeader className="border-b border-white/[0.07] bg-[#071013] p-4 2xl:p-5">
+          <div className="flex items-center gap-3">
             <div
               className={cn(
-                "relative w-16 h-16 rounded-xl bg-black border flex items-center justify-center overflow-hidden cursor-pointer select-none shrink-0 transition-all duration-150",
+                "relative h-[72px] w-[72px] 2xl:h-20 2xl:w-20 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.2),#030607_68%)] border flex items-center justify-center overflow-hidden cursor-pointer select-none shrink-0 transition-all duration-150",
                 tapFlash
                   ? "border-red-400/80 shadow-[0_0_28px_-2px_rgba(239,68,68,0.95)] scale-95"
                   : "border-red-500/30 shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)] scale-100"
@@ -257,10 +269,13 @@ export function AppSidebar() {
                 <Cpu className="w-8 h-8 text-red-500 animate-spin [animation-duration:4s]" />
               ) : (
                 <video
+                  key={location}
                   ref={spinVideoRef}
                   src={BRAND.spinRed}
-                  autoPlay muted loop playsInline
-                  className="w-16 h-16 object-cover pointer-events-none"
+                  poster="/branding/optigods-red.png"
+                  autoPlay muted loop playsInline preload="auto"
+                  className="h-full w-full object-cover pointer-events-none"
+                  onCanPlay={(event) => event.currentTarget.play().catch(() => {})}
                   onError={() => setSpinVideoFailed(true)}
                 />
               )}
@@ -272,7 +287,7 @@ export function AppSidebar() {
             </div>
             <Link href="/" data-testid="link-home-logo">
               <div className="cursor-pointer">
-                <p className="font-display font-black text-base leading-tight text-white">
+                <p className="font-display text-lg font-black leading-tight text-white 2xl:text-xl">
                   OPTI <span className="text-red-500">GODS</span>
                 </p>
                 <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 select-none" data-testid="text-version">
@@ -341,7 +356,7 @@ export function AppSidebar() {
           )}
 
 
-          {enabledCount > 0 && (
+          {!native && enabledCount > 0 && (
             <div
               data-testid="widget-script-cta"
               onClick={() => window.dispatchEvent(new CustomEvent("optigods:open-script"))}
