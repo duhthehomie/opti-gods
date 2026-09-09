@@ -84,6 +84,11 @@ description = "Open the Windows Downloads folder in Explorer."
 commands.allow = ["open_downloads"]
 
 [[permission]]
+identifier = "allow-open-fivem-folder"
+description = "Open a detected FiveM application data folder in Explorer."
+commands.allow = ["open_fivem_folder"]
+
+[[permission]]
 identifier = "allow-scan-task-manager"
 description = "Scan running processes and startup entries."
 commands.allow = ["scan_task_manager"]
@@ -129,6 +134,7 @@ permissions = [
   "allow-check-for-update",
   "allow-env-info",
   "allow-open-downloads",
+  "allow-open-fivem-folder",
   "allow-scan-task-manager",
   "allow-kill-app",
   "allow-disable-startup-app",

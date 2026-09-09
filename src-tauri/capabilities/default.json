@@ -36,6 +36,7 @@
     "allow-env-info",
     "allow-read-text-file",
     "allow-open-downloads",
+    "allow-open-fivem-folder",
     "allow-scan-task-manager",
     "allow-kill-app",
     "allow-disable-startup-app",

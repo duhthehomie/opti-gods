@@ -369,68 +369,39 @@ type PackOpts = {
 
 function buildReadme(opts: PackOpts): string {
   const label = skyLabel(opts.skyColorKey);
-  const flags: string[] = [];
-  if (opts.disableRain)        flags.push("Rain disabled (+25 FPS)");
-  if (opts.disableSnow)        flags.push("Snow disabled (+25-30 FPS)");
-  if (opts.disableBloodDecals) flags.push("Blood decals disabled (citizen override)");
-  if (opts.freezeTime)         flags.push(`Time + weather frozen at ${String(opts.freezeHour).padStart(2,"0")}:${String(opts.freezeMinute).padStart(2,"0")} (+30-45 FPS)`);
-  if (opts.aerialClouds)       flags.push(`Aerial clouds ON (${opts.aerialDensity}% density)`);
-  if (opts.lightRays)          flags.push(`Light rays ON (${opts.lightRayIntensity}% intensity)`);
-  if (opts.atmosphereHaze)     flags.push("Atmosphere haze ON");
 
   return [
-    `OPTI GODS — FiveM Graphics Pack`,
+    `OPTI GODS — FiveM Client-Safe Citizen Pack`,
     `Pack Name  : ${opts.packName}`,
     `Generated  : ${new Date().toISOString().split("T")[0]}`,
     `Sky Color  : ${label} (brightness ${opts.skyBrightness}%)`,
     ``,
     `SETTINGS`,
-    `  Ground Clouds   : ${opts.cloudThickness}%  ${opts.cloudThickness === 0 ? "(+2-6 FPS)" : ""}`,
-    `  Aerial Clouds   : ${opts.aerialClouds ? opts.aerialDensity + "% density" : "OFF (+3-8 FPS)"}`,
-    `  Jet Streams     : ${opts.jetStreams}%  ${opts.jetStreams === 0 ? "(+1-2 FPS)" : ""}`,
-    `  Light Rays      : ${opts.lightRays ? opts.lightRayIntensity + "% intensity (-5-15 FPS)" : "OFF (+5-15 FPS)"}`,
+    `  Ground Clouds   : ${opts.cloudThickness}%`,
+    `  Aerial Clouds   : ${opts.aerialClouds ? opts.aerialDensity + "% density" : "OFF"}`,
+    `  Jet Streams     : ${opts.jetStreams}%`,
+    `  Light Rays      : ${opts.lightRays ? opts.lightRayIntensity + "% intensity" : "OFF"}`,
     `  Sun Intensity   : ${opts.sunIntensity}%`,
-    `  Atmosphere Haze : ${opts.atmosphereHaze ? "ON" : "OFF (+1-3 FPS)"}`,
+    `  Atmosphere Haze : ${opts.atmosphereHaze ? "ON" : "OFF"}`,
     `  Sky Colour      : ${label}`,
-    `  Props           : ${opts.keepProps ? "Kept (full props)" : "Reduced"}`,
-    flags.length ? `  Flags           : ${flags.join(", ")}` : "",
     ``,
-    `INSTALL — 2 steps, takes under 1 minute`,
+    `IMPORTANT`,
+    `  This ZIP contains client-side citizen visual overrides only.`,
+    `  It does not start resources, lock server time/weather, or bypass server permissions.`,
     ``,
-    `  STEP 1 — Extract this ZIP anywhere (e.g. Desktop)`,
+    `INSTALL — BACKUP FIRST`,
+    `  1. Close FiveM completely.`,
+    `  2. Open your FiveM data folder.`,
+    `  3. Back up any existing files at the same citizen paths included in this ZIP.`,
+    `  4. Copy the citizen folder from this ZIP into the FiveM data folder.`,
+    `  5. Review Windows copy prompts carefully, then restart FiveM.`,
     ``,
-    `  STEP 2 — Double-click INSTALL.bat (run as the same user, no admin needed)`,
-    `           The BAT automatically:`,
-    `             • Copies citizen/ overrides into FiveM Application Data`,
-    opts.freezeTime || opts.disableSnow || opts.disableRain
-      ? `             • Copies resources/optigods-timecycle/ into FiveM resources/\n             • Patches autoexec.cfg so time freeze auto-starts every launch`
-      : `             • Installs sky + weather XML overrides`,
-    ``,
-    `  STEP 3 — Restart FiveM completely`,
-    ``,
-    opts.freezeTime ? [
-      `TIME FREEZE`,
-      `  Locked at ${String(opts.freezeHour).padStart(2,"0")}:${String(opts.freezeMinute).padStart(2,"0")} 24/7 — sky will NEVER change to any other time.`,
-      `  The resource runs client-side, no server permission needed.`,
-      `  To verify: press F8 in FiveM. You should see "optigods-timecycle" in the resource list.`,
-      ``,
-    ].join("\n") : "",
     `UNINSTALL`,
-    `  Run INSTALL.bat again and press Ctrl+C, or manually:`,
-    `  Delete citizen/platform/data/tune/timecycle_mods_1.xml`,
-    `  Delete citizen/common/data/weather.xml`,
-    opts.freezeTime || opts.disableSnow || opts.disableRain
-      ? `  Delete resources/optigods-timecycle/ from FiveM Application Data\n  Remove "start optigods-timecycle" from autoexec.cfg`
-      : ``,
-    `  Restart FiveM — stock visuals restore instantly.`,
+    `  Restore the files you backed up before installation.`,
+    `  Do not delete the whole citizen folder; it may contain unrelated packs.`,
+    `  Restart FiveM after restoring your backup.`,
     ``,
-    `FPS TIPS (Ryzen 5 3500 / GTX 1650 Super tested)`,
-    `  Freeze Time ON    = biggest single gain (+30-45 FPS)`,
-    `  No Rain           = +25 FPS`,
-    `  No Snow           = +25-30 FPS`,
-    `  Ground Clouds 0%  = +2-6 FPS`,
-    `  Light Rays OFF    = +5-15 FPS`,
-    `  Grey/Black sky    = +2-4 FPS (fewer color-buffer ops)`,
+    `Performance varies by GPU, resolution, server, and other installed visual mods.`,
     `by leaq — optigods.com`,
   ].filter(l => l !== "").join("\r\n");
 }
@@ -513,35 +484,23 @@ function generateZip(opts: PackOpts): Uint8Array {
   const tcXml      = buildTimecycleXml(opts);
   const weatherXml = buildWeatherXml(opts);
   const readme     = buildReadme(opts);
-  const hasLua     = opts.freezeTime || opts.disableSnow || opts.disableRain;
+
+  const validateXml = (name: string, value: string, root: string) => {
+    if (!value.startsWith("<?xml") || !value.includes(`<${root}>`) || !value.includes(`</${root}>`)) {
+      throw new Error(`${name} failed validation`);
+    }
+    if (value.includes("NaN") || value.includes("Infinity")) {
+      throw new Error(`${name} contains invalid numeric values`);
+    }
+  };
+  validateXml("timecycle_mods_1.xml", tcXml, "CTimeCycleModifierList");
+  validateXml("weather.xml", weatherXml, "CWeatherTypeList");
 
   const files: Record<string, Uint8Array> = {
     "citizen/platform/data/tune/timecycle_mods_1.xml": strToU8(tcXml),
     "citizen/common/data/weather.xml":                  strToU8(weatherXml),
     "READ ME - How to install.txt":                     strToU8(readme),
-    "INSTALL.bat":                                       strToU8(buildInstallerBat({
-      freezeTime: opts.freezeTime, disableSnow: opts.disableSnow, disableRain: opts.disableRain,
-    })),
   };
-
-  if (hasLua) {
-    // Resource goes to resources/ (NOT citizen/) so FiveM actually executes the Lua
-    files["resources/optigods-timecycle/client.lua"]     = strToU8(buildTimeFreezeScript({
-      freezeTime:   opts.freezeTime,
-      freezeHour:   opts.freezeHour,
-      freezeMinute: opts.freezeMinute,
-      disableSnow:  opts.disableSnow,
-      disableRain:  opts.disableRain,
-    }));
-    files["resources/optigods-timecycle/fxmanifest.lua"] = strToU8(buildTimeFreezeManifest());
-  }
-
-  // Always include visualsettings.dat — the V4 mesh-fix baseline prevents
-  // meshy face/arms bug on ALL packs, even when no extra options are selected.
-  files["citizen/common/data/visualsettings.dat"] = strToU8(buildVisualSettings({
-    disableBloodDecals: opts.disableBloodDecals,
-    fixFaceQuality:     opts.fixFaceQuality,
-  }));
 
   return zipSync(files);
 }
@@ -1307,13 +1266,7 @@ export default function FivemGraphics() {
         return;
       }
     }
-    const bat = `@echo off\r\nstart "" "%LOCALAPPDATA%\\FiveM\\FiveM Application Data"\r\n`;
-    const blob = new Blob([bat], { type: "application/octet-stream" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url; a.download = "Open-FiveM-AppData.bat";
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
+    alert("Open %LOCALAPPDATA%\\FiveM in File Explorer, then choose FiveM Application Data or FiveM.app.");
   };
 
   const handleGenerate = () => {
@@ -1355,9 +1308,10 @@ export default function FivemGraphics() {
     if (!aiPrompt.trim()) return;
     setAiLoading(true); setAiError(""); setAiSuccess("");
     try {
-      const res  = await fetch("/api/ai/graphics-pack", {
+      const res  = await fetch(apiUrl("/api/ai/graphics-pack"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ description: aiPrompt }),
       });
       const text = await res.text();
@@ -1466,8 +1420,8 @@ export default function FivemGraphics() {
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-300/80 leading-relaxed space-y-0.5">
-              <p><span className="font-bold text-amber-300">Install:</span> Extract ZIP → double-click <span className="font-mono font-bold text-amber-300">INSTALL.bat</span> → restart FiveM. Done.</p>
-              <p className="text-zinc-500">The BAT copies all files automatically and patches <span className="font-mono text-zinc-400">autoexec.cfg</span> so time-lock auto-starts every launch — no F8 command needed.</p>
+              <p><span className="font-bold text-amber-300">Install safely:</span> Close FiveM → back up matching citizen files → copy the ZIP's <span className="font-mono font-bold text-amber-300">citizen</span> folder → restart.</p>
+              <p className="text-zinc-500">Client-safe visual overrides only. No installer script, autoexec changes, local resources, or server time/weather claims.</p>
             </div>
           </div>
         )}
@@ -1547,8 +1501,7 @@ export default function FivemGraphics() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {[
-                    "No Clouds = Stability","Vivid Blue Sky","No Contrails = Stability","Props Intact",
-                    "Freeze Time +30-45 FPS","No Rain +25 FPS","No Snow +25-30 FPS",
+                    "No Clouds","Vivid Blue Sky","No Contrails","Client-Safe Citizen Files",
                   ].map(tag => (
                     <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/8 border border-white/10 text-zinc-200">
                       {tag}
@@ -1556,7 +1509,7 @@ export default function FivemGraphics() {
                   ))}
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed mb-5 max-w-md">
-                  The exact pack leaq runs daily — all-clear blue sky, zero clouds, zero contrails, time + weather locked at noon. Max FPS on low-to-mid GPU builds. Download and drag the citizen folder in.
+                  A clean blue-sky citizen pack with zero clouds and zero contrails. Back up matching files first, then copy the citizen folder into FiveM Application Data.
                 </p>
                 <button
                   onClick={handleDownloadLeaqPack}
@@ -1686,17 +1639,14 @@ export default function FivemGraphics() {
                   </AnimatePresence>
                 </div>
 
-                {/* Quick Pack Options — moved here from Pre-Made Packs */}
+                {/* Quick visual options */}
                 <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-4 space-y-3">
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Quick Pack Options</p>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Quick Visual Options</p>
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { label: "No Rain",    active: disableRain,        onToggle: () => setDisableRain(v => !v),        fps: "+25 FPS",    color: "blue",  testId: "quick-toggle-rain"  },
-                      { label: "No Snow",    active: disableSnow,        onToggle: () => setDisableSnow(v => !v),        fps: "+25-30 FPS", color: "cyan",  testId: "quick-toggle-snow"  },
-                      { label: "No Blood",   active: disableBloodDecals, onToggle: () => setDisableBloodDecals(v => !v), fps: "Citizen",    color: "red",   testId: "quick-toggle-blood" },
-                      { label: "Keep Props", active: keepProps,          onToggle: () => setKeepProps(v => !v),          fps: "+50 FPS",    color: "zinc",  testId: "quick-toggle-props" },
-                      { label: "Aerial Clouds", active: aerialClouds,   onToggle: () => setAerialClouds(v => !v),       fps: aerialClouds ? "ON" : "+3-8 FPS", color: "sky", testId: "quick-toggle-aerial" },
-                      { label: "Light Haze", active: atmosphereHaze,    onToggle: () => setAtmosphereHaze(v => !v),     fps: atmosphereHaze ? "ON" : "+1-3 FPS", color: "zinc", testId: "quick-toggle-haze" },
+                      { label: "Aerial Clouds", active: aerialClouds, onToggle: () => setAerialClouds(v => !v), fps: aerialClouds ? "ON" : "OFF", color: "sky", testId: "quick-toggle-aerial" },
+                      { label: "Light Haze", active: atmosphereHaze, onToggle: () => setAtmosphereHaze(v => !v), fps: atmosphereHaze ? "ON" : "OFF", color: "zinc", testId: "quick-toggle-haze" },
+                      { label: "Light Rays", active: lightRays, onToggle: () => setLightRays(v => !v), fps: lightRays ? "ON" : "OFF", color: "red", testId: "quick-toggle-rays" },
                     ] as Array<{ label: string; active: boolean; onToggle: () => void; fps: string; color: string; testId: string }>).map(({ label, active, onToggle, fps, color, testId }) => {
                       const activeCls: Record<string, string> = {
                         blue: "border-blue-500/40 bg-blue-500/10 text-blue-300",
@@ -2026,7 +1976,8 @@ export default function FivemGraphics() {
                   </div>
                 </div>
 
-                {/* Weather & Time */}
+                {/* Server-controlled weather/time and unverified visualsettings options are intentionally unavailable. */}
+                {false && (
                 <div className="rounded-2xl border border-white/8 bg-zinc-900/60 p-5 space-y-1">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-3">Weather & Time</p>
 
@@ -2169,6 +2120,7 @@ export default function FivemGraphics() {
                   <ToggleRow icon={Eye} label="Keep Props" on={keepProps} onToggle={() => setKeepProps(v => !v)}
                     sub="Full world props — recommended" testId="toggle-keep-props" />
                 </div>
+                )}
               </div>
 
               {/* Right: Preview + summary + download */}
@@ -2213,18 +2165,13 @@ export default function FivemGraphics() {
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Pack Summary</p>
                   {[
                     { label: "Sky Color",     value: `${skyLabel(skyColorKey)} · ${skyBrightness}%`, ok: true },
-                    { label: "Ground Clouds", value: freezeTime ? "Frozen clear" : cloudThickness === 0 ? "OFF (+2–6 FPS)" : `${cloudThickness}%`, ok: cloudThickness < 30 || freezeTime },
-                    { label: "Aerial Clouds", value: aerialClouds ? `ON · ${aerialDensity}%` : "OFF (+3–8 FPS)", ok: !aerialClouds },
-                    { label: "Jet Streams",   value: freezeTime ? "Disabled" : jetStreams === 0 ? "OFF (+1–2 FPS)" : `${jetStreams}%`, ok: jetStreams === 0 || freezeTime },
-                    { label: "Light Rays",    value: lightRays ? `ON · ${lightRayIntensity}% (−5–15 FPS)` : "OFF (+5–15 FPS)", ok: !lightRays },
+                    { label: "Ground Clouds", value: cloudThickness === 0 ? "OFF" : `${cloudThickness}%`, ok: cloudThickness < 30 },
+                    { label: "Aerial Clouds", value: aerialClouds ? `ON · ${aerialDensity}%` : "OFF", ok: !aerialClouds },
+                    { label: "Jet Streams",   value: jetStreams === 0 ? "OFF" : `${jetStreams}%`, ok: jetStreams === 0 },
+                    { label: "Light Rays",    value: lightRays ? `ON · ${lightRayIntensity}%` : "OFF", ok: !lightRays },
                     { label: "Sun Intensity", value: `${sunIntensity}%`, ok: true },
-                    { label: "Haze",          value: atmosphereHaze ? "ON" : "OFF (+1–3 FPS)", ok: !atmosphereHaze },
-                    { label: "Rain",          value: disableRain || freezeTime ? "OFF (+25 FPS)" : "Active", ok: disableRain || freezeTime },
-                    { label: "Snow",          value: disableSnow || freezeTime ? "OFF (+25–30 FPS)" : "Active", ok: disableSnow || freezeTime },
-                    { label: "Blood Decals",  value: disableBloodDecals ? "OFF (citizen)" : "Default", ok: disableBloodDecals },
-                    { label: "Face Quality",  value: fixFaceQuality ? "Boosted — ped LOD ×1.5" : "Default", ok: fixFaceQuality },
-                    { label: "Time",          value: freezeTime ? `Locked ${String(freezeHour).padStart(2,"0")}:00 (+30–45 FPS)` : "Dynamic", ok: freezeTime },
-                    { label: "Props",         value: keepProps ? "Full" : "Reduced", ok: keepProps },
+                    { label: "Haze",          value: atmosphereHaze ? "ON" : "OFF", ok: !atmosphereHaze },
+                    { label: "Scope",         value: "Client-safe citizen files", ok: true },
                   ].map(({ label, value, ok }) => (
                     <div key={label} className="flex items-center justify-between gap-2">
                       <span className="text-xs text-zinc-500 shrink-0">{label}</span>
@@ -2243,10 +2190,6 @@ export default function FivemGraphics() {
                     <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">ZIP Contents</p>
                   </div>
                   <div className="space-y-1 font-mono text-[10px]">
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                      <Zap className="w-3 h-3 shrink-0" /><span>INSTALL.bat</span>
-                      <span className="text-zinc-600 font-normal">← double-click this</span>
-                    </div>
                     <div className="flex items-center gap-2 text-zinc-300 mt-1">
                       <Layers className="w-3 h-3 text-amber-400 shrink-0" /><span>citizen/</span>
                     </div>
@@ -2256,30 +2199,6 @@ export default function FivemGraphics() {
                     <div className="flex items-center gap-2 text-zinc-400 pl-4">
                       <Layers className="w-3 h-3 text-zinc-600 shrink-0" /><span>common/data/weather.xml</span>
                     </div>
-                    {(disableBloodDecals || fixFaceQuality) && (
-                      <div className="flex items-center gap-2 text-emerald-400/70 pl-4">
-                        <Shield className="w-3 h-3 shrink-0" />
-                        <span>common/data/visualsettings.dat
-                          {disableBloodDecals && fixFaceQuality ? " (blood + face)" : disableBloodDecals ? " (blood)" : " (face LOD)"}
-                        </span>
-                      </div>
-                    )}
-                    {(freezeTime || disableSnow || disableRain) && (
-                      <>
-                        <div className="flex items-center gap-2 text-amber-400 mt-1">
-                          <Layers className="w-3 h-3 shrink-0" /><span>resources/</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-amber-400/80 pl-4">
-                          <Clock className="w-3 h-3 shrink-0" />
-                          <span>optigods-timecycle/ <span className="text-zinc-600 font-normal">
-                            {freezeTime ? `time frozen ${String(freezeHour).padStart(2,"0")}:00 + weather lock` : "weather remap"}
-                          </span></span>
-                        </div>
-                        <div className="flex items-center gap-2 text-amber-300/50 pl-8">
-                          <Layers className="w-3 h-3 text-zinc-700 shrink-0" /><span>client.lua + fxmanifest.lua</span>
-                        </div>
-                      </>
-                    )}
                     <div className="flex items-center gap-2 text-zinc-500 mt-1">
                       <Layers className="w-3 h-3 text-zinc-700 shrink-0" /><span>READ ME - How to install.txt</span>
                     </div>
@@ -2414,7 +2333,7 @@ export default function FivemGraphics() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-500 leading-relaxed">
               <div>
                 <p className="font-semibold text-zinc-300 mb-1">What they do</p>
-                <p>Override FiveM's sky, cloud and weather visuals via files in the <span className="font-mono text-zinc-400">citizen</span> folder — no mods menu or server permission needed.</p>
+                <p>Override supported local sky and cloud visuals via files in the <span className="font-mono text-zinc-400">citizen</span> folder. Server-controlled time and weather are not changed.</p>
               </div>
               <div>
                 <p className="font-semibold text-zinc-300 mb-1">Files inside</p>
@@ -2422,7 +2341,7 @@ export default function FivemGraphics() {
               </div>
               <div>
                 <p className="font-semibold text-zinc-300 mb-1">To uninstall</p>
-                <p>Delete the <span className="font-mono text-zinc-400">citizen</span> folder from FiveM Application Data, or remove the two XML files. Restart FiveM — stock visuals restore instantly.</p>
+                <p>Restore the matching files from your backup. Never delete the whole <span className="font-mono text-zinc-400">citizen</span> folder because it may contain unrelated packs.</p>
               </div>
             </div>
           </section>
