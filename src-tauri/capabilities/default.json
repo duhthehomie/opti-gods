@@ -33,6 +33,7 @@
     "allow-discord-logout",
     "allow-discord-cached-token",
     "allow-check-for-update",
+    "allow-perform-update",
     "allow-env-info",
     "allow-read-text-file",
     "allow-open-downloads",

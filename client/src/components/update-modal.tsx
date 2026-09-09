@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { APP_VERSION } from "@/generated/version";
-import { isNative, performUpdate } from "@/lib/tauri-bridge";
+import { checkForUpdate, isNative, performUpdate } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { CheckCircle2, Download, X } from "lucide-react";
@@ -17,19 +17,36 @@ export function UpdateModal() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const reduced = typeof window !== "undefined" && prefersReducedMotion();
   const downloadStarted = useRef(false);
+  const updateCheckStarted = useRef(false);
+  const [detectedVersion, setDetectedVersion] = useState<string | null>(null);
 
   useEffect(() => {
     if (!data || dismissed) return;
-    if (!isNative()) return;
+    if (isNative()) return;
     const { latestVersion } = data;
     if (!latestVersion) return;
     const installedVersion = APP_VERSION || data.currentVersion;
     if (!installedVersion) return;
     if (compareVersions(latestVersion, installedVersion) <= 0) return;
 
-    // Update found — show the prompt, do NOT auto-start
+    // Browser builds cannot self-install, so retain the explicit prompt.
     setPhase("prompt");
   }, [data, dismissed]);
+
+  useEffect(() => {
+    if (!isNative() || dismissed || updateCheckStarted.current) return;
+    updateCheckStarted.current = true;
+
+    void checkForUpdate()
+      .then((update) => {
+        if (!update?.available) return;
+        setDetectedVersion(update.latest_version);
+        void triggerUpdate();
+      })
+      .catch((error) => {
+        console.warn("[update] automatic update check failed:", error);
+      });
+  }, [dismissed]);
 
   async function triggerUpdate() {
     if (downloadStarted.current) return;
@@ -56,11 +73,10 @@ export function UpdateModal() {
   }
 
   function fallbackDownload() {
-    if (!data?.updaterCmdUrl) { dismiss(); return; }
-    const targetUrl = apiUrl(data.updaterCmdUrl);
+    const targetUrl = apiUrl(data?.updaterCmdUrl || "/api/download/latest");
     const a = document.createElement("a");
     a.href = targetUrl;
-    a.download = `OptiGods-Setup-${data.latestVersion ?? "latest"}.exe`;
+    a.download = `OptiGods-Setup-${detectedVersion ?? data?.latestVersion ?? "latest"}.exe`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -114,7 +130,7 @@ export function UpdateModal() {
           <div className="text-center space-y-1">
             <h2 className="text-base font-black text-white tracking-tight">Update Available</h2>
             <p className="text-sm text-zinc-400">
-              v{data?.latestVersion} is ready to install
+              v{detectedVersion ?? data?.latestVersion} is ready to install
             </p>
             <p className="text-xs text-zinc-600 mt-1">
               Your current version: v{APP_VERSION || data?.currentVersion}

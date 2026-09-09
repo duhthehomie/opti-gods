@@ -74,6 +74,11 @@ description = "Check GitHub releases for a newer version."
 commands.allow = ["check_for_update"]
 
 [[permission]]
+identifier = "allow-perform-update"
+description = "Download and install a verified Opti Gods update."
+commands.allow = ["perform_update"]
+
+[[permission]]
 identifier = "allow-env-info"
 description = "Read runtime environment info."
 commands.allow = ["env_info"]
@@ -132,6 +137,7 @@ permissions = [
   "allow-discord-logout",
   "allow-discord-cached-token",
   "allow-check-for-update",
+  "allow-perform-update",
   "allow-env-info",
   "allow-open-downloads",
   "allow-open-fivem-folder",
