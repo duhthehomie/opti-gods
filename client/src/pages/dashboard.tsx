@@ -378,6 +378,19 @@ export default function Dashboard() {
   const confirmScriptRan = () => { setScriptRan(true); localStorage.setItem("og_script_ran", "true"); };
 
   const applyAllRecommended = () => {
+    if (!isPro) {
+      if (Object.values(tweaks).filter(Boolean).length > 15) {
+        const cleared = { ...tweaks };
+        Object.keys(cleared).forEach(id => { cleared[id] = false; });
+        setAllTweaks(cleared);
+      }
+      document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+      toast({
+        title: "Free accounts can enable 15 tweaks",
+        description: "Use Enable Best 15 Tweaks to get server-validated choices for your scanned system. Link a Pro Discord account to unlock Full Optimize.",
+      });
+      return;
+    }
     // Enable all safe + aggressive tweaks. Expert tweaks (DisableDefender, DisableVBS,
     // SysHypervisorOff, DisablePagefile, etc.) are NEVER auto-enabled — they require
     // deliberate opt-in on their own tab. Hardware filtering at script generation time
@@ -400,6 +413,10 @@ export default function Dashboard() {
   };
 
   const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+    if (!isPro) {
+      applyAllRecommended();
+      return;
+    }
     const next = { ...tweaks };
     preset.tweaks.forEach((key) => { if (key in next) next[key] = true; });
     setAllTweaks(next);
@@ -490,7 +507,7 @@ export default function Dashboard() {
                 {recommendedApplied ? (
                   <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />Full Optimize</>
+                  <><Rocket className="w-4 h-4 mr-2" />{isPro ? "Full Optimize" : "Enable Best 15 Tweaks"}</>
                 )}
               </Button>
 
@@ -520,9 +537,13 @@ export default function Dashboard() {
               <Rocket className="w-4 h-4 text-red-500" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
             </div>
-            <span className="text-[10px] text-zinc-600 font-mono">one click — all tweaks enabled instantly</span>
+            <span className="text-[10px] text-zinc-600 font-mono">{isPro ? "one click — all tweaks enabled instantly" : "Pro presets · free accounts get the best 15"}</span>
           </div>
-          <p className="text-xs text-zinc-500 mb-5 px-1">Pick a preset to instantly enable a curated set of tweaks, then download your script.</p>
+          <p className="text-xs text-zinc-500 mb-5 px-1">
+            {isPro
+              ? "Pick a preset to instantly enable a curated set of tweaks, then download your script."
+              : "Quick Boost presets require a linked Pro Discord account. Free accounts can enable the best 15 tweaks for their saved system scan."}
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {QUICK_BOOST_PRESETS.map((preset, i) => {
               const isActive = activeBoost === preset.id;
@@ -935,7 +956,7 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-              {recommendedApplied ? "All Tweaks Enabled" : "Enable All Tweaks in One Click"}
+                {recommendedApplied ? "All Tweaks Enabled" : isPro ? "Enable All Tweaks in One Click" : "Enable the Best 15 Tweaks"}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -944,7 +965,9 @@ export default function Dashboard() {
                   : "Click GET MY SCRIPT (top right) to download your personalized script. Restart your PC after running it."
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
-                  : `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`}
+                  : isPro
+                    ? `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`
+                    : "Free accounts can enable the 15 best server-validated tweaks for their saved system scan. Link a Pro Discord account to unlock every tweak."}
             </p>
           </div>
 
@@ -964,7 +987,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                Enable All {totalTweaks} Tweaks
+                {isPro ? `Enable All ${totalTweaks} Tweaks` : "Enable Best 15 Tweaks"}
               </Button>
             )}
             <span className="text-[10px] text-zinc-600 text-center">

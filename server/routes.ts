@@ -1127,6 +1127,17 @@ async function requirePaidPro(req: any): Promise<boolean> {
   // and has an active entitlement, they're Pro on any device. If their
   // entitlement was explicitly revoked, we deny access even if they still
   // hold a valid legacy session token — admin revoke must be authoritative.
+  // Native Windows requests authenticate with the bearer token restored from
+  // Credential Manager. Resolve that token to the linked Discord account so
+  // only an active Discord entitlement unlocks unlimited native tweaks.
+  const nativeHeader = req.headers["x-native-auth"];
+  const nativeUserId = typeof nativeHeader === "string" ? await validateNativeToken(nativeHeader) : null;
+  if (nativeUserId) {
+    const ent = await storage.getProEntitlement(nativeUserId);
+    if (ent && !ent.revokedAt) return true;
+    if (ent && ent.revokedAt) return false;
+  }
+
   const userId: string | undefined = req.session?.userId;
   if (userId) {
     // Single indexed PK lookup — covers both active and revoked rows.
