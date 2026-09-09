@@ -50,8 +50,6 @@ export function PerformanceAllowanceCard() {
     setAllTweaks(cleared);
   }, [authRequired, loaded, setAllTweaks, status?.pro, tweaks]);
 
-  if (!loaded || status?.pro) return null;
-
   const chooseBest = async () => {
     if (authRequired) {
       toast({ title: "Discord login required", description: "Sign in with Discord so your 15 lifetime free tweak enables can be tracked securely.", variant: "destructive" });
@@ -73,7 +71,7 @@ export function PerformanceAllowanceCard() {
         Object.keys(selected).forEach(id => { selected[id] = false; });
         for (const id of ids) selected[id] = true;
         setAllTweaks(selected);
-        toast({ title: `Best ${ids.length} free tweaks selected`, description: "These server-validated choices match your saved system scan. You can unselect any of them before running your script." });
+        toast({ title: `${ids.length} best tweaks enabled`, description: "These server-validated choices match your saved system scan. You can unselect any of them before running your script.", variant: "success" });
         await refresh();
         return;
       }
@@ -118,12 +116,22 @@ export function PerformanceAllowanceCard() {
           continue;
         }
       }
-      toast({ title: `Best ${applied} applied`, description: applied ? "Trusted native actions completed. Undo remains available for each successful tweak." : "No supported tweak could be applied.", variant: applied ? undefined : "destructive" });
+      toast({ title: `${applied} best tweaks enabled`, description: applied ? "Trusted native actions completed. Undo remains available for each successful tweak." : "No supported tweak could be applied.", variant: applied ? "success" : "destructive" });
       await refresh();
     } catch (e) {
       toast({ title: "Could not select best tweaks", description: e instanceof Error ? e.message : "A saved scan is required.", variant: "destructive" });
     } finally { setBusy(false); }
   };
+
+  // The Dashboard's other bulk buttons route free users through this same
+  // server-authorized flow instead of selecting the entire local registry.
+  useEffect(() => {
+    const trigger = () => { void chooseBest(); };
+    window.addEventListener("optigods:enable-best-free", trigger);
+    return () => window.removeEventListener("optigods:enable-best-free", trigger);
+  });
+
+  if (!loaded || status?.pro) return null;
 
   return (
     <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">

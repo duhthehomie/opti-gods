@@ -379,16 +379,8 @@ export default function Dashboard() {
 
   const applyAllRecommended = () => {
     if (!isPro) {
-      if (Object.values(tweaks).filter(Boolean).length > 15) {
-        const cleared = { ...tweaks };
-        Object.keys(cleared).forEach(id => { cleared[id] = false; });
-        setAllTweaks(cleared);
-      }
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
-      toast({
-        title: "Free accounts can enable 15 tweaks",
-        description: "Use Enable Best 15 Tweaks to get server-validated choices for your scanned system. Link a Pro Discord account to unlock Full Optimize.",
-      });
+      window.dispatchEvent(new Event("optigods:enable-best-free"));
       return;
     }
     // Enable all safe + aggressive tweaks. Expert tweaks (DisableDefender, DisableVBS,

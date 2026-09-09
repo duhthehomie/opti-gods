@@ -12,3 +12,5 @@ Free tweak credits are consumed only by successful native desktop execution, nev
 On a cold Windows-app start, restore the bearer token from Windows Credential Manager before requesting or consuming a native ticket; localStorage alone is not a reliable session source.
 
 Dashboard bulk selectors must never bypass entitlement: free/logged-out sessions may only enter the server-built Best 15 flow, and persisted selections above 15 must be cleared.
+
+Undo is a safety operation rather than a Pro entitlement; if a native undo token is unavailable, offer the trusted per-tweak restore script without consuming or changing free-enable credits.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { detectAppliedTweaks, isNative, undoTweak } from "@/lib/tauri-bridge";
+import { apiUrl } from "@/lib/api-base";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakMeta } from "@/lib/tweak-registry";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +10,31 @@ import { cn } from "@/lib/utils";
 
 const TOKEN_KEY = "optigods-native-undo-tokens";
 function tokenFor(id: string) { try { return (JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}") as Record<string,string>)[id] || null; } catch { return null; } }
+
+async function downloadUndoScript(id: string): Promise<boolean> {
+  const sessionToken = localStorage.getItem("optigods_session_v2");
+  const res = await fetch(apiUrl("/api/script/undo"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, sessionToken }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.message || `Undo failed (${res.status})`);
+  }
+  const granular = res.headers.get("X-Undo-Available") === "true";
+  const text = await res.text();
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `OptiGods-Undo-${id}.bat`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return granular;
+}
 
 export default function AppliedTweaksPage() {
   const { tweaks, appliedAt, setTweak, clearApplied } = useOptimizationStore();
@@ -27,11 +53,23 @@ export default function AppliedTweaksPage() {
     setUndoing(id);
     try {
       if (!isNative()) { toast({ title: "Native undo unavailable", description: "Open the Windows app to undo applied system changes." }); return; }
-      const result = await undoTweak(id, tokenFor(id));
-      if (!result.ok) throw new Error(result.message);
-      setTweak(id, false); clearApplied(id);
-      toast({ title: "Tweak undone", description: result.message });
-      setNativeState(s => ({ ...s, [id]: false }));
+      const nativeToken = tokenFor(id);
+      if (nativeToken) {
+        const result = await undoTweak(id, nativeToken);
+        if (result.ok) {
+          setTweak(id, false); clearApplied(id);
+          toast({ title: "Tweak undone", description: result.message, variant: "success" });
+          setNativeState(s => ({ ...s, [id]: false }));
+          return;
+        }
+      }
+      const granular = await downloadUndoScript(id);
+      if (granular) {
+        setTweak(id, false); clearApplied(id);
+        toast({ title: "Undo script downloaded", description: "Run it as Administrator to reverse this tweak.", variant: "success" });
+      } else {
+        toast({ title: "Undo script downloaded", description: "Run it as Administrator. For this tweak, the script will guide you to Restore Last Working State.", variant: "success" });
+      }
     } catch (error) { toast({ title: "Undo failed", description: error instanceof Error ? error.message : "The safe native action could not complete.", variant: "destructive" }); }
     finally { setUndoing(null); }
   };

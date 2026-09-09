@@ -2819,9 +2819,9 @@ Write-Output $json
 
   // ── Task #39 — Per-tweak Undo + Restore Last Working State ───────────────
   app.post('/api/script/undo', async (req, res) => {
-    if (!(await requirePaidPro(req))) {
-      return res.status(403).json({ message: "Pro access required. Activate your code to download undo scripts." });
-    }
+    // Undo is a safety operation, not a Pro feature. Free and logged-out
+    // users must be able to reverse a previously applied tweak even when the
+    // native app no longer has the original in-memory undo token.
     const id: unknown = req.body?.id;
     const sessionToken: string | undefined = req.body?.sessionToken;
     if (typeof id !== 'string' || !/^[A-Za-z0-9_]{2,64}$/.test(id)) {

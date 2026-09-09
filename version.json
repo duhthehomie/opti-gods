@@ -1,4 +1,4 @@
 {
-  "version": "5.2.2",
-  "notes": "V5.2.2 — Dashboard bulk actions now require linked Discord Pro; free accounts are limited to the 15 best server-validated tweaks for their saved system scan."
+  "version": "5.2.3",
+  "notes": "V5.2.3 — Best 15 now reports a green success state, all free bulk actions use the server-approved flow, and free users can undo applied tweaks without Pro."
 }
