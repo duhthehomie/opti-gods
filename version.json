@@ -1,4 +1,4 @@
 {
-  "version": "5.2.1",
-  "notes": "V5.2.1 — Reliable native authorization tickets, exact 15-tweak free allowance controls, improved account session restore, and Game Library scan navigation."
+  "version": "5.2.2",
+  "notes": "V5.2.2 — Dashboard bulk actions now require linked Discord Pro; free accounts are limited to the 15 best server-validated tweaks for their saved system scan."
 }
