@@ -144,7 +144,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   FiveMCacheClear: `Remove-Item -Path "$env:LocalAppData\\FiveM\\FiveM.app\\cache\\*" -Recurse -Force -ErrorAction SilentlyContinue`,
   FiveMHighPriority: `$_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri`,
   FiveMExtendedMemory: `$_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri`,
-  FiveMDisableVSync: `$cfg = "$env:LocalAppData\\FiveM\\FiveM.app\\citizen\\common\\data\\VehicleLayouts\\settings.xml"; Write-Host "VSync override queued for FiveM config."`,
+  FiveMDisableVSync: `$cfg = "$env:AppData\\CitizenFX\\gta5_settings.xml"; If (!(Test-Path $cfg)) { throw "Not for this system: FiveM settings were not detected. Launch FiveM once, close it, then try again." }; [xml]$xml = Get-Content $cfg -Raw; $node = $xml.SelectSingleNode("//video/VSync"); If (!$node) { throw "FiveM VSync setting was not found in gta5_settings.xml." }; $node.value = "0"; $xml.Save($cfg); [xml]$verify = Get-Content $cfg -Raw; If ($verify.SelectSingleNode("//video/VSync").value -ne "0") { throw "Windows saved the file but VSync verification failed." }; Write-Host "[OK] FiveM VSync disabled and verified." -ForegroundColor Green`,
   FiveMIOPriority: `$key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM.exe\\PerfOptions'; If (Test-Path $key) { Set-ItemProperty -Path $key -Name 'IoPriority' -Value 2 -ErrorAction SilentlyContinue; Write-Host "[FiveM] IoPriority set to 2 (Normal) — Critical I/O was removed as it starved FiveM browser processes causing crashes" -ForegroundColor Green }`,
   FiveMDisableP2P: `$cfgPath = "$env:LocalAppData\\FiveM\\FiveM.app\\CitizenFX.ini"; If (!(Test-Path $cfgPath)) { New-Item -ItemType File -Path $cfgPath -Force | Out-Null }; $content = Get-Content $cfgPath -Raw -ErrorAction SilentlyContinue; If ($content -notmatch 'DisablePeerToPeer') { Add-Content $cfgPath "DisablePeerToPeer=1" }; Write-Host "[FiveM] P2P connections disabled — forces direct server connections for lower ping variance" -ForegroundColor Green`,
   // Debloat
@@ -393,7 +393,7 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   RobloxNetworkBuffer: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 262144 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 262144 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Roblox: Network socket buffers set to 256KB" -ForegroundColor Green`,
   // Game Detection — each command auto-detects if the game is installed before applying
   game_valorant: `$paths = @("$env:LocalAppData\\VALORANT","C:\\Riot Games\\VALORANT"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Valorant at $found" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\VALORANT-Win64-Shipping.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3; Write-Host "[OK] Valorant: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}) + High I/O priority" -ForegroundColor Green } Else { Write-Host "[SKIP] Valorant not detected" -ForegroundColor DarkGray }`,
-  game_cs2: `$dirs = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Call of Duty","D:\\Call of Duty","E:\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty"); $steamPaths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe","D:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe","E:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe"); $all = $dirs + $steamPaths; $found = $all | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Call of Duty at $found" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri -Type DWord -Force; Set-ItemProperty -Path $key -Name 'CpuPriorityBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'DisableEnergyThrottling' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'ForceForegroundBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'PagePriority' -Value 5 -Type DWord -Force; netsh int tcp set global timestamps=disabled | Out-Null; Write-Host "[OK] Call of Duty: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}) + TCP timestamps disabled" -ForegroundColor Green } Else { Write-Host "[SKIP] Call of Duty not detected" -ForegroundColor DarkGray }`,
+  game_cod: `$dirs = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Call of Duty","D:\\Call of Duty","E:\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty"); $steamPaths = @("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe","D:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe","E:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2\\cod.exe"); $all = $dirs + $steamPaths; $found = $all | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Call of Duty at $found" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri -Type DWord -Force; Set-ItemProperty -Path $key -Name 'CpuPriorityBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'DisableEnergyThrottling' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'ForceForegroundBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'PagePriority' -Value 5 -Type DWord -Force; netsh int tcp set global timestamps=disabled | Out-Null; Write-Host "[OK] Call of Duty: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}) + TCP timestamps disabled" -ForegroundColor Green } Else { throw "Not for this system: Call of Duty was not detected." }`,
   game_apex: `$paths = @("C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe","C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe","C:\\Program Files (x86)\\Origin Games\\Apex Legends\\r5apex.exe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Apex Legends" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\r5apex.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3; Write-Host "[OK] Apex: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}) + High I/O" -ForegroundColor Green } Else { Write-Host "[SKIP] Apex Legends not detected" -ForegroundColor DarkGray }`,
   game_warzone: `$paths = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] Call of Duty / Warzone at $found" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri -Type DWord -Force; Set-ItemProperty -Path $key -Name 'CpuPriorityBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'DisableEnergyThrottling' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'DisablePagingExecutive' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'EnableBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'EnableLargePage' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'ForceForegroundBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'GPUPriority' -Value 8 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'PagePriority' -Value 5 -Type DWord -Force; Set-ItemProperty -Path $key -Name 'TimerResolution' -Value 1 -Type DWord -Force; Write-Host "[OK] COD: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}), GPUPriority=8, IO=High, EnergyThrottle=Off, LargePage=On, TimerRes=1" -ForegroundColor Green } Else { Write-Host "[SKIP] COD / Warzone not detected" -ForegroundColor DarkGray }`,
   game_lol: `$paths = @("C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe","D:\\Riot Games\\League of Legends\\Game\\League of Legends.exe"); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; If ($found) { Write-Host "[DETECTED] League of Legends" -ForegroundColor Green; $_c=(Get-CimInstance Win32_Processor -Property NumberOfCores|Measure-Object NumberOfCores -Sum).Sum; $_pri=if($_c -ge 6){4}else{3}; $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\League of Legends.exe\\PerfOptions'; If (!(Test-Path $key)) { New-Item -Path $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'CpuPriorityClass' -Value $_pri; Set-ItemProperty -Path $key -Name 'IoPriority' -Value 3; Write-Host "[OK] LoL: CPU=$(if($_pri-eq 4){'High'}else{'AboveNormal'}) + High I/O" -ForegroundColor Green } Else { Write-Host "[SKIP] League of Legends not detected" -ForegroundColor DarkGray }`,
@@ -1201,7 +1201,7 @@ function buildSingleTweakUndoScript(tweakId: string): string {
     `# Generated: ${new Date().toISOString()}`,
     `# ============================================`,
     ``,
-    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `$ErrorActionPreference = 'Stop'`,
     ``,
     `if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
     `    Write-Host ""`,
@@ -1312,6 +1312,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     ``,
     `# --- Tweak Tracking (ChrisTitusUtil-style summary) ---`,
     `$appliedTweaks = [System.Collections.Generic.List[string]]::new()`,
+    `$skippedTweaks = [System.Collections.Generic.List[string]]::new()`,
     `$failedTweaks  = [System.Collections.Generic.List[string]]::new()`,
     ``,
     `# --- Smart Hardware Detection ---`,
@@ -1421,8 +1422,14 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     const wrapped = [
       `Write-Host "[>>] ${key}..." -ForegroundColor DarkYellow`,
       `try {`,
-      `    ${cmd}`,
-      `    $appliedTweaks.Add("${key}") | Out-Null`,
+      `    $ogOutput = @(& { ${cmd} } 6>&1)`,
+      `    $ogOutput | ForEach-Object { Microsoft.PowerShell.Utility\\Write-Host $_ }`,
+      `    $ogText = ($ogOutput | ForEach-Object { "$_" }) -join [Environment]::NewLine`,
+      `    if ($ogText -match '(?im)\\[SKIP(?:PED)?\\]') {`,
+      `        $skippedTweaks.Add("${key}") | Out-Null`,
+      `    } else {`,
+      `        $appliedTweaks.Add("${key}") | Out-Null`,
+      `    }`,
       `} catch {`,
       `    $failedTweaks.Add("${key}") | Out-Null`,
       `    Write-Host "[ERR] ${key}: \$_" -ForegroundColor Red`,
@@ -1443,7 +1450,12 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   scriptLines.push(`Write-Host "   OPTI GODS by leaq -- TWEAKS APPLIED" -ForegroundColor Red`);
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Write-Host "  [OK] $($appliedTweaks.Count) of ${enabledTweaks.length} tweaks applied" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "  [OK] $($appliedTweaks.Count) of ${enabledTweaks.length} tweaks completed without a reported error" -ForegroundColor Green`);
+  scriptLines.push(`if ($skippedTweaks.Count -gt 0) {`);
+  scriptLines.push(`    Write-Host ""`);
+  scriptLines.push(`    Write-Host "  [NOT FOR THIS SYSTEM] ($($skippedTweaks.Count) skipped safely):" -ForegroundColor Yellow`);
+  scriptLines.push(`    foreach ($t in $skippedTweaks) { Write-Host "    [SKIP] $t" -ForegroundColor Yellow }`);
+  scriptLines.push(`}`);
   scriptLines.push(`if ($failedTweaks.Count -gt 0) {`);
   scriptLines.push(`    Write-Host "" `);
   scriptLines.push(`    Write-Host "  [FAILED] ($($failedTweaks.Count) tweaks had errors):" -ForegroundColor Red`);
@@ -1692,9 +1704,32 @@ export async function registerRoutes(
         return res.redirect(302, envUrl);
       }
 
-      // Local bundled installer — check root-level downloads/ first (served directly
-      // by Express so it never goes through the Vite build pipeline), then fall back
-      // to client/public/downloads/ for legacy compatibility.
+      const [settings, gh] = await Promise.all([
+        storage.getAdminSettings().catch(() => null),
+        getLatestGhRelease(),
+      ]);
+      const override = settings?.updaterCmdUrl?.trim();
+      // HTTPS-only admin override remains above automatic GitHub detection.
+      if (override && /^https:\/\//i.test(override)) {
+        try {
+          const u = new URL(override);
+          if (u.host && u.protocol === "https:") {
+            return res.redirect(302, u.toString());
+          }
+        } catch {
+          // fall through to GitHub
+        }
+      }
+
+      // The website must prefer the newest GitHub release. Bundled installers
+      // are intentionally only an offline fallback because they become stale.
+      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        console.log(`[download] Redirecting to GitHub: ${gh.exeUrl}`);
+        return res.redirect(302, gh.exeUrl);
+      }
+
+      // Emergency local fallback — check root-level downloads/ first, then
+      // client/public/downloads/ for legacy compatibility.
       const searchDirs = [
         join(process.cwd(), "downloads"),
         join(process.cwd(), "client", "public", "downloads"),
@@ -1717,30 +1752,6 @@ export async function registerRoutes(
           res.setHeader("Content-Type", "application/octet-stream");
           return res.sendFile(full);
         }
-      }
-
-      const [settings, gh] = await Promise.all([
-        storage.getAdminSettings().catch(() => null),
-        getLatestGhRelease(),
-      ]);
-      const override = settings?.updaterCmdUrl?.trim();
-      // HTTPS-only admin override — accepts any HTTPS URL (direct .exe links
-      // or file-host pages like gofile.io, mediafire, etc.)
-      if (override && /^https:\/\//i.test(override)) {
-        try {
-          const u = new URL(override);
-          if (u.host && u.protocol === "https:") {
-            return res.redirect(302, u.toString());
-          }
-        } catch {
-          // fall through
-        }
-      }
-
-      // Fallback — redirect to GitHub direct download URL (must be a .exe asset)
-      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
-        console.log(`[download] Redirecting to GitHub: ${gh.exeUrl}`);
-        return res.redirect(302, gh.exeUrl);
       }
 
       // Hard fallback — no local file and no GitHub release
@@ -1779,6 +1790,19 @@ export async function registerRoutes(
         return res.json({ source: "env", version: null, url: envUrl });
       }
 
+      const [settings, gh] = await Promise.all([
+        storage.getAdminSettings().catch(() => null),
+        getLatestGhRelease(),
+      ]);
+      const override = settings?.updaterCmdUrl?.trim();
+      if (override && /^https:\/\//i.test(override)) {
+        return res.json({ source: "admin_override", version: settings?.latestVersion ?? null, url: override });
+      }
+
+      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        return res.json({ source: "github", version: gh.version, url: gh.exeUrl, pageUrl: gh.pageUrl });
+      }
+
       const versionDirs = [
         join(process.cwd(), "downloads"),
         join(process.cwd(), "client", "public", "downloads"),
@@ -1799,19 +1823,6 @@ export async function registerRoutes(
           const verMatch = name.match(/(\d+\.\d+[\d.]*)/);
           return res.json({ source: "local", version: verMatch?.[1] ?? null, url: `/api/download/latest`, filename: name });
         }
-      }
-
-      const [settings, gh] = await Promise.all([
-        storage.getAdminSettings().catch(() => null),
-        getLatestGhRelease(),
-      ]);
-      const override = settings?.updaterCmdUrl?.trim();
-      if (override && /^https:\/\//i.test(override)) {
-        return res.json({ source: "admin_override", version: settings?.latestVersion ?? null, url: override });
-      }
-
-      if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
-        return res.json({ source: "github", version: gh.version, url: gh.exeUrl, pageUrl: gh.pageUrl });
       }
 
       res.json({ source: "none", version: null, url: null });

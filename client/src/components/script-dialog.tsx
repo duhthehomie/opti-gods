@@ -97,7 +97,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
   const [downloadingPs1, setDownloadingPs1] = useState(false);
   const [copyingPs1, setCopyingPs1] = useState(false);
   const [showWhat, setShowWhat] = useState(false);
-  const { tweaks, nvidiaPreset, markApplied } = useOptimizationStore();
+  const { tweaks, nvidiaPreset } = useOptimizationStore();
   const { toast } = useToast();
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
@@ -129,9 +129,6 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      // Task #39 — mark every selected tweak as "applied" so the TweakRow
-      // shows an inline Undo button. Persisted client-side via zustand.
-      markApplied(Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k));
       setStage("downloaded");
     } catch (e) {
       toast({ title: "Download failed", description: String(e), variant: "destructive" });
@@ -161,8 +158,7 @@ export function ScriptDialog({ open, onOpenChange, command }: ScriptDialogProps)
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      markApplied(Object.entries(tweaks).filter(([, v]) => v).map(([k]) => k));
-      toast({ title: "Script downloaded", description: "Double-click the .bat file and click Yes on the UAC prompt. Done." });
+      toast({ title: "Script downloaded", description: "The tweaks remain Selected until you confirm the script completed successfully." });
     } catch (e) {
       toast({ title: "Download failed", description: String(e), variant: "destructive" });
     } finally {

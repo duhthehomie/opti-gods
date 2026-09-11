@@ -18,10 +18,10 @@ pub struct RestorePoint {
 pub async fn create_restore_point(label: String) -> Result<RestorePoint, String> {
     #[cfg(windows)]
     {
-        // Ensure System Restore is enabled first — some debloat scripts disable it.
-        // Non-fatal: if this fails we proceed and surface the real error from create().
-        let _ = crate::win32::restore::ensure_enabled();
-        crate::win32::restore::create(&label).map_err(|e| format!("create_restore_point: {e:#}"))
+        // Never claim a recoverable change unless Windows confirms that System
+        // Restore is available first.
+        crate::win32::restore::ensure_session_checkpoint(&label)
+            .map_err(|e| format!("create_restore_point: {e:#}"))
     }
     #[cfg(not(windows))]
     {
@@ -67,7 +67,9 @@ pub async fn startup_restore_checkpoint() -> Result<Option<RestorePoint>, String
         if let Err(e) = crate::win32::restore::ensure_enabled() {
             log::warn!("[restore] ensure_enabled failed (non-fatal): {e:#}");
         }
-        match crate::win32::restore::create("OptiGods V3 — Pre-Optimization Baseline") {
+        match crate::win32::restore::ensure_session_checkpoint(
+            "OptiGods — Pre-Optimization Baseline",
+        ) {
             Ok(rp) => {
                 log::info!(
                     "[restore] startup checkpoint created — seq={} label={}",

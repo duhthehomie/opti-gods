@@ -9,6 +9,9 @@ use crate::commands::restore::RestorePoint;
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
+use std::thread;
+use std::time::Duration;
 use wmi::{COMLibrary, WMIConnection};
 use windows::Win32::System::Restore::{
     SRSetRestorePointW, BEGIN_NESTED_SYSTEM_CHANGE, END_NESTED_SYSTEM_CHANGE, MODIFY_SETTINGS,
@@ -62,11 +65,50 @@ pub fn create(label: &str) -> Result<RestorePoint> {
         ));
     }
 
-    Ok(RestorePoint {
+    let point = RestorePoint {
         sequence_number: begin_status.llSequenceNumber,
         label: label.to_string(),
         created_at: chrono_iso_now(),
-    })
+    };
+
+    // SRSetRestorePointW can return success before a broken System Restore
+    // setup is visible to recovery tools. Require WMI to see the exact
+    // sequence before we allow any tweak mutation.
+    for _ in 0..3 {
+        if list()
+            .map(|points| {
+                points
+                    .iter()
+                    .any(|candidate| candidate.sequence_number == point.sequence_number)
+            })
+            .unwrap_or(false)
+        {
+            return Ok(point);
+        }
+        thread::sleep(Duration::from_millis(300));
+    }
+    Err(anyhow!(
+        "Windows created checkpoint #{} but it was not visible in System Restore",
+        point.sequence_number
+    ))
+}
+
+static SESSION_CHECKPOINT: OnceLock<Mutex<Option<RestorePoint>>> = OnceLock::new();
+
+/// Guarantees that this desktop-app process has created and WMI-verified a
+/// restore point. Renderer state cannot bypass this guard.
+pub fn ensure_session_checkpoint(label: &str) -> Result<RestorePoint> {
+    let state = SESSION_CHECKPOINT.get_or_init(|| Mutex::new(None));
+    let mut checkpoint = state
+        .lock()
+        .map_err(|_| anyhow!("restore checkpoint lock was poisoned"))?;
+    if let Some(existing) = checkpoint.clone() {
+        return Ok(existing);
+    }
+    ensure_enabled()?;
+    let created = create(label)?;
+    *checkpoint = Some(created.clone());
+    Ok(created)
 }
 
 #[derive(Deserialize, Debug)]
@@ -109,7 +151,6 @@ pub fn restore(sequence_number: i64) -> Result<()> {
 
 /// Ensure System Restore is enabled on the C: drive.
 /// Requires admin rights (Opti Gods app.manifest already requests them).
-/// Best-effort — if it fails, we log the error and continue.
 pub fn ensure_enabled() -> anyhow::Result<()> {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
@@ -117,7 +158,7 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
 
     // 1. Clear the policy key that disables System Restore
     //    HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore DisableSR = 0
-    Command::new("reg")
+    let policy = Command::new("reg")
         .args([
             "add",
             r"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore",
@@ -128,21 +169,30 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .ok();
+        .context("launch reg.exe to enable System Restore policy")?;
+    if !policy.status.success() {
+        return Err(anyhow!(
+            "Windows rejected the System Restore policy change: {}",
+            String::from_utf8_lossy(&policy.stderr).trim()
+        ));
+    }
 
-    // 2. Set srservice (System Restore) to Manual start and start it
-    Command::new("sc").args(["config", "srservice", "start=", "demand"]).creation_flags(CREATE_NO_WINDOW).output().ok();
-    Command::new("sc").args(["start", "srservice"]).creation_flags(CREATE_NO_WINDOW).output().ok();
-
-    // 3. Enable System Restore on C:\ via PowerShell
-    Command::new("powershell")
+    // 2. Enable System Restore on C:\ and fail if PowerShell rejects it.
+    let enabled = Command::new("powershell")
         .args([
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "Enable-ComputerRestore -Drive 'C:\\' -EA SilentlyContinue",
+            "$ErrorActionPreference='Stop'; Enable-ComputerRestore -Drive 'C:\\'",
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .ok();
+        .context("launch PowerShell to enable System Restore")?;
+    if !enabled.status.success() {
+        let detail = String::from_utf8_lossy(&enabled.stderr);
+        return Err(anyhow!(
+            "System Restore could not be enabled on C:\\: {}",
+            detail.trim()
+        ));
+    }
 
     Ok(())
 }

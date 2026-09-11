@@ -375,7 +375,14 @@ export default function Dashboard() {
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
   const [scriptRan, setScriptRan] = useState(() => localStorage.getItem("og_script_ran") === "true");
-  const confirmScriptRan = () => { setScriptRan(true); localStorage.setItem("og_script_ran", "true"); };
+  const confirmScriptRan = () => {
+    setScriptRan(true);
+    localStorage.setItem("og_script_ran", "true");
+    toast({
+      title: "Script run confirmed",
+      description: "Your selections remain separate from Applied status because the browser cannot verify individual Windows changes.",
+    });
+  };
 
   const applyAllRecommended = () => {
     if (!isPro) {

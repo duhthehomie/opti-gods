@@ -1,4 +1,4 @@
 {
-  "version": "5.2.4",
-  "notes": "V5.2.4 — always-visible Selected and Applied counts, truthful selection tracking, multi-select Undo, and a restart reminder after restoring tweaks."
+  "version": "5.2.5",
+  "notes": "V5.2.5 — verified restore points before native changes, truthful Applied status, hardware-safe skip messages, and real Windows error details."
 }

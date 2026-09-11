@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "python-3.11", "postgresql-16"]
+modules = ["nodejs-20", "web", "python-3.11", "postgresql-16", "rust-stable"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -50,7 +50,7 @@ STRIPE_SECRET_KEY = "sk_live_51TDwlYLcJlSyMFAkRtrR4AOBELHEQyWNuowvjBo09lFUWJOpMk
 STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
 SITE_URL = "https://optigods.com"
 DISCORD_REDIRECT_URI = "https://optigods.com/api/auth/discord/callback"
-DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v4.0.0/OptiGods-Setup-4.0.0.exe"
+DOWNLOAD_URL = "https://github.com/duhthehomie/opti-gods/releases/download/v5.2.4/OptiGods-Setup-5.2.4.exe"
 ZERNIO_PROFILE_ID = "6aa0ea4eecb23f483b79d0d6"
 
 [userenv.production]

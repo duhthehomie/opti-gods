@@ -81,8 +81,12 @@ export function PerformanceAllowanceCard() {
       // individual TweakRow path, one tweak at a time.
       const nativeAuth = await getNativeAuthToken();
       if (!nativeAuth) throw new Error("Sign in to the Windows app before applying native tweaks.");
-      await createRestorePoint("Before Opti Gods best 15 changes").catch(() => null);
+      const restorePoint = await createRestorePoint("Before Opti Gods best 15 changes");
+      if (!restorePoint?.sequence_number) {
+        throw new Error("Windows did not confirm a restore point. No tweaks were applied.");
+      }
       let applied = 0;
+      const failures: string[] = [];
       for (const id of ids) {
         const idempotencyKey = crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "");
         const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
@@ -91,7 +95,10 @@ export function PerformanceAllowanceCard() {
           body: JSON.stringify({ tweakId: id, idempotencyKey }),
         });
         const authBody = await auth.json().catch(() => ({}));
-        if (!auth.ok || typeof authBody.ticket !== "string") continue;
+        if (!auth.ok || typeof authBody.ticket !== "string") {
+          failures.push(`${id}: ${authBody.error || "authorization failed"}`);
+          continue;
+        }
         let osApplied = false;
         try {
           const result = await applyTweak(id, authBody.ticket, nativeAuth);
@@ -105,7 +112,8 @@ export function PerformanceAllowanceCard() {
           if (result.message.includes("ALLOWANCE_SYNC_PENDING")) {
             toast({ title: "Applied; allowance sync pending", description: `${id} changed Windows successfully, but the server did not confirm the allowance. Undo remains available.`, variant: "destructive" });
           }
-        } catch {
+        } catch (error) {
+          failures.push(`${id}: ${error instanceof Error ? error.message : "Windows rejected the change"}`);
           if (!osApplied) {
             await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
               method: "POST",
@@ -117,6 +125,13 @@ export function PerformanceAllowanceCard() {
         }
       }
       toast({ title: `${applied} best tweaks enabled`, description: applied ? "Trusted native actions completed. Undo remains available for each successful tweak." : "No supported tweak could be applied.", variant: applied ? "success" : "destructive" });
+      if (failures.length) {
+        toast({
+          title: `${failures.length} tweak${failures.length === 1 ? "" : "s"} not applied`,
+          description: failures.slice(0, 3).join(" · "),
+          variant: "destructive",
+        });
+      }
       await refresh();
     } catch (e) {
       toast({ title: "Could not select best tweaks", description: e instanceof Error ? e.message : "A saved scan is required.", variant: "destructive" });

@@ -111,6 +111,21 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
 
 #[tauri::command]
 pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
+    #[cfg(windows)]
+    if let Err(error) = crate::win32::restore::ensure_session_checkpoint(
+        "OptiGods — Before Tweak Changes",
+    ) {
+        return TweakResult {
+            ok: false,
+            id: args.id,
+            message: format!(
+                "No tweak was applied because Windows could not create a verified restore point: {error:#}"
+            ),
+            undo_token: None,
+            requires_reboot: false,
+            via_powershell: false,
+        };
+    }
     let ticket = match (args.ticket.as_deref(), args.native_auth.as_deref()) {
         (Some(ticket), Some(auth)) => (ticket, auth),
         _ => return TweakResult { ok: false, id: args.id, message: "A server authorization ticket is required.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
@@ -242,6 +257,16 @@ fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
             "netsh int tcp set global autotuninglevel=disabled | Out-Null",
             "netsh int tcp set global autotuninglevel=normal | Out-Null",
         ),
+        (
+            "EnableMSIMode",
+            "$gpus=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($gpus.Count -ne 1){throw \"Not for this system: MSI mode requires exactly one active GPU; detected $($gpus.Count).\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpus[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; New-Item $p -Force|Out-Null; Set-ItemProperty $p MSISupported 1 -Type DWord -Force; if((Get-ItemPropertyValue $p MSISupported -ErrorAction Stop)-ne 1){throw 'MSI mode verification failed.'}",
+            "$gpus=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($gpus.Count -ne 1){throw \"Not for this system: cannot identify one GPU to undo MSI mode.\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpus[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; Set-ItemProperty $p MSISupported 0 -Type DWord -Force",
+        ),
+        (
+            "DisableMemoryCompression",
+            "$ram=[math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory/1GB); if($ram -lt 16){throw \"Not for this system: disabling memory compression requires at least 16 GB RAM; detected $ram GB.\"}; Disable-MMAgent -MemoryCompression -ErrorAction Stop; if((Get-MMAgent).MemoryCompression){throw 'Windows left memory compression enabled.'}",
+            "Enable-MMAgent -MemoryCompression -ErrorAction Stop; if(-not (Get-MMAgent).MemoryCompression){throw 'Windows left memory compression disabled.'}",
+        ),
     ];
     TABLE
         .iter()
@@ -257,6 +282,9 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let guarded = format!(
+            "$ErrorActionPreference='Stop'; & {{ {snippet} }}; if (-not $?) {{ throw 'Windows reported that the tweak command failed.' }}"
+        );
         let result = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
@@ -264,7 +292,7 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                snippet,
+                &guarded,
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
@@ -286,7 +314,12 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 message: format!(
                     "PowerShell exited {}: {}",
                     out.status,
-                    String::from_utf8_lossy(&out.stderr)
+                     {
+                         let stderr = String::from_utf8_lossy(&out.stderr);
+                         let stdout = String::from_utf8_lossy(&out.stdout);
+                         let detail = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+                         if detail.is_empty() { "Windows rejected the command without an error message." } else { detail }
+                     }
                 ),
                 undo_token: None,
                 requires_reboot: false,
@@ -570,7 +603,6 @@ const NATIVE_TWEAKS: &[(&str, NativeTweak)] = &[
     ("Win32PrioritySeparation",   NativeTweak { apply: native_impls::apply_priority_separation,    undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("SetTimerResolution",        NativeTweak { apply: native_impls::apply_timer_resolution,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
     ("SetResponsiveness",         NativeTweak { apply: native_impls::apply_system_responsiveness,  undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
-    ("EnableMSIMode",             NativeTweak { apply: native_impls::apply_msi_mode,               undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
     ("GameModeTweaks",            NativeTweak { apply: native_impls::apply_game_mode,              undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("NetworkThrottling",         NativeTweak { apply: native_impls::apply_network_throttling,     undo: native_impls::reg_undo, category: "network",        requires_reboot: false }),
     ("DisableNagle",              NativeTweak { apply: native_impls::apply_disable_nagle,          undo: native_impls::reg_undo, category: "network",        requires_reboot: true  }),
@@ -585,7 +617,6 @@ const NATIVE_TWEAKS: &[(&str, NativeTweak)] = &[
     ("SysVisualBestPerf",         NativeTweak { apply: native_impls::apply_visual_best_perf,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("DisableTelemetry",          NativeTweak { apply: native_impls::apply_disable_telemetry,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("SysHibernateOff",           NativeTweak { apply: native_impls::apply_disable_hibernate,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
-    ("DisableMemoryCompression",  NativeTweak { apply: native_impls::apply_disable_memory_compression, undo: native_impls::reg_undo, category: "memory",     requires_reboot: true  }),
     ("SetDNSPriority",            NativeTweak { apply: native_impls::apply_optimize_dns,           undo: native_impls::reg_undo, category: "network",        requires_reboot: false }),
 ];
 

@@ -104,6 +104,13 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     let nativeTicket: string | null = null;
     let osApplied = false;
     try {
+      if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
+        const restorePoint = await createRestorePoint("Before Opti Gods tweak changes");
+        if (!restorePoint?.sequence_number) {
+          throw new Error("Windows did not confirm a restore point. No tweak was applied.");
+        }
+        sessionStorage.setItem(RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+      }
       // The server decides eligibility, entitlement, and remaining allowance.
       // No client-side counter or Pro flag is used for authorization.
       const nativeAuth = await getNativeAuthToken();
@@ -122,10 +129,6 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       if (!auth.ok) throw new Error(authBody?.error || "This tweak is not available on the free allowance.");
       nativeTicket = authBody.ticket || null;
       if (!nativeTicket) throw new Error("The server did not issue an authorization ticket. Try again.");
-      if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
-        await createRestorePoint("Before Opti Gods tweak changes").catch(() => null);
-        sessionStorage.setItem(RESTORE_CREATED_KEY, "1");
-      }
       const result = await applyTweak(id, authBody.ticket, nativeAuth);
       if (!result.ok) throw new Error(result.message || "This tweak needs the script runner.");
       // Persist the OS truth before any fallible ledger network request.
@@ -149,10 +152,12 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         }).catch(() => {});
       }
       if (!osApplied) onCheckedChange(false);
+      const message = error instanceof Error ? error.message : "Nothing was changed.";
+      const incompatible = /not for this system|not compatible|requires an? (nvidia|amd|intel|laptop|desktop)|not detected/i.test(message);
       toast({
-        title: "Tweak could not be enabled",
-        description: error instanceof Error ? error.message : "Nothing was changed.",
-        variant: "success",
+        title: incompatible ? "Not for this system" : "Tweak could not be enabled",
+        description: message,
+        variant: "destructive",
       });
     } finally {
       setApplying(false);
