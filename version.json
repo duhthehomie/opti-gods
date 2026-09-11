@@ -1,4 +1,4 @@
 {
-  "version": "5.2.3",
-  "notes": "V5.2.3 — Best 15 now reports a green success state, all free bulk actions use the server-approved flow, and free users can undo applied tweaks without Pro."
+  "version": "5.2.4",
+  "notes": "V5.2.4 — always-visible Selected and Applied counts, truthful selection tracking, multi-select Undo, and a restart reminder after restoring tweaks."
 }

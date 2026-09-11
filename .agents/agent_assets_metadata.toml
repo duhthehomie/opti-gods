@@ -6,138 +6,161 @@ id = "j4qg-mRSyqSTe4KGMtcTD"
 uri = "file://attached_assets/generated_images/optigods_thumbnail.png"
 type = "image"
 title = "Opti Gods Pro — Gumroad Thumbnail (1:1)"
+logical_id = "7861bd7b-15a8-484c-b533-5988c8bd6b9b"
 
 [[outputs]]
 id = "JRETMaeKkn-v2r3a5kh1y"
 uri = "file://attached_assets/generated_videos/optigods_promo_tiktok.mp4"
 type = "video"
 title = "Opti Gods — TikTok/Instagram Promo Video (9:16)"
+logical_id = "fb34fa94-7123-4c28-8cbf-c81a5195d7af"
 
 [[outputs]]
 id = "T8HtNwC36ffAC-CShQ9v-"
 uri = "file://client/public/optigods_pfp.png"
 type = "image"
 title = "Opti Gods Logo (for Discord app icon)"
+logical_id = "724b0ca2-7437-4175-b00c-5449ebcc43be"
 
 [[outputs]]
 id = "fEoahrNhJo8tR9-mHjW7X"
 uri = "file://client/public/optigods_banner.png"
 type = "image"
 title = "Opti Gods YouTube Banner"
+logical_id = "b3a0dccb-0331-4b02-ad98-62b90891a6f6"
 
 [[outputs]]
 id = "tG0WvUzZwQlDYDNWAVqcv"
 uri = "file://attached_assets/fire_icon_preview.png"
 type = "image"
 title = "New Fire Icon (256x256 preview)"
+logical_id = "a1b84bba-ad20-40c5-b68c-8e202d3b2865"
 
 [[outputs]]
 id = "Z1gCEAIbHJbI8KHLm2Tiu"
 uri = "file://scripts/output/OptiGods-COD-9800X3D-RTX5070-Streamer.zip"
 type = "unspecified"
 title = "OptiGods — Streamer Build (9800X3D + RTX 5070) — fixed"
+logical_id = "2b831ca5-55ef-4007-93fb-2eff3c554825"
 
 [[outputs]]
 id = "LLtcG-qtTWT7Xfc15PSaW"
 uri = "file://scripts/output/OptiGods-COD-9800X3D-RTX5070-Streamer-bat.zip"
 type = "unspecified"
 title = "OptiGods — COD Streamer .bat (updated)"
+logical_id = "35708656-69be-48ec-9fe1-1a045b295e67"
 
 [[outputs]]
 id = "Hg4FMe_DfzLRb0gwlQUiR"
 uri = "file://scripts/output/OptiGods-COD-7800X3D-RTX5070-Streamer.zip"
 type = "unspecified"
 title = "OptiGods — Streamer Build (7800X3D + RTX 5070)"
+logical_id = "deea3cda-d9ee-449c-b0dd-f53d97404f8a"
 
 [[outputs]]
 id = "y6cT3OIPWVEGKzhom3kPR"
 uri = "file://FiveM-MenuFPS-Uncap-Test.zip"
 type = "unspecified"
 title = "FiveM Menu FPS Uncap — fivem.cfg Patcher"
+logical_id = "6450a141-bcff-4214-a825-3b47fd0c7c66"
 
 [[outputs]]
 id = "DnwdV1AaHew32bLMDjMt6"
 uri = "file://FiveM-Scan.zip"
 type = "unspecified"
 title = "FiveM Config Scanner (Pure .bat)"
+logical_id = "8af102fd-c8c3-454c-9ba4-e8ab1039e1c9"
 
 [[outputs]]
 id = "zwN2kipg4oA7kLvZBoimk"
 uri = "file://exports/OptiGods_FiveM_Priority_Booster.zip"
 type = "unspecified"
 title = "OptiGods_FiveM_Priority_Booster.bat (fixed v2)"
+logical_id = "9e911348-4e94-40d9-aacd-fed760ccef81"
 
 [[outputs]]
 id = "sZz68n4DpkNSzBKJBbEwQ"
 uri = "file://downloads/SetTimerResolution-Guide.txt"
 type = "text"
 title = "SetTimerResolution Guide for five"
+logical_id = "f2056ae6-3a65-4059-b1ae-3f43ad2e1868"
 
 [[outputs]]
 id = "cQkzpgI6EPSKkH8Mp0UVv"
 uri = "file://downloads/OptiGods-TimerFix-0.5ms.zip"
 type = "unspecified"
 title = "OptiGods-TimerFix-0.5ms.ps1"
+logical_id = "df54e9ff-822e-45f7-a7a0-461093227232"
 
 [[outputs]]
 id = "hN41O1C8b82rSq2TT4VaW"
 uri = "file://downloads/OptiGods-TimerFix-0.5ms-bat.zip"
 type = "unspecified"
 title = "OptiGods-TimerFix-0.5ms.bat"
+logical_id = "720d4193-c18c-4ec9-a553-e6bf9a87932b"
 
 [[outputs]]
 id = "JKtDFruPeISDXEKH2Nwpj"
 uri = "file://downloads/OptiGods-AudioFix-bat.zip"
 type = "unspecified"
 title = "OptiGods-AudioFix.bat"
+logical_id = "7b421d9e-0df7-46a8-a800-b32c3954355c"
 
 [[outputs]]
 id = "IuHvioIfLm8_d_-lqlxC7"
 uri = "file://downloads/OptiGods-Preset-i5-12600K-RTX4060Ti.zip"
 type = "unspecified"
 title = "OptiGods-Preset-i5-12600K-RTX4060Ti.bat"
+logical_id = "78d0e0c6-bef7-41c6-b5d3-0f26eec8a994"
 
 [[outputs]]
 id = "gM67shTirjJEnBmHRVxJI"
 uri = "file://downloads/OptiGods-FullRestore.zip"
 type = "unspecified"
 title = "OptiGods-FullRestore.bat"
+logical_id = "f7128126-3bba-4caf-9f91-7e71f89200e0"
 
 [[outputs]]
 id = "cVXlzE_zgBWL9Oxmdx7R9"
 uri = "file://downloads/OptiGods-NvidiaFix.zip"
 type = "unspecified"
 title = "OptiGods-NvidiaFix.bat"
+logical_id = "aabe652a-c13a-4cfe-ad02-18b0940baa26"
 
 [[outputs]]
 id = "pQjsNVj7Hfk46E9TAtdUm"
 uri = "file://downloads/OptiGods-ConflictFix.zip"
 type = "unspecified"
 title = "OptiGods-ConflictFix.bat"
+logical_id = "927ccff5-051d-46b2-89ce-22e7d9a67179"
 
 [[outputs]]
 id = "HPC4MgBenK3ldQ-Ytzvsq"
 uri = "file://downloads/OptiGods-Preset-R7-2700-GTX1650.zip"
 type = "unspecified"
 title = "OptiGods-Preset-R7-2700-GTX1650.bat"
+logical_id = "61fa6a8e-cb8e-4034-a356-c6bf7aa71250"
 
 [[outputs]]
 id = "2ehwm32PCZMRkKnUT4Rn7"
 uri = "file://downloads/OptiGods-Preset-i5-4590-RTX2060.zip"
 type = "unspecified"
 title = "OptiGods-Preset-i5-4590-RTX2060-V2.bat"
+logical_id = "8ba4f651-2a07-4dbc-906c-2a3e217de493"
 
 [[outputs]]
 id = "3OxCD0rcZwCcw8rP8NNx5"
 uri = "file://downloads/OptiGods-Preset-R5-5600X-RTX4060.zip"
 type = "unspecified"
 title = "OptiGods-Preset-R5-5600X-RTX4060.zip"
+logical_id = "96ba5668-4c49-421a-ab94-c385fbe0569a"
 
 [[outputs]]
 id = "WzaZI7uM9A-uoH1dvrZvn"
 uri = "file://OptiGods-MoviesTVFix.zip"
 type = "unspecified"
 title = "OptiGods-MoviesTVFix.zip — v2 (updated)"
+logical_id = "7c627620-5915-40f6-8b6a-83e616838a90"
 
 [[outputs]]
 id = "lgRmMa5ZB8lAjurLaywDg"
@@ -145,9 +168,97 @@ uri = "file://OptiGodsOverlay-ReShade.zip"
 type = "unspecified"
 title = "OptiGodsOverlay-ReShade.zip"
 description = ".fx → reshade-shaders/Shaders/ | .png → reshade-shaders/Textures/"
+logical_id = "1cf3103d-cb90-4ed2-93ce-c90de7e931a0"
 
 [[outputs]]
 id = "iVBHvRJQzS2UBhNFgJ7ht"
 uri = "file://OptiGods-DisableXboxOverlay.zip"
 type = "unspecified"
 title = "OptiGods-DisableXboxOverlay.zip"
+logical_id = "af1feaa8-6664-4e29-8259-f1e2c5f22b76"
+
+[[outputs]]
+id = "x4YkCLxv6-BusspXSV9vk"
+uri = "file://attached_assets/generated_audio/opti-gods-ad-music.mp3"
+type = "audio"
+title = "Opti Gods gaming ad music"
+description = "Generated music: 15 second instrumental gaming technology advertisement, dark aggressive electronic trap pulse, immediate punchy hook, rising tension, clean bass impacts, premium modern sound, no voc…"
+logical_id = "b38f1f40-adc9-4136-9d71-829042a037c7"
+
+[[outputs]]
+id = "Keikfcvu5XgxWmpB_rTu5"
+uri = "file://attached_assets/generated_audio/opti-gods-ad-voice.mp3"
+type = "audio"
+title = "Opti Gods energetic ad voiceover"
+description = "Text-to-speech audio: Your PC isn't slow. It's under-optimized. Opti Gods scans your exact hardware, finds the right performance tweaks, and keeps every change reversible. Download free at OptiGods.c…"
+logical_id = "1545826a-5e32-4ffa-a6af-44a3f9160269"
+
+[[outputs]]
+id = "a8-SqFxnUBo-vXinihnUR"
+uri = "file://marketing/video/opti-gods-example-ad-vertical.mp4"
+type = "video"
+title = "Opti Gods Example Vertical Ad"
+description = "15-second 1080x1920 video with cinematic gaming footage, real Opti Gods UI, voiceover, music, and a download CTA. Ready for TikTok, Instagram Reels, and YouTube Shorts."
+logical_id = "4500a90b-8974-4c5a-a36e-05bc77c57a9a"
+content_hash = "sha256:db30381c9051790fb1c90ea5166250f8a8f8e14a55302cd0a2bfe5a2785b3f9a"
+size = 9764385
+mtime_ms = 1789095178468
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/4500a90b-8974-4c5a-a36e-05bc77c57a9a/63f2ccae-65bf-4d66-908e-5f31547ae77b"
+storage_version_token = "1789095264435565"
+content_type = "video/mp4"
+
+[[outputs]]
+id = "xO90Bkyvjmpeggyyk0--w"
+uri = "file://marketing/opti-gods-30-day-content-calendar.csv"
+type = "table"
+title = "Opti Gods 30-Day Content Calendar"
+description = "Thirty platform-specific video concepts with hooks, scripts, visual plans, captions, hashtags, CTAs, and paid-ad recommendations."
+logical_id = "bdab3828-77e9-4423-acde-1796afab0e1a"
+content_hash = "sha256:46110a8a0612891a7937c424abfdb043a29df2f2e1d9a4b967597fd91efa5535"
+size = 14027
+mtime_ms = 1789095226265
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/bdab3828-77e9-4423-acde-1796afab0e1a/3777b7e2-720e-4f02-a7b6-723320ba89df"
+storage_version_token = "1789095265077071"
+content_type = "text/csv"
+
+[[outputs]]
+id = "eCWB3263fggW-jbyBXjdh"
+uri = "file://marketing/opti-gods-example-ad-posting-copy.txt"
+type = "text"
+title = "Example Ad Posting Copy"
+description = "Ready-to-post TikTok, Instagram Reels, and YouTube Shorts copy plus the first paid-ad test setup."
+logical_id = "da5bc6aa-ca52-4402-83de-ad6b1ab77c81"
+content_hash = "sha256:b7ab46fc72b011f54bc621daa040b6dc8106494d06502cfb9c25cb90e9821de0"
+size = 1895
+mtime_ms = 1789095233733
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/da5bc6aa-ca52-4402-83de-ad6b1ab77c81/e1e8f2b2-7d4e-4fd3-9da7-6643202669c2"
+storage_version_token = "1789095265713316"
+content_type = "text/plain"
+
+[[outputs]]
+id = "GddP47h7FWDYWKUFnE-c1"
+uri = "file://marketing/ads/google/opti-gods-google-display-300x250.gif"
+type = "image"
+title = "Opti Gods Google Display GIF"
+description = "Google-compliant 300x250 animated ad: 7.25 seconds, 4 FPS, 58 KB, centered safe-area layout, animated splash, product features, full Opti Gods interface, and download CTA."
+logical_id = "1c6f1072-cbed-4aa0-a521-ce7ce7dce27b"
+content_hash = "sha256:700102e3eff02bf628d333a4273a449517d195112b10125cd81a11aa97c08429"
+size = 57850
+mtime_ms = 1789099430444
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/1c6f1072-cbed-4aa0-a521-ce7ce7dce27b/bda70828-2674-4c18-8b0b-12f3cc3f5402"
+storage_version_token = "1789099452728804"
+content_type = "image/gif"
+
+[[outputs]]
+id = "7lYVDFEaMsm2zLTsfCJxr"
+uri = "file://marketing/ads/google/opti-gods-google-display-preview.mp4"
+type = "video"
+title = "Opti Gods Display Ad Smooth Preview"
+description = "High-resolution 900x750, 30 FPS preview of the Google Display creative for reviewing transitions and layout."
+logical_id = "f6b63aad-b816-42c0-a82c-cf0abfd58e21"
+content_hash = "sha256:d6198827f2bbb90996792f2a83ebaf41a8579c78d1c17b42ec21d731f6d281f1"
+size = 334801
+mtime_ms = 1789099430144
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/f6b63aad-b816-42c0-a82c-cf0abfd58e21/f592ca1a-54df-4646-add5-e288d4164ceb"
+storage_version_token = "1789099453303397"
+content_type = "video/mp4"

@@ -4,7 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
-import { Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight } from "lucide-react";
+import { Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight, CheckCircle2 } from "lucide-react";
 import { BRAND } from "@/components/branding/assets";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { ScriptDialog } from "../script-dialog";
@@ -128,18 +128,26 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
   "/game-profiles": {
     title: "Game Profiles",
     desc: "Game-specific optimization controls, grouped by title instead of mixed into Windows tweaks.",
+    tweakCount: "Profiles",
+    highlights: ["Per-game controls", "Saved configurations", "Focused optimization", "Quick switching"],
   },
   "/graphics-studio": {
     title: "Graphics Studio",
     desc: "Build, validate, and install FiveM visual packs from one focused workspace.",
+    tweakCount: "Visual",
+    highlights: ["Pack builder", "Validation", "FiveM visuals", "Safe installation"],
   },
   "/support": {
     title: "Support",
     desc: "Get direct help by email or through the Opti Gods Discord community.",
+    tweakCount: "Help",
+    highlights: ["Discord community", "Direct support", "Setup help", "Troubleshooting"],
   },
   "/updates": {
     title: "Updates",
     desc: "See release notes, relevant improvements, and available Opti Gods updates.",
+    tweakCount: "Latest",
+    highlights: ["Release notes", "Version checks", "New features", "Installer updates"],
   },
   "/task-manager": {
     title: "Task Manager",
@@ -524,6 +532,22 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <Link href="/applied-tweaks">
+                <button
+                  data-testid="button-tweak-status"
+                  className="hidden sm:inline-flex items-center overflow-hidden rounded-xl border border-white/10 bg-black/40 text-left transition-colors hover:border-red-500/35"
+                  title="Open Applied Tweaks"
+                >
+                  <span className="flex items-center gap-1.5 border-r border-white/10 px-3 py-2">
+                    <Zap className="h-3.5 w-3.5 text-red-400" />
+                    <span><span className="block text-[8px] font-bold uppercase tracking-wider text-zinc-600">Selected</span><span className="block text-xs font-black text-white">{enabledCount}</span></span>
+                  </span>
+                  <span className="flex items-center gap-1.5 px-3 py-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                    <span><span className="block text-[8px] font-bold uppercase tracking-wider text-zinc-600">Applied</span><span className="block text-xs font-black text-emerald-300">{appliedCount}</span></span>
+                  </span>
+                </button>
+              </Link>
               <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 lg:inline-flex">
                 <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                 System online

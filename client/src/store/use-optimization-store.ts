@@ -679,12 +679,9 @@ export const useOptimizationStore = create<OptimizationState>()(
 
       setNvidiaPreset: (preset) => set({ nvidiaPreset: preset }),
 
-      setAllTweaks: (tweaks) => set((state) => {
-        const now = Date.now();
-        const nextApplied = { ...state.appliedAt };
-        Object.entries(tweaks).forEach(([k, v]) => { if (v) nextApplied[k] = now; });
-        return { tweaks, appliedAt: nextApplied };
-      }),
+      // Selection is intent, not proof that Windows changed. Only native
+      // success or a completed script flow may call markApplied().
+      setAllTweaks: (tweaks) => set({ tweaks }),
 
       markApplied: (ids) => set((state) => {
         const now = Date.now();

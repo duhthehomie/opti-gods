@@ -11,3 +11,4 @@
 - [Registry sections consolidation](registry-consolidation.md) — 10 sections merged to 5; DisableCoreParking and DisableDynamicTick were duplicated between CPU_TWEAKS and POWER_TWEAKS — removed from POWER_TWEAKS.
 - [GitHub publish authentication](github-publish-auth.md) — GitHub App attachment may not replace stale GIT_ASKPASS credentials; verify the actual auth path before retrying pushes.
 - [Free tweak allowance security](free-tweak-allowance.md) — credits require successful native execution with one-use server authorization; selection, downloads, and Undo never alter usage.
+- [Social creative direction](social-creative-direction.md) — approved premium red/black gaming ads; app scenes must show the full interface, centered and uncropped.

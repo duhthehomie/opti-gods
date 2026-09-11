@@ -852,7 +852,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         if (!logContent || !mounted) return;
         // Match any connect target: cfx codes, domains, IPs (with optional port).
         // Examples: "88aypv", "pvp.tmfrz.com", "185.1.2.3:30120", "cfx.re/join/abc123"
-        const matches = [...logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([^\s,;]+)/gi)];
+        const matches = Array.from(logContent.matchAll(/Connecting to\s+(?:cfx\.re\/join\/)?([^\s,;]+)/gi));
         if (!matches.length) return;
         const rawConnect = matches[matches.length - 1][1];
         if (!rawConnect || rawConnect.length < 3) return;
