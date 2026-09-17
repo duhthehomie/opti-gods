@@ -1,4 +1,4 @@
 {
-  "version": "5.2.5",
-  "notes": "V5.2.5 — verified restore points before native changes, truthful Applied status, hardware-safe skip messages, and real Windows error details."
+  "version": "5.2.6",
+  "notes": "V5.2.6 — hardware-matched Pro presets plus 15 reusable active free-tweak slots with truthful native Undo."
 }

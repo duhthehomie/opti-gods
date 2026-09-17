@@ -164,6 +164,7 @@ export interface IStorage {
   authorizeNativeTweakTicket(discordUserId: string, tweakId: string, idempotencyKey: string, quotaRequired: boolean): Promise<{ ticket: string; reused: boolean }>;
   consumeNativeTweakTicket(discordUserId: string, ticket: string, tweakId: string): Promise<{ idempotencyKey: string; resultSecret: string } | null>;
   cancelNativeTweakTicket(discordUserId: string, ticket: string): Promise<boolean>;
+  releasePerformanceTweak(discordUserId: string, tweakId: string): Promise<boolean>;
   finalizeNativeTweakTicket(ticket: string, resultSecret: string, success: boolean): Promise<{ ok: boolean; status: string }>;
 }
 
@@ -1000,12 +1001,18 @@ export class DatabaseStorage implements IStorage {
           ...(discordUserId !== undefined ? { discordUserId: discordUserId ?? null } : {}),
           ...(proCode ? { proCode } : {}),
           cpu: payload.cpu,
+          cpuCores: payload.cpuCores ?? null,
+          cpuThreads: payload.cpuThreads ?? null,
           gpu: payload.gpu,
           vramMb: payload.vramMb ?? null,
           ramGb: payload.ramGb ?? null,
           ramMhz: payload.ramMhz ?? null,
           motherboard: payload.motherboard ?? null,
           chassis: payload.chassis ?? null,
+          systemModel: payload.systemModel ?? null,
+          isLaptop: payload.isLaptop ?? null,
+          osName: payload.osName ?? null,
+          osBuild: payload.osBuild ?? null,
           coolingType: payload.coolingType ?? null,
           refreshHz: payload.refreshHz ?? null,
           nicVendor: payload.nicVendor ?? null,
@@ -1021,12 +1028,18 @@ export class DatabaseStorage implements IStorage {
       discordUserId: discordUserId ?? null,
       proCode: proCode ?? null,
       cpu: payload.cpu,
+      cpuCores: payload.cpuCores ?? null,
+      cpuThreads: payload.cpuThreads ?? null,
       gpu: payload.gpu,
       vramMb: payload.vramMb ?? null,
       ramGb: payload.ramGb ?? null,
       ramMhz: payload.ramMhz ?? null,
       motherboard: payload.motherboard ?? null,
       chassis: payload.chassis ?? null,
+      systemModel: payload.systemModel ?? null,
+      isLaptop: payload.isLaptop ?? null,
+      osName: payload.osName ?? null,
+      osBuild: payload.osBuild ?? null,
       coolingType: payload.coolingType ?? null,
       refreshHz: payload.refreshHz ?? null,
       nicVendor: payload.nicVendor ?? null,
@@ -1277,14 +1290,20 @@ export class DatabaseStorage implements IStorage {
 
   async getPerformanceAllowance(discordUserId: string): Promise<{ used: number; remaining: number }> {
     const [row] = await db.select({ used: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
-      .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.status, "consumed")));
+      .where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        sql`${performanceTweakAllowance.status} IN ('consumed','reserved')`,
+      ));
     const used = row?.used ?? 0;
     return { used, remaining: Math.max(0, 15 - used) };
   }
 
   async getConsumedPerformanceTweakIds(discordUserId: string): Promise<string[]> {
     const rows = await db.select({ id: performanceTweakAllowance.tweakId }).from(performanceTweakAllowance)
-      .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.status, "consumed")));
+      .where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        sql`${performanceTweakAllowance.status} IN ('consumed','reserved')`,
+      ));
     return rows.map(row => row.id);
   }
 
@@ -1330,6 +1349,18 @@ export class DatabaseStorage implements IStorage {
 
   async failPerformanceTweaks(discordUserId: string, idempotencyKey: string): Promise<void> {
     await db.delete(performanceTweakAllowance).where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), eq(performanceTweakAllowance.idempotencyKey, idempotencyKey), eq(performanceTweakAllowance.status, "reserved")));
+  }
+
+  async releasePerformanceTweak(discordUserId: string, tweakId: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      const rows = await tx.delete(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.tweakId, tweakId),
+        eq(performanceTweakAllowance.status, "consumed"),
+      )).returning({ id: performanceTweakAllowance.id });
+      return rows.length > 0;
+    });
   }
 
   async authorizeNativeTweakTicket(discordUserId: string, tweakId: string, idempotencyKey: string, quotaRequired: boolean): Promise<{ ticket: string; reused: boolean }> {

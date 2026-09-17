@@ -18,6 +18,7 @@ import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
 import { buildSafePreset, hardwareFromRig, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
 import { getLatestGhRelease, bustGhCache } from "./github-release";
+import { NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
 const GAME_WHITELIST_PS_ARRAY = GAME_WHITELIST
@@ -1283,7 +1284,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     `# Tweaks enabled: ${enabledTweaks.length}`,
     `# ============================================`,
     ``,
-    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `$ErrorActionPreference = 'Stop'`,
     ``,
     `# --- Administrator check (elevation is handled by the .bat launcher) ---`,
     `if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {`,
@@ -1292,6 +1293,25 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     `    Write-Host "  Please re-download and run the .bat file from the website." -ForegroundColor Yellow`,
     `    Write-Host "" `,
     `    Read-Host "  Press Enter to close"`,
+    `    exit 1`,
+    `}`,
+    ``,
+    `# --- Mandatory verified restore point before any optimization ---`,
+    `$restoreLabel = "OptiGods Before Preset $([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))"`,
+    `try {`,
+    `    Enable-ComputerRestore -Drive "$($env:SystemDrive)\\" -ErrorAction Stop`,
+    `    $srPolicy = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore'`,
+    `    New-Item $srPolicy -Force | Out-Null`,
+    `    Set-ItemProperty $srPolicy SystemRestorePointCreationFrequency 0 -Type DWord -Force`,
+    `    Checkpoint-Computer -Description $restoreLabel -RestorePointType MODIFY_SETTINGS -ErrorAction Stop`,
+    `    Start-Sleep -Milliseconds 750`,
+    `    $verifiedRestore = Get-CimInstance -Namespace root/default -ClassName SystemRestore -ErrorAction Stop | Where-Object Description -eq $restoreLabel | Sort-Object SequenceNumber -Descending | Select-Object -First 1`,
+    `    if (-not $verifiedRestore -or -not $verifiedRestore.SequenceNumber) { throw 'Windows did not expose the new checkpoint through System Restore.' }`,
+    `    Write-Host "[RESTORE] Verified checkpoint #$($verifiedRestore.SequenceNumber): $restoreLabel" -ForegroundColor Green`,
+    `} catch {`,
+    `    Write-Host "[FATAL] No optimization was applied because a restore point could not be created and verified." -ForegroundColor Red`,
+    `    Write-Host $_.Exception.Message -ForegroundColor Red`,
+    `    Read-Host "Press Enter to close"`,
     `    exit 1`,
     `}`,
     ``,
@@ -1546,14 +1566,7 @@ export async function registerRoutes(
     Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id) &&
     !EXPERT_TWEAK_IDS.has(id);
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
-  const NATIVE_EXECUTABLE_ALLOWLIST = new Set([
-    "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
-    "NetworkThrottling", "DisableNagle", "InputLagTCP", "DisableNDU",
-    "DisablePrefetch", "EnableHAGS", "DisablePointerPrecision",
-    "DisableFastStartup", "DisableXboxGameBar", "DisableGameDVR",
-    "SysVisualBestPerf", "DisableTelemetry", "SysHibernateOff",
-    "SetDNSPriority", "ClearDnsCache", "ResetTcpAutotune",
-  ]);
+  const NATIVE_EXECUTABLE_ALLOWLIST = NATIVE_TWEAK_ID_SET;
 
   app.get("/api/performance-allowance", async (req, res) => {
     const userId = await allowanceAuth(req);
@@ -1565,6 +1578,7 @@ export async function registerRoutes(
   app.post("/api/performance-allowance/authorize", async (req, res) => {
     const userId = await allowanceAuth(req);
     if (!userId) return res.status(401).json({ error: "Discord login required" });
+    const isPro = await requirePaidPro(req);
     const nativeHeader = req.headers["x-native-auth"];
     if ((typeof nativeHeader !== "string" || await validateNativeToken(nativeHeader) !== userId) && !(req.body?.mode === "best" && req.body?.preview === true)) {
       return res.status(403).json({ error: "Free performance tweaks can only be authorized by the Windows app.", code: "NATIVE_APP_REQUIRED" });
@@ -1577,25 +1591,48 @@ export async function registerRoutes(
     if (req.body?.mode === "best") {
       const rig = req.body?.rigHash ? await storage.getRigByHash(String(req.body.rigHash)) : await storage.getLatestRigForUser(userId);
       if (!rig || (rig.discordUserId && rig.discordUserId !== userId)) return res.status(400).json({ error: "A server-validated system scan is required" });
-      ids = buildSafePreset(hardwareFromRig(rig), "balanced").core
-        .filter(id => eligibleAllowanceId(id) && NATIVE_EXECUTABLE_ALLOWLIST.has(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
-      const consumed = new Set(await storage.getConsumedPerformanceTweakIds(userId));
-      const allowance = await storage.getPerformanceAllowance(userId);
-      ids = ids.filter(id => !consumed.has(id)).slice(0, allowance.remaining);
+      const scanAgeMs = Date.now() - (rig.lastSeenAt?.getTime() ?? 0);
+      if (scanAgeMs > 30 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: "Your hardware scan is stale. Rescan your system before selecting Best 15." });
+      }
+      if (!rig.cpu.trim() || !rig.gpu.trim() || !rig.ramGb || rig.ramGb < 1) {
+        return res.status(400).json({ error: "Your hardware scan is incomplete. Rescan your system before selecting Best 15." });
+      }
+      const compatibleCore = buildSafePreset(hardwareFromRig(rig), "balanced").core
+        .filter(id => eligibleAllowanceId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
+      if (isPro) {
+        // Pro receives the complete canonical hardware-aware core preset.
+        // Historical free usage is irrelevant to an unlimited entitlement.
+        ids = compatibleCore;
+      } else {
+        const instantCandidates = compatibleCore.filter(id => NATIVE_EXECUTABLE_ALLOWLIST.has(id));
+        const consumed = new Set(await storage.getConsumedPerformanceTweakIds(userId));
+        const allowance = await storage.getPerformanceAllowance(userId);
+        const selected = selectBestInstantTweaks(instantCandidates, consumed, allowance.remaining, false);
+        ids = selected.ids;
+        if (ids.length !== selected.requestedCount) {
+          return res.status(409).json({
+            error: `Only ${ids.length} verified compatible instant tweaks are available for this scan; ${selected.requestedCount} are required. Rescan after updating Windows and GPU drivers.`,
+            code: "BEST_15_INCOMPLETE",
+          });
+        }
+      }
     }
-    if (!ids.length || ids.length > 128 || ids.some(id => !eligibleAllowanceId(id))) {
+    // The free/native path is deliberately bounded. Pro receives the complete
+    // hardware-compatible core preset, which can exceed 128 app tweaks.
+    if (!ids.length || (!isPro && ids.length > 128) || ids.some(id => !eligibleAllowanceId(id))) {
       return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance" });
     }
-    if (req.body?.mode === "best" && req.body?.preview === true && !(await requirePaidPro(req))) {
+    if (req.body?.mode === "best" && req.body?.preview === true && !isPro) {
       return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
     }
-    if (await requirePaidPro(req)) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
+    if (isPro) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
     try {
       const result = await storage.reservePerformanceTweaks(userId, ids, key);
       return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...result });
     } catch (err) {
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") {
-        return res.status(429).json({ error: "Free allowance limit reached (15 unique performance tweaks). Pro users have unlimited access.", code: "FREE_ALLOWANCE_EXHAUSTED" });
+        return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "FREE_ALLOWANCE_EXHAUSTED" });
       }
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_RESERVATION_CONFLICT") {
         return res.status(409).json({ error: "One or more tweaks are already being authorized; retry after the active operation completes.", code: "RESERVATION_CONFLICT" });
@@ -1616,6 +1653,9 @@ export async function registerRoutes(
     }
     const tweakId = req.body?.tweakId;
     if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
+    if (!NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
+      return res.status(400).json({ error: "This tweak is script-only and is not available for instant apply.", code: "NATIVE_TWEAK_UNAVAILABLE" });
+    }
     const key = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : randomBytes(16).toString("hex");
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: "Invalid idempotency key" });
     const pro = await requirePaidPro(req);
@@ -1626,7 +1666,7 @@ export async function registerRoutes(
       if (err instanceof Error && ["FREE_ALLOWANCE_RESERVATION_CONFLICT", "NATIVE_TICKET_KEY_CONFLICT", "NATIVE_TICKET_OPERATION_FINALIZED"].includes(err.message)) {
         return res.status(409).json({ error: "Authorization operation conflicts with an existing or finalized ticket.", code: "RESERVATION_CONFLICT" });
       }
-      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free allowance limit reached (15 unique performance tweaks).", code: "FREE_ALLOWANCE_EXHAUSTED" });
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "FREE_ALLOWANCE_EXHAUSTED" });
       throw err;
     }
   });
@@ -1656,6 +1696,18 @@ export async function registerRoutes(
     if (typeof header !== "string" || await validateNativeToken(header) !== userId) return res.status(403).json({ error: "Native Windows authorization required" });
     const cancelled = await storage.cancelNativeTweakTicket(userId, String(req.body?.ticket || ""));
     return cancelled ? res.json({ ok: true }) : res.status(409).json({ error: "Ticket already consumed or invalid" });
+  });
+  app.post("/api/performance-allowance/release", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    const header = req.headers["x-native-auth"];
+    if (typeof header !== "string" || await validateNativeToken(header) !== userId) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    }
+    const tweakId = req.body?.tweakId;
+    if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
+    const released = await storage.releasePerformanceTweak(userId, tweakId);
+    return res.json({ ok: true, released });
   });
   app.post("/api/performance-allowance/native-ticket/result", async (req, res) => {
     const { ticket, resultSecret, success } = req.body ?? {};
@@ -3479,7 +3531,10 @@ Start-Sleep 2
         : "nvidia";
 
       const chassisLower = (rig.chassis ?? "").toLowerCase();
-      const isLaptop = ["laptop", "notebook", "portable", "sub notebook", "sub-notebook"].some(k => chassisLower.includes(k));
+      const isLaptop = rig.isLaptop ?? ["laptop", "notebook", "portable", "sub notebook", "sub-notebook"].some(k => chassisLower.includes(k));
+      const osVersion = (rig.osBuild ?? 0) >= 22000 || /windows\s*11/i.test(rig.osName ?? "") ? "win11"
+        : (rig.osBuild ?? 0) >= 10240 || /windows\s*10/i.test(rig.osName ?? "") ? "win10"
+        : null;
 
       const discordUsername = rig.discordUserId ? (discordUserMap[rig.discordUserId] ?? null) : null;
 
@@ -3488,10 +3543,10 @@ Start-Sleep 2
         gpuVendor,
         gpuName: rig.gpu,
         cpuModel: rig.cpu,
-        cpuCores: null,
-        cpuThreads: null,
+        cpuCores: rig.cpuCores ?? null,
+        cpuThreads: rig.cpuThreads ?? null,
         ramGb: rig.ramGb ?? null,
-        osVersion: null,
+        osVersion,
         isLaptop,
         discordUsername,
         source: "rig" as const,
@@ -3499,6 +3554,9 @@ Start-Sleep 2
         rigId: rig.id,
         seenCount: rig.seenCount,
         motherboard: rig.motherboard ?? null,
+        systemModel: rig.systemModel ?? null,
+        osName: rig.osName ?? null,
+        osBuild: rig.osBuild ?? null,
         vramMb: rig.vramMb ?? null,
         ramMhz: rig.ramMhz ?? null,
         refreshHz: rig.refreshHz ?? null,
@@ -5882,7 +5940,6 @@ Check 'DisableCoreParking'        '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentCon
 Check 'DisableDynamicTick'        '(bcdedit /enum | Select-String "disabledynamictick.*yes") -ne $null'
 Check 'SetTimerResolution'        '(bcdedit /enum | Select-String "disabledynamictick.*yes") -ne $null'
 Check 'GameModeTweaks'            '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name "GPU Priority" -EA SilentlyContinue)."GPU Priority") -eq 8'
-Check 'EnableMSIMode'             '$gpu=(Get-PnpDevice -Class Display -EA SilentlyContinue | Select-Object -First 1); if($gpu){$p="HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; ((Get-ItemProperty $p -EA SilentlyContinue).MSISupported) -eq 1}else{$false}'
 
 # --- Registry: Network ---
 Check 'NetworkThrottling'  '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile" -Name NetworkThrottlingIndex -EA SilentlyContinue).NetworkThrottlingIndex) -eq 4294967295'
@@ -5910,7 +5967,6 @@ Check 'DisableUSBSuspend'      '((powercfg -query SCHEME_CURRENT 2a737441-1930-4
 # --- Registry: Memory ---
 Check 'EnableLargeSystemCache'    '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name LargeSystemCache -EA SilentlyContinue).LargeSystemCache) -eq 1'
 Check 'DisablePagefileEncryption' '(fsutil behavior query encryptpagingfile 2>$null | Select-String "= 0") -ne $null'
-Check 'DisableMemoryCompression' '(Get-MMAgent -EA SilentlyContinue).MemoryCompression -eq $false'
 Check 'DisablePrefetch'          '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters" -Name EnablePrefetcher -EA SilentlyContinue).EnablePrefetcher) -eq 0'
 Check 'MemDisableKernelPaging'   '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" -Name DisablePagingExecutive -EA SilentlyContinue).DisablePagingExecutive) -eq 1'
 Check 'MemGPUOptimize'           '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrLevel -EA SilentlyContinue).TdrLevel) -eq 3'
@@ -7347,7 +7403,9 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       return res.status(400).json({ error: "Invalid scan payload", fieldErrors: parsed.error.flatten().fieldErrors });
     }
     try {
-      const discordUserId = req.session.userId ?? null;
+       const nativeHeader = req.headers["x-native-auth"];
+       const nativeUserId = typeof nativeHeader === "string" ? await validateNativeToken(nativeHeader) : null;
+       const discordUserId = req.session.userId ?? nativeUserId ?? null;
       // Resolve pro code from session token so admin can identify user by code
       let proCode: string | null = null;
       if (parsed.data.sessionToken) {

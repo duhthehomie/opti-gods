@@ -12,6 +12,7 @@ import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
@@ -91,12 +92,18 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   });
   const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac));
   const acBlocked = Boolean(blockingAC) && !checked;
+  const instantAvailable = NATIVE_TWEAK_ID_SET.has(id);
 
   const runEnable = async () => {
     if (applying) return;
     if (!isNative()) {
       onCheckedChange(true);
       toast({ title: "Tweak selected", description: "It will be included when you run your selected tweaks." });
+      return;
+    }
+    if (!instantAvailable) {
+      onCheckedChange(true);
+      toast({ title: "Script only", description: "This tweak is not available for instant apply. It will be included in the PowerShell script." });
       return;
     }
 
@@ -130,7 +137,11 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       nativeTicket = authBody.ticket || null;
       if (!nativeTicket) throw new Error("The server did not issue an authorization ticket. Try again.");
       const result = await applyTweak(id, authBody.ticket, nativeAuth);
-      if (!result.ok) throw new Error(result.message || "This tweak needs the script runner.");
+      if (!result.ok) {
+        const failure = new Error(result.message || "Native tweak execution failed.");
+        (failure as Error & { nativeKind?: string }).nativeKind = result.error_kind;
+        throw failure;
+      }
       // Persist the OS truth before any fallible ledger network request.
       osApplied = true;
       onCheckedChange(true);
@@ -152,10 +163,18 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         }).catch(() => {});
       }
       if (!osApplied) onCheckedChange(false);
-      const message = error instanceof Error ? error.message : "Nothing was changed.";
-      const incompatible = /not for this system|not compatible|requires an? (nvidia|amd|intel|laptop|desktop)|not detected/i.test(message);
+       const message = error instanceof Error ? error.message : "Nothing was changed.";
+       const kind = error instanceof Error ? (error as Error & { nativeKind?: string }).nativeKind : undefined;
+       const incompatible = kind === "compatibility" || /not for this system|not compatible|requires an? (nvidia|amd|intel|laptop|desktop)|not detected/i.test(message);
+       const errorTitles: Record<string, string> = {
+         restore: "Restore point unavailable",
+         auth: "Authorization required",
+         allowance: "Allowance unavailable",
+         compatibility: "Not for this system",
+         execution: "Windows could not apply this tweak",
+       };
       toast({
-        title: incompatible ? "Not for this system" : "Tweak could not be enabled",
+         title: errorTitles[kind || ""] || (incompatible ? "Not for this system" : "Windows could not apply this tweak"),
         description: message,
         variant: "destructive",
       });
@@ -189,13 +208,33 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     setUndoing(true);
     try {
       const nativeToken = readNativeUndoToken(id);
-      if (isNative() && nativeToken) {
+      if (isNative()) {
+        const nativeAuth = await getNativeAuthToken();
         const result = await undoTweak(id, nativeToken);
         if (!result.ok) throw new Error(result.message || "Native undo failed");
+        let slotReleased = false;
+        if (nativeAuth) {
+          for (let attempt = 0; attempt < 3 && !slotReleased; attempt++) {
+            const release = await fetch(apiUrl("/api/performance-allowance/release"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+              body: JSON.stringify({ tweakId: id }),
+            }).catch(() => null);
+            if (release?.ok) {
+              const releaseBody = await release.json().catch(() => ({}));
+              slotReleased = releaseBody.released === true;
+            }
+            if (!slotReleased && attempt < 2) await new Promise(resolve => setTimeout(resolve, 250));
+          }
+        }
         setTweakStore(id, false);
         clearApplied(id);
         writeNativeUndoToken(id, null);
-        toast({ title: "Tweak undone", description: result.message });
+        window.dispatchEvent(new Event("optigods:allowance-changed"));
+        toast({
+          title: "Tweak undone",
+          description: slotReleased ? `${result.message} One free slot is available again.` : `${result.message} The free-slot counter will sync when the server reconnects.`,
+        });
         return;
       }
       const sessionToken = getStoredToken();
@@ -421,8 +460,13 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               )}
             >
               {applying || undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : appliedAt ? <Undo2 className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : checked ? "Selected" : "Enable"}
+              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : !instantAvailable ? "Script only" : checked ? "Selected" : "Enable"}
             </button>
+            {!instantAvailable && (
+              <span className="hidden sm:inline text-[9px] font-semibold uppercase tracking-wide text-zinc-500" title="Not available for instant apply; included in the PowerShell script.">
+                not available for instant apply
+              </span>
+            )}
           </div>
         )}
       </motion.div>

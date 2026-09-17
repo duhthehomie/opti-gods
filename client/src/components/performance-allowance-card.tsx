@@ -37,7 +37,12 @@ export function PerformanceAllowanceCard() {
       setStatus(null);
     })
     .finally(() => setLoaded(true));
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const onAllowanceChanged = () => { void refresh(); };
+    window.addEventListener("optigods:allowance-changed", onAllowanceChanged);
+    return () => window.removeEventListener("optigods:allowance-changed", onAllowanceChanged);
+  }, []);
 
   // Old bulk actions could leave hundreds of free toggles persisted locally.
   // Once the server confirms a free/logged-out session, remove that misleading
@@ -52,7 +57,7 @@ export function PerformanceAllowanceCard() {
 
   const chooseBest = async () => {
     if (authRequired) {
-      toast({ title: "Discord login required", description: "Sign in with Discord so your 15 lifetime free tweak enables can be tracked securely.", variant: "destructive" });
+      toast({ title: "Discord login required", description: "Sign in with Discord so your 15 active free tweak slots can be tracked securely.", variant: "destructive" });
       return;
     }
     setBusy(true);
@@ -152,11 +157,11 @@ export function PerformanceAllowanceCard() {
     <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold text-white">15 Free Tweak Enables</h2>
+          <h2 className="text-sm font-bold text-white">15 Active Free Tweak Slots</h2>
           <p className="mt-1 text-xs text-zinc-400">
             {authRequired
               ? "Sign in with Discord to enable the 15 best free tweaks for your scanned system."
-              : "Non-Pro accounts can enable 15 unique tweaks total. You can unselect choices before they run; Undo does not return an enable."}
+              : "Free accounts can keep up to 15 native tweaks enabled at once. Undo a tweak to free its slot for another choice."}
           </p>
           {status && <p className="mt-2 text-xs font-semibold text-red-300">{status.used} / {status.limit} used · {status.remaining} left</p>}
         </div>

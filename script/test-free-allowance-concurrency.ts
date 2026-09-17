@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import { storage } from "../server/storage";
 import { nativeTweakTickets, performanceTweakAllowance, users } from "../shared/schema";
+import { selectBestInstantTweaks } from "../shared/native-tweak-ids";
 
 async function cleanup(userId: string) {
   await db.delete(nativeTweakTickets).where(eq(nativeTweakTickets.discordUserId, userId));
@@ -12,6 +13,23 @@ async function cleanup(userId: string) {
 }
 
 async function main() {
+  const candidates = [
+    "Win32PrioritySeparation", "GameModeTweaks", "SetResponsiveness",
+    "NetworkThrottling", "DisableNagle", "InputLagTCP", "EnableHAGS",
+    "DisableGameDVR", "DisablePointerPrecision", "DisableFastStartup",
+    "DisablePrefetch", "DisableNDU", "SysVisualBestPerf",
+    "DisableTelemetry", "SysHibernateOff", "SetDNSPriority",
+  ];
+  const partiallyUsed = new Set(candidates.slice(0, 7));
+  const proAfterPartialUse = selectBestInstantTweaks(candidates, partiallyUsed, 0, true);
+  assert.equal(proAfterPartialUse.ids.length, 15, "Pro must receive all 15 ranked compatible IDs despite prior free usage");
+  assert.equal(proAfterPartialUse.requestedCount, 15);
+  const fullyUsed = new Set(candidates);
+  const proAfterFullUse = selectBestInstantTweaks(candidates, fullyUsed, 0, true);
+  assert.equal(proAfterFullUse.ids.length, 15, "Pro must not be filtered by a fully exhausted free ledger");
+  const freeAfterPartialUse = selectBestInstantTweaks(candidates, partiallyUsed, 8, false);
+  assert.deepEqual(freeAfterPartialUse.ids, candidates.slice(7, 15), "Free selection must exclude charged IDs and remain ranked");
+
   const userId = `allowance-race-${randomUUID()}`;
   const duplicateUserId = `allowance-duplicate-${randomUUID()}`;
 
@@ -72,6 +90,15 @@ async function main() {
       ),
       /FREE_ALLOWANCE_EXHAUSTED/,
     );
+    assert.equal(await storage.releasePerformanceTweak(userId, accepted[0]!.tweakId), true);
+    assert.deepEqual(await storage.getPerformanceAllowance(userId), { used: 14, remaining: 1 });
+    const reusable = await storage.authorizeNativeTweakTicket(
+      userId,
+      "ConcurrencyTweak17",
+      randomUUID().replaceAll("-", ""),
+      true,
+    );
+    assert.ok(reusable.ticket, "a released free slot must be reusable for a different tweak");
 
     // Repeated simultaneous clicks for the same operation must all resolve to
     // one ticket and one reserved credit, never sibling executable tickets.
@@ -87,11 +114,12 @@ async function main() {
       ),
     );
     assert.equal(new Set(duplicates.map(result => result.ticket)).size, 1);
-    assert.deepEqual(await storage.getPerformanceAllowance(duplicateUserId), { used: 0, remaining: 15 });
+    assert.deepEqual(await storage.getPerformanceAllowance(duplicateUserId), { used: 1, remaining: 14 });
 
     console.log("PASS: 16 simultaneous unique clicks accepted exactly 15 and rejected 1.");
-    console.log("PASS: successful finalization consumed exactly 15 lifetime credits.");
+    console.log("PASS: successful finalization filled exactly 15 active free slots.");
     console.log("PASS: 15 duplicate simultaneous clicks produced one ticket and one reservation.");
+    console.log("PASS: Undo releases an active slot for a different tweak.");
   } finally {
     await cleanup(userId);
     await cleanup(duplicateUserId);
