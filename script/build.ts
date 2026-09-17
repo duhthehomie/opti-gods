@@ -62,6 +62,14 @@ async function buildAll() {
 }
 
 buildAll().catch((err) => {
-  console.error(err);
+  const message = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+  console.error(message);
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const annotation = message
+      .replace(/%/g, "%25")
+      .replace(/\r/g, "%0D")
+      .replace(/\n/g, "%0A");
+    console.error(`::error file=script/build.ts,line=39,title=Frontend build failure::${annotation.slice(-12000)}`);
+  }
   process.exit(1);
 });
