@@ -12,7 +12,7 @@ import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
-import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
+import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
