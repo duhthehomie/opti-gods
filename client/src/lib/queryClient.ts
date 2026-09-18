@@ -4,6 +4,7 @@ import { apiUrl } from "@/lib/api-base";
 export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
 export const NATIVE_ADMIN_KEY = "optigods_admin_key";
 export const DEVICE_ID_KEY = "optigods_device_id";
+export const BEST_15_IDS_KEY = "optigods_best_15_ids";
 
 export function getPersistentDeviceId(): string {
   try {
@@ -30,6 +31,25 @@ export function getNativeAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+/**
+ * Authentication headers for normal account/Pro API calls.
+ *
+ * X-Device-ID is intentionally excluded. It belongs only on free-allowance
+ * requests; sending it everywhere forces an unnecessary CORS preflight and
+ * breaks login/code redemption against older production servers that did not
+ * allow that header yet.
+ */
+export function getNativeSessionHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  try {
+    const token = localStorage.getItem(NATIVE_TOKEN_KEY);
+    if (token) headers["X-Native-Auth"] = token;
+    const adminKey = localStorage.getItem(NATIVE_ADMIN_KEY);
+    if (adminKey) headers["X-Admin-Key"] = adminKey;
+  } catch { /* localStorage may not be available */ }
+  return headers;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -46,7 +66,7 @@ export async function apiRequest(
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...getNativeAuthHeaders(),
+      ...getNativeSessionHeaders(),
     },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
@@ -65,7 +85,7 @@ export const getQueryFn: <T>(options: {
     const path = queryKey.join("/") as string;
     const res = await fetch(apiUrl(path), {
       credentials: "include",
-      headers: getNativeAuthHeaders(),
+      headers: getNativeSessionHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

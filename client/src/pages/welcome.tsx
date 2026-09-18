@@ -7,7 +7,8 @@ import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { setProSession, setProStatus } from "@/lib/pro-status";
-import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
+import { getNativeSessionHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 
 export const GUEST_MODE_KEY = "og_guest_mode";
 
@@ -15,6 +16,7 @@ type View = "main" | "code";
 
 export default function Welcome() {
   const { isLoading } = useAuth();
+  const [, navigate] = useLocation();
   const version = useVersionInfo();
   const [signingIn, setSigningIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function Welcome() {
       try {
         const res = await fetch(apiUrl("/api/me"), {
           credentials: "include",
-          headers: getNativeAuthHeaders(),
+          headers: getNativeSessionHeaders(),
         });
         if (res.ok) {
           const data = await res.json() as { isAuthenticated?: boolean };
@@ -91,10 +93,21 @@ export default function Welcome() {
         const session = await discordLogin(clientId);
         // Store the nativeToken so all subsequent API calls are authenticated.
         try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
-        // Refresh auth state so any gate that checks /api/me re-queries.
-        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
-        window.location.href = "/tweaks";
+        // Seed the account query immediately so AuthGate cannot flash Welcome
+        // again while the authenticated /api/me request is in flight.
+        queryClient.setQueryData(["/api/me"], {
+          user: {
+            discordId: session.user_id,
+            username: session.username,
+            globalName: null,
+            avatarUrl: null,
+          },
+        });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["/api/me"] }),
+          queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] }),
+        ]);
+        navigate("/tweaks");
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         setLoginError(`Sign-in failed: ${msg.replace(/^Error:\s*/i, "")}`);
@@ -117,8 +130,8 @@ export default function Welcome() {
     try {
       const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-        body: JSON.stringify({ code: code.trim() }),
+        headers: { "Content-Type": "application/json", ...getNativeSessionHeaders() },
+        body: JSON.stringify({ code: code.trim().replace(/^\d+\s+/, "") }),
         credentials: "include",
       });
       const raw = await res.text();
@@ -141,7 +154,7 @@ export default function Welcome() {
         // Only auto-redirect when Discord is already linked (permanent Pro).
         // If not linked, hold the screen so the user can link or manually skip.
         if (data.discordSaved) {
-          redirectTimer.current = setTimeout(() => { window.location.href = "/tweaks"; }, 1800);
+          redirectTimer.current = setTimeout(() => { navigate("/tweaks"); }, 1800);
         }
       } else if (data.reason === "already_used") {
         setCodeAlreadyUsed(true);

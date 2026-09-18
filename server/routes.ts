@@ -3338,7 +3338,7 @@ Start-Sleep 2
   app.post('/api/pro/verify', rateLimit(5, 60_000, 10), async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.json({ valid: false });
-    const normalizedCode = String(code).toUpperCase().trim();
+    const normalizedCode = String(code).toUpperCase().trim().replace(/^\d+\s+/, "");
     const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     // Format gate: accept either the canonical XXXX-XXXX-XXXX (auto-generated)
     // or a 3-32 char alphanumeric (with optional dashes/underscores) so the

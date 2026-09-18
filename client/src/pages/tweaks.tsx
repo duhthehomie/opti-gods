@@ -12,6 +12,8 @@ import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { BEST_15_IDS_KEY } from "@/lib/queryClient";
+import { APP_VERSION } from "@/generated/version";
 
 const Registry         = lazy(() => import("@/pages/registry"));
 const Nvidia           = lazy(() => import("@/pages/nvidia"));
@@ -282,6 +284,19 @@ export default function TweaksPage() {
   const detecting = isDetecting(hw);
   const { tweaks } = useOptimizationStore();
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const showBest15 = new URLSearchParams(window.location.search).get("best15") === "1";
+  const best15Ids = (() => {
+    if (!showBest15) return [] as string[];
+    try {
+      const value = JSON.parse(localStorage.getItem(BEST_15_IDS_KEY) || "[]");
+      return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string").slice(0, 15) : [];
+    } catch {
+      return [] as string[];
+    }
+  })();
+  const best15 = best15Ids
+    .map(id => TWEAK_REGISTRY.find(tweak => tweak.id === id))
+    .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
 
   useEffect(() => { try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {} }, [activeTab]);
   useEffect(() => { try { localStorage.setItem(SHOW_ALL_KEY, showAll ? "1" : "0"); } catch {} }, [showAll]);
@@ -313,6 +328,18 @@ export default function TweaksPage() {
     setActiveSectionId(prev => prev === id ? null : id);
   }
 
+  function openRecommendedTweak(id: string, category: TweakCategory) {
+    const section = SECTIONS.find(candidate =>
+      candidate.tweakIds?.includes(id) || candidate.categories.includes(category)
+    );
+    if (!section) return;
+    setActiveTab(section.group);
+    setActiveSectionId(section.id);
+    window.setTimeout(() => {
+      document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
   return (
     <AppLayout>
       <div className="space-y-5">
@@ -337,7 +364,7 @@ export default function TweaksPage() {
                 </span>
               ) : null}
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide">
-                V4.0.0
+                V{APP_VERSION}
               </span>
               {gpuChip && !showAll && (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
@@ -388,6 +415,54 @@ export default function TweaksPage() {
             )}
           </div>
         </header>
+
+        {showBest15 && (
+          <section className="rounded-xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-zinc-950/80 to-black p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-red-400" />
+                  <h2 className="text-sm font-black text-white">Your Best 15</h2>
+                  <span className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-300 border border-red-500/30">
+                    Hardware matched
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-zinc-400">
+                  These are the server-validated recommendations for this PC. Open any one to review its toggle—nothing is applied until you enable it.
+                </p>
+              </div>
+            </div>
+            {best15.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                {best15.map((tweak, index) => (
+                  <button
+                    key={tweak.id}
+                    type="button"
+                    onClick={() => openRecommendedTweak(tweak.id, tweak.category)}
+                    className="group flex items-center gap-3 rounded-lg border border-white/8 bg-black/35 px-3 py-2.5 text-left transition-colors hover:border-red-500/40 hover:bg-red-500/10"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-[10px] font-black text-red-300 border border-red-500/25">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-zinc-100 group-hover:text-white">
+                        {tweak.title || tweak.id}
+                      </span>
+                      <span className="block text-[10px] uppercase tracking-wide text-zinc-600">
+                        {tweak.category}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-zinc-600 group-hover:text-red-400" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200">
+                No recommendations were returned. Run System Scan, then choose “Choose Myself” again.
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Category Tab Bar */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 border-b border-white/5 scrollbar-none" style={{ scrollbarWidth: "none" }}>
