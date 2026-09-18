@@ -1591,10 +1591,11 @@ export async function registerRoutes(
     const deviceId = req.headers["x-device-id"];
     return typeof deviceId === "string" && ownerId === `device:${deviceId.toLowerCase()}` && /^[a-f0-9-]{36}$/i.test(deviceId);
   };
-  const eligibleAllowanceId = (id: unknown): id is string =>
+  const trustedTweakId = (id: unknown): id is string =>
     typeof id === "string" && /^[A-Za-z0-9_]{2,64}$/.test(id) &&
-    Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id) &&
-    !EXPERT_TWEAK_IDS.has(id);
+    Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id);
+  const freeEligibleId = (id: unknown): id is string =>
+    trustedTweakId(id) && !EXPERT_TWEAK_IDS.has(id);
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
   const NATIVE_EXECUTABLE_ALLOWLIST = NATIVE_TWEAK_ID_SET;
 
@@ -1644,13 +1645,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Your hardware scan is incomplete. Rescan your system before selecting Best 15.", code: "OG-SCAN-003" });
       }
       const compatibleCore = buildSafePreset(hardwareFromRig(rig), "balanced").core
-        .filter(id => eligibleAllowanceId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
+        .filter(id => trustedTweakId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
       if (isPro) {
         // Pro receives the complete canonical hardware-aware core preset.
         // Historical free usage is irrelevant to an unlimited entitlement.
         ids = compatibleCore;
       } else {
-        const instantCandidates = compatibleCore.filter(id => NATIVE_EXECUTABLE_ALLOWLIST.has(id));
+        const instantCandidates = compatibleCore.filter(id => freeEligibleId(id) && NATIVE_EXECUTABLE_ALLOWLIST.has(id));
         const consumed = new Set(await storage.getConsumedPerformanceTweakIds(userId));
         const allowance = await storage.getPerformanceAllowance(userId);
         const selected = selectBestInstantTweaks(instantCandidates, consumed, allowance.remaining, false);
@@ -1669,7 +1670,8 @@ export async function registerRoutes(
     }
     // The free/native path is deliberately bounded. Pro receives the complete
     // hardware-compatible core preset, which can exceed 128 app tweaks.
-    if (!ids.length || (!isPro && ids.length > 128) || ids.some(id => !eligibleAllowanceId(id))) {
+    const invalidIds = ids.some(id => isPro ? !trustedTweakId(id) : !freeEligibleId(id));
+    if (!ids.length || (!isPro && ids.length > 128) || invalidIds) {
       return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance", code: "OG-TWEAK-001" });
     }
     if (isPro) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
@@ -1698,8 +1700,10 @@ export async function registerRoutes(
       return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     }
     const tweakId = req.body?.tweakId;
-    if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
     const pro = await requirePaidPro(req);
+    if (pro ? !trustedTweakId(tweakId) : !freeEligibleId(tweakId)) {
+      return res.status(400).json({ error: "Ineligible tweak", code: "OG-TWEAK-001" });
+    }
     if (!pro && !NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
       return res.status(400).json({ error: "This tweak is script-only and is not available for instant apply.", code: "OG-TWEAK-002" });
     }
@@ -1725,7 +1729,7 @@ export async function registerRoutes(
     }
     const id = req.body?.tweakId;
     const ticket = req.body?.ticket;
-    if (!eligibleAllowanceId(id) || typeof ticket !== "string") return res.status(400).json({ error: "Invalid ticket request" });
+    if (!trustedTweakId(id) || typeof ticket !== "string") return res.status(400).json({ error: "Invalid ticket request" });
     const result = await storage.consumeNativeTweakTicket(userId, ticket, id);
     if (!result) return res.status(409).json({ error: "Ticket invalid, expired, or already used" });
     const command = TWEAK_COMMANDS[id];
@@ -1758,7 +1762,7 @@ export async function registerRoutes(
       return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     }
     const tweakId = req.body?.tweakId;
-    if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
+    if (!trustedTweakId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
     const released = await storage.releasePerformanceTweak(userId, tweakId);
     return res.json({ ok: true, released });
   });
@@ -2778,7 +2782,7 @@ Write-Output $json
       if (!userId) return res.status(401).json({ message: "Discord login required" });
       if (!(await requirePaidPro(req))) return res.status(403).json({ message: "Free performance tweaks run in the Windows app. Open Opti Gods for native apply authorization." });
       const enabledIds = Object.entries(input.tweaks).filter(([, v]) => v).map(([id]) => id);
-      if (enabledIds.some(id => !eligibleAllowanceId(id))) return res.status(400).json({ message: "One or more selected tweaks are not eligible." });
+      if (enabledIds.some(id => !trustedTweakId(id))) return res.status(400).json({ message: "One or more selected tweaks are not eligible." });
       let allowanceKey: string | undefined;
 
       // Store tweaks in session so the irm | iex URL applies the correct tweaks.

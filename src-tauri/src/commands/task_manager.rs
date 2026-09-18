@@ -391,6 +391,9 @@ pub fn kill_app(args: KillArgs) -> ActionResult {
 
     #[cfg(windows)]
     {
+        if let Err(error) = crate::commands::restore::require_verified_checkpoint() {
+            return ActionResult { ok: false, message: error };
+        }
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let out = std::process::Command::new("taskkill")
@@ -468,6 +471,9 @@ pub fn disable_startup_app(args: StartupArgs) -> ActionResult {
 
     #[cfg(windows)]
     {
+        if let Err(error) = crate::commands::restore::require_verified_checkpoint() {
+            return ActionResult { ok: false, message: error };
+        }
         use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
         use winreg::RegKey;
 

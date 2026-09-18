@@ -167,7 +167,12 @@ function playFeedbackSound(isError: boolean) {
 
 function toast({ ...props }: Toast) {
   const id = genId()
-  playFeedbackSound(props.variant === "destructive")
+  // Neutral browser selections and informational messages are not proof of a
+  // Windows change, so they must not play the success chime.  Only explicit
+  // terminal success/error variants are audible.
+  if (props.variant === "success" || props.variant === "destructive") {
+    playFeedbackSound(props.variant === "destructive")
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({

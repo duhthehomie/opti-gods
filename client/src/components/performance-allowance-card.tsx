@@ -7,6 +7,16 @@ import { isNative } from "@/lib/tauri-bridge";
 import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useLocation } from "wouter";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Allowance = { pro: boolean; limit: number | null; used: number; remaining: number | null };
 /** Small, non-Pro-only choice surface; the server remains authoritative. */
@@ -15,6 +25,7 @@ export function PerformanceAllowanceCard() {
   const [loaded, setLoaded] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmBest, setConfirmBest] = useState(false);
   const [, navigate] = useLocation();
   const tweaks = useOptimizationStore(s => s.tweaks);
   const setTweak = useOptimizationStore(s => s.setTweak);
@@ -70,7 +81,7 @@ export function PerformanceAllowanceCard() {
     return () => controller.abort();
   }, [authRequired, loaded, setAllTweaks, status?.pro]);
 
-  const chooseBest = async () => {
+  const executeChooseBest = async () => {
     if (authRequired) {
       toast({ title: "Windows app required", description: "OG-AUTH-001 · Open Opti Gods in the Windows app to use your 15 free device slots.", variant: "destructive" });
       return;
@@ -78,7 +89,7 @@ export function PerformanceAllowanceCard() {
     setBusy(true);
     try {
       const body = await authorizeHardwarePreset();
-      const ids = (body.authorizedIds as string[]).slice(0, Math.max(0, Number(body.remaining ?? 15)));
+      const ids = body.authorizedIds as string[];
       const visibleIds = [...(body.activeIds || []), ...ids].slice(0, 15);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(visibleIds)); } catch { /* ignore */ }
       if (!isNative()) {
@@ -86,7 +97,7 @@ export function PerformanceAllowanceCard() {
         Object.keys(selected).forEach(id => { selected[id] = false; });
         for (const id of visibleIds) selected[id] = true;
         setAllTweaks(selected);
-        toast({ title: `${visibleIds.length} best tweaks selected`, description: "These server-validated choices match your saved system scan. Download and run the .bat to apply new selections.", variant: "success" });
+        toast({ title: `${visibleIds.length} best tweaks selected`, description: "These server-validated choices match your saved system scan. Windows changes are not confirmed in the browser; open the Windows app or run the generated script to apply them." });
         await refresh();
         return;
       }
@@ -96,6 +107,11 @@ export function PerformanceAllowanceCard() {
     } catch (e) {
       toast({ title: "Could not select best tweaks", description: e instanceof Error ? e.message : "A saved scan is required.", variant: "destructive" });
     } finally { setBusy(false); }
+  };
+
+  const chooseBest = () => {
+    if (busy) return;
+    setConfirmBest(true);
   };
 
   const chooseMyself = async () => {
@@ -123,7 +139,7 @@ export function PerformanceAllowanceCard() {
   // The Dashboard's other bulk buttons route free users through this same
   // server-authorized flow instead of selecting the entire local registry.
   useEffect(() => {
-    const trigger = () => { void chooseBest(); };
+    const trigger = () => { chooseBest(); };
     window.addEventListener("optigods:enable-best-free", trigger);
     return () => window.removeEventListener("optigods:enable-best-free", trigger);
   }, [authRequired, status?.remaining, tweaks]);
@@ -131,7 +147,8 @@ export function PerformanceAllowanceCard() {
   if (!loaded || status?.pro) return null;
 
   return (
-    <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">
+    <>
+      <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-white">15 Active Free Tweak Slots</h2>
@@ -155,7 +172,34 @@ export function PerformanceAllowanceCard() {
             {busy ? "Loading…" : "Choose Myself"}
           </button>
         </div>
-      </div>
-    </section>
+        </div>
+      </section>
+
+      <AlertDialog open={confirmBest} onOpenChange={setConfirmBest}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enable the Best 15 free tweaks?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Opti Gods will use your free allowance to authorize up to 15 compatible tweaks for
+              this device. A restore point is required before Windows changes run. In the Windows
+              app you will see each tweak live as applied or failed; browser selections alone do
+              not unlock Pro or claim that Windows was changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={() => {
+                setConfirmBest(false);
+                void executeChooseBest();
+              }}
+            >
+              Confirm Best 15
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

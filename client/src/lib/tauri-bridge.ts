@@ -54,6 +54,15 @@ export interface NativeRestorePoint {
   created_at: string;
 }
 
+export interface NativeStartupRestoreResult {
+  ok: boolean;
+  status: "verified" | "protection_unavailable" | "verification_failed" | "creation_failed" | "unsupported" | string;
+  repair_attempted: boolean;
+  restore_point: NativeRestorePoint | null;
+  message: string;
+  recovery: string;
+}
+
 export interface NativeDiscordSession {
   user_id: string;
   username: string;
@@ -195,6 +204,21 @@ export async function scanHardware(): Promise<NativeHardwareScan | null> {
 export async function createRestorePoint(label: string): Promise<NativeRestorePoint | null> {
   if (!isNative()) return null;
   return invoke<NativeRestorePoint>("create_restore_point", { label });
+}
+
+/** Run the launch safety check. Failure is structured, not swallowed. */
+export async function startupRestoreCheckpoint(): Promise<NativeStartupRestoreResult> {
+  if (!isNative()) {
+    return {
+      ok: false,
+      status: "unsupported",
+      repair_attempted: false,
+      restore_point: null,
+      message: "System Restore points are available only in the Windows desktop app.",
+      recovery: "Open Opti Gods on Windows to enable native tweaks safely.",
+    };
+  }
+  return invoke<NativeStartupRestoreResult>("startup_restore_checkpoint");
 }
 
 export async function listRestorePoints(): Promise<NativeRestorePoint[]> {

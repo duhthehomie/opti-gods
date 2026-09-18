@@ -64,16 +64,26 @@ export default function AppliedTweaksPage() {
     }).then(result => {
       setRunFinished(true);
       setShowRestartPrompt(result.appliedIds.length > 0);
+       const failureCount = result.failures.length;
+       const failureDetails = result.failures
+         .map(failure => `${failure.id}: ${failure.message}`)
+         .join(" | ");
       toast({
-        title: result.appliedIds.length ? `${result.appliedIds.length} tweaks applied` : "No tweaks were applied",
-        description: result.failures.length
-          ? `${result.failures.length} failed. Review the in-app results below.`
-          : "Every selected Windows change was confirmed. Restart your PC for the full boost.",
-        variant: result.appliedIds.length ? "success" : "destructive",
+         title: failureCount === 0 ? `${result.appliedIds.length} tweaks applied` : `${failureCount} tweak${failureCount === 1 ? "" : "s"} failed`,
+         description: failureCount
+           ? `${result.appliedIds.length} applied. ${failureDetails}`
+           : "Every selected Windows change was confirmed. Restart your PC for the full boost.",
+         variant: failureCount === 0 ? "success" : "destructive",
       });
     }).catch(error => {
+       const message = error instanceof Error ? error.message : "Windows could not start the in-app runner.";
+       setRunItems(items => items.map(item =>
+         item.status === "applied" || item.status === "failed"
+           ? item
+           : { ...item, status: "failed", message },
+       ));
       setRunFinished(true);
-      toast({ title: "Tweak run stopped", description: error instanceof Error ? error.message : "Windows could not start the in-app runner.", variant: "destructive" });
+       toast({ title: "Tweak run stopped", description: message, variant: "destructive" });
     }).finally(() => {
       setRunning(false);
       detectAppliedTweaks().then(setNativeState);

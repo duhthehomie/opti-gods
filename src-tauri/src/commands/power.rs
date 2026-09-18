@@ -30,6 +30,7 @@ pub fn set_power_plan(guid: String) -> Result<(), String> {
     if !guid.chars().all(|c| c.is_ascii_hexdigit() || c == '-') { return Err("Invalid power plan identifier.".into()); }
     #[cfg(windows)]
     {
+        crate::commands::restore::require_verified_checkpoint()?;
         let status = Command::new("powercfg").args(["/setactive", &guid]).status().map_err(|e| e.to_string())?;
         if status.success() { Ok(()) } else { Err(format!("powercfg exited with {status}")) }
     }

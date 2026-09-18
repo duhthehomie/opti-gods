@@ -14,6 +14,28 @@ pub struct RestorePoint {
     pub created_at: String,
 }
 
+/// The renderer-facing result of the launch safety check.  This is deliberately
+/// a successful IPC response even when Windows cannot create a point: callers
+/// need the exact recovery state rather than an opaque invoke rejection.
+#[derive(Serialize, Clone, Debug)]
+pub struct StartupRestoreResult {
+    pub ok: bool,
+    pub status: String,
+    pub repair_attempted: bool,
+    pub restore_point: Option<RestorePoint>,
+    pub message: String,
+    pub recovery: String,
+}
+
+/// Native mutation commands use this guard as a second line of defence
+/// behind the renderer launch gate. Renderer state is never trusted here.
+#[cfg(windows)]
+pub fn require_verified_checkpoint() -> Result<(), String> {
+    crate::win32::restore::ensure_session_checkpoint("Opti Gods Restore")
+        .map(|_| ())
+        .map_err(|error| format!("restore checkpoint required before mutation: {error:#}"))
+}
+
 #[tauri::command]
 pub async fn create_restore_point(label: String) -> Result<RestorePoint, String> {
     #[cfg(windows)]
@@ -57,32 +79,67 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
 }
 
 /// Called once on app startup — enables System Restore (if it was disabled)
-/// then creates the next numbered "Opti Gods Restore N" checkpoint. Non-fatal: errors are
-/// logged but never surfaced to the user as a crash.
+/// then creates the next numbered "Opti Gods Restore N" checkpoint.
+///
+/// Failures are returned as structured data so the renderer can block actions
+/// and give the user an actionable recovery message.  The native apply command
+/// remains the final safety backstop regardless of this result.
 #[tauri::command]
-pub async fn startup_restore_checkpoint() -> Result<Option<RestorePoint>, String> {
+pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String> {
     #[cfg(windows)]
     {
-        // Best-effort enable — clears policy key + starts srservice
-        if let Err(e) = crate::win32::restore::ensure_enabled() {
-            log::warn!("[restore] ensure_enabled failed (non-fatal): {e:#}");
-        }
+        // This also repairs the common "DisableSR" configuration.  Keep the
+        // error intact: policy, elevation, PowerShell and drive failures are
+        // materially different recovery paths for the user.
         match crate::win32::restore::ensure_session_checkpoint("Opti Gods Restore") {
             Ok(rp) => {
                 log::info!(
                     "[restore] startup checkpoint created — seq={} label={}",
-                    rp.sequence_number, rp.label
+                    rp.sequence_number,
+                    rp.label
                 );
-                Ok(Some(rp))
+                Ok(StartupRestoreResult {
+                    ok: true,
+                    status: "verified".into(),
+                    repair_attempted: true,
+                    restore_point: Some(rp),
+                    message:
+                        "System Protection is ready and the launch restore point was verified."
+                            .into(),
+                    recovery: "No action needed.".into(),
+                })
             }
             Err(e) => {
-                log::warn!("[restore] startup checkpoint failed (non-fatal): {e:#}");
-                Ok(None) // harmless — user can still use Restore Last Working State
+                let detail = format!("{e:#}");
+                log::error!("[restore] startup checkpoint failed: {detail}");
+                let lower = detail.to_ascii_lowercase();
+                let status = if lower.contains("enable") || lower.contains("policy") {
+                    "protection_unavailable"
+                } else if lower.contains("wmi") || lower.contains("visible") {
+                    "verification_failed"
+                } else {
+                    "creation_failed"
+                };
+                Ok(StartupRestoreResult {
+                    ok: false,
+                    status: status.into(),
+                    repair_attempted: true,
+                    restore_point: None,
+                    message: format!("System Protection could not be verified: {detail}"),
+                    recovery: "Run the app as administrator, turn on System Protection for C:, then press Retry. No tweak was allowed to run.".into(),
+                })
             }
         }
     }
     #[cfg(not(windows))]
     {
-        Ok(None)
+        Ok(StartupRestoreResult {
+            ok: false,
+            status: "unsupported".into(),
+            repair_attempted: false,
+            restore_point: None,
+            message: "System Restore points are available only in the Windows desktop app.".into(),
+            recovery: "Open Opti Gods on Windows to enable native tweaks safely.".into(),
+        })
     }
 }

@@ -14,6 +14,10 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { APP_VERSION } from "@/generated/version";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { useToast } from "@/hooks/use-toast";
+import { isNative } from "@/lib/tauri-bridge";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 
 const Registry         = lazy(() => import("@/pages/registry"));
 const Nvidia           = lazy(() => import("@/pages/nvidia"));
@@ -283,6 +287,8 @@ export default function TweaksPage() {
   const os = useOsDetection();
   const detecting = isDetecting(hw);
   const { tweaks } = useOptimizationStore();
+  const { toast } = useToast();
+  const [confirmApply, setConfirmApply] = useState(false);
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const showBest15 = new URLSearchParams(window.location.search).get("best15") === "1";
   const best15Ids = (() => {
@@ -339,6 +345,39 @@ export default function TweaksPage() {
       document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   }
+
+  const selectedIds = Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id);
+  const runSelected = async () => {
+    setConfirmApply(false);
+    if (!selectedIds.length) return;
+    try {
+      const result = await applyTweakBatch(selectedIds);
+      // Native mode navigates to the live runner. Browser mode still reports
+      // selection/compatibility clearly and never claims an OS change.
+      if (result.failures.length || result.unsupportedIds.length) {
+        toast({
+          title: "Some selected tweaks could not run",
+          description: result.failures.concat(result.unsupportedIds.map(id => ({
+            id,
+            message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
+          }))).map(failure => `${failure.id}: ${failure.message}`).join(" | "),
+          variant: "destructive",
+        });
+      } else if (!isNative()) {
+        toast({
+          title: `${result.selectedIds.length} tweaks selected`,
+          description: "Open the Windows app to apply these changes to your system.",
+          variant: "success",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Selected tweak run failed",
+        description: error instanceof Error ? error.message : "The selected tweaks could not be started.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <AppLayout>
@@ -398,6 +437,16 @@ export default function TweaksPage() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              data-testid="button-apply-selected"
+              disabled={!selectedIds.length}
+              onClick={() => setConfirmApply(true)}
+              className="flex items-center gap-1.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Zap className="h-3 w-3" />
+              Apply selected{selectedIds.length ? ` (${selectedIds.length})` : ""}
+            </button>
             {!detecting && (
               <button
                 data-testid="button-toggle-show-all"
@@ -618,6 +667,26 @@ export default function TweaksPage() {
             )}
         </>
       </div>
+      {confirmApply && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="apply-selected-title">
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-zinc-950 p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+              <div>
+                <h2 id="apply-selected-title" className="text-base font-bold text-white">Confirm Windows changes</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Opti Gods is about to run {selectedIds.length} selected tweak{selectedIds.length === 1 ? "" : "s"}.
+                  A verified restore point is required first. Incompatible or unavailable tweaks will fail safely and show their full reason.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => setConfirmApply(false)} className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:border-white/25 hover:text-white">Cancel</button>
+              <button type="button" onClick={() => void runSelected()} className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500">Confirm and run</button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

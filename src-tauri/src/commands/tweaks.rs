@@ -161,7 +161,23 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         (Some(ticket), Some(auth)) => (ticket, auth),
         _ => return TweakResult { ok: false, id: args.id, message: "A server authorization ticket is required.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
-    let client = reqwest::Client::new();
+    let client = match reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return TweakResult {
+            ok: false,
+            id: args.id,
+            message: format!("Could not initialize secure server authorization: {error}"),
+            undo_token: None,
+            requires_reboot: false,
+            via_powershell: false,
+            error_kind: Some(NativeErrorKind::Auth),
+            error_stage: Some(NativeErrorStage::Authorization),
+        },
+    };
     let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { "https://optigods.com" };
     let mut validation_request = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"));
     validation_request = if let Some(device_id) = ticket.1.strip_prefix("device:") {
@@ -264,6 +280,19 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
 
 #[tauri::command]
 pub fn undo_tweak(args: UndoArgs) -> TweakResult {
+    #[cfg(windows)]
+    if let Err(error) = crate::commands::restore::require_verified_checkpoint() {
+        return TweakResult {
+            ok: false,
+            id: args.id,
+            message: error,
+            undo_token: None,
+            requires_reboot: false,
+            via_powershell: false,
+            error_kind: Some(NativeErrorKind::Restore),
+            error_stage: Some(NativeErrorStage::Restore),
+        };
+    }
     if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.undo)(args.undo_token.as_deref()) {
             Ok(()) => TweakResult {
@@ -422,7 +451,7 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
         let guarded = format!(
             "$ErrorActionPreference='Stop'; & {{ {snippet} }}; if (-not $?) {{ throw 'Windows reported that the tweak command failed.' }}"
         );
-        let result = Command::new("powershell.exe")
+        let child = Command::new("powershell.exe")
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -432,7 +461,38 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 &guarded,
             ])
             .creation_flags(CREATE_NO_WINDOW)
-            .output();
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+        let result = match child {
+            Ok(mut child) => {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(_)) => break child.wait_with_output(),
+                        Ok(None) if std::time::Instant::now() < deadline => {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                        Ok(None) => {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            return TweakResult {
+                                ok: false,
+                                id: id.to_string(),
+                                message: "PowerShell exceeded the 90-second safety limit and was stopped. The tweak was not confirmed.".into(),
+                                undo_token: None,
+                                requires_reboot: false,
+                                via_powershell: true,
+                                error_kind: Some(NativeErrorKind::Execution),
+                                error_stage: Some(NativeErrorStage::Execution),
+                            };
+                        }
+                        Err(error) => break Err(error),
+                    }
+                }
+            }
+            Err(error) => Err(error),
+        };
         match result {
             Ok(out) if out.status.success() => TweakResult {
                 ok: true,

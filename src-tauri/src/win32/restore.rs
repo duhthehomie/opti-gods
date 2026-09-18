@@ -106,6 +106,8 @@ pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint>
     if let Some(existing) = checkpoint.clone() {
         return Ok(existing);
     }
+    // Keep this check in the native backstop as well as launch. A renderer
+    // event/session flag must never be enough to authorize a mutation.
     ensure_enabled()?;
     let next_number = list()
         .unwrap_or_default()

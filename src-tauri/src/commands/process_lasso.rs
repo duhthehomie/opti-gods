@@ -54,6 +54,8 @@ const GAME_EXES: &[&str] = &[
 
 #[tauri::command]
 pub fn start_pro_balance(app: AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    crate::commands::restore::require_verified_checkpoint()?;
     let state = app.state::<AppState>();
     state.pro_balance_active.store(true, Ordering::SeqCst);
     log::info!("[process_lasso] ProBalance ENABLED");
@@ -62,6 +64,8 @@ pub fn start_pro_balance(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn stop_pro_balance(app: AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    crate::commands::restore::require_verified_checkpoint()?;
     let state = app.state::<AppState>();
     state.pro_balance_active.store(false, Ordering::SeqCst);
     log::info!("[process_lasso] ProBalance DISABLED");

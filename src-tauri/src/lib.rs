@@ -26,37 +26,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::default())
         .setup(|app| {
-            let handle_safety = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                if let Some(w) = handle_safety.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            });
-
-            #[cfg(windows)]
-            {
-                // Auto-create a System Restore checkpoint on every app launch.
-                // If System Restore is disabled (some debloat scripts turn it off),
-                // ensure_enabled() re-enables it before creating the point.
-                // This checkpoint is what "Restore Last Working State" rolls back to.
-                tauri::async_runtime::spawn(async move {
-                    // Wait for the UI to be visible before the potentially-slow SR call
-                    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
-                    match commands::restore::startup_restore_checkpoint().await {
-                        Ok(Some(rp)) => log::info!(
-                            "[startup] restore point #{} ready — 'Restore Last Working State' is armed",
-                            rp.sequence_number
-                        ),
-                        Ok(None) => log::warn!(
-                            "[startup] restore point skipped — System Restore may be unavailable on this machine"
-                        ),
-                        Err(e) => log::error!("[startup] restore point error: {e}"),
-                    }
-                });
-            }
-
             #[cfg(windows)]
             {
                 let handle = app.handle().clone();

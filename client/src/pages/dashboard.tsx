@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
+import { createRestorePoint, detectAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -27,6 +27,16 @@ import { PerformanceAllowanceCard } from "@/components/performance-allowance-car
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Feature categories
 const FEATURES = [
@@ -305,7 +315,8 @@ export default function Dashboard() {
   const smartRecs = computeSmartRecs(hw, osInfo);
   const isPro = useProStatus();
   const proStatusLoading = useProStatusLoading();
-  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { tweaks, setAllTweaks, appliedAt } = useOptimizationStore();
+  const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
   const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
     staleTime: 5 * 60 * 1000,
@@ -318,6 +329,15 @@ export default function Dashboard() {
   const proPrice = pricingData?.price ?? 25;
   const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!native) return;
+    let active = true;
+    void detectAppliedTweaks().then(state => {
+      if (active) setDetectedNativeTweaks(state);
+    });
+    return () => { active = false; };
+  }, [native]);
 
   const handleScanned = useCallback((_info: ScannedSysInfo) => {
     window.location.reload();
@@ -379,17 +399,9 @@ export default function Dashboard() {
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
-  const [scriptRan, setScriptRan] = useState(() => localStorage.getItem("og_script_ran") === "true");
-  const confirmScriptRan = () => {
-    setScriptRan(true);
-    localStorage.setItem("og_script_ran", "true");
-    toast({
-      title: "Script run confirmed",
-      description: "Your selections remain separate from Applied status because the browser cannot verify individual Windows changes.",
-    });
-  };
+  const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
 
-  const applyAllRecommended = async () => {
+  const executeFullOptimize = async () => {
     if (bulkApplying) return;
     if (!isPro) {
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -408,8 +420,8 @@ export default function Dashboard() {
         const result = await applyTweakBatch(ids);
         setRecommendedApplied(true);
         toast({
-          title: "Hardware-matched Pro preset selected",
-          description: `${result.selectedIds.length} compatible safe tweaks selected. Download and run the .bat to apply them. Expert tweaks remain opt-in.`,
+          title: "Pro preset selected",
+          description: `${result.selectedIds.length} compatible tweaks selected in the browser. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
         });
       }
     } catch (error) {
@@ -421,6 +433,16 @@ export default function Dashboard() {
     } finally {
       setBulkApplying(false);
     }
+  };
+
+  const applyAllRecommended = () => {
+    if (bulkApplying || recommendedApplied || proStatusLoading) return;
+    if (!isPro) {
+      document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.dispatchEvent(new Event("optigods:enable-best-free"));
+      return;
+    }
+    setConfirmFullOptimize(true);
   };
 
   const applyQuickBoost = async (preset: typeof QUICK_BOOST_PRESETS[number]) => {
@@ -440,7 +462,9 @@ export default function Dashboard() {
         description: native
           ? `${result.appliedIds.length} Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
           : `${result.selectedIds.length} compatible tweaks selected. Download and run the .bat to apply them.`,
-        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+        variant: native
+          ? (result.failures.length || blocked.length ? "destructive" : "success")
+          : undefined,
       });
     } finally {
       setBulkApplying(false);
@@ -456,10 +480,23 @@ export default function Dashboard() {
   // Filter both out of the score denominator so 100% is always achievable.
   const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
   const achievableIds = Array.from(smartRecs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
-  const recApplied = achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
+  // Browser toggles are intent only.  Native score/results must come from the
+  // detector (with the confirmed session ledger as a fallback while Windows
+  // refreshes), so a Best 15 preview can never produce God Tier by itself.
+  const confirmedIds = native
+    ? new Set([
+      ...Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]),
+      ...Object.keys(appliedAt),
+    ])
+    : new Set<string>();
+  const recApplied = native
+    ? achievableIds.filter(id => confirmedIds.has(id)).length
+    : achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
   const scorePercent = achievableIds.length > 0 ? Math.round((recApplied / achievableIds.length) * 100) : 0;
-  const displayScore = scorePercent === 100 && !scriptRan ? 99 : scorePercent;
-  const tierLabel = displayScore === 100 ? "100% OPTIMIZED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED";
+  const displayScore = scorePercent;
+  const tierLabel = native
+    ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED")
+    : (displayScore === 100 ? "100% SELECTED" : displayScore >= 90 ? "PREVIEW — NOT APPLIED" : displayScore >= 70 ? "PREVIEW — NOT APPLIED" : displayScore >= 46 ? "DECENT PREVIEW" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED");
   const tierColor = displayScore === 100 ? "text-red-400" : displayScore >= 70 ? "text-red-400" : displayScore >= 46 ? "text-orange-400" : "text-zinc-500";
 
   return (
@@ -544,6 +581,32 @@ export default function Dashboard() {
             </div>
           </div>
         </motion.div>
+
+        <AlertDialog open={confirmFullOptimize} onOpenChange={setConfirmFullOptimize}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Run Full Optimize?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Opti Gods will authorize and run every compatible Pro tweak in this preset on Windows.
+                A restore point is required first. Review the live Applied Tweaks results and do not
+                interrupt the run. Incompatible or failed tweaks will be reported instead of being
+                marked as applied.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkApplying}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={bulkApplying}
+                onClick={() => {
+                  setConfirmFullOptimize(false);
+                  void executeFullOptimize();
+                }}
+              >
+                Confirm Full Optimize
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* ─── QUICK BOOST PRESETS ─── */}
         <motion.div
@@ -653,25 +716,22 @@ export default function Dashboard() {
                     {tierLabel}
                   </span>
                   {displayScore === 100 && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-400 font-black uppercase tracking-wide">🏆 100% Optimized</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-400 font-black uppercase tracking-wide">✓ {native ? "100% Confirmed" : "100% Selected"}</span>
                   )}
-                  {displayScore >= 90 && displayScore < 100 && (
+                  {native && displayScore >= 90 && displayScore < 100 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 font-black uppercase tracking-wide">🔥 Maxed</span>
                   )}
                 </div>
                 <p className="text-[11px] text-zinc-500 mb-3">
-                  {displayScore === 100 ? (
-                    <span className="text-red-400 font-bold">All tweaks applied — 100% optimized!</span>
-                  ) : scorePercent === 100 && !scriptRan ? (
-                    <span className="text-amber-400 font-bold">All tweaks enabled in app — <button onClick={confirmScriptRan} className="underline text-white hover:text-amber-300 transition-colors">mark script as run ✓</button> to reach 100%</span>
-                  ) : (
-                    <>
-                      <span className="text-white font-bold">{recApplied}</span>
-                      <span className="text-zinc-600"> of </span>
-                      <span className="text-white font-bold">{achievableIds.length}</span>
-                      {" "}tweaks selected
-                    </>
-                  )}
+                  <span className={displayScore === 100 ? "text-amber-400 font-bold" : "text-zinc-400"}>
+                    <span className="text-white font-bold">{recApplied}</span>
+                    <span className="text-zinc-600"> of </span>
+                    <span className="text-white font-bold">{achievableIds.length}</span>
+                     {" "}{native ? "compatible tweaks confirmed" : "compatible tweaks selected"} ·{" "}
+                    <span className="text-zinc-500">
+                      {native ? "Windows results are confirmed in Applied Tweaks." : "Windows changes are not verified in the browser."}
+                    </span>
+                  </span>
                 </p>
                 <div className="flex items-center gap-3">
                   <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs flex-1">
@@ -711,15 +771,6 @@ export default function Dashboard() {
                       <Zap className="w-4 h-4 mr-1.5" />
                       {displayScore === 0 ? "Get Started" : "Boost My Score"}
                     </Button>
-                    {!native && scorePercent === 100 && !scriptRan && (
-                      <button
-                        data-testid="button-confirm-script-ran"
-                        onClick={confirmScriptRan}
-                        className="text-[10px] font-bold text-amber-500 hover:text-amber-400 border border-amber-500/30 hover:border-amber-500/60 px-3 py-1.5 rounded-lg transition-all"
-                      >
-                        ✓ I&apos;ve Run the Script
-                      </button>
-                    )}
                   </div>
                 ) : native ? (
                   <div className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-300">
@@ -736,7 +787,7 @@ export default function Dashboard() {
                       <Download className="w-4 h-4" />
                       Get My Script
                     </button>
-                    <span className="text-[9px] text-zinc-600 font-medium">100% optimized — click to download</span>
+                    <span className="text-[9px] text-zinc-600 font-medium">Selection complete — Windows execution is not verified here</span>
                   </div>
                 )}
               </div>

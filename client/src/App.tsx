@@ -18,6 +18,7 @@ import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
 import { showLoginSuccess } from "@/lib/auth-feedback";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { NativeRestoreReadinessBanner } from "@/components/native-restore-readiness-banner";
 
 // Always eager — these are the first screens the user sees
 import Landing from "@/pages/landing";
@@ -243,8 +244,9 @@ function App() {
         <SessionHeartbeat />
         <VisitTracker />
         <FriendUnlockHandler />
+        <Toaster />
+        <NativeRestoreReadinessBanner />
         <AuthGate>
-          <Toaster />
           <Router />
           <UpdateModal />
           <VersionPin />
