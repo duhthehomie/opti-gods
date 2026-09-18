@@ -6,6 +6,7 @@ export const NATIVE_TWEAK_IDS = [
   "DisableFastStartup", "DisableGameDVR", "SysVisualBestPerf",
   "DisableTelemetry", "SysHibernateOff", "SetDNSPriority",
   "ClearDnsCache", "DisableMMAgentMemoryCompression", "ResetTcpAutotune",
+  "SetHighPerformancePlan",
 ] as const;
 
 export type NativeTweakId = typeof NATIVE_TWEAK_IDS[number];
@@ -15,6 +16,7 @@ export const NATIVE_TWEAK_ID_SET: ReadonlySet<string> = new Set(NATIVE_TWEAK_IDS
 export const BEST_15_PRIORITY = [
   "Win32PrioritySeparation",
   "GameModeTweaks",
+  "SetHighPerformancePlan",
   "SetResponsiveness",
   "NetworkThrottling",
   "InputLagTCP",

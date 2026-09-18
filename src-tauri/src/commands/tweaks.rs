@@ -495,6 +495,7 @@ struct NativeTweak {
 mod native_impls {
     use super::*;
     use crate::win32::registry as r;
+    use std::process::Command;
 
     // Helper: registry-set tweak. Backs up the prior value and returns it as
     // the undo token (base64 JSON so we can round-trip arbitrary REG_* types).
@@ -514,6 +515,71 @@ mod native_impls {
             r::restore_from_token(t)?;
         }
         Ok(())
+    }
+
+    fn guid_from_powercfg(text: &str) -> Option<String> {
+        text.split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | ':'))
+            .map(|part| part.trim())
+            .find(|part| {
+                part.len() == 36
+                    && part.chars().enumerate().all(|(index, ch)| {
+                        matches!(index, 8 | 13 | 18 | 23) && ch == '-'
+                            || !matches!(index, 8 | 13 | 18 | 23) && ch.is_ascii_hexdigit()
+                    })
+            })
+            .map(str::to_ascii_lowercase)
+    }
+
+    fn active_power_guid() -> anyhow::Result<String> {
+        let output = Command::new("powercfg").arg("/getactivescheme").output()?;
+        if !output.status.success() {
+            anyhow::bail!("powercfg could not read the active power plan");
+        }
+        guid_from_powercfg(&String::from_utf8_lossy(&output.stdout))
+            .ok_or_else(|| anyhow::anyhow!("Windows returned an unreadable active power-plan GUID"))
+    }
+
+    fn activate_power_guid(guid: &str) -> anyhow::Result<()> {
+        let output = Command::new("powercfg").args(["/setactive", guid]).output()?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "Windows rejected power plan {guid}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let active = active_power_guid()?;
+        if !active.eq_ignore_ascii_case(guid) {
+            anyhow::bail!("Windows did not verify the requested power plan");
+        }
+        Ok(())
+    }
+
+    pub fn apply_high_performance_plan() -> anyhow::Result<Option<String>> {
+        const ULTIMATE_TEMPLATE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+        const HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let prior = active_power_guid()?;
+
+        if activate_power_guid(ULTIMATE_TEMPLATE).is_err() {
+            let duplicate = Command::new("powercfg")
+                .args(["/duplicatescheme", ULTIMATE_TEMPLATE])
+                .output()?;
+            let duplicate_guid = duplicate
+                .status
+                .success()
+                .then(|| guid_from_powercfg(&String::from_utf8_lossy(&duplicate.stdout)))
+                .flatten();
+            if let Some(guid) = duplicate_guid {
+                activate_power_guid(&guid)?;
+            } else {
+                activate_power_guid(HIGH_PERFORMANCE)?;
+            }
+        }
+        Ok(Some(prior))
+    }
+
+    pub fn undo_high_performance_plan(token: Option<&str>) -> anyhow::Result<()> {
+        let prior = token.ok_or_else(|| anyhow::anyhow!("Previous power plan was not recorded"))?;
+        activate_power_guid(prior)
     }
 
     // ── 20 representative native impls (one per high-impact category) ────
@@ -723,6 +789,10 @@ mod native_impls {
     stub!(apply_disable_hibernate);
     stub!(apply_disable_memory_compression);
     stub!(apply_optimize_dns);
+    stub!(apply_high_performance_plan);
+    pub fn undo_high_performance_plan(_token: Option<&str>) -> anyhow::Result<()> {
+        anyhow::bail!("Windows-only");
+    }
 }
 
 // 20 representative native impls — one per high-impact category from the
@@ -737,6 +807,7 @@ const NATIVE_TWEAKS: &[(&str, NativeTweak)] = &[
     ("DisableFastStartup",        NativeTweak { apply: native_impls::apply_disable_fast_startup,   undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
     ("DisableGameDVR",            NativeTweak { apply: native_impls::apply_disable_game_dvr,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("DisableTelemetry",          NativeTweak { apply: native_impls::apply_disable_telemetry,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
+    ("SetHighPerformancePlan",    NativeTweak { apply: native_impls::apply_high_performance_plan,  undo: native_impls::undo_high_performance_plan, category: "power", requires_reboot: false }),
 ];
 
 // Re-exported so other modules can validate IDs without re-listing.
