@@ -1,4 +1,4 @@
 {
-  "version": "5.2.7",
-  "notes": "V5.2.7 — restores Discord and premium-code access, fixes Best 15 connectivity, and makes Choose Myself open the tweak catalog."
+  "version": "5.2.8",
+  "notes": "V5.2.8 — fixes native Pro detection, hides all free controls for Pro users, restores Best 15 connectivity, and links device activity in admin."
 }

@@ -475,7 +475,7 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
-        <PerformanceAllowanceCard />
+        {!isPro && <PerformanceAllowanceCard />}
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -3449,7 +3449,13 @@ Start-Sleep 2
   // checking the legacy localStorage session token so guests still work.
   // GET version: keyed off the authenticated Discord session cookie.
   app.get('/api/pro/status', rateLimit(60, 60_000, 120), async (req, res) => {
-    const userId = req.session?.userId;
+    let userId: string | null = req.session?.userId ?? null;
+    if (!userId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") {
+        userId = await validateNativeToken(nativeToken);
+      }
+    }
     if (userId) {
       // Single PK lookup returns the entitlement row (active or revoked) so
       // we never scan the full table on this hot path.
