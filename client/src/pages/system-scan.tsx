@@ -136,8 +136,8 @@ function fanLabel(scan: NativeHardwareScan, countOverride?: number | null): { la
     const chassis = (scan.chassis || "").toLowerCase();
     const isLaptop = chassis === "laptop" || chassis === "notebook";
     return {
-      label: `${count} WMI-visible fan${count === 1 ? "" : "s"}`,
-      sub: isLaptop ? "Laptop firmware report" : "Motherboard firmware report",
+      label: `${count} detected fan source${count === 1 ? "" : "s"}`,
+      sub: isLaptop ? "GPU + laptop firmware detection" : "GPU + motherboard firmware detection",
     };
   }
   const chassis = (scan.chassis || "").toLowerCase();
@@ -325,8 +325,13 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         {scan.refresh_hz && (
           <Stat icon={Monitor} label="Refresh Rate" value={`${scan.refresh_hz} Hz`} />
         )}
-        {scan.nic_vendor && (
-          <Stat icon={Wifi} label="Network" value={scan.nic_vendor} />
+        {(scan.network_ssid || scan.nic_vendor) && (
+          <Stat
+            icon={Wifi}
+            label="Network"
+            value={scan.network_ssid || scan.nic_vendor || "Connected"}
+            sub={scan.network_band ? `${scan.network_band} Wi-Fi` : (scan.network_ssid ? "Connected Wi-Fi" : undefined)}
+          />
         )}
       </div>
 

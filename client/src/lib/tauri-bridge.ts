@@ -37,6 +37,8 @@ export interface NativeHardwareScan {
   cpu_temp_c: number | null;
   refresh_hz: number | null;
   nic_vendor: string | null;
+  network_ssid: string | null;
+  network_band: string | null;
   anticheats: string[];
   system_model?: string | null;
   os_name?: string | null;

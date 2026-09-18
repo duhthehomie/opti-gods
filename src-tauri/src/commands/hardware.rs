@@ -18,6 +18,8 @@ pub struct HardwareScan {
     pub cpu_temp_c: Option<f32>,
     pub refresh_hz: Option<u32>,
     pub nic_vendor: Option<String>,
+    pub network_ssid: Option<String>,
+    pub network_band: Option<String>,
     pub anticheats: Vec<String>,
     pub system_model: Option<String>,
     pub os_name: Option<String>,

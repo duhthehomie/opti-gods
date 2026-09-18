@@ -4,6 +4,8 @@
 use crate::commands::hardware::HardwareScan;
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::os::windows::process::CommandExt;
+use std::process::Command;
 use wmi::{COMLibrary, WMIConnection};
 
 #[derive(Deserialize, Debug)]
@@ -149,9 +151,9 @@ pub fn scan() -> Result<HardwareScan> {
         })
         .count() as u32;
 
-    // Use the highest count any source reports.
+    // Use the highest count any motherboard/ACPI source reports. These WMI
+    // sources overlap heavily, so summing them would double-count one fan.
     let best_count = wmi_fan_count.max(pnp_fan_count).max(named_fan_count);
-    let fan_count: Option<u32> = if best_count > 0 { Some(best_count) } else { None };
 
     // Pick the "main" GPU heuristically: largest VRAM that isn't a virtual / RDP adapter.
     let main_gpu = gpus
@@ -163,6 +165,21 @@ pub fn scan() -> Result<HardwareScan> {
                 .unwrap_or(true)
         })
         .max_by_key(|g| g.adapter_ram.unwrap_or(0));
+
+    // NVIDIA exposes one controllable cooling source through nvidia-smi even
+    // when motherboard WMI only reports the CPU/chassis fan. Count that source
+    // separately so a GPU fan plus one board fan is not displayed as one.
+    let nvidia_fan_visible = Command::new("nvidia-smi.exe")
+        .args(["--query-gpu=fan.speed", "--format=csv,noheader,nounits"])
+        .creation_flags(0x0800_0000)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|output| output.lines().any(|line| line.trim().parse::<u32>().is_ok()))
+        .unwrap_or(false);
+    let detected_fan_sources = best_count + u32::from(nvidia_fan_visible);
+    let fan_count: Option<u32> = (detected_fan_sources > 0).then_some(detected_fan_sources);
 
     let cpu = cpus
         .first()
@@ -220,6 +237,38 @@ pub fn scan() -> Result<HardwareScan> {
         .filter(|n| n.physical_adapter.unwrap_or(false))
         .find_map(|n| n.manufacturer.clone());
 
+    // netsh reports the actual connected Wi-Fi network. Adapter Manufacturer
+    // often says "Microsoft", which is not useful to the user.
+    let wifi = Command::new("netsh.exe")
+        .args(["wlan", "show", "interfaces"])
+        .creation_flags(0x0800_0000)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok());
+    let network_ssid = wifi.as_deref().and_then(|output| {
+        output.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key.trim().eq_ignore_ascii_case("SSID") && !key.trim().eq_ignore_ascii_case("BSSID"))
+                .then(|| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+    });
+    let channel = wifi.as_deref().and_then(|output| {
+        output.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.trim().eq_ignore_ascii_case("Channel")
+                .then(|| value.trim().parse::<u32>().ok())
+                .flatten()
+        })
+    });
+    let network_band = channel.map(|channel| {
+        if channel <= 14 { "2.4 GHz" }
+        else if channel >= 181 { "6 GHz" }
+        else { "5 GHz" }
+        .to_string()
+    });
+
     // CPU temperature via MSAcpi_ThermalZoneTemperature (root\wmi namespace).
     // This is the same source Windows Task Manager and most monitoring tools use.
     // Wrap in a closure so any failure returns None gracefully.
@@ -258,6 +307,8 @@ pub fn scan() -> Result<HardwareScan> {
         cpu_temp_c,
         refresh_hz: None,
         nic_vendor,
+        network_ssid,
+        network_band,
         anticheats: Vec::new(),
         system_model: computers.first().and_then(|c| {
             let value = format!("{} {}", c.manufacturer.as_deref().unwrap_or(""), c.model.as_deref().unwrap_or(""));

@@ -4,7 +4,7 @@ import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { isNative } from "@/lib/tauri-bridge";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +60,11 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
               if (applying) return;
               setApplying(true);
               const compatible = recIds.filter(id => !tweaks[id] && getTweakCompatibility(id).ok);
+              if (isNative()) {
+                queueTweakBatch(compatible);
+                window.location.assign("/applied-tweaks?run=1");
+                return;
+              }
               void applyTweakBatch(compatible).then(result => {
                 toast({
                   title: isNative() ? `${result.appliedIds.length} recommended tweaks applied` : `${result.selectedIds.length} recommendations selected`,

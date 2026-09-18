@@ -178,6 +178,15 @@ export function useProStatus(): boolean {
   return entitled || legacyValid;
 }
 
+export function useProStatusLoading(): boolean {
+  const { isPending } = useQuery<ProStatusResponse>({
+    queryKey: PRO_STATUS_KEY,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+  });
+  return isPending;
+}
+
 export function setProStatus(value: boolean, sessionToken?: string): void {
   if (value && sessionToken) {
     setProSession(sessionToken);

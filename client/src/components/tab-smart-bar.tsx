@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { isNative } from "@/lib/tauri-bridge";
 
@@ -49,6 +49,11 @@ export function TabSmartBar({
     setApplying(true);
     try {
       const compatible = recNotApplied.filter(id => getTweakCompatibility(id).ok);
+      if (isNative()) {
+        queueTweakBatch(compatible);
+        window.location.assign("/applied-tweaks?run=1");
+        return;
+      }
       const result = await applyTweakBatch(compatible);
       toast({
         title: isNative() ? `${label} — ${result.appliedIds.length} applied` : `${label} — recommendations selected`,
@@ -56,6 +61,12 @@ export function TabSmartBar({
           ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}${result.failures.length ? ` · ${result.failures.length} failed` : ""}.`
           : `${result.selectedIds.length} tweaks selected for your .bat.`,
         variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Could not apply recommendations",
+        description: error instanceof Error ? error.message : "The action failed.",
+        variant: "destructive",
       });
     } finally {
       setApplying(false);

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.9",
-  "notes": "V5.2.9 — runs selected tweaks silently inside the elevated app, shows live apply progress, records confirmed results, and fixes Best 15 routing."
+  "version": "5.2.10",
+  "notes": "V5.2.10 — fixes Best 15 and all recommended buttons, routes bulk actions through the visible Windows runner, and improves fan and Wi-Fi detection."
 }

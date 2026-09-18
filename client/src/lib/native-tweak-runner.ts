@@ -52,6 +52,20 @@ export async function applyTweakBatch(
 ): Promise<BulkTweakResult> {
   const uniqueIds = Array.from(new Set(ids));
   const native = isNative();
+  // All bulk actions use one visible runner. Individual pages must not start
+  // long elevated runs in-place where navigation or a re-render can hide
+  // progress and make a working button look unresponsive.
+  if (native && window.location.pathname !== "/applied-tweaks") {
+    const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
+    queueTweakBatch(compatibleIds);
+    window.location.assign("/applied-tweaks?run=1");
+    return {
+      appliedIds: [],
+      selectedIds: compatibleIds,
+      unsupportedIds: uniqueIds.filter(id => !getTweakCompatibility(id).ok),
+      failures: [],
+    };
+  }
   const nativeAuth = native ? await getNativeAuthToken() : null;
   const deviceId = getPersistentDeviceId();
   const credential = nativeAuth || (deviceId ? `device:${deviceId}` : null);

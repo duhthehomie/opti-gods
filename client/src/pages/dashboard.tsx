@@ -17,7 +17,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
-import { useProStatus } from "@/lib/pro-status";
+import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
@@ -303,6 +303,7 @@ export default function Dashboard() {
   const hw = useHardwareInfo();
   const smartRecs = computeSmartRecs(hw, osInfo);
   const isPro = useProStatus();
+  const proStatusLoading = useProStatusLoading();
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -472,7 +473,7 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
-        {!isPro && <PerformanceAllowanceCard />}
+        {!proStatusLoading && !isPro && <PerformanceAllowanceCard />}
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -523,7 +524,7 @@ export default function Dashboard() {
               <Button
                 data-testid="button-full-optimize"
                 onClick={applyAllRecommended}
-                disabled={recommendedApplied || bulkApplying}
+                disabled={recommendedApplied || bulkApplying || proStatusLoading}
                 className={cn(
                   "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
                   recommendedApplied
@@ -534,7 +535,7 @@ export default function Dashboard() {
                 {recommendedApplied ? (
                   <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : isPro ? "Apply Compatible Tweaks" : "Enable Best 15 Tweaks"}</>
+                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? "Full Optimize" : "Enable Best 15 Tweaks"}</>
                 )}
               </Button>
 
