@@ -7,7 +7,7 @@ import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { setProSession, setProStatus } from "@/lib/pro-status";
-import { getNativeSessionHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
+import { getNativeAuthHeaders, getNativeSessionHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 export const GUEST_MODE_KEY = "og_guest_mode";
@@ -93,6 +93,12 @@ export default function Welcome() {
         const session = await discordLogin(clientId);
         // Store the nativeToken so all subsequent API calls are authenticated.
         try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        // Associate any anonymous scan/free-tweak history from this Windows
+        // device with the Discord account that just signed in.
+        await fetch(apiUrl("/api/device/link"), {
+          method: "POST",
+          headers: getNativeAuthHeaders(),
+        }).catch(() => null);
         // Seed the account query immediately so AuthGate cannot flash Welcome
         // again while the authenticated /api/me request is in flight.
         queryClient.setQueryData(["/api/me"], {
@@ -130,7 +136,7 @@ export default function Welcome() {
     try {
       const res = await fetch(apiUrl("/api/pro/verify"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getNativeSessionHeaders() },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({ code: code.trim().replace(/^\d+\s+/, "") }),
         credentials: "include",
       });

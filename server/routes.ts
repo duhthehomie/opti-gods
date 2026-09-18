@@ -1556,16 +1556,25 @@ export async function registerRoutes(
   // the native security boundary.
   const allowanceAuth = async (req: Request): Promise<string | null> => {
     if (req.session.userId) return req.session.userId;
+    const requestIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const deviceId = req.headers["x-device-id"];
+    const normalizedDeviceId = typeof deviceId === "string" && /^[a-f0-9-]{36}$/i.test(deviceId)
+      ? deviceId.toLowerCase()
+      : null;
     {
       const token = req.headers["x-native-auth"];
       if (typeof token === "string") {
         const nativeUserId = await validateNativeToken(token);
-        if (nativeUserId) return nativeUserId;
+        if (nativeUserId) {
+          if (normalizedDeviceId) {
+            storage.logProIp(`link/${nativeUserId}/${normalizedDeviceId}`, requestIp).catch(() => {});
+          }
+          return nativeUserId;
+        }
       }
     }
-    const deviceId = req.headers["x-device-id"];
-    if (typeof deviceId !== "string" || !/^[a-f0-9-]{36}$/i.test(deviceId)) return null;
-    const ownerId = `device:${deviceId.toLowerCase()}`;
+    if (!normalizedDeviceId) return null;
+    const ownerId = `device:${normalizedDeviceId}`;
     await storage.upsertUser({
       discordId: ownerId,
       username: "Anonymous Windows device",
@@ -1573,6 +1582,7 @@ export async function registerRoutes(
       avatarUrl: null,
       email: null,
     });
+    storage.logProIp(`device/${normalizedDeviceId}`, requestIp).catch(() => {});
     return ownerId;
   };
   const allowanceOwnerMatches = async (req: Request, ownerId: string): Promise<boolean> => {
@@ -1593,6 +1603,21 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ error: "Open this page in the Opti Gods Windows app.", code: "OG-AUTH-001" });
     if (await requirePaidPro(req)) return res.json({ pro: true, used: 0, remaining: null, limit: null });
     return res.json({ pro: false, ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
+  });
+
+  app.post("/api/device/link", async (req, res) => {
+    const token = req.headers["x-native-auth"];
+    const deviceId = req.headers["x-device-id"];
+    if (typeof token !== "string" || typeof deviceId !== "string" || !/^[a-f0-9-]{36}$/i.test(deviceId)) {
+      return res.status(401).json({ error: "Windows device and account authentication required", code: "OG-AUTH-001" });
+    }
+    const discordUserId = await validateNativeToken(token);
+    if (!discordUserId) return res.status(401).json({ error: "Account session expired", code: "OG-AUTH-003" });
+    const normalizedDeviceId = deviceId.toLowerCase();
+    const linkedRigs = await storage.linkDeviceRigsToDiscord(`device:${normalizedDeviceId}`, discordUserId);
+    const requestIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    storage.logProIp(`link/${discordUserId}/${normalizedDeviceId}`, requestIp).catch(() => {});
+    return res.json({ ok: true, linkedRigs });
   });
 
   app.post("/api/performance-allowance/authorize", async (req, res) => {
@@ -3365,6 +3390,10 @@ Start-Sleep 2
     if (redeemed) {
       const sessionToken = await storage.createProSession(normalizedCode);
       storage.logProIp(normalizedCode, clientIp).catch(() => {});
+      const deviceId = req.headers["x-device-id"];
+      if (typeof deviceId === "string" && /^[a-f0-9-]{36}$/i.test(deviceId)) {
+        storage.logProIp(`code-device/${normalizedCode}/${deviceId.toLowerCase()}`, clientIp).catch(() => {});
+      }
       runSecurityChecks(normalizedCode, clientIp, `${req.protocol}://${req.get("host")}`).catch(() => {});
 
       // If Discord is linked, save the entitlement for cross-device restore.

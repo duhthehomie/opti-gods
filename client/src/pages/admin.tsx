@@ -4010,10 +4010,29 @@ export default function Admin() {
         region: null as string | null,
         country: null as string | null,
       }));
-    return [...codeEvents, ...friendEvents]
+    const deviceEvents = (ipLogsQuery.data || [])
+      .filter(log =>
+        log.codeRef.startsWith("device/") ||
+        log.codeRef.startsWith("link/") ||
+        log.codeRef.startsWith("code-device/")
+      )
+      .map(log => {
+        const isAccountLink = log.codeRef.startsWith("link/");
+        const isCodeLink = log.codeRef.startsWith("code-device/");
+        return {
+          type: (isAccountLink || isCodeLink ? "device-link" : "device") as "device" | "device-link",
+          label: isCodeLink ? "Device connected to Pro code" : isAccountLink ? "Device connected to Discord" : "Windows device detected",
+          detail: `${log.codeRef} · IP ${log.ipAddress}`,
+          at: log.seenAt,
+          city: log.city,
+          region: log.region,
+          country: log.country,
+        };
+      });
+    return [...codeEvents, ...friendEvents, ...deviceEvents]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 30);
-  }, [codesQuery.data, friendsQuery.data]);
+      .slice(0, 100);
+  }, [codesQuery.data, friendsQuery.data, ipLogsQuery.data]);
 
   function dmTemplate(code: string): string {
     return `Hey! Here's your Opti Gods Pro key: ${code}\n\nDownload + redeem at: https://optigods.com\nOpen the app → click GET PRO → enter your code. Takes 10 seconds.\n\nThanks for purchasing — enjoy the gains! 🔥`;
@@ -5279,11 +5298,15 @@ export default function Admin() {
                       "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
                       item.type === "code"
                         ? "bg-red-500/10 border border-red-500/20"
-                        : "bg-amber-500/10 border border-amber-500/20"
+                        : item.type === "friend"
+                          ? "bg-amber-500/10 border border-amber-500/20"
+                          : "bg-sky-500/10 border border-sky-500/20"
                     )}>
                       {item.type === "code"
                         ? <Key className="w-3.5 h-3.5 text-red-400" />
-                        : <Link className="w-3.5 h-3.5 text-amber-400" />
+                        : item.type === "friend"
+                          ? <Link className="w-3.5 h-3.5 text-amber-400" />
+                          : <Activity className="w-3.5 h-3.5 text-sky-400" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
@@ -5299,9 +5322,9 @@ export default function Admin() {
                     <div className="text-right shrink-0">
                       <p className={cn(
                         "text-[10px] font-bold",
-                        item.type === "code" ? "text-red-400" : "text-amber-400"
+                         item.type === "code" ? "text-red-400" : item.type === "friend" ? "text-amber-400" : "text-sky-400"
                       )}>
-                        {item.type === "code" ? `+$${PRICE_PER_CODE}` : "Free"}
+                         {item.type === "code" ? `+$${PRICE_PER_CODE}` : item.type === "friend" ? "Free" : item.type === "device-link" ? "Linked" : "Device"}
                       </p>
                       <p className="text-[10px] text-zinc-600">{timeAgo(item.at)}</p>
                     </div>
@@ -5719,6 +5742,11 @@ export default function Admin() {
                       const isFriend = s.codeRef?.startsWith("friend:");
                       const isAdminTest = s.codeRef?.startsWith("admin-");
                       const isOrphan = !isFriend && !isAdminTest && !!s.codeRef && !validCodeSet.has(s.codeRef);
+                      const anonymousIpLabel = s.ipAddress
+                        ? s.ipAddress.includes(".")
+                          ? `${s.ipAddress.split(".")[0]}.x.x.x`
+                          : `${s.ipAddress.split(":")[0]}:…`
+                        : null;
                       return (
                         <div
                           key={s.id}
@@ -5744,7 +5772,13 @@ export default function Admin() {
                                 <p className="text-xs font-semibold text-amber-300 truncate">{s.codeNote.split(" | stripe:")[0]}</p>
                               ) : (
                                 <p className={cn("text-xs font-semibold italic", isOrphan ? "text-red-400" : "text-zinc-500")}>
-                                  {isFriend ? "Friend link user" : isAdminTest ? "Admin test session" : isOrphan ? "⚠ ORPHAN — code deleted" : s.codeRef ?? "No session data"}
+                                  {isFriend
+                                    ? "Friend link user"
+                                    : isAdminTest
+                                      ? "Admin test session"
+                                      : isOrphan
+                                        ? "⚠ ORPHAN — code deleted"
+                                        : s.codeRef ?? (anonymousIpLabel ? `Unknown user · ${anonymousIpLabel}` : "Unknown user")}
                                 </p>
                               )}
                               {s.discordUsername && (

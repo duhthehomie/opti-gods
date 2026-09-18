@@ -124,6 +124,7 @@ export interface IStorage {
   getRigByHash(hash: string): Promise<HardwareRig | null>;
   getRigById(id: number): Promise<HardwareRig | null>;
   getLatestRigForUser(discordUserId: string): Promise<HardwareRig | null>;
+  linkDeviceRigsToDiscord(deviceOwnerId: string, discordUserId: string): Promise<number>;
   listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]>;
   addTweakSuggestion(data: InsertTweakSuggestion): Promise<TweakSuggestion>;
   listSuggestions(status?: SuggestionStatus): Promise<TweakSuggestion[]>;
@@ -1074,6 +1075,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(hardwareRigs.lastSeenAt))
       .limit(1);
     return row ?? null;
+  }
+
+  async linkDeviceRigsToDiscord(deviceOwnerId: string, discordUserId: string): Promise<number> {
+    const rows = await db.update(hardwareRigs)
+      .set({ discordUserId, lastSeenAt: new Date() })
+      .where(eq(hardwareRigs.discordUserId, deviceOwnerId))
+      .returning({ id: hardwareRigs.id });
+    return rows.length;
   }
 
   async listRigs(opts?: { limit?: number; offset?: number; sort?: "lastSeenAt" | "seenCount" | "firstSeenAt" }): Promise<HardwareRig[]> {
