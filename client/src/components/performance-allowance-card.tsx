@@ -68,7 +68,7 @@ export function PerformanceAllowanceCard() {
 
   const chooseBest = async () => {
     if (authRequired) {
-      toast({ title: "Discord login required", description: "Sign in with Discord so your 15 active free tweak slots can be tracked securely.", variant: "destructive" });
+      toast({ title: "Windows app required", description: "OG-AUTH-001 · Open Opti Gods in the Windows app to use your 15 free device slots.", variant: "destructive" });
       return;
     }
     setBusy(true);
@@ -80,7 +80,7 @@ export function PerformanceAllowanceCard() {
         body: JSON.stringify({ mode: "best", preview: true, idempotencyKey: key }),
       });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || "A saved system scan is required.");
+      if (!r.ok) throw new Error(`${body.code || `OG-HTTP-${r.status}`} · ${body.error || "A saved system scan is required."}`);
       const ids = (body.authorizedIds as string[]).slice(0, Math.max(0, Number(body.remaining ?? 15)));
       if (!isNative()) {
         const selected = { ...tweaks };
@@ -127,7 +127,7 @@ export function PerformanceAllowanceCard() {
           <h2 className="text-sm font-bold text-white">15 Active Free Tweak Slots</h2>
           <p className="mt-1 text-xs text-zinc-400">
             {authRequired
-              ? "Sign in with Discord to enable the 15 best free tweaks for your scanned system."
+              ? "Open the Opti Gods Windows app to enable the 15 best free tweaks for this PC. Discord is only required for Pro."
               : "Free accounts can keep up to 15 native tweaks enabled at once. Undo a tweak to free its slot for another choice."}
           </p>
           {status && <p className="mt-2 text-xs font-semibold text-red-300">{status.used} / {status.limit} used · {status.remaining} left</p>}

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
 import { useToast } from "@/hooks/use-toast";
+import { ProGate } from "@/components/pro-gate";
 
 const ALL_DEBLOAT_IDS = [
   "DebloatCortana","DebloatOneDrive","DebloatXboxApp","DebloatXboxGameBar","DebloatXboxIdentity",
@@ -263,10 +264,12 @@ export default function Debloat() {
               Removes <strong className="text-white">AppX packages</strong> and disables services permanently. A <strong className="text-white">restore point is recommended</strong> first.
             </p>
           </div>
-          <Button data-testid="button-nuke-all" onClick={handleNukeAll}
-            className="ml-4 shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 px-4">
-            ENABLE ALL (WIN10)
-          </Button>
+          <ProGate className="ml-4 shrink-0">
+            <Button data-testid="button-nuke-all" onClick={handleNukeAll}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 px-4">
+              FULL DEBLOAT (WIN10)
+            </Button>
+          </ProGate>
         </motion.div>
 
         
@@ -300,11 +303,13 @@ export default function Debloat() {
                 <p className="text-zinc-500 text-sm mt-0.5">Taskbar Copilot, Widgets, Teams Chat, Start Menu ads, and more Win11-specific bloat</p>
               </div>
             </div>
-            <Button data-testid="button-nuke-win11" onClick={handleNukeWin11}
-              variant="outline"
-              className="shrink-0 border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-red-400 text-xs font-bold px-4">
-              ENABLE ALL (WIN11)
-            </Button>
+            <ProGate className="shrink-0">
+              <Button data-testid="button-nuke-win11" onClick={handleNukeWin11}
+                variant="outline"
+                className="border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-red-400 text-xs font-bold px-4">
+                FULL DEBLOAT (WIN11)
+              </Button>
+            </ProGate>
           </div>
 
           {!isWin11 && !osInfo.loading && (

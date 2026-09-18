@@ -163,8 +163,13 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     };
     let client = reqwest::Client::new();
     let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { "https://optigods.com" };
-    let validation = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"))
-        .header("X-Native-Auth", ticket.1)
+    let mut validation_request = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"));
+    validation_request = if let Some(device_id) = ticket.1.strip_prefix("device:") {
+        validation_request.header("X-Device-ID", device_id)
+    } else {
+        validation_request.header("X-Native-Auth", ticket.1)
+    };
+    let validation = validation_request
         .json(&serde_json::json!({ "ticket": ticket.0, "tweakId": &args.id }))
         .send().await;
     let response = match validation {
@@ -232,7 +237,14 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     let mut acknowledged = false;
     for attempt in 0..3 {
         let ack = client.post(format!("{base}/api/performance-allowance/native-ticket/result"))
-            .json(&serde_json::json!({ "ticket": ticket.0, "resultSecret": result_secret, "success": result.ok }))
+            .json(&serde_json::json!({
+                "ticket": ticket.0,
+                "resultSecret": result_secret,
+                "success": result.ok,
+                "tweakId": &result.id,
+                "errorCode": result.error_kind.as_ref().map(|kind| format!("OG-NATIVE-{:?}", kind).to_ascii_uppercase()),
+                "message": &result.message
+            }))
             .send().await;
         if matches!(ack, Ok(ref response) if response.status().is_success()) {
             acknowledged = true;

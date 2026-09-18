@@ -3,6 +3,7 @@ import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
@@ -28,11 +29,13 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
   const uniqueIds = Array.from(new Set(ids));
   const native = isNative();
   const nativeAuth = native ? await getNativeAuthToken() : null;
+  const deviceId = getPersistentDeviceId();
+  const credential = nativeAuth || (deviceId ? `device:${deviceId}` : null);
   const allowanceResponse = await fetch(apiUrl("/api/performance-allowance"), {
-    headers: nativeAuth ? { "X-Native-Auth": nativeAuth } : undefined,
+    headers: getNativeAuthHeaders(),
   }).catch(() => null);
   if (!allowanceResponse?.ok) {
-    throw new Error(native ? "Sign in to the Windows app before enabling tweaks." : "Sign in with Discord before selecting tweaks.");
+    throw new Error(native ? "OG-AUTH-001 · Windows device identity unavailable." : "OG-AUTH-001 · Open Opti Gods in the Windows app.");
   }
   const allowance = await allowanceResponse.json() as { pro: boolean; remaining: number | null };
   const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
@@ -48,9 +51,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
     return { appliedIds: [], selectedIds: entitledIds, unsupportedIds, failures: [] };
   }
 
-  if (!nativeAuth) {
-    throw new Error("Sign in to the Windows app before applying tweaks.");
-  }
+  if (!credential) throw new Error("OG-AUTH-001 · Windows device identity unavailable.");
 
   // Script-only Pro choices are selection intent and do not need a restore
   // point yet. Keep them available even when native restore-point creation
@@ -90,7 +91,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
     try {
       const authorization = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({
           tweakId: id,
           idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
@@ -98,10 +99,10 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
       });
       const authorizationBody = await authorization.json().catch(() => ({}));
       if (!authorization.ok || typeof authorizationBody.ticket !== "string") {
-        throw new Error(authorizationBody.error || "Authorization failed.");
+        throw new Error(`${authorizationBody.code || `OG-HTTP-${authorization.status}`} · ${authorizationBody.error || "Authorization failed."}`);
       }
       ticket = authorizationBody.ticket;
-      const result = await applyTweak(id, ticket, nativeAuth);
+      const result = await applyTweak(id, ticket, credential);
       if (!result.ok) throw new Error(result.message || "Windows rejected the change.");
       osApplied = true;
       const store = useOptimizationStore.getState();
@@ -113,7 +114,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
       if (ticket && !osApplied) {
         await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+          headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
           body: JSON.stringify({ ticket }),
         }).catch(() => {});
       }

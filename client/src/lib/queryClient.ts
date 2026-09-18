@@ -3,12 +3,27 @@ import { apiUrl } from "@/lib/api-base";
 
 export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
 export const NATIVE_ADMIN_KEY = "optigods_admin_key";
+export const DEVICE_ID_KEY = "optigods_device_id";
+
+export function getPersistentDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && /^[a-f0-9-]{36}$/i.test(existing)) return existing.toLowerCase();
+    const created = crypto.randomUUID().toLowerCase();
+    localStorage.setItem(DEVICE_ID_KEY, created);
+    return created;
+  } catch {
+    return "";
+  }
+}
 
 export function getNativeAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   try {
     const token = localStorage.getItem(NATIVE_TOKEN_KEY);
     if (token) headers["X-Native-Auth"] = token;
+    const deviceId = getPersistentDeviceId();
+    if (deviceId) headers["X-Device-ID"] = deviceId;
     const adminKey = localStorage.getItem(NATIVE_ADMIN_KEY);
     if (adminKey) headers["X-Admin-Key"] = adminKey;
   } catch { /* localStorage may not be available */ }

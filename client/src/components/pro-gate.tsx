@@ -21,7 +21,7 @@ const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
 const DISCORD_LINK = DISCORD_INVITE;
-const SUPPORT_TICKET_TEXT = encodeURIComponent("I want to buy the $25 manual with card. Please tell me if I can get it now or if I should wait. I’m in the info → ✉️・support ticket channel.");
+const SUPPORT_TICKET_TEXT = encodeURIComponent("I want the $20 Manual Opti service. Please tell me when Leaq can connect through Parsec.");
 
 export function ProPaymentDialog({
   open,
@@ -459,12 +459,12 @@ export function ProPaymentDialog({
                     ) : (
                       <>
                         <CreditCard className="w-4 h-4" />
-                        Pay ${price} with Card — Stripe
+                        Full Opti Gods App Lifetime — ${price} with Card
                       </>
                     )}
                   </button>
 
-                  {/* $25 Manual Opti — paid directly via Stripe (done-for-you service) */}
+                  {/* $20 Manual Opti — paid directly via Stripe (done for you service) */}
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
                     {manualDiscountData ? (
                       <div className="flex items-center gap-2 px-3 py-2">
@@ -519,7 +519,7 @@ export function ProPaymentDialog({
                     ) : manualDiscountData ? (
                       <>
                         <CreditCard className="w-4 h-4 text-red-400" />
-                        Pay ${manualDiscountData.discountedPrice} — Manual Opti (Done-For-You)
+                        Pay ${manualDiscountData.discountedPrice} — Manual Opti (Done for You)
                         <span className="ml-1 text-[10px] font-bold bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full border border-green-500/30">
                           {manualDiscountData.percentOff}% OFF
                         </span>
@@ -527,12 +527,12 @@ export function ProPaymentDialog({
                     ) : (
                       <>
                         <CreditCard className="w-4 h-4 text-red-400" />
-                        Pay $25 — Manual Opti (Done-For-You)
+                        Pay $20 — Manual Opti (Done for You)
                       </>
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-500 text-center -mt-1 px-2 leading-snug">
-                    leaq connects via Parsec and personally sets up ReviOS, applies all registry/GPU/driver tweaks, and fully optimizes your PC. Takes 20–30 min or more if drivers or Windows need updating. Open a Discord ticket after paying to schedule.
+                    Leaq connects to your PC via Parsec and optimizes it, including a hardware-scanned Opti Gods preset made for your PC.
                   </p>
 
                   <a
@@ -543,7 +543,7 @@ export function ProPaymentDialog({
                     className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 hover:bg-[#5865F2]/20 hover:border-[#5865F2]/50 text-white text-sm font-black tracking-wide transition-all"
                   >
                     <Ticket className="w-4 h-4 text-[#5865F2]" />
-                    Manual Opti — Discord Ticket (other payment)
+                    Contact Leaq on Discord
                   </a>
 
                   {COINBASE_LINK && (

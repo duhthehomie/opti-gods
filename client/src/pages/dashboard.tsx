@@ -1019,7 +1019,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                {bulkApplying ? "Applying…" : isPro ? "Apply Compatible Instant Tweaks" : "Enable Best 15 Tweaks"}
+                {bulkApplying ? "Applying…" : isPro ? "Full Optimize This PC" : "Enable Best 15 Tweaks"}
               </Button>
             )}
             <span className="text-[10px] text-zinc-600 text-center">

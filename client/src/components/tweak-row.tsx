@@ -11,7 +11,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 
@@ -97,6 +97,11 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const hardwareBlocked = !compatibility.ok && !checked;
   const blocked = acBlocked || hardwareBlocked;
   const instantAvailable = NATIVE_TWEAK_ID_SET.has(id);
+  const scanComplete = (() => {
+    try { const scan = JSON.parse(localStorage.getItem("optigods-sysinfo") || "{}"); return Boolean(scan.GPU && scan.CPU); } catch { return false; }
+  })();
+
+  if (hardwareBlocked && scanComplete) return null;
 
   const runEnable = async () => {
     if (applying) return;
@@ -125,22 +130,22 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       // The server decides eligibility, entitlement, and remaining allowance.
       // No client-side counter or Pro flag is used for authorization.
       const nativeAuth = await getNativeAuthToken();
-      if (!nativeAuth) {
-        throw new Error("Sign in to the Windows app before enabling native tweaks.");
-      }
+      const deviceId = getPersistentDeviceId();
+      const credential = nativeAuth || (deviceId ? `device:${deviceId}` : null);
+      if (!credential) throw new Error("OG-AUTH-001 · Windows device identity unavailable.");
       const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({
           tweakId: id,
           idempotencyKey: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^A-Za-z0-9_-]/g, ""),
         }),
       });
       const authBody = await auth.json().catch(() => ({}));
-      if (!auth.ok) throw new Error(authBody?.error || "This tweak is not available on the free allowance.");
+      if (!auth.ok) throw new Error(`${authBody?.code || `OG-HTTP-${auth.status}`} · ${authBody?.error || "This tweak is not available on the free allowance."}`);
       nativeTicket = authBody.ticket || null;
       if (!nativeTicket) throw new Error("The server did not issue an authorization ticket. Try again.");
-      const result = await applyTweak(id, authBody.ticket, nativeAuth);
+      const result = await applyTweak(id, authBody.ticket, credential);
       if (!result.ok) {
         const failure = new Error(result.message || "Native tweak execution failed.");
         (failure as Error & { nativeKind?: string }).nativeKind = result.error_kind;
@@ -213,15 +218,14 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     try {
       const nativeToken = readNativeUndoToken(id);
       if (isNative()) {
-        const nativeAuth = await getNativeAuthToken();
         const result = await undoTweak(id, nativeToken);
         if (!result.ok) throw new Error(result.message || "Native undo failed");
         let slotReleased = false;
-        if (nativeAuth) {
+        if (Object.keys(getNativeAuthHeaders()).length) {
           for (let attempt = 0; attempt < 3 && !slotReleased; attempt++) {
             const release = await fetch(apiUrl("/api/performance-allowance/release"), {
               method: "POST",
-              headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+              headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
               body: JSON.stringify({ tweakId: id }),
             }).catch(() => null);
             if (release?.ok) {

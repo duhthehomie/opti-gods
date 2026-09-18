@@ -1555,11 +1555,31 @@ export async function registerRoutes(
   // app/API paths are nevertheless closed and the Rust ID allowlist remains
   // the native security boundary.
   const allowanceAuth = async (req: Request): Promise<string | null> => {
-    if (!req.session.userId) {
+    if (req.session.userId) return req.session.userId;
+    {
       const token = req.headers["x-native-auth"];
-      if (typeof token === "string") req.session.userId = await validateNativeToken(token) ?? undefined;
+      if (typeof token === "string") {
+        const nativeUserId = await validateNativeToken(token);
+        if (nativeUserId) return nativeUserId;
+      }
     }
-    return req.session.userId ?? null;
+    const deviceId = req.headers["x-device-id"];
+    if (typeof deviceId !== "string" || !/^[a-f0-9-]{36}$/i.test(deviceId)) return null;
+    const ownerId = `device:${deviceId.toLowerCase()}`;
+    await storage.upsertUser({
+      discordId: ownerId,
+      username: "Anonymous Windows device",
+      globalName: null,
+      avatarUrl: null,
+      email: null,
+    });
+    return ownerId;
+  };
+  const allowanceOwnerMatches = async (req: Request, ownerId: string): Promise<boolean> => {
+    const token = req.headers["x-native-auth"];
+    if (typeof token === "string" && await validateNativeToken(token) === ownerId) return true;
+    const deviceId = req.headers["x-device-id"];
+    return typeof deviceId === "string" && ownerId === `device:${deviceId.toLowerCase()}` && /^[a-f0-9-]{36}$/i.test(deviceId);
   };
   const eligibleAllowanceId = (id: unknown): id is string =>
     typeof id === "string" && /^[A-Za-z0-9_]{2,64}$/.test(id) &&
@@ -1570,18 +1590,18 @@ export async function registerRoutes(
 
   app.get("/api/performance-allowance", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    if (!userId) return res.status(401).json({ error: "Open this page in the Opti Gods Windows app.", code: "OG-AUTH-001" });
     if (await requirePaidPro(req)) return res.json({ pro: true, used: 0, remaining: null, limit: null });
     return res.json({ pro: false, ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
   });
 
   app.post("/api/performance-allowance/authorize", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
+    if (!userId) return res.status(401).json({ error: "A persistent Windows device identity is required.", code: "OG-AUTH-001" });
     const isPro = await requirePaidPro(req);
     const nativeHeader = req.headers["x-native-auth"];
-    if ((typeof nativeHeader !== "string" || await validateNativeToken(nativeHeader) !== userId) && !(req.body?.mode === "best" && req.body?.preview === true)) {
-      return res.status(403).json({ error: "Free performance tweaks can only be authorized by the Windows app.", code: "NATIVE_APP_REQUIRED" });
+    if (!await allowanceOwnerMatches(req, userId) && !(req.body?.mode === "best" && req.body?.preview === true)) {
+      return res.status(403).json({ error: "Free performance tweaks can only be authorized by the Windows app.", code: "OG-AUTH-002" });
     }
     const key = typeof req.body?.idempotencyKey === "string" && /^[A-Za-z0-9_-]{16,128}$/.test(req.body.idempotencyKey)
       ? req.body.idempotencyKey : randomBytes(16).toString("hex");
@@ -1590,13 +1610,13 @@ export async function registerRoutes(
     // supplied recommendation/core flags are intentionally ignored.
     if (req.body?.mode === "best") {
       const rig = req.body?.rigHash ? await storage.getRigByHash(String(req.body.rigHash)) : await storage.getLatestRigForUser(userId);
-      if (!rig || (rig.discordUserId && rig.discordUserId !== userId)) return res.status(400).json({ error: "A server-validated system scan is required" });
+      if (!rig || (rig.discordUserId && rig.discordUserId !== userId)) return res.status(400).json({ error: "A server-validated system scan is required.", code: "OG-SCAN-001" });
       const scanAgeMs = Date.now() - (rig.lastSeenAt?.getTime() ?? 0);
       if (scanAgeMs > 30 * 24 * 60 * 60 * 1000) {
-        return res.status(400).json({ error: "Your hardware scan is stale. Rescan your system before selecting Best 15." });
+        return res.status(400).json({ error: "Your hardware scan is stale. Rescan your system before selecting Best 15.", code: "OG-SCAN-002" });
       }
       if (!rig.cpu.trim() || !rig.gpu.trim() || !rig.ramGb || rig.ramGb < 1) {
-        return res.status(400).json({ error: "Your hardware scan is incomplete. Rescan your system before selecting Best 15." });
+        return res.status(400).json({ error: "Your hardware scan is incomplete. Rescan your system before selecting Best 15.", code: "OG-SCAN-003" });
       }
       const compatibleCore = buildSafePreset(hardwareFromRig(rig), "balanced").core
         .filter(id => eligibleAllowanceId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
@@ -1613,7 +1633,7 @@ export async function registerRoutes(
         if (ids.length !== selected.requestedCount) {
           return res.status(409).json({
             error: `Only ${ids.length} verified compatible instant tweaks are available for this scan; ${selected.requestedCount} are required. Rescan after updating Windows and GPU drivers.`,
-            code: "BEST_15_INCOMPLETE",
+            code: "OG-HW-001",
           });
         }
       }
@@ -1625,7 +1645,7 @@ export async function registerRoutes(
     // The free/native path is deliberately bounded. Pro receives the complete
     // hardware-compatible core preset, which can exceed 128 app tweaks.
     if (!ids.length || (!isPro && ids.length > 128) || ids.some(id => !eligibleAllowanceId(id))) {
-      return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance" });
+      return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance", code: "OG-TWEAK-001" });
     }
     if (isPro) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
     try {
@@ -1633,7 +1653,7 @@ export async function registerRoutes(
       return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...result });
     } catch (err) {
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") {
-        return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "FREE_ALLOWANCE_EXHAUSTED" });
+        return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "OG-LIMIT-015" });
       }
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_RESERVATION_CONFLICT") {
         return res.status(409).json({ error: "One or more tweaks are already being authorized; retry after the active operation completes.", code: "RESERVATION_CONFLICT" });
@@ -1648,14 +1668,14 @@ export async function registerRoutes(
 
   app.post("/api/performance-allowance/native-ticket", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
-    if (typeof req.headers["x-native-auth"] !== "string" || await validateNativeToken(req.headers["x-native-auth"]) !== userId) {
-      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    if (!await allowanceOwnerMatches(req, userId)) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     }
     const tweakId = req.body?.tweakId;
     if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
     if (!NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
-      return res.status(400).json({ error: "This tweak is script-only and is not available for instant apply.", code: "NATIVE_TWEAK_UNAVAILABLE" });
+      return res.status(400).json({ error: "This tweak is script-only and is not available for instant apply.", code: "OG-TWEAK-002" });
     }
     const key = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : randomBytes(16).toString("hex");
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: "Invalid idempotency key" });
@@ -1667,17 +1687,16 @@ export async function registerRoutes(
       if (err instanceof Error && ["FREE_ALLOWANCE_RESERVATION_CONFLICT", "NATIVE_TICKET_KEY_CONFLICT", "NATIVE_TICKET_OPERATION_FINALIZED"].includes(err.message)) {
         return res.status(409).json({ error: "Authorization operation conflicts with an existing or finalized ticket.", code: "RESERVATION_CONFLICT" });
       }
-      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "FREE_ALLOWANCE_EXHAUSTED" });
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "OG-LIMIT-015" });
       throw err;
     }
   });
 
   app.post("/api/performance-allowance/native-ticket/consume", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
-    const nativeHeader = req.headers["x-native-auth"];
-    if (typeof nativeHeader !== "string" || await validateNativeToken(nativeHeader) !== userId) {
-      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    if (!await allowanceOwnerMatches(req, userId)) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     }
     const id = req.body?.tweakId;
     const ticket = req.body?.ticket;
@@ -1692,18 +1711,16 @@ export async function registerRoutes(
   });
   app.post("/api/performance-allowance/native-ticket/cancel", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
-    const header = req.headers["x-native-auth"];
-    if (typeof header !== "string" || await validateNativeToken(header) !== userId) return res.status(403).json({ error: "Native Windows authorization required" });
+    if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    if (!await allowanceOwnerMatches(req, userId)) return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     const cancelled = await storage.cancelNativeTweakTicket(userId, String(req.body?.ticket || ""));
     return cancelled ? res.json({ ok: true }) : res.status(409).json({ error: "Ticket already consumed or invalid" });
   });
   app.post("/api/performance-allowance/release", async (req, res) => {
     const userId = await allowanceAuth(req);
-    if (!userId) return res.status(401).json({ error: "Discord login required" });
-    const header = req.headers["x-native-auth"];
-    if (typeof header !== "string" || await validateNativeToken(header) !== userId) {
-      return res.status(403).json({ error: "Native Windows authorization required", code: "NATIVE_APP_REQUIRED" });
+    if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    if (!await allowanceOwnerMatches(req, userId)) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
     }
     const tweakId = req.body?.tweakId;
     if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
@@ -1711,9 +1728,19 @@ export async function registerRoutes(
     return res.json({ ok: true, released });
   });
   app.post("/api/performance-allowance/native-ticket/result", async (req, res) => {
-    const { ticket, resultSecret, success } = req.body ?? {};
+    const { ticket, resultSecret, success, tweakId, errorCode, message } = req.body ?? {};
     if (typeof ticket !== "string" || typeof resultSecret !== "string" || typeof success !== "boolean") return res.status(400).json({ error: "Invalid result" });
     const result = await storage.finalizeNativeTweakTicket(ticket, resultSecret, success);
+    if (result.ok && !success) {
+      const safeTweakId = typeof tweakId === "string" ? tweakId.slice(0, 64) : "unknown";
+      const safeCode = typeof errorCode === "string" ? errorCode.slice(0, 64) : "OG-NATIVE-EXECUTION";
+      const safeMessage = typeof message === "string" ? message.slice(0, 1000) : "Windows rejected the tweak.";
+      storage.createUserReport(
+        "tweak_problem",
+        `${safeCode} · ${safeTweakId} · ${safeMessage}`,
+        { supportCode: safeCode, tweakId: safeTweakId, source: "native-executor" },
+      ).catch(error => console.error("[tweak-report] Could not add native failure to admin reports:", error));
+    }
     return result.ok ? res.json(result) : res.status(409).json(result);
   });
   const authorizeGeneratedScript = async (req: Request, res: Response, ids: string[]): Promise<boolean> => {
@@ -5655,7 +5682,7 @@ Start-Sleep 2
     }
 
     // Two tiers: 'pro' = the standard $20 one-time Pro access (uses STRIPE_PRICE_ID),
-    // 'manual' = the $25 done-for-you Manual Opti service (priced inline so it
+    // 'manual' = the $20 done for you Manual Opti service (priced inline so it
     // doesn't need a separate Price object in Stripe).
     const tier: 'pro' | 'manual' = req.body?.tier === 'manual' ? 'manual' : 'pro';
 
@@ -5695,13 +5722,13 @@ Start-Sleep 2
           }]
         : [{ price: priceId!, quantity: 1 }];
 
-      const BASE_MANUAL_CENTS = 2500; // $25.00
+      const BASE_MANUAL_CENTS = 2000; // $20.00
       const manualUnitAmount = appliedDiscount
         ? Math.max(100, Math.round(BASE_MANUAL_CENTS * (1 - appliedDiscount.percentOff / 100)))
         : BASE_MANUAL_CENTS;
       const manualName = appliedDiscount
-        ? `Opti Gods — Manual Opti (Done-For-You) (${appliedDiscount.percentOff}% discount)`
-        : 'Opti Gods — Manual Opti (Done-For-You)';
+        ? `Opti Gods — Manual Opti (Done for You) (${appliedDiscount.percentOff}% discount)`
+        : 'Opti Gods — Manual Opti (Done for You)';
 
       const lineItems = tier === 'manual'
         ? [{
@@ -5769,7 +5796,7 @@ Start-Sleep 2
       const isDiscounted = session.metadata?.discounted === 'true';
       const priceMatches = isManualTier
         ? lineItems.length === 1 && lineItems.some((item: any) =>
-            Number(item.amount_total) === 2500 &&
+            Number(item.amount_total) === 2000 &&
             Number(item.quantity) === 1 &&
             (item.currency || item.price?.currency) === 'usd'
           )
@@ -5793,9 +5820,9 @@ Start-Sleep 2
       // a Discord ticket so we can schedule the session.
       if (isManualTier) {
         const hasRealEmail = customerEmail && customerEmail !== 'unknown@card' && customerEmail.includes('@');
-        // Log loud + clear so the admin sees fresh $25 manual orders in server logs.
+        // Log loud + clear so the admin sees fresh $20 manual orders in server logs.
         // (Stripe dashboard is the source of truth; this just makes it skim-able.)
-        console.log(`[MANUAL-OPTI] $25 PAID — buyer=${hasRealEmail ? customerEmail : 'card-only'} stripe_session=${sessionId}`);
+        console.log(`[MANUAL-OPTI] $20 PAID — buyer=${hasRealEmail ? customerEmail : 'card-only'} stripe_session=${sessionId}`);
         // Notify Discord of a new Manual Opti sale
         try {
           const manualSettings = await storage.getAdminSettings();
@@ -5806,7 +5833,7 @@ Start-Sleep 2
             tier: 'manual',
             email: hasRealEmail ? customerEmail : null,
             code: null,
-            amount: 2500,
+            amount: 2000,
             stripeSessionId: sessionId,
             adminPanelUrl: `${proto}://${host}/admin`,
             discordWebhookUrl: manualWebhook,
@@ -7409,9 +7436,9 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
        if (req.session.userId && nativeUserId && req.session.userId !== nativeUserId) {
          return res.status(409).json({ error: "The browser and Windows app are signed in as different Discord users. Sign out of one account and rescan." });
        }
-       const discordUserId = req.session.userId ?? nativeUserId ?? null;
+       const discordUserId = req.session.userId ?? nativeUserId ?? await allowanceAuth(req);
        if (!discordUserId) {
-         return res.status(401).json({ error: "Discord login is required before saving a hardware scan." });
+         return res.status(401).json({ error: "Open the hardware scan in the Opti Gods Windows app.", code: "OG-AUTH-001" });
        }
       // Resolve pro code from session token so admin can identify user by code
       let proCode: string | null = null;

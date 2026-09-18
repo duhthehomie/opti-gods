@@ -131,7 +131,7 @@ export default function PaymentSuccess() {
               </h1>
               <p className="text-zinc-400 text-sm leading-relaxed">
                 {tier === "manual"
-                  ? "Your $25 Manual Opti payment is confirmed. leaq will optimize your PC personally — open a Discord ticket below so we can schedule your session."
+                  ? "Your $20 Manual Opti payment is confirmed. Leaq will optimize your PC personally — contact Leaq on Discord below to schedule your session."
                   : `Payment confirmed. Your Pro access is active — all ${TOTAL_TWEAKS_LABEL} tweaks and every game pack are unlocked.`}
               </p>
             </div>
@@ -141,7 +141,7 @@ export default function PaymentSuccess() {
                 <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 text-left space-y-2" data-testid="panel-manual-next-steps">
                   <p className="text-[10px] uppercase tracking-widest font-bold text-red-400 mb-2">Next Steps</p>
                   {[
-                    "Open a Discord ticket in info → ✉️・support",
+                    "Contact Leaq on Discord",
                     "Send your Stripe receipt + your timezone",
                     "leaq schedules a session with you (1-on-1)",
                     "Sit back — your PC gets optimized for you",
@@ -157,7 +157,7 @@ export default function PaymentSuccess() {
                   <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 text-left">
                     <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-400 mb-1.5">Receipt</p>
                     <p className="text-xs text-zinc-300 leading-relaxed">
-                      Stripe just emailed your $25 receipt to <strong className="text-white break-all">{emailInfo.email}</strong>. Use it when you open your ticket.
+                      Stripe just emailed your $20 receipt to <strong className="text-white break-all">{emailInfo.email}</strong>. Keep it for your session.
                     </p>
                   </div>
                 )}
@@ -171,7 +171,7 @@ export default function PaymentSuccess() {
                     className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white border border-[#5865F2] font-display font-bold transition-all"
                   >
                     <MessageCircle className="w-4 h-4" />
-                    Open Discord — Start Ticket
+                    Contact Leaq on Discord
                   </a>
                   <Button
                     data-testid="button-back-to-dashboard-manual"

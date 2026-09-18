@@ -139,8 +139,35 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+let lastSoundAt = 0
+function playFeedbackSound(isError: boolean) {
+  if (typeof window === "undefined" || Date.now() - lastSoundAt < 120) return
+  lastSoundAt = Date.now()
+  try {
+    const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const notes = isError ? [392, 311, 196] : [523, 659, 784]
+    notes.forEach((frequency, index) => {
+      const oscillator = ctx.createOscillator()
+      const gain = ctx.createGain()
+      oscillator.type = isError ? "triangle" : "sine"
+      oscillator.frequency.setValueAtTime(frequency, ctx.currentTime + index * 0.075)
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + index * 0.075)
+      gain.gain.exponentialRampToValueAtTime(isError ? 0.055 : 0.04, ctx.currentTime + index * 0.075 + 0.012)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + index * 0.075 + 0.22)
+      oscillator.connect(gain)
+      gain.connect(ctx.destination)
+      oscillator.start(ctx.currentTime + index * 0.075)
+      oscillator.stop(ctx.currentTime + index * 0.075 + 0.23)
+    })
+    window.setTimeout(() => void ctx.close(), 700)
+  } catch { /* browsers may block audio before the first user gesture */ }
+}
+
 function toast({ ...props }: Toast) {
   const id = genId()
+  playFeedbackSound(props.variant === "destructive")
 
   const update = (props: ToasterToast) =>
     dispatch({
