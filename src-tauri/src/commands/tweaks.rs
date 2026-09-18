@@ -452,8 +452,16 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                      {
                          let stderr = String::from_utf8_lossy(&out.stderr);
                          let stdout = String::from_utf8_lossy(&out.stdout);
-                         let detail = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
-                         if detail.is_empty() { "Windows rejected the command without an error message." } else { detail }
+                         let detail = if stderr.trim().is_empty() {
+                             stdout.trim().to_owned()
+                         } else {
+                             stderr.trim().to_owned()
+                         };
+                         if detail.is_empty() {
+                             "Windows rejected the command without an error message.".to_owned()
+                         } else {
+                             detail
+                         }
                      }
                 ),
                 undo_token: None,
