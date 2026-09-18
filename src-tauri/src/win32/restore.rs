@@ -12,11 +12,11 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-use wmi::{COMLibrary, WMIConnection};
 use windows::Win32::System::Restore::{
-    SRSetRestorePointW, BEGIN_NESTED_SYSTEM_CHANGE, END_NESTED_SYSTEM_CHANGE, MODIFY_SETTINGS,
-    RESTOREPOINTINFOW, STATEMGRSTATUS,
+    SRSetRestorePointW, BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW,
+    STATEMGRSTATUS,
 };
+use wmi::{COMLibrary, WMIConnection};
 
 pub fn create(label: &str) -> Result<RestorePoint> {
     // SRSetRestorePointW expects a 64-char description in a fixed-size buffer.
@@ -24,10 +24,10 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     for (i, c) in label.encode_utf16().take(63).enumerate() {
         desc[i] = c;
     }
-    // Phase 1 — BEGIN_NESTED_SYSTEM_CHANGE opens the checkpoint and gives us
+    // Phase 1 — BEGIN_SYSTEM_CHANGE opens the checkpoint and gives us
     // the sequence number we need to finalise it.
     let mut begin_info = RESTOREPOINTINFOW {
-        dwEventType: BEGIN_NESTED_SYSTEM_CHANGE,
+        dwEventType: BEGIN_SYSTEM_CHANGE,
         dwRestorePtType: MODIFY_SETTINGS,
         llSequenceNumber: 0,
         szDescription: desc,
@@ -44,11 +44,11 @@ pub fn create(label: &str) -> Result<RestorePoint> {
         ));
     }
 
-    // Phase 2 — END_NESTED_SYSTEM_CHANGE finalises the checkpoint Windows
+    // Phase 2 — END_SYSTEM_CHANGE finalises the checkpoint Windows
     // opened in phase 1. Without this the restore point is never committed
     // and won't appear in `rstrui.exe` / `vssadmin list shadows`.
     let mut end_info = RESTOREPOINTINFOW {
-        dwEventType: END_NESTED_SYSTEM_CHANGE,
+        dwEventType: END_SYSTEM_CHANGE,
         dwRestorePtType: MODIFY_SETTINGS,
         llSequenceNumber: begin_status.llSequenceNumber,
         szDescription: desc,
@@ -74,7 +74,8 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     // SRSetRestorePointW can return success before a broken System Restore
     // setup is visible to recovery tools. Require WMI to see the exact
     // sequence before we allow any tweak mutation.
-    for _ in 0..3 {
+    // WMI often trails SRSetRestorePointW by several seconds on Windows 10.
+    for _ in 0..20 {
         if list()
             .map(|points| {
                 points
@@ -85,7 +86,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
         {
             return Ok(point);
         }
-        thread::sleep(Duration::from_millis(300));
+        thread::sleep(Duration::from_millis(500));
     }
     Err(anyhow!(
         "Windows created checkpoint #{} but it was not visible in System Restore",
@@ -174,9 +175,12 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
         .args([
             "add",
             r"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore",
-            "/v", "DisableSR",
-            "/t", "REG_DWORD",
-            "/d", "0",
+            "/v",
+            "DisableSR",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "0",
             "/f",
         ])
         .creation_flags(CREATE_NO_WINDOW)
@@ -195,9 +199,12 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
         .args([
             "add",
             r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore",
-            "/v", "SystemRestorePointCreationFrequency",
-            "/t", "REG_DWORD",
-            "/d", "0",
+            "/v",
+            "SystemRestorePointCreationFrequency",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "0",
             "/f",
         ])
         .creation_flags(CREATE_NO_WINDOW)
@@ -213,7 +220,10 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
     // 3. Enable System Restore on C:\ and fail if PowerShell rejects it.
     let enabled = Command::new("powershell")
         .args([
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
             "$ErrorActionPreference='Stop'; Enable-ComputerRestore -Drive 'C:\\'",
         ])
         .creation_flags(CREATE_NO_WINDOW)

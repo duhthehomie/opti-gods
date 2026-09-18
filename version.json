@@ -1,4 +1,4 @@
 {
-  "version": "5.2.10",
-  "notes": "V5.2.10 — fixes Best 15 and all recommended buttons, routes bulk actions through the visible Windows runner, and improves fan and Wi-Fi detection."
+  "version": "5.2.11",
+  "notes": "V5.2.11 — repairs missing server scans automatically, validates every hardware rescan, and fixes Windows restore-point confirmation for Full Optimize."
 }

@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isNative } from "@/lib/tauri-bridge";
 import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useLocation } from "wouter";
+import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 
 type Allowance = { pro: boolean; limit: number | null; used: number; remaining: number | null };
 /** Small, non-Pro-only choice surface; the server remains authoritative. */
@@ -76,14 +77,7 @@ export function PerformanceAllowanceCard() {
     }
     setBusy(true);
     try {
-      const key = crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "");
-      const r = await fetch(apiUrl("/api/performance-allowance/authorize"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-        body: JSON.stringify({ mode: "best", preview: true, idempotencyKey: key }),
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(`${body.code || `OG-HTTP-${r.status}`} · ${body.error || "A saved system scan is required."}`);
+      const body = await authorizeHardwarePreset();
       const ids = (body.authorizedIds as string[]).slice(0, Math.max(0, Number(body.remaining ?? 15)));
       const visibleIds = [...(body.activeIds || []), ...ids].slice(0, 15);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(visibleIds)); } catch { /* ignore */ }
@@ -111,19 +105,7 @@ export function PerformanceAllowanceCard() {
     }
     setBusy(true);
     try {
-      const response = await fetch(apiUrl("/api/performance-allowance/authorize"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-        body: JSON.stringify({
-          mode: "best",
-          preview: true,
-          idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(`${body.code || `OG-HTTP-${response.status}`} · ${body.error || "A saved system scan is required."}`);
-      }
+      const body = await authorizeHardwarePreset();
       const ids = [...(body.activeIds || []), ...(body.authorizedIds || [])].slice(0, 15);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(ids)); } catch { /* ignore */ }
       navigate("/tweaks?best15=1");

@@ -98,20 +98,25 @@ export async function applyTweakBatch(
     try {
       const restorePoint = await createRestorePoint("Before Opti Gods tweak changes");
       if (!restorePoint?.sequence_number) {
+        const message = "Windows did not confirm a restore point. Turn on System Protection for drive C: and try Full Optimize again.";
+        uniqueIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
         return {
           appliedIds: [],
           selectedIds: [],
           unsupportedIds,
-          failures: uniqueIds.map(id => ({ id, message: "Windows did not confirm a restore point. No tweaks were applied." })),
+          failures: uniqueIds.map(id => ({ id, message })),
         };
       }
       sessionStorage.setItem(RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
     } catch (error) {
+      const detail = error instanceof Error ? error.message : "Could not create a verified restore point.";
+      const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
+      uniqueIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
       return {
         appliedIds: [],
           selectedIds: [],
         unsupportedIds,
-        failures: uniqueIds.map(id => ({ id, message: error instanceof Error ? error.message : "Could not create a verified restore point." })),
+        failures: uniqueIds.map(id => ({ id, message })),
       };
     }
   }

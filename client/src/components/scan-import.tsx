@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { detectAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 import { useToast } from "@/hooks/use-toast";
+import { scanAndUploadValidatedHardware } from "@/lib/hardware-scan-sync";
 
 type ScanStatus = "idle" | "scanning" | "success" | "error";
 
@@ -17,6 +18,7 @@ export function ScanImport() {
     if (!native || status === "scanning") return;
     setStatus("scanning");
     try {
+      await scanAndUploadValidatedHardware();
       const detected = await detectAppliedTweaks();
       const store = useOptimizationStore.getState();
       const next = { ...store.tweaks };
@@ -36,7 +38,7 @@ export function ScanImport() {
 
       if (!quiet) {
         toast({
-          title: "Smart Scan complete",
+          title: "Hardware and tweak scan complete",
           description: appliedIds.length
             ? `${appliedIds.length} existing optimizations recognized.`
             : "No supported Opti Gods tweaks are currently applied.",

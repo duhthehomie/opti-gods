@@ -1,61 +1,4 @@
-import { useState, useCallback } from "react";
-import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
-import { motion } from "framer-motion";
-import { AppLayout } from "@/components/layout/app-layout";
-import {
-  ShieldAlert, Zap, Cpu, HardDrive, Monitor, Trash2,
-  CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
-  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio, ScanLine,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@shared/routes";
-import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useToast } from "@/hooks/use-toast";
-import { useOsDetection } from "@/hooks/use-os-detection";
-import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { cn } from "@/lib/utils";
-import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
-import { ProUnlockButton } from "@/components/pro-gate";
-import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
-import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
-import { ScanImport } from "@/components/scan-import";
-import { HardwareScanZone } from "@/components/hardware-scan";
-import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
-import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
-import { getTweakCompatibility } from "@/lib/tweak-compatibility";
-
-// Feature categories
-const FEATURES = [
-  { icon: Settings2, title: "Registry Tweaks", desc: "Deep Windows registry optimizations for latency and responsiveness" },
-  { icon: Wifi, title: "Network Stack", desc: "TCP/IP tuning, nagle disable, DNS and connection optimizations" },
-  { icon: Monitor, title: "GPU / NVIDIA", desc: "HAGS, MSI interrupt mode, driver tweaks, and shader cache control" },
-  { icon: MemoryStick, title: "Memory Optimizer", desc: "RAM priority pinning, pagefile control, and heap management" },
-  { icon: Power, title: "Power Plan", desc: "Processor performance states, C-states, and idle inhibit" },
-  { icon: Gamepad2, title: "FiveM Optimizer", desc: "GTA V and FiveM-specific process tweaks for max FPS" },
-  { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
-  { icon: Search, title: "Game Detection", desc: "Auto-detect 27 games and apply per-game optimization packs" },
-  { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
-];
-
-// Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
-
-// ── Safe Boost ─────────────────────────────────────────────────────────────
-// No service stops, no uninstalls — pure registry + power plan + privacy tweaks.
-const SAFE_TWEAKS = [
-  // CPU scheduling & responsiveness
-  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
-  // Network baseline
-  "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority",
-  // Power & hardware
-  "SetHighPerformancePlan", "DisableCoreParking", "EnableHAGS",
-  // Input
-  "DisablePointerPrecision",
-  // Windows cleanup — zero risk
-  "DisableXboxGameBar", "DisableGameDVR", "DisableFastStartup",
-  "DisableWindowsError", "DisableHungAppDetection", "SysVisualBestPerf",
+on", "SysVisualBestPerf",
   "DisableAutoMaintenance", "SysHibernateOff",
   // Memory
   "OptimizeRAMUsage", "DisableNDU", "MemGPUOptimize", "MemGPUSchedulerTweak",
@@ -397,16 +340,7 @@ export default function Dashboard() {
     }
     setBulkApplying(true);
     try {
-      const nativeAuth = native ? await getNativeAuthToken() : null;
-      const response = await fetch(apiUrl("/api/performance-allowance/authorize"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(nativeAuth ? { "X-Native-Auth": nativeAuth } : {}) },
-        body: JSON.stringify({ mode: "best", preview: true, idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "") }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok || !Array.isArray(body.authorizedIds)) {
-        throw new Error(body.error || "A saved system scan is required.");
-      }
+      const body = await authorizeHardwarePreset();
       const ids = (body.authorizedIds as string[]).filter(id => id in tweaks);
       if (native) {
         queueTweakBatch(ids);
