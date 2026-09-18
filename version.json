@@ -1,4 +1,4 @@
 {
-  "version": "5.2.8",
-  "notes": "V5.2.8 — fixes native Pro detection, hides all free controls for Pro users, restores Best 15 connectivity, and links device activity in admin."
+  "version": "5.2.9",
+  "notes": "V5.2.9 — runs selected tweaks silently inside the elevated app, shows live apply progress, records confirmed results, and fixes Best 15 routing."
 }

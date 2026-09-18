@@ -1699,12 +1699,12 @@ export async function registerRoutes(
     }
     const tweakId = req.body?.tweakId;
     if (!eligibleAllowanceId(tweakId)) return res.status(400).json({ error: "Ineligible tweak" });
-    if (!NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
+    const pro = await requirePaidPro(req);
+    if (!pro && !NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
       return res.status(400).json({ error: "This tweak is script-only and is not available for instant apply.", code: "OG-TWEAK-002" });
     }
     const key = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : randomBytes(16).toString("hex");
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ error: "Invalid idempotency key" });
-    const pro = await requirePaidPro(req);
     try {
       const issued = await storage.authorizeNativeTweakTicket(userId, tweakId, key, !pro);
       return res.json({ ...issued, idempotencyKey: key, pro });
@@ -1728,7 +1728,17 @@ export async function registerRoutes(
     if (!eligibleAllowanceId(id) || typeof ticket !== "string") return res.status(400).json({ error: "Invalid ticket request" });
     const result = await storage.consumeNativeTweakTicket(userId, ticket, id);
     if (!result) return res.status(409).json({ error: "Ticket invalid, expired, or already used" });
-    return res.json({ ok: true, idempotencyKey: result.idempotencyKey, resultSecret: result.resultSecret });
+    const command = TWEAK_COMMANDS[id];
+    if (typeof command !== "string" || !command.trim()) {
+      await storage.finalizeNativeTweakTicket(ticket, result.resultSecret, false);
+      return res.status(400).json({ error: "No trusted in-app command exists for this tweak", code: "OG-TWEAK-003" });
+    }
+    return res.json({
+      ok: true,
+      idempotencyKey: result.idempotencyKey,
+      resultSecret: result.resultSecret,
+      command,
+    });
   });
 
   app.post("/api/performance-allowance/failure", async (req, res) => {

@@ -1,12 +1,33 @@
 import { apiUrl } from "@/lib/api-base";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
+export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
+
+export type TweakRunProgress = {
+  id: string;
+  index: number;
+  total: number;
+  status: "queued" | "running" | "applied" | "failed";
+  message?: string;
+};
+
+export function queueTweakBatch(ids: readonly string[]) {
+  localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
+}
+
+export function readQueuedTweakBatch(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(NATIVE_RUN_QUEUE_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 function saveUndoToken(id: string, token: string | null) {
   try {
@@ -25,7 +46,10 @@ export type BulkTweakResult = {
   failures: { id: string; message: string }[];
 };
 
-export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweakResult> {
+export async function applyTweakBatch(
+  ids: readonly string[],
+  onProgress?: (progress: TweakRunProgress) => void,
+): Promise<BulkTweakResult> {
   const uniqueIds = Array.from(new Set(ids));
   const native = isNative();
   const nativeAuth = native ? await getNativeAuthToken() : null;
@@ -41,9 +65,8 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
   const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
   const entitledIds = allowance.pro
     ? compatibleIds
-    : compatibleIds.filter(id => NATIVE_TWEAK_ID_SET.has(id)).slice(0, Math.max(0, allowance.remaining ?? 0));
-  const supportedIds = entitledIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
-  const scriptOnlyIds = allowance.pro ? entitledIds.filter(id => !NATIVE_TWEAK_ID_SET.has(id)) : [];
+    : compatibleIds.slice(0, Math.max(0, allowance.remaining ?? 0));
+  const supportedIds = entitledIds;
   const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
 
   if (!native) {
@@ -53,12 +76,8 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
 
   if (!credential) throw new Error("OG-AUTH-001 · Windows device identity unavailable.");
 
-  // Script-only Pro choices are selection intent and do not need a restore
-  // point yet. Keep them available even when native restore-point creation
-  // fails, but never mark them Applied.
-  for (const id of scriptOnlyIds) useOptimizationStore.getState().setTweak(id, true);
   if (!supportedIds.length) {
-    return { appliedIds: [], selectedIds: scriptOnlyIds, unsupportedIds, failures: [] };
+    return { appliedIds: [], selectedIds: [], unsupportedIds, failures: [] };
   }
 
   if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
@@ -67,7 +86,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
       if (!restorePoint?.sequence_number) {
         return {
           appliedIds: [],
-          selectedIds: scriptOnlyIds,
+          selectedIds: [],
           unsupportedIds,
           failures: uniqueIds.map(id => ({ id, message: "Windows did not confirm a restore point. No tweaks were applied." })),
         };
@@ -76,7 +95,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
     } catch (error) {
       return {
         appliedIds: [],
-        selectedIds: scriptOnlyIds,
+          selectedIds: [],
         unsupportedIds,
         failures: uniqueIds.map(id => ({ id, message: error instanceof Error ? error.message : "Could not create a verified restore point." })),
       };
@@ -85,9 +104,12 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
 
   const appliedIds: string[] = [];
   const failures: { id: string; message: string }[] = [];
-  for (const id of supportedIds) {
+  supportedIds.forEach((id, index) => onProgress?.({ id, index, total: supportedIds.length, status: "queued" }));
+  for (let index = 0; index < supportedIds.length; index++) {
+    const id = supportedIds[index];
     let ticket: string | null = null;
     let osApplied = false;
+    onProgress?.({ id, index, total: supportedIds.length, status: "running" });
     try {
       const authorization = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST",
@@ -110,6 +132,7 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
       store.markApplied([id]);
       saveUndoToken(id, result.undo_token);
       appliedIds.push(id);
+      onProgress?.({ id, index, total: supportedIds.length, status: "applied", message: result.message });
     } catch (error) {
       if (ticket && !osApplied) {
         await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
@@ -118,10 +141,13 @@ export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweak
           body: JSON.stringify({ ticket }),
         }).catch(() => {});
       }
-      failures.push({ id, message: error instanceof Error ? error.message : "Windows rejected the change." });
+      const message = error instanceof Error ? error.message : "Windows rejected the change.";
+      failures.push({ id, message });
+      onProgress?.({ id, index, total: supportedIds.length, status: "failed", message });
     }
   }
 
   window.dispatchEvent(new Event("optigods:allowance-changed"));
-  return { appliedIds, selectedIds: scriptOnlyIds, unsupportedIds, failures };
+  localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
+  return { appliedIds, selectedIds: [], unsupportedIds, failures };
 }

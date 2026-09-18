@@ -24,7 +24,7 @@ import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
 import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 
 // Feature categories
@@ -407,15 +407,12 @@ export default function Dashboard() {
         throw new Error(body.error || "A saved system scan is required.");
       }
       const ids = (body.authorizedIds as string[]).filter(id => id in tweaks);
-      const result = await applyTweakBatch(ids);
       if (native) {
-        setRecommendedApplied(result.appliedIds.length > 0 && result.failures.length === 0);
-        toast({
-          title: result.appliedIds.length ? "Compatible instant tweaks applied" : "No instant tweaks were applied",
-          description: `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only choices remain available manually` : ""}${result.failures.length ? ` · ${result.failures.length} failed` : ""}.`,
-          variant: result.appliedIds.length ? "success" : "destructive",
-        });
+        queueTweakBatch(ids);
+        window.location.assign("/applied-tweaks?run=1");
+        return;
       } else {
+        const result = await applyTweakBatch(ids);
         setRecommendedApplied(true);
         toast({
           title: "Hardware-matched Pro preset selected",
@@ -448,7 +445,7 @@ export default function Dashboard() {
       toast({
         title: native ? `${preset.title}: ${result.appliedIds.length} applied` : `${preset.title} selected`,
         description: native
-          ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
+          ? `${result.appliedIds.length} Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
           : `${result.selectedIds.length} compatible tweaks selected. Download and run the .bat to apply them.`,
         variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
       });
@@ -997,7 +994,7 @@ export default function Dashboard() {
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
                   : isPro
-                    ? "Compatible instant tweaks apply directly. The full Pro catalog remains available, with incompatible choices locked and script-only choices clearly labeled."
+                    ? "Compatible tweaks apply inside Opti Gods. Incompatible choices remain locked for this PC."
                     : "Free accounts can enable the 15 best server-validated tweaks for their saved system scan. Link a Pro Discord account to unlock every tweak."}
             </p>
           </div>

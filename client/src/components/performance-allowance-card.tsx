@@ -4,7 +4,7 @@ import { BEST_15_IDS_KEY, getNativeAuthHeaders } from "@/lib/queryClient";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { isNative } from "@/lib/tauri-bridge";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useLocation } from "wouter";
 
 type Allowance = { pro: boolean; limit: number | null; used: number; remaining: number | null };
@@ -97,18 +97,8 @@ export function PerformanceAllowanceCard() {
         return;
       }
 
-      const result = await applyTweakBatch(ids);
-      const applied = result.appliedIds.length;
-      const failures = result.failures.map(failure => `${failure.id}: ${failure.message}`);
-      toast({ title: `${applied} best tweaks enabled`, description: applied ? "Trusted native actions completed. Undo remains available for each successful tweak." : "No supported tweak could be applied.", variant: applied ? "success" : "destructive" });
-      if (failures.length) {
-        toast({
-          title: `${failures.length} tweak${failures.length === 1 ? "" : "s"} not applied`,
-          description: failures.slice(0, 3).join(" · "),
-          variant: "destructive",
-        });
-      }
-      await refresh();
+      queueTweakBatch(ids);
+      navigate("/applied-tweaks?run=1");
     } catch (e) {
       toast({ title: "Could not select best tweaks", description: e instanceof Error ? e.message : "A saved scan is required.", variant: "destructive" });
     } finally { setBusy(false); }

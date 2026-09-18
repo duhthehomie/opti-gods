@@ -193,6 +193,10 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         Some(value) => value.to_string(),
         None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
+    let server_command = consumed
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
     let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {
             Ok(undo_token) => TweakResult {
@@ -216,11 +220,11 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
                 error_stage: Some(NativeErrorStage::Execution),
             },
         }
-    } else if let Some(snippet) = trusted_ps_snippet(&args.id, false) {
+    } else if let Some(snippet) = server_command.as_deref().or_else(|| trusted_ps_snippet(&args.id, false)) {
         // SECURITY: PowerShell snippets MUST come from this hard-coded
-        // table — never from the renderer. The desktop shell runs
-        // elevated under `requireAdministrator`, so accepting arbitrary
-        // script text from the WebView would be a one-line XSS→RCE.
+        // table or the authenticated optigods.com ticket response — never
+        // from the renderer. The desktop shell runs elevated under
+        // `requireAdministrator`, so WebView-provided script text is forbidden.
         run_powershell(snippet, &args.id, false)
     } else {
         TweakResult {

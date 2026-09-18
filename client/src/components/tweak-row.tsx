@@ -12,7 +12,6 @@ import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
-import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -96,7 +95,6 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   const compatibility = useTweakCompatibility(id);
   const hardwareBlocked = !compatibility.ok && !checked;
   const blocked = acBlocked || hardwareBlocked;
-  const instantAvailable = NATIVE_TWEAK_ID_SET.has(id);
   const scanComplete = (() => {
     try { const scan = JSON.parse(localStorage.getItem("optigods-sysinfo") || "{}"); return Boolean(scan.GPU && scan.CPU); } catch { return false; }
   })();
@@ -110,12 +108,6 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       toast({ title: "Tweak selected", description: "It will be included when you run your selected tweaks." });
       return;
     }
-    if (!instantAvailable) {
-      onCheckedChange(true);
-      toast({ title: "Script only", description: "This tweak is not available for instant apply. It will be included in the PowerShell script." });
-      return;
-    }
-
     setApplying(true);
     let nativeTicket: string | null = null;
     let osApplied = false;
@@ -475,13 +467,8 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
               )}
             >
               {applying || undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : appliedAt ? <Undo2 className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : !instantAvailable ? "Script only" : checked ? "Selected" : "Enable"}
+              {applying ? "Applying" : undoing ? "Undoing" : appliedAt ? "Undo" : checked ? "Selected" : "Enable"}
             </button>
-            {!instantAvailable && (
-              <span className="hidden sm:inline text-[9px] font-semibold uppercase tracking-wide text-zinc-500" title="Not available for instant apply; included in the PowerShell script.">
-                not available for instant apply
-              </span>
-            )}
           </div>
         )}
       </motion.div>

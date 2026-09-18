@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useGenerateScript } from "@/hooks/use-script";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { queueTweakBatch } from "@/lib/native-tweak-runner";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
 const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
 const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
@@ -397,15 +397,9 @@ function SmartRecsBreakdown() {
 
   async function handleApply() {
     try {
-      const result = await applyTweakBatch(missingSafeIds);
-      setApplied(true);
-      toast({
-        title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`,
-        description: isNative()
-          ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.`
-          : "Download and run the .bat to apply the selected tweaks.",
-        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
-      });
+      if (!isNative()) throw new Error("Open Opti Gods for Windows to apply tweaks in the app.");
+      queueTweakBatch(missingSafeIds);
+      window.location.assign("/applied-tweaks?run=1");
       setTimeout(() => setApplied(false), 3000);
     } catch (error) {
       toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
