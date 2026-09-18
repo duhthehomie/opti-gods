@@ -5,7 +5,7 @@
   "identifier": "gg.optigods.desktop",
   "build": {
     "beforeDevCommand": "",
-    "beforeBuildCommand": "npx vite build",
+    "beforeBuildCommand": "node script/tauri-preflight.mjs && npx vite build",
     "devUrl": "http://localhost:5000",
     "frontendDist": "../dist/public"
   },
