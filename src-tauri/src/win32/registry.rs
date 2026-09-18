@@ -55,6 +55,13 @@ pub fn write_dword(hive: Hive, path: &str, name: &str, value: u32) -> Result<()>
         .with_context(|| format!("create_subkey {path}"))?;
     key.set_value(name, &value)
         .with_context(|| format!("set_value {name} = {value:#x}"))?;
+    match read_value(hive, path, name)? {
+        RegValue::Dword(actual) if actual == value => {}
+        RegValue::Dword(actual) => anyhow::bail!(
+            "registry verification failed for {name}: expected {value:#x}, found {actual:#x}"
+        ),
+        _ => anyhow::bail!("registry verification failed for {name}: value is not a DWORD"),
+    }
     Ok(())
 }
 

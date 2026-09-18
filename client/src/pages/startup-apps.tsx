@@ -9,6 +9,8 @@ import { Power, AlertTriangle, XCircle, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const STARTUP_SAVINGS: Record<string, number> = {
   su_discord: 3.2, su_spotify: 2.8, su_steam: 2.1, su_onedrive: 3.5,
@@ -106,13 +108,18 @@ export default function StartupApps() {
     .filter(id => tweaks[id])
     .reduce((sum, id) => sum + (STARTUP_SAVINGS[id] || 0), 0);
 
-  const handleDisableAll = () => {
-    const next: Record<string, boolean> = { ...useOptimizationStore.getState().tweaks };
-    ALL_STARTUP_APPS.forEach(a => {
-      if (!a.essential) next[a.id] = true;
-    });
-    setAllTweaks(next);
-    toast({ title: "Disabled all non-essential apps", description: "Essential apps (MSI Afterburner, RTSS, etc.) were kept." });
+  const handleDisableAll = async () => {
+    const ids = ALL_STARTUP_APPS.filter(a => !a.essential).map(a => a.id);
+    try {
+      const result = await applyTweakBatch(ids);
+      toast({
+        title: isNative() ? `${result.appliedIds.length} startup tweaks applied` : `${result.selectedIds.length} startup tweaks selected`,
+        description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected startup changes.",
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({ title: "Could not disable startup apps", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
   };
 
   const handleEnableAll = () => {

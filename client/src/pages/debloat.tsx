@@ -8,6 +8,9 @@ import { Trash2, AlertTriangle, Info, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { cn } from "@/lib/utils";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
 
 const ALL_DEBLOAT_IDS = [
   "DebloatCortana","DebloatOneDrive","DebloatXboxApp","DebloatXboxGameBar","DebloatXboxIdentity",
@@ -131,7 +134,8 @@ const WIN11_ITEMS: DebloatItem[] = [
 ];
 
 export default function Debloat() {
-  const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
+  const { tweaks, setTweak } = useOptimizationStore();
+  const { toast } = useToast();
   const osInfo = useOsDetection();
   const isWin11 = osInfo.isWindows11;
   const [pendingWarn, setPendingWarn] = useState<{ id: string; title: string; warning: string } | null>(null);
@@ -139,16 +143,21 @@ export default function Debloat() {
   const allWin10Keys = [...WIN10_APPS, ...SERVICES, ...PRIVACY].map(i => i.id);
   const allWin11Keys = WIN11_ITEMS.map(i => i.id);
 
+  const applyBulk = async (ids: string[], label: string) => {
+    try {
+      const result = await applyTweakBatch(ids);
+      toast({ title: isNative() ? `${result.appliedIds.length} ${label} applied` : `${result.selectedIds.length} ${label} selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected changes.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    } catch (error) {
+      toast({ title: `Could not apply ${label}`, description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
+  };
+
   const handleNukeAll = () => {
-    const nuked: Record<string, boolean> = { ...useOptimizationStore.getState().tweaks };
-    allWin10Keys.forEach(k => nuked[k] = true);
-    setAllTweaks(nuked);
+    void applyBulk(allWin10Keys, "Win10 debloat tweaks");
   };
 
   const handleNukeWin11 = () => {
-    const nuked: Record<string, boolean> = { ...useOptimizationStore.getState().tweaks };
-    allWin11Keys.forEach(k => nuked[k] = true);
-    setAllTweaks(nuked);
+    void applyBulk(allWin11Keys, "Win11 debloat tweaks");
   };
 
   const DebloatSection = ({ title, items }: { title: string; items: DebloatItem[] }) => (

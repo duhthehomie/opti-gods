@@ -10,6 +10,8 @@ use wmi::{COMLibrary, WMIConnection};
 #[serde(rename_all = "PascalCase")]
 struct Win32Processor {
     name: Option<String>,
+    number_of_cores: Option<u32>,
+    number_of_logical_processors: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -38,6 +40,20 @@ struct Win32BaseBoard {
 #[serde(rename_all = "PascalCase")]
 struct Win32SystemEnclosure {
     chassis_types: Option<Vec<u16>>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Win32ComputerSystem {
+    manufacturer: Option<String>,
+    model: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Win32OperatingSystem {
+    caption: Option<String>,
+    build_number: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -75,7 +91,7 @@ pub fn scan() -> Result<HardwareScan> {
     let wmi = WMIConnection::new(com).context("WMI connect")?;
 
     let cpus: Vec<Win32Processor> = wmi
-        .raw_query("SELECT Name FROM Win32_Processor")
+        .raw_query("SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor")
         .context("query Win32_Processor")?;
     let gpus: Vec<Win32VideoController> = wmi
         .raw_query("SELECT Name, AdapterRAM FROM Win32_VideoController")
@@ -89,6 +105,12 @@ pub fn scan() -> Result<HardwareScan> {
     let chassis: Vec<Win32SystemEnclosure> = wmi
         .raw_query("SELECT ChassisTypes FROM Win32_SystemEnclosure")
         .context("query Win32_SystemEnclosure")?;
+    let computers: Vec<Win32ComputerSystem> = wmi
+        .raw_query("SELECT Manufacturer, Model FROM Win32_ComputerSystem")
+        .unwrap_or_default();
+    let operating_systems: Vec<Win32OperatingSystem> = wmi
+        .raw_query("SELECT Caption, BuildNumber FROM Win32_OperatingSystem")
+        .unwrap_or_default();
     let nics: Vec<Win32NetworkAdapter> = wmi
         .raw_query("SELECT Manufacturer, PhysicalAdapter FROM Win32_NetworkAdapter")
         .context("query Win32_NetworkAdapter")?;
@@ -237,5 +259,17 @@ pub fn scan() -> Result<HardwareScan> {
         refresh_hz: None,
         nic_vendor,
         anticheats: Vec::new(),
+        system_model: computers.first().and_then(|c| {
+            let value = format!("{} {}", c.manufacturer.as_deref().unwrap_or(""), c.model.as_deref().unwrap_or(""));
+            let value = value.trim().to_string();
+            (!value.is_empty()).then_some(value)
+        }),
+        os_name: operating_systems.first().and_then(|o| o.caption.clone()),
+        os_build: operating_systems.first().and_then(|o| o.build_number.as_deref()?.parse().ok()),
+        cpu_cores: cpus.first().and_then(|c| c.number_of_cores),
+        cpu_threads: cpus.first().and_then(|c| c.number_of_logical_processors),
+        is_laptop: chassis.first().and_then(|c| c.chassis_types.as_ref()).map(|types| {
+            types.iter().any(|t| matches!(t, 8 | 9 | 10 | 14))
+        }),
     })
 }

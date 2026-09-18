@@ -224,14 +224,13 @@ export const users = pgTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// Server-authoritative lifetime free allowance.  A row is created only after
-// the native/script operation reports success; reserved rows close the small
-// authorize -> apply race and are removed on explicit failure.
+// Server-authoritative active free-tweak slots. A row exists while a native
+// tweak is reserved or applied; Undo removes it so the slot can be reused.
 export const performanceTweakAllowance = pgTable("performance_tweak_allowance", {
   id: serial("id").primaryKey(),
   discordUserId: text("discord_user_id").notNull().references(() => users.discordId, { onDelete: "cascade" }),
   tweakId: text("tweak_id").notNull(),
-  status: text("status").notNull().default("reserved"), // reserved | consumed
+  status: text("status").notNull().default("reserved"), // reserved | consumed (active)
   idempotencyKey: text("idempotency_key").notNull(),
   reservedAt: timestamp("reserved_at").defaultNow().notNull(),
   consumedAt: timestamp("consumed_at"),
@@ -327,12 +326,18 @@ export const hardwareRigs = pgTable("hardware_rigs", {
   discordUserId: text("discord_user_id"),
   proCode: text("pro_code"),
   cpu: text("cpu").notNull(),
+  cpuCores: integer("cpu_cores"),
+  cpuThreads: integer("cpu_threads"),
   gpu: text("gpu").notNull(),
   vramMb: integer("vram_mb"),
   ramGb: integer("ram_gb"),
   ramMhz: integer("ram_mhz"),
   motherboard: text("motherboard"),
   chassis: text("chassis"),
+  systemModel: text("system_model"),
+  isLaptop: boolean("is_laptop"),
+  osName: text("os_name"),
+  osBuild: integer("os_build"),
   coolingType: text("cooling_type"),
   refreshHz: integer("refresh_hz"),
   nicVendor: text("nic_vendor"),
@@ -363,6 +368,12 @@ export const hardwareScanPayloadSchema = z.object({
   nicVendor: z.string().max(100).optional(),
   storageSummary: z.record(z.unknown()).optional(),
   anticheats: z.array(z.string().max(50)).optional(),
+  cpuCores: z.number().int().nonnegative().optional(),
+  cpuThreads: z.number().int().nonnegative().optional(),
+  osName: z.string().max(200).optional(),
+  osBuild: z.number().int().nonnegative().optional(),
+  systemModel: z.string().max(200).optional(),
+  isLaptop: z.boolean().optional(),
   sessionToken: z.string().max(128).optional(),
 });
 export type HardwareScanPayload = z.infer<typeof hardwareScanPayloadSchema>;

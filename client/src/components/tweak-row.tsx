@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
+import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
@@ -92,6 +93,9 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   });
   const blockingAC = meta?.incompatibleWith?.find((ac) => detectedACs.has(ac));
   const acBlocked = Boolean(blockingAC) && !checked;
+  const compatibility = useTweakCompatibility(id);
+  const hardwareBlocked = !compatibility.ok && !checked;
+  const blocked = acBlocked || hardwareBlocked;
   const instantAvailable = NATIVE_TWEAK_ID_SET.has(id);
 
   const runEnable = async () => {
@@ -184,7 +188,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   };
 
   const handleChange = (val: boolean) => {
-    if (acBlocked && val) return;
+    if (blocked && val) return;
     if (val && warning && !checked) {
       setPendingEnable(true);
     } else if (val) {
@@ -318,16 +322,16 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         transition={{ duration: 0.25, delay: delay * 0.04 }}
         role="switch"
         aria-checked={checked}
-        aria-disabled={acBlocked || undefined}
+        aria-disabled={blocked || undefined}
         aria-label={title}
-        tabIndex={acBlocked ? -1 : 0}
+        tabIndex={blocked ? -1 : 0}
         onClick={onRowClick}
         onKeyDown={onRowKeyDown}
         data-testid={`row-tweak-${id}`}
         className={cn(
           "flex flex-row items-center justify-between rounded-xl border px-6 py-7 sm:px-7 sm:py-8 transition-all duration-200 group",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
-          acBlocked ? "cursor-not-allowed" : "cursor-pointer",
+          blocked ? "cursor-not-allowed opacity-65" : "cursor-pointer",
           checked
             ? "bg-emerald-500/8 border-emerald-500/40 shadow-[inset_0_0_14px_-6px_rgba(52,211,153,0.22)] hover:border-emerald-500/55 hover:bg-emerald-500/10"
             : "bg-black/40 border-white/5 hover:border-white/15 hover:bg-black/60"
@@ -418,25 +422,32 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
                 ON
               </span>
             )}
+            {appliedAt && (
+              <span className="text-[9px] font-semibold text-emerald-300/80">
+                Applied {new Date(appliedAt).toLocaleString()}
+              </span>
+            )}
           </div>
           <p className="text-[13px] text-zinc-500 leading-loose mt-3">{description}</p>
           {relevanceWarning && (
             <p className="text-[11px] text-zinc-600 mt-1 italic">Note: {relevanceWarning}</p>
           )}
         </div>
-        {acBlocked ? (
+        {blocked ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span
-                data-testid={`ac-blocked-${id}`}
+                data-testid={`${acBlocked ? "ac" : "hardware"}-blocked-${id}`}
                 className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold bg-zinc-900 text-zinc-500 border border-zinc-800 cursor-not-allowed"
               >
                 <Lock className="w-3 h-3" />
-                BLOCKED BY {blockingAC?.toUpperCase()}
+                {acBlocked ? `BLOCKED BY ${blockingAC?.toUpperCase()}` : "NOT FOR THIS PC"}
               </span>
             </TooltipTrigger>
             <TooltipContent side="left" className="max-w-xs text-xs leading-snug">
-              {blockingAC} is installed. Enabling this would get you kicked or banned, so the toggle is disabled. Uninstall {blockingAC} (or turn off the matching <code>ACDetect…</code> diagnostic toggle) to re-enable.
+              {acBlocked
+                ? <>{blockingAC} is installed. Enabling this could get you kicked or banned, so the toggle is disabled.</>
+                : compatibility.reason || "This tweak does not match the detected hardware."}
             </TooltipContent>
           </Tooltip>
         ) : (

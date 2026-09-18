@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","EnableMSIMode_Safe",
   "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force"];
@@ -305,10 +307,16 @@ export default function Nvidia() {
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
   const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id));
-
-  const enableAllNvidia = () => {
-    nvidiaSmartIds.forEach((k) => setTweak(k, true));
+  const applyBulk = async (ids: string[], label = "NVIDIA recommendations") => {
+    const result = await applyTweakBatch(ids);
+    toast({
+      title: isNative() ? `${result.appliedIds.length} ${label} applied` : `${result.selectedIds.length} ${label} selected`,
+      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+    });
   };
+
+  const enableAllNvidia = () => { void applyBulk(nvidiaSmartIds); };
 
   return (
     <AppLayout>
@@ -540,7 +548,7 @@ export default function Nvidia() {
               return (
                 <Button
                   variant="ghost" size="sm"
-                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  onClick={() => void applyBulk(recIds)}
                   disabled={allOn || noScan}
                   title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-registry"
@@ -582,7 +590,7 @@ export default function Nvidia() {
               return (
                 <Button
                   variant="ghost" size="sm"
-                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  onClick={() => void applyBulk(recIds)}
                   disabled={allOn || noScan}
                   title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-advanced"
@@ -625,7 +633,7 @@ export default function Nvidia() {
               return (
                 <Button
                   variant="ghost" size="sm"
-                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  onClick={() => void applyBulk(recIds)}
                   disabled={allOn || noScan}
                   title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-new"
@@ -669,7 +677,7 @@ export default function Nvidia() {
               return (
                 <Button
                   variant="ghost" size="sm"
-                  onClick={() => recIds.forEach(id => setTweak(id, true))}
+                  onClick={() => void applyBulk(recIds)}
                   disabled={allOn || noScan}
                   title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-lowend"
@@ -710,7 +718,7 @@ export default function Nvidia() {
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn || noScan}
+                <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn || noScan}
                   title={noScan ? "Run Instant Scan first" : undefined}
                   data-testid="button-enable-recommended-nvidia-dx"
                   className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed">

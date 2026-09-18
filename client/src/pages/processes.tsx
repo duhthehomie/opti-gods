@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -403,7 +405,7 @@ const ALL_TWEAKS = [
 const APPLY_ALL_ID = "ProcSvc_ApplyAll";
 
 export default function ProcessesPage() {
-  const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
+  const { tweaks, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const [scanning, setScanning] = useState(false);
 
@@ -434,15 +436,21 @@ export default function ProcessesPage() {
   const recommendedIds = ALL_TWEAKS.filter(t => t.recommended).map(t => t.id);
   const allRecommendedOn = recommendedIds.length > 0 && recommendedIds.every(id => tweaks[id]);
 
+  async function applyBulk(ids: string[]) {
+    try {
+      const result = await applyTweakBatch(ids);
+      toast({
+        title: isNative() ? `${result.appliedIds.length} process tweaks applied` : `${result.selectedIds.length} process tweaks selected`,
+        description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected process changes.",
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({ title: "Could not apply process recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
+  }
+
   function handleEnableRecommended() {
-    const updates: Record<string, boolean> = {};
-    recommendedIds.forEach(id => { updates[id] = true; });
-    updates[APPLY_ALL_ID] = true;
-    setAllTweaks({ ...tweaks, ...updates });
-    toast({
-      title: "Recommended services set to Manual",
-      description: `${recommendedIds.length} non-essential services will be stopped at next boot`,
-    });
+    void applyBulk([...recommendedIds, APPLY_ALL_ID]);
   }
 
   function renderSection(title: string, items: ServiceTweak[], color: string = "text-red-500") {
@@ -464,11 +472,7 @@ export default function ProcessesPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                const updates: Record<string, boolean> = {};
-                sectionRec.forEach(t => { updates[t.id] = true; });
-                setAllTweaks({ ...tweaks, ...updates });
-              }}
+              onClick={() => void applyBulk(sectionRec.map(t => t.id))}
               data-testid={`button-enable-recommended-${title.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all"
             >

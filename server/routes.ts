@@ -1618,13 +1618,14 @@ export async function registerRoutes(
         }
       }
     }
+    if (req.body?.mode === "best" && req.body?.preview === true && !isPro) {
+      const activeIds = await storage.getConsumedPerformanceTweakIds(userId);
+      return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), activeIds, ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
+    }
     // The free/native path is deliberately bounded. Pro receives the complete
     // hardware-compatible core preset, which can exceed 128 app tweaks.
     if (!ids.length || (!isPro && ids.length > 128) || ids.some(id => !eligibleAllowanceId(id))) {
       return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance" });
-    }
-    if (req.body?.mode === "best" && req.body?.preview === true && !isPro) {
-      return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...(await storage.getPerformanceAllowance(userId)), limit: 15 });
     }
     if (isPro) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
     try {
@@ -7405,7 +7406,13 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
     try {
        const nativeHeader = req.headers["x-native-auth"];
        const nativeUserId = typeof nativeHeader === "string" ? await validateNativeToken(nativeHeader) : null;
+       if (req.session.userId && nativeUserId && req.session.userId !== nativeUserId) {
+         return res.status(409).json({ error: "The browser and Windows app are signed in as different Discord users. Sign out of one account and rescan." });
+       }
        const discordUserId = req.session.userId ?? nativeUserId ?? null;
+       if (!discordUserId) {
+         return res.status(401).json({ error: "Discord login is required before saving a hardware scan." });
+       }
       // Resolve pro code from session token so admin can identify user by code
       let proCode: string | null = null;
       if (parsed.data.sessionToken) {

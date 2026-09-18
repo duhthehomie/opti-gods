@@ -12,3 +12,4 @@
 - [GitHub publish authentication](github-publish-auth.md) — GitHub App attachment may not replace stale GIT_ASKPASS credentials; verify the actual auth path before retrying pushes.
 - [Free tweak allowance security](free-tweak-allowance.md) — credits require successful native execution with one-use server authorization; selection, downloads, and Undo never alter usage.
 - [Social creative direction](social-creative-direction.md) — approved premium red/black gaming ads; app scenes must show the full interface, centered and uncropped.
+- [Website installer source](website-installer-source.md) — DOWNLOAD_URL overrides release detection; keep it current or the live Download button can stay pinned to an old installer.

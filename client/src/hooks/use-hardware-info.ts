@@ -66,6 +66,14 @@ export interface ScannedSysInfo {
   OsName?: string;
   OsBuild?: number;
   SystemModel?: string;
+  VRAM_MB?: number;
+  Motherboard?: string;
+  Chassis?: string;
+  CoolingType?: string;
+  RefreshHz?: number;
+  NicVendor?: string;
+  Anticheats?: string[];
+  IsLaptop?: boolean;
 }
 
 const SCAN_KEY = "optigods-sysinfo";
@@ -82,10 +90,12 @@ export function getScannedInfo(): ScannedSysInfo | null {
 
 export function saveScannedInfo(info: ScannedSysInfo) {
   localStorage.setItem(SCAN_KEY, JSON.stringify(info));
+  window.dispatchEvent(new Event("optigods:hardware-scan-changed"));
 }
 
 export function clearScannedInfo() {
   localStorage.removeItem(SCAN_KEY);
+  window.dispatchEvent(new Event("optigods:hardware-scan-changed"));
 }
 
 function detectGPUViaWebGL(): { gpuName: string; gpuVendor: string } {

@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isNative, scanTaskManager, readFivemLog, openExternal } from "@/lib/tauri-bridge";
 import { getTweakMeta } from "@/lib/tweak-registry";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { useToast } from "@/hooks/use-toast";
 
 interface GameEntry {
   id: string;
@@ -518,6 +520,7 @@ function getActiveServerInfo(): SavedServer | null {
 
 function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) => void }) {
   const { tweaks, setTweak } = useOptimizationStore();
+  const { toast } = useToast();
   const native = useMemo(() => isNative(), []);
 
   const [runningGame, setRunningGame] = useState<GameEntry | null>(null);
@@ -1152,9 +1155,14 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const allTweaksEnabled = hasSpecificTweaks
     ? gameTweakIds.every(id => !!(tweaks[id as keyof typeof tweaks]))
     : enabled;
-  const enableAllGameTweaks = () => {
-    setTweak(runningGame!.id, true);
-    if (hasSpecificTweaks) gameTweakIds.forEach(id => setTweak(id, true));
+  const enableAllGameTweaks = async () => {
+    const ids = [runningGame!.id, ...(hasSpecificTweaks ? gameTweakIds : [])];
+    try {
+      const result = await applyTweakBatch(ids);
+      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected game changes.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    } catch (error) {
+      toast({ title: "Could not enable game tweaks", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
   };
   const disableAllGameTweaks = () => {
     setTweak(runningGame!.id, false);
@@ -2841,10 +2849,14 @@ export default function GameDetection() {
   const enabledGames = visibleGames.filter(g => tweaks[g.id]);
   const disabledGames = visibleGames.filter(g => !tweaks[g.id]);
 
-  const handleEnableAll = () => {
-    const next = { ...useOptimizationStore.getState().tweaks };
-    visibleGames.forEach(g => { next[g.id] = true; });
-    setAllTweaks(next);
+  const { toast } = useToast();
+  const handleEnableAll = async () => {
+    try {
+      const result = await applyTweakBatch(visibleGames.map(g => g.id));
+      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected game changes.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    } catch (error) {
+      toast({ title: "Could not enable game tweaks", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
   };
 
   const handleDisableAll = () => {

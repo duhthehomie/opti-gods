@@ -18,6 +18,10 @@ export interface NativeTweakResult {
   undo_token: string | null;
   requires_reboot: boolean;
   via_powershell: boolean;
+  /** Stable classification for a failed native enable. */
+  error_kind?: "restore" | "auth" | "allowance" | "compatibility" | "execution";
+  /** Native stage that produced the failure. */
+  error_stage?: "restore" | "authorization" | "execution" | "result";
 }
 
 export interface NativeHardwareScan {
@@ -35,6 +39,11 @@ export interface NativeHardwareScan {
   nic_vendor: string | null;
   anticheats: string[];
   system_model?: string | null;
+  os_name?: string | null;
+  os_build?: number | null;
+  cpu_cores?: number | null;
+  cpu_threads?: number | null;
+  is_laptop?: boolean | null;
 }
 
 export interface NativeRestorePoint {

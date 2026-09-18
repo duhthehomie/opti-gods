@@ -4,9 +4,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api-base";
 import { isNative, openExternal } from "@/lib/tauri-bridge";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
-import type { HardwareInfo } from "@/hooks/use-hardware-info";
-import type { OsInfo } from "@/hooks/use-os-detection";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
@@ -1433,84 +1430,77 @@ function AdminPresetGenerator({
       || hw.codeRef.toLowerCase().includes(q);
   });
 
-  const buildFakeHW = (): HardwareInfo => {
-    const cpu = parseCpuModel(cpuModel);
-    // Use actual WMI-scanned thread/core counts when available — far more accurate than estimates
-    const cores = actualThreads > 0 ? actualThreads : cpu.threads;
-    const physCores = actualCores > 0 ? actualCores : cpu.cores;
-    const ram = parseInt(ramGB) || 16;
-    const isNvidia = gpuVendor === "nvidia";
-    const isAmdGpu = gpuVendor === "amd";
-    const isAmdApu = gpuVendor === "amd" && isLaptop && ram <= 16;
-    const isIntel = gpuVendor === "intel";
-    const isAMD = isAmdGpu || isAmdApu;
-    const gpuNameLower = gpuName.toLowerCase();
-    const nvidiaIsRTX = isNvidia && (gpuNameLower.includes("rtx") || gpuNameLower.includes(" 30") || gpuNameLower.includes(" 40") || gpuNameLower.includes(" 50"));
-    const nvidiaIsLowEnd = isNvidia && !nvidiaIsRTX;
-    const gpuLabel = gpuName || (isNvidia ? "NVIDIA GPU" : isAmdGpu ? "AMD GPU" : "Intel GPU");
-    const ramLabel = `${ram}GB`;
+  // V2.2 — buildSafePreset is the single canonical preset path. Both preview
+  // and downloads consume the response from this endpoint; no client-side
+  // recommendation list is allowed to add or replace server-selected core IDs.
+  type DirectHW = { gpuVendor: "nvidia"|"amd"|"intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11"|"win10"; isLaptop: boolean; cpuCores?: number; cpuThreads?: number };
+
+  const presetHardware = (hw: DirectHW) => {
+    const cpu = parseCpuModel(hw.cpuModel);
     return {
-      loading: false, scanned: true,
-      gpuName: gpuLabel, gpuVendor: gpuVendor,
-      cpuLabel: cpu.cpuLabel, cpuCores: cores, cpuPhysicalCores: physCores,
-      ramGB: ram, ramLabel, ramNote: "",
-      isNvidia, isAmdGpu, isAmdApu, isAMD, isIntel, isLaptop,
-      isAmd: isAMD,
-      nvidiaIsRTX, nvidiaIsLowEnd,
-      cpuBrand: cpu.brand, isRyzen: cpu.isRyzen, isIntelCore: cpu.isIntelCore,
+      gpuVendor: hw.gpuVendor,
+      gpuName: hw.gpuName,
+      cpuBrand: cpu.brand,
+      cpuLabel: hw.cpuModel,
+      cpuCores: hw.cpuThreads || cpu.threads,
       cpuGeneration: cpu.generation,
-      resolution: "1920x1080",
-      gpus: [],
-      hasIntegratedGpu: isIntel || isAmdApu,
-      hasDiscreteGpu: isNvidia || isAmdGpu,
-      isHybridGpu: false,
-      systemModel: "",
-      ramMhz: 0,
-    } as HardwareInfo;
+      ramGB: hw.ramGb,
+      osVersion: hw.osVersion,
+      isLaptop: hw.isLaptop,
+      hasDiscreteGpu: hw.gpuVendor === "nvidia" || hw.gpuVendor === "amd",
+    };
   };
 
-  const buildFakeOS = (): OsInfo => {
-    return {
-      loading: false,
-      os: osVersion === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
-      displayName: osVersion === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
-      isWindows: true,
-      isWindows11: osVersion === "win11",
-      isWindows10: osVersion === "win10",
-      build: osVersion === "win11" ? "22631" : "19045",
-    } as OsInfo;
+  const readServerError = async (res: Response, fallback: string) => {
+    try {
+      const body = await res.json() as { error?: string };
+      return body.error || fallback;
+    } catch {
+      return fallback;
+    }
   };
 
-  // V2.2 — buildSafePreset is the single canonical preset path. Admin previews
-  // the structured response (core + red opt-in expert section) before downloading.
-  // Generate preset, optionally with directly-supplied hw values (bypasses async state for load+generate)
-  type DirectHW = { gpuVendor: "nvidia"|"amd"|"intel"; gpuName: string; cpuModel: string; ramGb: number; osVersion: "win11"|"win10"; isLaptop: boolean };
+  const fetchSafePreset = async (hw: DirectHW, optInFlags: string[] = []) => {
+    const res = await fetch(apiUrl("/api/ai/preset"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
+      body: JSON.stringify({
+        hardware: presetHardware(hw),
+        goal: "balanced",
+        optInFlags,
+      }),
+    });
+    if (!res.ok) throw new Error(await readServerError(res, "Preset build failed"));
+    return (await res.json()) as SafePresetResponse;
+  };
+
+  const downloadPreset = async (preset: SafePresetResponse, gameIds: string[], filename: string, includeNvidiaPreset: boolean) => {
+    const tweakMap: Record<string, boolean> = {};
+    preset.core.forEach(id => { tweakMap[id] = true; });
+    preset.expert.forEach(id => { tweakMap[id] = true; });
+    gameIds.forEach(id => { tweakMap[id] = true; });
+    const res = await fetch(apiUrl("/api/script/download-bat"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
+      body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: includeNvidiaPreset ? "Balanced" : "" }),
+    });
+    if (!res.ok) throw new Error(await readServerError(res, "Script generation failed"));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return Object.keys(tweakMap).length;
+  };
 
   const generateFromHW = async (hw: DirectHW) => {
     setGenerating(true);
     try {
-      const cpu = parseCpuModel(hw.cpuModel);
-      const safePresetRes = await fetch(apiUrl("/api/ai/preset"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
-        body: JSON.stringify({
-          hardware: {
-            gpuVendor: hw.gpuVendor,
-            gpuName: hw.gpuName,
-            cpuBrand: cpu.brand,
-            cpuLabel: hw.cpuModel,
-            cpuCores: cpu.threads,
-            ramGB: hw.ramGb,
-            osVersion: hw.osVersion,
-            isLaptop: hw.isLaptop,
-            hasDiscreteGpu: hw.gpuVendor === "nvidia" || hw.gpuVendor === "amd",
-          },
-          goal: "balanced",
-          optInFlags: [],
-        }),
-      });
-      if (!safePresetRes.ok) throw new Error("Preset build failed");
-      const preset = (await safePresetRes.json()) as SafePresetResponse;
+      const preset = await fetchSafePreset(hw, []);
       setSafePreset(preset);
       // Pre-select all expert tweaks when includeAllExpert is on
       if (includeAllExpert) setAdminOptInIds(new Set(preset.expert));
@@ -1537,71 +1527,24 @@ function AdminPresetGenerator({
     });
   };
 
-  // One-click insane preset download per rig — no form interaction needed.
-  // Uses computeSmartRecs (max coverage) + all expert tweaks, defaults Win11.
+  // One-click preset download per rig — uses the same canonical response as
+  // the preview and main Generate action.
   const instantDownload = async (hw: CustomerHW, e: React.MouseEvent) => {
     e.stopPropagation();
     const vendor = (hw.gpuVendor && ["nvidia","amd","intel"].includes(hw.gpuVendor)) ? hw.gpuVendor as "nvidia"|"amd"|"intel" : "nvidia";
     const osVer: "win11"|"win10" = hw.osVersion === "win10" ? "win10" : "win11";
     setDownloadingRig(hw.codeRef);
     try {
-      const cpu = parseCpuModel(hw.cpuModel || "");
-      const isNvidia = vendor === "nvidia";
-      const isAmdGpu = vendor === "amd";
-      const isIntel = vendor === "intel";
-      const gpuNameLower = (hw.gpuName || "").toLowerCase();
-      const nvidiaIsRTX = isNvidia && (gpuNameLower.includes("rtx") || gpuNameLower.includes(" 30") || gpuNameLower.includes(" 40") || gpuNameLower.includes(" 50"));
-      const fakeHW = {
-        loading: false, scanned: true,
-        gpuName: hw.gpuName || (isNvidia ? "NVIDIA GPU" : isAmdGpu ? "AMD GPU" : "Intel GPU"),
-        gpuVendor: vendor,
-        cpuLabel: hw.cpuModel || "Unknown CPU",
-        cpuCores: hw.cpuThreads ?? cpu.threads,
-        cpuPhysicalCores: hw.cpuCores ?? cpu.cores,
-        ramGB: hw.ramGb || 16, ramLabel: `${hw.ramGb || 16}GB`, ramNote: "",
-        isNvidia, isAmdGpu, isAmdApu: false, isAMD: isAmdGpu, isIntel, isLaptop: hw.isLaptop || false,
-        isAmd: isAmdGpu, nvidiaIsRTX, nvidiaIsLowEnd: isNvidia && !nvidiaIsRTX,
-        cpuBrand: cpu.brand, isRyzen: cpu.isRyzen, isIntelCore: cpu.isIntelCore,
-        cpuGeneration: cpu.generation, resolution: "1920x1080", gpus: [],
-        hasIntegratedGpu: isIntel, hasDiscreteGpu: isNvidia || isAmdGpu,
-        isHybridGpu: false, systemModel: "", ramMhz: hw.ramMhz || 0,
-      } as HardwareInfo;
-      const fakeOS = {
-        loading: false,
-        os: osVer === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
-        displayName: osVer === "win11" ? "Windows 11 Pro (23H2)" : "Windows 10 Pro (22H2)",
-        isWindows: true, isWindows11: osVer === "win11", isWindows10: osVer === "win10",
-        build: osVer === "win11" ? "22631" : "19045",
-      } as OsInfo;
-      const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakMap: Record<string, boolean> = {};
-      recs.ids.forEach(id => { tweakMap[id] = true; });
-      // All expert tweaks — admin preset, no safety holding back
-      const expertCandidates = [
-        "DisableMemoryCompression", "MemDisableCompression", "DisablePagefileEncryption",
-        "DisableDefender", "SysHypervisorOff",
-        ...(osVer === "win11" ? ["Win11DisableVBS", "Win11DisableHVCI"] : []),
-        ...(fakeHW.isLaptop && fakeHW.isIntelCore ? ["Lap_Intel_DisableECores"] : []),
-      ];
-      expertCandidates.forEach(id => { tweakMap[id] = true; });
-      // Game pack tweaks selected by admin toggle
-      includedGames.forEach(g => { (GAME_PACKS[g]?.ids ?? []).forEach(id => { tweakMap[id] = true; }); });
-      const res = await fetch(apiUrl("/api/script/download-bat"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
-        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
-      });
-      if (!res.ok) throw new Error("Script generation failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
+      const preset = await fetchSafePreset({
+        gpuVendor: vendor, gpuName: hw.gpuName || "", cpuModel: hw.cpuModel || "",
+        ramGb: hw.ramGb || 16, osVersion: osVer, isLaptop: hw.isLaptop || false,
+        cpuCores: hw.cpuCores || undefined, cpuThreads: hw.cpuThreads || undefined,
+      }, includeAllExpert ? [] : Array.from(adminOptInIds));
+      const selectedExpert = includeAllExpert ? preset.expert : preset.expert.filter(id => adminOptInIds.has(id));
       const safe = (hw.gpuName || vendor).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 24);
-      const gamesSuffix = includedGames.size > 0 ? `_${Array.from(includedGames).join("+")}` : "";
-      a.download = `OptiGods_${safe}_${osVer.toUpperCase()}${gamesSuffix}.bat`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({ title: `⚡ ${Object.keys(tweakMap).length} tweaks — downloaded`, description: `${hw.gpuName || vendor.toUpperCase()} · ${osVer === "win11" ? "Win11" : "Win10"}` });
+      const games = Array.from(includedGames).flatMap(g => GAME_PACKS[g]?.ids ?? []);
+      const count = await downloadPreset({ ...preset, expert: selectedExpert }, games, `OptiGods_${safe}_${osVer.toUpperCase()}.bat`, vendor === "nvidia");
+      toast({ title: `⚡ ${count} tweaks — downloaded`, description: `${hw.gpuName || vendor.toUpperCase()} · ${osVer === "win11" ? "Win11" : "Win10"}` });
     } catch (err) {
       toast({ title: "Download failed", description: String(err), variant: "destructive" });
     } finally {
@@ -1612,58 +1555,17 @@ function AdminPresetGenerator({
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const fakeHW = buildFakeHW();
-      const fakeOS = buildFakeOS();
-
-      // computeSmartRecs sweeps ALL TWEAK_REGISTRY entries via its catch-all pass,
-      // giving the most comprehensive hardware-gated preset possible (600+ on some rigs).
-      const recs = computeSmartRecs(fakeHW, fakeOS);
-      const tweakMap: Record<string, boolean> = {};
-      recs.ids.forEach(id => { tweakMap[id] = true; });
-
-      // Include expert / risk tweaks when the admin "include all expert" toggle is on.
-      if (includeAllExpert) {
-        const expertCandidates = [
-          "DisableMemoryCompression", "MemDisableCompression", "DisablePagefileEncryption",
-          "DisableDefender", "SysHypervisorOff",
-          ...(fakeOS.isWindows11 ? ["Win11DisableVBS", "Win11DisableHVCI"] : []),
-          ...(fakeHW.isLaptop && fakeHW.isIntelCore ? ["Lap_Intel_DisableECores"] : []),
-        ];
-        expertCandidates.forEach(id => { tweakMap[id] = true; });
-        // Also pull any expert IDs from the V2.2 safePreset preview if it was loaded.
-        if (safePreset) safePreset.expert.forEach(id => { tweakMap[id] = true; });
-      } else {
-        adminOptInIds.forEach(id => { tweakMap[id] = true; });
-      }
-
-      // Game pack tweaks selected by admin toggle
-      includedGames.forEach(g => { (GAME_PACKS[g]?.ids ?? []).forEach(id => { tweakMap[id] = true; }); });
-
-      // Belt-and-suspenders: merge safePreset core so server-resolved IDs aren't missed.
-      if (safePreset) safePreset.core.forEach(id => { tweakMap[id] = true; });
-
-      const tweakIds = Object.keys(tweakMap);
-
-      const res = await fetch(apiUrl("/api/script/download-bat"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
-        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
-      });
-
-      if (!res.ok) throw new Error("Script generation failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `OptiGods_Custom_Preset.bat`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      setGenerated({ name: recs.profile, tweakCount: tweakIds.length });
+      const preset = await fetchSafePreset({
+        gpuVendor, gpuName, cpuModel, ramGb: parseInt(ramGB) || 16,
+        osVersion, isLaptop, cpuCores: actualCores || undefined, cpuThreads: actualThreads || undefined,
+      }, includeAllExpert ? [] : Array.from(adminOptInIds));
+      setSafePreset(preset);
+      const selectedExpert = includeAllExpert ? preset.expert : preset.expert.filter(id => adminOptInIds.has(id));
+      const games = Array.from(includedGames).flatMap(g => GAME_PACKS[g]?.ids ?? []);
+      const count = await downloadPreset({ ...preset, expert: selectedExpert }, games, "OptiGods_Custom_Preset.bat", gpuVendor === "nvidia");
+      setGenerated({ name: preset.profile, tweakCount: count });
       toast({
-        title: `Preset generated — ${tweakIds.length} tweaks`,
+        title: `Preset generated — ${count} tweaks`,
         description: `Send the .bat file to the user — they just double-click it.`,
       });
     } catch (e) {
@@ -1701,7 +1603,7 @@ function AdminPresetGenerator({
       const res = await fetch(apiUrl("/api/script/download-bat"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": apiKey },
-        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "Balanced" }),
+        body: JSON.stringify({ tweaks: tweakMap, nvidiaPreset: "" }),
       });
       if (!res.ok) throw new Error("Fix generation failed");
       const blob = await res.blob();
@@ -2038,29 +1940,22 @@ function AdminPresetGenerator({
       </div>
 
       {/* Preview */}
-      {(() => {
-        const fakeHW = buildFakeHW();
-        const fakeOS = buildFakeOS();
-        const recs = computeSmartRecs(fakeHW, fakeOS);
-        return (
+      {safePreset ? (
           <div className="rounded-xl border border-white/5 bg-zinc-900/40 p-4 space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Preset Preview</p>
             <div className="flex flex-wrap gap-2">
-              <span className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{recs.ids.size} tweaks</span>
-              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.profile}</span>
-              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.gpuLabel}</span>
-              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.cpuLabel}</span>
-              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{recs.osLabel}</span>
+              <span className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{safePreset.core.length + safePreset.expert.length} tweaks</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{safePreset.profile}</span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs">{safePreset.hardwareSummary}</span>
               {isLaptop && <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">Laptop</span>}
             </div>
             <div className="space-y-1 max-h-24 overflow-y-auto">
-              {recs.reasons.slice(0, 6).map((r, i) => (
+              {safePreset.reasons.slice(0, 6).map((r, i) => (
                 <p key={i} className="text-[10px] text-zinc-500 flex gap-1.5"><span className="text-red-500/50 shrink-0">•</span>{r}</p>
               ))}
             </div>
           </div>
-        );
-      })()}
+      ) : null}
 
       {/* V2.2 — Structured safe preset preview (rendered after first generate). */}
       {safePreset && (

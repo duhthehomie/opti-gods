@@ -11,6 +11,8 @@ import {
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 interface TweakEntry {
   key: string;
@@ -161,10 +163,10 @@ function Section({ section }: { section: SectionDef }) {
   const sectionKeys = section.tweaks.map((t) => t.key);
   const enabledCount = sectionKeys.filter((k) => tweaks[k]).length;
 
-  const enableRecommended = () => {
+  const enableRecommended = async () => {
     const recommended = section.tweaks.filter((t) => t.recommended);
-    recommended.forEach((t) => setTweak(t.key, true));
-    toast({ title: `${recommended.length} recommended tweaks enabled`, description: section.label });
+    const result = await applyTweakBatch(recommended.map(t => t.key));
+    toast({ title: isNative() ? `${result.appliedIds.length} recommended tweaks applied` : `${result.selectedIds.length} recommended tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   };
 
   return (
@@ -220,10 +222,10 @@ export default function WinTitus() {
   const allKeys = SECTIONS.flatMap((s) => s.tweaks.map((t) => t.key));
   const enabledTotal = allKeys.filter((k) => tweaks[k]).length;
 
-  const enableAll = () => {
-    SECTIONS.flatMap((s) => s.tweaks.filter((t) => t.recommended)).forEach((t) => setTweak(t.key, true));
-    const count = SECTIONS.flatMap((s) => s.tweaks.filter((t) => t.recommended)).length;
-    toast({ title: `${count} recommended tweaks enabled`, description: "Review your selections, then download your script from the top bar." });
+  const enableAll = async () => {
+    const ids = SECTIONS.flatMap((s) => s.tweaks.filter((t) => t.recommended)).map(t => t.key);
+    const result = await applyTweakBatch(ids);
+    toast({ title: isNative() ? `${result.appliedIds.length} WinTitus tweaks applied` : `${result.selectedIds.length} WinTitus tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   };
 
   return (

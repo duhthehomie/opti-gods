@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Swords, AlertTriangle, Info, FileCode, Zap, MonitorPlay, Cpu } from "lucide-react";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
 
 const ALL_RUST_IDS = [
   "RustFPSUncap", "RustDisableVSync",
@@ -47,6 +50,7 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
   tweaks: Record<string, boolean>; setTweak: (id: string, v: boolean) => void;
   smartRecIds?: Set<string>;
 }) {
+  const { toast } = useToast();
   const base = SECTION_RECOMMENDED[sectionKey] || [];
   const ids = smartRecIds ? base.filter(id => smartRecIds.has(id)) : base;
   const allOn = ids.length > 0 && ids.every(id => tweaks[id]);
@@ -59,7 +63,11 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
       <Button
         size="sm"
         variant={allOn ? "default" : "outline"}
-        onClick={() => ids.forEach(id => setTweak(id, true))}
+        onClick={() => void applyTweakBatch(ids).then(result => toast({
+          title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`,
+          description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}.` : "Download and run the .bat to apply them.",
+          variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+        }))}
         className={cn(
           "h-6 px-2.5 text-[10px] font-bold uppercase tracking-wide gap-1.5",
           allOn

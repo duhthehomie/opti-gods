@@ -47,8 +47,8 @@ export interface SafePreset {
  * They are still legal tweaks, but the AI/admin generators must NEVER include
  * them in `core` — only in `expert` and only when explicitly opted in.
  *
- * - EnableMSIMode: V1 BSOD `SYSTEM_THREAD_EXCEPTION_NOT_HANDLED`
- *   (use the safer `EnableMSIMode_Safe` from the V2.2 driver-reapply set).
+ * - EnableMSIMode: V1 BSOD `SYSTEM_THREAD_EXCEPTION_NOT_HANDLED`.
+ *   No MSI-mode action is auto-selected; capability must be validated manually.
  * - DisableIPv6: V1 FiveM `productId != ProductID::INVALID` crash; also breaks
  *   Discord voice / Xbox party chat / Rockstar entitlement.
  * - SetTimerResolution: V1 boot hang on Ryzen APUs / Intel chipsets
@@ -101,12 +101,43 @@ function startsWithAny(id: string, prefixes: readonly string[]): boolean {
  * (Win32PrioritySeparation, NetDNSCloudflare, etc.) are not gated by GPU
  * vendor — only the vendor-prefixed families are.
  */
-function isHardwareCompatible(id: string, hw: PresetHardware): { ok: boolean; reason?: string } {
+export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: boolean; reason?: string } {
   const isNvidiaTweak = startsWithAny(id, NVIDIA_PREFIXES);
-  const isAmdDgpuTweak = startsWithAny(id, AMD_DGPU_PREFIXES) && !startsWithAny(id, AMD_IGPU_PREFIXES);
+  const isAmdCpuTweak = id.startsWith("AmdCpu");
+  const isAmdDgpuTweak = startsWithAny(id, AMD_DGPU_PREFIXES) && !startsWithAny(id, AMD_IGPU_PREFIXES) && !isAmdCpuTweak;
   const isAmdIgpuTweak = startsWithAny(id, AMD_IGPU_PREFIXES);
   const isIntelIgpuTweak = startsWithAny(id, INTEL_IGPU_PREFIXES);
   const isGenericIgpuTweak = startsWithAny(id, GENERIC_IGPU_PREFIXES) && !isAmdIgpuTweak && !isIntelIgpuTweak;
+  const cpu = hw.cpuLabel ?? "";
+
+  if (isAmdCpuTweak && hw.cpuBrand !== "amd") {
+    return { ok: false, reason: `AMD CPU tweak skipped — detected CPU brand is ${hw.cpuBrand}` };
+  }
+  if (id.startsWith("Zen5") && (hw.cpuBrand !== "amd" || !/\b(?:ryzen(?:\s+ai)?\s+)?9\d{3}\b|\bryzen\s+ai\s+(?:9\s+)?(?:hx\s+)?3\d{2}\b/i.test(cpu))) {
+    return { ok: false, reason: "Zen 5 tweak skipped — a supported Ryzen 9000 or Ryzen AI 300 CPU was not detected" };
+  }
+  if (id.startsWith("Arrow") && (hw.cpuBrand !== "intel" || !/\bcore\s+ultra\s+[3579]\s+2\d{2}\b|arrow\s*lake|lunar\s*lake/i.test(cpu))) {
+    return { ok: false, reason: "Arrow/Lunar Lake tweak skipped — an Intel Core Ultra 200-series CPU was not detected" };
+  }
+  if (id.startsWith("FiveM3500") && (hw.cpuBrand !== "amd" || !/\bryzen\s+5\s+3500(?:x|u|h)?\b/i.test(cpu))) {
+    return { ok: false, reason: "Ryzen 5 3500 tweak skipped — matching CPU was not detected" };
+  }
+  if (id.startsWith("FiveM5600") && (hw.cpuBrand !== "amd" || !/\bryzen\s+5\s+5600(?:x|g|u|h)?\b/i.test(cpu))) {
+    return { ok: false, reason: "Ryzen 5 5600 tweak skipped — matching CPU was not detected" };
+  }
+  if (id.startsWith("FiveMIntel14") && (hw.cpuBrand !== "intel" || !/\b(?:core\s+)?i[579]-?14\d{3}[a-z]{0,2}\b/i.test(cpu))) {
+    return { ok: false, reason: "Intel 14th-gen tweak skipped — matching CPU was not detected" };
+  }
+
+  if (id === "EnableHAGS") {
+    const gpu = hw.gpuName ?? "";
+    const supportedGpu =
+      (hw.gpuVendor === "nvidia" && /rtx\s*(20|30|40|50)\d{2}/i.test(gpu))
+      || (hw.gpuVendor === "amd" && /\brx\s*[6-9]\d{3}\b/i.test(gpu));
+    if (hw.osVersion !== "win11" || !supportedGpu) {
+      return { ok: false, reason: "HAGS skipped — requires Windows 11 with RTX 20-series+ or Radeon RX 6000-series+" };
+    }
+  }
 
   if (isNvidiaTweak && hw.gpuVendor !== "nvidia") {
     return { ok: false, reason: `NVIDIA tweak skipped — detected GPU vendor is ${hw.gpuVendor}` };
@@ -310,7 +341,7 @@ const GAME_DETECT_PACKS: string[] = [
 const SYSTEM_EXTRA: string[] = [
   "DisableAutoMaintenance", "DisableCTFMonTracking",
   "DisableSearchIndexer", "DisableTelemetry",
-  "OOShutupPrivacy", "EnableMSIMode_Safe",
+  "OOShutupPrivacy",
   "ToolDPCLatencyCheck",
 ];
 
@@ -832,9 +863,14 @@ export function buildSafePreset(
  */
 export function hardwareFromRig(rig: {
   cpu: string;
+  cpuCores: number | null;
+  cpuThreads: number | null;
   gpu: string;
   ramGb: number | null;
   chassis: string | null;
+  isLaptop: boolean | null;
+  osName: string | null;
+  osBuild: number | null;
   refreshHz: number | null;
 }): PresetHardware {
   const gpuLower = rig.gpu.toLowerCase();
@@ -848,7 +884,11 @@ export function hardwareFromRig(rig: {
   if (cpuLower.includes("intel") || /\bi[3579]-/.test(cpuLower) || cpuLower.includes("core ultra")) cpuBrand = "intel";
   else if (cpuLower.includes("ryzen") || cpuLower.includes("amd") || cpuLower.includes("threadripper")) cpuBrand = "amd";
 
-  const isLaptop = !!rig.chassis && /laptop|notebook|portable/i.test(rig.chassis);
+  const isLaptop = rig.isLaptop ?? (!!rig.chassis && /laptop|notebook|portable/i.test(rig.chassis));
+  const osVersion: PresetOsVersion =
+    (rig.osBuild ?? 0) >= 22000 || /windows\s*11/i.test(rig.osName ?? "") ? "win11"
+    : (rig.osBuild ?? 0) >= 10240 || /windows\s*10/i.test(rig.osName ?? "") ? "win10"
+    : "unknown";
   // Heuristic: if GPU mentions RTX/RX-discrete it's a dGPU even on a laptop.
   const hasDiscreteGpu = gpuVendor === "nvidia"
     || (gpuVendor === "amd" && /\brx\s*\d{3,4}/i.test(rig.gpu));
@@ -858,8 +898,9 @@ export function hardwareFromRig(rig: {
     gpuName: rig.gpu,
     cpuBrand,
     cpuLabel: rig.cpu,
+    cpuCores: rig.cpuCores ?? rig.cpuThreads ?? undefined,
     ramGB: rig.ramGb ?? undefined,
-    osVersion: "unknown", // hardware_rigs doesn't track OS — caller may override
+    osVersion,
     isLaptop,
     hasDiscreteGpu,
   };

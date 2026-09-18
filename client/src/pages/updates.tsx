@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Announcement = {
   id: number;
@@ -66,13 +68,20 @@ function TweakDiffPanel({
   const newOnes = tweakIds.filter(id => !tweaks[id]);
   const allDone = newOnes.length === 0;
 
-  const applyNew = () => {
-    newOnes.forEach(id => setTweak(id, true));
-    setApplied(true);
-    toast({
-      title: `${newOnes.length} new tweak${newOnes.length !== 1 ? "s" : ""} applied!`,
-      description: "Your tweak selection has been updated. Download your script to run them.",
-    });
+  const applyNew = async () => {
+    try {
+      const result = await applyTweakBatch(newOnes);
+      setApplied(true);
+      toast({
+        title: isNative() ? `${result.appliedIds.length} new tweaks applied` : `${result.selectedIds.length} new tweaks selected`,
+        description: isNative()
+          ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only choices selected` : ""}.`
+          : "Download and run the .bat to apply the selected tweaks.",
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({ title: "Could not apply new tweaks", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
   };
 
   const downloadUpdateScript = async () => {

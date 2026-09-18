@@ -262,3 +262,17 @@ mtime_ms = 1789099430144
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/f6b63aad-b816-42c0-a82c-cf0abfd58e21/f592ca1a-54df-4646-add5-e288d4164ceb"
 storage_version_token = "1789099453303397"
 content_type = "video/mp4"
+
+[[outputs]]
+id = "Tv45mPfQC9LmLMYK8j6rq"
+uri = "file://marketing/discord/opti-gods-loading-splash.gif"
+type = "image"
+title = "Opti Gods Loading Splash GIF"
+description = "Discord-ready animated loading splash for partnership advertisements. 800×374, 6.6 seconds, 433 KB."
+logical_id = "ba12faf2-42ad-4f2e-a267-7d2a37c61596"
+content_hash = "sha256:a8cd5afa419460295eea570ed821e26c2f9f7c2c2b5dc885db0566c86689e860"
+size = 443377
+mtime_ms = 1789102415673
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:28415566-ef27-431a-9269-f09c9a2b3db0/ba12faf2-42ad-4f2e-a267-7d2a37c61596/8a11fcd7-4b0b-4860-82c4-07ff69ef3c1d"
+storage_version_token = "1789102421254815"
+content_type = "image/gif"

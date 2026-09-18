@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { saveScannedInfo, clearScannedInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredToken } from "@/lib/pro-status";
-import { isNative, scanHardware } from "@/lib/tauri-bridge";
+import { getNativeAuthToken, isNative, scanHardware } from "@/lib/tauri-bridge";
 
 function detectGpuVendor(gpuName: string): "nvidia" | "amd" | "intel" {
   const n = (gpuName || "").toLowerCase();
@@ -39,6 +39,34 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
       isLaptop: false,
     }),
   }).catch(() => {});
+  // The V2 hardware-rig contract is the source used by hardware-aware Best 15.
+  // Do not send a partial browser scan here: that endpoint intentionally
+  // requires native-quality CPU/GPU data.
+  if (parsed.CPU && parsed.GPU) {
+    void getNativeAuthToken().then(nativeToken => fetch(apiUrl("/api/hardware/scan"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(nativeToken ? { "X-Native-Auth": nativeToken } : {}) },
+      body: JSON.stringify({
+        cpu: parsed.CPU,
+        cpuCores: parsed.Cores,
+        cpuThreads: parsed.Threads,
+        gpu: parsed.GPU,
+        vramMb: parsed.VRAM_MB,
+        ramGb: parsed.RAM_GB,
+        ramMhz: parsed.RAM_MHz,
+        motherboard: parsed.Motherboard,
+        chassis: parsed.Chassis,
+        coolingType: parsed.CoolingType,
+        refreshHz: parsed.RefreshHz,
+        nicVendor: parsed.NicVendor,
+        anticheats: parsed.Anticheats,
+        osName: parsed.OsName,
+        osBuild: parsed.OsBuild,
+        systemModel: parsed.SystemModel,
+        isLaptop: parsed.IsLaptop,
+      }),
+    })).catch(() => {});
+  }
 }
 
 export const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $cs=Get-WmiObject Win32_ComputerSystem; $ram=[Math]::Round($cs.TotalPhysicalMemory/1GB,0); $mfr=$cs.Manufacturer.Trim();$mdl=$cs.Model.Trim();$sysModel=if($mdl -like "$mfr *" -or $mdl -eq $mfr){$mdl}else{"$mfr $mdl".Trim()}; $ramMhz=[int](((Get-WmiObject Win32_PhysicalMemory -EA SilentlyContinue) | ForEach-Object { [Math]::Max([int]$_.ConfiguredClockSpeed,[int]$_.Speed) }) | Measure-Object -Maximum).Maximum; $os=Get-WmiObject Win32_OperatingSystem; $osBuild=[int]$os.BuildNumber; $osName=$os.Caption.Trim(); $dir=if(Test-Path "$env:USERPROFILE\\Desktop"){"$env:USERPROFILE\\Desktop"}else{"$env:TEMP"}; $base=$dir+"\\OptiGods-HW-Scan"; $path=$base+".json"; $n=2; while(Test-Path $path){$path=$base+"_"+$n+".json";$n++}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram;RAM_MHz=$ramMhz;OsName=$osName;OsBuild=$osBuild;SystemModel=$sysModel}|ConvertTo-Json|Out-File $path -Encoding utf8; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
@@ -133,7 +161,21 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
       const parsed: ScannedSysInfo = {
         GPU: native.gpu,
         CPU: native.cpu,
+        Cores: native.cpu_cores ?? undefined,
+        Threads: native.cpu_threads ?? undefined,
         RAM_GB: native.ram_gb ?? undefined,
+        RAM_MHz: native.ram_mhz ?? undefined,
+        VRAM_MB: native.vram_mb ?? undefined,
+        Motherboard: native.motherboard ?? undefined,
+        Chassis: native.chassis ?? undefined,
+        CoolingType: native.cooling_type ?? undefined,
+        RefreshHz: native.refresh_hz ?? undefined,
+        NicVendor: native.nic_vendor ?? undefined,
+        Anticheats: native.anticheats,
+        SystemModel: native.system_model ?? undefined,
+        OsName: native.os_name ?? undefined,
+        OsBuild: native.os_build ?? undefined,
+        IsLaptop: native.is_laptop ?? undefined,
       };
       saveScannedInfo(parsed);
       uploadHardwareToServer(parsed);

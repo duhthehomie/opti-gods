@@ -5,7 +5,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { useLiveStats } from "@/hooks/use-live-stats";
-import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile, getNativeAuthToken } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useGenerateScript } from "@/hooks/use-script";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
 const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
 const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
@@ -380,7 +381,7 @@ function SmartRecsBreakdown() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const recs = computeSmartRecs(hw, os);
-  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const [applied, setApplied] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -394,16 +395,21 @@ function SmartRecsBreakdown() {
   const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
   const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
 
-  function handleApply() {
-    const next = { ...tweaks };
-    missingSafeIds.forEach(id => { next[id] = true; });
-    setAllTweaks(next);
-    setApplied(true);
-    toast({
-      title: "Missing tweaks applied",
-      description: `${missingSafeIds.length} tweaks enabled — download your script from any tab.`,
-    });
-    setTimeout(() => setApplied(false), 3000);
+  async function handleApply() {
+    try {
+      const result = await applyTweakBatch(missingSafeIds);
+      setApplied(true);
+      toast({
+        title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`,
+        description: isNative()
+          ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.`
+          : "Download and run the .bat to apply the selected tweaks.",
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+      setTimeout(() => setApplied(false), 3000);
+    } catch (error) {
+      toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
   }
 
   async function handleDownloadMissing() {
@@ -1186,15 +1192,27 @@ export default function SystemScanPage() {
           saveScannedInfo({
             GPU:         data.gpu  || undefined,
             CPU:         data.cpu  || undefined,
+            Cores:       data.cpu_cores ?? undefined,
+            Threads:     data.cpu_threads ?? undefined,
             RAM_GB:      data.ram_gb    ?? undefined,
             RAM_MHz:     data.ram_mhz   ?? undefined,
+            VRAM_MB:     data.vram_mb ?? undefined,
+            Motherboard: data.motherboard ?? undefined,
+            Chassis:     data.chassis ?? undefined,
+            CoolingType: data.cooling_type ?? undefined,
+            RefreshHz:   data.refresh_hz ?? undefined,
+            NicVendor:   data.nic_vendor ?? undefined,
+            Anticheats:  data.anticheats,
+            OsName:      data.os_name ?? undefined,
+            OsBuild:     data.os_build ?? undefined,
             SystemModel: data.system_model ?? undefined,
+            IsLaptop:    data.is_laptop ?? undefined,
           });
           // Submit to backend so admin can see this rig and generate a preset
           const sessionToken = localStorage.getItem("optigods_session_v2") ?? undefined;
-          fetch("/api/hardware/scan", {
+          void getNativeAuthToken().then(nativeToken => fetch(apiUrl("/api/hardware/scan"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(nativeToken ? { "X-Native-Auth": nativeToken } : {}) },
             credentials: "include",
             body: JSON.stringify({
               cpu: data.cpu,
@@ -1208,9 +1226,15 @@ export default function SystemScanPage() {
               refreshHz: data.refresh_hz ?? undefined,
               nicVendor: data.nic_vendor ?? undefined,
               anticheats: data.anticheats ?? [],
+              cpuCores: data.cpu_cores ?? undefined,
+              cpuThreads: data.cpu_threads ?? undefined,
+              osName: data.os_name ?? undefined,
+              osBuild: data.os_build ?? undefined,
+              systemModel: data.system_model ?? undefined,
+              isLaptop: data.is_laptop ?? undefined,
               sessionToken,
             }),
-          }).catch(() => {}); // fire-and-forget — never block the UI
+          })).catch(() => {}); // fire-and-forget — never block the UI
         }
       })
       .catch(err => { setScanError(String(err)); })

@@ -3,6 +3,11 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { isNative } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
 
 interface V2TweakSectionProps {
   heading: string;
@@ -24,6 +29,8 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
   const tweaks = useOptimizationStore(s => s.tweaks);
   const setTweak = useOptimizationStore(s => s.setTweak);
   const a = ACCENTS[accent];
+  const [applying, setApplying] = useState(false);
+  const { toast } = useToast();
 
   const items = ids
     .map(id => {
@@ -49,13 +56,28 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
         {recIds.length > 0 && (
           <Button
             variant="ghost" size="sm"
-            onClick={() => recIds.forEach(id => setTweak(id, true))}
-            disabled={allRecOn}
+            onClick={() => {
+              if (applying) return;
+              setApplying(true);
+              const compatible = recIds.filter(id => !tweaks[id] && getTweakCompatibility(id).ok);
+              void applyTweakBatch(compatible).then(result => {
+                toast({
+                  title: isNative() ? `${result.appliedIds.length} recommended tweaks applied` : `${result.selectedIds.length} recommendations selected`,
+                  description: isNative()
+                    ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}.`
+                    : "Download and run the .bat to apply the selected tweaks.",
+                  variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+                });
+              }).catch(error => {
+                toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+              }).finally(() => setApplying(false));
+            }}
+            disabled={allRecOn || applying}
             data-testid={`button-enable-recommended-v2-${testIdSuffix}`}
             className={`text-[10px] font-bold uppercase tracking-wider ${a.text} ${a.hover} ${a.bg} border ${a.border} px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             <CheckCircle2 className="w-3 h-3 mr-1" />
-            {allRecOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+            {applying ? "Applying…" : allRecOn ? "Recommended ON" : `${isNative() ? "Apply" : "Select"} Recommended (${recIds.length})`}
           </Button>
         )}
       </div>

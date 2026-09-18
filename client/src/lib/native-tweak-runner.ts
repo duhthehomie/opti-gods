@@ -1,0 +1,126 @@
+import { apiUrl } from "@/lib/api-base";
+import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids.ts";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+
+const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
+const RESTORE_CREATED_KEY = "optigods-native-restore-created";
+
+function saveUndoToken(id: string, token: string | null) {
+  try {
+    const all = JSON.parse(localStorage.getItem(NATIVE_UNDO_KEY) || "{}") as Record<string, string>;
+    if (token) all[id] = token;
+    localStorage.setItem(NATIVE_UNDO_KEY, JSON.stringify(all));
+  } catch {
+    // Applied state remains available for this session even if local storage is unavailable.
+  }
+}
+
+export type BulkTweakResult = {
+  appliedIds: string[];
+  selectedIds: string[];
+  unsupportedIds: string[];
+  failures: { id: string; message: string }[];
+};
+
+export async function applyTweakBatch(ids: readonly string[]): Promise<BulkTweakResult> {
+  const uniqueIds = Array.from(new Set(ids));
+  const native = isNative();
+  const nativeAuth = native ? await getNativeAuthToken() : null;
+  const allowanceResponse = await fetch(apiUrl("/api/performance-allowance"), {
+    headers: nativeAuth ? { "X-Native-Auth": nativeAuth } : undefined,
+  }).catch(() => null);
+  if (!allowanceResponse?.ok) {
+    throw new Error(native ? "Sign in to the Windows app before enabling tweaks." : "Sign in with Discord before selecting tweaks.");
+  }
+  const allowance = await allowanceResponse.json() as { pro: boolean; remaining: number | null };
+  const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
+  const entitledIds = allowance.pro
+    ? compatibleIds
+    : compatibleIds.filter(id => NATIVE_TWEAK_ID_SET.has(id)).slice(0, Math.max(0, allowance.remaining ?? 0));
+  const supportedIds = entitledIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+  const scriptOnlyIds = allowance.pro ? entitledIds.filter(id => !NATIVE_TWEAK_ID_SET.has(id)) : [];
+  const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
+
+  if (!native) {
+    for (const id of entitledIds) useOptimizationStore.getState().setTweak(id, true);
+    return { appliedIds: [], selectedIds: entitledIds, unsupportedIds, failures: [] };
+  }
+
+  if (!nativeAuth) {
+    throw new Error("Sign in to the Windows app before applying tweaks.");
+  }
+
+  // Script-only Pro choices are selection intent and do not need a restore
+  // point yet. Keep them available even when native restore-point creation
+  // fails, but never mark them Applied.
+  for (const id of scriptOnlyIds) useOptimizationStore.getState().setTweak(id, true);
+  if (!supportedIds.length) {
+    return { appliedIds: [], selectedIds: scriptOnlyIds, unsupportedIds, failures: [] };
+  }
+
+  if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
+    try {
+      const restorePoint = await createRestorePoint("Before Opti Gods tweak changes");
+      if (!restorePoint?.sequence_number) {
+        return {
+          appliedIds: [],
+          selectedIds: scriptOnlyIds,
+          unsupportedIds,
+          failures: uniqueIds.map(id => ({ id, message: "Windows did not confirm a restore point. No tweaks were applied." })),
+        };
+      }
+      sessionStorage.setItem(RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+    } catch (error) {
+      return {
+        appliedIds: [],
+        selectedIds: scriptOnlyIds,
+        unsupportedIds,
+        failures: uniqueIds.map(id => ({ id, message: error instanceof Error ? error.message : "Could not create a verified restore point." })),
+      };
+    }
+  }
+
+  const appliedIds: string[] = [];
+  const failures: { id: string; message: string }[] = [];
+  for (const id of supportedIds) {
+    let ticket: string | null = null;
+    let osApplied = false;
+    try {
+      const authorization = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+        body: JSON.stringify({
+          tweakId: id,
+          idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
+        }),
+      });
+      const authorizationBody = await authorization.json().catch(() => ({}));
+      if (!authorization.ok || typeof authorizationBody.ticket !== "string") {
+        throw new Error(authorizationBody.error || "Authorization failed.");
+      }
+      ticket = authorizationBody.ticket;
+      const result = await applyTweak(id, ticket, nativeAuth);
+      if (!result.ok) throw new Error(result.message || "Windows rejected the change.");
+      osApplied = true;
+      const store = useOptimizationStore.getState();
+      store.setTweak(id, true);
+      store.markApplied([id]);
+      saveUndoToken(id, result.undo_token);
+      appliedIds.push(id);
+    } catch (error) {
+      if (ticket && !osApplied) {
+        await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
+          body: JSON.stringify({ ticket }),
+        }).catch(() => {});
+      }
+      failures.push({ id, message: error instanceof Error ? error.message : "Windows rejected the change." });
+    }
+  }
+
+  window.dispatchEvent(new Event("optigods:allowance-changed"));
+  return { appliedIds, selectedIds: scriptOnlyIds, unsupportedIds, failures };
+}

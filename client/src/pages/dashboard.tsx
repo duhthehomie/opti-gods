@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
+import { createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -24,6 +24,8 @@ import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
 import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 
 // Feature categories
 const FEATURES = [
@@ -374,6 +376,7 @@ export default function Dashboard() {
 
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
   const [recommendedApplied, setRecommendedApplied] = useState(false);
+  const [bulkApplying, setBulkApplying] = useState(false);
   const [scriptRan, setScriptRan] = useState(() => localStorage.getItem("og_script_ran") === "true");
   const confirmScriptRan = () => {
     setScriptRan(true);
@@ -384,46 +387,74 @@ export default function Dashboard() {
     });
   };
 
-  const applyAllRecommended = () => {
+  const applyAllRecommended = async () => {
+    if (bulkApplying) return;
     if (!isPro) {
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
       window.dispatchEvent(new Event("optigods:enable-best-free"));
       return;
     }
-    // Enable all safe + aggressive tweaks. Expert tweaks (DisableDefender, DisableVBS,
-    // SysHypervisorOff, DisablePagefile, etc.) are NEVER auto-enabled — they require
-    // deliberate opt-in on their own tab. Hardware filtering at script generation time
-    // means incompatible tweaks (wrong GPU vendor, wrong OS, laptop-only) won't appear
-    // in the downloaded .bat even if toggled on.
-    const expertIds = new Set(
-      TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id)
-    );
-    const next = { ...tweaks };
-    let applied = 0;
-    Object.keys(next).forEach(key => {
-      if (!expertIds.has(key)) { (next as any)[key] = true; applied++; }
-    });
-    setAllTweaks(next);
-    setRecommendedApplied(true);
-    toast({
-      title: "All Safe Tweaks Enabled!",
-      description: `${applied} tweaks enabled (expert tweaks excluded — opt-in on their tabs). Hardware filtering runs at script generation.`,
-    });
+    setBulkApplying(true);
+    try {
+      const nativeAuth = native ? await getNativeAuthToken() : null;
+      const response = await fetch(apiUrl("/api/performance-allowance/authorize"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(nativeAuth ? { "X-Native-Auth": nativeAuth } : {}) },
+        body: JSON.stringify({ mode: "best", preview: true, idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "") }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(body.authorizedIds)) {
+        throw new Error(body.error || "A saved system scan is required.");
+      }
+      const ids = (body.authorizedIds as string[]).filter(id => id in tweaks);
+      const result = await applyTweakBatch(ids);
+      if (native) {
+        setRecommendedApplied(result.appliedIds.length > 0 && result.failures.length === 0);
+        toast({
+          title: result.appliedIds.length ? "Compatible instant tweaks applied" : "No instant tweaks were applied",
+          description: `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only choices remain available manually` : ""}${result.failures.length ? ` · ${result.failures.length} failed` : ""}.`,
+          variant: result.appliedIds.length ? "success" : "destructive",
+        });
+      } else {
+        setRecommendedApplied(true);
+        toast({
+          title: "Hardware-matched Pro preset selected",
+          description: `${result.selectedIds.length} compatible safe tweaks selected. Download and run the .bat to apply them. Expert tweaks remain opt-in.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Could not build your hardware preset",
+        description: error instanceof Error ? error.message : "A saved system scan is required.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkApplying(false);
+    }
   };
 
-  const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+  const applyQuickBoost = async (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+    if (bulkApplying) return;
     if (!isPro) {
-      applyAllRecommended();
+      void applyAllRecommended();
       return;
     }
-    const next = { ...tweaks };
-    preset.tweaks.forEach((key) => { if (key in next) next[key] = true; });
-    setAllTweaks(next);
-    setActiveBoost(preset.id);
-    toast({
-      title: `${preset.title} Applied`,
-      description: `${preset.tweaks.filter(k => k in tweaks).length} tweaks enabled. Download your script to apply them.`,
-    });
+    setBulkApplying(true);
+    try {
+      const compatible = preset.tweaks.filter(id => id in tweaks && getTweakCompatibility(id).ok);
+      const blocked = preset.tweaks.filter(id => id in tweaks && !getTweakCompatibility(id).ok);
+      const result = await applyTweakBatch(compatible);
+      setActiveBoost(preset.id);
+      toast({
+        title: native ? `${preset.title}: ${result.appliedIds.length} applied` : `${preset.title} selected`,
+        description: native
+          ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
+          : `${result.selectedIds.length} compatible tweaks selected. Download and run the .bat to apply them.`,
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } finally {
+      setBulkApplying(false);
+    }
   };
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
@@ -495,7 +526,7 @@ export default function Dashboard() {
               <Button
                 data-testid="button-full-optimize"
                 onClick={applyAllRecommended}
-                disabled={recommendedApplied}
+                disabled={recommendedApplied || bulkApplying}
                 className={cn(
                   "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
                   recommendedApplied
@@ -506,7 +537,7 @@ export default function Dashboard() {
                 {recommendedApplied ? (
                   <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />{isPro ? "Full Optimize" : "Enable Best 15 Tweaks"}</>
+                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : isPro ? "Apply Compatible Tweaks" : "Enable Best 15 Tweaks"}</>
                 )}
               </Button>
 
@@ -536,11 +567,11 @@ export default function Dashboard() {
               <Rocket className="w-4 h-4 text-red-500" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
             </div>
-            <span className="text-[10px] text-zinc-600 font-mono">{isPro ? "one click — all tweaks enabled instantly" : "Pro presets · free accounts get the best 15"}</span>
+            <span className="text-[10px] text-zinc-600 font-mono">{isPro ? "one click — compatible instant tweaks apply now" : "Pro presets · free accounts get the best 15"}</span>
           </div>
           <p className="text-xs text-zinc-500 mb-5 px-1">
             {isPro
-              ? "Pick a preset to instantly enable a curated set of tweaks, then download your script."
+              ? "Pick a preset to apply compatible instant tweaks now. Script-only choices remain available for the downloadable .bat."
               : "Quick Boost presets require a linked Pro Discord account. Free accounts can enable the best 15 tweaks for their saved system scan."}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -552,7 +583,8 @@ export default function Dashboard() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.06 + i * 0.05 }}
-                  onClick={() => applyQuickBoost(preset)}
+                  onClick={() => void applyQuickBoost(preset)}
+                  disabled={bulkApplying}
                   data-testid={`button-quick-boost-${preset.id}`}
                   className={cn(
                     "relative text-left rounded-xl border overflow-hidden transition-all duration-300 group",
@@ -955,7 +987,7 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-                {recommendedApplied ? "All Tweaks Enabled" : isPro ? "Enable All Tweaks in One Click" : "Enable the Best 15 Tweaks"}
+                {recommendedApplied ? "Compatible Tweaks Applied" : isPro ? "Apply Compatible Tweaks in One Click" : "Enable the Best 15 Tweaks"}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -965,7 +997,7 @@ export default function Dashboard() {
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
                   : isPro
-                    ? `All ${totalTweaks} tweaks enabled — hardware filtering runs at script generation so only compatible tweaks land in your .bat. No uninstalls, no risks.`
+                    ? "Compatible instant tweaks apply directly. The full Pro catalog remains available, with incompatible choices locked and script-only choices clearly labeled."
                     : "Free accounts can enable the 15 best server-validated tweaks for their saved system scan. Link a Pro Discord account to unlock every tweak."}
             </p>
           </div>
@@ -983,10 +1015,11 @@ export default function Dashboard() {
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
+                disabled={bulkApplying}
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                {isPro ? `Enable All ${totalTweaks} Tweaks` : "Enable Best 15 Tweaks"}
+                {bulkApplying ? "Applying…" : isPro ? "Apply Compatible Instant Tweaks" : "Enable Best 15 Tweaks"}
               </Button>
             )}
             <span className="text-[10px] text-zinc-600 text-center">

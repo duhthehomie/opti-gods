@@ -3,19 +3,10 @@ import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
-import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
+import { isNative } from "@/lib/tauri-bridge";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
 
 type Allowance = { pro: boolean; limit: number | null; used: number; remaining: number | null };
-const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
-
-function saveUndoToken(id: string, token: string | null) {
-  try {
-    const all = JSON.parse(localStorage.getItem(NATIVE_UNDO_KEY) || "{}") as Record<string, string>;
-    if (token) all[id] = token;
-    localStorage.setItem(NATIVE_UNDO_KEY, JSON.stringify(all));
-  } catch { /* best effort; native undo still remains available in-session */ }
-}
-
 /** Small, non-Pro-only choice surface; the server remains authoritative. */
 export function PerformanceAllowanceCard() {
   const [status, setStatus] = useState<Allowance | null>(null);
@@ -55,6 +46,26 @@ export function PerformanceAllowanceCard() {
     setAllTweaks(cleared);
   }, [authRequired, loaded, setAllTweaks, status?.pro, tweaks]);
 
+  useEffect(() => {
+    if (!loaded || authRequired || status?.pro !== false) return;
+    const controller = new AbortController();
+    void fetch(apiUrl("/api/performance-allowance/authorize"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({ mode: "best", preview: true, idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "") }),
+      signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) return;
+      const body = await response.json();
+      const ids = [...(body.activeIds || []), ...(body.authorizedIds || [])].slice(0, 15);
+      const selected = { ...useOptimizationStore.getState().tweaks };
+      Object.keys(selected).forEach(id => { selected[id] = false; });
+      for (const id of ids) selected[id] = true;
+      setAllTweaks(selected);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [authRequired, loaded, setAllTweaks, status?.pro]);
+
   const chooseBest = async () => {
     if (authRequired) {
       toast({ title: "Discord login required", description: "Sign in with Discord so your 15 active free tweak slots can be tracked securely.", variant: "destructive" });
@@ -74,61 +85,17 @@ export function PerformanceAllowanceCard() {
       if (!isNative()) {
         const selected = { ...tweaks };
         Object.keys(selected).forEach(id => { selected[id] = false; });
-        for (const id of ids) selected[id] = true;
+        const visibleIds = [...(body.activeIds || []), ...ids].slice(0, 15);
+        for (const id of visibleIds) selected[id] = true;
         setAllTweaks(selected);
-        toast({ title: `${ids.length} best tweaks enabled`, description: "These server-validated choices match your saved system scan. You can unselect any of them before running your script.", variant: "success" });
+        toast({ title: `${visibleIds.length} best tweaks selected`, description: "These server-validated choices match your saved system scan. Download and run the .bat to apply new selections.", variant: "success" });
         await refresh();
         return;
       }
 
-      // Native best mode is a real apply, not a visual toggle. Keep the same
-      // server authorize -> trusted Rust apply -> completion sequence as the
-      // individual TweakRow path, one tweak at a time.
-      const nativeAuth = await getNativeAuthToken();
-      if (!nativeAuth) throw new Error("Sign in to the Windows app before applying native tweaks.");
-      const restorePoint = await createRestorePoint("Before Opti Gods best 15 changes");
-      if (!restorePoint?.sequence_number) {
-        throw new Error("Windows did not confirm a restore point. No tweaks were applied.");
-      }
-      let applied = 0;
-      const failures: string[] = [];
-      for (const id of ids) {
-        const idempotencyKey = crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, "");
-        const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
-          body: JSON.stringify({ tweakId: id, idempotencyKey }),
-        });
-        const authBody = await auth.json().catch(() => ({}));
-        if (!auth.ok || typeof authBody.ticket !== "string") {
-          failures.push(`${id}: ${authBody.error || "authorization failed"}`);
-          continue;
-        }
-        let osApplied = false;
-        try {
-          const result = await applyTweak(id, authBody.ticket, nativeAuth);
-          if (!result.ok) throw new Error(result.message || "Native apply failed");
-          // Persist truthful OS state and Undo before the fallible ledger call.
-          osApplied = true;
-          setTweak(id, true);
-          useOptimizationStore.getState().markApplied([id]);
-          saveUndoToken(id, result.undo_token);
-          applied++;
-          if (result.message.includes("ALLOWANCE_SYNC_PENDING")) {
-            toast({ title: "Applied; allowance sync pending", description: `${id} changed Windows successfully, but the server did not confirm the allowance. Undo remains available.`, variant: "destructive" });
-          }
-        } catch (error) {
-          failures.push(`${id}: ${error instanceof Error ? error.message : "Windows rejected the change"}`);
-          if (!osApplied) {
-            await fetch(apiUrl("/api/performance-allowance/native-ticket/cancel"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Native-Auth": nativeAuth },
-              body: JSON.stringify({ ticket: authBody.ticket }),
-            }).catch(() => {});
-          }
-          continue;
-        }
-      }
+      const result = await applyTweakBatch(ids);
+      const applied = result.appliedIds.length;
+      const failures = result.failures.map(failure => `${failure.id}: ${failure.message}`);
       toast({ title: `${applied} best tweaks enabled`, description: applied ? "Trusted native actions completed. Undo remains available for each successful tweak." : "No supported tweak could be applied.", variant: applied ? "success" : "destructive" });
       if (failures.length) {
         toast({
@@ -149,7 +116,7 @@ export function PerformanceAllowanceCard() {
     const trigger = () => { void chooseBest(); };
     window.addEventListener("optigods:enable-best-free", trigger);
     return () => window.removeEventListener("optigods:enable-best-free", trigger);
-  });
+  }, [authRequired, status?.remaining, tweaks]);
 
   if (!loaded || status?.pro) return null;
 

@@ -11,6 +11,9 @@ import { Gamepad2, Info, CheckCircle2, Download, Package, Zap } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { useToast } from "@/hooks/use-toast";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
@@ -45,6 +48,7 @@ export default function Fivem() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
+  const { toast } = useToast();
   const [dlMushyFace, setDlMushyFace] = useState(false);
 
   async function downloadMushyFix() {
@@ -189,7 +193,7 @@ export default function Fivem() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => recommended.forEach(id => setTweak(id, true))}
+              onClick={() => void applyTweakBatch(recommended).then(result => toast({ title: isNative() ? `${result.appliedIds.length} ${heading} tweaks applied` : `${result.selectedIds.length} ${heading} tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" }))}
               disabled={allRecommendedOn}
               data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"

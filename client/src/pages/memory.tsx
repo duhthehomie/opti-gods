@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -329,11 +331,12 @@ export default function Memory() {
   const ram = systemRamGB;
   const profile = ram ? getRamProfile(ram) : null;
 
-  function handleApplyProfile() {
+  async function handleApplyProfile() {
     if (!profile || !ram) return;
     const before = { ...tweaks };
-    const newTweaks = { ...tweaks, ...profile.applyTweaks };
-    setAllTweaks(newTweaks);
+    const enableIds = Object.entries(profile.applyTweaks).filter(([, value]) => value).map(([key]) => key);
+    const result = await applyTweakBatch(enableIds);
+    for (const [key, value] of Object.entries(profile.applyTweaks)) if (!value) setTweak(key, false);
 
     const log: string[] = [];
     for (const [key, val] of Object.entries(profile.applyTweaks)) {
@@ -345,8 +348,9 @@ export default function Memory() {
     setApplied(true);
     setShowLog(true);
     toast({
-      title: `${profile.label} applied`,
-      description: `${log.length} tweak${log.length !== 1 ? "s" : ""} changed for ${ram}GB RAM`,
+      title: isNative() ? `${result.appliedIds.length} ${profile.label} tweaks applied` : `${result.selectedIds.length} ${profile.label} tweaks selected`,
+      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
     });
   }
 
@@ -384,7 +388,7 @@ export default function Memory() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => recommended.forEach(id => setTweak(id, true))}
+              onClick={() => void applyTweakBatch(recommended).then(result => toast({ title: isNative() ? `${result.appliedIds.length} memory tweaks applied` : `${result.selectedIds.length} memory tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" }))}
               disabled={allRecommendedOn}
               data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"

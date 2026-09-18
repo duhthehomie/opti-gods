@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { isNative } from "@/lib/tauri-bridge";
 
 interface TabSmartBarProps {
   tweakIds: string[];
@@ -28,6 +31,7 @@ export function TabSmartBar({
   const { tweaks, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const [showTips, setShowTips] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   const active = tweakIds.filter(id => tweaks[id]).length;
   const total = tweakIds.length;
@@ -40,12 +44,22 @@ export function TabSmartBar({
     pct >= 40 ? "text-amber-400 bg-amber-500/10 border-amber-500/20" :
     "text-zinc-500 bg-zinc-800 border-zinc-700";
 
-  function handleApplyRecommended() {
-    recNotApplied.forEach(id => setTweak(id, true));
-    toast({
-      title: `${label} — Recommended Applied`,
-      description: `${recNotApplied.length} tweak${recNotApplied.length !== 1 ? "s" : ""} enabled.`,
-    });
+  async function handleApplyRecommended() {
+    if (applying) return;
+    setApplying(true);
+    try {
+      const compatible = recNotApplied.filter(id => getTweakCompatibility(id).ok);
+      const result = await applyTweakBatch(compatible);
+      toast({
+        title: isNative() ? `${label} — ${result.appliedIds.length} applied` : `${label} — recommendations selected`,
+        description: isNative()
+          ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}${result.failures.length ? ` · ${result.failures.length} failed` : ""}.`
+          : `${result.selectedIds.length} tweaks selected for your .bat.`,
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } finally {
+      setApplying(false);
+    }
   }
 
   return (
@@ -84,11 +98,12 @@ export function TabSmartBar({
           <Button
             data-testid={`button-apply-recommended-${label.replace(/\s+/g, "-").toLowerCase()}`}
             size="sm"
-            onClick={handleApplyRecommended}
+            onClick={() => void handleApplyRecommended()}
+            disabled={applying}
             className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-400 hover:text-red-300 h-7 px-2.5 gap-1"
           >
             <Zap className="w-3 h-3" />
-            {applyLabel ?? `Apply ${recNotApplied.length} Recommended`}
+            {applying ? "Applying…" : applyLabel ?? `${isNative() ? "Apply" : "Select"} ${recNotApplied.length} Recommended`}
           </Button>
         )}
         {allRecOn && (

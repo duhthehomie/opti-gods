@@ -991,7 +991,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertRig(payload: HardwareScanPayload, discordUserId?: string | null, proCode?: string | null): Promise<{ rig: HardwareRig; isNew: boolean }> {
-    const hash = computeRigHash(payload);
+    const hardwareHash = computeRigHash(payload);
+    // The same model/spec combination can legitimately belong to multiple
+    // customers. Scope deduplication to the authenticated owner so a later
+    // scan can never transfer another user's saved Best-15 rig.
+    const ownerScope = discordUserId ? `discord:${discordUserId}` : proCode ? `pro:${proCode}` : "anonymous";
+    const hash = createHash("sha256").update(`${hardwareHash}|${ownerScope}`).digest("hex");
     const existing = await db.select().from(hardwareRigs).where(eq(hardwareRigs.hash, hash)).limit(1);
     if (existing.length) {
       const [updated] = await db.update(hardwareRigs)

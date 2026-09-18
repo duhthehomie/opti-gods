@@ -19,6 +19,12 @@ pub struct HardwareScan {
     pub refresh_hz: Option<u32>,
     pub nic_vendor: Option<String>,
     pub anticheats: Vec<String>,
+    pub system_model: Option<String>,
+    pub os_name: Option<String>,
+    pub os_build: Option<u32>,
+    pub cpu_cores: Option<u32>,
+    pub cpu_threads: Option<u32>,
+    pub is_laptop: Option<bool>,
 }
 
 #[tauri::command]

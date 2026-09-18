@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ALL_AMD_IDS = [
   "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState",
@@ -251,28 +253,32 @@ const AMD_PRESETS = [
 ];
 
 export default function Amd() {
-  const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
+  const { tweaks, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
 
   const amdSmartIds = ALL_AMD_IDS.filter(id => smartRecs.ids.has(id));
-
-  const applyPreset = (preset: typeof AMD_PRESETS[number]) => {
-    const next = { ...tweaks };
-    preset.tweaks.forEach((k) => { if (k in next) next[k] = true; });
-    setAllTweaks(next);
+  const applyBulk = async (ids: string[], label = "AMD recommendations") => {
+    const result = await applyTweakBatch(ids);
     toast({
-      title: `${preset.title} Applied`,
-      description: `${preset.tweaks.length} AMD tweaks enabled — download your script to apply.`,
+      title: isNative() ? `${result.appliedIds.length} ${label} applied` : `${result.selectedIds.length} ${label} selected`,
+      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
     });
   };
 
-  const enableAllRecommended = () => {
-    amdSmartIds.forEach((k) => setTweak(k, true));
-    toast({ title: "AMD Recommended Applied", description: `${amdSmartIds.length} key tweaks enabled for your system.` });
+  const applyPreset = async (preset: typeof AMD_PRESETS[number]) => {
+    const result = await applyTweakBatch(preset.tweaks.filter(k => k in tweaks));
+    toast({
+      title: isNative() ? `${result.appliedIds.length} ${preset.title} tweaks applied` : `${result.selectedIds.length} ${preset.title} tweaks selected`,
+      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+    });
   };
+
+  const enableAllRecommended = () => { void applyBulk(amdSmartIds, "AMD recommendations"); };
 
   return (
     <AppLayout>
@@ -514,7 +520,7 @@ export default function Amd() {
               const recIds = PERFORMANCE_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "CRITICAL").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
               return (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-performance"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -550,7 +556,7 @@ export default function Amd() {
               const recIds = DRIVER_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
               return (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-driver"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -611,7 +617,7 @@ export default function Amd() {
               const recIds = NEXTGEN_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
               const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
               return recIds.length > 0 ? (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-nextgen"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -649,7 +655,7 @@ export default function Amd() {
               const cpuRecIds = ["AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy"];
               const allOn = cpuRecIds.every(id => tweaks[id]);
               return (
-                <Button variant="ghost" size="sm" onClick={() => cpuRecIds.forEach(id => setTweak(id, true))} disabled={allOn}
+                <Button variant="ghost" size="sm" onClick={() => void applyBulk(cpuRecIds, "AMD CPU recommendations")} disabled={allOn}
                   data-testid="button-enable-recommended-amd-cpu"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -804,7 +810,7 @@ export default function Amd() {
               const recIds = ["AmdD3DOptimize","AmdPCIeOptimize"];
               const allOn = recIds.every(id => tweaks[id]);
               return (
-                <Button variant="ghost" size="sm" onClick={() => recIds.forEach(id => setTweak(id, true))} disabled={allOn}
+              <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-dx"
                   className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />

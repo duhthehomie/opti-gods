@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ALL_IGPU_IDS = [
   "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
@@ -353,32 +355,32 @@ export default function IntegratedGraphics() {
 
   const enabledCount = ALL_IGPU_IDS.filter(id => tweaks[id]).length;
 
-  function applyRecommended(ids: string[]) {
-    ids.forEach(id => setTweak(id, true));
+  async function applyRecommended(ids: string[]) {
+    const result = await applyTweakBatch(ids);
     toast({
-      title: `${ids.length} tweaks enabled`,
-      description: "Recommended integrated graphics optimizations applied. Generate your script to apply.",
+      title: isNative() ? `${result.appliedIds.length} iGPU tweaks applied` : `${result.selectedIds.length} iGPU tweaks selected`,
+      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
     });
   }
 
   function applyAmdRecommended() {
-    applyRecommended(AMD_RECOMMENDED);
+    void applyRecommended(AMD_RECOMMENDED);
   }
 
   function applyIntelRecommended() {
-    applyRecommended(INTEL_RECOMMENDED);
+    void applyRecommended(INTEL_RECOMMENDED);
   }
 
   function applyAll() {
     const all = isIntelIGpu
       ? INTEL_RECOMMENDED
       : AMD_RECOMMENDED;
-    applyRecommended(all);
+    void applyRecommended(all);
   }
 
   function applySection(ids: string[]) {
-    ids.forEach(id => setTweak(id, true));
-    toast({ title: `${ids.length} tweaks enabled`, description: "Generate your script to apply." });
+    void applyRecommended(ids);
   }
 
   const detectedGPU = hw?.gpuName || "Detecting...";

@@ -97,7 +97,7 @@ static SESSION_CHECKPOINT: OnceLock<Mutex<Option<RestorePoint>>> = OnceLock::new
 
 /// Guarantees that this desktop-app process has created and WMI-verified a
 /// restore point. Renderer state cannot bypass this guard.
-pub fn ensure_session_checkpoint(label: &str) -> Result<RestorePoint> {
+pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint> {
     let state = SESSION_CHECKPOINT.get_or_init(|| Mutex::new(None));
     let mut checkpoint = state
         .lock()
@@ -106,7 +106,19 @@ pub fn ensure_session_checkpoint(label: &str) -> Result<RestorePoint> {
         return Ok(existing);
     }
     ensure_enabled()?;
-    let created = create(label)?;
+    let next_number = list()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|point| {
+            point
+                .label
+                .strip_prefix("Opti Gods Restore ")
+                .and_then(|value| value.trim().parse::<u32>().ok())
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let created = create(&format!("Opti Gods Restore {next_number}"))?;
     *checkpoint = Some(created.clone());
     Ok(created)
 }
@@ -177,7 +189,28 @@ pub fn ensure_enabled() -> anyhow::Result<()> {
         ));
     }
 
-    // 2. Enable System Restore on C:\ and fail if PowerShell rejects it.
+    // Allow one numbered Opti Gods restore point per app launch instead of
+    // Windows silently suppressing checkpoints created within 24 hours.
+    let frequency = Command::new("reg")
+        .args([
+            "add",
+            r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore",
+            "/v", "SystemRestorePointCreationFrequency",
+            "/t", "REG_DWORD",
+            "/d", "0",
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .context("launch reg.exe to allow restore point creation")?;
+    if !frequency.status.success() {
+        return Err(anyhow!(
+            "Windows rejected the restore-point frequency change: {}",
+            String::from_utf8_lossy(&frequency.stderr).trim()
+        ));
+    }
+
+    // 3. Enable System Restore on C:\ and fail if PowerShell rejects it.
     let enabled = Command::new("powershell")
         .args([
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",

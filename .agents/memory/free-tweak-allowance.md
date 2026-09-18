@@ -9,6 +9,8 @@ Free tweak credits are consumed only by successful native desktop execution, nev
 
 **How to apply:** Keep issuance, consume, cancellation, expiry, and finalization serialized per account. Automatic choices must intersect the native executable allowlist and exclude expert/forbidden tweaks. Undo never refunds credit.
 
+Native mutation must require a restore point created and WMI-verified inside the Rust process for the current app session. Renderer/session storage is not a safety boundary. Only verified native success may enter Applied state; downloading or confirming a browser script must not bulk-mark selections as applied.
+
 On a cold Windows-app start, restore the bearer token from Windows Credential Manager before requesting or consuming a native ticket; localStorage alone is not a reliable session source.
 
 Dashboard bulk selectors must never bypass entitlement: free/logged-out sessions may only enter the server-built Best 15 flow, and persisted selections above 15 must be cleared.

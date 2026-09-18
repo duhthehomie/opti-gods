@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api-base";
 import type { HardwareRig, TweakSuggestion, NvidiaDriver, SuggestionStatus } from "@shared/schema";
 import {
   Cpu, Search, Download, X, Inbox, CheckCircle2, Pencil, XCircle, Eye,
@@ -10,6 +11,22 @@ import {
 } from "lucide-react";
 
 type Headers = Record<string, string>;
+
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(apiUrl(path), init);
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = body?.message || body?.error || "";
+    } catch {
+      // The response may not contain JSON, so fall back to its status text.
+    }
+    const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+    throw new Error(detail ? `Request failed (${status}): ${detail}` : `Request failed (${status})`);
+  }
+  return response.json() as Promise<T>;
+}
 
 function fmtDate(d: string | Date | null | undefined): string {
   if (!d) return "—";
@@ -57,7 +74,8 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
 
   const rigsQ = useQuery<{ rigs: HardwareRig[] }>({
     queryKey: ["/api/admin/rigs", sort],
-    queryFn: () => fetch(`/api/admin/rigs?sort=${sort}&limit=500`, { headers }).then(r => r.json()),
+    queryFn: () => fetchJson(`/api/admin/rigs?sort=${sort}&limit=500`, { headers }),
+    refetchInterval: 15_000,
   });
 
   const rigs = rigsQ.data?.rigs ?? [];
@@ -77,13 +95,11 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
 
   const suggestMut = useMutation({
     mutationFn: async (data: { rigHash: string; suggestion: string; category: string }) => {
-      const res = await fetch("/api/admin/suggestions", {
+      return fetchJson("/api/admin/suggestions", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
     },
     onSuccess: () => {
       toast({ title: "Suggestion added to inbox" });
@@ -316,11 +332,12 @@ export function SuggestionsInboxTab({ headers }: { headers: Headers }) {
 
   const sQ = useQuery<{ suggestions: TweakSuggestion[] }>({
     queryKey: ["/api/admin/suggestions"],
-    queryFn: () => fetch("/api/admin/suggestions", { headers }).then(r => r.json()),
+    queryFn: () => fetchJson("/api/admin/suggestions", { headers }),
   });
   const rigsQ = useQuery<{ rigs: HardwareRig[] }>({
     queryKey: ["/api/admin/rigs", "lastSeenAt"],
-    queryFn: () => fetch("/api/admin/rigs?limit=500", { headers }).then(r => r.json()),
+    queryFn: () => fetchJson("/api/admin/rigs?limit=500", { headers }),
+    refetchInterval: 15_000,
   });
 
   const rigByHash = useMemo(() => {
@@ -338,13 +355,11 @@ export function SuggestionsInboxTab({ headers }: { headers: Headers }) {
 
   const updateMut = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: SuggestionStatus }) => {
-      const res = await fetch(`/api/admin/suggestions/${id}`, {
+      return fetchJson(`/api/admin/suggestions/${id}`, {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/suggestions"] }),
     onError: () => toast({ title: "Failed to update", variant: "destructive" }),
@@ -495,7 +510,7 @@ export function NvidiaTrackerTab({ headers }: { headers: Headers }) {
 
   const dQ = useQuery<{ drivers: NvidiaDriver[] }>({
     queryKey: ["/api/admin/nvidia-drivers"],
-    queryFn: () => fetch("/api/admin/nvidia-drivers", { headers }).then(r => r.json()),
+    queryFn: () => fetchJson("/api/admin/nvidia-drivers", { headers }),
   });
 
   const drivers = dQ.data?.drivers ?? [];
@@ -521,13 +536,11 @@ export function NvidiaTrackerTab({ headers }: { headers: Headers }) {
 
   const validateMut = useMutation({
     mutationFn: async ({ version, tweaksValidated }: { version: string; tweaksValidated: boolean }) => {
-      const res = await fetch("/api/admin/nvidia-drivers", {
+      return fetchJson("/api/admin/nvidia-drivers", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ version, tweaksValidated }),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/nvidia-drivers"] }),
     onError: () => toast({ title: "Failed to update driver", variant: "destructive" }),

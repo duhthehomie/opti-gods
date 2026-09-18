@@ -567,7 +567,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
               {!isMobile && native && (
                 <span className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.07] px-3.5 py-2 text-[9px] font-black uppercase tracking-[0.14em] text-red-300">
                   <Zap className="h-3.5 w-3.5" />
-                  Instant toggles
+                  Instant toggles · Windows desktop only
                 </span>
               )}
               {!isMobile && !native && (

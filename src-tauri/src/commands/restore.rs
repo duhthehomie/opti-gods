@@ -57,7 +57,7 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
 }
 
 /// Called once on app startup — enables System Restore (if it was disabled)
-/// then creates a baseline "OptiGods V3" checkpoint. Non-fatal: errors are
+/// then creates the next numbered "Opti Gods Restore N" checkpoint. Non-fatal: errors are
 /// logged but never surfaced to the user as a crash.
 #[tauri::command]
 pub async fn startup_restore_checkpoint() -> Result<Option<RestorePoint>, String> {
@@ -67,9 +67,7 @@ pub async fn startup_restore_checkpoint() -> Result<Option<RestorePoint>, String
         if let Err(e) = crate::win32::restore::ensure_enabled() {
             log::warn!("[restore] ensure_enabled failed (non-fatal): {e:#}");
         }
-        match crate::win32::restore::ensure_session_checkpoint(
-            "OptiGods — Pre-Optimization Baseline",
-        ) {
+        match crate::win32::restore::ensure_session_checkpoint("Opti Gods Restore") {
             Ok(rp) => {
                 log::info!(
                     "[restore] startup checkpoint created — seq={} label={}",

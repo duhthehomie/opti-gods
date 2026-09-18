@@ -10,6 +10,8 @@ import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Message = {
   role: "user" | "assistant";
@@ -76,7 +78,7 @@ function hardwareToPresetPayload(hw: ReturnType<typeof useHardwareInfo>, os: Ret
 }
 
 function SavePresetCard() {
-  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
@@ -151,11 +153,13 @@ function SavePresetCard() {
           config: { tweaks: presetTweaks },
         }),
       });
-      setAllTweaks({ ...tweaks, ...presetTweaks });
+      const result = await applyTweakBatch(Object.keys(presetTweaks));
       setSaved(true);
       toast({
         title: "Smart Preset saved!",
-        description: `${Object.keys(presetTweaks).length} hardware-matched tweaks applied. Download your script to activate.`,
+        description: isNative()
+          ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only choices selected` : ""}.`
+          : `${result.selectedIds.length} hardware-matched tweaks selected. Download and run the .bat to apply them.`,
       });
     } catch {
       toast({ title: "Save failed", description: "Try again.", variant: "destructive" });

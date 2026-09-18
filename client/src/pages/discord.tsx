@@ -9,6 +9,9 @@ import { MessageCircle, CheckCircle2, Info, Zap, Monitor, Cpu, Trash2, Shield, G
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { useToast } from "@/hooks/use-toast";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 const ALL_DISCORD_IDS = [
   "DiscordLowPriority",
@@ -216,6 +219,7 @@ function SectionHeader({
   onSet: (id: string, v: boolean) => void;
 }) {
   const allOn = recommended.length > 0 && recommended.every(id => tweakState[id]);
+  const { toast } = useToast();
   return (
     <div className="flex items-center justify-between mb-4 px-1">
       <div className="flex items-center gap-2">
@@ -226,7 +230,7 @@ function SectionHeader({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => recommended.forEach(id => onSet(id, true))}
+          onClick={() => void applyTweakBatch(recommended).then(result => toast({ title: isNative() ? `${result.appliedIds.length} Discord tweaks applied` : `${result.selectedIds.length} Discord tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" }))}
           disabled={allOn}
           data-testid={`button-enable-recommended-discord-${title.replace(/\s+/g, "-").toLowerCase()}`}
           className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -241,12 +245,11 @@ function SectionHeader({
 
 export default function Discord() {
   const { tweaks, setTweak } = useOptimizationStore();
+  const { toast } = useToast();
   const hw = useHardwareInfo();
   const recIds = DISCORD_RECOMMENDED;
 
-  const enableAll = () => {
-    recIds.forEach(id => setTweak(id, true));
-  };
+  const enableAll = () => { void applyTweakBatch(recIds).then(result => toast({ title: isNative() ? `${result.appliedIds.length} Discord tweaks applied` : `${result.selectedIds.length} Discord tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" })); };
 
   const enabledCount = ALL_DISCORD_IDS.filter(id => tweaks[id]).length;
 

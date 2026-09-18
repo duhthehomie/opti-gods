@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 // Persist per-game whitelist toggles in localStorage so the user's choices
 // survive page reloads + show up in the generated PS1.
@@ -351,6 +353,10 @@ export default function ProcessLasso() {
 
   const probalanceRecIds = probalanceTweaks.filter(t => t.recommended).map(t => t.id);
   const memRecIds = memTweaks.filter(t => t.recommended).map(t => t.id);
+  const applyBulk = async (ids: string[]) => {
+    const result = await applyTweakBatch(ids);
+    toast({ title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+  };
   const probalanceAllOn = probalanceRecIds.every(id => tweaks[id]);
   const memAllOn = memRecIds.every(id => tweaks[id]);
 
@@ -490,7 +496,7 @@ export default function ProcessLasso() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             <Button
               variant="ghost" size="sm"
-              onClick={() => probalanceRecIds.forEach(id => setTweak(id, true))}
+              onClick={() => void applyBulk(probalanceRecIds)}
               disabled={probalanceAllOn}
               data-testid="button-enable-recommended-probalance"
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -515,7 +521,7 @@ export default function ProcessLasso() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             <Button
               variant="ghost" size="sm"
-              onClick={() => memRecIds.forEach(id => setTweak(id, true))}
+              onClick={() => void applyBulk(memRecIds)}
               disabled={memAllOn}
               data-testid="button-enable-recommended-mem-opt"
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"

@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Impact = "HIGH" | "MED" | "LOW";
 interface TweakDef {
@@ -376,9 +378,9 @@ function Section({
   const recIds = (recommended ?? []).filter(id => visible.some(t => t.id === id));
   const enabled = recIds.filter(id => store[id as keyof typeof store]);
 
-  function enableRec() {
-    recIds.forEach(id => setTweak(id as any, true));
-    toast({ title: `✓ ${recIds.length} recommended tweaks enabled` });
+  async function enableRec() {
+    const result = await applyTweakBatch(recIds);
+    toast({ title: isNative() ? `✓ ${result.appliedIds.length} laptop tweaks applied` : `✓ ${result.selectedIds.length} laptop tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   }
 
   return (
@@ -432,9 +434,9 @@ export default function LaptopPage() {
   const smartRecs = computeSmartRecs(hw, osInfo);
   const { toast } = useToast();
 
-  const enableAll = () => {
-    ALL_RECOMMENDED.forEach(id => setTweak(id as any, true));
-    toast({ title: `✓ ${ALL_RECOMMENDED.length} recommended tweaks enabled for your laptop` });
+  const enableAll = async () => {
+    const result = await applyTweakBatch(ALL_RECOMMENDED);
+    toast({ title: isNative() ? `✓ ${result.appliedIds.length} laptop tweaks applied` : `✓ ${result.selectedIds.length} laptop tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   };
 
   const enabledCount = ALL_LAPTOP_IDS.filter(id => tweaks[id as keyof typeof tweaks]).length;

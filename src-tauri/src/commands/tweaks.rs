@@ -28,6 +28,44 @@ pub struct TweakResult {
     pub requires_reboot: bool,
     /// True when the impl shelled out to PowerShell instead of running native code.
     pub via_powershell: bool,
+    /// Machine-readable failure classification. Present only when `ok` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<NativeErrorKind>,
+    /// The stage at which a native enable failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_stage: Option<NativeErrorStage>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeErrorKind {
+    Restore,
+    Auth,
+    Allowance,
+    Compatibility,
+    Execution,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeErrorStage {
+    Restore,
+    Authorization,
+    Execution,
+    Result,
+}
+
+fn classify_native_error(message: &str) -> NativeErrorKind {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("not for this system")
+        || lower.contains("not compatible")
+        || lower.contains("not detected")
+        || lower.contains("requires exactly")
+    {
+        NativeErrorKind::Compatibility
+    } else {
+        NativeErrorKind::Execution
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -76,23 +114,14 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
             ("Win32PrioritySeparation", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 0x26),
             ("SetTimerResolution", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1),
             ("SetResponsiveness", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 10),
-            ("EnableMSIMode", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "IRQ8Priority", 1),
             ("GameModeTweaks", Hive::CurrentUser, r"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1),
             ("NetworkThrottling", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", 0xFFFFFFFF),
-            ("DisableNagle", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpAckFrequency", 1),
             ("InputLagTCP", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TCPNoDelay", 1),
             ("DisableNDU", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\NDU", "Start", 4),
-            ("DisablePrefetch", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnablePrefetcher", 0),
             ("EnableHAGS", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2),
-            ("DisablePointerPrecision", Hive::CurrentUser, r"Control Panel\Mouse", "MouseSpeed", 0),
             ("DisableFastStartup", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled", 0),
-            ("DisableXboxGameBar", Hive::CurrentUser, r"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0),
             ("DisableGameDVR", Hive::CurrentUser, r"System\GameConfigStore", "GameDVR_Enabled", 0),
-            ("SysVisualBestPerf", Hive::CurrentUser, r"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 2),
             ("DisableTelemetry", Hive::LocalMachine, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0),
-            ("SysHibernateOff", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
-            ("DisableMemoryCompression", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive", 1),
-            ("SetDNSPriority", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters", "MaxCacheTtl", 86400),
         ];
 
         checks
@@ -124,11 +153,13 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
             undo_token: None,
             requires_reboot: false,
             via_powershell: false,
+            error_kind: Some(NativeErrorKind::Restore),
+            error_stage: Some(NativeErrorStage::Restore),
         };
     }
     let ticket = match (args.ticket.as_deref(), args.native_auth.as_deref()) {
         (Some(ticket), Some(auth)) => (ticket, auth),
-        _ => return TweakResult { ok: false, id: args.id, message: "A server authorization ticket is required.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+        _ => return TweakResult { ok: false, id: args.id, message: "A server authorization ticket is required.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
     let client = reqwest::Client::new();
     let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { "https://optigods.com" };
@@ -138,15 +169,24 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         .send().await;
     let response = match validation {
         Ok(response) if response.status().is_success() => response,
-        _ => return TweakResult { ok: false, id: args.id, message: "Server authorization ticket was rejected or expired.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+        Ok(response) => {
+            let detail = response.text().await.unwrap_or_default();
+            let message = serde_json::from_str::<serde_json::Value>(&detail)
+                .ok()
+                .and_then(|body| body.get("error").or_else(|| body.get("message")).and_then(|v| v.as_str()).map(str::to_owned))
+                .filter(|text| !text.trim().is_empty())
+                .unwrap_or_else(|| "Server authorization ticket was rejected or expired.".into());
+            return TweakResult { ok: false, id: args.id, message, undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Allowance), error_stage: Some(NativeErrorStage::Authorization) };
+        }
+        Err(_) => return TweakResult { ok: false, id: args.id, message: "Server authorization ticket was rejected or expired.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Allowance), error_stage: Some(NativeErrorStage::Authorization) },
     };
     let consumed: serde_json::Value = match response.json().await {
         Ok(value) => value,
-        Err(_) => return TweakResult { ok: false, id: args.id, message: "Invalid authorization response.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+        Err(_) => return TweakResult { ok: false, id: args.id, message: "Invalid authorization response.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
     let result_secret = match consumed.get("resultSecret").and_then(|v| v.as_str()) {
         Some(value) => value.to_string(),
-        None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false },
+        None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
     let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {
@@ -157,6 +197,8 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
                 undo_token,
                 requires_reboot: tweak.1.requires_reboot,
                 via_powershell: false,
+                error_kind: None,
+                error_stage: None,
             },
             Err(err) => TweakResult {
                 ok: false,
@@ -165,6 +207,8 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
                 undo_token: None,
                 requires_reboot: false,
                 via_powershell: false,
+                error_kind: Some(classify_native_error(&err.to_string())),
+                error_stage: Some(NativeErrorStage::Execution),
             },
         }
     } else if let Some(snippet) = trusted_ps_snippet(&args.id, false) {
@@ -181,6 +225,8 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
             undo_token: None,
             requires_reboot: false,
             via_powershell: false,
+            error_kind: Some(NativeErrorKind::Execution),
+            error_stage: Some(NativeErrorStage::Execution),
         }
     };
     let mut acknowledged = false;
@@ -211,6 +257,8 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
                 undo_token: None,
                 requires_reboot: tweak.1.requires_reboot,
                 via_powershell: false,
+                error_kind: None,
+                error_stage: None,
             },
             Err(err) => TweakResult {
                 ok: false,
@@ -219,6 +267,8 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
                 undo_token: None,
                 requires_reboot: false,
                 via_powershell: false,
+                error_kind: Some(NativeErrorKind::Execution),
+                error_stage: Some(NativeErrorStage::Execution),
             },
         }
     } else if let Some(snippet) = trusted_ps_snippet(&args.id, true) {
@@ -231,6 +281,8 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
             undo_token: None,
             requires_reboot: false,
             via_powershell: false,
+            error_kind: Some(NativeErrorKind::Execution),
+            error_stage: Some(NativeErrorStage::Execution),
         }
     }
 }
@@ -258,6 +310,61 @@ fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
             "netsh int tcp set global autotuninglevel=normal | Out-Null",
         ),
         (
+            "GameModeTweaks",
+            "$p='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; New-Item $p -Force|Out-Null; Set-ItemProperty $p 'Scheduling Category' 'High' -Force; Set-ItemProperty $p 'SFIO Priority' 'High' -Force; Set-ItemProperty $p 'GPU Priority' 8 -Type DWord -Force; Set-ItemProperty $p Priority 6 -Type DWord -Force; Set-ItemProperty $p MaximumPreRenderedFrames 1 -Type DWord -Force; $x=Get-ItemProperty $p; if($x.'Scheduling Category' -ne 'High' -or $x.'SFIO Priority' -ne 'High' -or $x.'GPU Priority' -ne 8 -or $x.Priority -ne 6 -or $x.MaximumPreRenderedFrames -ne 1){throw 'Windows did not verify all Games multimedia priorities.'}",
+            "$p='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; Remove-ItemProperty $p 'Scheduling Category','SFIO Priority','GPU Priority','Priority','MaximumPreRenderedFrames' -ErrorAction SilentlyContinue",
+        ),
+        (
+            "InputLagTCP",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters'; Set-ItemProperty $p TcpAckFrequency 1 -Type DWord -Force; Set-ItemProperty $p TCPNoDelay 1 -Type DWord -Force; Set-ItemProperty $p EnablePMTUBHDetect 0 -Type DWord -Force; $x=Get-ItemProperty $p; if($x.TcpAckFrequency -ne 1 -or $x.TCPNoDelay -ne 1 -or $x.EnablePMTUBHDetect -ne 0){throw 'Windows did not verify all TCP latency values.'}",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters'; Remove-ItemProperty $p TcpAckFrequency,TCPNoDelay,EnablePMTUBHDetect -ErrorAction SilentlyContinue",
+        ),
+        (
+            "DisableNagle",
+            "$paths=@(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -ErrorAction Stop); if(-not $paths.Count){throw 'Not for this system: no TCP/IP interfaces were found.'}; foreach($k in $paths){Set-ItemProperty $k.PSPath TcpAckFrequency 1 -Type DWord -Force; Set-ItemProperty $k.PSPath TCPNoDelay 1 -Type DWord -Force}; foreach($k in $paths){$x=Get-ItemProperty $k.PSPath; if($x.TcpAckFrequency -ne 1 -or $x.TCPNoDelay -ne 1){throw \"Windows did not verify Nagle settings on $($k.PSChildName).\"}}",
+            "$paths=@(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -ErrorAction Stop); foreach($k in $paths){Remove-ItemProperty $k.PSPath TcpAckFrequency,TCPNoDelay -ErrorAction SilentlyContinue}",
+        ),
+        (
+            "DisablePrefetch",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters'; Set-ItemProperty $p EnablePrefetcher 0 -Type DWord -Force; Set-ItemProperty $p EnableSuperfetch 0 -Type DWord -Force; $x=Get-ItemProperty $p; if($x.EnablePrefetcher -ne 0 -or $x.EnableSuperfetch -ne 0){throw 'Windows did not verify Prefetch and Superfetch were disabled.'}",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters'; Set-ItemProperty $p EnablePrefetcher 3 -Type DWord -Force; Set-ItemProperty $p EnableSuperfetch 3 -Type DWord -Force",
+        ),
+        (
+            "DisablePointerPrecision",
+            "$p='HKCU:\\Control Panel\\Mouse'; Set-ItemProperty $p MouseSpeed '0' -Force; Set-ItemProperty $p MouseThreshold1 '0' -Force; Set-ItemProperty $p MouseThreshold2 '0' -Force; $x=Get-ItemProperty $p; if($x.MouseSpeed -ne '0' -or $x.MouseThreshold1 -ne '0' -or $x.MouseThreshold2 -ne '0'){throw 'Windows did not verify all pointer precision values.'}",
+            "$p='HKCU:\\Control Panel\\Mouse'; Set-ItemProperty $p MouseSpeed '1' -Force; Set-ItemProperty $p MouseThreshold1 '6' -Force; Set-ItemProperty $p MouseThreshold2 '10' -Force",
+        ),
+        (
+            "DisableXboxGameBar",
+            "$a='HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR'; $b='HKCU:\\System\\GameConfigStore'; New-Item $a -Force|Out-Null; New-Item $b -Force|Out-Null; Set-ItemProperty $a AppCaptureEnabled 0 -Type DWord -Force; Set-ItemProperty $b GameDVR_Enabled 0 -Type DWord -Force; if((Get-ItemPropertyValue $a AppCaptureEnabled)-ne 0 -or (Get-ItemPropertyValue $b GameDVR_Enabled)-ne 0){throw 'Windows did not verify Game Bar capture was disabled.'}",
+            "$a='HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR'; $b='HKCU:\\System\\GameConfigStore'; Set-ItemProperty $a AppCaptureEnabled 1 -Type DWord -Force; Set-ItemProperty $b GameDVR_Enabled 1 -Type DWord -Force",
+        ),
+        (
+            "SysVisualBestPerf",
+            "$v='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects'; $d='HKCU:\\Control Panel\\Desktop'; $w='HKCU:\\Software\\Microsoft\\Windows\\DWM'; $mask=[byte[]](0x90,0x12,0x01,0x80,0x10,0x00,0x00,0x00); New-Item $v -Force|Out-Null; New-Item $d -Force|Out-Null; New-Item $w -Force|Out-Null; Set-ItemProperty $v VisualFXSetting 2 -Type DWord -Force; Set-ItemProperty $d UserPreferencesMask $mask -Type Binary -Force; Set-ItemProperty $d FontSmoothing '2' -Force; Set-ItemProperty $w EnableAeroPeek 0 -Type DWord -Force; $actual=[byte[]](Get-ItemPropertyValue $d UserPreferencesMask); if((Get-ItemPropertyValue $v VisualFXSetting)-ne 2 -or [Convert]::ToBase64String($actual)-ne [Convert]::ToBase64String($mask) -or (Get-ItemPropertyValue $d FontSmoothing)-ne '2' -or (Get-ItemPropertyValue $w EnableAeroPeek)-ne 0){throw 'Windows did not verify the complete visual performance profile.'}",
+            "$v='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects'; $d='HKCU:\\Control Panel\\Desktop'; $w='HKCU:\\Software\\Microsoft\\Windows\\DWM'; Set-ItemProperty $v VisualFXSetting 0 -Type DWord -Force; Set-ItemProperty $d FontSmoothing '2' -Force; Set-ItemProperty $w EnableAeroPeek 1 -Type DWord -Force",
+        ),
+        (
+            "SysHibernateOff",
+            "powercfg.exe /hibernate off | Out-Null; if($LASTEXITCODE -ne 0){throw \"powercfg failed with exit code $LASTEXITCODE.\"}; $p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power'; New-Item $p -Force|Out-Null; Set-ItemProperty $p HiberbootEnabled 0 -Type DWord -Force; $h=(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power' -ErrorAction Stop).HibernateEnabled; if($h -ne 0 -or (Get-ItemPropertyValue $p HiberbootEnabled)-ne 0){throw 'Windows did not verify hibernation and Fast Startup were disabled.'}",
+            "powercfg.exe /hibernate on | Out-Null; if($LASTEXITCODE -ne 0){throw \"powercfg failed with exit code $LASTEXITCODE.\"}; $p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power'; Set-ItemProperty $p HiberbootEnabled 1 -Type DWord -Force",
+        ),
+        (
+            "SetDNSPriority",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters'; Set-ItemProperty $p MaxCacheTtl 86400 -Type DWord -Force; Set-ItemProperty $p MaxNegativeCacheTtl 0 -Type DWord -Force; netsh.exe int tcp set global timestamps=disabled | Out-Null; if($LASTEXITCODE -ne 0){throw \"netsh failed with exit code $LASTEXITCODE.\"}; $x=Get-ItemProperty $p; if($x.MaxCacheTtl -ne 86400 -or $x.MaxNegativeCacheTtl -ne 0){throw 'Windows did not verify the DNS cache policy.'}",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters'; Remove-ItemProperty $p MaxCacheTtl,MaxNegativeCacheTtl -ErrorAction SilentlyContinue; netsh.exe int tcp set global timestamps=allowed | Out-Null; if($LASTEXITCODE -ne 0){throw \"netsh failed with exit code $LASTEXITCODE.\"}",
+        ),
+        (
+            "EnableHAGS",
+            "$b=[Environment]::OSVersion.Version.Build; if($b -lt 22000){throw \"Not for this system: HAGS requires Windows 11; detected build $b.\"}; $g=@(Get-CimInstance Win32_VideoController -ErrorAction Stop|Where-Object {$_.AdapterRAM -gt 1GB -and $_.Name -notmatch 'Microsoft Basic|Remote Display'}); if($g.Count -ne 1){throw \"Not for this system: HAGS requires exactly one supported discrete GPU; detected $($g.Count).\"}; if($g[0].Name -notmatch 'RTX\\s*(20|30|40|50)\\d{2}|Radeon.*RX\\s*[6-9]\\d{3}'){throw \"Not for this system: HAGS is limited to RTX 20-series+ or Radeon RX 6000-series+; detected $($g[0].Name).\"}; $p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; Set-ItemProperty $p HwSchMode 2 -Type DWord -Force; if((Get-ItemPropertyValue $p HwSchMode) -ne 2){throw 'Windows did not verify HAGS was enabled.'}",
+            "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; Set-ItemProperty $p HwSchMode 1 -Type DWord -Force",
+        ),
+        (
+            "EnableMSIMode_Safe",
+            "$g=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($g.Count -ne 1){throw \"Not for this system: MSI mode requires exactly one active display GPU; detected $($g.Count).\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($g[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; New-Item $p -Force|Out-Null; Set-ItemProperty $p MSISupported 1 -Type DWord -Force; if((Get-ItemPropertyValue $p MSISupported -ErrorAction Stop) -ne 1){throw 'Windows did not verify MSI mode was enabled.'}",
+            "$g=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($g.Count -ne 1){throw \"Not for this system: MSI undo requires exactly one active display GPU; detected $($g.Count).\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($g[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; Set-ItemProperty $p MSISupported 0 -Type DWord -Force; if((Get-ItemPropertyValue $p MSISupported -ErrorAction Stop) -ne 0){throw 'Windows did not verify MSI mode was disabled.'}",
+        ),
+        (
             "EnableMSIMode",
             "$gpus=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($gpus.Count -ne 1){throw \"Not for this system: MSI mode requires exactly one active GPU; detected $($gpus.Count).\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpus[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; New-Item $p -Force|Out-Null; Set-ItemProperty $p MSISupported 1 -Type DWord -Force; if((Get-ItemPropertyValue $p MSISupported -ErrorAction Stop)-ne 1){throw 'MSI mode verification failed.'}",
             "$gpus=@(Get-PnpDevice -Class Display -ErrorAction Stop|Where-Object Status -eq 'OK'); if($gpus.Count -ne 1){throw \"Not for this system: cannot identify one GPU to undo MSI mode.\"}; $p=\"HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpus[0].InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties\"; Set-ItemProperty $p MSISupported 0 -Type DWord -Force",
@@ -272,6 +379,20 @@ fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
         .iter()
         .find(|(t_id, _, _)| *t_id == id)
         .map(|(_, ap, un)| if undo { *un } else { *ap })
+}
+
+fn trusted_ps_requires_reboot(id: &str) -> bool {
+    matches!(
+        id,
+        "EnableHAGS"
+            | "EnableMSIMode"
+            | "EnableMSIMode_Safe"
+            | "DisableMemoryCompression"
+            | "DisableMMAgentMemoryCompression"
+            | "InputLagTCP"
+            | "ResetTcpAutotune"
+            | "SysHibernateOff"
+    )
 }
 
 // ─── PowerShell fallback ────────────────────────────────────────────────────
@@ -305,8 +426,10 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                     if undo { "Undone" } else { "Applied" }
                 ),
                 undo_token: None,
-                requires_reboot: false,
+                requires_reboot: trusted_ps_requires_reboot(id),
                 via_powershell: true,
+                error_kind: None,
+                error_stage: None,
             },
             Ok(out) => TweakResult {
                 ok: false,
@@ -324,6 +447,8 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 undo_token: None,
                 requires_reboot: false,
                 via_powershell: true,
+                error_kind: Some(NativeErrorKind::Execution),
+                error_stage: Some(NativeErrorStage::Execution),
             },
             Err(err) => TweakResult {
                 ok: false,
@@ -332,6 +457,8 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 undo_token: None,
                 requires_reboot: false,
                 via_powershell: true,
+                error_kind: Some(NativeErrorKind::Execution),
+                error_stage: Some(NativeErrorStage::Execution),
             },
         }
     }
@@ -345,6 +472,8 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
             undo_token: None,
             requires_reboot: false,
             via_powershell: true,
+            error_kind: Some(NativeErrorKind::Compatibility),
+            error_stage: Some(NativeErrorStage::Execution),
         }
     }
 }
@@ -603,21 +732,11 @@ const NATIVE_TWEAKS: &[(&str, NativeTweak)] = &[
     ("Win32PrioritySeparation",   NativeTweak { apply: native_impls::apply_priority_separation,    undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("SetTimerResolution",        NativeTweak { apply: native_impls::apply_timer_resolution,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
     ("SetResponsiveness",         NativeTweak { apply: native_impls::apply_system_responsiveness,  undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
-    ("GameModeTweaks",            NativeTweak { apply: native_impls::apply_game_mode,              undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("NetworkThrottling",         NativeTweak { apply: native_impls::apply_network_throttling,     undo: native_impls::reg_undo, category: "network",        requires_reboot: false }),
-    ("DisableNagle",              NativeTweak { apply: native_impls::apply_disable_nagle,          undo: native_impls::reg_undo, category: "network",        requires_reboot: true  }),
-    ("InputLagTCP",               NativeTweak { apply: native_impls::apply_input_lag_tcp,          undo: native_impls::reg_undo, category: "network",        requires_reboot: true  }),
     ("DisableNDU",                NativeTweak { apply: native_impls::apply_disable_ndu,            undo: native_impls::reg_undo, category: "network",        requires_reboot: true  }),
-    ("DisablePrefetch",           NativeTweak { apply: native_impls::apply_disable_prefetch,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
-    ("EnableHAGS",                NativeTweak { apply: native_impls::apply_hags,                   undo: native_impls::reg_undo, category: "nvidia",         requires_reboot: true  }),
-    ("DisablePointerPrecision",   NativeTweak { apply: native_impls::apply_disable_pointer_precision, undo: native_impls::reg_undo, category: "registry",    requires_reboot: false }),
     ("DisableFastStartup",        NativeTweak { apply: native_impls::apply_disable_fast_startup,   undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
-    ("DisableXboxGameBar",        NativeTweak { apply: native_impls::apply_disable_xbox_gamebar,   undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("DisableGameDVR",            NativeTweak { apply: native_impls::apply_disable_game_dvr,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
-    ("SysVisualBestPerf",         NativeTweak { apply: native_impls::apply_visual_best_perf,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("DisableTelemetry",          NativeTweak { apply: native_impls::apply_disable_telemetry,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
-    ("SysHibernateOff",           NativeTweak { apply: native_impls::apply_disable_hibernate,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: true  }),
-    ("SetDNSPriority",            NativeTweak { apply: native_impls::apply_optimize_dns,           undo: native_impls::reg_undo, category: "network",        requires_reboot: false }),
 ];
 
 // Re-exported so other modules can validate IDs without re-listing.
