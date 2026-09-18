@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 function lerp(a: number, b: number, t: number) {
@@ -1112,12 +1113,15 @@ function DiscordGate({ notGranted = false }: { notGranted?: boolean }) {
     try {
       if (isNative()) {
         const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        if (!cfgRes.ok) throw new Error("Discord login is unavailable right now.");
         const { clientId } = await cfgRes.json();
         await discordLogin(clientId);
+        showLoginSuccess("Discord");
       } else {
         loginWithDiscord();
       }
-    } catch {
+    } catch (error) {
+      showLoginError(error);
       setLoading(false);
     }
   }, [loading]);

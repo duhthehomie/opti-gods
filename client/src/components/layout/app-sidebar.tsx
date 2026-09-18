@@ -23,6 +23,7 @@ import { apiUrl } from "@/lib/api-base";
 import { NATIVE_TOKEN_KEY, NATIVE_ADMIN_KEY, queryClient } from "@/lib/queryClient";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
+import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 type NavItem = {
@@ -202,9 +203,10 @@ export function AppSidebar() {
         try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
         queryClient.invalidateQueries({ queryKey: ["/api/me"] });
         queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+        showLoginSuccess("Discord");
         window.location.href = "/tweaks";
-      } catch {
-        loginWithDiscord();
+      } catch (error) {
+        showLoginError(error);
       }
     } else {
       loginWithDiscord();

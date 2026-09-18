@@ -3487,6 +3487,18 @@ Start-Sleep 2
     res.json({ isPro: false, source: null, grantedAt: null, revoked: false });
   });
 
+  app.post('/api/session/heartbeat', rateLimit(12, 60_000, 30), async (req, res) => {
+    let userId: string | null = req.session?.userId ?? null;
+    if (!userId) {
+      const nativeToken = req.headers["x-native-auth"];
+      if (typeof nativeToken === "string") userId = await validateNativeToken(nativeToken);
+    }
+    if (!userId) return res.status(401).json({ active: false });
+    await storage.touchUserActivity(userId);
+    const entitlement = await storage.getProEntitlement(userId);
+    return res.json({ active: true, isPro: Boolean(entitlement && !entitlement.revokedAt) });
+  });
+
   // Legacy migration (Task #41): a guest with a valid localStorage session
   // token logs in via Discord. Their old session is upgraded to a permanent
   // entitlement so they're Pro on every future device.
@@ -3658,8 +3670,9 @@ Start-Sleep 2
       storage.listDiscordUsers(),
     ]);
     // Direct Discord ID → user map (covers ALL logged-in Discord users, including admin with no entitlement row)
-    const discordUserById: Record<string, { username: string; globalName: string | null; avatarUrl: string | null }> = {};
+    const discordUserById: Record<string, { username: string; globalName: string | null; avatarUrl: string | null; lastLoginAt: Date | null }> = {};
     for (const u of allDiscordUsers) discordUserById[u.discordId] = u;
+    const entitlementByUser = new Map(proUsers.map(ent => [ent.discordUserId, ent]));
 
     // Build codeRef → email from email_requests
     const codeValueToEmail: Record<string, string> = {};
@@ -3713,24 +3726,26 @@ Start-Sleep 2
 
     const enriched = sessions.map(s => {
       const loc = s.codeRef ? (codeValueToLocation[s.codeRef] ?? null) : null;
+      const did = s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null);
+      const user = did ? discordUserById[did] : null;
+      const entitlement = did ? entitlementByUser.get(did) : null;
       return {
         ...s,
         email: s.codeRef ? (codeValueToEmail[s.codeRef] ?? null) : null,
-        discordId: s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null),
+        discordId: did,
         discordAvatarUrl: (() => {
-          const did = s.discordUserId ?? (s.codeRef ? (codeValueToDiscordId[s.codeRef] ?? null) : null);
           const byCode = s.codeRef ? (codeValueToAvatarUrl[s.codeRef] ?? null) : null;
-          // Final fallback: direct users table lookup (catches admin + any Discord-logged-in user)
-          return byCode ?? (did ? (discordIdToAvatarUrl[did] ?? discordUserById[did]?.avatarUrl ?? null) : null);
+          const fallback = did ? `https://cdn.discordapp.com/embed/avatars/${Number(did.slice(-1)) % 5}.png` : null;
+          return user?.avatarUrl ?? byCode ?? (did ? discordIdToAvatarUrl[did] : null) ?? fallback;
         })(),
         discordUsername: (() => {
           const byEmail = s.codeRef ? (codeValueToDiscordFromEmail[s.codeRef] ?? null) : null;
           const byEnt = s.codeRef ? (codeValueToDiscordFromEnt[s.codeRef] ?? null) : null;
-          const did = s.discordUserId ?? null;
-          // Final fallback: direct users table lookup (covers admin with no entitlement row)
-          const byId = did ? (discordUserById[did]?.globalName ?? discordUserById[did]?.username ?? null) : null;
-          return byEmail ?? byEnt ?? byId;
+          return user?.globalName ?? user?.username ?? byEnt ?? byEmail ?? null;
         })(),
+        isPro: Boolean((entitlement && !entitlement.revokedAt) || s.sessionToken),
+        proSource: entitlement && !entitlement.revokedAt ? entitlement.source : (s.codeRef ? "session" : null),
+        sessionKind: "pro" as const,
         codeNote: s.codeRef ? (codeValueToNote[s.codeRef] ?? null) : null,
         tokenMasked: s.sessionToken.slice(0, 8) + "…",
         ipCity: loc?.city ?? null,
@@ -3739,7 +3754,35 @@ Start-Sleep 2
       };
     });
 
-    return res.json(enriched);
+    const representedDiscordIds = new Set(enriched.map(s => s.discordId).filter(Boolean));
+    const accountSessions = allDiscordUsers
+      .filter(user => !representedDiscordIds.has(user.discordId))
+      .map(user => {
+        const entitlement = entitlementByUser.get(user.discordId);
+        const isPro = Boolean(entitlement && !entitlement.revokedAt);
+        return {
+          id: `discord-${user.discordId}`,
+          sessionToken: null,
+          tokenMasked: "Discord",
+          codeRef: null,
+          createdAt: user.lastLoginAt,
+          lastCheckedAt: user.lastLoginAt,
+          ipAddress: null,
+          email: null,
+          discordId: user.discordId,
+          discordUsername: user.globalName ?? user.username,
+          discordAvatarUrl: user.avatarUrl ?? `https://cdn.discordapp.com/embed/avatars/${Number(user.discordId.slice(-1)) % 5}.png`,
+          isPro,
+          proSource: isPro ? entitlement?.source ?? "entitlement" : null,
+          sessionKind: "account" as const,
+          codeNote: null,
+          ipCity: null,
+          ipRegion: null,
+          ipCountry: null,
+        };
+      });
+
+    return res.json([...enriched, ...accountSessions]);
   });
 
   // Admin — revoke any Pro session instantly (kill free/fraudulent access)

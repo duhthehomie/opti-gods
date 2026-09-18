@@ -13,6 +13,7 @@ import { getNativeAuthHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/query
 import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
 import { isNative, discordLogin, openExternal } from "@/lib/tauri-bridge";
 import { DISCORD_INVITE } from "@/lib/brand-links";
+import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -144,9 +145,10 @@ export function ProPaymentDialog({
         queryClient.invalidateQueries({ queryKey: ["/api/me"] });
         queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
         setDiscordSaved(true);
+        showLoginSuccess("Discord");
         setTimeout(() => { onOpenChange(false); setSuccess(false); setCode(""); }, 1400);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = showLoginError(err);
         setLinkDiscordError(msg.replace(/^Error:\s*/i, ""));
       } finally {
         setLinkingDiscord(false);

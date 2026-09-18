@@ -15,7 +15,7 @@ function detectGpuVendor(gpuName: string): "nvidia" | "amd" | "intel" {
   return "intel";
 }
 
-function uploadHardwareToServer(parsed: ScannedSysInfo) {
+async function uploadHardwareToServer(parsed: ScannedSysInfo) {
   // Always upload — Pro users get linked to their code, others stored by IP.
   const token = getStoredToken();
   const gpuVendor = detectGpuVendor(parsed.GPU || "");
@@ -25,7 +25,7 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
   const osVersion = parsed.OsBuild
     ? (parsed.OsBuild >= 22000 ? "win11" : "win10")
     : "win11";
-  fetch(apiUrl("/api/session/hardware"), {
+  const response = await fetch(apiUrl("/api/session/hardware"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -39,7 +39,8 @@ function uploadHardwareToServer(parsed: ScannedSysInfo) {
       osVersion,
       isLaptop: false,
     }),
-  }).catch(() => {});
+  });
+  if (!response.ok) throw new Error(`Admin scan sync failed (${response.status}).`);
 }
 
 export const PS1_CMD = `$gpu=(Get-WmiObject Win32_VideoController|Where-Object{$_.AdapterRAM -gt 0}|Sort-Object AdapterRAM -Desc|Select-Object -First 1).Name; if(!$gpu){$gpu=(Get-WmiObject Win32_VideoController|Select-Object -First 1).Name}; $cpu=Get-WmiObject Win32_Processor|Select-Object -First 1; $cs=Get-WmiObject Win32_ComputerSystem; $ram=[Math]::Round($cs.TotalPhysicalMemory/1GB,0); $mfr=$cs.Manufacturer.Trim();$mdl=$cs.Model.Trim();$sysModel=if($mdl -like "$mfr *" -or $mdl -eq $mfr){$mdl}else{"$mfr $mdl".Trim()}; $ramMhz=[int](((Get-WmiObject Win32_PhysicalMemory -EA SilentlyContinue) | ForEach-Object { [Math]::Max([int]$_.ConfiguredClockSpeed,[int]$_.Speed) }) | Measure-Object -Maximum).Maximum; $os=Get-WmiObject Win32_OperatingSystem; $osBuild=[int]$os.BuildNumber; $osName=$os.Caption.Trim(); $dir=if(Test-Path "$env:USERPROFILE\\Desktop"){"$env:USERPROFILE\\Desktop"}else{"$env:TEMP"}; $base=$dir+"\\OptiGods-HW-Scan"; $path=$base+".json"; $n=2; while(Test-Path $path){$path=$base+"_"+$n+".json";$n++}; @{GPU=$gpu;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;Threads=$cpu.NumberOfLogicalProcessors;RAM_GB=$ram;RAM_MHz=$ramMhz;OsName=$osName;OsBuild=$osBuild;SystemModel=$sysModel}|ConvertTo-Json|Out-File $path -Encoding utf8; Write-Host "Done! File saved to: $path" -ForegroundColor Green`;
@@ -81,7 +82,7 @@ function BrowserQuickScan({ onScanned, onClose }: { onScanned: (info: ScannedSys
       const parsed: ScannedSysInfo = { GPU: gpuName || undefined, RAM_GB: ramGb, Threads: cpuThreads };
 
       saveScannedInfo(parsed);
-      uploadHardwareToServer(parsed);
+      await uploadHardwareToServer(parsed);
       onScanned(parsed);
       onClose();
       toast({
@@ -151,7 +152,7 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
         IsLaptop: native.is_laptop ?? undefined,
       };
       await uploadValidatedHardwareScan(native);
-      uploadHardwareToServer(parsed);
+      await uploadHardwareToServer(parsed);
       onScanned(parsed);
       setExpanded(false);
       toast({ title: "Native scan validated", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}` });

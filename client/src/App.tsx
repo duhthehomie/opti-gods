@@ -1,5 +1,5 @@
 import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { getNativeAuthHeaders, queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,7 +15,9 @@ import { BootSplash } from "@/components/branding/boot-splash";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
 import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
+import { showLoginSuccess } from "@/lib/auth-feedback";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 // Always eager — these are the first screens the user sees
 import Landing from "@/pages/landing";
@@ -184,6 +186,7 @@ function NativeTokenHandler() {
     clean.searchParams.delete("nativeToken");
     window.history.replaceState({}, "", clean.toString());
     queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    showLoginSuccess("Discord");
   }, []);
   return null;
 }
@@ -210,6 +213,24 @@ function NativeBootstrap() {
   return null;
 }
 
+function SessionHeartbeat() {
+  const { isAuthenticated } = useAuth();
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const ping = () => {
+      void fetch(apiUrl("/api/session/heartbeat"), {
+        method: "POST",
+        credentials: "include",
+        headers: getNativeAuthHeaders(),
+      }).catch(() => {});
+    };
+    ping();
+    const interval = window.setInterval(ping, 20_000);
+    return () => window.clearInterval(interval);
+  }, [isAuthenticated]);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -219,6 +240,7 @@ function App() {
         <NativeTokenHandler />
         <NativeCachedTokenHandler />
         <NativeBootstrap />
+        <SessionHeartbeat />
         <VisitTracker />
         <FriendUnlockHandler />
         <AuthGate>

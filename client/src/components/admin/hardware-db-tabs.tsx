@@ -75,7 +75,7 @@ export function HardwareDbTab({ headers }: { headers: Headers }) {
   const rigsQ = useQuery<{ rigs: HardwareRig[] }>({
     queryKey: ["/api/admin/rigs", sort],
     queryFn: () => fetchJson(`/api/admin/rigs?sort=${sort}&limit=500`, { headers }),
-    refetchInterval: 15_000,
+    refetchInterval: 2_000,
   });
 
   const rigs = rigsQ.data?.rigs ?? [];

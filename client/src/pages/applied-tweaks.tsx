@@ -150,7 +150,7 @@ export default function AppliedTweaksPage() {
       <div className="max-h-80 space-y-1 overflow-y-auto p-3">
         {runItems.map(item => { const meta = getTweakMeta(item.id); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
           {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
-          <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{meta?.title || item.id}</p>{item.message && <p className={cn("mt-0.5 truncate text-[10px]", item.status === "failed" ? "text-red-300" : "text-zinc-500")}>{item.message}</p>}</div>
+          <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{meta?.title || item.id}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : "text-zinc-500")}>{item.message}</p>}</div>
           <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status}</span>
         </div>; })}
       </div>

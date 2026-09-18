@@ -1,4 +1,4 @@
 {
-  "version": "5.2.11",
-  "notes": "V5.2.11 — repairs missing server scans automatically, validates every hardware rescan, and fixes Windows restore-point confirmation for Full Optimize."
+  "version": "5.2.12",
+  "notes": "V5.2.12 — adds universal success/error sounds and notifications, live Discord session identity with Pro/free status, instant admin scan updates, and clearer real-time tweak results."
 }

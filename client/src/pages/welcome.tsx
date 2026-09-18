@@ -9,6 +9,7 @@ import { apiUrl } from "@/lib/api-base";
 import { setProSession, setProStatus } from "@/lib/pro-status";
 import { getNativeAuthHeaders, getNativeSessionHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import { showAccessCodeError, showAccessCodeSuccess, showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
 
 export const GUEST_MODE_KEY = "og_guest_mode";
 
@@ -70,7 +71,9 @@ export default function Welcome() {
         user_fetch: "Could not read your Discord profile. Please try again.",
         server: "Server error during sign-in. Please try again.",
       };
-      setLoginError(labels[reason] || "Sign-in failed. Please try again.");
+      const message = labels[reason] || "Sign-in failed. Please try again.";
+      setLoginError(message);
+      showLoginError(message);
       const url = new URL(window.location.href);
       url.searchParams.delete("login");
       url.searchParams.delete("reason");
@@ -113,9 +116,10 @@ export default function Welcome() {
           queryClient.invalidateQueries({ queryKey: ["/api/me"] }),
           queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] }),
         ]);
+        showLoginSuccess("Discord");
         navigate("/tweaks");
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = showLoginError(err);
         setLoginError(`Sign-in failed: ${msg.replace(/^Error:\s*/i, "")}`);
         setSigningIn(false);
       }
@@ -145,9 +149,13 @@ export default function Welcome() {
       try { data = JSON.parse(raw); } catch { /* non-JSON */ }
 
       if (res.status === 429) {
-        setCodeError("Too many attempts — wait a minute and try again.");
+        const message = "Too many attempts — wait a minute and try again.";
+        setCodeError(message);
+        showAccessCodeError(message);
       } else if (res.status === 403) {
-        setCodeError(data.error || "Your IP is blocked from redeeming codes. Contact support.");
+        const message = data.error || "Your IP is blocked from redeeming codes. Contact support.";
+        setCodeError(message);
+        showAccessCodeError(message);
       } else if (data.valid) {
         if (data.sessionToken) {
           setProSession(data.sessionToken);
@@ -156,6 +164,7 @@ export default function Welcome() {
         }
         setDiscordSaved(data.discordSaved ?? false);
         setCodeSuccess(true);
+        showAccessCodeSuccess();
         try { localStorage.setItem(GUEST_MODE_KEY, "1"); } catch { /* ignore */ }
         // Only auto-redirect when Discord is already linked (permanent Pro).
         // If not linked, hold the screen so the user can link or manually skip.
@@ -164,11 +173,16 @@ export default function Welcome() {
         }
       } else if (data.reason === "already_used") {
         setCodeAlreadyUsed(true);
+        showAccessCodeError("This code has already been used. Sign in with the linked Discord account to restore access.");
       } else {
-        setCodeError("Invalid code. If you already paid, DM leaq on Discord and it'll be fixed instantly.");
+        const message = "Invalid code. If you already paid, DM leaq on Discord and it'll be fixed instantly.";
+        setCodeError(message);
+        showAccessCodeError(message);
       }
-    } catch {
-      setCodeError("Couldn't reach the server. Check your internet and try again.");
+    } catch (error) {
+      const message = "Couldn't reach the server. Check your internet and try again.";
+      setCodeError(message);
+      showLoginError(error instanceof Error ? error : message, "Code");
     } finally {
       setCodeLoading(false);
     }

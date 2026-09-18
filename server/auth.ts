@@ -64,7 +64,10 @@ function getRedirectUri(_req: Request): string {
 }
 
 function discordAvatarUrl(id: string, avatarHash: string | null): string | null {
-  if (!avatarHash) return null;
+  if (!avatarHash) {
+    const index = Number(id.slice(-1)) % 5;
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+  }
   const ext = avatarHash.startsWith("a_") ? "gif" : "png";
   return `https://cdn.discordapp.com/avatars/${id}/${avatarHash}.${ext}?size=128`;
 }
@@ -401,7 +404,7 @@ export function registerAuthRoutes(app: Express): void {
       getLatestGhRelease(),
     ]);
     const fileVersion = readVersionFromFile();
-    const CURRENT = "5.2.11";
+    const CURRENT = "5.2.12";
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
 

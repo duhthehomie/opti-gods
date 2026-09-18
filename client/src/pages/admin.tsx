@@ -2850,7 +2850,7 @@ function ProUsersTab({ headers }: { headers: Record<string, string> }) {
       if (!res.ok) throw new Error("Failed to load Pro entitlements");
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 2_000,
   });
 
   const grantMutation = useMutation({
@@ -3641,7 +3641,7 @@ export default function Admin() {
     },
     enabled: authed,
     retry: false,
-    refetchInterval: 10000,
+    refetchInterval: 2_000,
   });
 
   const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
@@ -3699,17 +3699,18 @@ export default function Admin() {
 
   // Pro Sessions — all active sessions with identity info
   type SessionRow = {
-    id: number; sessionToken: string; tokenMasked: string;
+    id: number | string; sessionToken: string | null; tokenMasked: string;
     codeRef: string | null; createdAt: string | null; lastCheckedAt: string | null; ipAddress: string | null;
     email: string | null; discordUsername: string | null; discordId: string | null; discordAvatarUrl: string | null;
     codeNote: string | null;
     ipCity: string | null; ipRegion: string | null; ipCountry: string | null;
+    isPro: boolean; proSource: string | null; sessionKind: "pro" | "account";
   };
   const sessionsQuery = useQuery<SessionRow[]>({
     queryKey: ["/api/admin/sessions", key],
     queryFn: () => fetch(apiUrl("/api/admin/sessions"), { headers }).then(r => r.json()),
     enabled: authed,
-    refetchInterval: 30_000, // refresh every 30s so online status stays current
+    refetchInterval: 3_000,
   });
 
   const revokeSession = useMutation({
@@ -5566,9 +5567,9 @@ export default function Admin() {
         {tab === "sessions" && (() => {
           const sessions = sessionsQuery.data ?? [];
           const now = Date.now();
-          // "Online" = last ping within 2 hours (covers .exe users who ping once on open)
+          // Clients heartbeat every 20 seconds. Allow brief sleep/network gaps.
           const isOnline = (s: { lastCheckedAt: string | null }) =>
-            s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 2 * 60 * 60_000 : false;
+            s.lastCheckedAt ? now - new Date(s.lastCheckedAt).getTime() < 2 * 60_000 : false;
           const onlineCount = sessions.filter(isOnline).length;
 
           // Orphan sessions: codeRef doesn't start with admin-/friend: AND doesn't match any real code
@@ -5684,6 +5685,7 @@ export default function Admin() {
                                 )}
                               </div>
                               <span className="text-[11px] text-emerald-300 font-semibold max-w-[120px] truncate">{name}</span>
+                              <span className={cn("text-[8px] font-black rounded px-1 py-0.5", s.isPro ? "bg-amber-500/15 text-amber-300" : "bg-zinc-800 text-zinc-400")}>{s.isPro ? "PRO" : "FREE"}</span>
                               {minutesAgo !== null && (
                                 <span className="text-[9px] text-emerald-600 shrink-0">
                                   {minutesAgo === 0 ? "now" : `${minutesAgo}m`}
@@ -5721,7 +5723,7 @@ export default function Admin() {
               })()}
 
               <div className="text-[10px] text-zinc-600 leading-relaxed">
-                Each row is a device that redeemed a Pro code or friend link. "Online" means they loaded the app in the last 15 min. Revoking kills their session immediately — they're locked out on next page load. Sessions = codes (1 active session per code — re-entering a code on a new device replaces the old session).
+                Each row is a Discord-authenticated website or Windows app session. "Online" means its secure heartbeat arrived in the last 2 minutes. Pro/free status comes from the server.
               </div>
 
               {sessionsQuery.isLoading ? (
@@ -5765,6 +5767,9 @@ export default function Admin() {
                                 ? "bg-emerald-400 ring-emerald-400/30 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
                                 : "bg-zinc-700 ring-zinc-700/30"
                             )} />
+                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/10 bg-zinc-900">
+                              {s.discordAvatarUrl ? <img src={s.discordAvatarUrl} alt={s.discordUsername ?? "Discord user"} className="h-full w-full object-cover" /> : null}
+                            </div>
                             <div className="flex-1 min-w-0">
                               {s.email ? (
                                 <p className="text-xs font-semibold text-white truncate">{s.email}</p>
@@ -5803,6 +5808,9 @@ export default function Admin() {
                             )}>
                               {online ? "ONLINE" : "OFFLINE"}
                             </span>
+                            <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded border", s.isPro ? "border-amber-500/25 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900 text-zinc-400")}>
+                              {s.isPro ? "PRO" : "FREE"}
+                            </span>
                             {s.discordId && (
                               <button
                                 data-testid={`button-graphics-studio-${s.id}`}
@@ -5827,18 +5835,18 @@ export default function Admin() {
                                 <Palette className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <button
+                            {s.sessionToken && <button
                               data-testid={`button-revoke-session-${s.id}`}
                               onClick={() => {
                                 if (confirm(`Revoke session for ${s.email ?? s.tokenMasked}?\n\nThey lose Pro access immediately.`))
-                                  revokeSession.mutate(s.sessionToken);
+                                  revokeSession.mutate(s.sessionToken!);
                               }}
                               disabled={revokeSession.isPending}
                               className="p-1.5 rounded hover:bg-red-500/10 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
                               title="Revoke this session"
                             >
                               <XCircle className="w-3.5 h-3.5" />
-                            </button>
+                            </button>}
                           </div>
 
                           {/* Row 2: code info + timestamps */}

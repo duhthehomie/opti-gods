@@ -94,6 +94,7 @@ export interface IStorage {
   // Discord-authenticated users
   upsertUser(data: InsertUser): Promise<User>;
   getUser(discordId: string): Promise<User | null>;
+  touchUserActivity(discordId: string): Promise<void>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -140,7 +141,7 @@ export interface IStorage {
   // gating (requirePaidPro, GET /api/pro/status) to avoid full-table scans.
   getProEntitlement(discordUserId: string): Promise<ProEntitlement | null>;
   listProUsers(): Promise<(ProEntitlement & { username: string | null; avatarUrl: string | null })[]>;
-  listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null }[]>;
+  listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null; lastLoginAt: Date | null }[]>;
   // Native bearer tokens — persisted so .exe users survive server restarts
   persistNativeToken(token: string, userId: string, expiresAt: number): Promise<void>;
   lookupNativeToken(token: string): Promise<{ userId: string; expiresAt: number } | null>;
@@ -932,6 +933,10 @@ export class DatabaseStorage implements IStorage {
     return row ?? null;
   }
 
+  async touchUserActivity(discordId: string): Promise<void> {
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.discordId, discordId));
+  }
+
   async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean; auditLogEnabled?: boolean; auditWebhookUrl?: string | null }): Promise<AdminSettings> {
     const existing = await this.getAdminSettings();
     if (existing) {
@@ -1189,12 +1194,13 @@ export class DatabaseStorage implements IStorage {
     return rows[0] ?? null;
   }
 
-  async listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null }[]> {
+  async listDiscordUsers(): Promise<{ discordId: string; username: string; globalName: string | null; avatarUrl: string | null; lastLoginAt: Date | null }[]> {
     return db.select({
       discordId: users.discordId,
       username: users.username,
       globalName: users.globalName,
       avatarUrl: users.avatarUrl,
+      lastLoginAt: users.lastLoginAt,
     }).from(users);
   }
 
