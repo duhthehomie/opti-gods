@@ -1,4 +1,4 @@
 {
-  "version": "5.2.18",
-  "notes": "V5.2.18 — removes the launch-time restore gate; native changes still require a verified restore point when applied."
+  "version": "5.2.19",
+  "notes": "V5.2.19 — anonymous Windows users can use the 15 native free tweaks; website visitors remain download-only."
 }

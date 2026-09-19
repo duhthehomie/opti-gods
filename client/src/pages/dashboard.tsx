@@ -407,7 +407,7 @@ export default function Dashboard() {
 
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !native) {
       loginWithDiscord("/dashboard");
       return;
     }
@@ -453,7 +453,7 @@ export default function Dashboard() {
 
   const applyAllRecommended = () => {
     if (bulkApplying || (native && recommendedApplied) || proStatusLoading) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !native) {
       loginWithDiscord("/dashboard");
       return;
     }
@@ -595,7 +595,7 @@ export default function Dashboard() {
                 </ProUnlockButton>
               )}
 
-              {isAuthenticated ? (
+              {isAuthenticated || native ? (
                 <Button
                   data-testid="button-full-optimize"
                   onClick={applyAllRecommended}
@@ -1136,7 +1136,7 @@ export default function Dashboard() {
                 <CheckCircle2 className="w-5 h-5" />
                 {enabledCount} Tweaks Enabled
               </div>
-            ) : isAuthenticated ? (
+            ) : isAuthenticated || native ? (
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
