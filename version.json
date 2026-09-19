@@ -1,4 +1,4 @@
 {
-  "version": "5.2.21",
-  "notes": "V5.2.21 — creates the Windows safety checkpoint in the background at launch without blocking the app."
+  "version": "5.2.22",
+  "notes": "V5.2.22 — loads the documented Windows restore provider directly so the safety checkpoint can be created reliably."
 }

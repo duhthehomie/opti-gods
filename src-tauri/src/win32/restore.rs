@@ -12,14 +12,15 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-use windows::Win32::Foundation::RPC_E_TOO_LATE;
+use windows::Win32::Foundation::{BOOL, RPC_E_TOO_LATE};
 use windows::Win32::System::Com::{
     CoInitializeSecurity, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
 };
 use windows::Win32::System::Restore::{
-    SRSetRestorePointW, BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW,
-    STATEMGRSTATUS,
+    BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW, STATEMGRSTATUS,
 };
+use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+use windows::core::{w, PCSTR};
 use wmi::{COMLibrary, WMIConnection};
 
 /// SRSetRestorePointW requires COM security to be initialized before it is
@@ -55,6 +56,24 @@ fn ensure_com_security() -> Result<()> {
     Ok(())
 }
 
+/// Microsoft documents SrClient.dll as the runtime provider for
+/// SRSetRestorePointW and recommends resolving it dynamically. Do that
+/// explicitly instead of relying on the generated import library metadata.
+fn set_restore_point(
+    restore_point: &RESTOREPOINTINFOW,
+    status: &mut STATEMGRSTATUS,
+) -> Result<BOOL> {
+    type SrSetRestorePointW =
+        unsafe extern "system" fn(*const RESTOREPOINTINFOW, *mut STATEMGRSTATUS) -> BOOL;
+
+    let module = unsafe { LoadLibraryW(w!("SrClient.dll")) }
+        .context("LoadLibraryW(SrClient.dll)")?;
+    let procedure = unsafe { GetProcAddress(module, PCSTR(b"SRSetRestorePointW\0".as_ptr())) }
+        .ok_or_else(|| anyhow!("GetProcAddress(SRSetRestorePointW) failed"))?;
+    let function: SrSetRestorePointW = unsafe { std::mem::transmute(procedure) };
+    Ok(unsafe { function(restore_point, status) })
+}
+
 pub fn create(label: &str) -> Result<RestorePoint> {
     ensure_com_security()?;
     // SRSetRestorePointW expects a 64-char description in a fixed-size buffer.
@@ -71,7 +90,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
         szDescription: desc,
     };
     let mut begin_status = STATEMGRSTATUS::default();
-    let ok = unsafe { SRSetRestorePointW(&mut begin_info, &mut begin_status) };
+    let ok = set_restore_point(&begin_info, &mut begin_status)?;
     if !ok.as_bool() {
         let status_code = begin_status.nStatus.0;
         let seq = begin_status.llSequenceNumber;
@@ -92,7 +111,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
         szDescription: desc,
     };
     let mut end_status = STATEMGRSTATUS::default();
-    let ok = unsafe { SRSetRestorePointW(&mut end_info, &mut end_status) };
+    let ok = set_restore_point(&end_info, &mut end_status)?;
     if !ok.as_bool() {
         let status_code = end_status.nStatus.0;
         let seq = end_status.llSequenceNumber;
