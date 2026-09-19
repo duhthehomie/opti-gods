@@ -3,7 +3,7 @@ import { getNativeAuthHeaders, queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect, lazy, Suspense } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect, lazy, Suspense } from "react";
 import { setProStatus } from "@/lib/pro-status";
 import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +19,7 @@ import { showLoginSuccess } from "@/lib/auth-feedback";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { NativeRestoreReadinessBanner } from "@/components/native-restore-readiness-banner";
+import { installGlobalErrorReporting, reportClientError } from "@/lib/client-error-reporter";
 
 // Always eager — these are the first screens the user sees
 import Landing from "@/pages/landing";
@@ -232,7 +233,46 @@ function SessionHeartbeat() {
   return null;
 }
 
+class ClientErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; supportCode: string | null }> {
+  state = { error: null, supportCode: null } as { error: Error | null; supportCode: string | null };
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    const supportCode = reportClientError(
+      new Error(`${error.message}\n${info.componentStack || ""}`),
+      "crash",
+      "React render error",
+    );
+    this.setState({ error, supportCode });
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="min-h-screen bg-black px-6 py-20 text-zinc-100">
+        <div className="mx-auto max-w-xl rounded-2xl border border-red-500/30 bg-zinc-950 p-8 shadow-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-400">Opti Gods error reader</p>
+          <h1 className="mt-3 text-2xl font-black">This screen failed safely</h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-400">
+            No Windows tweak was marked successful. Reload the app and retry. The error was recorded for diagnosis.
+          </p>
+          <p className="mt-5 rounded-lg border border-white/10 bg-black/40 px-4 py-3 font-mono text-xs text-amber-300">
+            Support code: {this.state.supportCode || "OG-UI-UNKNOWN"}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-500"
+          >
+            Reload Opti Gods
+          </button>
+        </div>
+      </main>
+    );
+  }
+}
+
 function App() {
+  useEffect(() => installGlobalErrorReporting(), []);
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -246,11 +286,13 @@ function App() {
         <FriendUnlockHandler />
         <Toaster />
         <NativeRestoreReadinessBanner />
-        <AuthGate>
-          <Router />
-          <UpdateModal />
-          <VersionPin />
-        </AuthGate>
+        <ClientErrorBoundary>
+          <AuthGate>
+            <Router />
+            <UpdateModal />
+            <VersionPin />
+          </AuthGate>
+        </ClientErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.19",
-  "notes": "V5.2.19 — anonymous Windows users can use the 15 native free tweaks; website visitors remain download-only."
+  "version": "5.2.20",
+  "notes": "V5.2.20 — adds the sanitized client error reader and support-code reporting for release diagnostics."
 }

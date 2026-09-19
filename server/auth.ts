@@ -404,7 +404,7 @@ export function registerAuthRoutes(app: Express): void {
       getLatestGhRelease(),
     ]);
     const fileVersion = readVersionFromFile();
-    const CURRENT = "5.2.19";
+    const CURRENT = "5.2.20";
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
 
