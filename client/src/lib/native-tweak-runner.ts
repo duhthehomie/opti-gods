@@ -95,6 +95,25 @@ export async function applyTweakBatch(
     // page would otherwise show a false success toast before navigation.
     return new Promise<never>(() => {});
   }
+  const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
+  const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
+  const unsupportedFailures = unsupportedIds.map(id => ({
+    id,
+    message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
+  }));
+  unsupportedIds.forEach((id, index) => onProgress?.({
+    id, index, total: uniqueIds.length, status: "failed",
+    message: unsupportedFailures.find(failure => failure.id === id)?.message,
+  }));
+
+  // Browser mode is selection/script mode, not native execution mode. Do not
+  // call the Windows-only allowance endpoint here: guests may browse, select,
+  // and generate a script without a Discord session or device identity.
+  if (!native) {
+    for (const id of compatibleIds) useOptimizationStore.getState().setTweak(id, true);
+    return { appliedIds: [], selectedIds: compatibleIds, unsupportedIds, failures: unsupportedFailures };
+  }
+
   const nativeAuth = native ? await getNativeAuthToken() : null;
   const deviceId = getPersistentDeviceId();
   const proSession = localStorage.getItem(PRO_SESSION_KEY);
@@ -109,7 +128,6 @@ export async function applyTweakBatch(
     throw new Error(native ? "OG-AUTH-001 · Windows device identity unavailable." : "OG-AUTH-001 · Open Opti Gods in the Windows app.");
   }
   const allowance = await allowanceResponse.json() as { pro: boolean; remaining: number | null };
-  const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
   // Native ticket issuance is the authoritative entitlement check.  Do not
   // slice native batches by the cached remaining count: active free tweaks
   // may already occupy allowance slots, and Best 15 must report each ticket
@@ -120,20 +138,6 @@ export async function applyTweakBatch(
       ? compatibleIds
       : compatibleIds.slice(0, Math.max(0, allowance.remaining ?? 0));
   const supportedIds = entitledIds;
-  const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
-  const unsupportedFailures = unsupportedIds.map(id => ({
-    id,
-    message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
-  }));
-  unsupportedIds.forEach((id, index) => onProgress?.({
-    id, index, total: uniqueIds.length, status: "failed",
-    message: unsupportedFailures.find(failure => failure.id === id)?.message,
-  }));
-
-  if (!native) {
-    for (const id of entitledIds) useOptimizationStore.getState().setTweak(id, true);
-    return { appliedIds: [], selectedIds: entitledIds, unsupportedIds, failures: [] };
-  }
 
   if (!credential) {
     const message = "OG-AUTH-001 · Windows device identity unavailable. Reopen the Windows app to refresh the device identity.";

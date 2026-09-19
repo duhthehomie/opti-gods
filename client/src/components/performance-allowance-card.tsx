@@ -43,6 +43,10 @@ export function PerformanceAllowanceCard() {
     })
     .finally(() => setLoaded(true));
   useEffect(() => {
+    if (!isNative()) {
+      setLoaded(true);
+      return;
+    }
     void refresh();
     const onAllowanceChanged = () => { void refresh(); };
     window.addEventListener("optigods:allowance-changed", onAllowanceChanged);
@@ -144,7 +148,10 @@ export function PerformanceAllowanceCard() {
     return () => window.removeEventListener("optigods:enable-best-free", trigger);
   }, [authRequired, status?.remaining, tweaks]);
 
-  if (!loaded || status?.pro) return null;
+  // Guests can browse and select tweaks, but this card is specifically for
+  // native Windows entitlement slots. Do not show an action that can only
+  // return "Windows app required" in an unsigned browser session.
+  if (!loaded || status?.pro || !isNative()) return null;
 
   return (
     <>

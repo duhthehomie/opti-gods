@@ -111,6 +111,12 @@ function sectionCount(section: Section): number {
 const TAB_STORAGE_KEY  = "optigods_tweaks_active_group";
 const SHOW_ALL_KEY     = "optigods_tweaks_show_all";
 const ACTIVE_SECT_KEY  = "optigods_tweaks_active_section";
+function summarizeRunFailures(failures: { id: string; message: string }[]): string {
+  const messages = Array.from(new Set(failures.map(failure => failure.message))).slice(0, 2);
+  const detail = messages.join(" ");
+  const remaining = failures.length - messages.length;
+  return `${failures.length} result${failures.length === 1 ? "" : "s"} failed. ${detail}${remaining > 0 ? ` ${remaining} other results are listed in the runner.` : ""}`;
+}
 
 type TabId = "all" | GroupId;
 const TABS: { id: TabId; label: string }[] = [
@@ -355,12 +361,15 @@ export default function TweaksPage() {
       // Native mode navigates to the live runner. Browser mode still reports
       // selection/compatibility clearly and never claims an OS change.
       if (result.failures.length || result.unsupportedIds.length) {
+        const failures = result.failures.length
+          ? result.failures
+          : result.unsupportedIds.map(id => ({
+              id,
+              message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
+            }));
         toast({
           title: "Some selected tweaks could not run",
-          description: result.failures.concat(result.unsupportedIds.map(id => ({
-            id,
-            message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
-          }))).map(failure => `${failure.id}: ${failure.message}`).join(" | "),
+          description: summarizeRunFailures(failures),
           variant: "destructive",
         });
       } else if (!isNative()) {
