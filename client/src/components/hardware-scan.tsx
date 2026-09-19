@@ -152,10 +152,15 @@ export function HardwareScanZone({ onScanned, onCleared, isScanned, defaultExpan
         IsLaptop: native.is_laptop ?? undefined,
       };
       await uploadValidatedHardwareScan(native);
-      await uploadHardwareToServer(parsed);
+      // This legacy admin-panel sync is optional. The validated upload above
+      // is the authoritative scan used by Best 15 and Full Optimize, so a
+      // secondary admin sync failure must never relabel a successful scan.
+      uploadHardwareToServer(parsed).catch(error => {
+        console.warn("[hardware-scan] optional admin sync failed", error);
+      });
       onScanned(parsed);
       setExpanded(false);
-      toast({ title: "Native scan validated", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}` });
+      toast({ title: "Native scan validated", description: `GPU: ${parsed.GPU || "?"} · RAM: ${parsed.RAM_GB ?? "?"}GB · CPU: ${parsed.CPU || "?"}`, variant: "success" });
     } catch (err: any) {
       toast({ title: "Native scan failed", description: String(err?.message || err), variant: "destructive" });
     }

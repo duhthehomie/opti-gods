@@ -5,12 +5,29 @@ export const NATIVE_TOKEN_KEY = "optigods_native_auth_token";
 export const NATIVE_ADMIN_KEY = "optigods_admin_key";
 export const DEVICE_ID_KEY = "optigods_device_id";
 export const BEST_15_IDS_KEY = "optigods_best_15_ids";
+export const PRO_SESSION_KEY = "optigods_session_v2";
+
+function createDeviceId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID().toLowerCase();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function getPersistentDeviceId(): string {
   try {
     const existing = localStorage.getItem(DEVICE_ID_KEY);
     if (existing && /^[a-f0-9-]{36}$/i.test(existing)) return existing.toLowerCase();
-    const created = crypto.randomUUID().toLowerCase();
+    const created = createDeviceId();
     localStorage.setItem(DEVICE_ID_KEY, created);
     return created;
   } catch {
@@ -23,6 +40,8 @@ export function getNativeAuthHeaders(): Record<string, string> {
   try {
     const token = localStorage.getItem(NATIVE_TOKEN_KEY);
     if (token) headers["X-Native-Auth"] = token;
+    const proSession = localStorage.getItem(PRO_SESSION_KEY);
+    if (proSession) headers["X-Pro-Session"] = proSession;
     const deviceId = getPersistentDeviceId();
     if (deviceId) headers["X-Device-ID"] = deviceId;
     const adminKey = localStorage.getItem(NATIVE_ADMIN_KEY);
@@ -44,6 +63,8 @@ export function getNativeSessionHeaders(): Record<string, string> {
   try {
     const token = localStorage.getItem(NATIVE_TOKEN_KEY);
     if (token) headers["X-Native-Auth"] = token;
+    const proSession = localStorage.getItem(PRO_SESSION_KEY);
+    if (proSession) headers["X-Pro-Session"] = proSession;
     const adminKey = localStorage.getItem(NATIVE_ADMIN_KEY);
     if (adminKey) headers["X-Admin-Key"] = adminKey;
   } catch { /* localStorage may not be available */ }

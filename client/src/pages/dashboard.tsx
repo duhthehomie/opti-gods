@@ -595,7 +595,7 @@ export default function Dashboard() {
                 </ProUnlockButton>
               )}
 
-              {isAuthenticated && (
+              {isAuthenticated ? (
                 <Button
                   data-testid="button-full-optimize"
                   onClick={applyAllRecommended}
@@ -612,6 +612,15 @@ export default function Dashboard() {
                   ) : (
                     <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? (native ? "Full Optimize" : "Select Pro preset for script") : "Enable Best 15 Tweaks"}</>
                   )}
+                </Button>
+              ) : (
+                <Button
+                  data-testid="button-best15-login"
+                  onClick={() => loginWithDiscord("/dashboard")}
+                  className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
+                >
+                  <Rocket className="w-4 h-4 mr-2" />
+                  Best 15 Tweaks
                 </Button>
               )}
 
@@ -1137,7 +1146,17 @@ export default function Dashboard() {
                 <Rocket className="w-5 h-5 mr-2" />
                 {bulkApplying ? "Applying…" : isPro ? "Full Optimize This PC" : "Enable Best 15 Tweaks"}
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                data-testid="button-best15-login-banner"
+                onClick={() => loginWithDiscord("/dashboard")}
+                disabled={bulkApplying}
+                className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-8 py-3 text-base rounded-xl"
+              >
+                <Rocket className="w-5 h-5 mr-2" />
+                Best 15 Tweaks
+              </Button>
+            )}
             <span className="text-[10px] text-zinc-600 text-center">
               {recommendedApplied ? "You can still customize any tweak below" : "Safe for all PCs · Reversible · No data deleted"}
             </span>

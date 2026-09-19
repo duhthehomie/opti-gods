@@ -194,6 +194,8 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     let mut validation_request = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"));
     validation_request = if let Some(device_id) = ticket.1.strip_prefix("device:") {
         validation_request.header("X-Device-ID", device_id)
+    } else if let Some(pro_session) = ticket.1.strip_prefix("pro:") {
+        validation_request.header("X-Pro-Session", pro_session)
     } else {
         validation_request.header("X-Native-Auth", ticket.1)
     };

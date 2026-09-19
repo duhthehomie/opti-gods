@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
@@ -329,12 +329,15 @@ export default function Nvidia() {
     if (id === "ImportNvidiaPresetPro" && !window.confirm("Create a verified Windows restore point, then import the verified performance preset? This changes the global NVIDIA driver profile.")) return;
     setProToolBusy(id);
     try {
-      const auth = await getNativeAuthToken();
-      if (!auth) throw new Error("Sign in to Pro in the Windows app before using this tool.");
+      const nativeAuth = await getNativeAuthToken();
+      const proSession = localStorage.getItem(PRO_SESSION_KEY);
+      const deviceId = getPersistentDeviceId();
+      const auth = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
+      if (!auth) throw new Error("Sign in or redeem Pro in the Windows app before using this tool.");
       const response = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-        body: JSON.stringify({ tweakId: id }),
+        body: JSON.stringify({ tweakId: id, sessionToken: proSession ?? undefined }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || typeof body.ticket !== "string") throw new Error(body.error || "The server did not authorize this one-use Pro tool ticket.");

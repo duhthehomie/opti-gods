@@ -11,7 +11,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getStoredToken } from "@/lib/pro-status";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
-import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
+import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -123,13 +123,15 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       // No client-side counter or Pro flag is used for authorization.
       const nativeAuth = await getNativeAuthToken();
       const deviceId = getPersistentDeviceId();
-      const credential = nativeAuth || (deviceId ? `device:${deviceId}` : null);
+      const proSession = localStorage.getItem(PRO_SESSION_KEY);
+      const credential = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
       if (!credential) throw new Error("OG-AUTH-001 · Windows device identity unavailable.");
       const auth = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
         body: JSON.stringify({
           tweakId: id,
+          sessionToken: proSession ?? undefined,
           idempotencyKey: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^A-Za-z0-9_-]/g, ""),
         }),
       });

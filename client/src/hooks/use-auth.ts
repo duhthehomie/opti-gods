@@ -73,11 +73,13 @@ export function useLogout() {
         if (isNative()) {
           await discordLogout().catch(() => {});
           localStorage.removeItem("optigods_native_auth_token"); // NATIVE_TOKEN_KEY
-          localStorage.removeItem("og_guest_mode"); // GUEST_MODE_KEY
         }
       } catch {
         // Browser build — tauri-bridge just no-ops anyway
       }
+      // Logout always ends guest browsing too. The next protected route must
+      // require a fresh Discord login in both browser and native builds.
+      try { localStorage.removeItem("og_guest_mode"); } catch {}
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/me"], { user: null });

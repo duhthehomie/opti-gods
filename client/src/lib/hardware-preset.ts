@@ -1,5 +1,5 @@
 import { apiUrl } from "@/lib/api-base";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { getNativeAuthHeaders, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { isNative } from "@/lib/tauri-bridge";
 import { scanAndUploadValidatedHardware } from "@/lib/hardware-scan-sync";
 
@@ -18,6 +18,7 @@ async function requestHardwarePreset(): Promise<{ response: Response; body: any 
     body: JSON.stringify({
       mode: "best",
       preview: true,
+      sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
       idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
     }),
   });

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { playFeedbackSound, useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useGenerateScript } from "@/hooks/use-script";
 import { queueTweakBatch } from "@/lib/native-tweak-runner";
@@ -1216,7 +1216,16 @@ export default function SystemScanPage() {
            toast({ title: "Instant Scan complete", description: "Hardware validated and ready for your PC-specific recommendations.", variant: "success" });
         }
       })
-      .catch(err => { setScanError(String(err)); })
+      .catch(err => {
+        const message = err instanceof Error ? err.message : String(err);
+        setScanError(message);
+        toast({
+          title: "Instant Scan failed",
+          description: message || "The hardware scan could not be validated.",
+          variant: "destructive",
+        });
+        playFeedbackSound(true);
+      })
       .finally(() => setScanning(false));
   }, []);
 

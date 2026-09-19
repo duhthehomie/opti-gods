@@ -1153,7 +1153,8 @@ async function requirePaidPro(req: any): Promise<boolean> {
     if (ent && ent.revokedAt) return false; // hard-deny revoked, bypass legacy token
   }
 
-  const sessionToken: string | undefined = req.body?.sessionToken || req.query?.sessionToken;
+  const sessionToken: string | undefined =
+    req.headers["x-pro-session"] || req.body?.sessionToken || req.query?.sessionToken;
   if (!sessionToken || typeof sessionToken !== 'string' || sessionToken.length < 16) return false;
   const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
   return await storage.verifyProSession(sessionToken, ip);
@@ -1562,7 +1563,6 @@ export async function registerRoutes(
   // app/API paths are nevertheless closed and the Rust ID allowlist remains
   // the native security boundary.
   const allowanceAuth = async (req: Request): Promise<string | null> => {
-    if (req.session.userId) return req.session.userId;
     const requestIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const deviceId = req.headers["x-device-id"];
     const normalizedDeviceId = typeof deviceId === "string" && /^[a-f0-9-]{36}$/i.test(deviceId)
@@ -1580,7 +1580,23 @@ export async function registerRoutes(
         }
       }
     }
-    if (!normalizedDeviceId) return null;
+    const proSession = req.headers["x-pro-session"] ?? req.body?.sessionToken;
+    if (typeof proSession === "string" && proSession.length >= 16) {
+      const valid = await storage.verifyProSession(proSession, requestIp);
+      if (valid) {
+        const codeRef = await storage.getProCodeForToken(proSession);
+        const ownerId = `pro:${codeRef || proSession.slice(0, 16)}`;
+        await storage.upsertUser({
+          discordId: ownerId,
+          username: "Opti Gods Pro device",
+          globalName: null,
+          avatarUrl: null,
+          email: null,
+        });
+        return ownerId;
+      }
+    }
+    if (!normalizedDeviceId) return req.session.userId || null;
     const ownerId = `device:${normalizedDeviceId}`;
     await storage.upsertUser({
       discordId: ownerId,
@@ -1595,6 +1611,14 @@ export async function registerRoutes(
   const allowanceOwnerMatches = async (req: Request, ownerId: string): Promise<boolean> => {
     const token = req.headers["x-native-auth"];
     if (typeof token === "string" && await validateNativeToken(token) === ownerId) return true;
+    const proSession = req.headers["x-pro-session"] ?? req.body?.sessionToken;
+    if (typeof proSession === "string" && proSession.length >= 16) {
+      const requestIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+      if (await storage.verifyProSession(proSession, requestIp)) {
+        const codeRef = await storage.getProCodeForToken(proSession);
+        if (ownerId === `pro:${codeRef || proSession.slice(0, 16)}`) return true;
+      }
+    }
     const deviceId = req.headers["x-device-id"];
     return typeof deviceId === "string" && ownerId === `device:${deviceId.toLowerCase()}` && /^[a-f0-9-]{36}$/i.test(deviceId);
   };

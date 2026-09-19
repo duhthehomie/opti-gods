@@ -45,6 +45,8 @@ async fn consume_pro_ticket(args: &ProToolArgs, id: &str) -> Result<(String, Str
     let mut request = client.post(format!("{base}/api/performance-allowance/native-ticket/consume"));
     request = if let Some(device_id) = args.native_auth.strip_prefix("device:") {
         request.header("X-Device-ID", device_id)
+    } else if let Some(pro_session) = args.native_auth.strip_prefix("pro:") {
+        request.header("X-Pro-Session", pro_session)
     } else {
         request.header("X-Native-Auth", &args.native_auth)
     };

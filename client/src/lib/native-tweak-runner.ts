@@ -2,7 +2,7 @@ import { apiUrl } from "@/lib/api-base";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
-import { getNativeAuthHeaders, getPersistentDeviceId } from "@/lib/queryClient";
+import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 const RESTORE_CREATED_KEY = "optigods-native-restore-created";
@@ -97,7 +97,8 @@ export async function applyTweakBatch(
   }
   const nativeAuth = native ? await getNativeAuthToken() : null;
   const deviceId = getPersistentDeviceId();
-  const credential = nativeAuth || (deviceId ? `device:${deviceId}` : null);
+  const proSession = localStorage.getItem(PRO_SESSION_KEY);
+  const credential = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
   const allowanceResponse = await fetchWithTimeout(
     apiUrl("/api/performance-allowance"),
     { headers: getNativeAuthHeaders() },
@@ -196,6 +197,7 @@ export async function applyTweakBatch(
           headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
           body: JSON.stringify({
             tweakId: id,
+            sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
             idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
           }),
         },
