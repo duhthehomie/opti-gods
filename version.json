@@ -1,4 +1,4 @@
 {
-  "version": "5.2.17",
-  "notes": "V5.2.17 — stops automatic System Restore repair attempts and verifies the restore point directly before native changes."
+  "version": "5.2.18",
+  "notes": "V5.2.18 — removes the launch-time restore gate; native changes still require a verified restore point when applied."
 }

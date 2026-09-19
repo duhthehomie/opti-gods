@@ -17,18 +17,14 @@ import {
   showMainWindow,
   scanHardware,
   isNative,
-  startupRestoreCheckpoint,
   type NativeEnvInfo,
-  type NativeStartupRestoreResult,
 } from "@/lib/tauri-bridge";
 import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
-import { toast } from "@/hooks/use-toast";
 import { setNativeRestoreReadiness } from "@/lib/native-readiness";
 
 export interface NativeBootResult {
   native: boolean;
   env: NativeEnvInfo | null;
-  restore: NativeStartupRestoreResult | null;
 }
 
 /** Race a promise against a timeout. Resolves with null on timeout. */
@@ -50,16 +46,13 @@ export function bootstrapNative(): Promise<NativeBootResult> {
   if (_bootPromise) return _bootPromise;
   _bootPromise = (async () => {
     if (!isNative()) {
-      return { native: false, env: null, restore: null };
+      return { native: false, env: null };
     }
-    setNativeRestoreReadiness({
-      ok: false,
-      status: "checking",
-      repair_attempted: false,
-      restore_point: null,
-      message: "Checking System Protection and creating a verified launch restore point…",
-      recovery: "Native tweak controls will unlock after this check completes.",
-    });
+    // Restore readiness is checked at the exact point a native mutation is
+    // requested. A launch-time checkpoint made the entire app appear broken
+    // when Windows denied an optional repair command, even though browsing,
+    // scanning, Pro entitlement, and free-tweak selection were usable.
+    setNativeRestoreReadiness(null);
 
     // Step 1 — Show the window FIRST, before any other work.
     // The window starts with visible:false so WebView2 initialises hidden
@@ -72,58 +65,7 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       console.warn("[native] showMainWindow failed", err);
     }
 
-    // Step 2 — establish the verified rollback point before any other native
-    // work.  The Rust apply command independently enforces this too.
-    let restore: NativeStartupRestoreResult | null = null;
-    try {
-      restore = await withTimeout(startupRestoreCheckpoint(), 15_000, "startupRestoreCheckpoint");
-      if (!restore) {
-        restore = {
-          ok: false,
-          status: "verification_failed",
-          repair_attempted: false,
-          restore_point: null,
-          message: "Windows did not report the launch restore point within 15 seconds.",
-          recovery: "Native tweaks remain paused. Check System Protection for C:, then restart Opti Gods and retry.",
-        };
-      }
-      if (restore?.ok) {
-        setNativeRestoreReadiness(restore);
-        const point = restore.restore_point;
-        toast({
-          title: "Restore point ready",
-          description: point
-            ? `${point.label} (#${point.sequence_number}) was verified${restore.repair_attempted ? " after checking System Protection" : ""}. Native tweaks are protected.`
-            : restore.message,
-          variant: "success",
-        });
-      } else if (restore) {
-        setNativeRestoreReadiness(restore);
-        toast({
-          title: "Native tweaks are paused",
-          description: `${restore.message} ${restore.recovery}`,
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      restore = {
-        ok: false,
-        status: "creation_failed",
-        repair_attempted: false,
-        restore_point: null,
-        message: `The launch restore-point check failed: ${message}`,
-        recovery: "Run as administrator, turn on System Protection for C:, then restart and retry.",
-      };
-      toast({
-        title: "Native tweaks are paused",
-        description: `${restore.message} ${restore.recovery}`,
-        variant: "destructive",
-      });
-      setNativeRestoreReadiness(restore);
-    }
-
-    // Step 3 — gather env info and start ProBalance (non-blocking).
+    // Step 2 — gather environment information (non-blocking).
     let env: NativeEnvInfo | null = null;
     try {
       env = await withTimeout(envInfo(), 5_000, "envInfo");
@@ -131,17 +73,13 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       console.warn("[native] envInfo failed", err);
     }
 
-    if (restore?.ok) {
-      try {
-        await withTimeout(startProBalance(), 5_000, "startProBalance");
-      } catch (err) {
-        console.warn("[native] startProBalance failed", err);
-      }
-    } else {
-      console.info("[native] ProBalance held until restore readiness is verified");
+    try {
+      await withTimeout(startProBalance(), 5_000, "startProBalance");
+    } catch (err) {
+      console.warn("[native] startProBalance failed", err);
     }
 
-    // Step 4 — silent auto-scan if no hardware data exists yet.
+    // Step 3 — silent auto-scan if no hardware data exists yet.
     // Replaces the web onboarding wizard entirely in the .exe.
     if (!getScannedInfo()) {
       try {
@@ -155,7 +93,7 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       }
     }
 
-    return { native: true, env, restore };
+    return { native: true, env };
   })();
   return _bootPromise;
 }
