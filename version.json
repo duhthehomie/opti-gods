@@ -1,4 +1,4 @@
 {
-  "version": "5.2.20",
-  "notes": "V5.2.20 — adds the sanitized client error reader and support-code reporting for release diagnostics."
+  "version": "5.2.21",
+  "notes": "V5.2.21 — creates the Windows safety checkpoint in the background at launch without blocking the app."
 }

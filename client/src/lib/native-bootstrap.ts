@@ -16,8 +16,10 @@ import {
   startProBalance,
   showMainWindow,
   scanHardware,
+  startupRestoreCheckpoint,
   isNative,
   type NativeEnvInfo,
+  type NativeStartupRestoreResult,
 } from "@/lib/tauri-bridge";
 import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { setNativeRestoreReadiness } from "@/lib/native-readiness";
@@ -48,12 +50,6 @@ export function bootstrapNative(): Promise<NativeBootResult> {
     if (!isNative()) {
       return { native: false, env: null };
     }
-    // Restore readiness is checked at the exact point a native mutation is
-    // requested. A launch-time checkpoint made the entire app appear broken
-    // when Windows denied an optional repair command, even though browsing,
-    // scanning, Pro entitlement, and free-tweak selection were usable.
-    setNativeRestoreReadiness(null);
-
     // Step 1 — Show the window FIRST, before any other work.
     // The window starts with visible:false so WebView2 initialises hidden
     // (avoiding the Win32 "Not Responding" freeze the user would otherwise
@@ -64,6 +60,33 @@ export function bootstrapNative(): Promise<NativeBootResult> {
     } catch (err) {
       console.warn("[native] showMainWindow failed", err);
     }
+
+    // Create the safety checkpoint after the window is visible. This runs in
+    // the background so a Windows restore/API problem never makes launch look
+    // broken. Native mutation remains blocked by the Rust backstop until this
+    // same checkpoint is verified.
+    const checking: NativeStartupRestoreResult = {
+      ok: false,
+      status: "checking",
+      repair_attempted: false,
+      restore_point: null,
+      message: "Preparing the Windows safety checkpoint…",
+      recovery: "You can browse and scan while this finishes.",
+    };
+    setNativeRestoreReadiness(checking);
+    void startupRestoreCheckpoint()
+      .then((result) => setNativeRestoreReadiness(result))
+      .catch((error) => {
+        const detail = error instanceof Error ? error.message : "The safety checkpoint could not be checked.";
+        setNativeRestoreReadiness({
+          ok: false,
+          status: "creation_failed",
+          repair_attempted: false,
+          restore_point: null,
+          message: `System Protection could not be verified: ${detail}`,
+          recovery: "Native tweaks are paused. Press Retry after checking System Protection for drive C:.",
+        });
+      });
 
     // Step 2 — gather environment information (non-blocking).
     let env: NativeEnvInfo | null = null;

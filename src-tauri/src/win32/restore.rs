@@ -12,13 +12,51 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
+use windows::Win32::Foundation::RPC_E_TOO_LATE;
+use windows::Win32::System::Com::{
+    CoInitializeSecurity, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
+};
 use windows::Win32::System::Restore::{
     SRSetRestorePointW, BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW,
     STATEMGRSTATUS,
 };
 use wmi::{COMLibrary, WMIConnection};
 
+/// SRSetRestorePointW requires COM security to be initialized before it is
+/// called. WMI may initialize COM on a worker thread, but that does not
+/// satisfy the System Restore callback requirement. Windows returns
+/// RPC_E_TOO_LATE when another component already initialized process COM
+/// security; that is safe to accept because the process already has a policy.
+fn ensure_com_security() -> Result<()> {
+    static INITIALIZATION_ERROR: OnceLock<Option<String>> = OnceLock::new();
+    let error = INITIALIZATION_ERROR.get_or_init(|| unsafe {
+        match CoInitializeSecurity(
+            None,
+            -1,
+            None,
+            None,
+            RPC_C_AUTHN_LEVEL_DEFAULT,
+            RPC_C_IMP_LEVEL_IMPERSONATE,
+            None,
+            EOAC_NONE,
+            None,
+        ) {
+            Ok(()) => None,
+            Err(error) if error.code() == RPC_E_TOO_LATE => None,
+            Err(error) => Some(format!(
+                "CoInitializeSecurity failed (HRESULT {:#x})",
+                error.code().0
+            )),
+        }
+    });
+    if let Some(error) = error {
+        return Err(anyhow!(error));
+    }
+    Ok(())
+}
+
 pub fn create(label: &str) -> Result<RestorePoint> {
+    ensure_com_security()?;
     // SRSetRestorePointW expects a 64-char description in a fixed-size buffer.
     let mut desc = [0u16; 256];
     for (i, c) in label.encode_utf16().take(63).enumerate() {
