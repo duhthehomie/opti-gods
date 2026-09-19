@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
 
+const resources = spawnSync(process.execPath, ["script/verify-v5-resources.mjs"], {
+  encoding: "utf8",
+  maxBuffer: 10 * 1024 * 1024,
+});
+if (resources.stdout) process.stdout.write(resources.stdout);
+if (resources.stderr) process.stderr.write(resources.stderr);
+if (resources.status !== 0) process.exit(resources.status || 1);
+
 const result = spawnSync(
   "cargo",
   ["check", "--manifest-path", "src-tauri/Cargo.toml", "--message-format", "short"],

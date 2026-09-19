@@ -69,6 +69,8 @@ pub fn run() {
             commands::misc::open_fivem_folder,
             commands::misc::read_text_file,
             commands::misc::read_fivem_log,
+             commands::misc::open_msi_utility,
+             commands::misc::import_nvidia_preset,
             commands::task_manager::scan_task_manager,
             commands::task_manager::kill_app,
             commands::task_manager::disable_startup_app,

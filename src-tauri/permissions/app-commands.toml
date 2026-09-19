@@ -104,6 +104,16 @@ description = "Open a detected FiveM application data folder in Explorer."
 commands.allow = ["open_fivem_folder"]
 
 [[permission]]
+identifier = "allow-open-msi-utility"
+description = "Launch the verified bundled MSI Utility v3 for an authorized Pro session."
+commands.allow = ["open_msi_utility"]
+
+[[permission]]
+identifier = "allow-import-nvidia-preset"
+description = "Import the verified bundled NVIDIA performance preset for an authorized Pro session."
+commands.allow = ["import_nvidia_preset"]
+
+[[permission]]
 identifier = "allow-scan-task-manager"
 description = "Scan running processes and startup entries."
 commands.allow = ["scan_task_manager"]
@@ -153,6 +163,8 @@ permissions = [
   "allow-env-info",
   "allow-open-downloads",
   "allow-open-fivem-folder",
+   "allow-open-msi-utility",
+   "allow-import-nvidia-preset",
   "allow-scan-task-manager",
   "allow-kill-app",
   "allow-disable-startup-app",

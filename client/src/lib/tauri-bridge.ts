@@ -151,6 +151,14 @@ export async function applyTweak(id: string, ticket?: string | null, nativeAuth?
   return invoke<NativeTweakResult>("apply_tweak", { args: { id, ticket: ticket ?? null, native_auth: nativeAuth ?? null } });
 }
 
+export async function openMsiUtility(ticket: string, nativeAuth: string): Promise<string> {
+  return invoke<string>("open_msi_utility", { args: { ticket, native_auth: nativeAuth } });
+}
+
+export async function importNvidiaPreset(ticket: string, nativeAuth: string): Promise<string> {
+  return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth } });
+}
+
 export async function undoTweak(
   id: string,
   undoToken?: string | null,

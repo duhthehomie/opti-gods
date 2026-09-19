@@ -40,6 +40,8 @@
     "allow-read-text-file",
     "allow-open-downloads",
     "allow-open-fivem-folder",
+    "allow-open-msi-utility",
+    "allow-import-nvidia-preset",
     "allow-scan-task-manager",
     "allow-kill-app",
     "allow-disable-startup-app",

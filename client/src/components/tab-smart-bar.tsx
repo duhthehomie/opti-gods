@@ -8,6 +8,16 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { isNative } from "@/lib/tauri-bridge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TabSmartBarProps {
   tweakIds: string[];
@@ -28,14 +38,18 @@ export function TabSmartBar({
   impactLabel,
   applyLabel,
 }: TabSmartBarProps) {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt } = useOptimizationStore();
   const { toast } = useToast();
   const [showTips, setShowTips] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [confirmNative, setConfirmNative] = useState(false);
 
   const active = tweakIds.filter(id => tweaks[id]).length;
   const total = tweakIds.length;
-  const recNotApplied = recommendedIds.filter(id => !tweaks[id]);
+  const confirmedRecommended = isNative()
+    ? recommendedIds.filter(id => Boolean(appliedAt[id]))
+    : recommendedIds.filter(id => Boolean(tweaks[id]));
+  const recNotApplied = recommendedIds.filter(id => !confirmedRecommended.includes(id));
   const allRecOn = recommendedIds.length > 0 && recNotApplied.length === 0;
   const pct = total > 0 ? Math.round((active / total) * 100) : 0;
 
@@ -44,11 +58,20 @@ export function TabSmartBar({
     pct >= 40 ? "text-amber-400 bg-amber-500/10 border-amber-500/20" :
     "text-zinc-500 bg-zinc-800 border-zinc-700";
 
-  async function handleApplyRecommended() {
+  async function runRecommended() {
     if (applying) return;
     setApplying(true);
     try {
       const compatible = recNotApplied.filter(id => getTweakCompatibility(id).ok);
+      if (compatible.length === 0) {
+        const blocked = recNotApplied.map(id => getTweakCompatibility(id).reason || `${id} is not compatible with this PC.`);
+        toast({
+          title: "No compatible recommendations",
+          description: blocked.slice(0, 3).join(" ") || "Every pending recommendation is already confirmed or unavailable.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (isNative()) {
         queueTweakBatch(compatible);
         window.location.assign("/applied-tweaks?run=1");
@@ -71,6 +94,14 @@ export function TabSmartBar({
     } finally {
       setApplying(false);
     }
+  }
+
+  function handleApplyRecommended() {
+    if (isNative()) {
+      setConfirmNative(true);
+      return;
+    }
+    void runRecommended();
   }
 
   return (
@@ -114,12 +145,12 @@ export function TabSmartBar({
             className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-400 hover:text-red-300 h-7 px-2.5 gap-1"
           >
             <Zap className="w-3 h-3" />
-            {applying ? "Applying…" : applyLabel ?? `${isNative() ? "Apply" : "Select"} ${recNotApplied.length} Recommended`}
+            {applying ? "Applying…" : isNative() ? (applyLabel ?? `Apply ${recNotApplied.length} Recommended`) : `Select ${recNotApplied.length} Recommended`}
           </Button>
         )}
         {allRecOn && (
           <div className="shrink-0 flex items-center gap-1 text-[10px] text-green-500 font-bold">
-            <CheckCircle2 className="w-3 h-3" /> Recommended ON
+            <CheckCircle2 className="w-3 h-3" /> {isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED"}
           </div>
         )}
 
@@ -156,6 +187,22 @@ export function TabSmartBar({
           </motion.div>
         )}
       </AnimatePresence>
+      <AlertDialog open={confirmNative} onOpenChange={setConfirmNative}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply confirmed Windows changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Opti Gods will create or verify a restore point, then run {recNotApplied.length} compatible recommended tweak{recNotApplied.length === 1 ? "" : "s"} in Applied Tweaks. Incompatible items will be reported instead of skipped silently.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmNative(false); void runRecommended(); }}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Next step hint — appears when tweaks are active */}
       <AnimatePresence>

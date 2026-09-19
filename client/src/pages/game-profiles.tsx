@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, Gamepad2, Shield, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
+import { TWEAK_REGISTRY, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
 
 type GameProfile = {
   slug: string;
@@ -11,14 +11,14 @@ type GameProfile = {
   cover: string;
   description: string;
   categories?: TweakCategory[];
-  count?: number;
+  tweakIds?: string[];
 };
 
 const PROFILES: GameProfile[] = [
   { slug: "fivem", title: "FiveM / GTA V", publisher: "Cfx.re / Rockstar Games", cover: "/game-covers/fivem.png", description: "Priority, cache, streaming, network buffers, server tools, and GTA process tuning.", categories: ["fivem"] },
   { slug: "fortnite", title: "Fortnite", publisher: "Epic Games", cover: "/game-covers/fortnite-new.png", description: "DX12, shader precompile, input latency, frame pacing, and hardware-aware graphics tuning.", categories: ["fortnite"] },
   { slug: "call-of-duty", title: "Call of Duty / Warzone", publisher: "Activision", cover: "https://cdn.akamai.steamstatic.com/steam/apps/1938090/header.jpg", description: "VRAM, texture streaming, HAGS, networking, CPU scheduling, and shader-cache fixes.", categories: ["cod"] },
-  { slug: "007-first-light", title: "007: First Light", publisher: "IO Interactive", cover: "/game-covers/007-first-light.jpg", description: "UE5 Engine.ini tuning, Lumen controls, process priority, and shader-cache preparation.", count: 13 },
+  { slug: "007-first-light", title: "007: First Light", publisher: "IO Interactive", cover: "/game-covers/007-first-light.jpg", description: "UE5 Engine.ini tuning, Lumen controls, process priority, and shader-cache preparation.", tweakIds: ["game_007firstlight", "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "Cod3500PowerPlan", "Cod3500CoreUnpark", "CodMemPriority", "CodFramePacing", "CodTdrDelay", "CodMMCSS"] },
   { slug: "rust", title: "Rust", publisher: "Facepunch Studios", cover: "/game-covers/rust.png", description: "Client configuration, CPU priority, frame cap, shadows, networking, and launch tuning.", categories: ["rust"] },
   { slug: "roblox", title: "Roblox", publisher: "Roblox Corporation", cover: "/game-covers/roblox.png", description: "FFlags, frame-rate controls, process priority, post-processing, and rendering settings.", categories: ["roblox"] },
   { slug: "discord", title: "Discord While Gaming", publisher: "Discord", cover: "https://cdn.simpleicons.org/discord/5865F2", description: "Reduce background GPU, media, notification, and process overhead during games.", categories: ["discord"] },
@@ -26,7 +26,10 @@ const PROFILES: GameProfile[] = [
 ];
 
 function profileCount(profile: GameProfile): number {
-  if (profile.count) return profile.count;
+  if (profile.tweakIds) {
+    const knownIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
+    return profile.tweakIds.filter(id => knownIds.has(id)).length;
+  }
   return (profile.categories ?? []).reduce((sum, category) => sum + tweaksByCategory(category).length, 0);
 }
 

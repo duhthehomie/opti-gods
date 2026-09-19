@@ -140,6 +140,18 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
 
 #[tauri::command]
 pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
+    if matches!(args.id.as_str(), "OpenMsiUtilityPro" | "ImportNvidiaPresetPro") {
+        return TweakResult {
+            ok: false,
+            id: args.id,
+            message: "This Pro tool is native-only; use its dedicated NVIDIA tool button.".into(),
+            undo_token: None,
+            requires_reboot: false,
+            via_powershell: false,
+            error_kind: Some(NativeErrorKind::Execution),
+            error_stage: Some(NativeErrorStage::Execution),
+        };
+    }
     #[cfg(windows)]
     if let Err(error) = crate::win32::restore::ensure_session_checkpoint(
         "OptiGods — Before Tweak Changes",

@@ -14,6 +14,7 @@ import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } fr
 import { useToast } from "@/hooks/use-toast";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_FIVEM_IDS = [
   "FiveMHighPriority","FiveMDisablePhysX","FiveMAffinityMask","FiveMIOPriority","FiveMWorkingSet",
@@ -44,7 +45,7 @@ interface Tweak {
 }
 
 export default function Fivem() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
@@ -184,7 +185,8 @@ export default function Fivem() {
 
   function renderSection(heading: string, items: Tweak[]) {
     const recommended = items.filter(t => smartRecs.ids.has(t.id)).map(t => t.id);
-    const allRecommendedOn = recommended.length > 0 && recommended.every(id => tweaks[id]);
+    const pending = getPendingRecommendationIds(recommended, tweaks, appliedAt);
+    const allRecommendedOn = recommended.length > 0 && pending.length === 0;
     return (
       <section>
         <div className="flex items-center justify-between mb-4 px-1">
@@ -193,13 +195,18 @@ export default function Fivem() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void applyTweakBatch(recommended).then(result => toast({ title: isNative() ? `${result.appliedIds.length} ${heading} tweaks applied` : `${result.selectedIds.length} ${heading} tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" }))}
+              onClick={() => {
+                if (!pending.length) { toast({ title: "No compatible pending tweaks", description: "All recommendations are already confirmed or incompatible with this PC.", variant: "destructive" }); return; }
+                if (isNative() && !window.confirm(`Apply ${pending.length} FiveM recommendations?`)) return;
+                if (isNative()) { void applyTweakBatch(pending); return; }
+                void applyTweakBatch(pending).then(result => toast({ title: `${result.selectedIds.length} ${heading} tweaks selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" }));
+              }}
               disabled={allRecommendedOn}
               data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              {allRecommendedOn ? "Recommended ON" : `Enable Recommended (${recommended.length})`}
+              {isNative() ? (allRecommendedOn ? "Recommended ON" : `Enable Recommended (${pending.length})`) : (allRecommendedOn ? "Selected" : `Select Recommended (${pending.length})`)}
             </Button>
           )}
         </div>

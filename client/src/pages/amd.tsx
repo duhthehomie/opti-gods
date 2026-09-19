@@ -15,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_AMD_IDS = [
   "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency","AmdMaxClockState",
@@ -253,7 +254,7 @@ const AMD_PRESETS = [
 ];
 
 export default function Amd() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
@@ -261,7 +262,18 @@ export default function Amd() {
 
   const amdSmartIds = ALL_AMD_IDS.filter(id => smartRecs.ids.has(id));
   const applyBulk = async (ids: string[], label = "AMD recommendations") => {
-    const result = await applyTweakBatch(ids);
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible ${label.toLowerCase()} now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
     toast({
       title: isNative() ? `${result.appliedIds.length} ${label} applied` : `${result.selectedIds.length} ${label} selected`,
       description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
@@ -270,7 +282,18 @@ export default function Amd() {
   };
 
   const applyPreset = async (preset: typeof AMD_PRESETS[number]) => {
-    const result = await applyTweakBatch(preset.tweaks.filter(k => k in tweaks));
+    const pending = getPendingRecommendationIds(preset.tweaks.filter(k => k in tweaks), tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Preset already confirmed", description: "Every compatible preset tweak is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible ${preset.title} tweaks now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
     toast({
       title: isNative() ? `${result.appliedIds.length} ${preset.title} tweaks applied` : `${result.selectedIds.length} ${preset.title} tweaks selected`,
       description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
@@ -306,7 +329,7 @@ export default function Amd() {
             data-testid="button-enable-all-amd"
             className="text-red-400 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/40 text-xs font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Enable All Recommended
+             {isNative() ? "Apply" : "Select"} All Recommended
           </Button>
         </motion.div>
 
@@ -518,13 +541,13 @@ export default function Amd() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = PERFORMANCE_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "CRITICAL").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const allOn = recIds.length > 0 && recIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
               return (
                 <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-performance"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {allOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recIds.length})`}
                 </Button>
               );
             })()}
@@ -554,13 +577,13 @@ export default function Amd() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = DRIVER_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const allOn = recIds.length > 0 && recIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
               return (
                 <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-driver"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {allOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recIds.length})`}
                 </Button>
               );
             })()}
@@ -615,13 +638,13 @@ export default function Amd() {
             <span className="text-[10px] text-zinc-600 uppercase tracking-wider mr-2">RDNA 3 / RX 7000</span>
             {(() => {
               const recIds = NEXTGEN_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const allOn = recIds.length > 0 && recIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
               return recIds.length > 0 ? (
                 <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-nextgen"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {allOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recIds.length})`}
                 </Button>
               ) : null;
             })()}
@@ -653,13 +676,14 @@ export default function Amd() {
             <span className="text-[10px] text-zinc-600 uppercase tracking-wider mr-2">Zen 2 / Zen 3 — Ryzen 3000 / 5000</span>
             {(() => {
               const cpuRecIds = ["AmdCpuCoalescingOff","AmdCpuPowerPinMax","AmdCpuCStatePolicy"];
-              const allOn = cpuRecIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(cpuRecIds, tweaks, appliedAt);
+              const allOn = cpuRecIds.length > 0 && pending.length === 0;
               return (
                 <Button variant="ghost" size="sm" onClick={() => void applyBulk(cpuRecIds, "AMD CPU recommendations")} disabled={allOn}
                   data-testid="button-enable-recommended-amd-cpu"
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : "Enable Recommended (3)"}
+                  {allOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${pending.length})`}
                 </Button>
               );
             })()}
@@ -808,7 +832,7 @@ export default function Amd() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = ["AmdD3DOptimize","AmdPCIeOptimize"];
-              const allOn = recIds.every(id => tweaks[id]);
+              const allOn = recIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
               return (
               <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn}
                   data-testid="button-enable-recommended-amd-dx"

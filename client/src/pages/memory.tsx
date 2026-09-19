@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -307,7 +308,7 @@ const VRAM_TWEAKS: Tweak[] = [
 ];
 
 export default function Memory() {
-  const { tweaks, setTweak, setAllTweaks, systemRamGB, setSystemRamGB } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak, setAllTweaks, systemRamGB, setSystemRamGB } = useOptimizationStore();
   const hw = useHardwareInfo();
   const osInfo = useOsDetection();
   const smartRecs = computeSmartRecs(hw, osInfo);
@@ -372,7 +373,22 @@ export default function Memory() {
   function renderSection(heading: string, items: Tweak[]) {
     const active = getActiveCount(items);
     const recommended = items.filter(t => t.recommended && !isTweakLocked(t).locked).map(t => t.id);
-    const allRecommendedOn = recommended.length > 0 && recommended.every(id => tweaks[id]);
+    const allRecommendedOn = recommended.length > 0 && recommended.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
+    const enableRecommended = async () => {
+      const pending = getPendingRecommendationIds(recommended, tweaks, appliedAt);
+      if (!pending.length) {
+        toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+        return;
+      }
+      if (isNative()) {
+        if (!window.confirm(`Apply ${pending.length} compatible memory recommendations now?`)) return;
+        queueTweakBatch(pending);
+        window.location.assign("/applied-tweaks?run=1");
+        return;
+      }
+      const result = await applyTweakBatch(pending);
+      toast({ title: `${result.selectedIds.length} memory recommendations selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
+    };
     return (
       <section className="text-white">
         <div className="flex items-center justify-between mb-4 px-1">
@@ -388,13 +404,13 @@ export default function Memory() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void applyTweakBatch(recommended).then(result => toast({ title: isNative() ? `${result.appliedIds.length} memory tweaks applied` : `${result.selectedIds.length} memory tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" }))}
+              onClick={() => void enableRecommended()}
               disabled={allRecommendedOn}
               data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              {allRecommendedOn ? "Recommended ON" : `Enable Recommended (${recommended.length})`}
+              {allRecommendedOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recommended.length})`}
             </Button>
           )}
         </div>

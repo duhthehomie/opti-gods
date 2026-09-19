@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 // Persist per-game whitelist toggles in localStorage so the user's choices
 // survive page reloads + show up in the generated PS1.
@@ -313,7 +314,7 @@ function downloadScript(content: string, filename: string) {
 }
 
 export default function ProcessLasso() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
   const [pinned, setPinned] = useState<Record<string, boolean>>(() =>
@@ -354,11 +355,22 @@ export default function ProcessLasso() {
   const probalanceRecIds = probalanceTweaks.filter(t => t.recommended).map(t => t.id);
   const memRecIds = memTweaks.filter(t => t.recommended).map(t => t.id);
   const applyBulk = async (ids: string[]) => {
-    const result = await applyTweakBatch(ids);
-    toast({ title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
+    toast({ title: `${result.selectedIds.length} tweaks selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
   };
-  const probalanceAllOn = probalanceRecIds.every(id => tweaks[id]);
-  const memAllOn = memRecIds.every(id => tweaks[id]);
+  const probalanceAllOn = probalanceRecIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
+  const memAllOn = memRecIds.every(id => isNative() ? Boolean(appliedAt[id]) : tweaks[id]);
 
   return (
     <AppLayout>
@@ -502,7 +514,7 @@ export default function ProcessLasso() {
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              {probalanceAllOn ? "Recommended ON" : "Enable Recommended"}
+              {probalanceAllOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended`}
             </Button>
           </div>
           <div className="space-y-4">
@@ -527,7 +539,7 @@ export default function ProcessLasso() {
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              {memAllOn ? "Recommended ON" : "Enable Recommended"}
+              {memAllOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended`}
             </Button>
           </div>
           <div className="space-y-4">

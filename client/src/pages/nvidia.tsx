@@ -13,13 +13,16 @@ import { MonitorPlay, Check, Cpu, Layers, Radio, AlertTriangle, ShieldAlert, Che
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ProUnlockButton } from "@/components/pro-gate";
+import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { isNative } from "@/lib/tauri-bridge";
+import { getNativeAuthToken, importNvidiaPreset, isNative, openMsiUtility } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","EnableMSIMode_Safe",
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","EnableNvidiaMSIPro",
   "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force"];
 
 // V2.2 — driver-class tweaks that survive game restarts but are wiped on driver
@@ -31,7 +34,6 @@ const NVIDIA_DRIVER_REAPPLY_TWEAKS = [
   { id: "NvThreadedOptOn",         title: "Threaded Optimization = ON (Global)",            desc: "Sets OGL_ThreadControl=1 and D3D_ThreadControl=1 — forces driver to offload OpenGL/D3D work to a dedicated thread. Default is 'Auto' which the driver sometimes guesses wrong on — forcing ON is correct for ~95% of modern titles.", badge: "RECOMMENDED", impact: "MED" as const },
   { id: "NvPowerMgmtMax",          title: "Power Management Mode = Prefer Max Performance", desc: "Locks PowerMizer to P0 state (PerfLevelSrc=0x2222) so the GPU never drops to lower power states between frames. Eliminates the ~1-2 frame stutter that happens when the GPU upclocks during a transition.", badge: "RECOMMENDED", impact: "HIGH" as const },
   { id: "NvFrameLimitOff",         title: "Frame Rate Limit = OFF (uncapped)",              desc: "Disables any driver-level frame-rate cap — ensures the NVIDIA driver never throttles your FPS. Use this to guarantee max FPS output.", badge: "UNCAP", impact: "LOW" as const },
-  { id: "EnableMSIMode_Safe",      title: "Safe MSI Mode (multi-device, BSOD-safe)",        desc: "V2.2 replacement for the V1 EnableMSIMode toggle that BSOD'd users on next boot. Enables Message Signaled Interrupts on GPU + active NICs + NVMe controllers, while explicitly WIPING the dangerous DevicePolicy/DevicePriority/AssignmentSetOverride keys. Skips GPU on hybrid iGPU+dGPU systems.", badge: "V2.2 SAFE", impact: "HIGH" as const },
 ];
 
 async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) {
@@ -299,20 +301,76 @@ function NvidiaBadge({ text }: { text: string }) {
 }
 
 export default function Nvidia() {
-  const { tweaks, setTweak, nvidiaPreset, setNvidiaPreset } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak, nvidiaPreset, setNvidiaPreset } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
+  const isPro = useProStatus();
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
   const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id));
+  const discreteNvidiaGpus = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated);
+  const safeMsiBlockReason = hw.loading || hw.gpuName === "Detecting..."
+    ? "Detecting your graphics topology — run the hardware scan first."
+    : !hw.scanned
+      ? "Run a hardware scan before changing interrupt mode."
+      : discreteNvidiaGpus.length === 0
+        ? "A discrete NVIDIA graphics card was not detected."
+        : hw.isHybridGpu
+          ? "Disabled on hybrid systems because the active display topology is ambiguous."
+          : discreteNvidiaGpus.length > 1
+            ? "Disabled because multiple NVIDIA display GPUs were detected; the target is ambiguous."
+            : "";
+  const canEnableSafeMsi = safeMsiBlockReason === "";
+  const [proToolBusy, setProToolBusy] = useState<string | null>(null);
+  const runProTool = async (id: "OpenMsiUtilityPro" | "ImportNvidiaPresetPro", label: string) => {
+    if (!isPro || !isNative() || proToolBusy) return;
+    if (id === "ImportNvidiaPresetPro" && !window.confirm("Create a verified Windows restore point, then import the verified performance preset? This changes the global NVIDIA driver profile.")) return;
+    setProToolBusy(id);
+    try {
+      const auth = await getNativeAuthToken();
+      if (!auth) throw new Error("Sign in to Pro in the Windows app before using this tool.");
+      const response = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({ tweakId: id }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || typeof body.ticket !== "string") throw new Error(body.error || "The server did not authorize this one-use Pro tool ticket.");
+      const message = id === "OpenMsiUtilityPro"
+        ? await openMsiUtility(body.ticket, auth)
+        : await importNvidiaPreset(body.ticket, auth);
+      toast({ title: `${label} complete`, description: message, variant: "success" });
+    } catch (error) {
+      toast({ title: `${label} failed`, description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+    } finally { setProToolBusy(null); }
+  };
+  const enableSafeMsi = async () => {
+    if (!isPro || !canEnableSafeMsi) return;
+    const result = await applyTweakBatch(["EnableNvidiaMSIPro"]);
+    if (!isNative()) {
+      toast({
+        title: "NVIDIA MSI Mode selected",
+        description: result.selectedIds.length
+          ? "Open the Windows app or run the generated script to apply it. Windows changes are not confirmed in the browser."
+          : "No compatible NVIDIA MSI action was selected.",
+      });
+    }
+  };
   const applyBulk = async (ids: string[], label = "NVIDIA recommendations") => {
-    const result = await applyTweakBatch(ids);
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "No compatible pending tweaks", description: "All recommendations are already confirmed or incompatible with this PC.", variant: "destructive" });
+      return;
+    }
+    if (isNative() && !window.confirm(`Apply ${pending.length} ${label}?`)) return;
+    if (isNative()) { void applyTweakBatch(pending); return; }
+    const result = await applyTweakBatch(pending);
     toast({
-      title: isNative() ? `${result.appliedIds.length} ${label} applied` : `${result.selectedIds.length} ${label} selected`,
-      description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
-      variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      title: `${result.selectedIds.length} ${label} selected`,
+      description: "Download and run the .bat to apply them.",
+      variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success",
     });
   };
 
@@ -349,6 +407,79 @@ export default function Nvidia() {
         </motion.div>
 
         <PageGuide pageName="NVIDIA Optimizer" />
+
+        <section
+          data-testid="section-nvidia-pro-hardware-actions"
+          className="rounded-xl border border-red-500/20 bg-red-500/[.04] p-5"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-red-400">Pro hardware action</h2>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                Safely enable Message Signaled Interrupts for exactly one live NVIDIA display adapter.
+                The server-side action verifies the Windows MSI capability and writes only MSISupported=1.
+              </p>
+            </div>
+            {isPro ? (
+              <Button
+                data-testid="button-pro-enable-safe-msi"
+                onClick={() => void enableSafeMsi()}
+                disabled={!canEnableSafeMsi}
+                title={safeMsiBlockReason || "Enable safe MSI mode"}
+                className="shrink-0 bg-red-600 text-xs font-bold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Enable Verified NVIDIA MSI
+              </Button>
+            ) : (
+              <ProUnlockButton>
+                <Button
+                  data-testid="button-pro-unlock-safe-msi"
+                  className="shrink-0 bg-red-600 text-xs font-bold text-white opacity-60"
+                >
+                  Unlock Pro · Verified NVIDIA MSI
+                </Button>
+              </ProUnlockButton>
+            )}
+          </div>
+          <p
+            data-testid="text-pro-safe-msi-status"
+            className={cn("mt-3 text-[11px]", isPro && canEnableSafeMsi ? "text-emerald-300" : "text-amber-300")}
+          >
+            {!isPro
+              ? "Pro access is required. Click the button to view Pro options."
+              : canEnableSafeMsi
+                ? `Ready for ${discreteNvidiaGpus[0]?.name || "the detected NVIDIA card"}.`
+                : safeMsiBlockReason}
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-red-500/20 bg-red-500/[.04] p-5" data-testid="section-nvidia-pro-tools">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-red-300" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-red-300">Pro NVIDIA tools</h2>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+            These tools are server-authorized one-use actions and run only the verified files bundled with the Windows app.
+            The verified performance preset contains 12 authoritative global settings; dynamic display/GPU choices,
+            shader-cache defaults, and VRSS are intentionally omitted. Profile Inspector exit status is reported without claiming driver readback.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {isPro ? <>
+              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("OpenMsiUtilityPro", "MSI Utility v3")} className="bg-red-700 text-xs hover:bg-red-600">
+                {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3"}
+              </Button>
+              <Button disabled={!isNative() || !!proToolBusy || discreteNvidiaGpus.length !== 1} onClick={() => void runProTool("ImportNvidiaPresetPro", "verified performance preset")} variant="outline" className="border-red-400/30 text-xs">
+                {proToolBusy === "ImportNvidiaPresetPro" ? "Importing…" : "Import verified performance preset"}
+              </Button>
+            </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
+          </div>
+          <p className="mt-3 text-[11px] text-amber-300">
+            MSI Utility is not automatic: select only the active NVIDIA display adapter, check MSI, choose High, then Apply. Driver updates reset that setting.
+          </p>
+        </section>
 
         {/* GPU compatibility banner — hybrid-aware: read hw.gpus instead of single-winner flags. */}
         {!hw.loading && (() => {
@@ -543,7 +674,8 @@ export default function Nvidia() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = NVIDIA_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
+              const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
@@ -555,7 +687,7 @@ export default function Nvidia() {
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed ml-1"
                 >
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {isNative() ? (allOn ? "Recommended ON" : `Enable Recommended (${pending.length})`) : (allOn ? "Selected" : `Select Recommended (${pending.length})`)}
                 </Button>
               );
             })()}
@@ -585,7 +717,8 @@ export default function Nvidia() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = NVIDIA_ADVANCED_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
+              const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
@@ -597,7 +730,7 @@ export default function Nvidia() {
                   className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {isNative() ? (allOn ? "Recommended ON" : `Enable Recommended (${pending.length})`) : (allOn ? "Selected" : `Select Recommended (${pending.length})`)}
                 </Button>
               );
             })()}
@@ -628,7 +761,8 @@ export default function Nvidia() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = NVIDIA_NEW_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
+              const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
@@ -640,7 +774,7 @@ export default function Nvidia() {
                   className="text-[10px] font-bold uppercase tracking-wider text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Recommended ON" : `Enable Recommended (${recIds.length})`}
+                  {isNative() ? (allOn ? "Recommended ON" : `Enable Recommended (${pending.length})`) : (allOn ? "Selected" : `Select Recommended (${pending.length})`)}
                 </Button>
               );
             })()}
@@ -672,7 +806,8 @@ export default function Nvidia() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = NVIDIA_LOW_END_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "GTX 1060 / 1650").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
+              const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button
@@ -684,7 +819,7 @@ export default function Nvidia() {
                   className="text-[10px] font-bold uppercase tracking-wider text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 hover:border-orange-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Applied" : `Apply for GTX 1060/1650 (${recIds.length})`}
+                  {isNative() ? (allOn ? "Applied" : `Apply for GTX 1060/1650 (${pending.length})`) : (allOn ? "Selected" : `Select for GTX 1060/1650 (${pending.length})`)}
                 </Button>
               );
             })()}
@@ -715,7 +850,8 @@ export default function Nvidia() {
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
               const recIds = NVIDIA_DX_TWEAKS.filter(t => t.badge === "RECOMMENDED" || t.badge === "GTX 1650 / 1060").map(t => t.id);
-              const allOn = recIds.length > 0 && recIds.every(id => tweaks[id]);
+              const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
+              const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
               return (
                 <Button variant="ghost" size="sm" onClick={() => void applyBulk(recIds)} disabled={allOn || noScan}
@@ -723,7 +859,7 @@ export default function Nvidia() {
                   data-testid="button-enable-recommended-nvidia-dx"
                   className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
-                  {allOn ? "Applied" : `Apply Recommended (${recIds.length})`}
+                  {isNative() ? (allOn ? "Applied" : `Apply Recommended (${pending.length})`) : (allOn ? "Selected" : `Select Recommended (${pending.length})`)}
                 </Button>
               );
             })()}

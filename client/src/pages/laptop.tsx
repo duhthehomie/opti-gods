@@ -10,8 +10,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 type Impact = "HIGH" | "MED" | "LOW";
 interface TweakDef {
@@ -362,7 +363,7 @@ function Section({
   recommended?: string[];
   color?: string;
 }) {
-  const { tweaks: store, toggleTweak, setTweak } = useOptimizationStore();
+  const { tweaks: store, appliedAt, toggleTweak } = useOptimizationStore();
   const { toast } = useToast();
 
   const visible = tweaks.filter(t => {
@@ -376,11 +377,22 @@ function Section({
   if (visible.length === 0) return null;
 
   const recIds = (recommended ?? []).filter(id => visible.some(t => t.id === id));
-  const enabled = recIds.filter(id => store[id as keyof typeof store]);
+  const enabled = recIds.filter(id => isNative() ? Boolean(appliedAt[id]) : store[id as keyof typeof store]);
 
   async function enableRec() {
-    const result = await applyTweakBatch(recIds);
-    toast({ title: isNative() ? `✓ ${result.appliedIds.length} laptop tweaks applied` : `✓ ${result.selectedIds.length} laptop tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    const pending = getPendingRecommendationIds(recIds, store, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible laptop recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
+    toast({ title: `✓ ${result.selectedIds.length} laptop tweaks selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
   }
 
   return (
@@ -404,7 +416,7 @@ function Section({
             )}
           >
             <Check className="w-2.5 h-2.5" />
-            {enabled.length === recIds.length ? "All Recommended On" : `Enable Recommended (${recIds.length})`}
+            {enabled.length === recIds.length ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recIds.length})`}
           </button>
         )}
       </div>
@@ -435,8 +447,19 @@ export default function LaptopPage() {
   const { toast } = useToast();
 
   const enableAll = async () => {
-    const result = await applyTweakBatch(ALL_RECOMMENDED);
-    toast({ title: isNative() ? `✓ ${result.appliedIds.length} laptop tweaks applied` : `✓ ${result.selectedIds.length} laptop tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+    const pending = getPendingRecommendationIds(ALL_RECOMMENDED, tweaks, useOptimizationStore.getState().appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible laptop recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
+    toast({ title: `✓ ${result.selectedIds.length} laptop tweaks selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
   };
 
   const enabledCount = ALL_LAPTOP_IDS.filter(id => tweaks[id as keyof typeof tweaks]).length;
@@ -471,7 +494,7 @@ export default function LaptopPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Zap className="w-3 h-3" />
-                Enable All Recommended
+                 {isNative() ? "Apply" : "Select"} All Recommended
               </button>
             </div>
           </div>

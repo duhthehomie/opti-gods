@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_IGPU_IDS = [
   "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
@@ -338,7 +339,7 @@ function SectionHeader({ title, icon: Icon, desc, onApplyAll, count }: {
 }
 
 export default function IntegratedGraphics() {
-  const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak, setAllTweaks } = useOptimizationStore();
   const hw = useHardwareInfo();
   const { toast } = useToast();
   const osInfo = useOsDetection();
@@ -356,7 +357,18 @@ export default function IntegratedGraphics() {
   const enabledCount = ALL_IGPU_IDS.filter(id => tweaks[id]).length;
 
   async function applyRecommended(ids: string[]) {
-    const result = await applyTweakBatch(ids);
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible iGPU recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
     toast({
       title: isNative() ? `${result.appliedIds.length} iGPU tweaks applied` : `${result.selectedIds.length} iGPU tweaks selected`,
       description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.",
@@ -459,7 +471,7 @@ export default function IntegratedGraphics() {
                       className="h-7 text-[10px] bg-purple-600 hover:bg-purple-700 text-white"
                       onClick={applyAmdRecommended}>
                       <Zap className="w-3 h-3 mr-1" />
-                      Apply AMD Recommended ({AMD_RECOMMENDED.length})
+                      {isNative() ? "Apply" : "Select"} AMD Recommended ({AMD_RECOMMENDED.length})
                     </Button>
                   )}
                   {(isIntelIGpu || (!isAmdIGpu && !isIntelIGpu)) && (
@@ -467,7 +479,7 @@ export default function IntegratedGraphics() {
                       className="h-7 text-[10px] bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={applyIntelRecommended}>
                       <Zap className="w-3 h-3 mr-1" />
-                      Apply Intel Recommended ({INTEL_RECOMMENDED.length})
+                      {isNative() ? "Apply" : "Select"} Intel Recommended ({INTEL_RECOMMENDED.length})
                     </Button>
                   )}
                 </div>

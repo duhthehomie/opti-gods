@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -405,7 +406,7 @@ const ALL_TWEAKS = [
 const APPLY_ALL_ID = "ProcSvc_ApplyAll";
 
 export default function ProcessesPage() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const [scanning, setScanning] = useState(false);
 
@@ -432,17 +433,28 @@ export default function ProcessesPage() {
     }
   };
 
-  const activeCount = ALL_TWEAKS.filter(t => tweaks[t.id]).length;
+  const activeCount = ALL_TWEAKS.filter(t => isNative() ? Boolean(appliedAt[t.id]) : tweaks[t.id]).length;
   const recommendedIds = ALL_TWEAKS.filter(t => t.recommended).map(t => t.id);
-  const allRecommendedOn = recommendedIds.length > 0 && recommendedIds.every(id => tweaks[id]);
+  const pendingRecommended = getPendingRecommendationIds(recommendedIds, tweaks, appliedAt);
+  const allRecommendedOn = recommendedIds.length > 0 && pendingRecommended.length === 0;
 
   async function applyBulk(ids: string[]) {
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({
+        title: "No compatible process tweaks pending",
+        description: "These service changes are already confirmed or are not compatible with this PC.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isNative() && !window.confirm(`Apply ${pending.length} process service changes to Windows? A verified restore point will be required first.`)) return;
     try {
-      const result = await applyTweakBatch(ids);
+      const result = await applyTweakBatch(pending);
       toast({
         title: isNative() ? `${result.appliedIds.length} process tweaks applied` : `${result.selectedIds.length} process tweaks selected`,
-        description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected process changes.",
-        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+        description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Selected for the browser script. Windows changes are not confirmed here.",
+        variant: isNative() ? (result.failures.length && !result.appliedIds.length ? "destructive" : "success") : undefined,
       });
     } catch (error) {
       toast({ title: "Could not apply process recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
@@ -450,12 +462,15 @@ export default function ProcessesPage() {
   }
 
   function handleEnableRecommended() {
-    void applyBulk([...recommendedIds, APPLY_ALL_ID]);
+    // ProcSvc_ApplyAll is a separate macro that changes many services at
+    // once; never mix it with individual IDs or claim each row was confirmed.
+    void applyBulk(recommendedIds);
   }
 
   function renderSection(title: string, items: ServiceTweak[], color: string = "text-red-500") {
-    const sectionActive = items.filter(t => tweaks[t.id]).length;
-    const sectionRec = items.filter(t => t.recommended && !tweaks[t.id]);
+    const sectionActive = items.filter(t => isNative() ? Boolean(appliedAt[t.id]) : tweaks[t.id]).length;
+    const sectionRec = items.filter(t => t.recommended).map(t => t.id);
+    const sectionPending = getPendingRecommendationIds(sectionRec, tweaks, appliedAt);
 
     return (
       <section>
@@ -468,16 +483,16 @@ export default function ProcessesPage() {
               </span>
             )}
           </div>
-          {sectionRec.length > 0 && (
+          {sectionPending.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void applyBulk(sectionRec.map(t => t.id))}
+              onClick={() => void applyBulk(sectionPending)}
               data-testid={`button-enable-recommended-${title.replace(/\s+/g, '-').toLowerCase()}`}
               className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all"
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              Enable Rec ({sectionRec.length})
+              {isNative() ? `Enable Rec (${sectionPending.length})` : `Select Rec (${sectionPending.length})`}
             </Button>
           )}
         </div>
@@ -573,12 +588,12 @@ export default function ProcessesPage() {
               <Button
                 data-testid="button-apply-all-services-manual"
                 onClick={handleEnableRecommended}
-                disabled={allRecommendedOn}
+                disabled={allRecommendedOn || !pendingRecommended.length}
                 className="bg-red-600 hover:bg-red-700 text-white border border-red-500/30 text-xs font-bold gap-1.5 disabled:opacity-50"
                 size="sm"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {allRecommendedOn ? "All Applied" : "Apply All Recommended"}
+                {allRecommendedOn ? (isNative() ? "All Confirmed" : "All Selected") : (isNative() ? "Apply All Recommended" : "Select All Recommended")}
               </Button>
             </div>
           </div>

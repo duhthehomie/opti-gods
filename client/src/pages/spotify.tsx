@@ -1,12 +1,71 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Music, Monitor, RefreshCw, Info, AlertTriangle, MonitorPlay, Cpu } from "lucide-react";
+import { Music, Monitor, RefreshCw, Info, AlertTriangle, MonitorPlay, Cpu, CheckCircle2 } from "lucide-react";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { Button } from "@/components/ui/button";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const ALL_SPOTIFY_IDS = [
+  "SpotifyLowPriority",
+  "SpotifyDisableGPU",
+  "SpotifyDisableAutoUpdate",
+  "SpotifyLimitBandwidth",
+];
+const SPOTIFY_RECOMMENDED = ["SpotifyLowPriority", "SpotifyDisableGPU"];
 
 export default function SpotifyPage() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const hw = useHardwareInfo();
+  const { toast } = useToast();
+  const [confirmBulk, setConfirmBulk] = useState<"recommended" | "all" | null>(null);
+  const [applying, setApplying] = useState(false);
+  const native = isNative();
+  const pendingFor = (ids: string[]) => ids.filter(id => native ? !appliedAt[id] : !tweaks[id]);
+  const recommendedRemaining = pendingFor(SPOTIFY_RECOMMENDED);
+  const allRemaining = pendingFor(ALL_SPOTIFY_IDS);
+  const executeSpotify = (ids: string[]) => {
+    if (!ids.length) {
+      toast({ title: "Spotify profile already selected", description: native ? "Every Spotify tweak is already confirmed in Windows." : "Every Spotify tweak is already selected for your script.", variant: "destructive" });
+      return;
+    }
+    setApplying(true);
+    void applyTweakBatch(ids).then(result => toast({
+      title: isNative()
+        ? `${result.appliedIds.length} Spotify tweaks applied`
+        : `${result.selectedIds.length} Spotify tweaks selected`,
+      description: isNative()
+        ? `${result.appliedIds.length} Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}.`
+        : "Browser mode only selects the tweaks. Open the Windows app or download and run the generated script to apply them.",
+      variant: isNative() && result.failures.length ? "destructive" : undefined,
+    })).catch(error => toast({
+      title: "Spotify tweaks could not start",
+      description: error instanceof Error ? error.message : "Open the Windows app or try again.",
+      variant: "destructive",
+    })).finally(() => setApplying(false));
+  };
+  const requestSpotify = (kind: "recommended" | "all") => {
+    const ids = pendingFor(kind === "recommended" ? SPOTIFY_RECOMMENDED : ALL_SPOTIFY_IDS);
+    if (!ids.length) {
+      toast({ title: "No pending Spotify tweaks", description: native ? "Every requested Spotify change is already confirmed in Windows." : "Every requested Spotify change is already selected.", variant: "destructive" });
+      return;
+    }
+    if (native) setConfirmBulk(kind);
+    else executeSpotify(ids);
+  };
 
   const gpuLabel = hw.gpuName && hw.gpuName !== "Detecting..." ? hw.gpuName : null;
   const isLowVram = hw.nvidiaIsLowEnd;
@@ -27,6 +86,55 @@ export default function SpotifyPage() {
           <p className="text-[11px] text-zinc-500">Stop Spotify from eating FPS while you game with music on</p>
         </div>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[.04] px-4 py-3">
+        <div>
+          <p className="text-xs font-bold text-emerald-300">Apply Spotify profile</p>
+          <p className="mt-1 text-[10px] text-zinc-500">Switches below select intent. Use a bulk action to run Windows changes or prepare the browser script.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={applying || !recommendedRemaining.length}
+            onClick={() => requestSpotify("recommended")}
+            className="h-7 border-emerald-500/30 px-2.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/10"
+          >
+            <CheckCircle2 className="mr-1.5 h-3 w-3" /> {native ? "Enable" : "Select"} Recommended ({recommendedRemaining.length})
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={applying || !allRemaining.length}
+            onClick={() => requestSpotify("all")}
+            className="h-7 border-white/15 px-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-300 hover:bg-white/5"
+          >
+            {native ? "Apply" : "Select"} All ({allRemaining.length})
+          </Button>
+        </div>
+      </div>
+      <AlertDialog open={Boolean(confirmBulk)} onOpenChange={open => { if (!open && !applying) setConfirmBulk(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply Spotify {confirmBulk === "recommended" ? "recommended" : "selected"} tweaks?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Windows will create or verify a restore point before running these Spotify changes. Review every queued, applied, and failed result in Applied Tweaks.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={applying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={applying}
+              onClick={() => {
+                const ids = pendingFor(confirmBulk === "recommended" ? SPOTIFY_RECOMMENDED : ALL_SPOTIFY_IDS);
+                setConfirmBulk(null);
+                executeSpotify(ids);
+              }}
+            >
+              Confirm Spotify Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Hardware-aware callout — shown once detection completes */}
       {detected && (

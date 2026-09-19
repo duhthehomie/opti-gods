@@ -15,6 +15,7 @@ import { isNative, scanTaskManager, readFivemLog, openExternal } from "@/lib/tau
 import { getTweakMeta } from "@/lib/tweak-registry";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { useToast } from "@/hooks/use-toast";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 interface GameEntry {
   id: string;
@@ -519,7 +520,7 @@ function getActiveServerInfo(): SavedServer | null {
 // ─── Now Playing Panel ────────────────────────────────────────────────────────
 
 function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) => void }) {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const native = useMemo(() => isNative(), []);
 
@@ -1152,14 +1153,18 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
   const hasSpecificTweaks = gameTweakIds.length > 0;
   // "all enabled" = all individual tweak IDs are on (for games with a specific map),
   // or the master game toggle (for games using text-description fallback).
-  const allTweaksEnabled = hasSpecificTweaks
-    ? gameTweakIds.every(id => !!(tweaks[id as keyof typeof tweaks]))
-    : enabled;
+  const gameActionIds = [runningGame!.id, ...(hasSpecificTweaks ? gameTweakIds : [])];
+  const pendingGameIds = getPendingRecommendationIds(gameActionIds, tweaks, appliedAt);
+  const allTweaksEnabled = gameActionIds.length > 0 && pendingGameIds.length === 0;
   const enableAllGameTweaks = async () => {
-    const ids = [runningGame!.id, ...(hasSpecificTweaks ? gameTweakIds : [])];
+    if (!pendingGameIds.length) {
+      toast({ title: "No compatible game tweaks pending", description: "This profile is already confirmed or has no compatible native actions.", variant: "destructive" });
+      return;
+    }
+    if (isNative() && !window.confirm(`Apply ${pendingGameIds.length} optimizations for ${runningGame!.name}? A verified restore point will be required first.`)) return;
     try {
-      const result = await applyTweakBatch(ids);
-      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected game changes.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+      const result = await applyTweakBatch(pendingGameIds);
+      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Selected for the browser script. Windows changes are not confirmed here.", variant: isNative() ? (result.failures.length && !result.appliedIds.length ? "destructive" : "success") : undefined });
     } catch (error) {
       toast({ title: "Could not enable game tweaks", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
     }
@@ -1351,7 +1356,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
                   className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30 flex items-center gap-1.5"
                 >
                   <Zap className="w-3 h-3" />
-                  Enable All
+                  {isNative() ? "Enable All" : "Select All"}
                 </Button>
               )}
               {allTweaksEnabled && (
@@ -2777,7 +2782,7 @@ function downloadScannerScript() {
 }
 
 export default function GameDetection() {
-  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { tweaks, appliedAt, setAllTweaks } = useOptimizationStore();
   const native = useMemo(() => isNative(), []);
 
   // Track which game is currently running (set by NowPlayingPanel)
@@ -2846,14 +2851,20 @@ export default function GameDetection() {
     ? GAMES.filter(g => detectedIds.has(g.id))
     : GAMES;
 
-  const enabledGames = visibleGames.filter(g => tweaks[g.id]);
-  const disabledGames = visibleGames.filter(g => !tweaks[g.id]);
+  const enabledGames = visibleGames.filter(g => isNative() ? Boolean(appliedAt[g.id]) : tweaks[g.id]);
+  const disabledGames = visibleGames.filter(g => isNative() ? !appliedAt[g.id] : !tweaks[g.id]);
 
   const { toast } = useToast();
   const handleEnableAll = async () => {
+    const pending = getPendingRecommendationIds(visibleGames.map(g => g.id), tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "No compatible detected-game tweaks pending", description: "The visible game profiles are already confirmed or unavailable on this PC.", variant: "destructive" });
+      return;
+    }
+    if (isNative() && !window.confirm(`Apply ${pending.length} detected-game profile optimizations? A verified restore point will be required first.`)) return;
     try {
-      const result = await applyTweakBatch(visibleGames.map(g => g.id));
-      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected game changes.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
+      const result = await applyTweakBatch(pending);
+      toast({ title: isNative() ? `${result.appliedIds.length} game tweaks applied` : `${result.selectedIds.length} game tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Selected for the browser script. Windows changes are not confirmed here.", variant: isNative() ? (result.failures.length && !result.appliedIds.length ? "destructive" : "success") : undefined });
     } catch (error) {
       toast({ title: "Could not enable game tweaks", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
     }
@@ -3076,7 +3087,9 @@ export default function GameDetection() {
             </Button>
             <Button data-testid="button-enable-all-games" onClick={handleEnableAll} size="sm"
               className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30">
-              {isFiltered ? "Enable Detected" : "Enable All Games"}
+              {isNative()
+                ? (isFiltered ? "Enable Detected" : "Enable All Games")
+                : (isFiltered ? "Select Detected" : "Select All Games")}
             </Button>
           </div>
         </motion.div>

@@ -97,6 +97,12 @@ setTimeout(runAutoResolveSafe, 30_000);
 setInterval(runAutoResolveSafe, 24 * 60 * 60 * 1000);
 
 const TWEAK_COMMANDS: Record<string, string> = {
+  EnableNvidiaMSIPro: `$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' }); $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' }); if ($active.Count -ne 1) { throw "NVIDIA MSI requires exactly one active display adapter; detected $($active.Count). Hybrid or multi-GPU display topology is not supported." }; if ($nvidia.Count -ne 1) { throw "NVIDIA MSI requires exactly one active NVIDIA display adapter; the active adapter is not NVIDIA or the topology is ambiguous." }; $gpu = $nvidia[0]; $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; if (!(Test-Path $msiPath)) { throw "Windows did not expose an MSI capability path for the detected NVIDIA adapter ($($gpu.FriendlyName))." }; $before = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($before -notin @(0,1)) { throw "The detected NVIDIA adapter has an unsupported MSISupported value ($before)." }; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop; $after = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the detected NVIDIA adapter." }; Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). NICs, NVMe devices, affinity, and priority were not changed." -ForegroundColor Green`,
+  // These two IDs are consumed by dedicated native commands.  They deliberately
+  // have no PowerShell fallback: a renderer can obtain a Pro ticket, but only
+  // the signed desktop shell can consume it and launch the verified resource.
+  OpenMsiUtilityPro: `throw "This is a native-only Pro tool action."`,
+  ImportNvidiaPresetPro: `throw "This is a native-only Pro tool action."`,
   // CPU
   Win32PrioritySeparation: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26`,
   DisableHungAppDetection: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '1000'`,
@@ -1425,6 +1431,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
 
   const categories: Record<string, string[]> = {};
   for (const key of enabledTweaks) {
+    if (key === "OpenMsiUtilityPro" || key === "ImportNvidiaPresetPro") continue;
     const cmd = TWEAK_COMMANDS[key];
     if (!cmd) continue;
     const cat = key.startsWith("Mem") ? "Memory"
@@ -1594,6 +1601,9 @@ export async function registerRoutes(
   const trustedTweakId = (id: unknown): id is string =>
     typeof id === "string" && /^[A-Za-z0-9_]{2,64}$/.test(id) &&
     Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id);
+  // This command is intentionally unavailable to free/native allowance users.
+  // Keep the historical multi-device command separate for legacy callers.
+  const PRO_ONLY_TWEAK_IDS = new Set(["EnableNvidiaMSIPro", "OpenMsiUtilityPro", "ImportNvidiaPresetPro"]);
   const freeEligibleId = (id: unknown): id is string =>
     trustedTweakId(id) && !EXPERT_TWEAK_IDS.has(id);
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
@@ -1701,7 +1711,7 @@ export async function registerRoutes(
     }
     const tweakId = req.body?.tweakId;
     const pro = await requirePaidPro(req);
-    if (pro ? !trustedTweakId(tweakId) : !freeEligibleId(tweakId)) {
+    if (pro ? !trustedTweakId(tweakId) : (!freeEligibleId(tweakId) || PRO_ONLY_TWEAK_IDS.has(tweakId))) {
       return res.status(400).json({ error: "Ineligible tweak", code: "OG-TWEAK-001" });
     }
     if (!pro && !NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
@@ -1784,7 +1794,8 @@ export async function registerRoutes(
   });
   const authorizeGeneratedScript = async (req: Request, res: Response, ids: string[]): Promise<boolean> => {
     const userId = await allowanceAuth(req);
-    if (await requirePaidPro(req)) return true;
+    const pro = await requirePaidPro(req);
+    if (pro && ids.every(id => trustedTweakId(id))) return true;
     void userId; void ids;
     res.status(403).json({ message: "Free performance tweaks run in the Windows app. Open Opti Gods for native apply authorization." });
     return false;

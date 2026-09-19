@@ -8,6 +8,10 @@ import { Cpu, CheckCircle2, AlertTriangle, Zap, Shield, Gamepad2 } from "lucide-
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
 import { cn } from "@/lib/utils";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
+import { useToast } from "@/hooks/use-toast";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -26,13 +30,15 @@ interface SectionProps {
   icon?: React.ComponentType<{ className?: string }>;
   tweaks: TweakDef[];
   tweakState: Record<string, boolean>;
+  appliedAt: Record<string, number>;
   onSet: (id: string, val: boolean) => void;
+  onEnable: (ids: string[]) => void;
   accentColor?: "red" | "amber" | "blue" | "emerald";
 }
 
-function Section({ heading, icon: Icon, tweaks, tweakState, onSet, accentColor = "red" }: SectionProps) {
+function Section({ heading, icon: Icon, tweaks, tweakState, appliedAt, onSet, onEnable, accentColor = "red" }: SectionProps) {
   const recommended = tweaks.filter(t => t.recommended).map(t => t.id);
-  const allOn = recommended.length > 0 && recommended.every(id => tweakState[id]);
+  const allOn = recommended.length > 0 && recommended.every(id => isNative() ? Boolean(appliedAt[id]) : tweakState[id]);
 
   const colorMap = {
     red:     { label: "text-red-500",    btn: "text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/40" },
@@ -50,11 +56,11 @@ function Section({ heading, icon: Icon, tweaks, tweakState, onSet, accentColor =
           {heading}
         </h2>
         {recommended.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => recommended.forEach(id => onSet(id, true))} disabled={allOn}
+          <Button variant="ghost" size="sm" onClick={() => onEnable(recommended)} disabled={allOn}
             data-testid={`button-enable-recommended-${heading.replace(/\s+/g, "-").toLowerCase()}`}
             className={cn("text-[10px] font-bold uppercase tracking-wider border px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed", c.btn)}>
             <CheckCircle2 className="w-3 h-3 mr-1" />
-            {allOn ? "Recommended ON" : `Enable Recommended (${recommended.length})`}
+             {allOn ? "Recommended CONFIRMED" : `${isNative() ? "Apply" : "Select"} Recommended (${recommended.length})`}
           </Button>
         )}
       </div>
@@ -79,10 +85,27 @@ function Section({ heading, icon: Icon, tweaks, tweakState, onSet, accentColor =
 }
 
 export default function CpuPage() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
+  const { toast } = useToast();
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const isWin11 = os.os === "Windows 11";
+
+  const enableRecommended = async (ids: string[]) => {
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible CPU recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
+    toast({ title: `${result.selectedIds.length} CPU recommendations selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
+  };
 
   const SCHEDULER_TWEAKS: TweakDef[] = [
     { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Short Variable)", desc: "Sets CPU time-slice quanta to short+variable — the foreground game gets far more CPU attention than background apps. Single most impactful CPU scheduler tweak.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -169,18 +192,18 @@ export default function CpuPage() {
           </motion.div>
         )}
 
-        <Section heading="Scheduler & Priority" icon={Zap} tweaks={SCHEDULER_TWEAKS} tweakState={tweaks} onSet={setTweak} accentColor="red" />
+        <Section heading="Scheduler & Priority" icon={Zap} tweaks={SCHEDULER_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="red" />
         <div className="border-t border-white/5 pt-8" />
-        <Section heading="Power Plan & Core Management" icon={Cpu} tweaks={POWER_TWEAKS} tweakState={tweaks} onSet={setTweak} accentColor="amber" />
+        <Section heading="Power Plan & Core Management" icon={Cpu} tweaks={POWER_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="amber" />
         <div className="border-t border-white/5 pt-8" />
-        <Section heading="Game Process Priority (IFEO)" icon={Gamepad2} tweaks={GAME_IFEO_TWEAKS} tweakState={tweaks} onSet={setTweak} accentColor="emerald" />
+        <Section heading="Game Process Priority (IFEO)" icon={Gamepad2} tweaks={GAME_IFEO_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="emerald" />
         <div className="border-t border-white/5 pt-8" />
-        <Section heading="Virtualization & Security Overhead" icon={Shield} tweaks={VIRTUALIZATION_TWEAKS} tweakState={tweaks} onSet={setTweak} accentColor="blue" />
+        <Section heading="Virtualization & Security Overhead" icon={Shield} tweaks={VIRTUALIZATION_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="blue" />
 
         {intelTweaks.length > 0 && (
           <>
             <div className="border-t border-white/5 pt-8" />
-            <Section heading="Intel CPU Specific" icon={Cpu} tweaks={intelTweaks} tweakState={tweaks} onSet={setTweak} accentColor="blue" />
+            <Section heading="Intel CPU Specific" icon={Cpu} tweaks={intelTweaks} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="blue" />
           </>
         )}
 
@@ -193,7 +216,7 @@ export default function CpuPage() {
             The tweaks below carry real security or stability tradeoffs. Read the warning on each before enabling.
           </p>
         </div>
-        <Section heading="Expert — Security Mitigations" icon={AlertTriangle} tweaks={EXPERT_TWEAKS} tweakState={tweaks} onSet={setTweak} accentColor="amber" />
+        <Section heading="Expert — Security Mitigations" icon={AlertTriangle} tweaks={EXPERT_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} accentColor="amber" />
       </div>
     </AppLayout>
   );

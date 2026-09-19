@@ -11,8 +11,9 @@ import {
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useToast } from "@/hooks/use-toast";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 interface TweakEntry {
   key: string;
@@ -156,7 +157,7 @@ function TweakRow({ tweak, enabled, onToggle }: { tweak: TweakEntry; enabled: bo
 }
 
 function Section({ section }: { section: SectionDef }) {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const [collapsed, setCollapsed] = useState(false);
   const { toast } = useToast();
 
@@ -165,7 +166,18 @@ function Section({ section }: { section: SectionDef }) {
 
   const enableRecommended = async () => {
     const recommended = section.tweaks.filter((t) => t.recommended);
-    const result = await applyTweakBatch(recommended.map(t => t.key));
+    const pending = getPendingRecommendationIds(recommended.map(t => t.key), tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
     toast({ title: isNative() ? `${result.appliedIds.length} recommended tweaks applied` : `${result.selectedIds.length} recommended tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   };
 
@@ -193,7 +205,7 @@ function Section({ section }: { section: SectionDef }) {
           onClick={(e) => { e.stopPropagation(); enableRecommended(); }}
         >
           <Sparkles className="w-3 h-3 mr-1" />
-          Enable Recommended
+           {isNative() ? "Apply" : "Select"} Recommended
         </Button>
         {collapsed ? <ChevronDown className="w-4 h-4 text-zinc-600 shrink-0" /> : <ChevronUp className="w-4 h-4 text-zinc-600 shrink-0" />}
       </div>
@@ -215,7 +227,7 @@ function Section({ section }: { section: SectionDef }) {
 }
 
 export default function WinTitus() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
 
@@ -224,7 +236,18 @@ export default function WinTitus() {
 
   const enableAll = async () => {
     const ids = SECTIONS.flatMap((s) => s.tweaks.filter((t) => t.recommended)).map(t => t.key);
-    const result = await applyTweakBatch(ids);
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible WinTitus recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
     toast({ title: isNative() ? `${result.appliedIds.length} WinTitus tweaks applied` : `${result.selectedIds.length} WinTitus tweaks selected`, description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only or incompatible` : ""}.` : "Download and run the .bat to apply them.", variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success" });
   };
 
@@ -299,7 +322,7 @@ export default function WinTitus() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500/40 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2" />
-              Enable All Recommended
+               {isNative() ? "Apply" : "Select"} All Recommended
             </Button>
           </div>
         </motion.div>

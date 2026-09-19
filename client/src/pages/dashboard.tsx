@@ -400,6 +400,7 @@ export default function Dashboard() {
   const [recommendedApplied, setRecommendedApplied] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
+  const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
@@ -411,16 +412,24 @@ export default function Dashboard() {
     setBulkApplying(true);
     try {
       const body = await authorizeHardwarePreset();
-      const ids = (body.authorizedIds as string[]).filter(id => id in tweaks);
+      const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
+      const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
+      if (unknownIds.length > 0) {
+        throw new Error(`The server returned ${unknownIds.length} unrecognized preset tweak${unknownIds.length === 1 ? "" : "s"} (${unknownIds.slice(0, 3).join(", ")}). No changes were started.`);
+      }
       if (native) {
-        queueTweakBatch(ids);
+        const pendingIds = ids.filter(id => !appliedAt[id]);
+        if (pendingIds.length === 0) {
+          toast({ title: "Full Optimize is already confirmed", description: "Every authorized preset tweak is already confirmed on this Windows session.", variant: "destructive" });
+          return;
+        }
+        queueTweakBatch(pendingIds);
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {
         const result = await applyTweakBatch(ids);
-        setRecommendedApplied(true);
         toast({
-          title: "Pro preset selected",
+          title: "Select Pro preset for script",
           description: `${result.selectedIds.length} compatible tweaks selected in the browser. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
         });
       }
@@ -436,7 +445,7 @@ export default function Dashboard() {
   };
 
   const applyAllRecommended = () => {
-    if (bulkApplying || recommendedApplied || proStatusLoading) return;
+    if (bulkApplying || (native && recommendedApplied) || proStatusLoading) return;
     if (!isPro) {
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
       window.dispatchEvent(new Event("optigods:enable-best-free"));
@@ -445,7 +454,7 @@ export default function Dashboard() {
     setConfirmFullOptimize(true);
   };
 
-  const applyQuickBoost = async (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+  const executeQuickBoost = async (preset: typeof QUICK_BOOST_PRESETS[number]) => {
     if (bulkApplying) return;
     if (!isPro) {
       void applyAllRecommended();
@@ -453,22 +462,47 @@ export default function Dashboard() {
     }
     setBulkApplying(true);
     try {
-      const compatible = preset.tweaks.filter(id => id in tweaks && getTweakCompatibility(id).ok);
-      const blocked = preset.tweaks.filter(id => id in tweaks && !getTweakCompatibility(id).ok);
-      const result = await applyTweakBatch(compatible);
+       const known = preset.tweaks.filter(id => TWEAK_REGISTRY.some(tweak => tweak.id === id));
+       const unknown = preset.tweaks.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
+       if (unknown.length > 0) {
+         throw new Error(`${unknown.length} preset tweak${unknown.length === 1 ? " is" : "s are"} not recognized by this app (${unknown.slice(0, 3).join(", ")}). No changes were started.`);
+       }
+       const compatible = known.filter(id => getTweakCompatibility(id).ok);
+       const blocked = known.filter(id => !getTweakCompatibility(id).ok);
+       const pending = native ? compatible.filter(id => !appliedAt[id]) : compatible;
+       if (pending.length === 0) {
+         toast({ title: `${preset.title} is already confirmed`, description: "Every compatible tweak in this preset is already confirmed on this Windows session.", variant: "destructive" });
+         return;
+       }
+       const result = await applyTweakBatch(pending);
       setActiveBoost(preset.id);
       toast({
         title: native ? `${preset.title}: ${result.appliedIds.length} applied` : `${preset.title} selected`,
         description: native
-          ? `${result.appliedIds.length} Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
+           ? `${result.appliedIds.length} of ${pending.length} pending Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
           : `${result.selectedIds.length} compatible tweaks selected. Download and run the .bat to apply them.`,
         variant: native
           ? (result.failures.length || blocked.length ? "destructive" : "success")
           : undefined,
       });
+    } catch (error) {
+      toast({
+        title: `${preset.title} could not start`,
+        description: error instanceof Error ? error.message : "The preset was not run.",
+        variant: "destructive",
+      });
     } finally {
       setBulkApplying(false);
     }
+  };
+
+  const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
+    if (bulkApplying) return;
+    if (!isPro) {
+      void applyAllRecommended();
+      return;
+    }
+    setConfirmQuickBoost(preset);
   };
 
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
@@ -553,7 +587,7 @@ export default function Dashboard() {
               <Button
                 data-testid="button-full-optimize"
                 onClick={applyAllRecommended}
-                disabled={recommendedApplied || bulkApplying || proStatusLoading}
+                 disabled={(native && recommendedApplied) || bulkApplying || proStatusLoading}
                 className={cn(
                   "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
                   recommendedApplied
@@ -564,7 +598,7 @@ export default function Dashboard() {
                 {recommendedApplied ? (
                   <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? "Full Optimize" : "Enable Best 15 Tweaks"}</>
+                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? (native ? "Full Optimize" : "Select Pro preset for script") : "Enable Best 15 Tweaks"}</>
                 )}
               </Button>
 
@@ -620,11 +654,13 @@ export default function Dashboard() {
               <Rocket className="w-4 h-4 text-red-500" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Quick Boost Presets</h2>
             </div>
-            <span className="text-[10px] text-zinc-600 font-mono">{isPro ? "one click — compatible instant tweaks apply now" : "Pro presets · free accounts get the best 15"}</span>
+            <span className="text-[10px] text-zinc-600 font-mono">{isPro ? (native ? "confirmed Windows run — restore point first" : "select for script — Windows results require the app") : "Pro presets · free accounts get the best 15"}</span>
           </div>
           <p className="text-xs text-zinc-500 mb-5 px-1">
             {isPro
-              ? "Pick a preset to apply compatible instant tweaks now. Script-only choices remain available for the downloadable .bat."
+              ? native
+                ? "Pick a preset, confirm the warning, and review every compatible Windows result in Applied Tweaks. Script-only choices remain available for the downloadable .bat."
+                : "Select a preset for your downloadable script. Browser mode cannot confirm Windows changes."
               : "Quick Boost presets require a linked Pro Discord account. Free accounts can enable the best 15 tweaks for their saved system scan."}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -636,7 +672,7 @@ export default function Dashboard() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.06 + i * 0.05 }}
-                  onClick={() => void applyQuickBoost(preset)}
+                  onClick={() => applyQuickBoost(preset)}
                   disabled={bulkApplying}
                   data-testid={`button-quick-boost-${preset.id}`}
                   className={cn(
@@ -671,6 +707,32 @@ export default function Dashboard() {
             })}
           </div>
         </motion.div>
+
+        <AlertDialog open={Boolean(confirmQuickBoost)} onOpenChange={open => { if (!open && !bulkApplying) setConfirmQuickBoost(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{native ? `Run ${confirmQuickBoost?.title}?` : `Select ${confirmQuickBoost?.title} for your script?`}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {native
+                  ? "This Pro preset will run its compatible Windows tweaks after creating or verifying a restore point. Review every queued, applied, and failed result in Applied Tweaks. Incompatible choices are reported, not silently skipped."
+                  : "Browser mode cannot change Windows or verify results. This selects the compatible Pro preset for your downloadable script; run that script as Administrator on Windows to apply it."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkApplying}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={bulkApplying || !confirmQuickBoost}
+                onClick={() => {
+                  const preset = confirmQuickBoost;
+                  setConfirmQuickBoost(null);
+                  if (preset) void executeQuickBoost(preset);
+                }}
+              >
+                {native ? "Confirm Quick Boost" : "Select Preset"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* ─── OPTIMIZATION SCORE ─── */}
         {smartRecs.ids.size > 0 && (

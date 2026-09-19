@@ -78,6 +78,8 @@ export const EXPERT_TWEAK_IDS: ReadonlySet<string> = new Set<string>([
   "Win11DisableVBS",
   "Win11DisableHVCI",
   "Lap_Intel_DisableECores",
+  "EnableNvidiaMSIPro",
+  "EnableMSIMode_Safe",
 ]);
 
 /**

@@ -11,6 +11,10 @@ import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert, Zap } from "
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
+import { isNative } from "@/lib/tauri-bridge";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
+import { useToast } from "@/hooks/use-toast";
 
 const ALL_REGISTRY_IDS = [
   "Win32PrioritySeparation","DisableHungAppDetection","SetTimerResolution","SetResponsiveness",
@@ -58,21 +62,19 @@ interface SectionProps {
   heading: string;
   tweaks: TweakDef[];
   tweakState: Record<string, boolean>;
+  appliedAt: Record<string, number>;
   onSet: (id: string, val: boolean) => void;
   showRecommended?: boolean;
   smartRecIds?: Set<string>;
+  onEnable: (ids: string[]) => void;
 }
 
-function Section({ heading, tweaks, tweakState, onSet, showRecommended = true, smartRecIds }: SectionProps) {
+function Section({ heading, tweaks, tweakState, appliedAt, onSet, onEnable, showRecommended = true, smartRecIds }: SectionProps) {
   const recommended = tweaks
     .filter((t) => smartRecIds ? smartRecIds.has(t.id) : t.recommended)
     .map((t) => t.id);
 
-  const handleEnableRecommended = () => {
-    recommended.forEach((id) => onSet(id, true));
-  };
-
-  const allRecommendedOn = recommended.length > 0 && recommended.every((id) => tweakState[id]);
+  const allRecommendedOn = recommended.length > 0 && recommended.every((id) => isNative() ? Boolean(appliedAt[id]) : tweakState[id]);
 
   return (
     <section>
@@ -82,13 +84,13 @@ function Section({ heading, tweaks, tweakState, onSet, showRecommended = true, s
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleEnableRecommended}
+             onClick={() => onEnable(recommended)}
             disabled={allRecommendedOn}
             data-testid={`button-enable-recommended-${heading.replace(/\s+/g, '-').toLowerCase()}`}
             className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-3 h-3 mr-1" />
-            {allRecommendedOn ? "Recommended ON" : `Enable Recommended (${recommended.length})`}
+             {allRecommendedOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recommended.length})`}
           </Button>
         )}
       </div>
@@ -113,10 +115,26 @@ function Section({ heading, tweaks, tweakState, onSet, showRecommended = true, s
 }
 
 export default function Registry() {
-  const { tweaks, setTweak } = useOptimizationStore();
+  const { tweaks, appliedAt, setTweak } = useOptimizationStore();
+  const { toast } = useToast();
   const hw = useHardwareInfo();
   const osInfo = useOsDetection();
   const smartRecs = computeSmartRecs(hw, osInfo);
+  const enableRecommended = async (ids: string[]) => {
+    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    if (!pending.length) {
+      toast({ title: "Recommendations already confirmed", description: "Every compatible recommendation is already applied.", variant: "destructive" });
+      return;
+    }
+    if (isNative()) {
+      if (!window.confirm(`Apply ${pending.length} compatible registry recommendations now?`)) return;
+      queueTweakBatch(pending);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    const result = await applyTweakBatch(pending);
+    toast({ title: `${result.selectedIds.length} registry recommendations selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" });
+  };
 
   const CPU_TWEAKS: TweakDef[] = [
     { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
@@ -282,14 +300,14 @@ export default function Registry() {
 
         <div className="space-y-10">
           {/* CPU + Power bundled — reduces visible section count */}
-          <Section heading="CPU, Power & Timer" tweaks={[...CPU_TWEAKS, ...POWER_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          <Section heading="CPU, Power & Timer" tweaks={[...CPU_TWEAKS, ...POWER_TWEAKS]} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} smartRecIds={smartRecs.ids} />
 
           {/* Network — basic + advanced DNS/QoS bundled */}
-          <Section heading="Network & Internet" tweaks={[...NETWORK_TWEAKS, ...ADVANCED_NETWORK_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          <Section heading="Network & Internet" tweaks={[...NETWORK_TWEAKS, ...ADVANCED_NETWORK_TWEAKS]} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} smartRecIds={smartRecs.ids} />
 
           {/* Memory section with RAM-aware safety note */}
           <div className="space-y-5">
-            <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+             <Section heading="Memory Management" tweaks={MEMORY_TWEAKS} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.ramGB <= 4 && hw.ramGB > 0 && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/25 bg-amber-500/5">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -303,7 +321,7 @@ export default function Registry() {
 
           {/* Visual + Kernel bundled */}
           <div className="space-y-5">
-            <Section heading="Visual, Kernel & System" tweaks={[...VISUAL_TWEAKS, ...KERNEL_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+             <Section heading="Visual, Kernel & System" tweaks={[...VISUAL_TWEAKS, ...KERNEL_TWEAKS]} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} smartRecIds={smartRecs.ids} />
             {!hw.loading && hw.isIntel && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-900/60">
                 <ShieldAlert className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
@@ -316,7 +334,7 @@ export default function Registry() {
           </div>
 
           {/* Process + Win11 bundled */}
-          <Section heading="Process Scheduling & Win11" tweaks={[...PROCESS_TWEAKS, ...WIN11_GAMING_TWEAKS]} tweakState={tweaks} onSet={setTweak} smartRecIds={smartRecs.ids} />
+          <Section heading="Process Scheduling & Win11" tweaks={[...PROCESS_TWEAKS, ...WIN11_GAMING_TWEAKS]} tweakState={tweaks} appliedAt={appliedAt} onSet={setTweak} onEnable={enableRecommended} smartRecIds={smartRecs.ids} />
 
           <section>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 mb-4">

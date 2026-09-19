@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
 import { useToast } from "@/hooks/use-toast";
+import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_ROBLOX_IDS = [
   "RobloxFPSUnlock", "RobloxDisablePostFX", "RobloxReduceLightUpdates", "RobloxDisableSSAO",
@@ -47,9 +48,11 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
   smartRecIds?: Set<string>;
 }) {
   const { toast } = useToast();
+  const appliedAt = useOptimizationStore(s => s.appliedAt);
   const base = SECTION_RECOMMENDED[sectionKey] || [];
   const ids = smartRecIds ? base.filter(id => smartRecIds.has(id)) : base;
-  const allOn = ids.length > 0 && ids.every(id => tweaks[id]);
+  const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+  const allOn = ids.length > 0 && pending.length === 0;
   if (ids.length === 0) {
     return <h2 className="text-sm font-bold uppercase tracking-wider text-red-500 mb-4 px-1">{title}</h2>;
   }
@@ -59,11 +62,12 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
       <Button
         size="sm"
         variant={allOn ? "default" : "outline"}
-        onClick={() => void applyTweakBatch(ids).then(result => toast({
-          title: isNative() ? `${result.appliedIds.length} tweaks applied` : `${result.selectedIds.length} tweaks selected`,
-          description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} script-only` : ""}.` : "Download and run the .bat to apply them.",
-          variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
-        }))}
+        onClick={() => {
+          if (!pending.length) { toast({ title: "No compatible pending tweaks", description: "All recommendations are already confirmed or incompatible with this PC.", variant: "destructive" }); return; }
+          if (isNative() && !window.confirm(`Apply ${pending.length} Roblox recommendations?`)) return;
+          if (isNative()) { void applyTweakBatch(pending); return; }
+          void applyTweakBatch(pending).then(result => toast({ title: `${result.selectedIds.length} tweaks selected`, description: "Download and run the .bat to apply them.", variant: result.failures.length && !result.selectedIds.length ? "destructive" : "success" }));
+        }}
         className={cn(
           "h-6 px-2.5 text-[10px] font-bold uppercase tracking-wide gap-1.5",
           allOn
@@ -73,7 +77,7 @@ function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
         data-testid={`apply-all-${sectionKey}`}
       >
         <Zap className="w-3 h-3" />
-        {allOn ? "Applied" : "Apply All"}
+        {isNative() ? (allOn ? "Applied" : `Apply (${pending.length})`) : (allOn ? "Selected" : `Select (${pending.length})`)}
       </Button>
     </div>
   );
