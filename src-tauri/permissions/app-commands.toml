@@ -19,6 +19,11 @@ description = "List all available tweaks."
 commands.allow = ["list_tweaks"]
 
 [[permission]]
+identifier = "allow-detect-applied-tweaks"
+description = "Read the confirmed applied state for supported native tweaks."
+commands.allow = ["detect_applied_tweaks"]
+
+[[permission]]
 identifier = "allow-list-power-plans"
 description = "Read the Windows power plans and active plan."
 commands.allow = ["list_power_plans"]
@@ -37,6 +42,11 @@ commands.allow = ["scan_hardware"]
 identifier = "allow-create-restore-point"
 description = "Create a Windows restore point."
 commands.allow = ["create_restore_point"]
+
+[[permission]]
+identifier = "allow-startup-restore-checkpoint"
+description = "Run the required startup restore-point readiness check."
+commands.allow = ["startup_restore_checkpoint"]
 
 [[permission]]
 identifier = "allow-restore-to-point"
@@ -138,6 +148,11 @@ identifier = "allow-read-text-file"
 description = "Read a text file from an absolute path (used by Tauri file-drop zones)."
 commands.allow = ["read_text_file"]
 
+[[permission]]
+identifier = "allow-read-fivem-log"
+description = "Read the detected CitizenFX log used by the FiveM server helper."
+commands.allow = ["read_fivem_log"]
+
 [permission_set]
 identifier = "all-app-commands"
 description = "All app-level commands."
@@ -146,10 +161,12 @@ permissions = [
   "allow-apply-tweak",
   "allow-undo-tweak",
   "allow-list-tweaks",
+  "allow-detect-applied-tweaks",
   "allow-list-power-plans",
   "allow-set-power-plan",
   "allow-scan-hardware",
   "allow-create-restore-point",
+  "allow-startup-restore-checkpoint",
   "allow-restore-to-point",
   "allow-list-restore-points",
   "allow-start-pro-balance",
@@ -170,4 +187,5 @@ permissions = [
   "allow-disable-startup-app",
   "allow-get-startup-value",
   "allow-read-text-file",
+  "allow-read-fivem-log",
 ]

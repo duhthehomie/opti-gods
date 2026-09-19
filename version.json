@@ -1,4 +1,4 @@
 {
-  "version": "5.2.14",
-  "notes": "V5.2.14 — fixes Full Optimize authorization, guest visibility after logout, Instant Scan feedback, and publish reliability."
+  "version": "5.2.15",
+  "notes": "V5.2.15 — fixes native-command permissions, Full Optimize authorization, validated scan feedback, and logout reliability."
 }
