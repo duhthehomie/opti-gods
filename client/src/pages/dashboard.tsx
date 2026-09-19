@@ -18,6 +18,7 @@ import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info"
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
+import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
@@ -310,10 +311,12 @@ const PRO_BULLETS = [
 
 export default function Dashboard() {
   const native = isNative();
+  const { isAuthenticated } = useAuth();
   const osInfo = useOsDetection();
   const hw = useHardwareInfo();
   const smartRecs = computeSmartRecs(hw, osInfo);
-  const isPro = useProStatus();
+  const hasProEntitlement = useProStatus();
+  const isPro = isAuthenticated && hasProEntitlement;
   const proStatusLoading = useProStatusLoading();
   const { tweaks, setAllTweaks, appliedAt } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
@@ -404,6 +407,10 @@ export default function Dashboard() {
 
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
+    if (!isAuthenticated) {
+      loginWithDiscord("/dashboard");
+      return;
+    }
     if (!isPro) {
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
       window.dispatchEvent(new Event("optigods:enable-best-free"));
@@ -446,6 +453,10 @@ export default function Dashboard() {
 
   const applyAllRecommended = () => {
     if (bulkApplying || (native && recommendedApplied) || proStatusLoading) return;
+    if (!isAuthenticated) {
+      loginWithDiscord("/dashboard");
+      return;
+    }
     if (!isPro) {
       document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
       window.dispatchEvent(new Event("optigods:enable-best-free"));
@@ -584,23 +595,25 @@ export default function Dashboard() {
                 </ProUnlockButton>
               )}
 
-              <Button
-                data-testid="button-full-optimize"
-                onClick={applyAllRecommended}
-                 disabled={(native && recommendedApplied) || bulkApplying || proStatusLoading}
-                className={cn(
-                  "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
-                  recommendedApplied
-                    ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-default"
-                    : "bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
-                )}
-              >
-                {recommendedApplied ? (
-                  <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
-                ) : (
-                  <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? (native ? "Full Optimize" : "Select Pro preset for script") : "Enable Best 15 Tweaks"}</>
-                )}
-              </Button>
+              {isAuthenticated && (
+                <Button
+                  data-testid="button-full-optimize"
+                  onClick={applyAllRecommended}
+                  disabled={(native && recommendedApplied) || bulkApplying || proStatusLoading}
+                  className={cn(
+                    "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
+                    recommendedApplied
+                      ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-default"
+                      : "bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white border border-red-500/40 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
+                  )}
+                >
+                  {recommendedApplied ? (
+                    <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
+                  ) : (
+                    <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? (native ? "Full Optimize" : "Select Pro preset for script") : "Enable Best 15 Tweaks"}</>
+                  )}
+                </Button>
+              )}
 
               <Button
                 data-testid="button-restore-point"
@@ -1114,7 +1127,7 @@ export default function Dashboard() {
                 <CheckCircle2 className="w-5 h-5" />
                 {enabledCount} Tweaks Enabled
               </div>
-            ) : (
+            ) : isAuthenticated ? (
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
@@ -1124,7 +1137,7 @@ export default function Dashboard() {
                 <Rocket className="w-5 h-5 mr-2" />
                 {bulkApplying ? "Applying…" : isPro ? "Full Optimize This PC" : "Enable Best 15 Tweaks"}
               </Button>
-            )}
+            ) : null}
             <span className="text-[10px] text-zinc-600 text-center">
               {recommendedApplied ? "You can still customize any tweak below" : "Safe for all PCs · Reversible · No data deleted"}
             </span>

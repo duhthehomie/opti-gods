@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { discordCachedToken, isNative } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
+import { clearProStatus } from "@/lib/pro-status";
 
 export type AuthUser = {
   discordId: string;
@@ -80,6 +81,14 @@ export function useLogout() {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/me"], { user: null });
+      // A code session is intentionally device-local. Signing out must not
+      // leave its token or cached entitlement visible to the next guest.
+      clearProStatus();
+      queryClient.setQueryData(["/api/pro/status"], {
+        isPro: false,
+        source: null,
+        grantedAt: null,
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
       window.location.href = "/";
     },

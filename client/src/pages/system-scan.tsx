@@ -1172,6 +1172,7 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
 export default function SystemScanPage() {
   const hw = useHardwareInfo();
   const os = useOsDetection();
+  const { toast } = useToast();
   const [nativeScan, setNativeScan] = useState<NativeHardwareScan | null>(() => loadNativeScan());
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -1190,7 +1191,7 @@ export default function SystemScanPage() {
           await uploadValidatedHardwareScan(data);
           saveNativeScan(data);
           // Bridge native scan into optigods-sysinfo so smart-recs on every page use WMI data
-          saveScannedInfo({
+           saveScannedInfo({
             GPU:         data.gpu  || undefined,
             CPU:         data.cpu  || undefined,
             Cores:       data.cpu_cores ?? undefined,
@@ -1209,6 +1210,10 @@ export default function SystemScanPage() {
             SystemModel: data.system_model ?? undefined,
             IsLaptop:    data.is_laptop ?? undefined,
           });
+           // A native scan is a completed user action. Mark it as an audible
+           // success so the desktop app gives feedback even when the results
+           // panel is below the fold.
+           toast({ title: "Instant Scan complete", description: "Hardware validated and ready for your PC-specific recommendations.", variant: "success" });
         }
       })
       .catch(err => { setScanError(String(err)); })

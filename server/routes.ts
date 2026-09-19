@@ -1666,9 +1666,9 @@ export async function registerRoutes(
         const allowance = await storage.getPerformanceAllowance(userId);
         const selected = selectBestInstantTweaks(instantCandidates, consumed, allowance.remaining, false);
         ids = selected.ids;
-        if (ids.length !== selected.requestedCount) {
+        if (ids.length === 0) {
           return res.status(409).json({
-            error: `Only ${ids.length} verified compatible instant tweaks are available for this scan; ${selected.requestedCount} are required. Rescan after updating Windows and GPU drivers.`,
+            error: "No unused verified compatible instant tweaks are available for this scan. Rescan after updating Windows and GPU drivers, or undo an active free tweak.",
             code: "OG-HW-001",
           });
         }

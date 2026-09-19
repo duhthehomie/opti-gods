@@ -1,4 +1,4 @@
 {
-  "version": "5.2.13",
-  "notes": "V5.2.13 — adds server-authorized NVIDIA Pro tools with verified bundled MSI Utility v3 and NVIDIA Profile Inspector preset."
+  "version": "5.2.14",
+  "notes": "V5.2.14 — fixes Full Optimize authorization, guest visibility after logout, Instant Scan feedback, and publish reliability."
 }
