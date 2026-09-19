@@ -1,4 +1,4 @@
 {
-  "version": "5.2.16",
-  "notes": "V5.2.16 — fixes native-command permissions and removes the protected registry writes from the System Restore startup check."
+  "version": "5.2.17",
+  "notes": "V5.2.17 — stops automatic System Restore repair attempts and verifies the restore point directly before native changes."
 }

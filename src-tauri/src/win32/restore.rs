@@ -106,9 +106,11 @@ pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint>
     if let Some(existing) = checkpoint.clone() {
         return Ok(existing);
     }
-    // Keep this check in the native backstop as well as launch. A renderer
-    // event/session flag must never be enough to authorize a mutation.
-    ensure_enabled()?;
+    // Keep the actual create-and-WMI-verify operation in the native backstop.
+    // A renderer event/session flag must never be enough to authorize a
+    // mutation. Do not call Enable-ComputerRestore here: Windows can reject
+    // that repair command even when the supported restore-point API itself is
+    // usable, and the repair attempt used to block every launch.
     let next_number = list()
         .unwrap_or_default()
         .iter()
@@ -161,45 +163,6 @@ pub fn restore(sequence_number: i64) -> Result<()> {
         .arg(arg)
         .spawn()
         .context("launch rstrui.exe")?;
-    Ok(())
-}
-
-/// Ensure System Restore is enabled on the C: drive.
-///
-/// Do not edit the Windows policy or restore-frequency registry values here.
-/// Those keys can be protected by Group Policy even for an elevated process,
-/// and changing them is not required when System Protection is already enabled.
-/// `Enable-ComputerRestore` is idempotent and is the supported Windows API
-/// surface for enabling protection on a drive.
-pub fn ensure_enabled() -> anyhow::Result<()> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-    // Enable System Restore on C:\ and fail if Windows rejects the request.
-    // Do not use `reg add` for the policy keys: a managed PC can deny those
-    // writes even when the app is elevated, while existing protection remains
-    // perfectly usable.
-    let enabled = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            "$ErrorActionPreference='Stop'; Enable-ComputerRestore -Drive 'C:\\'",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .context("launch PowerShell to enable System Restore")?;
-    if !enabled.status.success() {
-        let detail = String::from_utf8_lossy(&enabled.stderr);
-        return Err(anyhow!(
-            "System Restore could not be enabled on C:\\: {}",
-            detail.trim()
-        ));
-    }
-
     Ok(())
 }
 

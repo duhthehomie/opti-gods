@@ -1,6 +1,6 @@
-# Opti Gods v5.2.16 Windows test
+# Opti Gods v5.2.17 Windows test
 
-1. Install/update the Windows build. Open Settings and confirm **5.2.16**.
+1. Install/update the Windows build. Open Settings and confirm **5.2.17**.
 2. Run the hardware scan. Confirm the NVIDIA page identifies the real GPU.
 3. Free account: press **Best 15** and confirm only compatible pending actions
    are selected and each result says whether Windows confirmed it.
@@ -37,7 +37,7 @@
 ## YES/NO answer template
 
 ```
-Version 5.2.16 installed: YES / NO
+Version 5.2.17 installed: YES / NO
 Hardware scan identifies NVIDIA GPU: YES / NO
 Best 15 result is truthful: YES / NO / NOT TESTED
 All tested game-profile buttons work: YES / NO / NOT TESTED

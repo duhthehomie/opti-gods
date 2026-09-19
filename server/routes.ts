@@ -1306,10 +1306,8 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     `# --- Mandatory verified restore point before any optimization ---`,
     `$restoreLabel = "OptiGods Before Preset $([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))"`,
     `try {`,
-    `    Enable-ComputerRestore -Drive "$($env:SystemDrive)\\" -ErrorAction Stop`,
-    `    $srPolicy = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore'`,
-    `    New-Item $srPolicy -Force | Out-Null`,
-    `    Set-ItemProperty $srPolicy SystemRestorePointCreationFrequency 0 -Type DWord -Force`,
+    `    # Do not change System Restore policy automatically. A managed PC can`,
+    `    # reject those writes even when the supported checkpoint API is usable.`,
     `    Checkpoint-Computer -Description $restoreLabel -RestorePointType MODIFY_SETTINGS -ErrorAction Stop`,
     `    Start-Sleep -Milliseconds 750`,
     `    $verifiedRestore = Get-CimInstance -Namespace root/default -ClassName SystemRestore -ErrorAction Stop | Where-Object Description -eq $restoreLabel | Sort-Object SequenceNumber -Descending | Select-Object -First 1`,
@@ -2379,8 +2377,6 @@ Write-Host "  ================================================" -ForegroundColor
 Write-Host "    OPTI GODS  --  Create Restore Point" -ForegroundColor White
 Write-Host "  ================================================" -ForegroundColor Red
 Write-Host ""
-Write-Host "  Enabling System Restore on C:\\ ..." -ForegroundColor Cyan
-try { Enable-ComputerRestore -Drive "C:\\" -EA SilentlyContinue } catch {}
 Write-Host "  Creating restore point..." -ForegroundColor Cyan
 try {
     Checkpoint-Computer -Description "OptiGods V3 - Before Optimization" -RestorePointType "MODIFY_SETTINGS" -EA Stop

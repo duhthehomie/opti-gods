@@ -78,8 +78,8 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
     }
 }
 
-/// Called once on app startup — enables System Restore (if it was disabled)
-/// then creates the next numbered "Opti Gods Restore N" checkpoint.
+/// Called once on app startup — creates the next numbered
+/// "Opti Gods Restore N" checkpoint and verifies it through WMI.
 ///
 /// Failures are returned as structured data so the renderer can block actions
 /// and give the user an actionable recovery message.  The native apply command
@@ -88,10 +88,8 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
 pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String> {
     #[cfg(windows)]
     {
-        // This asks Windows to enable protection without editing Group Policy
-        // or undocumented registry settings. Keep the error intact: policy,
-        // elevation, PowerShell and drive failures need different recovery
-        // paths for the user.
+        // Do not attempt to change Windows policy automatically. The native
+        // create-and-verify call is the only safe prerequisite for mutations.
         match crate::win32::restore::ensure_session_checkpoint("Opti Gods Restore") {
             Ok(rp) => {
                 log::info!(
@@ -102,7 +100,7 @@ pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String
                 Ok(StartupRestoreResult {
                     ok: true,
                     status: "verified".into(),
-                    repair_attempted: true,
+                    repair_attempted: false,
                     restore_point: Some(rp),
                     message:
                         "System Protection is ready and the launch restore point was verified."
@@ -124,7 +122,7 @@ pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String
                 Ok(StartupRestoreResult {
                     ok: false,
                     status: status.into(),
-                    repair_attempted: true,
+                    repair_attempted: false,
                     restore_point: None,
                     message: format!("System Protection could not be verified: {detail}"),
                     recovery: "Open System Protection for C: in Windows, enable it, then press Retry. If Windows still denies the request, launch Opti Gods with Run as administrator. No tweak was allowed to run.".into(),
