@@ -88,9 +88,10 @@ pub async fn restore_to_point(sequence_number: i64) -> Result<(), String> {
 pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String> {
     #[cfg(windows)]
     {
-        // This also repairs the common "DisableSR" configuration.  Keep the
-        // error intact: policy, elevation, PowerShell and drive failures are
-        // materially different recovery paths for the user.
+        // This asks Windows to enable protection without editing Group Policy
+        // or undocumented registry settings. Keep the error intact: policy,
+        // elevation, PowerShell and drive failures need different recovery
+        // paths for the user.
         match crate::win32::restore::ensure_session_checkpoint("Opti Gods Restore") {
             Ok(rp) => {
                 log::info!(
@@ -126,7 +127,7 @@ pub async fn startup_restore_checkpoint() -> Result<StartupRestoreResult, String
                     repair_attempted: true,
                     restore_point: None,
                     message: format!("System Protection could not be verified: {detail}"),
-                    recovery: "Run the app as administrator, turn on System Protection for C:, then press Retry. No tweak was allowed to run.".into(),
+                    recovery: "Open System Protection for C: in Windows, enable it, then press Retry. If Windows still denies the request, launch Opti Gods with Run as administrator. No tweak was allowed to run.".into(),
                 })
             }
         }

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.15",
-  "notes": "V5.2.15 — fixes native-command permissions, Full Optimize authorization, validated scan feedback, and logout reliability."
+  "version": "5.2.16",
+  "notes": "V5.2.16 — fixes native-command permissions and removes the protected registry writes from the System Restore startup check."
 }

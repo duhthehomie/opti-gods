@@ -11,6 +11,13 @@ import { cn } from "@/lib/utils";
 
 const TOKEN_KEY = "optigods-native-undo-tokens";
 function tokenFor(id: string) { try { return (JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}") as Record<string,string>)[id] || null; } catch { return null; } }
+function summarizeFailures(failures: { id: string; message: string }[], appliedCount: number): string {
+  if (!failures.length) return "Every selected Windows change was confirmed. Restart your PC for the full boost.";
+  const messages = Array.from(new Set(failures.map(failure => failure.message))).slice(0, 2);
+  const detail = messages.join(" ");
+  const remaining = failures.length - messages.length;
+  return `${appliedCount} applied. ${failures.length} failed. ${detail}${remaining > 0 ? ` ${remaining} other result${remaining === 1 ? "" : "s"} are listed below.` : ""}`;
+}
 
 async function downloadUndoScript(id: string): Promise<boolean> {
   const sessionToken = localStorage.getItem("optigods_session_v2");
@@ -65,14 +72,9 @@ export default function AppliedTweaksPage() {
       setRunFinished(true);
       setShowRestartPrompt(result.appliedIds.length > 0);
        const failureCount = result.failures.length;
-       const failureDetails = result.failures
-         .map(failure => `${failure.id}: ${failure.message}`)
-         .join(" | ");
       toast({
          title: failureCount === 0 ? `${result.appliedIds.length} tweaks applied` : `${failureCount} tweak${failureCount === 1 ? "" : "s"} failed`,
-         description: failureCount
-           ? `${result.appliedIds.length} applied. ${failureDetails}`
-           : "Every selected Windows change was confirmed. Restart your PC for the full boost.",
+          description: summarizeFailures(result.failures, result.appliedIds.length),
          variant: failureCount === 0 ? "success" : "destructive",
       });
     }).catch(error => {

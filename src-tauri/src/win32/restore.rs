@@ -165,64 +165,25 @@ pub fn restore(sequence_number: i64) -> Result<()> {
 }
 
 /// Ensure System Restore is enabled on the C: drive.
-/// Requires admin rights (Opti Gods app.manifest already requests them).
+///
+/// Do not edit the Windows policy or restore-frequency registry values here.
+/// Those keys can be protected by Group Policy even for an elevated process,
+/// and changing them is not required when System Protection is already enabled.
+/// `Enable-ComputerRestore` is idempotent and is the supported Windows API
+/// surface for enabling protection on a drive.
 pub fn ensure_enabled() -> anyhow::Result<()> {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-    // 1. Clear the policy key that disables System Restore
-    //    HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore DisableSR = 0
-    let policy = Command::new("reg")
-        .args([
-            "add",
-            r"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore",
-            "/v",
-            "DisableSR",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "0",
-            "/f",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .context("launch reg.exe to enable System Restore policy")?;
-    if !policy.status.success() {
-        return Err(anyhow!(
-            "Windows rejected the System Restore policy change: {}",
-            String::from_utf8_lossy(&policy.stderr).trim()
-        ));
-    }
-
-    // Allow one numbered Opti Gods restore point per app launch instead of
-    // Windows silently suppressing checkpoints created within 24 hours.
-    let frequency = Command::new("reg")
-        .args([
-            "add",
-            r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore",
-            "/v",
-            "SystemRestorePointCreationFrequency",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "0",
-            "/f",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .context("launch reg.exe to allow restore point creation")?;
-    if !frequency.status.success() {
-        return Err(anyhow!(
-            "Windows rejected the restore-point frequency change: {}",
-            String::from_utf8_lossy(&frequency.stderr).trim()
-        ));
-    }
-
-    // 3. Enable System Restore on C:\ and fail if PowerShell rejects it.
+    // Enable System Restore on C:\ and fail if Windows rejects the request.
+    // Do not use `reg add` for the policy keys: a managed PC can deny those
+    // writes even when the app is elevated, while existing protection remains
+    // perfectly usable.
     let enabled = Command::new("powershell")
         .args([
             "-NoProfile",
+            "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
