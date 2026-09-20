@@ -466,10 +466,9 @@ const ZEN5_TWEAKS: string[] = [
 ];
 
 /** NVIDIA frame limit / driver reapply options (all variants) */
-const NVIDIA_FRAME_LIMITS: string[] = [
-  "NvFrameLimit30", "NvFrameLimit60", "NvFrameLimit120",
-  "NvFrameLimit144", "NvFrameLimit240", "NvFrameLimitCustom",
-];
+// Frame caps are intentionally not part of generated presets. Opti Gods never
+// chooses a monitor-specific cap for a user.
+const NVIDIA_FRAME_LIMITS: string[] = [];
 
 /** RTX 50 extra driver tweaks + FiveM RTX 5060 targeted pack */
 const NVIDIA_RTX50_EXTRA: string[] = [
@@ -488,7 +487,7 @@ const NVIDIA_CORE: string[] = [
   "NvidiaFrameBufferOpt", "NvidiaGpuBgOptimize", "NvidiaCUDAPriority",
   "NvidiaDisableHDMIAudio",
   "NvLowLatencyUltra", "NvTextureFilterHighPerf", "NvThreadedOptOn",
-  "NvPowerMgmtMax", "NvFrameLimitOff",
+  "NvPowerMgmtMax",
   "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
 ];
 const NVIDIA_RTX_EXTRA: string[] = [
@@ -577,7 +576,7 @@ const COD_UNIVERSAL: string[] = [
 /** COD tweaks that only apply on NVIDIA hardware */
 const COD_NVIDIA: string[] = ["Cod1650LowLatency", "Cod1650DisableAnsel"];
 /** COD tweaks that only apply on AMD CPU builds */
-const COD_AMD_CPU: string[] = ["Cod3500PowerPlan", "Cod3500CoreUnpark"];
+const COD_AMD_CPU: string[] = ["Cod3500PowerPlan"];
 
 /** Hardware-summary string for prompts/UI. */
 export function summarizeHardware(hw: PresetHardware): string {
