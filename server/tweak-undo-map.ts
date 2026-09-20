@@ -388,16 +388,6 @@ export const TWEAK_UNDO_MAP: Record<string, UndoEntry> = {
       OK("PowerMizer keys removed (adaptive restored)"),
     ],
   },
-  ...((): Record<string, { label: string; commands: string[] }> => {
-    const clearFps = `@('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { If (Test-Path $_) { Remove-ItemProperty -Path $_ -Name 'FrameRateLimit' -EA SilentlyContinue; Remove-ItemProperty -Path $_ -Name 'FrameRateLimitEnable' -EA SilentlyContinue } }`;
-    const entry = { label: "NVIDIA frame rate cap removed", commands: [clearFps, OK("Frame rate cap cleared")] };
-    return {
-      NvFrameLimitOff: entry, NvFrameLimit30: entry, NvFrameLimit60: entry,
-      NvFrameLimit120: entry, NvFrameLimit144: entry, NvFrameLimit240: entry,
-      NvFrameLimitCustom: entry,
-    };
-  })(),
-
   // ── V2.2 AMD driver-class undos ───────────────────────────────────────────
   AmdTextureFilterPerf: {
     label: "AMD Texture Filtering → driver default",
