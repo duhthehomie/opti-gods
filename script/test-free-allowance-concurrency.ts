@@ -73,7 +73,13 @@ async function main() {
 
     const finalized = await Promise.all(
       accepted.map(({ ticket }, index) =>
-        storage.finalizeNativeTweakTicket(ticket, consumed[index]!.resultSecret, true),
+        storage.finalizeNativeTweakTicket(
+          userId,
+          ticket,
+          consumed[index]!.resultSecret,
+          true,
+          accepted[index]!.tweakId,
+        ),
       ),
     );
     assert.ok(finalized.every(result => result.ok && result.status === "success"));
