@@ -373,7 +373,7 @@ export default function Dashboard() {
         try {
           const result = await createRestorePoint("OptiGods V4 — Before Optimization");
           if (result) {
-            toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — you can roll back anytime from Tools & Fixes.` });
+            toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — review or undo applied changes anytime from Applied Tweaks.` });
             nativeOk = true;
           }
         } catch (e: unknown) {
