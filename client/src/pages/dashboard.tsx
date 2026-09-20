@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   ShieldAlert, Zap, Cpu, HardDrive, Monitor, Trash2,
-  CheckCircle2, Download, Terminal, RotateCcw, ChevronRight,
+  CheckCircle2, Download, Terminal, RotateCcw, RefreshCw, ChevronRight,
   MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio, ScanLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import { PerformanceAllowanceCard } from "@/components/performance-allowance-car
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
-import { GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
+import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -81,6 +81,38 @@ const GAME_PACK_LABELS: Record<string, string> = {
   game_007firstlight: "007: First Light",
   game_fortnite: "Fortnite",
 };
+
+function playFullOptimizeSound() {
+  if (typeof window === "undefined") return;
+  const AudioContextCtor = window.AudioContext
+    ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return;
+  try {
+    const context = new AudioContextCtor();
+    const now = context.currentTime;
+    const notes = [
+      { frequency: 392, start: 0, duration: 0.1 },
+      { frequency: 523.25, start: 0.09, duration: 0.12 },
+      { frequency: 783.99, start: 0.2, duration: 0.2 },
+    ];
+    for (const note of notes) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "square";
+      oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
+      gain.gain.setValueAtTime(0.0001, now + note.start);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + note.start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now + note.start);
+      oscillator.stop(now + note.start + note.duration + 0.02);
+    }
+    window.setTimeout(() => { void context.close(); }, 600);
+  } catch {
+    // Audio is an enhancement; a blocked audio context must not block Optimize.
+  }
+}
 
 // Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
 
@@ -162,6 +194,24 @@ const MAX_FPS_TWEAKS = [
   "su_discord", "su_spotify", "su_skype", "su_teams", "su_nvidia",
   "su_ccleaner", "su_battlenet", "su_epic", "su_chrome", "su_razer",
   "su_amdradeon", "su_rtss", "su_logitech",
+  // Maximum-performance hardware and process layer — no competitive preset
+  // should be stronger than the primary Max FPS choice.
+  "EnableMSIMode_Safe",
+  "NvidiaDisableTelemetry", "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
+  "NvidiaShaderCache", "NvidiaOptimizeLatency", "NvidiaDisableOverlay",
+  "NvidiaDisableAnsel", "NvidiaDisableShadowPlay",
+  "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
+  "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
+  "AmdOptimizeLatency", "AmdShaderCache", "AmdTextureFilterPerf",
+  "AmdSurfaceFormatOpt", "AmdTessOverride16x", "AmdRadeonBoostOff",
+  "AmdD3DOptimize", "AmdPCIeOptimize",
+  "ProcessLassoAffinityGaming", "ProcessLassoProBalance", "ProcessAutoKillHung",
+  "ProcessLassoInstanceBalancer",
+  "FortniteDisableVSync", "FortniteInputLatency", "FortniteDisableSSR",
+  "FortniteRawInput", "FortniteDisableLumen", "FortniteAffinityPhysical",
+  "DiscordLowPriority", "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
+  "DiscordDisableVAD", "DiscordDisableClips", "DiscordDisableUpdateCheck",
+  "DiscordDisableCrashHandler", "DiscordDisableAnimations",
 ];
 
 // ── Competitive Shooter ────────────────────────────────────────────────────
@@ -363,15 +413,6 @@ export default function Dashboard() {
   const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!native) return;
-    let active = true;
-    void detectAppliedTweaks().then(state => {
-      if (active) setDetectedNativeTweaks(state);
-    });
-    return () => { active = false; };
-  }, [native]);
-
   const handleScanned = useCallback((_info: ScannedSysInfo) => {
     window.location.reload();
   }, []);
@@ -434,7 +475,26 @@ export default function Dashboard() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
   const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
+  const [selectedFullOptimizeDebloat, setSelectedFullOptimizeDebloat] = useState<string[]>([]);
+  const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
+
+  const refreshDetectedState = useCallback(async () => {
+    if (!native) return;
+    setRefreshingScore(true);
+    try {
+      setDetectedNativeTweaks(await detectAppliedTweaks());
+    } finally {
+      setRefreshingScore(false);
+    }
+  }, [native]);
+
+  useEffect(() => {
+    void refreshDetectedState();
+    if (!native) return;
+    const interval = window.setInterval(() => { void refreshDetectedState(); }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [native, refreshDetectedState]);
 
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
@@ -449,14 +509,22 @@ export default function Dashboard() {
     }
     setBulkApplying(true);
     try {
-      const body = await authorizeHardwarePreset(selectedFullOptimizeGames);
+      const body = await authorizeHardwarePreset(selectedFullOptimizeGames, selectedFullOptimizeDebloat);
       const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
       const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
-      if (unknownIds.length > 0) {
-        throw new Error(`The server returned ${unknownIds.length} unrecognized preset tweak${unknownIds.length === 1 ? "" : "s"} (${unknownIds.slice(0, 3).join(", ")}). No changes were started.`);
+      const recognizedIds = ids.filter(id => !unknownIds.includes(id));
+      if (recognizedIds.length === 0) {
+        throw new Error("The server returned no tweaks recognized by this app. Refresh the Windows app and run the hardware scan again.");
       }
-      const compatibleIds = ids.filter(id => getTweakCompatibility(id).ok);
-      const blockedIds = ids.filter(id => !getTweakCompatibility(id).ok);
+      const compatibleIds = recognizedIds.filter(id => getTweakCompatibility(id).ok);
+      const blockedIds = recognizedIds.filter(id => !getTweakCompatibility(id).ok);
+      if (unknownIds.length > 0) {
+        toast({
+          title: "Skipped outdated preset entries",
+          description: `${unknownIds.length} unsupported preset entr${unknownIds.length === 1 ? "y was" : "ies were"} skipped. The recognized tweaks will continue.`,
+          variant: "destructive",
+        });
+      }
       if (compatibleIds.length === 0) {
         toast({
           title: "No compatible tweaks to run",
@@ -476,10 +544,15 @@ export default function Dashboard() {
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {
-        const result = await applyTweakBatch(compatibleIds);
+        const pendingIds = compatibleIds.filter(id => !activeIdsForDisplay.has(id));
+        if (pendingIds.length === 0) {
+          toast({ title: "All matched tweaks are already selected", description: "Your browser selection already contains every compatible tweak in this hardware preset.", variant: "destructive" });
+          return;
+        }
+        const result = await applyTweakBatch(pendingIds);
         toast({
           title: "Select Pro preset for script",
-          description: `${result.selectedIds.length} compatible tweaks selected in the browser${blockedIds.length ? `; ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} left out` : ""}. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
+          description: `${result.selectedIds.length} missing compatible tweaks selected in the browser${blockedIds.length ? `; ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} left out` : ""}. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
         });
       }
     } catch (error) {
@@ -495,15 +568,12 @@ export default function Dashboard() {
 
   const applyAllRecommended = () => {
     if (bulkApplying || (native && recommendedApplied) || proStatusLoading) return;
-    if (!isAuthenticated && !native) {
-      loginWithDiscord("/dashboard");
-      return;
-    }
     if (!isPro) {
-      document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.dispatchEvent(new Event("optigods:enable-best-free"));
+      // ProUnlockButton owns the paywall for guests and free users. Do not
+      // silently redirect or consume the 15-tweak allowance from this CTA.
       return;
     }
+    playFullOptimizeSound();
     setConfirmFullOptimize(true);
   };
 
@@ -577,6 +647,19 @@ export default function Dashboard() {
       ...Object.keys(appliedAt),
     ])
     : new Set<string>();
+  // Native category totals must come from the live Windows detector, not the
+  // browser intent store. The latter is persistent, but it is not proof that
+  // a registry/service change still exists on this PC.
+  const activeIdsForDisplay = native
+    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]))
+    : new Set(Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id));
+  const activeTweakCount = activeIdsForDisplay.size;
+  const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
+    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
+    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
+  });
+  const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
+  const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
   const recApplied = native
     ? achievableIds.filter(id => confirmedIds.has(id)).length
     : achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
@@ -638,7 +721,7 @@ export default function Dashboard() {
                 </ProUnlockButton>
               )}
 
-              {isAuthenticated || native ? (
+              {isPro ? (
                 <Button
                   data-testid="button-full-optimize"
                   onClick={applyAllRecommended}
@@ -653,18 +736,19 @@ export default function Dashboard() {
                   {recommendedApplied ? (
                     <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
                   ) : (
-                    <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : isPro ? (native ? "Full Optimize" : "Select Pro preset for script") : "Enable Best 15 Tweaks"}</>
+                    <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : `Apply ${missingRecommendedCount} missing tweaks`}</>
                   )}
                 </Button>
               ) : (
-                <Button
-                  data-testid="button-best15-login"
-                  onClick={() => loginWithDiscord("/dashboard")}
-                  className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
-                >
-                  <Rocket className="w-4 h-4 mr-2" />
-                  Best 15 Tweaks
-                </Button>
+                <ProUnlockButton>
+                  <Button
+                    data-testid="button-best15-login"
+                    className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
+                  >
+                    <Rocket className="w-4 h-4 mr-2" />
+                    Apply {missingRecommendedCount} missing tweaks
+                  </Button>
+                </ProUnlockButton>
               )}
 
               <Button
@@ -684,10 +768,10 @@ export default function Dashboard() {
         <AlertDialog open={confirmFullOptimize} onOpenChange={setConfirmFullOptimize}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Choose your games for Full Optimize</AlertDialogTitle>
+              <AlertDialogTitle>Choose games and apps for Full Optimize</AlertDialogTitle>
               <AlertDialogDescription>
-                Select only games you actually play. Opti Gods will run the shared Windows optimizations
-                plus the selected game packs; unselected games will not be authorized or queued.
+                Choose the games you play and the Windows apps you want removed. Shared hardware and
+                Windows optimizations always run; unchecked game and debloat packs are skipped.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-3">
@@ -740,8 +824,58 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  {selectedFullOptimizeDebloat.length
+                    ? `${selectedFullOptimizeDebloat.length} app${selectedFullOptimizeDebloat.length === 1 ? "" : "s"} selected for debloat`
+                    : "No debloat apps selected"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFullOptimizeDebloat([...DEBLOAT_TWEAK_IDS])}
+                    className="text-[10px] font-bold uppercase tracking-wider text-red-300 hover:text-red-200"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFullOptimizeDebloat([])}
+                    className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="grid max-h-52 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-2 sm:grid-cols-2">
+                {DEBLOAT_TWEAK_IDS.map(id => {
+                  const checked = selectedFullOptimizeDebloat.includes(id);
+                  const label = TWEAK_REGISTRY.find(tweak => tweak.id === id)?.title ?? id.replace(/^Debloat/, "");
+                  return (
+                    <label
+                      key={id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
+                        checked
+                          ? "border-red-500/35 bg-red-500/10 text-red-100"
+                          : "border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[.03]",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedFullOptimizeDebloat(current =>
+                          current.includes(id) ? current.filter(item => item !== id) : [...current, id],
+                        )}
+                        className="h-3.5 w-3.5 accent-red-600"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
               <p className="text-[11px] leading-relaxed text-zinc-500">
-                Leave every game unchecked to run only the hardware and Windows-wide optimizations.
+                Leave games and apps unchecked to run only hardware and Windows-wide optimizations.
                 A restore point is required before native changes begin.
               </p>
             </div>
@@ -924,12 +1058,13 @@ export default function Dashboard() {
                     />
                   </div>
                   <button
-                    data-testid="button-instant-scan"
-                    onClick={() => window.location.href = '/system-scan'}
-                    className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-red-400 transition-colors shrink-0 border border-zinc-800 hover:border-red-500/30 px-2 py-1 rounded-md"
+                    data-testid="button-refresh-score"
+                    onClick={() => { void refreshDetectedState(); }}
+                    disabled={!native || refreshingScore}
+                    className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-red-400 transition-colors shrink-0 border border-zinc-800 hover:border-red-500/30 px-2 py-1 rounded-md disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <ScanLine className="w-3 h-3" />
-                    Instant Scan
+                    <RefreshCw className={cn("w-3 h-3", refreshingScore && "animate-spin")} />
+                    {refreshingScore ? "Detecting…" : "Detect applied tweaks"}
                   </button>
                 </div>
               </div>
@@ -1111,7 +1246,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* ─── TWEAK CATEGORY BREAKDOWN ─── */}
-        {enabledCount > 0 && (
+        {activeTweakCount > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1123,7 +1258,7 @@ export default function Dashboard() {
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Active Tweaks by Category</span>
               </div>
-              <span className="text-xs font-bold text-white">{enabledCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} tweaks</span></span>
+              <span className="text-xs font-bold text-white">{activeTweakCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} tweaks</span></span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {[
@@ -1136,7 +1271,7 @@ export default function Dashboard() {
                 { label: "Process",   keys: (k: string) => k.startsWith("Process"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Process")).length },
                 { label: "Registry",  keys: (k: string) => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => k.startsWith(p)), total: TWEAK_REGISTRY.filter(t => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => t.id.startsWith(p))).length },
               ].map(({ label, keys, total }) => {
-                const active = Object.entries(tweaks).filter(([k, v]) => v && keys(k)).length;
+                const active = Array.from(activeIdsForDisplay).filter(keys).length;
                 const pct = Math.round((active / total) * 100);
                 if (active === 0) return null;
                 return (
@@ -1208,7 +1343,7 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-                {recommendedApplied ? "Compatible Tweaks Applied" : isPro ? "Apply Compatible Tweaks in One Click" : "Enable the Best 15 Tweaks"}
+                {recommendedApplied ? "Compatible Tweaks Applied" : isPro ? `Apply ${missingRecommendedCount} missing tweaks` : `${matchedRecommendedIds.length} tweaks match your hardware`}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -1218,8 +1353,8 @@ export default function Dashboard() {
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
                   : isPro
-                    ? "Compatible tweaks apply inside Opti Gods. Incompatible choices remain locked for this PC."
-                    : "Free accounts can enable the 15 best server-validated tweaks for their saved system scan. Link a Pro Discord account to unlock every tweak."}
+                    ? `${missingRecommendedCount} compatible tweaks are not confirmed yet. Apply only what is missing from this PC.`
+                    : `${freeUnavailableCount} additional matched tweaks are unavailable on Free. Unlock Pro to apply the full hardware-matched set.`}
             </p>
           </div>
 
@@ -1232,7 +1367,7 @@ export default function Dashboard() {
                 <CheckCircle2 className="w-5 h-5" />
                 {enabledCount} Tweaks Enabled
               </div>
-            ) : isAuthenticated || native ? (
+            ) : isPro ? (
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
@@ -1240,18 +1375,19 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                {bulkApplying ? "Applying…" : isPro ? "Full Optimize This PC" : "Enable Best 15 Tweaks"}
+                {bulkApplying ? "Applying…" : `Apply ${missingRecommendedCount} missing tweaks`}
               </Button>
             ) : (
-              <Button
-                data-testid="button-best15-login-banner"
-                onClick={() => loginWithDiscord("/dashboard")}
-                disabled={bulkApplying}
-                className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-8 py-3 text-base rounded-xl"
-              >
-                <Rocket className="w-5 h-5 mr-2" />
-                Best 15 Tweaks
-              </Button>
+              <ProUnlockButton>
+                <Button
+                  data-testid="button-best15-login-banner"
+                  disabled={bulkApplying}
+                  className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-8 py-3 text-base rounded-xl"
+                >
+                  <Rocket className="w-5 h-5 mr-2" />
+                  Apply {missingRecommendedCount} missing tweaks
+                </Button>
+              </ProUnlockButton>
             )}
             <span className="text-[10px] text-zinc-600 text-center">
               {recommendedApplied ? "You can still customize any tweak below" : "Safe for all PCs · Reversible · No data deleted"}

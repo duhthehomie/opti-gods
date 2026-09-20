@@ -12,12 +12,16 @@ import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory
 import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useAuth } from "@/hooks/use-auth";
+import { useProStatus } from "@/lib/pro-status";
+import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { APP_VERSION } from "@/generated/version";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { useToast } from "@/hooks/use-toast";
 import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 
 const Registry         = lazy(() => import("@/pages/registry"));
 const Nvidia           = lazy(() => import("@/pages/nvidia"));
@@ -253,6 +257,9 @@ function SectionCard({
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TweaksPage() {
   const [location] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const hasProEntitlement = useProStatus();
+  const isPro = isAuthenticated && hasProEntitlement;
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
   });
@@ -291,10 +298,12 @@ export default function TweaksPage() {
 
   const hw = useHardwareInfo();
   const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
   const detecting = isDetecting(hw);
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const [confirmApply, setConfirmApply] = useState(false);
+  const [applyingMatched, setApplyingMatched] = useState(false);
   const enabledCount = Object.values(tweaks).filter(Boolean).length;
   const showBest15 = new URLSearchParams(window.location.search).get("best15") === "1";
   const best15Ids = (() => {
@@ -309,6 +318,33 @@ export default function TweaksPage() {
   const best15 = best15Ids
     .map(id => TWEAK_REGISTRY.find(tweak => tweak.id === id))
     .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
+  const matchedProIds = Array.from(smartRecs.ids).filter(id => {
+    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
+    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
+  });
+  const missingMatchedIds = matchedProIds.filter(id => !tweaks[id]);
+
+  const applyMatched = async () => {
+    if (applyingMatched || !missingMatchedIds.length) return;
+    setApplyingMatched(true);
+    try {
+      const result = await applyTweakBatch(missingMatchedIds);
+      toast({
+        title: isNative() ? "Matched tweaks queued" : "Matched tweaks selected",
+        description: isNative()
+          ? `${result.selectedIds.length} missing hardware-matched tweaks are queued in Applied Tweaks.`
+          : `${result.selectedIds.length} missing hardware-matched tweaks are selected for your script.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Could not apply matched tweaks",
+        description: error instanceof Error ? error.message : "The hardware-matched tweaks could not be started.",
+        variant: "destructive",
+      });
+    } finally {
+      setApplyingMatched(false);
+    }
+  };
 
   useEffect(() => { try { localStorage.setItem(TAB_STORAGE_KEY, activeTab); } catch {} }, [activeTab]);
   useEffect(() => { try { localStorage.setItem(SHOW_ALL_KEY, showAll ? "1" : "0"); } catch {} }, [showAll]);
@@ -473,6 +509,48 @@ export default function TweaksPage() {
             )}
           </div>
         </header>
+
+        <section
+          data-testid="card-matched-pro-inventory"
+          className="rounded-xl border border-red-500/25 bg-gradient-to-r from-red-500/10 via-black/60 to-black/50 p-5"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-red-400" />
+                <h2 className="text-sm font-black uppercase tracking-wider text-white">
+                  {matchedProIds.length} tweaks match this PC
+                </h2>
+              </div>
+              <p className="mt-1 text-xs text-zinc-400">
+                {isPro
+                  ? `${missingMatchedIds.length} compatible tweaks are still missing. Apply only what is not already selected.`
+                  : `${Math.max(0, matchedProIds.length - 15)} additional matched tweaks are unavailable on Free. Unlock Pro to use the full hardware-matched set.`}
+              </p>
+            </div>
+            {isPro ? (
+              <button
+                type="button"
+                data-testid="button-apply-matched-tweaks"
+                disabled={applyingMatched || !missingMatchedIds.length}
+                onClick={() => void applyMatched()}
+                className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_20px_-5px_rgba(220,38,38,0.7)] transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {applyingMatched ? "Applying…" : missingMatchedIds.length ? `Apply ${missingMatchedIds.length} missing tweaks` : "All matched tweaks selected"}
+              </button>
+            ) : (
+              <ProUnlockButton>
+                <button
+                  type="button"
+                  data-testid="button-unlock-matched-tweaks"
+                  className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_20px_-5px_rgba(220,38,38,0.7)] transition-colors hover:bg-red-500"
+                >
+                  Apply {missingMatchedIds.length} missing tweaks
+                </button>
+              </ProUnlockButton>
+            )}
+          </div>
+        </section>
 
         {showBest15 && (
           <section className="rounded-xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-zinc-950/80 to-black p-5">

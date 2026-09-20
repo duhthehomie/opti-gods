@@ -75,8 +75,9 @@ export function AppSidebar() {
   const native = isNative();
   const { tweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
-  const isPro = useProStatus();
+  const hasProEntitlement = useProStatus();
   const { user } = useAuth();
+  const isPro = !!user && hasProEntitlement;
   const logout = useLogout();
   const enabledCount = useMemo(() => Object.values(tweaks).filter(Boolean).length, [tweaks]);
   const isGuest = isGuestMode();

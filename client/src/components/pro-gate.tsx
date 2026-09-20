@@ -733,7 +733,9 @@ interface ProGateProps {
 }
 
 export function ProGate({ children, className }: ProGateProps) {
-  const isPro = useProStatus();
+  const { isAuthenticated } = useAuth();
+  const hasProEntitlement = useProStatus();
+  const isPro = isAuthenticated && hasProEntitlement;
   const [open, setOpen] = useState(false);
 
   if (isPro) return <>{children}</>;
@@ -754,7 +756,11 @@ export function ProGate({ children, className }: ProGateProps) {
 }
 
 export function ProUnlockButton({ children, className }: { children: ReactNode; className?: string }) {
-  const isPro = useProStatus();
+  const { isAuthenticated } = useAuth();
+  // A cached entitlement or legacy localStorage token must never hide the
+  // purchase CTA from a signed-out visitor. Pro is always session + entitlement.
+  const hasProEntitlement = useProStatus();
+  const isPro = isAuthenticated && hasProEntitlement;
   const [open, setOpen] = useState(false);
 
   if (isPro) return null;
