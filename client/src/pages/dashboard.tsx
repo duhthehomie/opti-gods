@@ -425,7 +425,8 @@ export default function Dashboard() {
         throw new Error(`The server returned ${unknownIds.length} unrecognized preset tweak${unknownIds.length === 1 ? "" : "s"} (${unknownIds.slice(0, 3).join(", ")}). No changes were started.`);
       }
       if (native) {
-        const pendingIds = ids.filter(id => !appliedAt[id]);
+        const nativeState = await detectAppliedTweaks();
+        const pendingIds = ids.filter(id => !nativeState[id]);
         if (pendingIds.length === 0) {
           toast({ title: "Full Optimize is already confirmed", description: "Every authorized preset tweak is already confirmed on this Windows session.", variant: "destructive" });
           return;
@@ -480,7 +481,8 @@ export default function Dashboard() {
        }
        const compatible = known.filter(id => getTweakCompatibility(id).ok);
        const blocked = known.filter(id => !getTweakCompatibility(id).ok);
-       const pending = native ? compatible.filter(id => !appliedAt[id]) : compatible;
+        const nativeState = native ? await detectAppliedTweaks() : {};
+        const pending = native ? compatible.filter(id => !nativeState[id]) : compatible;
        if (pending.length === 0) {
          toast({ title: `${preset.title} is already confirmed`, description: "Every compatible tweak in this preset is already confirmed on this Windows session.", variant: "destructive" });
          return;
