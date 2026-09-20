@@ -68,8 +68,16 @@ async fn consume_pro_ticket(args: &ProToolArgs, id: &str) -> Result<(String, Str
 }
 
 async fn finalize_pro_ticket(base: &str, args: &ProToolArgs, secret: &str, id: &str, success: bool, message: &str) {
-    let _ = reqwest::Client::new()
-        .post(format!("{base}/api/performance-allowance/native-ticket/result"))
+    let client = reqwest::Client::new();
+    let mut request = client.post(format!("{base}/api/performance-allowance/native-ticket/result"));
+    request = if let Some(device_id) = args.native_auth.strip_prefix("device:") {
+        request.header("X-Device-ID", device_id)
+    } else if let Some(pro_session) = args.native_auth.strip_prefix("pro:") {
+        request.header("X-Pro-Session", pro_session)
+    } else {
+        request.header("X-Native-Auth", &args.native_auth)
+    };
+    let _ = request
         .json(&serde_json::json!({
             "ticket": args.ticket,
             "resultSecret": secret,
