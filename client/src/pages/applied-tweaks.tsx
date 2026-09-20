@@ -6,9 +6,20 @@ import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakMeta } from "@/lib/tweak-registry";
+import { getHardwareAwareTweakTitle } from "@/lib/tweak-compatibility";
+import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
-import { applyTweakBatch, NATIVE_RUN_QUEUE_KEY, readQueuedTweakBatch, type TweakRunProgress } from "@/lib/native-tweak-runner";
-import { AlertCircle, CheckCircle2, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, X } from "lucide-react";
+import {
+  applyTweakBatch,
+  NATIVE_RUN_QUEUE_KEY,
+  readNativeTweakRun,
+  readQueuedTweakBatch,
+  stopNativeTweakRun,
+  subscribeNativeTweakRun,
+  type NativeTweakRunState,
+  type TweakRunProgress,
+} from "@/lib/native-tweak-runner";
+import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TOKEN_KEY = "optigods-native-undo-tokens";
@@ -46,6 +57,80 @@ async function downloadUndoScript(id: string): Promise<boolean> {
   return granular;
 }
 
+function downloadRunDiagnosticLog(
+  runState: NativeTweakRunState | null,
+  items: TweakRunProgress[],
+  nativeState: Record<string, boolean>,
+) {
+  const generatedAt = new Date().toISOString();
+  const applied = items.filter(item => item.status === "applied");
+  const failed = items.filter(item => item.status === "failed");
+  const stopped = items.filter(item => item.status === "stopped");
+  const pending = items.filter(item => item.status === "queued" || item.status === "running");
+  const lines = [
+    "Opti Gods V5 — Tweak Run Diagnostic Log",
+    "========================================",
+    `Generated: ${generatedAt}`,
+    `App version: ${APP_VERSION}`,
+    `Page: ${window.location.href}`,
+    `Native Windows app: ${isNative() ? "yes" : "no"}`,
+    `User agent: ${navigator.userAgent}`,
+    `Platform: ${navigator.platform || "unknown"}`,
+    "",
+    "Run context",
+    "-----------",
+    `Run ID: ${runState?.runId || "not persisted"}`,
+    `Run status: ${runState?.status || "unknown"}`,
+    `Started: ${runState?.startedAt ? new Date(runState.startedAt).toISOString() : "unknown"}`,
+    `Finished: ${runState?.finishedAt ? new Date(runState.finishedAt).toISOString() : "not finished"}`,
+    `Stop requested: ${runState?.stopRequested ? "yes" : "no"}`,
+    `Total selected: ${items.length}`,
+    `Applied: ${applied.length}`,
+    `Failed: ${failed.length}`,
+    `Stopped: ${stopped.length}`,
+    `Still queued/running: ${pending.length}`,
+    `Native-confirmed IDs currently detected: ${Object.keys(nativeState).filter(id => nativeState[id]).length}`,
+    "",
+    "Complete tweak results",
+    "----------------------",
+    ...items.map(item => {
+      const meta = getTweakMeta(item.id);
+      return [
+        `[${item.status.toUpperCase()}] ${item.id}`,
+        `  Title: ${meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : "Unknown tweak"}`,
+        `  Category: ${meta?.category || "unknown"}`,
+        `  Position: ${item.index + 1}/${item.total}`,
+        `  Message: ${item.message || "(no message returned)"}`,
+      ].join("\n");
+    }),
+    "",
+    "Troubleshooting note",
+    "--------------------",
+    "Attach this complete file when reporting a Windows tweak result. It does not include session tokens or API credentials.",
+    "",
+    "Machine/app context JSON",
+    "------------------------",
+    JSON.stringify({
+      appVersion: APP_VERSION,
+      native: isNative(),
+      runState,
+      items,
+      nativeConfirmedIds: Object.keys(nativeState).filter(id => nativeState[id]),
+    }, null, 2),
+    "",
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = generatedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  anchor.href = url;
+  anchor.download = `OptiGods-V5-Tweak-Run-Error-Log-${stamp}.txt`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 type UndoOutcome = "native" | "script" | "restore-script" | "unavailable" | "failed";
 
 export default function AppliedTweaksPage() {
@@ -56,15 +141,28 @@ export default function AppliedTweaksPage() {
   const [undoing, setUndoing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchUndoing, setBatchUndoing] = useState(false);
-  const [showRestartPrompt, setShowRestartPrompt] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
   const [running, setRunning] = useState(false);
   const [runFinished, setRunFinished] = useState(false);
   const [runHadFailures, setRunHadFailures] = useState(false);
   const [runTab, setRunTab] = useState<"all" | "failed">("all");
+  const [runState, setRunState] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
+  const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
   const startedRef = useRef(false);
   useEffect(() => { detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    const syncRun = (state: NativeTweakRunState | null) => {
+      setRunState(state);
+      if (!state) return;
+      setRunItems(state.items);
+      setRunning(state.status === "running" || state.status === "stopping");
+      setRunFinished(state.status === "completed" || state.status === "stopped" || state.status === "failed");
+      setRunHadFailures(state.items.some(item => item.status === "failed"));
+    };
+    syncRun(readNativeTweakRun());
+    return subscribeNativeTweakRun(syncRun);
+  }, []);
   useEffect(() => {
     if (!isNative()) return;
     void fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() })
@@ -101,10 +199,6 @@ export default function AppliedTweaksPage() {
       if (!result) return;
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
-      // Keep the results page usable after the run. A full-screen restart
-      // overlay made the Applied Tweaks tab look black and hid the live
-      // success/failed lists the user needs to review.
-      setShowRestartPrompt(false);
        const failureCount = result.failures.length;
       toast({
          title: failureCount === 0 ? `${result.appliedIds.length} tweaks applied` : `${failureCount} tweak${failureCount === 1 ? "" : "s"} failed`,
@@ -128,6 +222,50 @@ export default function AppliedTweaksPage() {
         .catch(() => {});
     });
   }, [toast]);
+  const runActive = running || runState?.status === "stopping";
+  const stopRun = () => {
+    if (!runActive) return;
+    if (stopNativeTweakRun()) {
+      toast({
+        title: "Stopping tweak run",
+        description: "The current Windows action will finish safely; no new tweak will start.",
+      });
+    }
+  };
+  const reapply = async (id: string) => {
+    if (runActive || reapplying || !isNative()) return;
+    setReapplying(id);
+    setRunTab("all");
+    setRunFinished(false);
+    setRunHadFailures(false);
+    setRunItems([{ id, index: 0, total: 1, status: "queued", message: "Ready to reapply." }]);
+    try {
+      const result = await applyTweakBatch(
+        [id],
+        progress => setRunItems(items => items.map(item => item.id === progress.id ? progress : item)),
+        { forceReapplyIds: [id] },
+      );
+      setRunFinished(true);
+      setRunHadFailures(result.failures.length > 0);
+      toast({
+        title: result.failures.length ? "Reapply needs attention" : "Tweak reapplied",
+        description: result.failures.length
+          ? summarizeFailures(result.failures, result.appliedIds.length)
+          : "Windows confirmed the tweak again.",
+        variant: result.failures.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Windows could not reapply this tweak.";
+      setRunItems(items => items.map(item => ({ ...item, status: "failed", message })));
+      setRunFinished(true);
+      setRunHadFailures(true);
+      toast({ title: "Reapply failed", description: message, variant: "destructive" });
+    } finally {
+      setReapplying(null);
+      setRunning(false);
+      detectAppliedTweaks().then(setNativeState);
+    }
+  };
   // Keep provenance separate: a local timestamp is a session record, not proof
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.
@@ -149,7 +287,6 @@ export default function AppliedTweaksPage() {
           if (!quiet) toast({ title: "Tweak undone", description: result.message, variant: "success" });
           setNativeState(s => ({ ...s, [id]: false }));
           setSelected(s => { const next = new Set(s); next.delete(id); return next; });
-          if (!quiet) setShowRestartPrompt(true);
           return "native";
         }
       }
@@ -194,7 +331,6 @@ export default function AppliedTweaksPage() {
       ].filter(Boolean).join(" "),
       variant: nativeUndone || scripts || restoreScripts ? "success" : "destructive",
     });
-    if (nativeUndone) setShowRestartPrompt(true);
   };
   const undoAll = async () => {
     if (!ids.length || batchUndoing) return;
@@ -210,6 +346,7 @@ export default function AppliedTweaksPage() {
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Native state ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Only changes confirmed by the native engine appear here. Undo is per tweak, never a category reset.</p></div>
       <div className="flex items-center gap-2">
+        {runItems.length > 0 && <button onClick={() => downloadRunDiagnosticLog(runState, runItems, nativeState)} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Stopping…" : "Stop & undo all"}</button>}
         {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
         <button onClick={() => { setLoading(true); detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
@@ -225,26 +362,38 @@ export default function AppliedTweaksPage() {
        <span className="font-bold">Free native allowance: {allowance.used} / {allowance.limit} active.</span>{" "}
        {allowance.remaining === 0 ? "The server is blocking additional instant tweaks. Undo one confirmed tweak to free a slot." : `${allowance.remaining} slot${allowance.remaining === 1 ? "" : "s"} remaining.`}
      </div>}
-    {runItems.length > 0 && <section className="overflow-hidden rounded-2xl border border-red-500/25 bg-black/30">
+      {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
+        {runHadFailures ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
+        <div>
+          <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : "Run finished successfully"}</p>
+          <p className="mt-0.5 text-xs opacity-80">
+            {runItems.filter(item => item.status === "applied").length} of {runItems.length} tweaks confirmed by Windows.
+            {runHadFailures ? " Open the Failed tab below for the exact Windows error and retry only those items." : ""}
+          </p>
+        </div>
+      </div>}
+     {runItems.length > 0 && <section className="overflow-hidden rounded-2xl border border-red-500/25 bg-black/30">
        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
-        <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">In-app Windows runner</p><h2 className="mt-1 text-base font-bold text-white">{running ? "Applying selected tweaks…" : runFinished ? "Tweak run complete" : "Ready to apply"}</h2></div>
-        <div className="flex items-center gap-2 text-xs font-bold text-zinc-300">{running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed</div>
+         <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">In-app Windows runner</p><h2 className="mt-1 text-base font-bold text-white">{runState?.status === "stopping" ? "Stopping after the current tweak…" : running ? "Applying selected tweaks…" : runFinished ? (runState?.status === "stopped" ? "Tweak run stopped" : "Tweak run complete") : "Ready to apply"}</h2></div>
+         <div className="flex items-center gap-3 text-xs font-bold text-zinc-300">
+           {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop run"}</button>}
+           {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
+         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "failed").length / runItems.length) * 100)}%` }} /></div>
       </div>
        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
          <button onClick={() => setRunTab("all")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "all" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>All ({runItems.length})</button>
-         <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
+          <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
        </div>
        <div className="max-h-80 space-y-1 overflow-y-auto p-3">
-         {runItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
-          {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
-          <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{meta?.title || item.id}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : "text-zinc-500")}>{item.message}</p>}</div>
-          <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status}</span>
+         {runItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
+           {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
+           <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}</div>
+           <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
         </div>; })}
       </div>
     </section>}
     {ids.length === 0 ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
-      <div className="space-y-2"><div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>{ids.map(id => { const meta = getTweakMeta(id); const confirmed = Boolean(nativeState[id]); const timestamp = appliedAt[id]; const provenance = confirmed ? "native confirmed" : (isNative() ? "session-recorded · pending verification" : "session-recorded · browser mode"); return <div key={id} className={cn("flex items-center gap-4 rounded-xl border bg-black/30 px-4 py-3 transition-colors hover:border-red-500/30", selected.has(id) ? "border-red-500/40" : "border-white/8")}><input type="checkbox" checked={selected.has(id)} onChange={() => setSelected(s => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} aria-label={`Select ${meta?.title || id}`} className="h-4 w-4 accent-red-600" /><div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", confirmed ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10")}><CheckCircle2 className={cn("h-4 w-4", confirmed ? "text-emerald-400" : "text-amber-400")} /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{meta?.title || id}</p><p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {provenance}</p>{timestamp && <p className="mt-0.5 text-[10px] text-emerald-300/75">Applied {new Date(timestamp).toLocaleString()}</p>}</div><span className={cn("text-[10px] font-mono", confirmed ? "text-emerald-400" : "text-amber-300")}>{confirmed ? "CONFIRMED" : "RECORDED"}</span><button disabled={undoing === id || batchUndoing} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button></div>; })}</div>}
-    {showRestartPrompt && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"><div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 p-6 shadow-2xl"><button onClick={() => setShowRestartPrompt(false)} className="float-right text-zinc-600 hover:text-white"><X className="h-4 w-4" /></button><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10"><RotateCcw className="h-6 w-6 text-red-400" /></div><h2 className="text-xl font-bold text-white">{runFinished ? (runHadFailures ? "Partial tweak run completed" : "Tweaks successfully applied") : "Tweaks undone"}</h2><p className="mt-2 text-sm leading-relaxed text-zinc-400">{runFinished ? (runHadFailures ? "Some changes were confirmed and some failed. Review the per-tweak results above; restart only after checking the confirmed changes." : "Restart your PC now to finish applying every confirmed change and get the full performance boost.") : "You can restart Windows now to finish restoring every changed system setting."}</p><button onClick={() => setShowRestartPrompt(false)} className="mt-5 w-full rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-500">Got it</button></div></div>}
+      <div className="space-y-2"><div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>{ids.map(id => { const meta = getTweakMeta(id); const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id; const confirmed = Boolean(nativeState[id]); const timestamp = appliedAt[id]; const provenance = confirmed ? "native confirmed" : (isNative() ? "session-recorded · pending verification" : "session-recorded · browser mode"); return <div key={id} className={cn("flex flex-wrap items-center gap-3 rounded-xl border bg-black/30 px-4 py-3 transition-colors hover:border-red-500/30", selected.has(id) ? "border-red-500/40" : "border-white/8")}><input type="checkbox" checked={selected.has(id)} onChange={() => setSelected(s => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} aria-label={`Select ${title}`} className="h-4 w-4 accent-red-600" /><div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", confirmed ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10")}><CheckCircle2 className={cn("h-4 w-4", confirmed ? "text-emerald-400" : "text-amber-400")} /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{title}</p><p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {provenance}</p>{timestamp && <p className="mt-0.5 text-[10px] text-emerald-300/75">Applied {new Date(timestamp).toLocaleString()}</p>}</div><span className={cn("text-[10px] font-mono", confirmed ? "text-emerald-400" : "text-amber-300")}>{confirmed ? "ALREADY APPLIED" : "RECORDED"}</span>{confirmed && <button disabled={runActive || reapplying === id || batchUndoing} onClick={() => void reapply(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {reapplying === id ? "Reapplying" : "Reapply tweak"}</button>}<button disabled={undoing === id || batchUndoing || reapplying === id} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button></div>; })}</div>}
   </div></AppLayout>;
 }

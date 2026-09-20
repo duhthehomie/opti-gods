@@ -109,6 +109,8 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
     #[cfg(windows)]
     {
         use crate::win32::registry::{read_value, Hive, RegValue};
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         let checks: &[(&str, Hive, &str, &str, u32)] = &[
             ("Win32PrioritySeparation", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 0x26),
@@ -124,13 +126,101 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
             ("DisableTelemetry", Hive::LocalMachine, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0),
         ];
 
-        checks
+        let mut detected: BTreeMap<String, bool> = checks
             .iter()
             .map(|(id, hive, path, name, expected)| {
                 let applied = matches!(read_value(*hive, path, name), Ok(RegValue::Dword(value)) if value == *expected);
                 ((*id).to_string(), applied)
             })
-            .collect()
+            .collect();
+
+        // The registry table above is deliberately cheap and synchronous, but
+        // debloat/service/file tweaks need one consolidated read-only probe.
+        // Running one PowerShell process here is substantially cheaper than
+        // queueing a separate ticket and process for every already-satisfied
+        // item. Missing optional apps/services count as already satisfied:
+        // there is nothing for the runner to change and therefore nothing to
+        // report as a false failure.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let script = r#"
+$checks = [ordered]@{
+  DebloatOneDrive = (
+    -not (Test-Path -LiteralPath "$env:SystemRoot\System32\OneDriveSetup.exe") -and
+    -not (Test-Path -LiteralPath "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") -and
+    -not (Test-Path -LiteralPath "$env:LOCALAPPDATA\Microsoft\OneDrive\OneDriveSetup.exe") -and
+    -not (Get-AppxPackage -Name "*Microsoft.OneDrive*" -ErrorAction SilentlyContinue) -and
+    -not ((Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -ErrorAction SilentlyContinue).OneDrive)
+  );
+  FiveMDisableNvidiaTelemetry = (
+    -not (Get-Service -Name "NvTelemetryContainer" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "NvTelemetryContainer" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
+  );
+  NvidiaDisableTelemetry = (
+    -not (Get-Service -Name "NvTelemetryContainer" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "NvTelemetryContainer" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
+  );
+  ServiceRetailDemo = (
+    -not (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
+  );
+  ServiceTabletInput = (
+    -not (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
+  );
+  ProcSvc_RetailDemo = (
+    -not (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Manual"
+  );
+  ProcSvc_TabletInput = (
+    -not (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue) -or
+    (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue).StartType -eq "Manual"
+  );
+  FiveM1060DisableHAGS = (Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -ErrorAction SilentlyContinue) -eq 1;
+  FiveM1060AnselDisable = (Get-ItemPropertyValue -Path "HKCU:\SOFTWARE\NVIDIA Corporation\Ansel" -Name "AnselEnable" -ErrorAction SilentlyContinue) -eq 0;
+  FiveM1650VRAMBudget = (
+    (Test-Path -LiteralPath "$env:USERPROFILE\Documents\Rockstar Games\GTA V\commandline.txt") -and
+    ((Get-Content -LiteralPath "$env:USERPROFILE\Documents\Rockstar Games\GTA V\commandline.txt" -Raw -ErrorAction SilentlyContinue) -match "availablevidmem\s+4096") -and
+    ((Get-Content -LiteralPath "$env:USERPROFILE\Documents\Rockstar Games\GTA V\commandline.txt" -Raw -ErrorAction SilentlyContinue) -match "percentvidmem\s+100")
+  );
+  DebloatCortana = -not (Get-AppxPackage -Name "*Microsoft.549981C3F5F10*" -ErrorAction SilentlyContinue);
+  DebloatXboxApp = -not (Get-AppxPackage -Name "*Microsoft.XboxApp*" -ErrorAction SilentlyContinue);
+  DebloatXboxGameBar = -not (Get-AppxPackage -Name "*Microsoft.XboxGamingOverlay*" -ErrorAction SilentlyContinue);
+  DebloatXboxIdentity = -not (Get-AppxPackage -Name "*Microsoft.XboxIdentityProvider*" -ErrorAction SilentlyContinue);
+  DebloatBing = -not (Get-AppxPackage -Name "*Microsoft.Bing*" -ErrorAction SilentlyContinue);
+  DebloatWeather = -not (Get-AppxPackage -Name "*Microsoft.BingWeather*" -ErrorAction SilentlyContinue);
+  DebloatNews = -not (Get-AppxPackage -Name "*Microsoft.BingNews*" -ErrorAction SilentlyContinue);
+  DebloatMaps = -not (Get-AppxPackage -Name "*Microsoft.WindowsMaps*" -ErrorAction SilentlyContinue);
+  DebloatSolitaire = -not (Get-AppxPackage -Name "*Microsoft.MicrosoftSolitaireCollection*" -ErrorAction SilentlyContinue);
+  DebloatMixedReality = -not (Get-AppxPackage -Name "*Microsoft.MixedReality.Portal*" -ErrorAction SilentlyContinue);
+  DebloatSkype = -not (Get-AppxPackage -Name "*Microsoft.SkypeApp*" -ErrorAction SilentlyContinue);
+  DebloatZune = -not (Get-AppxPackage -Name "*Microsoft.ZuneMusic*" -ErrorAction SilentlyContinue);
+  DebloatGrooveMusic = -not (Get-AppxPackage -Name "*Microsoft.ZuneMusic*" -ErrorAction SilentlyContinue);
+  DebloatOfficeHub = -not (Get-AppxPackage -Name "*Microsoft.MicrosoftOfficeHub*" -ErrorAction SilentlyContinue);
+  DebloatFeedback = -not (Get-AppxPackage -Name "*Microsoft.WindowsFeedbackHub*" -ErrorAction SilentlyContinue);
+  DebloatGetHelp = -not (Get-AppxPackage -Name "*Microsoft.GetHelp*" -ErrorAction SilentlyContinue);
+  DebloatMSPaint3D = -not (Get-AppxPackage -Name "*Microsoft.MSPaint*" -ErrorAction SilentlyContinue);
+  DebloatWindowsCamera = -not (Get-AppxPackage -Name "*Microsoft.WindowsCamera*" -ErrorAction SilentlyContinue);
+  DebloatYourPhone = -not (Get-AppxPackage -Name "*Microsoft.YourPhone*" -ErrorAction SilentlyContinue);
+  DebloatClipchamp = -not (Get-AppxPackage -Name "*Clipchamp*" -ErrorAction SilentlyContinue);
+  DebloatPowerAutomate = -not (Get-AppxPackage -Name "*PowerAutomateDesktop*" -ErrorAction SilentlyContinue);
+  DebloatQuickAssist = -not (Get-AppxPackage -Name "*MicrosoftCorporationII.QuickAssist*" -ErrorAction SilentlyContinue);
+  DebloatTeamsConsumer = -not (Get-AppxPackage -Name "*MicrosoftTeams*" -ErrorAction SilentlyContinue);
+  DebloatAlarmsAndClock = -not (Get-AppxPackage -Name "*Microsoft.WindowsAlarms*" -ErrorAction SilentlyContinue)
+};
+$checks | ConvertTo-Json -Compress
+"#;
+        if let Ok(output) = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(extra) = serde_json::from_slice::<BTreeMap<String, bool>>(&output.stdout) {
+                    detected.extend(extra);
+                }
+            }
+        }
+        detected
     }
     #[cfg(not(windows))]
     {
@@ -250,12 +340,25 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
                 error_stage: Some(NativeErrorStage::Execution),
             },
         }
-    } else if let Some(snippet) = server_command.as_deref().or_else(|| trusted_ps_snippet(&args.id, false)) {
+    } else if let Some(snippet) = server_command.or_else(|| trusted_ps_snippet(&args.id, false).map(str::to_owned)) {
         // SECURITY: PowerShell snippets MUST come from this hard-coded
         // table or the authenticated optigods.com ticket response — never
         // from the renderer. The desktop shell runs elevated under
         // `requireAdministrator`, so WebView-provided script text is forbidden.
-        run_powershell(snippet, &args.id, false)
+        let tweak_id = args.id.clone();
+        match tokio::task::spawn_blocking(move || run_powershell(&snippet, &tweak_id, false)).await {
+            Ok(result) => result,
+            Err(error) => TweakResult {
+                ok: false,
+                id: args.id,
+                message: format!("PowerShell worker stopped unexpectedly: {error}"),
+                undo_token: None,
+                requires_reboot: false,
+                via_powershell: true,
+                error_kind: Some(NativeErrorKind::Execution),
+                error_stage: Some(NativeErrorStage::Execution),
+            },
+        }
     } else {
         TweakResult {
             ok: false,

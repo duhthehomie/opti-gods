@@ -28,6 +28,7 @@ import { PerformanceAllowanceCard } from "@/components/performance-allowance-car
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
+import { GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,35 @@ const FEATURES = [
   { icon: Search, title: "Game Detection", desc: "Auto-detect 27 games and apply per-game optimization packs" },
   { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
 ];
+
+const GAME_PACK_LABELS: Record<string, string> = {
+  game_valorant: "VALORANT",
+  game_cod: "Call of Duty",
+  game_apex: "Apex Legends",
+  game_warzone: "Warzone",
+  game_lol: "League of Legends",
+  game_overwatch: "Overwatch",
+  game_siege: "Rainbow Six Siege",
+  game_rust: "Rust",
+  game_minecraft: "Minecraft",
+  game_roblox: "Roblox",
+  game_tarkov: "Escape from Tarkov",
+  game_pubg: "PUBG",
+  game_dbd: "Dead by Daylight",
+  game_dota2: "Dota 2",
+  game_warframe: "Warframe",
+  game_forza: "Forza",
+  game_readyornot: "Ready or Not",
+  game_phasmo: "Phasmophobia",
+  game_battlefield: "Battlefield",
+  game_gta5: "GTA V",
+  game_fivem: "FiveM",
+  game_rocketleague: "Rocket League",
+  game_arcraiders: "ARC Raiders",
+  game_marvelrivals: "Marvel Rivals",
+  game_007firstlight: "007: First Light",
+  game_fortnite: "Fortnite",
+};
 
 // Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
 
@@ -403,6 +433,7 @@ export default function Dashboard() {
   const [recommendedApplied, setRecommendedApplied] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
+  const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
   const executeFullOptimize = async () => {
@@ -418,27 +449,37 @@ export default function Dashboard() {
     }
     setBulkApplying(true);
     try {
-      const body = await authorizeHardwarePreset();
+      const body = await authorizeHardwarePreset(selectedFullOptimizeGames);
       const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
       const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
       if (unknownIds.length > 0) {
         throw new Error(`The server returned ${unknownIds.length} unrecognized preset tweak${unknownIds.length === 1 ? "" : "s"} (${unknownIds.slice(0, 3).join(", ")}). No changes were started.`);
       }
+      const compatibleIds = ids.filter(id => getTweakCompatibility(id).ok);
+      const blockedIds = ids.filter(id => !getTweakCompatibility(id).ok);
+      if (compatibleIds.length === 0) {
+        toast({
+          title: "No compatible tweaks to run",
+          description: "The saved hardware scan does not support any tweak in this preset. Run a fresh scan before Full Optimize.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (native) {
         const nativeState = await detectAppliedTweaks();
-        const pendingIds = ids.filter(id => !nativeState[id]);
+        const pendingIds = compatibleIds.filter(id => !nativeState[id]);
         if (pendingIds.length === 0) {
-          toast({ title: "Full Optimize is already confirmed", description: "Every authorized preset tweak is already confirmed on this Windows session.", variant: "destructive" });
+          toast({ title: "Full Optimize is already confirmed", description: `Every compatible preset tweak is already confirmed on this Windows session.${blockedIds.length ? ` ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} were left out.` : ""}`, variant: "destructive" });
           return;
         }
         queueTweakBatch(pendingIds);
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {
-        const result = await applyTweakBatch(ids);
+        const result = await applyTweakBatch(compatibleIds);
         toast({
           title: "Select Pro preset for script",
-          description: `${result.selectedIds.length} compatible tweaks selected in the browser. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
+          description: `${result.selectedIds.length} compatible tweaks selected in the browser${blockedIds.length ? `; ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} left out` : ""}. Open the Windows app or download the script to apply them; Windows results cannot be confirmed here.`,
         });
       }
     } catch (error) {
@@ -643,14 +684,67 @@ export default function Dashboard() {
         <AlertDialog open={confirmFullOptimize} onOpenChange={setConfirmFullOptimize}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Run Full Optimize?</AlertDialogTitle>
+              <AlertDialogTitle>Choose your games for Full Optimize</AlertDialogTitle>
               <AlertDialogDescription>
-                Opti Gods will authorize and run every compatible Pro tweak in this preset on Windows.
-                A restore point is required first. Review the live Applied Tweaks results and do not
-                interrupt the run. Incompatible or failed tweaks will be reported instead of being
-                marked as applied.
+                Select only games you actually play. Opti Gods will run the shared Windows optimizations
+                plus the selected game packs; unselected games will not be authorized or queued.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  {selectedFullOptimizeGames.length
+                    ? `${selectedFullOptimizeGames.length} game${selectedFullOptimizeGames.length === 1 ? "" : "s"} selected`
+                    : "No game packs selected"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFullOptimizeGames([...GAME_DETECT_PACK_IDS])}
+                    className="text-[10px] font-bold uppercase tracking-wider text-red-300 hover:text-red-200"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFullOptimizeGames([])}
+                    className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-2 sm:grid-cols-2">
+                {GAME_DETECT_PACK_IDS.map(id => {
+                  const checked = selectedFullOptimizeGames.includes(id);
+                  return (
+                    <label
+                      key={id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
+                        checked
+                          ? "border-red-500/35 bg-red-500/10 text-red-100"
+                          : "border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[.03]",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedFullOptimizeGames(current =>
+                          current.includes(id) ? current.filter(item => item !== id) : [...current, id],
+                        )}
+                        className="h-3.5 w-3.5 accent-red-600"
+                      />
+                      <span>{GAME_PACK_LABELS[id] ?? id.replace(/^game_/, "")}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] leading-relaxed text-zinc-500">
+                Leave every game unchecked to run only the hardware and Windows-wide optimizations.
+                A restore point is required before native changes begin.
+              </p>
+            </div>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={bulkApplying}>Cancel</AlertDialogCancel>
               <AlertDialogAction

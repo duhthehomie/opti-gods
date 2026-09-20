@@ -8,6 +8,8 @@ import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
+export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
+const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
 
@@ -43,9 +45,105 @@ export type TweakRunProgress = {
   id: string;
   index: number;
   total: number;
-  status: "queued" | "running" | "applied" | "failed";
+  status: "queued" | "running" | "applied" | "failed" | "stopped";
   message?: string;
 };
+
+export type NativeTweakRunState = {
+  runId: string;
+  ids: string[];
+  items: TweakRunProgress[];
+  status: "running" | "stopping" | "completed" | "stopped" | "failed";
+  startedAt: number;
+  finishedAt?: number;
+  stopRequested?: boolean;
+};
+
+export type TweakBatchOptions = {
+  /** Re-run these IDs even when native Windows detection says they are applied. */
+  forceReapplyIds?: readonly string[];
+};
+
+let activeRunPromise: Promise<BulkTweakResult> | null = null;
+let stopRequested = false;
+
+function dispatchRunState() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(NATIVE_RUN_EVENT));
+}
+
+function readRunStateSafely(): NativeTweakRunState | null {
+  try {
+    const raw = localStorage.getItem(NATIVE_RUN_STATE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as NativeTweakRunState;
+    return value && Array.isArray(value.items) && Array.isArray(value.ids) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRunState(state: NativeTweakRunState) {
+  try { localStorage.setItem(NATIVE_RUN_STATE_KEY, JSON.stringify(state)); } catch { /* best effort */ }
+  dispatchRunState();
+}
+
+export function readNativeTweakRun(): NativeTweakRunState | null {
+  return readRunStateSafely();
+}
+
+export function subscribeNativeTweakRun(listener: (state: NativeTweakRunState | null) => void): () => void {
+  const handler = () => listener(readRunStateSafely());
+  window.addEventListener(NATIVE_RUN_EVENT, handler);
+  return () => window.removeEventListener(NATIVE_RUN_EVENT, handler);
+}
+
+function beginPersistedRun(ids: string[]): string {
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  stopRequested = false;
+  writeRunState({
+    runId,
+    ids,
+    items: ids.map((id, index) => ({ id, index, total: ids.length, status: "queued" })),
+    status: "running",
+    startedAt: Date.now(),
+  });
+  return runId;
+}
+
+function updatePersistedProgress(runId: string, progress: TweakRunProgress) {
+  const state = readRunStateSafely();
+  if (!state || state.runId !== runId) return;
+  writeRunState({
+    ...state,
+    items: state.items.map(item => item.id === progress.id ? progress : item),
+  });
+}
+
+function finishPersistedRun(runId: string, result?: BulkTweakResult, error?: unknown) {
+  const state = readRunStateSafely();
+  if (!state || state.runId !== runId) return;
+  const stopped = Boolean(state.stopRequested || stopRequested);
+  writeRunState({
+    ...state,
+    status: error ? "failed" : stopped ? "stopped" : "completed",
+    finishedAt: Date.now(),
+    stopRequested: stopped,
+    items: error
+      ? state.items.map(item => item.status === "applied" || item.status === "failed" || item.status === "stopped"
+        ? item
+        : { ...item, status: "failed", message: error instanceof Error ? error.message : "The runner stopped unexpectedly." })
+      : state.items,
+  });
+  void result;
+}
+
+export function stopNativeTweakRun(): boolean {
+  const state = readRunStateSafely();
+  if (!state || (state.status !== "running" && state.status !== "stopping")) return false;
+  stopRequested = true;
+  writeRunState({ ...state, status: "stopping", stopRequested: true });
+  return true;
+}
 
 export function queueTweakBatch(ids: readonly string[]) {
   localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
@@ -75,14 +173,47 @@ export type BulkTweakResult = {
   selectedIds: string[];
   unsupportedIds: string[];
   failures: { id: string; message: string }[];
+  stoppedIds?: string[];
 };
 
 export async function applyTweakBatch(
   ids: readonly string[],
   onProgress?: (progress: TweakRunProgress) => void,
+  options: TweakBatchOptions = {},
 ): Promise<BulkTweakResult> {
   const uniqueIds = Array.from(new Set(ids));
   const native = isNative();
+  if (native && window.location.pathname === "/applied-tweaks") {
+    if (activeRunPromise) return activeRunPromise;
+    const runId = beginPersistedRun(uniqueIds);
+    const promise = applyTweakBatchInternal(uniqueIds, onProgress, options, runId)
+      .then(result => {
+        finishPersistedRun(runId, result);
+        return result;
+      })
+      .catch(error => {
+        finishPersistedRun(runId, undefined, error);
+        throw error;
+      });
+    activeRunPromise = promise.finally(() => {
+      activeRunPromise = null;
+    });
+    return activeRunPromise;
+  }
+  return applyTweakBatchInternal(uniqueIds, onProgress, options);
+}
+
+async function applyTweakBatchInternal(
+  uniqueIds: string[],
+  onProgress?: (progress: TweakRunProgress) => void,
+  options: TweakBatchOptions = {},
+  persistedRunId?: string,
+): Promise<BulkTweakResult> {
+  const native = isNative();
+  const emitProgress = (progress: TweakRunProgress) => {
+    onProgress?.(progress);
+    if (persistedRunId) updatePersistedProgress(persistedRunId, progress);
+  };
   // All bulk actions use one visible runner. Individual pages must not start
   // long elevated runs in-place where navigation or a re-render can hide
   // progress and make a working button look unresponsive.
@@ -91,7 +222,13 @@ export async function applyTweakBatch(
     // script-only IDs before navigation so they never reach the ticket API and
     // produce the misleading "could not apply" toast seen on the Tweaks page.
     // Pro keeps the full trusted server command surface.
-    let queuedIds = uniqueIds;
+    const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
+    const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
+    const unsupportedFailures = unsupportedIds.map(id => ({
+      id,
+      message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
+    }));
+    let queuedIds = compatibleIds;
     try {
       const allowanceResponse = await fetchWithTimeout(
         apiUrl("/api/performance-allowance"),
@@ -102,7 +239,10 @@ export async function applyTweakBatch(
       if (allowanceResponse.ok) {
         const allowance = await allowanceResponse.json() as { pro?: boolean };
         if (allowance.pro === false) {
-          queuedIds = uniqueIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+          // Keep the hardware filter in force for the free path too. The
+          // previous code replaced compatibleIds with every native ID, which
+          // reintroduced GTX 1060 entries after the first filter.
+          queuedIds = compatibleIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
         }
       }
     } catch {
@@ -112,12 +252,12 @@ export async function applyTweakBatch(
     if (!queuedIds.length) {
       return {
         appliedIds: [],
-        selectedIds: uniqueIds,
-        unsupportedIds: uniqueIds,
-        failures: uniqueIds.map(id => ({
+        selectedIds: compatibleIds,
+        unsupportedIds,
+        failures: unsupportedFailures.concat(compatibleIds.map(id => ({
           id,
           message: "This tweak is script-only and is not available for instant apply.",
-        })),
+        }))),
       };
     }
     queueTweakBatch(queuedIds);
@@ -133,7 +273,7 @@ export async function applyTweakBatch(
     id,
     message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
   }));
-  unsupportedIds.forEach((id, index) => onProgress?.({
+  unsupportedIds.forEach((id, index) => emitProgress({
     id, index, total: uniqueIds.length, status: "failed",
     message: unsupportedFailures.find(failure => failure.id === id)?.message,
   }));
@@ -152,17 +292,23 @@ export async function applyTweakBatch(
   let alreadyConfirmedIds: string[] = [];
   if (native) {
     const detected = await detectAppliedTweaks().catch(() => ({} as Record<string, boolean>));
-    alreadyConfirmedIds = compatibleIds.filter(id => Boolean(detected[id]));
+    const forcedIds = new Set(options.forceReapplyIds ?? []);
+    const locallyRecorded = useOptimizationStore.getState().appliedAt;
+    alreadyConfirmedIds = compatibleIds.filter(id =>
+      !forcedIds.has(id) && (Boolean(detected[id]) || Boolean(locallyRecorded[id])),
+    );
     alreadyConfirmedIds.forEach((id, index) => {
       const store = useOptimizationStore.getState();
       store.setTweak(id, true);
       store.markApplied([id]);
-      onProgress?.({
+      emitProgress({
         id,
         index,
         total: uniqueIds.length,
         status: "applied",
-        message: "Already confirmed by Windows; skipped.",
+        message: detected[id]
+          ? "Already confirmed by Windows; skipped."
+          : "Previously confirmed by Opti Gods; skipped.",
       });
     });
   }
@@ -194,7 +340,7 @@ export async function applyTweakBatch(
 
   if (!credential) {
     const message = "OG-AUTH-001 · Windows device identity unavailable. Reopen the Windows app to refresh the device identity.";
-    supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
+    supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
     return {
       appliedIds: alreadyConfirmedIds,
       selectedIds: [],
@@ -217,7 +363,7 @@ export async function applyTweakBatch(
       );
       if (!restorePoint?.sequence_number) {
         const message = "Windows did not confirm a restore point. Turn on System Protection for drive C: and try Full Optimize again.";
-        supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
+        supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
         return {
           appliedIds: alreadyConfirmedIds,
           selectedIds: [],
@@ -229,7 +375,7 @@ export async function applyTweakBatch(
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Could not create a verified restore point.";
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
-      supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
+      supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
       return {
         appliedIds: alreadyConfirmedIds,
         selectedIds: uniqueIds,
@@ -241,32 +387,88 @@ export async function applyTweakBatch(
 
   const appliedIds: string[] = [...alreadyConfirmedIds];
   const failures: { id: string; message: string }[] = [];
-  supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "queued" }));
+  const stoppedIds: string[] = [];
+  supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "queued" }));
+
+  // Authorization is independent of the Windows mutation. Pipeline one
+  // ticket ahead so the network round-trip is hidden behind PowerShell/native
+  // execution, while keeping actual system writes strictly serial.
+  const authorize = (tweakId: string) => fetchWithTimeout(
+    apiUrl("/api/performance-allowance/native-ticket"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({
+        tweakId,
+        sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
+        idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
+      }),
+    },
+    NATIVE_REQUEST_TIMEOUT_MS,
+    `OG-NET-002 · Authorization timed out for ${tweakId}.`,
+  );
+  let nextAuthorization: Promise<Response> | null = null;
+  let nextAuthorizationId: string | null = null;
+
   for (let index = 0; index < supportedIds.length; index++) {
     const id = supportedIds[index];
+    const persistedStopRequested = persistedRunId
+      ? (() => {
+        const state = readRunStateSafely();
+        return state?.runId === persistedRunId && Boolean(state.stopRequested);
+      })()
+      : false;
+    if (stopRequested || persistedStopRequested) {
+      if (nextAuthorization && nextAuthorizationId) {
+        const response = await nextAuthorization.catch(() => null);
+        const body = await response?.json().catch(() => ({})) as { ticket?: string };
+        if (typeof body.ticket === "string") {
+          await fetchWithTimeout(
+            apiUrl("/api/performance-allowance/native-ticket/cancel"),
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+              body: JSON.stringify({ ticket: body.ticket }),
+            },
+            NATIVE_REQUEST_TIMEOUT_MS,
+            `OG-NET-003 · Ticket cleanup timed out for ${nextAuthorizationId}.`,
+          ).catch(() => {});
+        }
+      }
+      nextAuthorization = null;
+      nextAuthorizationId = null;
+      for (let remainingIndex = index; remainingIndex < supportedIds.length; remainingIndex++) {
+        const remainingId = supportedIds[remainingIndex];
+        stoppedIds.push(remainingId);
+        emitProgress({
+          id: remainingId,
+          index: remainingIndex,
+          total: uniqueIds.length,
+          status: "stopped",
+          message: "Stopped by user before Windows changed this tweak.",
+        });
+      }
+      break;
+    }
     let ticket: string | null = null;
     let osApplied = false;
-    onProgress?.({ id, index, total: uniqueIds.length, status: "running" });
+    emitProgress({ id, index, total: uniqueIds.length, status: "running" });
     try {
-      const authorization = await fetchWithTimeout(
-        apiUrl("/api/performance-allowance/native-ticket"),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-          body: JSON.stringify({
-            tweakId: id,
-            sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
-            idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
-          }),
-        },
-        NATIVE_REQUEST_TIMEOUT_MS,
-        `OG-NET-002 · Authorization timed out for ${id}.`,
-      );
+      const authorization = nextAuthorizationId === id && nextAuthorization
+        ? await nextAuthorization
+        : await authorize(id);
+      nextAuthorization = null;
+      nextAuthorizationId = null;
       const authorizationBody = await authorization.json().catch(() => ({}));
       if (!authorization.ok || typeof authorizationBody.ticket !== "string") {
         throw new Error(`${authorizationBody.code || `OG-HTTP-${authorization.status}`} · ${authorizationBody.error || "Authorization failed."}`);
       }
       ticket = authorizationBody.ticket;
+      const nextId = supportedIds[index + 1];
+      if (nextId && !stopRequested) {
+        nextAuthorization = authorize(nextId);
+        nextAuthorizationId = nextId;
+      }
       // Rust enforces the real 90-second process deadline and kills timed-out
       // PowerShell before returning. Do not add a renderer-only timeout here:
       // it could report failure while Windows continued mutating in the background.
@@ -278,7 +480,7 @@ export async function applyTweakBatch(
       store.markApplied([id]);
       saveUndoToken(id, result.undo_token);
       appliedIds.push(id);
-      onProgress?.({ id, index, total: uniqueIds.length, status: "applied", message: result.message });
+      emitProgress({ id, index, total: uniqueIds.length, status: "applied", message: result.message });
     } catch (error) {
       if (ticket && !osApplied) {
         await fetchWithTimeout(
@@ -294,11 +496,11 @@ export async function applyTweakBatch(
       }
       const message = error instanceof Error ? error.message : "Windows rejected the change.";
       failures.push({ id, message });
-      onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message });
+      emitProgress({ id, index, total: uniqueIds.length, status: "failed", message });
     }
   }
 
   window.dispatchEvent(new Event("optigods:allowance-changed"));
   localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
-  return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures) };
+  return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures), stoppedIds };
 }

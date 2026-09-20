@@ -98,6 +98,38 @@ function startsWithAny(id: string, prefixes: readonly string[]): boolean {
   return false;
 }
 
+function normalizedGpuName(hw: PresetHardware): string {
+  return (hw.gpuName ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export type NvidiaGtxFamily = "gtx1060" | "gtx1650" | "other";
+
+/**
+ * Keep model-specific preset rules in one place. Vendor-only matching is not
+ * enough here: GTX 1060 and GTX 1650 share a driver family but do not share
+ * VRAM budgets or every FiveM optimization.
+ */
+export function nvidiaGtxFamily(hw: PresetHardware): NvidiaGtxFamily {
+  const gpu = normalizedGpuName(hw);
+  if (/\b(?:geforce\s+)?gtx\s*1060(?:\s*6\s*gb)?\b/i.test(gpu)) return "gtx1060";
+  if (/\b(?:geforce\s+)?gtx\s*1650(?:\s*(?:super|ti))?\b/i.test(gpu)) return "gtx1650";
+  return "other";
+}
+
+/**
+ * Human-facing label for shared GTX logic. This is intentionally derived from
+ * the scanned card instead of hard-coding "1650 SUPER" for every GTX 1650.
+ */
+export function nvidiaGtxLabel(hw: PresetHardware): string {
+  switch (nvidiaGtxFamily(hw)) {
+    case "gtx1060": return "GTX 1060";
+    case "gtx1650": return /\b1650\s*super\b/i.test(hw.gpuName ?? "")
+      ? "GTX 1650 SUPER"
+      : "GTX 1650";
+    default: return "NVIDIA GPU";
+  }
+}
+
 /**
  * Whether `id` is compatible with the provided hardware. Universal tweaks
  * (Win32PrioritySeparation, NetDNSCloudflare, etc.) are not gated by GPU
@@ -129,6 +161,25 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
   }
   if (id.startsWith("FiveMIntel14") && (hw.cpuBrand !== "intel" || !/\b(?:core\s+)?i[579]-?14\d{3}[a-z]{0,2}\b/i.test(cpu))) {
     return { ok: false, reason: "Intel 14th-gen tweak skipped — matching CPU was not detected" };
+  }
+
+  const gtxFamily = nvidiaGtxFamily(hw);
+  if (id === "FiveM1060VRAMFlag" && gtxFamily !== "gtx1060") {
+    return { ok: false, reason: "GTX 1060 6GB VRAM tweak skipped — this PC is not using a GTX 1060 6GB." };
+  }
+  // These two operations are the shared GTX 1060/1650 logic. The 1060 IDs
+  // are the canonical IDs so a 1650 never receives duplicate HAGS or Ansel
+  // tickets from the separate historical 1650 entries.
+  if (id === "FiveM1060DisableHAGS" || id === "FiveM1060AnselDisable") {
+    if (gtxFamily !== "gtx1060" && gtxFamily !== "gtx1650") {
+      return { ok: false, reason: "Shared GTX 1060/1650 tweak skipped — a GTX 1060 or GTX 1650 was not detected." };
+    }
+  }
+  if (id === "FiveM1650DisableHAGS" || id === "FiveM1650DisableAnsel") {
+    return { ok: false, reason: "Shared GTX 1060/1650 logic is represented by the combined GTX entry; duplicate ticket skipped." };
+  }
+  if (id.startsWith("FiveM1650") && gtxFamily !== "gtx1650") {
+    return { ok: false, reason: "GTX 1650-specific tweak skipped — a GTX 1650 was not detected." };
   }
 
   if (id === "EnableHAGS") {
@@ -329,7 +380,7 @@ const ROBLOX_TWEAKS: string[] = [
 ];
 
 /** Game detection packs — auto-detect install path and apply targeted tweaks */
-const GAME_DETECT_PACKS: string[] = [
+export const GAME_DETECT_PACK_IDS: string[] = [
   "game_valorant", "game_cod", "game_apex", "game_warzone",
   "game_lol", "game_overwatch", "game_siege", "game_rust",
   "game_minecraft", "game_roblox", "game_tarkov", "game_dbd",
@@ -654,7 +705,7 @@ export function buildSafePreset(
   RUST_TWEAKS.forEach(id => candidates.add(id));
   RUST_EXTRA.forEach(id => candidates.add(id));
   ROBLOX_TWEAKS.forEach(id => candidates.add(id));
-  GAME_DETECT_PACKS.forEach(id => candidates.add(id));
+  GAME_DETECT_PACK_IDS.forEach(id => candidates.add(id));
   COD_EXTRA_UNIVERSAL.forEach(id => candidates.add(id));
 
   reasons.push(`${candidates.size} universal tweaks (core, memory, network, debloat, FiveM, Fortnite, Rust, Roblox, COD, game-detect, Discord, Spotify, services, ProcSvc, startup, WinTitus, input)`);

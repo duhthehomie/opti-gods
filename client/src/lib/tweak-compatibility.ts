@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { getScannedInfo } from "@/hooks/use-hardware-info";
-import { isHardwareCompatible, type PresetHardware } from "@shared/preset-builder";
+import { isHardwareCompatible, nvidiaGtxLabel, type PresetHardware } from "@shared/preset-builder";
 
 const CHANGE_EVENT = "optigods:hardware-scan-changed";
 
@@ -42,6 +42,13 @@ function hardwareFromScan(): PresetHardware | null {
     isLaptop,
     hasDiscreteGpu,
   };
+}
+
+export function getHardwareAwareTweakTitle(id: string, title: string): string {
+  if (id !== "FiveM1060DisableHAGS" && id !== "FiveM1060AnselDisable") return title;
+  const hardware = hardwareFromScan();
+  if (!hardware) return title;
+  return title.replace("GTX 1060 + GTX 1650", `GTX 1060 + ${nvidiaGtxLabel(hardware)}`);
 }
 
 export function getTweakCompatibility(id: string): { ok: boolean; reason?: string } {
