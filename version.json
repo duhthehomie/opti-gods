@@ -1,4 +1,4 @@
 {
-  "version": "5.2.23",
-  "notes": "V5.2.23 — grants the Windows System Restore service the documented COM callback permissions before creating the safety checkpoint."
+  "version": "5.2.24",
+  "notes": "V5.2.24 — adds a truthful Stop & undo all workflow in Applied Tweaks and keeps generated undo scripts listed until Windows confirms the reversal."
 }
