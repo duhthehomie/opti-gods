@@ -22,7 +22,7 @@ import {
   type NativeStartupRestoreResult,
 } from "@/lib/tauri-bridge";
 import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
-import { setNativeRestoreReadiness } from "@/lib/native-readiness";
+import { NATIVE_RESTORE_CREATED_KEY, setNativeRestoreReadiness } from "@/lib/native-readiness";
 
 export interface NativeBootResult {
   native: boolean;
@@ -77,6 +77,16 @@ export function bootstrapNative(): Promise<NativeBootResult> {
     const restoreCheck = startupRestoreCheckpoint()
       .then((result) => {
         setNativeRestoreReadiness(result);
+        if (result.ok && result.restore_point?.sequence_number) {
+          try {
+            sessionStorage.setItem(
+              NATIVE_RESTORE_CREATED_KEY,
+              String(result.restore_point.sequence_number),
+            );
+          } catch {
+            // Rust remains the authoritative safety backstop if storage is unavailable.
+          }
+        }
         return result;
       })
       .catch((error) => {
