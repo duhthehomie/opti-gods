@@ -1124,6 +1124,31 @@ function buildRestoreScript(categories: string[]): string {
 const scriptSessions = new Map<string, { tweaks: Record<string, boolean>; nvidiaPreset: string; created: number; sessionToken?: string; allowanceKey?: string; allowanceUserId?: string }>();
 const SCRIPT_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour hard TTL
 
+// A valid legacy session is still enough to recover a user's entitlement after
+// Discord OAuth. This is deliberately keyed by Discord ID, never username:
+// Discord usernames can change, while the account ID remains stable.
+async function restoreLegacyEntitlement(req: any, userId: string, sessionToken: string | undefined): Promise<boolean> {
+  if (!sessionToken || typeof sessionToken !== "string" || sessionToken.length < 16) return false;
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+  const valid = await storage.verifyProSession(sessionToken, ip, userId);
+  if (!valid) return false;
+
+  // Never turn an admin test session into a customer entitlement.
+  const codeRef = await storage.getProCodeForToken(sessionToken);
+  if (codeRef?.startsWith("admin-")) return false;
+
+  const current = await storage.getProEntitlement(userId);
+  if (current?.revokedAt) return false;
+  if (!current) {
+    await storage.grantPro({
+      discordUserId: userId,
+      source: "legacy",
+      notes: codeRef ? `migrated:${codeRef}` : "migrated:legacy-session",
+    });
+  }
+  return true;
+}
+
 // Gate any tweak/script generation behind a real, admin-acknowledged Pro session.
 // Admin requests (with x-admin-key) are also allowed so the admin panel preset/fix
 // generators keep working without requiring a customer code.
@@ -1147,6 +1172,8 @@ async function requirePaidPro(req: any): Promise<boolean> {
     const ent = await storage.getProEntitlement(nativeUserId);
     if (ent && !ent.revokedAt) return true;
     if (ent && ent.revokedAt) return false;
+    const nativeSessionToken = req.headers["x-pro-session"] || req.body?.sessionToken || req.query?.sessionToken;
+    if (await restoreLegacyEntitlement(req, nativeUserId, nativeSessionToken)) return true;
   }
 
   const userId: string | undefined = req.session?.userId;
@@ -1155,6 +1182,8 @@ async function requirePaidPro(req: any): Promise<boolean> {
     const ent = await storage.getProEntitlement(userId);
     if (ent && !ent.revokedAt) return true;
     if (ent && ent.revokedAt) return false; // hard-deny revoked, bypass legacy token
+    const sessionToken = req.headers["x-pro-session"] || req.body?.sessionToken || req.query?.sessionToken;
+    if (await restoreLegacyEntitlement(req, userId, sessionToken)) return true;
   }
 
   const sessionToken: string | undefined =
@@ -3566,7 +3595,7 @@ Start-Sleep 2
       return res.json({ migrated: false });
     }
     const ip = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-    const valid = await storage.verifyProSession(sessionToken, ip);
+    const valid = await storage.verifyProSession(sessionToken, ip, userId);
     if (!valid) return res.json({ migrated: false });
     // Find the codeRef so we can record it in the exact format the admin panel
     // expects (code:XXXX) — without this the Discord link shows as "No Discord"
@@ -5367,6 +5396,127 @@ Start-Sleep 2
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_Crash_Fix.bat"');
+    res.end(Buffer.from(script, 'utf8'));
+  });
+
+  // Public — backup-first FiveM NUI/input recovery. This is intentionally
+  // separate from the automatic preset: it changes only FiveM's own config
+  // and removes Opti Gods process overrides that can starve CEF/input.
+  app.get('/api/fivem-ui-input-fix-script', (_req, res) => {
+    const ps1Lines = [
+      `\$ErrorActionPreference = 'Stop'`,
+      ``,
+      `Write-Host ""`,
+      `Write-Host "  Opti Gods — FiveM UI + Input Recovery" -ForegroundColor Red`,
+      `Write-Host "  =======================================" -ForegroundColor DarkRed`,
+      `Write-Host "  Backup-first fix for stuck K menus, chat delay, and NUI lag" -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      ``,
+      `\$running = Get-Process -Name 'FiveM','GTA5' -EA SilentlyContinue`,
+      `If (\$running) {`,
+      `  Write-Host "[STOP] Close FiveM and GTA V, then run this fix again." -ForegroundColor Yellow`,
+      `  Read-Host "Press Enter to close"`,
+      `  exit 1`,
+      `}`,
+      ``,
+      `\$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'`,
+      `\$backupRoot = Join-Path \$env:LOCALAPPDATA "OptiGods\\Backups\\FiveM-UI-\$stamp"`,
+      `New-Item -ItemType Directory -Path \$backupRoot -Force | Out-Null`,
+      `Write-Host "[1/5] Backups will be saved to \$backupRoot" -ForegroundColor Cyan`,
+      ``,
+      `\$cfgDir = Join-Path \$env:APPDATA 'CitizenFX'`,
+      `\$cfg = Join-Path \$cfgDir 'fivem.cfg'`,
+      `\$ini = Join-Path \$env:LOCALAPPDATA 'FiveM\\FiveM.app\\CitizenFX.ini'`,
+      `\$settings = Join-Path \$env:APPDATA 'CitizenFX\\gta5_settings.xml'`,
+      `foreach (\$source in @(\$cfg, \$ini, \$settings)) {`,
+      `  If (Test-Path \$source) {`,
+      `    Copy-Item \$source (Join-Path \$backupRoot ([IO.Path]::GetFileName(\$source))) -Force`,
+      `    Write-Host "  [BACKUP] \$source" -ForegroundColor DarkGray`,
+      `  }`,
+      `}`,
+      ``,
+      `\$ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'`,
+      `foreach (\$exe in @('FiveM.exe','GTA5.exe')) {`,
+      `  \$perf = "\$ifeo\\\$exe\\PerfOptions"`,
+      `  If (Test-Path \$perf) {`,
+      `    \$regBackup = Join-Path \$backupRoot ("\$exe-PerfOptions.reg")`,
+      `    reg.exe export "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\\$exe\\PerfOptions" \$regBackup /y | Out-Null`,
+      `    Write-Host "  [BACKUP] \$perf" -ForegroundColor DarkGray`,
+      `  }`,
+      `}`,
+      ``,
+      `Write-Host "[2/5] Enabling FiveM's in-process GPU path..." -ForegroundColor Cyan`,
+      `If (-not (Test-Path \$cfgDir)) { New-Item -ItemType Directory -Path \$cfgDir -Force | Out-Null }`,
+      `\$cfgText = If (Test-Path \$cfg) { Get-Content \$cfg -Raw } Else { "" }`,
+      `\$cfgText = [regex]::Replace(\$cfgText, '(?im)^\\s*set\\s+(nui_maxFramerate|nui_framerate)\\s+\\S+\\s*\\r?$', '')`,
+      `\$nuiPattern = '(?im)^\\s*set\\s+nui_useInProcessGpu\\s+\\S+\\s*\\r?$'`,
+      `If (\$cfgText -match \$nuiPattern) {`,
+      `  \$cfgText = [regex]::Replace(\$cfgText, \$nuiPattern, 'set nui_useInProcessGpu true')`,
+      `} Else {`,
+      `  \$cfgText = \$cfgText.TrimEnd() + "\`r\`nset nui_useInProcessGpu true\`r\`n"`,
+      `}`,
+      `Set-Content -Path \$cfg -Value \$cfgText -Encoding UTF8`,
+      `Write-Host "  [OK] nui_useInProcessGpu=true" -ForegroundColor Green`,
+      `Write-Host "  [OK] Removed custom NUI 9999 FPS overrides that can keep GPU usage high" -ForegroundColor Green`,
+      ``,
+      `Write-Host "[3/5] Removing Opti Gods FiveM process-priority overrides..." -ForegroundColor Cyan`,
+      `foreach (\$exe in @('FiveM.exe','GTA5.exe')) {`,
+      `  \$perf = "\$ifeo\\\$exe\\PerfOptions"`,
+      `  If (Test-Path \$perf) {`,
+      `    Remove-ItemProperty -Path \$perf -Name 'CpuPriorityClass','CpuPriorityBoost','IoPriority' -EA SilentlyContinue`,
+      `    Write-Host "  [OK] \$exe process overrides removed" -ForegroundColor Green`,
+      `  }`,
+      `}`,
+      ``,
+      `Write-Host "[4/5] Clearing FiveM's disposable browser cache..." -ForegroundColor Cyan`,
+      `\$browserCache = Join-Path \$env:LOCALAPPDATA 'FiveM\\FiveM.app\\data\\cache\\browser'`,
+      `If (Test-Path \$browserCache) {`,
+      `  Remove-Item -Path (Join-Path \$browserCache '*') -Recurse -Force -EA SilentlyContinue`,
+      `  Write-Host "  [OK] Browser cache cleared (FiveM will rebuild it)" -ForegroundColor Green`,
+      `} Else {`,
+      `  Write-Host "  [INFO] Browser cache was not present" -ForegroundColor DarkGray`,
+      `}`,
+      ``,
+      `Write-Host "[5/5] Recovery complete." -ForegroundColor Cyan`,
+      `Write-Host "  Your backup is at: \$backupRoot" -ForegroundColor White`,
+      `Write-Host "  Start FiveM and test K, chat, and the pause/menu screens." -ForegroundColor White`,
+      `Write-Host "  If the issue remains, restore the backed-up files and contact Opti Gods support." -ForegroundColor Yellow`,
+      `Write-Host ""`,
+      `Read-Host "Press Enter to close"`,
+    ];
+    const ps1Content = ps1Lines.join('\r\n');
+    const marker = '##PS1_UI_INPUT_START##';
+    const batLines = [
+      `@echo off`,
+      `setlocal`,
+      `set "SELF=%~f0"`,
+      `set "TMPPS1=%TEMP%\\OptiGods-FiveM-UI-Input-Fix.ps1"`,
+      ``,
+      `title Opti Gods by leaq  --  FiveM UI and Input Recovery`,
+      `echo.`,
+      `echo  ==========================================`,
+      `echo    OPTI GODS by leaq  --  FiveM UI Recovery`,
+      `echo  ==========================================`,
+      `echo.`,
+      `echo  [1/2] Extracting backup-first fix script...`,
+      `PowerShell -NoProfile -ExecutionPolicy Bypass -Command "$c=[IO.File]::ReadAllText($env:SELF,[Text.Encoding]::UTF8);$m='##PS1'+'_UI_INPUT_START##';$i=$c.IndexOf($m);if($i -ge 0){[IO.File]::WriteAllText($env:TMPPS1,$c.Substring($i+$m.Length),[Text.Encoding]::UTF8)}"`,
+      `if not exist "%TMPPS1%" (`,
+      `  echo  [ERROR] Script extraction failed. Please re-download from the website.`,
+      `  pause`,
+      `  exit /b 1`,
+      `)`,
+      `echo  [2/2] A Windows security prompt will appear.`,
+      `echo      Click "Yes" to apply the fix as Administrator.`,
+      `echo.`,
+      `PowerShell -NoProfile -Command "try { Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File '+[char]34+$env:TMPPS1+[char]34) } catch { Write-Host ('UAC cancelled or launch failed: '+$_) -ForegroundColor Red; Read-Host 'Press Enter to close' }"`,
+      `del "%TMPPS1%" 2>nul`,
+      `exit /b 0`,
+      marker,
+      ps1Content,
+    ];
+    const script = batLines.join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods_FiveM_UI_Input_Fix.bat"');
     res.end(Buffer.from(script, 'utf8'));
   });
 

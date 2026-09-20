@@ -537,6 +537,26 @@ export default function Fixes() {
           onDownload={() => dlFix("fivem", "/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.")}
         />
 
+        <FixCard
+          testId="button-download-fivem-ui-input-fix"
+          accent="teal"
+          icon={Gamepad2}
+          title="FiveM — UI Lag / Stuck Menu & Chat Fix"
+          subtitle="K menu stays on screen · chat/input feels delayed · NUI stutters at high GPU usage"
+          tweaks="Backup first · nui_useInProcessGpu · NUI cache · process overrides"
+          bullets={[
+            ["Enables FiveM's “NUI in-process GPU” path", "This is the FiveM setting intended to reduce browser/UI lag when the game is using most of the GPU."],
+            ["Removes the old 9999 NUI FPS override", "An unlimited menu cap can keep the CEF interface competing for GPU time; the fix removes both legacy nui_maxFramerate and nui_framerate entries."],
+            ["Backs up config and process settings before changing them", "Copies fivem.cfg, CitizenFX.ini, gta5_settings.xml, and FiveM/GTA5 process registry settings into a timestamped Opti Gods backup folder."],
+            ["Clears only the disposable FiveM browser cache", "It does not delete NUI storage or Discord/server credentials, so saved web UI data is left intact."],
+            ["Does not touch server time, weather, or gameplay scripts", "This is a local client UI/input recovery fix. It cannot change settings controlled by a FiveM server resource."],
+          ]}
+          footer="Close FiveM first. Run the downloaded .bat as administrator, then reopen FiveM and test K, chat, and the pause menu."
+          btnLabel="Download UI / Input Fix"
+          downloading={!!dlState["fivem-ui-input"]}
+          onDownload={() => dlFix("fivem-ui-input", "/api/fivem-ui-input-fix-script", "OptiGods-FiveM-UI-Input-Fix.bat", "FiveM UI Fix Downloaded", "Close FiveM, run the .bat as administrator, then test the menu and chat.")}
+        />
+
         {/* ── Mushy Face / Arms Texture Fix ────────────────────────────────── */}
         <FixCard
           testId="button-download-mushy-face-fix"

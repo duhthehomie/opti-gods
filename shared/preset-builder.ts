@@ -321,21 +321,16 @@ const CPU_GAME_IFEO: string[] = [
   "CpuBoostModeAggressive", "CpuIdleMin100",
 ];
 
-/** FiveM tweaks safe for any GPU/CPU */
+/** Conservative FiveM tweaks safe for any GPU/CPU.
+ * Process priorities, adapter/network settings, overlays, command-line
+ * flags, and exploit-protection changes stay opt-in because they can affect
+ * NUI/input, voice, authentication, or other games.
+ */
 const FIVEM_UNIVERSAL: string[] = [
-  "FiveMCacheClear", "FiveMHighPriority", "FiveMExtendedMemory",
-  "FiveMNetworkBuffer", "FiveMDisableVSync", "FiveMStreamDistance",
-  "FiveMDisableFullscreen", "FiveMDisableDWM", "FiveMAffinityMask",
-  "FiveMIOPriority", "FiveMDisableP2P", "FiveMDNSOverride",
-  "FiveMQueueFix", "FiveMWorkingSet", "FiveMStreamPool",
-  "FiveMMenuFpsUncap", "FiveMDisableLSO", "FiveMEnableRSS",
+  "FiveMCacheClear",
+  "FiveMDisableVSync", "FiveMStreamDistance",
+  "FiveMWorkingSet", "FiveMStreamPool",
   "FiveMReduceNPCDensity", "FiveMReduceShadowQuality",
-  "FiveMCommandLineTweaks", "FiveMFullPerfStack",
-  "FiveMGTAProcessPerfOptions", "FiveMGameModeAdd",
-  "FiveMRenderingBoost", "FiveMCitizenDisableMedia",
-  "FiveMSteamChildOff", "FiveMCommandlineMax",
-  "FiveMSteamOverlayOff", "FiveMMMCSSAudio", "FiveMDisableMPO",
-  "FiveMFixProductId",
 ];
 
 /** FiveM Ryzen CPU affinity tweaks — AMD only */
