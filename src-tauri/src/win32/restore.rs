@@ -250,7 +250,8 @@ if (-not $point) {
 }
 [Console]::Out.WriteLine([int64]$point.SequenceNumber)
 "#;
-    let output = Command::new("powershell.exe")
+    let mut command = Command::new("powershell.exe");
+    command
         .args([
             "-NoLogo",
             "-NoProfile",
@@ -258,7 +259,13 @@ if (-not $point) {
             "-Command",
             script,
         ])
-        .env("OPTIGODS_RESTORE_LABEL", label)
+        .env("OPTIGODS_RESTORE_LABEL", label);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let output = command
         .output()
         .context("launching PowerShell Checkpoint-Computer fallback")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
