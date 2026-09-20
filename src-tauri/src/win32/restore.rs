@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use windows::core::{w, PCSTR};
-use windows::Win32::Foundation::{LocalFree, BOOL, HLOCAL, RPC_E_CHANGED_MODE, RPC_E_TOO_LATE};
+use windows::Win32::Foundation::{LocalFree, BOOL, HLOCAL, RPC_E_TOO_LATE};
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
@@ -22,7 +22,7 @@ use windows::Win32::System::Com::{
     CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINIT_MULTITHREADED, EOAC_NONE,
     RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
 };
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+use windows::Win32::System::LibraryLoader::{FreeLibrary, GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Restore::{
     BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW, STATEMGRSTATUS,
 };
@@ -40,66 +40,90 @@ use wmi::{COMLibrary, WMIConnection};
 /// because the process already has a policy.
 fn ensure_com_security() -> Result<()> {
     static INITIALIZATION_ERROR: OnceLock<Option<String>> = OnceLock::new();
-    let error = INITIALIZATION_ERROR.get_or_init(|| unsafe {
-        // Microsoft initializes COM before CoInitializeSecurity in its
-        // SRSetRestorePoint sample. Do this before WMI gets a chance to
-        // initialize the apartment with a default security policy.
-        let com_result = CoInitializeEx(None, COINIT_MULTITHREADED);
-        if !com_result.is_ok() && com_result != RPC_E_CHANGED_MODE {
-            return Some(format!(
-                "CoInitializeEx failed (HRESULT {:#x})",
-                com_result.0
-            ));
-        }
+    let error = INITIALIZATION_ERROR.get_or_init(|| {
+        // A Tauri/WebView thread can already be STA. Use a fresh thread so
+        // CoInitializeEx cannot silently return RPC_E_CHANGED_MODE and leave
+        // the process with an unverified COM apartment/security policy.
+        let worker = thread::Builder::new()
+            .name("optigods-com-security".into())
+            .spawn(|| unsafe {
+                // Microsoft initializes COM before CoInitializeSecurity in its
+                // SRSetRestorePoint sample. Do this before WMI gets a chance to
+                // initialize the apartment with a default security policy.
+                let com_result = CoInitializeEx(None, COINIT_MULTITHREADED);
+                if !com_result.is_ok() {
+                    return Some(format!(
+                        "CoInitializeEx failed (HRESULT {:#x})",
+                        com_result.0
+                    ));
+                }
 
-        let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
-        let descriptor =
-            w!("O:BAG:BAD:(A;;0x1;;;LS)(A;;0x1;;;NS)(A;;0x1;;;PS)(A;;0x1;;;SY)(A;;0x1;;;BA)");
-        if let Err(error) = ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            descriptor,
-            SDDL_REVISION_1,
-            &mut security_descriptor,
-            None,
-        ) {
-            if com_result.is_ok() {
+                let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
+                // 0x3 = COM_RIGHTS_EXECUTE | COM_RIGHTS_EXECUTE_LOCAL.
+                // System Restore calls back as LocalSystem, NetworkService,
+                // LocalService, or an administrator while opening the point.
+                let descriptor =
+                    w!("O:BAG:BAD:(A;;0x3;;;LS)(A;;0x3;;;NS)(A;;0x3;;;PS)(A;;0x3;;;SY)(A;;0x3;;;BA)");
+                if let Err(error) = ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    descriptor,
+                    SDDL_REVISION_1,
+                    &mut security_descriptor,
+                    None,
+                ) {
+                    CoUninitialize();
+                    return Some(format!(
+                        "ConvertStringSecurityDescriptorToSecurityDescriptorW failed (HRESULT {:#x})",
+                        error.code().0
+                    ));
+                }
+
+                let result = CoInitializeSecurity(
+                    security_descriptor,
+                    -1,
+                    None,
+                    None,
+                    RPC_C_AUTHN_LEVEL_DEFAULT,
+                    RPC_C_IMP_LEVEL_IMPERSONATE,
+                    None,
+                    EOAC_NONE,
+                    None,
+                );
+                // The descriptor is copied by COM during CoInitializeSecurity.
+                let _ = LocalFree(HLOCAL(security_descriptor.0));
                 CoUninitialize();
-            }
-            return Some(format!(
-                "ConvertStringSecurityDescriptorToSecurityDescriptorW failed (HRESULT {:#x})",
-                error.code().0
-            ));
-        }
 
-        let result = CoInitializeSecurity(
-            Some(security_descriptor),
-            -1,
-            None,
-            None,
-            RPC_C_AUTHN_LEVEL_DEFAULT,
-            RPC_C_IMP_LEVEL_IMPERSONATE,
-            None,
-            EOAC_NONE,
-            None,
-        );
-        // The descriptor is copied by COM during CoInitializeSecurity.
-        let _ = LocalFree(HLOCAL(security_descriptor.0));
-        if com_result.is_ok() {
-            CoUninitialize();
-        }
-
-        match result {
-            Ok(()) => None,
-            Err(error) if error.code() == RPC_E_TOO_LATE => None,
-            Err(error) => Some(format!(
-                "CoInitializeSecurity failed (HRESULT {:#x})",
-                error.code().0
-            )),
+                match result {
+                    Ok(()) => None,
+                    // Do not treat an unknown pre-existing policy as safe:
+                    // it may be exactly the default ACL that caused 0x5.
+                    Err(error) if error.code() == RPC_E_TOO_LATE => Some(
+                        "CoInitializeSecurity was already called with an unverified policy (RPC_E_TOO_LATE)"
+                            .into(),
+                    ),
+                    Err(error) => Some(format!(
+                        "CoInitializeSecurity failed (HRESULT {:#x})",
+                        error.code().0
+                    )),
+                }
+            })
+            .map_err(|error| format!("COM security thread failed to start: {error}"));
+        match worker {
+            Ok(worker) => match worker.join() {
+                Ok(error) => error,
+                Err(_) => Some("COM security thread panicked".into()),
+            },
+            Err(error) => Some(error),
         }
     });
     if let Some(error) = error {
         return Err(anyhow!(error));
     }
     Ok(())
+}
+
+/// Must run before any WMI or WebView code can initialize COM security.
+pub fn initialize_com_security() -> Result<()> {
+    ensure_com_security()
 }
 
 /// Microsoft documents SrClient.dll as the runtime provider for
@@ -114,10 +138,22 @@ fn set_restore_point(
 
     let module =
         unsafe { LoadLibraryW(w!("SrClient.dll")) }.context("LoadLibraryW(SrClient.dll)")?;
-    let procedure = unsafe { GetProcAddress(module, PCSTR(b"SRSetRestorePointW\0".as_ptr())) }
-        .ok_or_else(|| anyhow!("GetProcAddress(SRSetRestorePointW) failed"))?;
+    let procedure = match unsafe { GetProcAddress(module, PCSTR(b"SRSetRestorePointW\0".as_ptr())) }
+    {
+        Some(procedure) => procedure,
+        None => {
+            unsafe {
+                let _ = FreeLibrary(module);
+            }
+            return Err(anyhow!("GetProcAddress(SRSetRestorePointW) failed"));
+        }
+    };
     let function: SrSetRestorePointW = unsafe { std::mem::transmute(procedure) };
-    Ok(unsafe { function(restore_point, status) })
+    let result = unsafe { function(restore_point, status) };
+    unsafe {
+        let _ = FreeLibrary(module);
+    }
+    Ok(result)
 }
 
 pub fn create(label: &str) -> Result<RestorePoint> {
@@ -137,7 +173,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     };
     let mut begin_status = STATEMGRSTATUS::default();
     let ok = set_restore_point(&begin_info, &mut begin_status)?;
-    if !ok.as_bool() {
+    if !ok.as_bool() || begin_status.nStatus.0 != 0 || begin_status.llSequenceNumber <= 0 {
         let status_code = begin_status.nStatus.0;
         let seq = begin_status.llSequenceNumber;
         return Err(anyhow!(
@@ -158,7 +194,10 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     };
     let mut end_status = STATEMGRSTATUS::default();
     let ok = set_restore_point(&end_info, &mut end_status)?;
-    if !ok.as_bool() {
+    if !ok.as_bool()
+        || end_status.nStatus.0 != 0
+        || end_status.llSequenceNumber != begin_status.llSequenceNumber
+    {
         let status_code = end_status.nStatus.0;
         let seq = end_status.llSequenceNumber;
         return Err(anyhow!(
@@ -169,7 +208,7 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     }
 
     let point = RestorePoint {
-        sequence_number: begin_status.llSequenceNumber,
+        sequence_number: end_status.llSequenceNumber,
         label: label.to_string(),
         created_at: chrono_iso_now(),
     };
@@ -201,7 +240,7 @@ static SESSION_CHECKPOINT: OnceLock<Mutex<Option<RestorePoint>>> = OnceLock::new
 
 /// Guarantees that this desktop-app process has created and WMI-verified a
 /// restore point. Renderer state cannot bypass this guard.
-pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint> {
+pub fn ensure_session_checkpoint(requested_label: &str) -> Result<RestorePoint> {
     // This must happen before list() initializes WMI/COM. If WMI initializes
     // first, CoInitializeSecurity returns RPC_E_TOO_LATE and the System
     // Restore service cannot call back into this process.
@@ -211,7 +250,13 @@ pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint>
         .lock()
         .map_err(|_| anyhow!("restore checkpoint lock was poisoned"))?;
     if let Some(existing) = checkpoint.clone() {
-        return Ok(existing);
+        let still_present = list()?
+            .iter()
+            .any(|candidate| candidate.sequence_number == existing.sequence_number);
+        if still_present {
+            return Ok(existing);
+        }
+        *checkpoint = None;
     }
     // Keep the actual create-and-WMI-verify operation in the native backstop.
     // A renderer event/session flag must never be enough to authorize a
@@ -230,7 +275,13 @@ pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint>
         .max()
         .unwrap_or(0)
         .saturating_add(1);
-    let created = create(&format!("Opti Gods Restore {next_number}"))?;
+    let requested_label = requested_label.trim();
+    let label = if requested_label.is_empty() || requested_label == "Opti Gods Restore" {
+        format!("Opti Gods Restore {next_number}")
+    } else {
+        requested_label.to_string()
+    };
+    let created = create(&label)?;
     *checkpoint = Some(created.clone());
     Ok(created)
 }
@@ -267,7 +318,7 @@ pub fn restore(sequence_number: i64) -> Result<()> {
     // The only supported way to replay a restore point as a regular admin
     // process is to hand off to rstrui.exe with /OFFLINE; it shows the
     // standard System Restore wizard pre-selected to the chosen checkpoint.
-    let arg = format!("/OFFLINE:C:\\=ACTIVE&id={sequence_number}");
+    let arg = format!("/OFFLINE:C:\\Windows=ACTIVE&id={sequence_number}");
     Command::new("rstrui.exe")
         .arg(arg)
         .spawn()
