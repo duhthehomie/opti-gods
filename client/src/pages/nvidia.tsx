@@ -22,7 +22,7 @@ import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { getNativeAuthToken, importNvidiaPreset, isNative, openMsiUtility } from "@/lib/tauri-bridge";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
-const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","NvFrameLimitOff","EnableNvidiaMSIPro",
+const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","EnableNvidiaMSIPro",
   "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force"];
 
 // V2.2 — driver-class tweaks that survive game restarts but are wiped on driver
@@ -33,7 +33,6 @@ const NVIDIA_DRIVER_REAPPLY_TWEAKS = [
   { id: "NvLowLatencyUltra",       title: "Low Latency Mode = Ultra",                       desc: "Sets RmLowLatencyMode=2 (Ultra) and FlipQueueSize=1 — equivalent to NVCP 'Low Latency Mode: Ultra'. Reduces render-queue depth to 1 frame for the lowest possible input-to-photon latency.", badge: "RECOMMENDED", impact: "HIGH" as const },
   { id: "NvThreadedOptOn",         title: "Threaded Optimization = ON (Global)",            desc: "Sets OGL_ThreadControl=1 and D3D_ThreadControl=1 — forces driver to offload OpenGL/D3D work to a dedicated thread. Default is 'Auto' which the driver sometimes guesses wrong on — forcing ON is correct for ~95% of modern titles.", badge: "RECOMMENDED", impact: "MED" as const },
   { id: "NvPowerMgmtMax",          title: "Power Management Mode = Prefer Max Performance", desc: "Locks PowerMizer to P0 state (PerfLevelSrc=0x2222) so the GPU never drops to lower power states between frames. Eliminates the ~1-2 frame stutter that happens when the GPU upclocks during a transition.", badge: "RECOMMENDED", impact: "HIGH" as const },
-  { id: "NvFrameLimitOff",         title: "Frame Rate Limit = OFF (uncapped)",              desc: "Disables any driver-level frame-rate cap — ensures the NVIDIA driver never throttles your FPS. Use this to guarantee max FPS output.", badge: "UNCAP", impact: "LOW" as const },
 ];
 
 async function downloadDriverReapply(tab: 'nvidia' | 'amd', tweakIds: string[]) {
