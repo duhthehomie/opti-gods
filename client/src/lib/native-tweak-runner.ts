@@ -1,9 +1,10 @@
 import { apiUrl } from "@/lib/api-base";
-import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
+import { applyTweak, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
+import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -86,9 +87,40 @@ export async function applyTweakBatch(
   // long elevated runs in-place where navigation or a re-render can hide
   // progress and make a working button look unresponsive.
   if (native && window.location.pathname !== "/applied-tweaks") {
-    // Keep every requested ID in the queue.  The runner must show unsupported,
-    // unentitled, and execution failures instead of silently dropping them.
-    queueTweakBatch(uniqueIds);
+    // Free users may only instant-apply the signed native allowlist. Filter
+    // script-only IDs before navigation so they never reach the ticket API and
+    // produce the misleading "could not apply" toast seen on the Tweaks page.
+    // Pro keeps the full trusted server command surface.
+    let queuedIds = uniqueIds;
+    try {
+      const allowanceResponse = await fetchWithTimeout(
+        apiUrl("/api/performance-allowance"),
+        { headers: getNativeAuthHeaders() },
+        NATIVE_REQUEST_TIMEOUT_MS,
+        "Allowance status unavailable; keeping the selected IDs for review.",
+      );
+      if (allowanceResponse.ok) {
+        const allowance = await allowanceResponse.json() as { pro?: boolean };
+        if (allowance.pro === false) {
+          queuedIds = uniqueIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+        }
+      }
+    } catch {
+      // The Applied Tweaks runner will report the actual server result if the
+      // allowance check could not be read before navigation.
+    }
+    if (!queuedIds.length) {
+      return {
+        appliedIds: [],
+        selectedIds: uniqueIds,
+        unsupportedIds: uniqueIds,
+        failures: uniqueIds.map(id => ({
+          id,
+          message: "This tweak is script-only and is not available for instant apply.",
+        })),
+      };
+    }
+    queueTweakBatch(queuedIds);
     window.location.assign("/applied-tweaks?run=1");
     // The Applied Tweaks page owns native terminal feedback.  Never resolve
     // here with a synthetic zero-applied result: callers on the originating
@@ -114,6 +146,27 @@ export async function applyTweakBatch(
     return { appliedIds: [], selectedIds: compatibleIds, unsupportedIds, failures: unsupportedFailures };
   }
 
+  // A full optimize rerun can contain hundreds of IDs that already succeeded
+  // in an earlier run. Detect those first so reruns are fast, do not consume a
+  // new allowance, and report them as confirmed immediately.
+  let alreadyConfirmedIds: string[] = [];
+  if (native) {
+    const detected = await detectAppliedTweaks().catch(() => ({} as Record<string, boolean>));
+    alreadyConfirmedIds = compatibleIds.filter(id => Boolean(detected[id]));
+    alreadyConfirmedIds.forEach((id, index) => {
+      const store = useOptimizationStore.getState();
+      store.setTweak(id, true);
+      store.markApplied([id]);
+      onProgress?.({
+        id,
+        index,
+        total: uniqueIds.length,
+        status: "applied",
+        message: "Already confirmed by Windows; skipped.",
+      });
+    });
+  }
+  const pendingIds = compatibleIds.filter(id => !alreadyConfirmedIds.includes(id));
   const nativeAuth = native ? await getNativeAuthToken() : null;
   const deviceId = getPersistentDeviceId();
   const proSession = localStorage.getItem(PRO_SESSION_KEY);
@@ -133,17 +186,17 @@ export async function applyTweakBatch(
   // may already occupy allowance slots, and Best 15 must report each ticket
   // result (rather than silently omitting IDs).
   const entitledIds = native
-    ? compatibleIds
+    ? pendingIds
     : allowance.pro
-      ? compatibleIds
-      : compatibleIds.slice(0, Math.max(0, allowance.remaining ?? 0));
+      ? pendingIds
+      : pendingIds.slice(0, Math.max(0, allowance.remaining ?? 0));
   const supportedIds = entitledIds;
 
   if (!credential) {
     const message = "OG-AUTH-001 · Windows device identity unavailable. Reopen the Windows app to refresh the device identity.";
     supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
     return {
-      appliedIds: [],
+      appliedIds: alreadyConfirmedIds,
       selectedIds: [],
       unsupportedIds,
       failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
@@ -151,7 +204,8 @@ export async function applyTweakBatch(
   }
 
   if (!supportedIds.length) {
-    return { appliedIds: [], selectedIds: [], unsupportedIds, failures: unsupportedFailures };
+    localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
+    return { appliedIds: alreadyConfirmedIds, selectedIds: uniqueIds, unsupportedIds, failures: unsupportedFailures };
   }
 
   if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
@@ -165,7 +219,7 @@ export async function applyTweakBatch(
         const message = "Windows did not confirm a restore point. Turn on System Protection for drive C: and try Full Optimize again.";
         supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
         return {
-          appliedIds: [],
+          appliedIds: alreadyConfirmedIds,
           selectedIds: [],
           unsupportedIds,
           failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
@@ -177,15 +231,15 @@ export async function applyTweakBatch(
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
       supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "failed", message }));
       return {
-        appliedIds: [],
-          selectedIds: [],
+        appliedIds: alreadyConfirmedIds,
+        selectedIds: uniqueIds,
         unsupportedIds,
         failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
       };
     }
   }
 
-  const appliedIds: string[] = [];
+  const appliedIds: string[] = [...alreadyConfirmedIds];
   const failures: { id: string; message: string }[] = [];
   supportedIds.forEach((id, index) => onProgress?.({ id, index, total: uniqueIds.length, status: "queued" }));
   for (let index = 0; index < supportedIds.length; index++) {
@@ -246,5 +300,5 @@ export async function applyTweakBatch(
 
   window.dispatchEvent(new Event("optigods:allowance-changed"));
   localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
-  return { appliedIds, selectedIds: [], unsupportedIds, failures: failures.concat(unsupportedFailures) };
+  return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures) };
 }
