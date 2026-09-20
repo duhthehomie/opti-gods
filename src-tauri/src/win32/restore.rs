@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use windows::core::{w, PCSTR};
-use windows::Win32::Foundation::{LocalFree, BOOL, HLOCAL, RPC_E_TOO_LATE};
+use windows::Win32::Foundation::{FreeLibrary, LocalFree, BOOL, HLOCAL, RPC_E_TOO_LATE};
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
@@ -22,7 +22,7 @@ use windows::Win32::System::Com::{
     CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINIT_MULTITHREADED, EOAC_NONE,
     RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
 };
-use windows::Win32::System::LibraryLoader::{FreeLibrary, GetProcAddress, LoadLibraryW};
+use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Restore::{
     BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW, STATEMGRSTATUS,
 };
