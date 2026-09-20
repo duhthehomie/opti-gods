@@ -3,9 +3,9 @@ import { applyTweak, createRestorePoint, getNativeAuthToken, isNative } from "@/
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
+import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
-const RESTORE_CREATED_KEY = "optigods-native-restore-created";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
@@ -154,7 +154,7 @@ export async function applyTweakBatch(
     return { appliedIds: [], selectedIds: [], unsupportedIds, failures: unsupportedFailures };
   }
 
-  if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
+  if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
     try {
       const restorePoint = await withTimeout(
         createRestorePoint("Before Opti Gods tweak changes"),
@@ -171,7 +171,7 @@ export async function applyTweakBatch(
           failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
         };
       }
-      sessionStorage.setItem(RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+      sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Could not create a verified restore point.";
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
