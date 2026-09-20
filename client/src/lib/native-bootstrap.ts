@@ -74,18 +74,23 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       recovery: "You can browse and scan while this finishes.",
     };
     setNativeRestoreReadiness(checking);
-    void startupRestoreCheckpoint()
-      .then((result) => setNativeRestoreReadiness(result))
+    const restoreCheck = startupRestoreCheckpoint()
+      .then((result) => {
+        setNativeRestoreReadiness(result);
+        return result;
+      })
       .catch((error) => {
         const detail = error instanceof Error ? error.message : "The safety checkpoint could not be checked.";
-        setNativeRestoreReadiness({
+        const result: NativeStartupRestoreResult = {
           ok: false,
           status: "creation_failed",
           repair_attempted: false,
           restore_point: null,
           message: `System Protection could not be verified: ${detail}`,
           recovery: "Native tweaks are paused. Press Retry after checking System Protection for drive C:.",
-        });
+        };
+        setNativeRestoreReadiness(result);
+        return result;
       });
 
     // Step 2 — gather environment information (non-blocking).
@@ -96,10 +101,15 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       console.warn("[native] envInfo failed", err);
     }
 
-    try {
-      await withTimeout(startProBalance(), 5_000, "startProBalance");
-    } catch (err) {
-      console.warn("[native] startProBalance failed", err);
+    const restoreResult = await withTimeout(restoreCheck, 95_000, "startupRestoreCheckpoint");
+    if (restoreResult?.ok) {
+      try {
+        await withTimeout(startProBalance(), 5_000, "startProBalance");
+      } catch (err) {
+        console.warn("[native] startProBalance failed", err);
+      }
+    } else {
+      console.warn("[native] ProBalance held until the safety checkpoint is verified");
     }
 
     // Step 3 — silent auto-scan if no hardware data exists yet.
