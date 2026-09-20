@@ -89,6 +89,7 @@ struct MsAcpiThermalZone {
 }
 
 pub fn scan() -> Result<HardwareScan> {
+    crate::win32::restore::initialize_com_security()?;
     let com = COMLibrary::new().context("COM init")?;
     let wmi = WMIConnection::new(com).context("WMI connect")?;
 
