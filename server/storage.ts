@@ -167,7 +167,7 @@ export interface IStorage {
   consumeNativeTweakTicket(discordUserId: string, ticket: string, tweakId: string): Promise<{ idempotencyKey: string; resultSecret: string } | null>;
   cancelNativeTweakTicket(discordUserId: string, ticket: string): Promise<boolean>;
   releasePerformanceTweak(discordUserId: string, tweakId: string): Promise<boolean>;
-  finalizeNativeTweakTicket(ticket: string, resultSecret: string, success: boolean): Promise<{ ok: boolean; status: string }>;
+  finalizeNativeTweakTicket(discordUserId: string, ticket: string, resultSecret: string, success: boolean, tweakId: string): Promise<{ ok: boolean; status: string }>;
 }
 
 // Deterministic SHA-256 dedup hash for a hardware rig.
@@ -1386,6 +1386,26 @@ export class DatabaseStorage implements IStorage {
   async authorizeNativeTweakTicket(discordUserId: string, tweakId: string, idempotencyKey: string, quotaRequired: boolean): Promise<{ ticket: string; reused: boolean }> {
     return db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      // A renderer or process crash can happen after consume but before the
+      // native result callback. Reclaim only old in-flight executions so a
+      // real Windows operation still has time to finish.
+      const abandoned = await tx.delete(nativeTweakTickets).where(and(
+        eq(nativeTweakTickets.discordUserId, discordUserId),
+        isNotNull(nativeTweakTickets.consumedAt),
+        isNull(nativeTweakTickets.resultStatus),
+        lt(nativeTweakTickets.consumedAt, new Date(Date.now() - 15 * 60 * 1000)),
+      )).returning({
+        tweakId: nativeTweakTickets.tweakId,
+        idempotencyKey: nativeTweakTickets.idempotencyKey,
+      });
+      for (const row of abandoned) {
+        await tx.delete(performanceTweakAllowance).where(and(
+          eq(performanceTweakAllowance.discordUserId, discordUserId),
+          eq(performanceTweakAllowance.tweakId, row.tweakId),
+          eq(performanceTweakAllowance.idempotencyKey, row.idempotencyKey),
+          eq(performanceTweakAllowance.status, "reserved"),
+        ));
+      }
       // Expired reservations can be reclaimed only when no executor has begun.
       // This runs under the same user lock as issuance and consumption.
       await tx.delete(performanceTweakAllowance).where(and(
@@ -1498,19 +1518,26 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async finalizeNativeTweakTicket(ticket: string, resultSecret: string, success: boolean): Promise<{ ok: boolean; status: string }> {
+  async finalizeNativeTweakTicket(discordUserId: string, ticket: string, resultSecret: string, success: boolean, tweakId: string): Promise<{ ok: boolean; status: string }> {
     try {
       return await db.transaction(async (tx) => {
       const desired = success ? "success" : "failure";
       const [row] = await tx.update(nativeTweakTickets).set({ resultStatus: desired, resultAt: new Date() }).where(and(
+        eq(nativeTweakTickets.discordUserId, discordUserId),
         eq(nativeTweakTickets.ticket, ticket),
         eq(nativeTweakTickets.resultSecret, resultSecret),
+        eq(nativeTweakTickets.tweakId, tweakId),
         isNotNull(nativeTweakTickets.consumedAt),
         isNull(nativeTweakTickets.resultStatus),
       )).returning();
       if (!row) {
         const [prior] = await tx.select({ status: nativeTweakTickets.resultStatus }).from(nativeTweakTickets)
-          .where(and(eq(nativeTweakTickets.ticket, ticket), eq(nativeTweakTickets.resultSecret, resultSecret)));
+          .where(and(
+            eq(nativeTweakTickets.discordUserId, discordUserId),
+            eq(nativeTweakTickets.ticket, ticket),
+            eq(nativeTweakTickets.resultSecret, resultSecret),
+            eq(nativeTweakTickets.tweakId, tweakId),
+          ));
         return prior?.status ? { ok: prior.status === desired, status: prior.status } : { ok: false, status: "invalid" };
       }
       if (success) {
