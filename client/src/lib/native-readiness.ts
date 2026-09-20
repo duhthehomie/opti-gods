@@ -1,6 +1,7 @@
 import type { NativeStartupRestoreResult } from "@/lib/tauri-bridge";
 
 const STORAGE_KEY = "optigods-native-restore-readiness";
+export const NATIVE_RESTORE_CREATED_KEY = "optigods-native-restore-created";
 let current: NativeStartupRestoreResult | null = null;
 const listeners = new Set<() => void>();
 
