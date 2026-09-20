@@ -231,6 +231,85 @@ fn set_restore_point(
     Ok(result)
 }
 
+/// Windows exposes the same supported restore-point operation through the
+/// built-in PowerShell cmdlet. Some Windows installations reject the direct
+/// SRSetRestorePointW call with ERROR_ACCESS_DENIED even when System
+/// Protection is enabled. Use the cmdlet only as a narrow fallback, and still
+/// require WMI to verify the exact point before allowing any mutation.
+fn create_via_powershell(label: &str) -> Result<RestorePoint> {
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+$label = $env:OPTIGODS_RESTORE_LABEL
+Checkpoint-Computer -Description $label -RestorePointType MODIFY_SETTINGS
+$point = Get-ComputerRestorePoint |
+    Where-Object { $_.Description -eq $label } |
+    Sort-Object SequenceNumber -Descending |
+    Select-Object -First 1
+if (-not $point) {
+    throw "Checkpoint-Computer completed without a matching restore point"
+}
+[Console]::Out.WriteLine([int64]$point.SequenceNumber)
+"#;
+    let output = Command::new("powershell.exe")
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ])
+        .env("OPTIGODS_RESTORE_LABEL", label)
+        .output()
+        .context("launching PowerShell Checkpoint-Computer fallback")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        let detail = stderr.trim();
+        let detail = if detail.is_empty() {
+            stdout.trim()
+        } else {
+            detail
+        };
+        return Err(anyhow!(
+            "Checkpoint-Computer failed with exit code {}{}",
+            output.status.code().unwrap_or(-1),
+            if detail.is_empty() {
+                String::new()
+            } else {
+                format!(": {detail}")
+            }
+        ));
+    }
+    let sequence_number = stdout
+        .lines()
+        .rev()
+        .find_map(|line| line.trim().parse::<i64>().ok())
+        .filter(|sequence| *sequence > 0)
+        .ok_or_else(|| anyhow!("Checkpoint-Computer returned no restore-point sequence"))?;
+    let point = RestorePoint {
+        sequence_number,
+        label: label.to_string(),
+        created_at: chrono_iso_now(),
+    };
+    for _ in 0..20 {
+        if list()
+            .map(|points| {
+                points
+                    .iter()
+                    .any(|candidate| candidate.sequence_number == point.sequence_number)
+            })
+            .unwrap_or(false)
+        {
+            return Ok(point);
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    Err(anyhow!(
+        "PowerShell created checkpoint #{} but WMI could not verify it",
+        point.sequence_number
+    ))
+}
+
 pub fn create(label: &str) -> Result<RestorePoint> {
     ensure_com_security()?;
     // SRSetRestorePointW expects a 64-char description in a fixed-size buffer.
@@ -251,6 +330,15 @@ pub fn create(label: &str) -> Result<RestorePoint> {
     if !ok.as_bool() || begin_status.nStatus.0 != 0 || begin_status.llSequenceNumber <= 0 {
         let status_code = begin_status.nStatus.0;
         let seq = begin_status.llSequenceNumber;
+        if status_code == 5 {
+            return create_via_powershell(label).map_err(|fallback| {
+                anyhow!(
+                    "SRSetRestorePointW(BEGIN) failed (status={:#x}, seq={}); PowerShell fallback failed: {fallback:#}",
+                    status_code,
+                    seq
+                )
+            });
+        }
         return Err(anyhow!(
             "SRSetRestorePointW(BEGIN) failed (status={:#x}, seq={})",
             status_code,
