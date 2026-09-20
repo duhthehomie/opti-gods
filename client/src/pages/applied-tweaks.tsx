@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { detectAppliedTweaks, isNative, openDownloadsFolder, saveTextToDownloads, undoTweak } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, isNative, openDownloadsFolder, undoTweak } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
@@ -124,11 +124,6 @@ async function downloadRunDiagnosticLog(
   const stamp = generatedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const filename = `OptiGods-V5-Tweak-Run-Error-Log-${stamp}.txt`;
   const content = lines.join("\n");
-  if (isNative()) {
-    const savedName = await saveTextToDownloads(content, filename);
-    await openDownloadsFolder();
-    return savedName;
-  }
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -138,6 +133,7 @@ async function downloadRunDiagnosticLog(
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+  if (isNative()) await openDownloadsFolder();
   return filename;
 }
 
