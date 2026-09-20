@@ -266,7 +266,7 @@ const PRIVACY_EXTRA: string[] = [
 ];
 
 /** Windows debloat — safe app + UWP removal */
-const DEBLOAT_TWEAKS: string[] = [
+export const DEBLOAT_TWEAK_IDS: string[] = [
   "DebloatCortana", "DebloatOneDrive", "DebloatXboxApp", "DebloatXboxGameBar",
   "DebloatXboxIdentity", "DebloatBing", "DebloatWeather", "DebloatNews",
   "DebloatMaps", "DebloatSolitaire", "DebloatMixedReality", "DebloatSkype",
@@ -686,7 +686,7 @@ export function buildSafePreset(
   MEMORY_EXTRA.forEach(id => candidates.add(id));
   REGISTRY_SYSTEM.forEach(id => candidates.add(id));
   PRIVACY_EXTRA.forEach(id => candidates.add(id));
-  DEBLOAT_TWEAKS.forEach(id => candidates.add(id));
+  DEBLOAT_TWEAK_IDS.forEach(id => candidates.add(id));
   SERVICE_SAFE.forEach(id => candidates.add(id));
   PROCSVC_TWEAKS.forEach(id => candidates.add(id));
   STARTUP_TWEAKS.forEach(id => candidates.add(id));
