@@ -22,7 +22,7 @@ export function VersionPin() {
           updateAvailable ? "text-red-400" : "text-red-500/50"
         )}
       >
-        v{current}
+        V5
         {updateAvailable && (
           <span className="ml-1.5 text-red-400/80">· update available</span>
         )}

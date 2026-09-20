@@ -130,10 +130,10 @@ export function UpdateModal() {
           <div className="text-center space-y-1">
             <h2 className="text-base font-black text-white tracking-tight">Update Available</h2>
             <p className="text-sm text-zinc-400">
-              v{detectedVersion ?? data?.latestVersion} is ready to install
+              V5 is ready to install
             </p>
             <p className="text-xs text-zinc-600 mt-1">
-              Your current version: v{APP_VERSION || data?.currentVersion}
+              Your current version: V5
             </p>
           </div>
 

@@ -67,6 +67,10 @@ export type TweakBatchOptions = {
 let activeRunPromise: Promise<BulkTweakResult> | null = null;
 let stopRequested = false;
 
+export function hasNativeTweakRunInFlight(): boolean {
+  return activeRunPromise !== null;
+}
+
 function dispatchRunState() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(NATIVE_RUN_EVENT));
 }

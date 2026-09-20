@@ -16,7 +16,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
-import { APP_VERSION } from "@/generated/version";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { useToast } from "@/hooks/use-toast";
 import { isNative } from "@/lib/tauri-bridge";
@@ -448,7 +447,7 @@ export default function TweaksPage() {
                 </span>
               ) : null}
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide">
-                V{APP_VERSION}
+                V5
               </span>
               {gpuChip && !showAll && (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">

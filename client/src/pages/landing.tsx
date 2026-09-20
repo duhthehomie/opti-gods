@@ -186,7 +186,7 @@ function DownloadButton() {
         Download for Windows
       </Button>
       <p className="text-[11px] text-zinc-500" data-testid="text-download-version">
-        Windows 10 / 11 · 64-bit · v{APP_VERSION} · ~139 MB
+        Windows 10 / 11 · 64-bit · V5 · ~139 MB
       </p>
     </div>
   );

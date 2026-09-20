@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { detectAppliedTweaks, isNative, undoTweak } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, isNative, openDownloadsFolder, saveTextToDownloads, undoTweak } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
@@ -11,6 +11,7 @@ import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
 import {
   applyTweakBatch,
+  hasNativeTweakRunInFlight,
   NATIVE_RUN_QUEUE_KEY,
   readNativeTweakRun,
   readQueuedTweakBatch,
@@ -19,6 +20,7 @@ import {
   type NativeTweakRunState,
   type TweakRunProgress,
 } from "@/lib/native-tweak-runner";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -57,11 +59,11 @@ async function downloadUndoScript(id: string): Promise<boolean> {
   return granular;
 }
 
-function downloadRunDiagnosticLog(
+async function downloadRunDiagnosticLog(
   runState: NativeTweakRunState | null,
   items: TweakRunProgress[],
   nativeState: Record<string, boolean>,
-) {
+): Promise<string> {
   const generatedAt = new Date().toISOString();
   const applied = items.filter(item => item.status === "applied");
   const failed = items.filter(item => item.status === "failed");
@@ -119,16 +121,24 @@ function downloadRunDiagnosticLog(
     }, null, 2),
     "",
   ];
-  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const stamp = generatedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const filename = `OptiGods-V5-Tweak-Run-Error-Log-${stamp}.txt`;
+  const content = lines.join("\n");
+  if (isNative()) {
+    const savedName = await saveTextToDownloads(content, filename);
+    await openDownloadsFolder();
+    return savedName;
+  }
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  const stamp = generatedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   anchor.href = url;
-  anchor.download = `OptiGods-V5-Tweak-Run-Error-Log-${stamp}.txt`;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+  return filename;
 }
 
 type UndoOutcome = "native" | "script" | "restore-script" | "unavailable" | "failed";
@@ -147,18 +157,26 @@ export default function AppliedTweaksPage() {
   const [runHadFailures, setRunHadFailures] = useState(false);
   const [runTab, setRunTab] = useState<"all" | "failed">("all");
   const [runState, setRunState] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
+  const [undoAfterStop, setUndoAfterStop] = useState(false);
   const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
   const startedRef = useRef(false);
   useEffect(() => { detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }, []);
   useEffect(() => {
-    const syncRun = (state: NativeTweakRunState | null) => {
-      setRunState(state);
+     const syncRun = (state: NativeTweakRunState | null) => {
+       const safeState = state
+         ? {
+           ...state,
+           ids: state.ids.filter(id => getTweakCompatibility(id).ok),
+           items: state.items.filter(item => getTweakCompatibility(item.id).ok),
+         }
+         : null;
+       setRunState(safeState);
       if (!state) return;
-      setRunItems(state.items);
+       setRunItems(safeState?.items ?? []);
       setRunning(state.status === "running" || state.status === "stopping");
       setRunFinished(state.status === "completed" || state.status === "stopped" || state.status === "failed");
-      setRunHadFailures(state.items.some(item => item.status === "failed"));
+       setRunHadFailures((safeState?.items ?? []).some(item => item.status === "failed"));
     };
     syncRun(readNativeTweakRun());
     return subscribeNativeTweakRun(syncRun);
@@ -178,11 +196,11 @@ export default function AppliedTweaksPage() {
     const startRun = async () => {
       // Recommendation buttons on individual tabs can queue script-only IDs.
       // Free users must never send those IDs to the instant-apply ticket API.
-      let executable = queued;
+       let executable = queued.filter(id => getTweakCompatibility(id).ok);
       try {
         const response = await fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() });
         if (response.ok && (await response.json() as { pro?: boolean }).pro === false) {
-          executable = queued.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+           executable = executable.filter(id => NATIVE_TWEAK_ID_SET.has(id));
         }
       } catch {
         // Keep the queue if status is temporarily unavailable; the server
@@ -222,14 +240,55 @@ export default function AppliedTweaksPage() {
         .catch(() => {});
     });
   }, [toast]);
-  const runActive = running || runState?.status === "stopping";
-  const stopRun = () => {
-    if (!runActive) return;
+   const runActive = (running || runState?.status === "stopping") && hasNativeTweakRunInFlight();
+   const retryableIds = Array.from(new Set(
+     runItems
+       .filter(item => item.status !== "applied")
+       .map(item => item.id)
+       .filter(id => getTweakCompatibility(id).ok),
+   ));
+  const stopAndUndo = () => {
+    if (!runActive) {
+      void undoAll();
+      return;
+    }
+    setUndoAfterStop(true);
     if (stopNativeTweakRun()) {
       toast({
-        title: "Stopping tweak run",
-        description: "The current Windows action will finish safely; no new tweak will start.",
+        title: "Stopping and preparing undo",
+        description: "The current Windows action will finish safely, then the applied changes will be undone.",
       });
+    }
+  };
+  const rerunQueued = async () => {
+    if (runActive || !retryableIds.length) return;
+    setRunTab("all");
+    setRunFinished(false);
+    setRunHadFailures(false);
+    setRunning(true);
+    setRunItems(retryableIds.map((id, index) => ({ id, index, total: retryableIds.length, status: "queued" })));
+    try {
+      const result = await applyTweakBatch(retryableIds, progress => {
+        setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
+      });
+      setRunFinished(true);
+      setRunHadFailures(result.failures.length > 0);
+      toast({
+        title: result.failures.length ? "Rerun needs attention" : "Queued tweaks reapplied",
+        description: summarizeFailures(result.failures, result.appliedIds.length),
+        variant: result.failures.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Windows could not restart the queued tweaks.";
+      setRunItems(items => items.map(item =>
+        item.status === "applied" || item.status === "failed" ? item : { ...item, status: "failed", message },
+      ));
+      setRunFinished(true);
+      setRunHadFailures(true);
+      toast({ title: "Rerun failed", description: message, variant: "destructive" });
+    } finally {
+      setRunning(false);
+      detectAppliedTweaks().then(setNativeState);
     }
   };
   const reapply = async (id: string) => {
@@ -335,19 +394,24 @@ export default function AppliedTweaksPage() {
   const undoAll = async () => {
     if (!ids.length || batchUndoing) return;
     if (!window.confirm(
-      `Stop and undo all ${ids.length} applied tweak${ids.length === 1 ? "" : "s"}?\n\n` +
+      `Undo all ${ids.length} applied tweak${ids.length === 1 ? "" : "s"}?\n\n` +
       "Opti Gods will reverse each change that has a native undo record. " +
       "Changes without one will download individual undo scripts instead; those must be run as Administrator. " +
       "Windows will not be changed by downloaded scripts until you run them.",
     )) return;
     await undoSelected(ids);
   };
+  useEffect(() => {
+    if (!undoAfterStop || !runState || !["completed", "stopped", "failed"].includes(runState.status)) return;
+    setUndoAfterStop(false);
+    void undoAll();
+  }, [runState?.status, undoAfterStop]);
   return <AppLayout><div className="og-page-enter space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Native state ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Only changes confirmed by the native engine appear here. Undo is per tweak, never a category reset.</p></div>
       <div className="flex items-center gap-2">
-        {runItems.length > 0 && <button onClick={() => downloadRunDiagnosticLog(runState, runItems, nativeState)} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
-        {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Stopping…" : "Stop & undo all"}</button>}
+         {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
+        {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
         {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
         <button onClick={() => { setLoading(true); detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
       </div>
@@ -376,7 +440,8 @@ export default function AppliedTweaksPage() {
        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
          <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">In-app Windows runner</p><h2 className="mt-1 text-base font-bold text-white">{runState?.status === "stopping" ? "Stopping after the current tweak…" : running ? "Applying selected tweaks…" : runFinished ? (runState?.status === "stopped" ? "Tweak run stopped" : "Tweak run complete") : "Ready to apply"}</h2></div>
          <div className="flex items-center gap-3 text-xs font-bold text-zinc-300">
-           {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop run"}</button>}
+            {(running || runState?.status === "stopping") && <button onClick={stopAndUndo} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping and undoing…" : "Stop and undo"}</button>}
+            {retryableIds.length > 0 && <button onClick={() => void rerunQueued()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun queued tweaks</button>}
            {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
          </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "failed").length / runItems.length) * 100)}%` }} /></div>

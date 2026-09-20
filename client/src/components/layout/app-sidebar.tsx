@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Home, Settings2, Crown, Download, ChevronRight, LogIn, LogOut, ShieldCheck, X, Gamepad2, HelpCircle, Palette, Cpu, Library, RefreshCw, ScanLine, Undo2, BatteryCharging, UserRound } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
-import { APP_VERSION } from "@/generated/version";
 import { BRAND } from "@/components/branding/assets";
 import {
   Sidebar,
@@ -297,7 +296,7 @@ export function AppSidebar() {
                   OPTI <span className="text-red-500">GODS</span>
                 </p>
                 <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 select-none" data-testid="text-version">
-                  by leaq · v{APP_VERSION}
+                  by leaq · V5
                 </p>
               </div>
             </Link>

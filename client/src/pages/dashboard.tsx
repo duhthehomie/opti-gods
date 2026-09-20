@@ -28,6 +28,7 @@ import { PerformanceAllowanceCard } from "@/components/performance-allowance-car
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
 import {
   AlertDialog,
@@ -81,38 +82,6 @@ const GAME_PACK_LABELS: Record<string, string> = {
   game_007firstlight: "007: First Light",
   game_fortnite: "Fortnite",
 };
-
-function playFullOptimizeSound() {
-  if (typeof window === "undefined") return;
-  const AudioContextCtor = window.AudioContext
-    ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextCtor) return;
-  try {
-    const context = new AudioContextCtor();
-    const now = context.currentTime;
-    const notes = [
-      { frequency: 392, start: 0, duration: 0.1 },
-      { frequency: 523.25, start: 0.09, duration: 0.12 },
-      { frequency: 783.99, start: 0.2, duration: 0.2 },
-    ];
-    for (const note of notes) {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "square";
-      oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
-      gain.gain.setValueAtTime(0.0001, now + note.start);
-      gain.gain.exponentialRampToValueAtTime(0.08, now + note.start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(now + note.start);
-      oscillator.stop(now + note.start + note.duration + 0.02);
-    }
-    window.setTimeout(() => { void context.close(); }, 600);
-  } catch {
-    // Audio is an enhancement; a blocked audio context must not block Optimize.
-  }
-}
 
 // Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
 
@@ -573,7 +542,7 @@ export default function Dashboard() {
       // silently redirect or consume the 15-tweak allowance from this CTA.
       return;
     }
-    playFullOptimizeSound();
+    playOptimizationActionSound();
     setConfirmFullOptimize(true);
   };
 
@@ -588,7 +557,14 @@ export default function Dashboard() {
        const known = preset.tweaks.filter(id => TWEAK_REGISTRY.some(tweak => tweak.id === id));
        const unknown = preset.tweaks.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
        if (unknown.length > 0) {
-         throw new Error(`${unknown.length} preset tweak${unknown.length === 1 ? " is" : "s are"} not recognized by this app (${unknown.slice(0, 3).join(", ")}). No changes were started.`);
+         toast({
+           title: "Skipped outdated preset entries",
+           description: `${unknown.length} preset entr${unknown.length === 1 ? "y was" : "ies were"} not recognized by this app. The compatible entries will continue.`,
+           variant: "destructive",
+         });
+       }
+       if (known.length === 0) {
+         throw new Error("This preset has no tweaks recognized by the current app. Refresh the Windows app and try again.");
        }
        const compatible = known.filter(id => getTweakCompatibility(id).ok);
        const blocked = known.filter(id => !getTweakCompatibility(id).ok);

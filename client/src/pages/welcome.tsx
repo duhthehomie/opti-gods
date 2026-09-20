@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, ShieldCheck, ChevronLeft, Eye, Ticket, AlertTriangle } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
-import { APP_VERSION } from "@/generated/version";
 import { loginWithDiscord, useAuth, useVersionInfo } from "@/hooks/use-auth";
 import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
@@ -188,7 +187,7 @@ export default function Welcome() {
     }
   };
 
-  const displayVersion = APP_VERSION || version.data?.currentVersion || "2.3.1";
+  const displayVersion = "V5";
 
   return (
     <div

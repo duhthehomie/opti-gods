@@ -159,6 +159,47 @@ pub fn open_downloads() {
     }
 }
 
+/// Saves a diagnostic text file directly in the user's Downloads folder.
+/// The renderer supplies file content, but the destination is always the
+/// well-known Downloads folder and the filename is sanitized.
+#[tauri::command]
+pub fn save_text_to_downloads(content: String, filename: String) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let user_profile = std::env::var("USERPROFILE")
+            .map_err(|_| "USERPROFILE is unavailable".to_string())?;
+        let safe_name: String = filename
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let safe_name = if safe_name.is_empty() {
+            "OptiGods-Tweak-Run-Error-Log.txt".to_string()
+        } else {
+            safe_name
+        };
+        let path = std::path::PathBuf::from(user_profile)
+            .join("Downloads")
+            .join(safe_name);
+        std::fs::write(&path, content)
+            .map_err(|error| format!("Could not save the diagnostic log: {error}"))?;
+        return Ok(path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("OptiGods-Tweak-Run-Error-Log.txt")
+            .to_string());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (content, filename);
+        Err("Saving directly to Downloads is available only in the Windows app.".to_string())
+    }
+}
+
 /// Opens FiveM Application Data directly in Explorer.
 /// Safe: the path is derived only from LOCALAPPDATA; the renderer supplies no path.
 #[tauri::command]

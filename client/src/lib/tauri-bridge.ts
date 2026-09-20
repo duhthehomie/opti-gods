@@ -302,6 +302,11 @@ export async function openDownloadsFolder(): Promise<void> {
   }
 }
 
+export async function saveTextToDownloads(content: string, filename: string): Promise<string> {
+  if (!isNative()) throw new Error("Direct Downloads saving is available in the Windows app.");
+  return invoke<string>("save_text_to_downloads", { content, filename });
+}
+
 export async function openFivemFolder(): Promise<void> {
   if (!isNative()) throw new Error("Open FiveM Folder is available in the Windows app.");
   await invoke<void>("open_fivem_folder");

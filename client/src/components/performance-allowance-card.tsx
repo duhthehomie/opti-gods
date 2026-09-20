@@ -7,6 +7,7 @@ import { isNative } from "@/lib/tauri-bridge";
 import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useLocation } from "wouter";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -115,6 +116,7 @@ export function PerformanceAllowanceCard() {
 
   const chooseBest = () => {
     if (busy) return;
+    playOptimizationActionSound();
     setConfirmBest(true);
   };
 
