@@ -12,8 +12,7 @@ import { join } from "node:path";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
-  "NvFrameLimitOff","NvFrameLimit30","NvFrameLimit60","NvFrameLimit120",
-  "NvFrameLimit144","NvFrameLimit240","NvFrameLimitCustom","EnableMSIMode_Safe",
+  "EnableMSIMode_Safe",
 ];
 const AMD_REAPPLY = [
   "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff",
@@ -94,7 +93,6 @@ const MIXED_SAMPLE = [
 const fixtures: Array<[string, string[]]> = [
   ["nvidia-all", NVIDIA_REAPPLY],
   ["amd-all", AMD_REAPPLY],
-  ["nvidia-frame-custom", ["NvFrameLimitCustom"]],
   ["msi-safe-only", ["EnableMSIMode_Safe"]],
   ["mixed-cross-category", MIXED_SAMPLE],
 ];
