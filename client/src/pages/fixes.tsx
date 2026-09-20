@@ -7,11 +7,13 @@ import {
   AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2,
   ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff,
-  Gamepad, Film, Volume2, Target,
+  Gamepad, Film, Volume2, Target, Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { isNative, repairNvidiaControlPanel } from "@/lib/tauri-bridge";
+import { getAppliedTweakIds, undoAppliedTweaks } from "@/lib/undo-applied-tweaks";
 
 // ─── Accent color map ─────────────────────────────────────────────────────────
 const A = {
@@ -338,6 +340,63 @@ export default function Fixes() {
   const [selected, setSelected] = useState<Set<string>>(new Set(RESTORE_CATEGORIES.map((c) => c.id)));
   const [restoring, setRestoring] = useState(false);
   const [dlState, setDlState] = useState<Record<string, boolean>>({});
+  const [repairingNvidia, setRepairingNvidia] = useState(false);
+  const [undoingTweaks, setUndoingTweaks] = useState(false);
+
+  const repairNvidia = async () => {
+    if (!isNative()) {
+      dlFix("nvidia-control-panel", "/api/nvidia-control-panel-fix-script", "OptiGods-NVIDIA-Control-Panel-Fix.bat", "Repair Script Downloaded", "Run it as administrator, then restart NVIDIA Control Panel.");
+      return;
+    }
+    setRepairingNvidia(true);
+    try {
+      const message = await repairNvidiaControlPanel();
+      toast({ title: "NVIDIA Control Panel repaired", description: message || "The Control Panel started successfully." });
+    } catch (error) {
+      toast({
+        title: "NVIDIA Control Panel still needs repair",
+        description: error instanceof Error ? error.message : "Reinstall the NVIDIA driver or Control Panel package.",
+        variant: "destructive",
+      });
+    } finally {
+      setRepairingNvidia(false);
+    }
+  };
+
+  const undoAllAppliedTweaks = async () => {
+    if (undoingTweaks) return;
+    const ids = await getAppliedTweakIds();
+    if (!ids.length) {
+      toast({ title: "No applied tweaks found", description: "Windows has no confirmed Opti Gods changes to undo." });
+      return;
+    }
+    if (!window.confirm(`Undo all ${ids.length} applied tweak${ids.length === 1 ? "" : "s"}?`)) return;
+    setUndoingTweaks(true);
+    try {
+      const summary = await undoAppliedTweaks(ids);
+      const processed = summary.nativeUndone + summary.scripts + summary.restoreScripts;
+      toast({
+        title: summary.failed
+          ? "Undo completed with errors"
+          : summary.nativeUndone
+            ? `${summary.nativeUndone} tweak${summary.nativeUndone === 1 ? "" : "s"} undone`
+            : "Undo actions prepared",
+        description: [
+          summary.nativeUndone ? `${summary.nativeUndone} native change${summary.nativeUndone === 1 ? "" : "s"} reversed.` : "",
+          summary.scripts ? `${summary.scripts} undo script${summary.scripts === 1 ? "" : "s"} downloaded.` : "",
+          summary.restoreScripts ? `${summary.restoreScripts} restore script${summary.restoreScripts === 1 ? "" : "s"} downloaded.` : "",
+          summary.failed ? `${summary.failed} could not be processed.` : "",
+          summary.unavailable ? "Open the Windows app to apply native undo." : "",
+          !processed && !summary.failed && !summary.unavailable ? "No changes were undone." : "",
+        ].filter(Boolean).join(" "),
+        variant: summary.failed || (!processed && !summary.unavailable) ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({ title: "Undo failed", description: error instanceof Error ? error.message : "The applied tweaks could not be undone.", variant: "destructive" });
+    } finally {
+      setUndoingTweaks(false);
+    }
+  };
 
   const dlFix = (id: string, endpoint: string, filename: string, toastTitle: string, toastDesc: string) => {
     setDlState((s) => ({ ...s, [id]: true }));
@@ -405,6 +464,46 @@ export default function Fixes() {
             </p>
           </div>
         </motion.div>
+
+        <section className="rounded-xl border border-green-500/30 bg-green-950/20 p-4 flex flex-wrap items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
+            <MonitorPlay className="w-5 h-5 text-green-400" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm font-bold text-white">NVIDIA Control Panel will not open?</p>
+            <p className="text-xs text-zinc-400 leading-snug mt-0.5">
+              Restores the NVIDIA display-container services, finds the installed Control Panel, and starts it. The button reports an error if the package is missing.
+            </p>
+          </div>
+          <Button
+            data-testid="button-repair-nvidia-control-panel"
+            onClick={() => void repairNvidia()}
+            disabled={repairingNvidia}
+            className="bg-green-700 hover:bg-green-600 text-white shrink-0"
+          >
+            {repairingNvidia ? "Repairing…" : "Fix NVIDIA Control Panel"}
+          </Button>
+        </section>
+
+        <section className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 flex flex-wrap items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <Undo2 className="w-5 h-5 text-red-400" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm font-bold text-white">Undo applied tweaks</p>
+            <p className="text-xs text-zinc-400 leading-snug mt-0.5">
+              Reverses every applied tweak with its native undo record. Other changes download individual restore scripts instead.
+            </p>
+          </div>
+          <Button
+            data-testid="button-undo-all-applied-tweaks"
+            onClick={() => void undoAllAppliedTweaks()}
+            disabled={undoingTweaks}
+            className="bg-red-700 hover:bg-red-600 text-white shrink-0"
+          >
+            {undoingTweaks ? "Undoing…" : "Undo all tweaks"}
+          </Button>
+        </section>
 
         {/* ════════════════════════════════════════════════════════════════════ */}
         {/* SECTION 1 — PER-GAME CRASH FIXES                                   */}

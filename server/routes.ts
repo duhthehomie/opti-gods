@@ -4206,6 +4206,28 @@ Start-Sleep 2
     res.json({ valid: true, percentOff: dc.percentOff, discountedPrice, code: dc.code });
   });
 
+  // Public — repair the NVIDIA Control Panel launch path. The desktop app
+  // performs the same repair natively; this is the browser fallback.
+  app.get('/api/nvidia-control-panel-fix-script', (req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host "Opti Gods - NVIDIA Control Panel Repair" -ForegroundColor Cyan`,
+      `$serviceNames = @('NVDisplay.ContainerLocalSystem','NVDisplay.ContainerLS','NvContainerLocalSystem')`,
+      `foreach ($name in $serviceNames) { $service = Get-Service -Name $name -ErrorAction SilentlyContinue; if ($service) { if ($service.StartType -eq 'Disabled') { Set-Service -InputObject $service -StartupType Automatic -ErrorAction SilentlyContinue }; if ($service.Status -ne 'Running') { Start-Service -InputObject $service -ErrorAction SilentlyContinue } } }`,
+      `\$candidates = @((Join-Path \$env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),(Join-Path \${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')) | Where-Object { \$_ -and (Test-Path -LiteralPath \$_) }`,
+      `$exe = $candidates | Select-Object -First 1`,
+      `if (-not $exe) { $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($package) { $candidate = Join-Path $package.InstallLocation 'nvcplui.exe'; if (Test-Path -LiteralPath $candidate) { $exe = $candidate } } }`,
+      `if (-not $exe) { Write-Host "NVIDIA Control Panel was not found. Reinstall it from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected." -ForegroundColor Red; pause; exit 1 }`,
+      `Start-Process -FilePath $exe`,
+      `Write-Host "NVIDIA Control Panel started from $exe" -ForegroundColor Green`,
+      `Write-Host "If it still closes immediately, reinstall the NVIDIA driver/Control Panel package, then run this repair again." -ForegroundColor Yellow`,
+      `pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-NVIDIA-Control-Panel-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'NVIDIA Control Panel Repair', tmpName: 'OptiGods-NVCPFix', marker: 'NVIDIA_CONTROL_PANEL_FIX_PS1_START' }), 'utf8'));
+  });
+
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
   // V3 Discord/Network fix — re-enables IPv6, fixes SystemResponsiveness, Win32PrioritySeparation
   app.get('/api/discord-network-fix-script', (req, res) => {

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Settings2, Crown, Download, ChevronRight, LogIn, LogOut, ShieldCheck, X, Gamepad2, HelpCircle, Palette, Cpu, Library, RefreshCw, ScanLine, Undo2, BatteryCharging, UserRound } from "lucide-react";
+import { Home, Settings2, Crown, Download, ChevronRight, LogIn, LogOut, ShieldCheck, X, Gamepad2, HelpCircle, Palette, Cpu, Library, RefreshCw, ScanLine, Undo2, BatteryCharging, UserRound, Wrench } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { BRAND } from "@/components/branding/assets";
 import {
@@ -42,6 +42,7 @@ type NavItem = {
   { title: "Graphics Studio", url: "/graphics-studio", icon: Palette },
   { title: "Support", url: "/support", icon: HelpCircle },
   { title: "Updates", url: "/updates", icon: RefreshCw },
+  { title: "Fixes & Restore", url: "/tools", icon: Wrench },
   { title: "Account", url: "/account", icon: UserRound },
 ];
 

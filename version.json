@@ -1,4 +1,4 @@
 {
-  "version": "5.2.24",
-  "notes": "V5.2.24 — adds a truthful Stop & undo all workflow in Applied Tweaks and keeps generated undo scripts listed until Windows confirms the reversal."
+  "version": "5.2.25",
+  "notes": "V5.2.25 — fixes Windows native tweak failures, saves diagnostic logs directly to Downloads, and adds one-click recovery tools including NVIDIA Control Panel repair."
 }

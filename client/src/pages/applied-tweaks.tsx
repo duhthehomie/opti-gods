@@ -153,7 +153,6 @@ export default function AppliedTweaksPage() {
   const [runHadFailures, setRunHadFailures] = useState(false);
   const [runTab, setRunTab] = useState<"all" | "failed">("all");
   const [runState, setRunState] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
-  const [undoAfterStop, setUndoAfterStop] = useState(false);
   const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
   const startedRef = useRef(false);
@@ -243,16 +242,11 @@ export default function AppliedTweaksPage() {
        .map(item => item.id)
        .filter(id => getTweakCompatibility(id).ok),
    ));
-  const stopAndUndo = () => {
-    if (!runActive) {
-      void undoAll();
-      return;
-    }
-    setUndoAfterStop(true);
+  const stopRun = () => {
     if (stopNativeTweakRun()) {
       toast({
-        title: "Stopping and preparing undo",
-        description: "The current Windows action will finish safely, then the applied changes will be undone.",
+        title: "Stopping tweak run",
+        description: "The current Windows action will finish safely. Applied tweaks will remain in place until you choose Undo.",
       });
     }
   };
@@ -397,11 +391,6 @@ export default function AppliedTweaksPage() {
     )) return;
     await undoSelected(ids);
   };
-  useEffect(() => {
-    if (!undoAfterStop || !runState || !["completed", "stopped", "failed"].includes(runState.status)) return;
-    setUndoAfterStop(false);
-    void undoAll();
-  }, [runState?.status, undoAfterStop]);
   return <AppLayout><div className="og-page-enter space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Native state ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Only changes confirmed by the native engine appear here. Undo is per tweak, never a category reset.</p></div>
@@ -436,7 +425,8 @@ export default function AppliedTweaksPage() {
        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
          <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">In-app Windows runner</p><h2 className="mt-1 text-base font-bold text-white">{runState?.status === "stopping" ? "Stopping after the current tweak…" : running ? "Applying selected tweaks…" : runFinished ? (runState?.status === "stopped" ? "Tweak run stopped" : "Tweak run complete") : "Ready to apply"}</h2></div>
          <div className="flex items-center gap-3 text-xs font-bold text-zinc-300">
-            {(running || runState?.status === "stopping") && <button onClick={stopAndUndo} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping and undoing…" : "Stop and undo"}</button>}
+             {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop tweaks"}</button>}
+             {(ids.length > 0 || runItems.length > 0) && <button onClick={() => void undoAll()} disabled={runActive || batchUndoing} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Undo2 className="h-3 w-3" />{batchUndoing ? "Undoing…" : "Undo all tweaks"}</button>}
             {retryableIds.length > 0 && <button onClick={() => void rerunQueued()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun queued tweaks</button>}
            {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
          </div>

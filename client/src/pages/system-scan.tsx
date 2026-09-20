@@ -19,7 +19,6 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { playFeedbackSound, useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useGenerateScript } from "@/hooks/use-script";
 import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
@@ -390,8 +389,6 @@ function SmartRecsBreakdown() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const [applied, setApplied] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const generateScript = useGenerateScript();
 
   const total = recs.ids.size;
 
@@ -409,22 +406,6 @@ function SmartRecsBreakdown() {
       setTimeout(() => setApplied(false), 3000);
     } catch (error) {
       toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
-    }
-  }
-
-  async function handleDownloadMissing() {
-    const idsToDownload = missingSafeIds.length > 0 ? missingSafeIds : safeIds;
-    if (idsToDownload.length === 0) return;
-    setDownloading(true);
-    try {
-      const tweakMap: Record<string, boolean> = {};
-      idsToDownload.forEach(id => { tweakMap[id] = true; });
-      const result = await generateScript.mutateAsync({ tweaks: tweakMap });
-      window.open(result.scriptUrl, "_blank");
-    } catch {
-      toast({ title: "Download failed", description: "Could not generate script. Make sure you have Pro access.", variant: "destructive" });
-    } finally {
-      setDownloading(false);
     }
   }
 
@@ -464,16 +445,6 @@ function SmartRecsBreakdown() {
               : <><Zap className="w-4 h-4" /> Apply {missingSafeIds.length} missing tweaks</>}
         </button>
 
-        {/* Download missing tweaks button */}
-        <button
-          data-testid="button-download-missing-tweaks"
-          onClick={handleDownloadMissing}
-          disabled={downloading}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all bg-zinc-800/60 border-white/8 text-zinc-300 hover:bg-zinc-700/60 hover:text-white hover:border-white/15 active:scale-[0.98]"
-        >
-          <Download className="w-4 h-4" />
-          {downloading ? "Generating…" : missingSafeIds.length > 0 ? `Download ${missingSafeIds.length} missing tweaks as PS1` : "Download all recommended tweaks as PS1"}
-        </button>
       </div>
 
       {/* Expert tweaks callout */}

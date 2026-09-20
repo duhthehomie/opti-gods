@@ -159,6 +159,105 @@ pub fn open_downloads() {
     }
 }
 
+#[derive(Deserialize)]
+pub struct DiagnosticLogArgs {
+    pub filename: String,
+    pub content: String,
+}
+
+/// Persist the native runner diagnostic log in the real Windows Downloads
+/// folder. Browser Blob downloads are not reliable inside WebView2, so the
+/// desktop shell owns this write and opens Explorer with the file selected.
+#[tauri::command]
+pub fn save_diagnostic_log(app: AppHandle, args: DiagnosticLogArgs) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let filename = std::path::Path::new(&args.filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| {
+                name.starts_with("OptiGods-V5-Tweak-Run-")
+                    && name.ends_with(".txt")
+                    && !name.contains("..")
+            })
+            .ok_or_else(|| "Invalid diagnostic log filename.".to_string())?;
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
+        std::fs::create_dir_all(&downloads)
+            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
+        let path = downloads.join(filename);
+        std::fs::write(&path, args.content.as_bytes())
+            .map_err(|error| format!("Could not save the diagnostic log: {error}"))?;
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+            .map_err(|error| format!("Diagnostic log was saved, but Explorer could not open it: {error}"))?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Diagnostic log saving is available in the Windows app.".to_string())
+    }
+}
+
+/// Repair the common NVIDIA Control Panel launch failure without claiming
+/// success unless the installed executable actually starts.
+#[tauri::command]
+pub fn repair_nvidia_control_panel() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+$serviceNames = @('NVDisplay.ContainerLocalSystem','NVDisplay.ContainerLS','NvContainerLocalSystem')
+foreach ($name in $serviceNames) {
+  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+  if ($service) {
+    if ($service.StartType -eq 'Disabled') { Set-Service -InputObject $service -StartupType Automatic -ErrorAction SilentlyContinue }
+    if ($service.Status -ne 'Running') { Start-Service -InputObject $service -ErrorAction SilentlyContinue }
+  }
+}
+$candidates = @(
+  (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
+  (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$exe = $candidates | Select-Object -First 1
+if (-not $exe) {
+  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($package) {
+    $candidate = Join-Path $package.InstallLocation 'nvcplui.exe'
+    if (Test-Path -LiteralPath $candidate) { $exe = $candidate }
+  }
+}
+if (-not $exe) { throw 'NVIDIA Control Panel executable was not found. Reinstall NVIDIA Control Panel from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.' }
+$process = Start-Process -FilePath $exe -PassThru
+Start-Sleep -Milliseconds 700
+if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) -and -not (Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue)) {
+  throw 'NVIDIA Control Panel was found but exited immediately. Reinstall the NVIDIA driver/Control Panel package.'
+}
+Write-Output "NVIDIA Control Panel started from $exe"
+"#;
+        let output = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+            .output()
+            .map_err(|error| format!("Could not run the NVIDIA Control Panel repair: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if detail.is_empty() {
+                "NVIDIA Control Panel repair failed.".to_string()
+            } else {
+                detail
+            });
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("NVIDIA Control Panel repair is available in the Windows app.".to_string())
+    }
+}
 /// Opens FiveM Application Data directly in Explorer.
 /// Safe: the path is derived only from LOCALAPPDATA; the renderer supplies no path.
 #[tauri::command]

@@ -478,7 +478,7 @@ export default function Dashboard() {
     }
     setBulkApplying(true);
     try {
-      const body = await authorizeHardwarePreset(selectedFullOptimizeGames, selectedFullOptimizeDebloat);
+      const body = await authorizeHardwarePreset(selectedFullOptimizeGames);
       const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
       const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
       const recognizedIds = ids.filter(id => !unknownIds.includes(id));

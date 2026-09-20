@@ -302,6 +302,15 @@ export async function openDownloadsFolder(): Promise<void> {
   }
 }
 
+export async function saveDiagnosticLog(filename: string, content: string): Promise<string> {
+  if (!isNative()) throw new Error("Diagnostic log saving is available in the Windows app.");
+  return invoke<string>("save_diagnostic_log", { args: { filename, content } });
+}
+
+export async function repairNvidiaControlPanel(): Promise<string> {
+  if (!isNative()) throw new Error("NVIDIA Control Panel repair is available in the Windows app.");
+  return invoke<string>("repair_nvidia_control_panel");
+}
 export async function openFivemFolder(): Promise<void> {
   if (!isNative()) throw new Error("Open FiveM Folder is available in the Windows app.");
   await invoke<void>("open_fivem_folder");
