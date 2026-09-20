@@ -1627,7 +1627,7 @@ export async function registerRoutes(
   // Keep the historical multi-device command separate for legacy callers.
   const PRO_ONLY_TWEAK_IDS = new Set(["EnableNvidiaMSIPro", "OpenMsiUtilityPro", "ImportNvidiaPresetPro"]);
   const freeEligibleId = (id: unknown): id is string =>
-    trustedTweakId(id) && !EXPERT_TWEAK_IDS.has(id);
+    trustedTweakId(id) && !EXPERT_TWEAK_IDS.has(id) && !PRO_ONLY_TWEAK_IDS.has(id);
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
   const NATIVE_EXECUTABLE_ALLOWLIST = NATIVE_TWEAK_ID_SET;
 
@@ -1766,7 +1766,7 @@ export async function registerRoutes(
     if (!result) return res.status(409).json({ error: "Ticket invalid, expired, or already used" });
     const command = TWEAK_COMMANDS[id];
     if (typeof command !== "string" || !command.trim()) {
-      await storage.finalizeNativeTweakTicket(ticket, result.resultSecret, false);
+      await storage.finalizeNativeTweakTicket(userId, ticket, result.resultSecret, false, id);
       return res.status(400).json({ error: "No trusted in-app command exists for this tweak", code: "OG-TWEAK-003" });
     }
     return res.json({
@@ -1800,8 +1800,14 @@ export async function registerRoutes(
   });
   app.post("/api/performance-allowance/native-ticket/result", async (req, res) => {
     const { ticket, resultSecret, success, tweakId, errorCode, message } = req.body ?? {};
-    if (typeof ticket !== "string" || typeof resultSecret !== "string" || typeof success !== "boolean") return res.status(400).json({ error: "Invalid result" });
-    const result = await storage.finalizeNativeTweakTicket(ticket, resultSecret, success);
+    const userId = await allowanceAuth(req);
+    if (!userId || !await allowanceOwnerMatches(req, userId)) {
+      return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    }
+    if (typeof ticket !== "string" || typeof resultSecret !== "string" || typeof success !== "boolean" || !trustedTweakId(tweakId)) {
+      return res.status(400).json({ error: "Invalid result" });
+    }
+    const result = await storage.finalizeNativeTweakTicket(userId, ticket, resultSecret, success, tweakId);
     if (result.ok && !success) {
       const safeTweakId = typeof tweakId === "string" ? tweakId.slice(0, 64) : "unknown";
       const safeCode = typeof errorCode === "string" ? errorCode.slice(0, 64) : "OG-NATIVE-EXECUTION";
