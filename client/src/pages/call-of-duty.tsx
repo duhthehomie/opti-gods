@@ -24,7 +24,7 @@ const ALL_COD_IDS = [
   "Cod1650LowLatency", "Cod1650DisableAnsel",
   "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
   "AmdD3DOptimize", "AmdPCIeOptimize",
-  "Cod3500PowerPlan", "Cod3500CoreUnpark",
+  "Cod3500PowerPlan",
   // V4 additions
   "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy", "CodRawInput",
   "CodFramePacing", "CodMemPriority",
@@ -34,7 +34,7 @@ const COD_RECOMMENDED = [
   "CodHighPriority", "CodGameMode", "CodGPUPriority",
   "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
   "CodDefenderExclusion", "CodNetworkBuffer",
-  "CodDisableLSO", "Cod1650LowLatency", "Cod3500PowerPlan", "Cod3500CoreUnpark",
+  "CodDisableLSO", "Cod1650LowLatency", "Cod3500PowerPlan",
   "CodMMCSS", "CodQoSPolicy", "CodDisableTelemetry",
   "CodFramePacing", "CodMemPriority",
 ];
@@ -45,7 +45,7 @@ const SECTION_RECOMMENDED: Record<string, string[]> = {
   network: ["CodNetworkBuffer", "CodDisableLSO", "CodQoSPolicy"],
   nvidia:  ["Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force"],
   amdgpu:  ["AmdD3DOptimize", "AmdPCIeOptimize"],
-  cpu:     ["Cod3500PowerPlan", "Cod3500CoreUnpark"],
+  cpu:     ["Cod3500PowerPlan"],
   advanced: ["CodDisableTelemetry", "CodTdrDelay", "CodMMCSS", "CodQoSPolicy", "CodFramePacing", "CodMemPriority"],
 };
 
@@ -448,16 +448,6 @@ export default function CallOfDuty() {
                     delay={1}
                   />
                 )}
-                <TweakRow
-                  id="Cod3500CoreUnpark"
-                  title={isAmdCpu ? "Unpark All Ryzen Cores" : isIntelCpu ? "Unpark All Intel Cores" : "Unpark All CPU Cores"}
-                  description="Core parking puts idle CPU cores to sleep to save power. When BO6 bursts onto a parked core, Windows takes 5-15ms to wake it — a direct cause of micro-stutter during gunfights. Unparking all cores keeps them ready for BO6's unpredictable threading bursts. Works on AMD and Intel."
-                  badge={isAmdCpu ? "AMD RYZEN" : isIntelCpu ? "INTEL" : undefined}
-                  impact="HIGH"
-                  checked={tweaks["Cod3500CoreUnpark"] || false}
-                  onCheckedChange={v => setTweak("Cod3500CoreUnpark", v)}
-                  delay={isAmdCpu ? 2 : 1}
-                />
               </div>
             </section>
 
