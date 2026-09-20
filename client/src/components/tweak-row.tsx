@@ -13,9 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak } from "@/lib/tauri-bridge";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
+import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
-const RESTORE_CREATED_KEY = "optigods-native-restore-created";
 
 function readNativeUndoToken(id: string): string | null {
   try {
@@ -112,12 +112,12 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
     let nativeTicket: string | null = null;
     let osApplied = false;
     try {
-      if (!sessionStorage.getItem(RESTORE_CREATED_KEY)) {
+      if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
         const restorePoint = await createRestorePoint("Before Opti Gods tweak changes");
         if (!restorePoint?.sequence_number) {
           throw new Error("Windows did not confirm a restore point. No tweak was applied.");
         }
-        sessionStorage.setItem(RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+        sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
       }
       // The server decides eligibility, entitlement, and remaining allowance.
       // No client-side counter or Pro flag is used for authorization.
