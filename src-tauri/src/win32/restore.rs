@@ -8,6 +8,7 @@
 use crate::commands::restore::RestorePoint;
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
+use std::mem::size_of;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
@@ -17,7 +18,7 @@ use windows::Win32::Foundation::{FreeLibrary, LocalFree, BOOL, HLOCAL, RPC_E_TOO
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
-use windows::Win32::Security::PSECURITY_DESCRIPTOR;
+use windows::Win32::Security::{MakeAbsoluteSD, ACL, PSECURITY_DESCRIPTOR};
 use windows::Win32::System::Com::{
     CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINIT_MULTITHREADED, EOAC_NONE,
     RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
@@ -77,8 +78,82 @@ fn ensure_com_security() -> Result<()> {
                     ));
                 }
 
-                let result = CoInitializeSecurity(
+                // ConvertStringSecurityDescriptorToSecurityDescriptorW returns
+                // a self-relative descriptor. CoInitializeSecurity requires an
+                // absolute descriptor; passing the converted pointer directly
+                // produces HRESULT_FROM_WIN32(ERROR_BAD_DESCRIPTOR_FORMAT)
+                // (0x80070551), even when System Protection is enabled.
+                let mut absolute_size = 0u32;
+                let mut dacl_size = 0u32;
+                let mut sacl_size = 0u32;
+                let mut owner_size = 0u32;
+                let mut primary_group_size = 0u32;
+                let _ = MakeAbsoluteSD(
                     security_descriptor,
+                    PSECURITY_DESCRIPTOR::default(),
+                    &mut absolute_size,
+                    None,
+                    &mut dacl_size,
+                    None,
+                    &mut sacl_size,
+                    std::ptr::null_mut(),
+                    &mut owner_size,
+                    std::ptr::null_mut(),
+                    &mut primary_group_size,
+                );
+                if absolute_size == 0 {
+                    let _ = LocalFree(HLOCAL(security_descriptor.0));
+                    CoUninitialize();
+                    return Some("MakeAbsoluteSD did not return a descriptor size".into());
+                }
+
+                let words = |bytes: u32| {
+                    (bytes as usize).div_ceil(size_of::<usize>())
+                };
+                let mut absolute_buffer = vec![0usize; words(absolute_size)];
+                let mut dacl_buffer = vec![0usize; words(dacl_size)];
+                let mut sacl_buffer = vec![0usize; words(sacl_size)];
+                let mut owner_buffer = vec![0usize; words(owner_size)];
+                let mut primary_group_buffer = vec![0usize; words(primary_group_size)];
+                let absolute_descriptor =
+                    PSECURITY_DESCRIPTOR(absolute_buffer.as_mut_ptr().cast());
+                let dacl = (dacl_size > 0)
+                    .then(|| dacl_buffer.as_mut_ptr().cast::<ACL>());
+                let sacl = (sacl_size > 0)
+                    .then(|| sacl_buffer.as_mut_ptr().cast::<ACL>());
+                let owner = if owner_size > 0 {
+                    owner_buffer.as_mut_ptr().cast()
+                } else {
+                    std::ptr::null_mut()
+                };
+                let primary_group = if primary_group_size > 0 {
+                    primary_group_buffer.as_mut_ptr().cast()
+                } else {
+                    std::ptr::null_mut()
+                };
+                if let Err(error) = MakeAbsoluteSD(
+                    security_descriptor,
+                    absolute_descriptor,
+                    &mut absolute_size,
+                    dacl,
+                    &mut dacl_size,
+                    sacl,
+                    &mut sacl_size,
+                    owner,
+                    &mut owner_size,
+                    primary_group,
+                    &mut primary_group_size,
+                ) {
+                    let _ = LocalFree(HLOCAL(security_descriptor.0));
+                    CoUninitialize();
+                    return Some(format!(
+                        "MakeAbsoluteSD failed (HRESULT {:#x})",
+                        error.code().0
+                    ));
+                }
+
+                let result = CoInitializeSecurity(
+                    absolute_descriptor,
                     -1,
                     None,
                     None,
