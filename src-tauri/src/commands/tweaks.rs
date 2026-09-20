@@ -270,7 +270,15 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     };
     let mut acknowledged = false;
     for attempt in 0..3 {
-        let ack = client.post(format!("{base}/api/performance-allowance/native-ticket/result"))
+        let mut ack_request = client.post(format!("{base}/api/performance-allowance/native-ticket/result"));
+        ack_request = if let Some(device_id) = ticket.1.strip_prefix("device:") {
+            ack_request.header("X-Device-ID", device_id)
+        } else if let Some(pro_session) = ticket.1.strip_prefix("pro:") {
+            ack_request.header("X-Pro-Session", pro_session)
+        } else {
+            ack_request.header("X-Native-Auth", ticket.1)
+        };
+        let ack = ack_request
             .json(&serde_json::json!({
                 "ticket": ticket.0,
                 "resultSecret": result_secret,
