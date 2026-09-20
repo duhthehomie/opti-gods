@@ -18,7 +18,7 @@ use windows::Win32::Foundation::{FreeLibrary, LocalFree, BOOL, HLOCAL, RPC_E_TOO
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
-use windows::Win32::Security::{MakeAbsoluteSD, ACL, PSECURITY_DESCRIPTOR};
+use windows::Win32::Security::{MakeAbsoluteSD, ACL, PSECURITY_DESCRIPTOR, PSID};
 use windows::Win32::System::Com::{
     CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINIT_MULTITHREADED, EOAC_NONE,
     RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
@@ -96,9 +96,9 @@ fn ensure_com_security() -> Result<()> {
                     &mut dacl_size,
                     None,
                     &mut sacl_size,
-                    std::ptr::null_mut(),
+                    PSID::default(),
                     &mut owner_size,
-                    std::ptr::null_mut(),
+                    PSID::default(),
                     &mut primary_group_size,
                 );
                 if absolute_size == 0 {
@@ -122,14 +122,14 @@ fn ensure_com_security() -> Result<()> {
                 let sacl = (sacl_size > 0)
                     .then(|| sacl_buffer.as_mut_ptr().cast::<ACL>());
                 let owner = if owner_size > 0 {
-                    owner_buffer.as_mut_ptr().cast()
+                    PSID(owner_buffer.as_mut_ptr().cast())
                 } else {
-                    std::ptr::null_mut()
+                    PSID::default()
                 };
                 let primary_group = if primary_group_size > 0 {
-                    primary_group_buffer.as_mut_ptr().cast()
+                    PSID(primary_group_buffer.as_mut_ptr().cast())
                 } else {
-                    std::ptr::null_mut()
+                    PSID::default()
                 };
                 if let Err(error) = MakeAbsoluteSD(
                     security_descriptor,
