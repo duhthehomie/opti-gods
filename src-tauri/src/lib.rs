@@ -15,6 +15,14 @@ pub fn run() {
     )
     .try_init();
 
+    #[cfg(windows)]
+    if let Err(error) = win32::restore::initialize_com_security() {
+        // Keep the shell launchable so the UI can show the exact recovery
+        // error; all native mutation commands remain blocked by the same
+        // process-wide guard until COM security is valid.
+        log::error!("[restore] COM security initialization failed: {error:#}");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
