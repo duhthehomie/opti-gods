@@ -12,27 +12,66 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-use windows::Win32::Foundation::{BOOL, RPC_E_TOO_LATE};
-use windows::Win32::System::Com::{
-    CoInitializeSecurity, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
+use windows::core::{w, PCSTR};
+use windows::Win32::Foundation::{LocalFree, BOOL, HLOCAL, RPC_E_CHANGED_MODE, RPC_E_TOO_LATE};
+use windows::Win32::Security::Authorization::{
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
+use windows::Win32::Security::PSECURITY_DESCRIPTOR;
+use windows::Win32::System::Com::{
+    CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINIT_MULTITHREADED, EOAC_NONE,
+    RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
+};
+use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Restore::{
     BEGIN_SYSTEM_CHANGE, END_SYSTEM_CHANGE, MODIFY_SETTINGS, RESTOREPOINTINFOW, STATEMGRSTATUS,
 };
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-use windows::core::{w, PCSTR};
 use wmi::{COMLibrary, WMIConnection};
 
 /// SRSetRestorePointW requires COM security to be initialized before it is
-/// called. WMI may initialize COM on a worker thread, but that does not
-/// satisfy the System Restore callback requirement. Windows returns
-/// RPC_E_TOO_LATE when another component already initialized process COM
-/// security; that is safe to accept because the process already has a policy.
+/// called. The System Restore service calls back into this process as
+/// NetworkService, LocalService, and LocalSystem, so a null/default descriptor
+/// is not sufficient: Windows rejects the callback with ERROR_ACCESS_DENIED.
+///
+/// This SDDL is the descriptor Microsoft uses in its System Restore sample.
+/// It grants only COM execute + local execute to the service identities and
+/// the Administrators group. Windows returns RPC_E_TOO_LATE when another
+/// component already initialized process COM security; that is safe to accept
+/// because the process already has a policy.
 fn ensure_com_security() -> Result<()> {
     static INITIALIZATION_ERROR: OnceLock<Option<String>> = OnceLock::new();
     let error = INITIALIZATION_ERROR.get_or_init(|| unsafe {
-        match CoInitializeSecurity(
+        // Microsoft initializes COM before CoInitializeSecurity in its
+        // SRSetRestorePoint sample. Do this before WMI gets a chance to
+        // initialize the apartment with a default security policy.
+        let com_result = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if !com_result.is_ok() && com_result != RPC_E_CHANGED_MODE {
+            return Some(format!(
+                "CoInitializeEx failed (HRESULT {:#x})",
+                com_result.0
+            ));
+        }
+
+        let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
+        let descriptor =
+            w!("O:BAG:BAD:(A;;0x1;;;LS)(A;;0x1;;;NS)(A;;0x1;;;PS)(A;;0x1;;;SY)(A;;0x1;;;BA)");
+        if let Err(error) = ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            descriptor,
+            SDDL_REVISION_1,
+            &mut security_descriptor,
             None,
+        ) {
+            if com_result.is_ok() {
+                CoUninitialize();
+            }
+            return Some(format!(
+                "ConvertStringSecurityDescriptorToSecurityDescriptorW failed (HRESULT {:#x})",
+                error.code().0
+            ));
+        }
+
+        let result = CoInitializeSecurity(
+            Some(security_descriptor),
             -1,
             None,
             None,
@@ -41,7 +80,14 @@ fn ensure_com_security() -> Result<()> {
             None,
             EOAC_NONE,
             None,
-        ) {
+        );
+        // The descriptor is copied by COM during CoInitializeSecurity.
+        let _ = LocalFree(HLOCAL(security_descriptor.0));
+        if com_result.is_ok() {
+            CoUninitialize();
+        }
+
+        match result {
             Ok(()) => None,
             Err(error) if error.code() == RPC_E_TOO_LATE => None,
             Err(error) => Some(format!(
@@ -66,8 +112,8 @@ fn set_restore_point(
     type SrSetRestorePointW =
         unsafe extern "system" fn(*const RESTOREPOINTINFOW, *mut STATEMGRSTATUS) -> BOOL;
 
-    let module = unsafe { LoadLibraryW(w!("SrClient.dll")) }
-        .context("LoadLibraryW(SrClient.dll)")?;
+    let module =
+        unsafe { LoadLibraryW(w!("SrClient.dll")) }.context("LoadLibraryW(SrClient.dll)")?;
     let procedure = unsafe { GetProcAddress(module, PCSTR(b"SRSetRestorePointW\0".as_ptr())) }
         .ok_or_else(|| anyhow!("GetProcAddress(SRSetRestorePointW) failed"))?;
     let function: SrSetRestorePointW = unsafe { std::mem::transmute(procedure) };
@@ -156,6 +202,10 @@ static SESSION_CHECKPOINT: OnceLock<Mutex<Option<RestorePoint>>> = OnceLock::new
 /// Guarantees that this desktop-app process has created and WMI-verified a
 /// restore point. Renderer state cannot bypass this guard.
 pub fn ensure_session_checkpoint(_requested_label: &str) -> Result<RestorePoint> {
+    // This must happen before list() initializes WMI/COM. If WMI initializes
+    // first, CoInitializeSecurity returns RPC_E_TOO_LATE and the System
+    // Restore service cannot call back into this process.
+    ensure_com_security()?;
     let state = SESSION_CHECKPOINT.get_or_init(|| Mutex::new(None));
     let mut checkpoint = state
         .lock()
@@ -194,6 +244,8 @@ struct SystemRestoreRow {
 }
 
 pub fn list() -> Result<Vec<RestorePoint>> {
+    // Keep the WMI listing path from being the first COM user in the process.
+    ensure_com_security()?;
     let com = COMLibrary::new().context("COM init")?;
     // System restore lives in root\default, not root\cimv2.
     let wmi = WMIConnection::with_namespace_path("root\\default", com)

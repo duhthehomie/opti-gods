@@ -1,4 +1,4 @@
 {
-  "version": "5.2.22",
-  "notes": "V5.2.22 — loads the documented Windows restore provider directly so the safety checkpoint can be created reliably."
+  "version": "5.2.23",
+  "notes": "V5.2.23 — grants the Windows System Restore service the documented COM callback permissions before creating the safety checkpoint."
 }
