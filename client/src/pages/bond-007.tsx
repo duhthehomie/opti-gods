@@ -24,7 +24,6 @@ const ALL_007_IDS = [
   "NvidiaD3DOptimize",
   "NvidiaPCIeGen3Force",
   "Cod3500PowerPlan",
-  "Cod3500CoreUnpark",
   "CodMemPriority",
   "CodFramePacing",
   "CodTdrDelay",
@@ -39,14 +38,13 @@ const BOND007_RECOMMENDED = [
   "CodMemPriority",
   "CodMMCSS",
   "Cod3500PowerPlan",
-  "Cod3500CoreUnpark",
 ];
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
   pack:    ["game_007firstlight"],
   shaders: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodTdrDelay"],
   nvidia:  ["Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force"],
-  cpu:     ["Cod3500PowerPlan", "Cod3500CoreUnpark", "CodMMCSS", "CodMemPriority", "CodFramePacing"],
+  cpu:     ["Cod3500PowerPlan", "CodMMCSS", "CodMemPriority", "CodFramePacing"],
 };
 
 function SectionHeader({ title, sectionKey, tweaks, setTweak, smartRecIds }: {
@@ -310,13 +308,6 @@ export default function Bond007() {
                       ? "Ryzen 5 3500 defaults to Balanced plan — this throttles clock speed and core response time. High Performance locks the multiplier at max boost, eliminating the 10-30ms clock recovery delay when UE5 suddenly demands a CPU burst for streaming or physics. Single biggest CPU fix for UE5 games on Ryzen."
                       : "High Performance plan eliminates Windows' power-state recovery delay — the CPU stays at max clock. Reduces UE5 streaming hitches caused by clock ramp-up latency on any CPU.",
                     badge: isAmdCpu ? "RYZEN FIX" : "RECOMMENDED",
-                    impact: "HIGH" as const,
-                  },
-                  {
-                    id: "Cod3500CoreUnpark",
-                    title: "Unpark All CPU Cores (Min Processor State 100%)",
-                    desc: "Forces all cores to stay active — eliminates the 5-15ms latency Windows introduces when waking a parked core. In UE5 games like 007: First Light, sudden CPU core demand (streaming, physics, AI) hits parked cores, causing micro-stutters that aren't visible in average FPS but ruin feel. Universal benefit.",
-                    badge: "RECOMMENDED",
                     impact: "HIGH" as const,
                   },
                   {
