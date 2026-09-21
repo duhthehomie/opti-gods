@@ -476,7 +476,7 @@ const PROCSVC_TWEAKS: string[] = [
 /** Extra COD tweaks */
 const COD_EXTRA_UNIVERSAL: string[] = [
   "CodDirectXQueue", "CodDisableXboxCapture", "CodGPUPriority",
-  "CodRawInput", "CodVRAMShaderBudget",
+  "CodRawInput",
 ];
 
 /** Fortnite extra tweaks */
@@ -631,9 +631,9 @@ const WIN11_CORE: string[] = [
 
 /** COD / Warzone tweaks — universal (no GPU prefix); safe to include for any gaming PC */
 const COD_UNIVERSAL: string[] = [
-  "CodHighPriority", "CodGameMode", "CodShaderCacheClear",
+  "CodHighPriority", "CodGameMode",
   "CodPagefileOptimize", "CodDisableHAGS", "CodNetworkBuffer",
-  "CodDisableLSO", "CodTCPOptimize", "CodBattlenetOptimize",
+  "CodDisableLSO", "CodTCPOptimize",
   "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS",
   "CodQoSPolicy", "CodFramePacing", "CodMemPriority",
 ];

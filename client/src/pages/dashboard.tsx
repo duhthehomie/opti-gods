@@ -156,11 +156,10 @@ const MAX_FPS_TWEAKS = [
   // Registry deep tuning
   "RegistryNTFSOptimize", "RegistryIOPageLock",
   // COD full pack (no-op if not installed)
-  "CodDirectXQueue", "CodVRAMShaderBudget", "CodHighPriority", "CodMMCSS",
+   "CodDirectXQueue", "CodHighPriority", "CodMMCSS",
   "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodDisableXboxCapture",
   "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
-  "CodTdrDelay", "CodFramePacing", "CodPagefileOptimize", "CodShaderCacheClear",
-  "CodBattlenetOptimize", "CodMemPriority",
+   "CodTdrDelay", "CodFramePacing", "CodPagefileOptimize", "CodMemPriority",
   // Spotify full pack
   "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
   // Fortnite FPS pack (no-op if not installed)

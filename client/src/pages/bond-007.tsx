@@ -17,7 +17,6 @@ import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_007_IDS = [
   "game_007firstlight",
-  "CodShaderCacheClear",
   "CodPagefileOptimize",
   "CodDisableHAGS",
   "Cod1650LowLatency",
@@ -32,7 +31,6 @@ const ALL_007_IDS = [
 
 const BOND007_RECOMMENDED = [
   "game_007firstlight",
-  "CodShaderCacheClear",
   "CodPagefileOptimize",
   "CodDisableHAGS",
   "CodMemPriority",
@@ -42,7 +40,7 @@ const BOND007_RECOMMENDED = [
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
   pack:    ["game_007firstlight"],
-  shaders: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodTdrDelay"],
+  shaders: ["CodPagefileOptimize", "CodDisableHAGS", "CodTdrDelay"],
   nvidia:  ["Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force"],
   cpu:     ["Cod3500PowerPlan", "CodMMCSS", "CodMemPriority", "CodFramePacing"],
 };

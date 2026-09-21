@@ -126,8 +126,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "SysHibernateOff",
     // Spotify — run in background without stealing FPS (safe universally — no-ops if Spotify not installed)
     "SpotifyLowPriority","SpotifyDisableGPU","SpotifyDisableAutoUpdate","SpotifyLimitBandwidth",
-    // COD / Warzone — IFEO + shader cache + DirectX (safe no-ops if COD not installed)
-    "CodGPUPriority","CodDefenderExclusion","CodDirectXQueue","CodVRAMShaderBudget",
+    // COD / Warzone — IFEO + DirectX (safe no-ops if COD not installed)
+    "CodGPUPriority","CodDefenderExclusion","CodDirectXQueue",
     // Startup apps — disable non-essential startup programs (safe, user can re-enable)
     "su_discord","su_steam","su_epic","su_ea_app","su_ubisoft","su_battlenet",
     "su_onedrive","su_spotify","su_skype","su_teams","su_zoom","su_chrome",

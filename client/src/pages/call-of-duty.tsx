@@ -16,10 +16,10 @@ import { useToast } from "@/hooks/use-toast";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_COD_IDS = [
-  "CodHighPriority", "CodGameMode", "CodDisableXboxCapture", "CodBattlenetOptimize",
+  "CodHighPriority", "CodGameMode", "CodDisableXboxCapture",
   "CodGPUPriority", "CodDirectXQueue",
-  "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
-  "CodDefenderExclusion", "CodVRAMShaderBudget",
+  "CodPagefileOptimize", "CodDisableHAGS",
+  "CodDefenderExclusion",
   "CodNetworkBuffer", "CodDisableLSO", "CodTCPOptimize",
   "Cod1650LowLatency", "Cod1650DisableAnsel",
   "NvidiaD3DOptimize", "NvidiaPCIeGen3Force", "NvidiaInterruptAffinity",
@@ -32,7 +32,7 @@ const ALL_COD_IDS = [
 
 const COD_RECOMMENDED = [
   "CodHighPriority", "CodGameMode", "CodGPUPriority",
-  "CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS",
+  "CodPagefileOptimize", "CodDisableHAGS",
   "CodDefenderExclusion", "CodNetworkBuffer",
   "CodDisableLSO", "Cod1650LowLatency", "Cod3500PowerPlan",
   "CodMMCSS", "CodQoSPolicy", "CodDisableTelemetry",
@@ -41,7 +41,7 @@ const COD_RECOMMENDED = [
 
 const SECTION_RECOMMENDED: Record<string, string[]> = {
   fps:     ["CodHighPriority", "CodGameMode", "CodGPUPriority", "CodDirectXQueue", "CodMMCSS"],
-  texture: ["CodShaderCacheClear", "CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodVRAMShaderBudget", "CodTdrDelay"],
+  texture: ["CodPagefileOptimize", "CodDisableHAGS", "CodDefenderExclusion", "CodTdrDelay"],
   network: ["CodNetworkBuffer", "CodDisableLSO", "CodQoSPolicy"],
   nvidia:  ["Cod1650LowLatency", "NvidiaD3DOptimize", "NvidiaPCIeGen3Force"],
   amdgpu:  ["AmdD3DOptimize", "AmdPCIeOptimize"],
@@ -177,9 +177,9 @@ export default function CallOfDuty() {
             tweakIds={ALL_COD_IDS}
             recommendedIds={COD_RECOMMENDED}
             label="Call of Duty BO6 / Warzone"
-            context="Tweaks modify Windows registry, pagefile, NVIDIA driver keys, and power plan for cod.exe. Run the .bat as Administrator. BO6 recompiles shaders on first launch after clearing cache — normal 2-3 min stutter pass, then textures load correctly every game."
+             context="Tweaks modify Windows registry, pagefile, NVIDIA driver keys, and power plan for cod.exe. Run the .bat as Administrator. Compiled shader caches are preserved so menus and textures can load immediately."
             tips={[
-              "Clear the shader cache first — stale BO6 cache is the #1 cause of blurry textures and character pop-in on any GPU.",
+               "Do not clear compiled shader caches during normal optimization — doing so forces a long rebuild and can leave menus black.",
               "Disable HAGS if you're on a GTX 10xx/16xx card — it causes frame-time spikes with BO6's renderer.",
               "The pagefile fix matters most if you have ≤6GB VRAM — when VRAM fills, BO6 overflows textures to system RAM via pagefile.",
               "Network buffer + LSO off are universal wins for Warzone BR server model regardless of your hardware.",
@@ -197,10 +197,10 @@ export default function CallOfDuty() {
                 {([
                   {
                     id: "CodHighPriority",
-                    title: "Force cod.exe to High CPU + IO Priority (Persistent)",
-                    desc: "Registers cod.exe in IFEO with High CPU priority, IO priority 3, page priority 5, energy throttle off, and foreground boost — survives every reboot. Works on any CPU. The single biggest FPS consistency fix for Warzone on any rig.\n\n⚠️ STREAMERS: High CPU priority starves OBS/Streamlabs of encoding time → choppy stream. If you stream, set OBS process priority to 'Above Normal' in OBS → Settings → Advanced, or skip this tweak.",
-                    badge: "MUST HAVE",
-                    impact: "HIGH" as const,
+                     title: "Keep COD Responsive Without Starving Windows",
+                     desc: "Uses Above Normal process priority and removes the old High-priority behavior that can make DWM, keyboard input, and Alt-Tab slow. Energy throttling remains disabled for the game.",
+                     badge: "STABILITY",
+                     impact: "MED" as const,
                   },
                   {
                     id: "CodGameMode",
@@ -217,22 +217,22 @@ export default function CallOfDuty() {
                   },
                   {
                     id: "CodBattlenetOptimize",
-                    title: "Stop Battle.net Background Agents During Gameplay",
-                    desc: "Kills Battle.net background update and scanning agents while you play. These processes use 50-150MB RAM and periodic CPU bursts that cause micro-stutter in BO6 on any system.",
+                     title: "Keep Battle.net Services Available",
+                     desc: "Leaves Battle.net services running so online menus, inventory, matchmaking, and content delivery can finish loading without interruption.",
                     impact: "MED" as const,
                   },
                   {
                     id: "CodGPUPriority",
-                    title: "GPU Render Queue Priority 8 (IFEO — All COD Executables)",
-                    desc: "Sets GPUPriority=8 for cod.exe, ModernWarfare.exe, ModernWarfareII.exe, and ModernWarfareIII.exe via IFEO — gives COD the highest possible slot in the Windows WDDM GPU scheduler. Reduces render-submit latency in BO6 gunfights and eliminates frame-submission stalls on mid-range GPUs. Works on any NVIDIA or AMD card.",
-                    badge: "RECOMMENDED",
-                    impact: "HIGH" as const,
+                     title: "Restore Balanced GPU Scheduling",
+                     desc: "Removes the undocumented maximum GPU-priority override so DWM, Windows, and Alt-Tab can preempt the game normally instead of fighting for the GPU.",
+                     badge: "STABILITY",
+                     impact: "MED" as const,
                   },
                   {
                     id: "CodDirectXQueue",
-                    title: "DirectX MaxFrameLatency=1 + Flip Model Override",
-                    desc: "Sets D3D MaxFrameLatency to 1 via registry and enables flip model presentation — reduces the GPU-side pre-render queue by 1 frame. Tightens frame delivery consistency in BO6 and reduces the input-to-display pipeline by 4-15ms on any GPU. No driver update needed.",
-                    badge: "DX FIX",
+                     title: "Restore Stable DirectX Scheduling",
+                     desc: "Removes undocumented overlay and Miracast overrides that can interfere with menu rendering and Alt-Tab, while keeping a moderate two-frame queue.",
+                     badge: "STABILITY",
                     impact: "MED" as const,
                   },
                 ]).map((item, i) => (
@@ -259,10 +259,10 @@ export default function CallOfDuty() {
                 {([
                   {
                     id: "CodShaderCacheClear",
-                    title: "Clear Shader Cache + GPU Driver Cache",
-                    desc: "Deletes stale BO6 shader cache, Battle.net cache, NVIDIA/AMD DXCache, and D3DSCache. Corrupted or oversized caches cause the blurry texture bug and slow character model loading in the battle bus on any GPU. BO6 recompiles cleanly on next launch (2-3 min first-game stutter, then fixed permanently).",
-                    badge: "FIX TEXTURES",
-                    impact: "HIGH" as const,
+                     title: "Preserve Compiled Shader Caches",
+                     desc: "This is intentionally a no-op during optimization. Clearing caches forces a long first-launch rebuild and can leave menus black while COD recompiles.",
+                     badge: "STABILITY",
+                     impact: "MED" as const,
                   },
                   {
                     id: "CodPagefileOptimize",
@@ -282,9 +282,9 @@ export default function CallOfDuty() {
                   },
                   {
                     id: "CodVRAMShaderBudget",
-                    title: "Clear COD Shader Cache + All DXCache Folders",
-                    desc: "Clears NVIDIA DXCache, NVIDIA GLCache, D3DSCache (Windows-wide), AMD DxcCache, and the Warzone-specific Battle.net cache. Stale or oversized shader caches waste VRAM headroom — COD keeps old shader data in VRAM reducing the budget for actual texture streaming. Forces a clean shader recompile on next launch (2-3 min first-game stutter, then clean every time).",
-                    badge: "VRAM FIX",
+                     title: "Preserve GPU Shader Caches",
+                     desc: "This is intentionally a no-op during optimization. Repeated cache clearing causes shader recompilation, black menus, and severe first-minute stutter.",
+                     badge: "STABILITY",
                     impact: "MED" as const,
                   },
                   {
