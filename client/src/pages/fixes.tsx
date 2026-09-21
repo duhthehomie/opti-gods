@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { isNative, repairNvidiaControlPanel } from "@/lib/tauri-bridge";
+import { isNative, repairNvidiaControlPanel, runNativeFix, runNativeRestore } from "@/lib/tauri-bridge";
 import { getAppliedTweakIds, undoAppliedTweaks } from "@/lib/undo-applied-tweaks";
 
 // ─── Accent color map ─────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function SectionHeader({
 // ─── Fix card (compact, collapsible) ─────────────────────────────────────────
 function FixCard({
   title, subtitle, tweaks, icon: Icon, accent, urgent = false,
-  bullets, footer, btnLabel, downloading, onDownload, testId,
+  bullets, footer, btnLabel, downloading, onDownload, testId, nativeActionId, onNativeAction,
 }: {
   title: string;
   subtitle: string;
@@ -214,6 +214,8 @@ function FixCard({
   downloading: boolean;
   onDownload: () => void;
   testId: string;
+  nativeActionId?: string;
+  onNativeAction?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const a = A[accent];
@@ -247,12 +249,15 @@ function FixCard({
         <div className="flex-1" />
         <Button
           data-testid={testId}
-          onClick={onDownload}
+          onClick={() => {
+            if (nativeActionId && onNativeAction && isNative()) onNativeAction(nativeActionId);
+            else onDownload();
+          }}
           disabled={downloading}
           className={cn("font-black text-xs px-4 py-1.5 border text-white whitespace-nowrap h-auto", a.btn, a.glow)}
         >
-          <Download className="w-3.5 h-3.5 mr-1.5" />
-          {downloading ? "Generating..." : btnLabel}
+          {isNative() && nativeActionId ? <Settings2 className="w-3.5 h-3.5 mr-1.5" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
+          {downloading ? "Running..." : isNative() && nativeActionId ? btnLabel.replace(/^Download /, "Run ") : btnLabel}
         </Button>
       </div>
 
@@ -342,6 +347,7 @@ export default function Fixes() {
   const [dlState, setDlState] = useState<Record<string, boolean>>({});
   const [repairingNvidia, setRepairingNvidia] = useState(false);
   const [undoingTweaks, setUndoingTweaks] = useState(false);
+  const [nativeAction, setNativeAction] = useState<string | null>(null);
 
   const repairNvidia = async () => {
     if (!isNative()) {
@@ -361,6 +367,14 @@ export default function Fixes() {
     } finally {
       setRepairingNvidia(false);
     }
+  };
+
+  const repairNvidiaOverlay = async () => {
+    if (!isNative()) {
+      dlFix("nvidia-overlay", "/api/nvidia-overlay-fix-script", "OptiGods-NVIDIA-Overlay-Fix.bat", "NVIDIA Overlay Fix Downloaded", "Run it as administrator, restart Windows, then enable In-game overlay in NVIDIA App.");
+      return;
+    }
+    await runFixInApp("nvidia-overlay");
   };
 
   const undoAllAppliedTweaks = async () => {
@@ -413,6 +427,26 @@ export default function Fixes() {
       .finally(() => setDlState((s) => ({ ...s, [id]: false })));
   };
 
+  const runFixInApp = async (id: string) => {
+    if (nativeAction) return;
+    setNativeAction(id);
+    try {
+      const result = await runNativeFix(id);
+      toast({
+        title: "Fix completed",
+        description: `${result.message}${result.requires_reboot ? " Restart your PC to finish applying it." : ""}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Fix could not be completed",
+        description: error instanceof Error ? error.message : "Windows rejected the recovery action.",
+        variant: "destructive",
+      });
+    } finally {
+      setNativeAction(null);
+    }
+  };
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -444,6 +478,26 @@ export default function Fixes() {
       toast({ title: "Download failed", description: "Try again.", variant: "destructive" });
     } finally {
       setRestoring(false);
+    }
+  };
+
+  const restoreInApp = async (cats: string[]) => {
+    if (nativeAction) return;
+    setNativeAction("restore");
+    try {
+      const result = await runNativeRestore(cats);
+      toast({
+        title: "Restore completed",
+        description: `${cats.length} restore categor${cats.length === 1 ? "y" : "ies"} ran in the Windows app.${result.requires_reboot ? " Restart your PC to finish applying it." : ""}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Restore could not be completed",
+        description: error instanceof Error ? error.message : "Windows rejected the restore action.",
+        variant: "destructive",
+      });
+    } finally {
+      setNativeAction(null);
     }
   };
 
@@ -485,6 +539,26 @@ export default function Fixes() {
           </Button>
         </section>
 
+        <section className="rounded-xl border border-green-500/30 bg-green-950/20 p-4 flex flex-wrap items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
+            <Shield className="w-5 h-5 text-green-400" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm font-bold text-white">NVIDIA in-game overlay stopped working?</p>
+            <p className="text-xs text-zinc-400 leading-snug mt-0.5">
+              Re-enables NVIDIA overlay preferences, NVIDIA container services, and any disabled NVIDIA startup entries. Restart Windows before testing in a game.
+            </p>
+          </div>
+          <Button
+            data-testid="button-repair-nvidia-overlay"
+            onClick={() => void repairNvidiaOverlay()}
+            disabled={nativeAction === "nvidia-overlay"}
+            className="bg-green-700 hover:bg-green-600 text-white shrink-0"
+          >
+            {nativeAction === "nvidia-overlay" ? "Restoring…" : "Restore NVIDIA Overlay"}
+          </Button>
+        </section>
+
         <section className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 flex flex-wrap items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
             <Undo2 className="w-5 h-5 text-red-400" />
@@ -492,7 +566,7 @@ export default function Fixes() {
           <div className="flex-1 min-w-[220px]">
             <p className="text-sm font-bold text-white">Undo applied tweaks</p>
             <p className="text-xs text-zinc-400 leading-snug mt-0.5">
-              Reverses every applied tweak with its native undo record. Other changes download individual restore scripts instead.
+              Reverses every applied tweak with its native undo record. The restore controls below run directly in the Windows app.
             </p>
           </div>
           <Button
@@ -533,8 +607,10 @@ export default function Fixes() {
           ]}
           footer="Universal fix — safe for all systems. Covers all 13 FiveM build numbers + mushy texture fix. ~5 seconds."
           btnLabel="Download FiveM Fix"
-          downloading={!!dlState["fivem"]}
+          downloading={!!dlState["fivem"] || nativeAction === "fivem"}
           onDownload={() => dlFix("fivem", "/api/fivem-crash-fix-script", "OptiGods-FiveM-Fix.bat", "FiveM Fix Downloaded", "Double-click → allow UAC → restart PC.")}
+          nativeActionId="fivem"
+          onNativeAction={runFixInApp}
         />
 
         <FixCard
@@ -553,8 +629,10 @@ export default function Fixes() {
           ]}
           footer="Close FiveM first. Run the downloaded .bat as administrator, then reopen FiveM and test K, chat, and the pause menu."
           btnLabel="Download UI / Input Fix"
-          downloading={!!dlState["fivem-ui-input"]}
+          downloading={!!dlState["fivem-ui-input"] || nativeAction === "fivem-ui-input"}
           onDownload={() => dlFix("fivem-ui-input", "/api/fivem-ui-input-fix-script", "OptiGods-FiveM-UI-Input-Fix.bat", "FiveM UI Fix Downloaded", "Close FiveM, run the .bat as administrator, then test the menu and chat.")}
+          nativeActionId="fivem-ui-input"
+          onNativeAction={runFixInApp}
         />
 
         {/* ── Mushy Face / Arms Texture Fix ────────────────────────────────── */}
@@ -574,8 +652,10 @@ export default function Fixes() {
           ]}
           footer="Restart FiveM / GTA V after running. If you had the High Performance texture tweak applied, this reverses it — small FPS trade for correct face quality."
           btnLabel="Download Face Fix"
-          downloading={!!dlState["mushy-face"]}
+          downloading={!!dlState["mushy-face"] || nativeAction === "mushy-face"}
           onDownload={() => dlFix("mushy-face", "/api/mushy-face-fix-script", "OptiGods-MushyFace-Fix.bat", "Face Texture Fix Downloaded", "Double-click → allow UAC → restart FiveM.")}
+          nativeActionId="mushy-face"
+          onNativeAction={runFixInApp}
         />
 
         {/* ── Valorant / Vanguard ───────────────────────────────────────────── */}
@@ -599,8 +679,10 @@ export default function Fixes() {
           ]}
           footer="Reboot required after running. Valorant will launch normally after restart."
           btnLabel="Download Vanguard Fix"
-          downloading={!!dlState["valorant"]}
+          downloading={!!dlState["valorant"] || nativeAction === "valorant"}
           onDownload={() => dlFix("valorant", "/api/valorant-fix-script", "OptiGods-Valorant-Fix.bat", "Valorant Fix Downloaded", "Re-enables VBS/HVCI. Reboot required.")}
+          nativeActionId="valorant"
+          onNativeAction={runFixInApp}
         />
 
         {/* ── Fortnite / Easy Anti-Cheat ────────────────────────────────────── */}
@@ -625,8 +707,10 @@ export default function Fixes() {
           ]}
           footer="Restart PC after running. Fortnite and all EAC/BattlEye games will launch normally. Defender real-time protection is re-enabled."
           btnLabel="Download Fortnite Fix"
-          downloading={!!dlState["fortnite"]}
+          downloading={!!dlState["fortnite"] || nativeAction === "fortnite"}
           onDownload={() => dlFix("fortnite", "/api/fortnite-fix-script", "OptiGods-Fortnite-Fix.bat", "Fortnite Fix Downloaded", "Re-enables Defender + clears EAC cache. Restart PC.")}
+          nativeActionId="fortnite"
+          onNativeAction={runFixInApp}
         />
 
         {/* ── Xbox Game Pass ────────────────────────────────────────────────── */}
@@ -650,8 +734,10 @@ export default function Fixes() {
           ]}
           footer="Restart PC after running. Game Pass games will launch normally. Xbox DVR/recording stays disabled."
           btnLabel="Download Xbox Fix"
-          downloading={!!dlState["xbox"]}
+          downloading={!!dlState["xbox"] || nativeAction === "xbox"}
           onDownload={() => dlFix("xbox", "/api/xbox-gamepass-fix-script", "OptiGods-Xbox-Fix.bat", "Xbox Fix Downloaded", "Re-enables Game Bar & Xbox services. Restart PC.")}
+          nativeActionId="xbox"
+          onNativeAction={runFixInApp}
         />
 
         {/* ── Discord ───────────────────────────────────────────────────────── */}
@@ -675,8 +761,10 @@ export default function Fixes() {
           ]}
           footer="Restart Discord + PC after running. Voice relay, Xbox party, and FiveM auth will all work again."
           btnLabel="Download Discord Fix"
-          downloading={!!dlState["discord"]}
+          downloading={!!dlState["discord"] || nativeAction === "discord"}
           onDownload={() => dlFix("discord", "/api/discord-network-fix-script", "OptiGods-Discord-Fix.bat", "Discord Fix Downloaded", "Re-enables IPv6. Restart Discord + PC.")}
+          nativeActionId="discord"
+          onNativeAction={runFixInApp}
         />
 
         {/* ════════════════════════════════════════════════════════════════════ */}
@@ -704,8 +792,10 @@ export default function Fixes() {
           ]}
           footer="Reboot required. Black screen and boot issues will be resolved after restart. Takes ~10 seconds."
           btnLabel="Download Boot Fix"
-          downloading={!!dlState["boot"]}
+          downloading={!!dlState["boot"] || nativeAction === "boot"}
           onDownload={() => dlFix("boot", "/api/boot-fix-script", "OptiGods-Boot-Fix.bat", "Boot Fix Downloaded", "Resets bcdedit + VBS. Restart PC.")}
+          nativeActionId="boot"
+          onNativeAction={runFixInApp}
         />
 
         {/* Audio Not Working — NEW */}
@@ -724,8 +814,10 @@ export default function Fixes() {
           ]}
           footer="Audio should work immediately — no restart required in most cases. If Discord voice is still cutting out, restart Discord after running."
           btnLabel="Download Audio Fix"
-          downloading={!!dlState["audio"]}
+          downloading={!!dlState["audio"] || nativeAction === "audio"}
           onDownload={() => dlFix("audio", "/api/audio-fix-script", "OptiGods-Audio-Fix.bat", "Audio Fix Downloaded", "Resets audio services + MMCSS. Restart Discord if needed.")}
+          nativeActionId="audio"
+          onNativeAction={runFixInApp}
         />
 
         {/* WMP / Photos */}
@@ -745,8 +837,10 @@ export default function Fixes() {
           ]}
           footer="Safe for all systems. Takes ~15 seconds. Restart PC after running."
           btnLabel="Download WMP Fix"
-          downloading={!!dlState["wmp"]}
+          downloading={!!dlState["wmp"] || nativeAction === "wmp"}
           onDownload={() => dlFix("wmp", "/api/wmp-fix-script", "OptiGods-WMP-Fix.bat", "WMP Fix Downloaded", "Re-registers codecs + DLLs. Restart PC.")}
+          nativeActionId="wmp"
+          onNativeAction={runFixInApp}
         />
 
         {/* Movies & TV — Can't Play MP4 (Error 0x8007060e) */}
@@ -766,8 +860,10 @@ export default function Fixes() {
           ]}
           footer="Safe on all systems. Takes ~30 seconds. Restart PC after running. If 0x8007060e persists for H.265 / HEVC files, install the free HEVC Video Extensions from the Microsoft Store (search 'HEVC Video Extensions from Device Manufacturer')."
           btnLabel="Download Movies & TV Fix"
-          downloading={!!dlState["movies-tv"]}
+          downloading={!!dlState["movies-tv"] || nativeAction === "movies-tv"}
           onDownload={() => dlFix("movies-tv", "/api/movies-tv-fix-script", "OptiGods-MoviesTVFix.bat", "Movies & TV Fix Downloaded", "Re-registers HEVC/H.264 codecs. Restart PC.")}
+          nativeActionId="movies-tv"
+          onNativeAction={runFixInApp}
         />
 
         {/* ════════════════════════════════════════════════════════════════════ */}
@@ -776,7 +872,9 @@ export default function Fixes() {
         <SectionHeader
           icon={RotateCcw} iconClass="text-cyan-400"
           title="Full System Restore"
-          desc="Select which tweak categories to undo, then download a combined .bat restore script"
+          desc={isNative()
+            ? "Select which tweak categories to undo, then run the restore inside the Windows app"
+            : "Select which tweak categories to undo, then download a combined .bat restore script"}
         />
 
         {/* Warning */}
@@ -789,10 +887,10 @@ export default function Fixes() {
           <div className="space-y-1">
             <p className="text-sm font-semibold text-amber-300">Before you restore</p>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              These scripts undo the registry and system changes made by Opti Gods. They do{" "}
+              These restore actions undo the registry and system changes made by Opti Gods. They do{" "}
               <span className="text-white font-medium">not</span> reinstall apps removed by the Debloat tab —
               those require a Windows feature repair or reinstall from the Store.
-              Always create a <span className="text-white font-medium">System Restore Point</span> before running any script.
+              The app creates a <span className="text-white font-medium">System Restore Point</span> before running them.
             </p>
           </div>
         </motion.div>
@@ -841,17 +939,25 @@ export default function Fixes() {
         >
           <Button
             data-testid="button-download-restore"
-            onClick={() => downloadRestore(Array.from(selected))}
-            disabled={restoring || selected.size === 0}
+            onClick={() => isNative()
+              ? void restoreInApp(Array.from(selected))
+              : void downloadRestore(Array.from(selected))}
+            disabled={restoring || nativeAction === "restore" || selected.size === 0}
             className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-black text-base py-4 border border-zinc-700/50 hover:border-zinc-500/50 transition-all h-auto"
           >
-            <Download className="w-5 h-5 mr-2" />
-            {restoring
-              ? "Generating restore script..."
-              : `Download Restore Script (${selected.size} ${selected.size === 1 ? "category" : "categories"})`}
+            {isNative()
+              ? <Settings2 className="w-5 h-5 mr-2" />
+              : <Download className="w-5 h-5 mr-2" />}
+            {restoring || nativeAction === "restore"
+              ? "Running restore..."
+              : isNative()
+                ? `Run Restore in App (${selected.size} ${selected.size === 1 ? "category" : "categories"})`
+                : `Download Restore Script (${selected.size} ${selected.size === 1 ? "category" : "categories"})`}
           </Button>
           <p className="text-center text-[10px] text-zinc-600 mt-2">
-            Double-click → allow UAC → restart PC when done
+            {isNative()
+              ? "The app runs the selected actions and creates a restore point first. Restart when done."
+              : "Double-click → allow UAC → restart PC when done"}
           </p>
         </motion.div>
 
