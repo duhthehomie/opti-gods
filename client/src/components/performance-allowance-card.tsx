@@ -34,7 +34,7 @@ export function PerformanceAllowanceCard() {
   const setAllTweaks = useOptimizationStore(s => s.setAllTweaks);
   const { toast } = useToast();
 
-  const refresh = () => fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() })
+  const refresh = () => fetch(apiUrl("/api/performance-allowance"), { cache: "no-store", headers: getNativeAuthHeaders() })
     .then(async r => {
       setAuthRequired(r.status === 401);
       setStatus(r.ok ? (await r.json() as Allowance) : null);

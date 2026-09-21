@@ -11,9 +11,11 @@ import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
 import {
   applyTweakBatch,
+  clearQueuedTweakBatch,
   hasNativeTweakRunInFlight,
   readNativeTweakRun,
   readQueuedTweakBatch,
+  readQueuedTweakBatchOptions,
   stopNativeTweakRun,
   subscribeNativeTweakRun,
   type NativeTweakRunState,
@@ -194,7 +196,7 @@ export default function AppliedTweaksPage() {
   }, []);
   const refreshAllowance = () => {
     if (!isNative()) return;
-    void fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() })
+    void fetch(apiUrl("/api/performance-allowance"), { cache: "no-store", headers: getNativeAuthHeaders() })
       .then(async response => response.ok ? setAllowance(await response.json()) : undefined)
       .catch(() => {});
   };
@@ -208,6 +210,7 @@ export default function AppliedTweaksPage() {
     if (startedRef.current || !isNative()) return;
     const persisted = readNativeTweakRun();
     const queued = readQueuedTweakBatch();
+    const queuedOptions = readQueuedTweakBatchOptions();
     const recoverable = queued.length
       ? queued
       : persisted && (persisted.status === "running" || persisted.status === "stopping")
@@ -240,9 +243,11 @@ export default function AppliedTweaksPage() {
       }
       setRunning(true);
       setRunItems(executable.map((id, index) => ({ id, index, total: executable.length, status: "queued" })));
-      return applyTweakBatch(executable, progress => {
+       return applyTweakBatch(executable, progress => {
         setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
-      });
+       }, {
+         forceReapplyIds: executable.filter(id => queuedOptions.forceReapplyIds?.includes(id)),
+       });
     };
     void startRun().then(result => {
       if (!result) return;
@@ -259,6 +264,7 @@ export default function AppliedTweaksPage() {
       setRunFinished(true);
     }).finally(() => {
       setRunning(false);
+       clearQueuedTweakBatch();
       detectAppliedTweaks().then(setNativeState);
       refreshAllowance();
     });
@@ -284,7 +290,7 @@ export default function AppliedTweaksPage() {
       });
     }
   };
-  const rerunIds = async (idsToRun: string[], title: string) => {
+  const rerunIds = async (idsToRun: string[], title: string, forceReapply = false) => {
     if (runActive || !idsToRun.length) return;
     setRunTab("all");
     setRunFinished(false);
@@ -292,9 +298,9 @@ export default function AppliedTweaksPage() {
     setRunning(true);
     setRunItems(idsToRun.map((id, index) => ({ id, index, total: idsToRun.length, status: "queued" })));
     try {
-      const result = await applyTweakBatch(idsToRun, progress => {
+       const result = await applyTweakBatch(idsToRun, progress => {
         setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
-      });
+       }, { forceReapplyIds: forceReapply ? idsToRun : [] });
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
     } catch (error) {
@@ -311,7 +317,7 @@ export default function AppliedTweaksPage() {
     }
   };
   const rerunQueued = () => rerunIds(queuedIds, "Queued tweaks reapplied");
-  const rerunFailed = () => rerunIds(failedIds, "Failed tweaks reapplied");
+  const rerunFailed = () => rerunIds(failedIds, "Failed tweaks reapplied", true);
   const reapply = async (id: string) => {
     if (runActive || reapplying || !isNative()) return;
     setReapplying(id);

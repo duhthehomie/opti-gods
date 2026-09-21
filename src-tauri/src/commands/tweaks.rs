@@ -372,7 +372,11 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         }
     };
     let mut acknowledged = false;
-    for attempt in 0..3 {
+    // The Windows mutation has already completed at this point. Give the
+    // authoritative server result callback enough time to survive a cold
+    // server, a brief network handoff, or a slow TLS connection instead of
+    // returning a successful tweak whose allowance remains reserved.
+    for attempt in 0..7 {
         let mut ack_request = client.post(format!("{base}/api/performance-allowance/native-ticket/result"));
         ack_request = if let Some(device_id) = ticket.1.strip_prefix("device:") {
             ack_request.header("X-Device-ID", device_id)
@@ -395,7 +399,9 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
             acknowledged = true;
             break;
         }
-        if attempt < 2 { tokio::time::sleep(std::time::Duration::from_millis(250)).await; }
+        if attempt < 6 {
+            tokio::time::sleep(std::time::Duration::from_millis(400 * (attempt + 1) as u64)).await;
+        }
     }
     if !acknowledged && result.ok {
         result.message.push_str(" ALLOWANCE_SYNC_PENDING");

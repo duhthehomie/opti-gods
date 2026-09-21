@@ -8,6 +8,7 @@ import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-twe
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
+export const NATIVE_RUN_FORCE_KEY = "optigods-native-run-force";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
@@ -211,8 +212,9 @@ export function stopNativeTweakRun(): boolean {
   return true;
 }
 
-export function queueTweakBatch(ids: readonly string[]) {
+export function queueTweakBatch(ids: readonly string[], options: TweakBatchOptions = {}) {
   localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
+  localStorage.setItem(NATIVE_RUN_FORCE_KEY, JSON.stringify(Array.from(new Set(options.forceReapplyIds ?? []))));
 }
 
 export function readQueuedTweakBatch(): string[] {
@@ -222,6 +224,24 @@ export function readQueuedTweakBatch(): string[] {
   } catch {
     return [];
   }
+}
+
+export function readQueuedTweakBatchOptions(): TweakBatchOptions {
+  try {
+    const value = JSON.parse(localStorage.getItem(NATIVE_RUN_FORCE_KEY) || "[]");
+    return {
+      forceReapplyIds: Array.isArray(value)
+        ? value.filter((id): id is string => typeof id === "string")
+        : [],
+    };
+  } catch {
+    return {};
+  }
+}
+
+export function clearQueuedTweakBatch() {
+  localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
+  localStorage.removeItem(NATIVE_RUN_FORCE_KEY);
 }
 
 function saveUndoToken(id: string, token: string | null) {
@@ -431,7 +451,7 @@ async function applyTweakBatchInternal(
 
   if (!supportedIds.length) {
     await reconcileConfirmedIds();
-    localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
+    clearQueuedTweakBatch();
     return { appliedIds: alreadyConfirmedIds, selectedIds: uniqueIds, unsupportedIds, failures: unsupportedFailures };
   }
 
@@ -562,6 +582,10 @@ async function applyTweakBatchInternal(
       saveUndoToken(id, result.undo_token);
       appliedIds.push(id);
       emitProgress({ id, index, total: uniqueIds.length, status: "applied", message: result.message });
+      // Keep allowance cards and the Applied Tweaks page current during a
+      // long run, not only after the final item. The server result callback
+      // has already finalized this ticket before applyTweak resolves.
+      window.dispatchEvent(new Event("optigods:allowance-changed"));
     } catch (error) {
       if (ticket && !osApplied) {
         await fetchWithTimeout(
@@ -583,6 +607,6 @@ async function applyTweakBatchInternal(
 
   await reconcileConfirmedIds();
   window.dispatchEvent(new Event("optigods:allowance-changed"));
-  localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
+  clearQueuedTweakBatch();
   return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures), stoppedIds };
 }

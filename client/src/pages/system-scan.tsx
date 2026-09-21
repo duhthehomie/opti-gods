@@ -445,7 +445,7 @@ function SmartRecsBreakdown() {
   function handleRetryFailed() {
     try {
       if (!isNative()) throw new Error("Open Opti Gods for Windows to retry native tweaks.");
-      queueTweakBatch(failedRunIds);
+       queueTweakBatch(failedRunIds, { forceReapplyIds: failedRunIds });
       window.location.assign("/applied-tweaks?run=1");
     } catch (error) {
       toast({ title: "Could not retry failed tweaks", description: error instanceof Error ? error.message : "The failed tweaks could not be queued.", variant: "destructive" });
