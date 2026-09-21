@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { isNative, readLivePerformance } from "@/lib/tauri-bridge";
 
 export interface LiveStats {
   cpuUsage: number;
@@ -37,21 +38,20 @@ function clamp(val: number, min: number, max: number): number {
 export function useLiveStats(ramGB: number): LiveStats {
   const totalRAM = ramGB > 0 ? ramGB : 16;
 
-  const cpuRef     = useRef(clamp(40 + Math.random() * 30, 20, 90));
-  const gpuRef     = useRef(clamp(30 + Math.random() * 40, 10, 85));
-  const baseRAMRef = useRef(clamp(totalRAM * 0.42 + Math.random() * 1.5, 1, totalRAM - 0.5));
-  const cpuHistRef = useRef<number[]>(Array(30).fill(cpuRef.current));
-  const gpuHistRef = useRef<number[]>(Array(30).fill(gpuRef.current));
+  const cpuRef = useRef(0);
+  const gpuRef = useRef(0);
+  const cpuHistRef = useRef<number[]>(Array(30).fill(0));
+  const gpuHistRef = useRef<number[]>(Array(30).fill(0));
 
   // Last snapshot received from the BAT — kept forever so data never blanks out
   const lastRealRef = useRef<LiveStats | null>(null);
 
   const [stats, setStats] = useState<LiveStats>({
-    cpuUsage:   cpuRef.current,
-    gpuUsage:   gpuRef.current,
-    ramUsedGB:  baseRAMRef.current,
+    cpuUsage:   0,
+    gpuUsage:   0,
+    ramUsedGB:  0,
     ramTotalGB: totalRAM,
-    ramPct:     (baseRAMRef.current / totalRAM) * 100,
+    ramPct:     0,
     cpuTemp:    null,
     gpuTemp:    null,
     cpuHistory: cpuHistRef.current,
@@ -61,18 +61,31 @@ export function useLiveStats(ramGB: number): LiveStats {
   });
 
   useEffect(() => {
-    let cpuTarget = cpuRef.current;
-    let gpuTarget = gpuRef.current;
-
     const tick = async () => {
       if (document.hidden) return;
 
       let realData: HwLiveResponse | null = null;
       try {
-        const resp = await fetch("/api/hw-live", { signal: AbortSignal.timeout(1500) });
-        if (resp.ok) {
-          const json: HwLiveResponse = await resp.json();
-          if (json.live) realData = json;
+        if (isNative()) {
+          const native = await readLivePerformance();
+          if (native?.live) {
+            realData = {
+              live: true,
+              cpu_load_pct: native.cpu_load_pct ?? undefined,
+              gpu_load_pct: native.gpu_load_pct ?? undefined,
+              ram_total_gb: native.ram_total_gb ?? undefined,
+              ram_free_gb: native.ram_free_gb ?? undefined,
+              ram_used_pct: native.ram_used_pct ?? undefined,
+              cpu_temp_c: native.cpu_temp_c ?? undefined,
+              gpu_temp_c: native.gpu_temp_c ?? undefined,
+            };
+          }
+        } else {
+          const resp = await fetch("/api/hw-live", { signal: AbortSignal.timeout(1500) });
+          if (resp.ok) {
+            const json: HwLiveResponse = await resp.json();
+            if (json.live) realData = json;
+          }
         }
       } catch {
         // server unreachable or stale — fall through
@@ -115,29 +128,18 @@ export function useLiveStats(ramGB: number): LiveStats {
         return;
       }
 
-      // Never had real data — run simulation
-      const cpuDrift = (Math.random() - 0.5) * 18;
-      const gpuDrift = (Math.random() - 0.5) * 22;
-      cpuTarget = clamp(cpuTarget + cpuDrift, 12, 94);
-      gpuTarget = clamp(gpuTarget + gpuDrift, 8, 96);
-      cpuRef.current = clamp(lerp(cpuRef.current, cpuTarget, 0.25), 5, 98);
-      gpuRef.current = clamp(lerp(gpuRef.current, gpuTarget, 0.25), 5, 98);
-      cpuHistRef.current.shift(); cpuHistRef.current.push(cpuRef.current);
-      gpuHistRef.current.shift(); gpuHistRef.current.push(gpuRef.current);
-
-      const base    = baseRAMRef.current;
-      const ramUsed = clamp(base + (Math.random() - 0.5) * 0.4, 1, totalRAM - 0.2);
-
+      // Never invent system telemetry. Keep the last real reading frozen, or
+      // show an explicit zero/unknown state until a monitor is available.
       setStats({
-        cpuUsage:   Math.round(cpuRef.current),
-        gpuUsage:   Math.round(gpuRef.current),
-        ramUsedGB:  Math.round(ramUsed * 10) / 10,
+        cpuUsage: 0,
+        gpuUsage: 0,
+        ramUsedGB: 0,
         ramTotalGB: totalRAM,
-        ramPct:     Math.round((ramUsed / totalRAM) * 100),
+        ramPct: 0,
         cpuTemp:    null,
         gpuTemp:    null,
-        cpuHistory: [...cpuHistRef.current],
-        gpuHistory: [...gpuHistRef.current],
+        cpuHistory: Array(30).fill(0),
+        gpuHistory: Array(30).fill(0),
         isLive:     false,
         isStale:    false,
       });
