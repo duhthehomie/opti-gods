@@ -31,6 +31,34 @@ const GAME_WHITELIST_COUNT = GAME_WHITELIST.length;
 interface RateWindow { count: number; resetAt: number; blocked: boolean }
 const rateBuckets = new Map<string, RateWindow>();
 
+// Live FiveM presence is intentionally ephemeral. The client reports the
+// server it just joined from CitizenFX.log; this is context for the admin
+// panel, not a remote-control channel. Entries expire quickly so an app
+// crash or lost connection cannot leave a user looking permanently online.
+interface FivemPresence {
+  sessionToken: string;
+  codeRef: string;
+  connectCode: string;
+  serverName: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+const fivemPresence = new Map<string, FivemPresence>();
+const FIVEM_PRESENCE_TTL_MS = 90_000;
+
+function pruneFivemPresence() {
+  const cutoff = Date.now() - FIVEM_PRESENCE_TTL_MS;
+  fivemPresence.forEach((row, key) => {
+    if (row.lastSeenAt < cutoff) fivemPresence.delete(key);
+  });
+}
+
+function normalizeFivemPresenceValue(value: unknown, maxLength: number): string {
+  return typeof value === "string"
+    ? value.trim().replace(/[<>]/g, "").slice(0, maxLength)
+    : "";
+}
+
 function rateLimit(maxPerWindow: number, windowMs: number, hardBlockAfter?: number) {
   return function (req: Request, res: Response, next: () => void) {
     const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
@@ -1878,7 +1906,7 @@ export async function registerRoutes(
     "/registry", "/fivem", "/fortnite", "/nvidia", "/amd",
     "/integrated-graphics", "/laptop", "/discord", "/memory",
     "/startup", "/debloat", "/process-lasso", "/wintitus",
-    "/fixes", "/custom-os", "/updates",
+    "/fixes", "/custom-os",
   ];
   // NOTE: /processes, /game-detection, /help, /task-manager are intentionally NOT
   // in MOVED_PATHS — they are live sidebar tabs accessible via direct URL.
@@ -4257,6 +4285,34 @@ Start-Sleep 2
     res.end(Buffer.from(wrapInBat(script, { title: 'NVIDIA Control Panel Repair', tmpName: 'OptiGods-NVCPFix', marker: 'NVIDIA_CONTROL_PANEL_FIX_PS1_START' }), 'utf8'));
   });
 
+  // Public — restore NVIDIA App / GeForce Experience in-game overlay state.
+  // This deliberately reverses the overlay-disable tweaks only; it does not
+  // apply the FiveM crash workaround that intentionally turns the overlay off.
+  app.get('/api/nvidia-overlay-fix-script', (_req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `Write-Host "[NVIDIA] Restoring the in-game overlay..." -ForegroundColor Cyan`,
+      `$serviceNames = @('NvTelemetryContainer','NvDisplayContainerLS','NVDisplay.ContainerLocalSystem','NvContainerLocalSystem')`,
+      `foreach ($name in $serviceNames) { $service = Get-Service -Name $name -ErrorAction SilentlyContinue; if ($service) { Set-Service -Name $name -StartupType Automatic -ErrorAction SilentlyContinue; Start-Service -Name $name -ErrorAction SilentlyContinue } }`,
+      `$clientPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NVControlPanel2\\Client'`,
+      `if (!(Test-Path $clientPath)) { New-Item -Path $clientPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path $clientPath -Name 'OptInOrOutPreference' -Value 1 -Type DWord -Force`,
+      `$trayPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NvTray'`,
+      `if (Test-Path $trayPath) { Set-ItemProperty -Path $trayPath -Name 'EnableSystemTray' -Value 1 -Type DWord -Force }`,
+      `$approvedPath = 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run'`,
+      `if (Test-Path $approvedPath) {`,
+      `  $enabled = [byte[]](0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)`,
+      `  foreach ($name in @('NvBackend','NVIDIA App','NVIDIA GeForce Experience')) { if (Get-ItemProperty -Path $approvedPath -Name $name -ErrorAction SilentlyContinue) { Set-ItemProperty -Path $approvedPath -Name $name -Value $enabled -Type Binary -Force } }`,
+      `}`,
+      `Write-Host "[OK] NVIDIA container services and overlay preferences restored." -ForegroundColor Green`,
+      `Write-Host "[OK] Open NVIDIA App > Settings and confirm In-game overlay is enabled." -ForegroundColor Green`,
+      `Write-Host "[INFO] Restart Windows before testing the overlay in a game." -ForegroundColor Yellow`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-NVIDIA-Overlay-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'NVIDIA In-Game Overlay Recovery', tmpName: 'OptiGods-NVIDIAOverlayFix', marker: 'NVIDIA_OVERLAY_FIX_PS1_START' }), 'utf8'));
+  });
+
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
   // V3 Discord/Network fix — re-enables IPv6, fixes SystemResponsiveness, Win32PrioritySeparation
   app.get('/api/discord-network-fix-script', (req, res) => {
@@ -5174,6 +5230,62 @@ Start-Sleep 2
       const srv = await storage.upsertFivemServer(connectCode.toLowerCase(), name, logoUrl || null);
       res.json(srv);
     } catch { res.status(500).json({ error: 'failed' }); }
+  });
+
+  // Authenticated Windows-app heartbeat for the admin panel. This reports
+  // only the client-observed connect target; it does not expose server
+  // internals and cannot apply changes to the user's PC remotely.
+  app.post('/api/fivem/presence', async (req, res) => {
+    const sessionToken = (
+      req.headers['x-pro-session'] ||
+      req.body?.sessionToken
+    ) as string | undefined;
+    if (!sessionToken || typeof sessionToken !== 'string' || sessionToken.length < 16) {
+      return res.status(401).json({ error: 'A signed-in Windows app session is required.' });
+    }
+    if (!(await requirePaidPro(req))) {
+      return res.status(403).json({ error: 'A valid Opti Gods session is required.' });
+    }
+
+    const codeRef = await storage.getProCodeForToken(sessionToken);
+    if (!codeRef) return res.status(401).json({ error: 'Session no longer exists.' });
+
+    pruneFivemPresence();
+    const active = req.body?.active !== false;
+    if (!active) {
+      fivemPresence.delete(sessionToken);
+      return res.json({ ok: true, active: false });
+    }
+
+    const connectCode = normalizeFivemPresenceValue(req.body?.connectCode, 180).toLowerCase();
+    const serverName = normalizeFivemPresenceValue(req.body?.serverName, 160) || connectCode;
+    if (connectCode.length < 3) {
+      return res.status(400).json({ error: 'A detected FiveM connect target is required.' });
+    }
+
+    const now = Date.now();
+    const previous = fivemPresence.get(sessionToken);
+    fivemPresence.set(sessionToken, {
+      sessionToken,
+      codeRef,
+      connectCode,
+      serverName,
+      firstSeenAt: previous?.firstSeenAt ?? now,
+      lastSeenAt: now,
+    });
+    return res.json({ ok: true, active: true, connectCode, serverName, lastSeenAt: now });
+  });
+
+  app.get('/api/admin/fivem/presence', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    pruneFivemPresence();
+    const rows = Array.from(fivemPresence.values())
+      .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+      .map(({ sessionToken: _sessionToken, ...row }) => ({
+        ...row,
+        online: Date.now() - row.lastSeenAt < FIVEM_PRESENCE_TTL_MS,
+      }));
+    return res.json(rows);
   });
 
   // Admin-only PATCH — leaq assigns logos via admin panel
