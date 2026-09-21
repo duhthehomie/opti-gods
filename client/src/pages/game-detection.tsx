@@ -11,11 +11,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isNative, scanTaskManager, readFivemLog, openExternal } from "@/lib/tauri-bridge";
+import { isNative, scanTaskManager, readFivemLog, openExternal, detectInstalledGames, type NativeInstalledGame } from "@/lib/tauri-bridge";
 import { getTweakMeta } from "@/lib/tweak-registry";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { useToast } from "@/hooks/use-toast";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
+import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
 
 interface GameEntry {
   id: string;
@@ -770,9 +772,29 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
     let baselineConnect: string | null = null;
     let initialized = false;
 
+    async function publishPresence(connectCode: string | null, serverName: string | null, active: boolean) {
+      const headers = getNativeAuthHeaders();
+      if (!headers["X-Pro-Session"]) return;
+      try {
+        await fetch(apiUrl("/api/fivem/presence"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          credentials: "include",
+          body: JSON.stringify({
+            active,
+            connectCode: connectCode ?? undefined,
+            serverName: serverName ?? undefined,
+          }),
+        });
+      } catch {
+        // Presence is helpful admin context, never a reason to block gameplay.
+      }
+    }
+
     // Clear any leftover active server from a previous session immediately
     localStorage.removeItem("og_fivem_active");
     window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+    void publishPresence(null, null, false);
 
     // Normalise a connect string for comparison: strip port + lowercase
     function norm(s: string): string {
@@ -789,6 +811,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
         if (markActive && mounted) {
           localStorage.setItem("og_fivem_active", existing.connect);
           window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+          void publishPresence(existing.connect, existing.name, true);
         }
         return;
       }
@@ -848,6 +871,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       }).catch(() => {});
       if (markActive) localStorage.setItem("og_fivem_active", rawConnect);
       window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+      if (markActive) void publishPresence(rawConnect, name, true);
     }
 
     async function detect() {
@@ -871,8 +895,18 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
           return;
         }
 
-        // Subsequent polls: only act when a NEW target appears (user just joined)
-        if (norm(rawConnect) === baselineConnect) return;
+        // Subsequent polls: only act when a NEW target appears (user just joined).
+        // While the target remains active, refresh the authenticated admin
+        // presence heartbeat so it does not expire during a long session.
+        if (norm(rawConnect) === baselineConnect) {
+          const currentActive = localStorage.getItem("og_fivem_active");
+          if (currentActive && norm(currentActive) === baselineConnect) {
+            const currentSaved = (JSON.parse(localStorage.getItem("og_fivem_servers") ?? "[]") as SavedServer[])
+              .find(server => norm(server.connect) === baselineConnect);
+            void publishPresence(currentActive, currentSaved?.name ?? currentActive, true);
+          }
+          return;
+        }
         baselineConnect = norm(rawConnect);
         await fetchAndSave(rawConnect, true);
       } catch { /* no log — that's fine */ }
@@ -886,6 +920,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
       // FiveM closed — clear active server so next launch starts clean
       localStorage.removeItem("og_fivem_active");
       window.dispatchEvent(new CustomEvent(OG_SERVER_EVENT));
+      void publishPresence(null, null, false);
     };
   }, [runningGame?.id]);
 
@@ -1314,6 +1349,16 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
                   <p className="text-[11px] text-zinc-500">{runningGame!.publisher}</p>
                 </>
               )}
+              {runningGame!.id === "game_fivem" && activeServer && (
+                <a
+                  href="/ai"
+                  data-testid="link-optimize-current-fivem-pc"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-300 transition-colors hover:border-red-500/50 hover:bg-red-500/20 hover:text-white"
+                >
+                  <Zap className="h-3 w-3" />
+                  Optimize this PC safely
+                </a>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {/* Save to Saved Servers button — shows when active FiveM server isn't saved yet */}
@@ -1598,7 +1643,7 @@ function NowPlayingPanel({ onGameChange }: { onGameChange?: (id: string | null) 
 
 // ─── Game Card ────────────────────────────────────────────────────────────────
 
-function GameCard({ game }: { game: GameEntry }) {
+function GameCard({ game, installation }: { game: GameEntry; installation?: NativeInstalledGame }) {
   const { tweaks, setTweak } = useOptimizationStore();
   const enabled = tweaks[game.id] || false;
   const [imgErr, setImgErr] = useState(false);
@@ -1644,10 +1689,17 @@ function GameCard({ game }: { game: GameEntry }) {
         )}
         {/* Dark overlay + enabled badge */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-        {enabled && (
+        {enabled && !installation?.running && (
           <div className="absolute top-2 left-2">
             <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-600 text-white uppercase tracking-wide shadow">
               INCLUDED
+            </span>
+          </div>
+        )}
+        {installation?.running && (
+          <div className="absolute top-2 left-2">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-600 text-white uppercase tracking-wide shadow">
+              RUNNING
             </span>
           </div>
         )}
@@ -1688,7 +1740,13 @@ function GameCard({ game }: { game: GameEntry }) {
             </div>
           ))}
           <div className="pt-1 flex flex-wrap gap-1">
-            {game.detectPaths.map((p, i) => (
+            {installation ? (
+              <>
+                <span className="text-[9px] font-mono text-zinc-500 truncate max-w-full">{installation.executable}</span>
+                <span className="text-[9px] font-mono text-zinc-700 truncate max-w-full" title={installation.install_path}>{installation.install_path}</span>
+                <span className="text-[9px] text-zinc-600">{installation.source}</span>
+              </>
+            ) : game.detectPaths.map((p, i) => (
               <span key={i} className="text-[9px] font-mono text-zinc-700 truncate max-w-full">{p}</span>
             ))}
           </div>
@@ -2788,8 +2846,12 @@ export default function GameDetection() {
   // Track which game is currently running (set by NowPlayingPanel)
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
 
-  // Read detected game IDs + hardware params from URL (set by the scanner PS1 script)
+  // Native installs are discovered automatically; legacy scanner URL results
+  // remain supported for browser users opening an existing scan link.
   const [detectedIds, setDetectedIds] = useState<Set<string> | null>(null);
+  const [installations, setInstallations] = useState<Record<string, NativeInstalledGame>>({});
+  const [detectingGames, setDetectingGames] = useState(native);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
   const [isFiltered, setIsFiltered] = useState(false);
   const [hwFromUrl, setHwFromUrl] = useState<{ gpu?: string; cpu?: string; ram?: string; vendor?: string; os?: string; laptop?: string } | null>(null);
   const [adminLinkCopied, setAdminLinkCopied] = useState(false);
@@ -2816,6 +2878,26 @@ export default function GameDetection() {
       setHwFromUrl({ gpu: gpu ?? undefined, cpu: cpu ?? undefined, ram: ram ?? undefined, vendor: vendor ?? undefined, os: os ?? undefined, laptop: laptop ?? undefined });
     }
   }, []);
+
+  const runNativeGameDetection = useCallback(async () => {
+    if (!native) return;
+    setDetectingGames(true);
+    setDetectionError(null);
+    try {
+      const installed = await detectInstalledGames();
+      setInstallations(Object.fromEntries(installed.map(game => [game.id, game])));
+      setDetectedIds(new Set(installed.map(game => game.id)));
+      setIsFiltered(true);
+    } catch (error) {
+      setDetectionError(error instanceof Error ? error.message : "Installed-game detection failed.");
+    } finally {
+      setDetectingGames(false);
+    }
+  }, [native]);
+
+  useEffect(() => {
+    runNativeGameDetection();
+  }, [runNativeGameDetection]);
 
   // The scanner returns to this page with ?games=...; keep the result visible
   // by taking the user to the horizontally scrollable library after it mounts.
@@ -2899,7 +2981,7 @@ export default function GameDetection() {
             <p className="text-zinc-500 text-sm">
               {isFiltered && detectedIds
                 ? `${detectedIds.size} game${detectedIds.size !== 1 ? "s" : ""} detected on your PC`
-                : "Scan your PC to see only games you have installed"}
+                : native ? "Detecting installed games locally…" : "Local game detection requires the Windows desktop app"}
             </p>
           </div>
         </motion.div>
@@ -2943,27 +3025,24 @@ export default function GameDetection() {
                   <Search className="w-5 h-5 text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold text-sm mb-1">Detect Your Installed Games</h3>
+                  <h3 className="text-white font-bold text-sm mb-1">Installed-game detection requires the desktop app</h3>
                   <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">
-                    Download the free scanner script (less than 2KB). Run it as Administrator — it checks your
-                    drives for each game's install path and opens this page showing <span className="text-white font-medium">only the games you have</span>.
-                    No data is sent anywhere. The script runs locally and opens your browser automatically.
+                    The website cannot inspect your PC. Open <span className="text-white font-medium">Opti Gods for Windows</span> to automatically detect Steam, Epic, common launcher, registry, and standalone installs without running a separate scanner.
                   </p>
                   <div className="flex flex-wrap gap-3 mt-3 text-[11px] text-zinc-500">
-                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Checks Steam libraries</span>
-                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Reads %LocalAppData%</span>
-                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> No internet calls</span>
-                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Opens browser automatically</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Automatic in desktop</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> Trusted locations only</span>
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-red-400" /> No game data uploaded</span>
                   </div>
                 </div>
               </div>
               <Button
                 data-testid="button-download-scanner"
-                onClick={downloadScannerScript}
+                onClick={() => { window.location.href = "/#download"; }}
                 className="bg-red-600 hover:bg-red-700 text-white border border-red-500/30 font-bold shrink-0 flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                Download Scanner
+                Get Desktop App
               </Button>
             </div>
           </motion.div>
@@ -2981,7 +3060,7 @@ export default function GameDetection() {
                 <Shield className="w-5 h-5 text-red-400 shrink-0" />
                 <div>
                   <p className="text-sm text-white font-bold">
-                    Scanner found {detectedIds.size} game{detectedIds.size !== 1 ? "s" : ""} on your PC
+                    {native ? "Desktop app" : "Scanner"} found {detectedIds.size} game{detectedIds.size !== 1 ? "s" : ""} on your PC
                   </p>
                   <p className="text-xs text-zinc-400">Only showing games that are actually installed. Toggle the ones you want to optimize.</p>
                 </div>
@@ -2989,13 +3068,14 @@ export default function GameDetection() {
               <div className="flex gap-2 shrink-0">
                 <Button
                   data-testid="button-rescan-games"
-                  onClick={downloadScannerScript}
+                  onClick={native ? runNativeGameDetection : downloadScannerScript}
+                  disabled={detectingGames}
                   variant="outline"
                   size="sm"
                   className="border-zinc-700 text-zinc-400 hover:text-white hover:bg-white/5 text-xs flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  Re-scan
+                  {detectingGames ? "Detecting…" : "Re-scan"}
                 </Button>
                 <Button
                   data-testid="button-show-all-games"
@@ -3052,6 +3132,12 @@ export default function GameDetection() {
           </motion.div>
         )}
 
+        {native && detectionError && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-xs text-red-300">
+            Installed-game detection could not finish: {detectionError}
+          </div>
+        )}
+
         {/* How it works info box (shown when NOT filtered, compact version) */}
         {!isFiltered && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.07 }}
@@ -3059,7 +3145,7 @@ export default function GameDetection() {
             <div className="flex items-start gap-3">
               <AlertCircle className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
               <p className="text-xs text-zinc-500 leading-relaxed">
-                Showing all {GAMES.length} supported games. Run the scanner above to filter to only your installed games,
+                Showing all {GAMES.length} supported games. {native ? "Use Re-scan to refresh native detection, " : "Open the desktop app to detect local installs, "}
                 or manually toggle whichever games you want to include in your script below.
                 The PowerShell script always uses <span className="font-mono text-zinc-400">Test-Path</span> at runtime to skip games not found on your PC.
               </p>
@@ -3104,7 +3190,7 @@ export default function GameDetection() {
             <div>
               <p className="text-white font-bold mb-1">No supported games found</p>
               <p className="text-sm text-zinc-500 max-w-sm">
-                The scanner didn't find any of the 14 supported games on your PC.
+                No supported installed games were found on this PC.
                 You can still enable any game pack manually below.
               </p>
             </div>
@@ -3129,7 +3215,7 @@ export default function GameDetection() {
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-color:#3f3f46_transparent]">
               {[...enabledGames, ...disabledGames].map((game, index) => (
                 <motion.div key={game.id} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(index * 0.02, 0.25) }} className="w-[210px] min-w-[210px] snap-start">
-                  <GameCard game={game} />
+                  <GameCard game={game} installation={installations[game.id]} />
                 </motion.div>
               ))}
             </div>
