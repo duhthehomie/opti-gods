@@ -107,6 +107,7 @@ export function loginWithDiscord(returnTo?: string): void {
 export type VersionInfo = {
   currentVersion: string;
   latestVersion: string;
+  notes?: string | null;
   updaterCmdUrl: string | null;
   updatePageUrl: string | null;
 };
