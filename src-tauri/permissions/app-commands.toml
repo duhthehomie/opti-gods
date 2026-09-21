@@ -109,9 +109,29 @@ description = "Open the Windows Downloads folder in Explorer."
 commands.allow = ["open_downloads"]
 
 [[permission]]
-identifier = "allow-recovery-actions"
+identifier = "allow-run-fix"
 description = "Run a named, allowlisted recovery action in the Windows app."
-commands.allow = ["run_fix", "run_restore_categories"]
+commands.allow = ["run_fix"]
+
+[[permission]]
+identifier = "allow-run-restore-categories"
+description = "Restore the selected tweak categories in the Windows app."
+commands.allow = ["run_restore_categories"]
+
+[[permission]]
+identifier = "allow-read-live-performance"
+description = "Read live Windows performance counters for the dashboard."
+commands.allow = ["read_live_performance"]
+
+[[permission]]
+identifier = "allow-install-fivem-pack"
+description = "Install a validated FiveM graphics pack."
+commands.allow = ["install_fivem_pack"]
+
+[[permission]]
+identifier = "allow-uninstall-fivem-pack"
+description = "Remove a previously installed FiveM graphics pack."
+commands.allow = ["uninstall_fivem_pack"]
 
 [[permission]]
 identifier = "allow-open-fivem-folder"
@@ -209,6 +229,11 @@ permissions = [
   "allow-perform-update",
   "allow-env-info",
   "allow-open-downloads",
+  "allow-run-fix",
+  "allow-run-restore-categories",
+  "allow-read-live-performance",
+  "allow-install-fivem-pack",
+  "allow-uninstall-fivem-pack",
   "allow-open-fivem-folder",
    "allow-open-msi-utility",
    "allow-import-nvidia-preset",
