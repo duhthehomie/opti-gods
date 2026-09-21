@@ -367,8 +367,9 @@ export default function Dashboard() {
   const hasProEntitlement = useProStatus();
   const isPro = isAuthenticated && hasProEntitlement;
   const proStatusLoading = useProStatusLoading();
-  const { tweaks, setAllTweaks, appliedAt } = useOptimizationStore();
+  const { tweaks, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
+  const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
   const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
     staleTime: 5 * 60 * 1000,
@@ -440,7 +441,6 @@ export default function Dashboard() {
   };
 
   const [activeBoost, setActiveBoost] = useState<string | null>(null);
-  const [recommendedApplied, setRecommendedApplied] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
   const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
@@ -453,6 +453,10 @@ export default function Dashboard() {
     setRefreshingScore(true);
     try {
       setDetectedNativeTweaks(await detectAppliedTweaks());
+      setNativeDetectionReady(true);
+    } catch {
+      // Never use local browser timestamps as proof that Windows changed.
+      setNativeDetectionReady(true);
     } finally {
       setRefreshingScore(false);
     }
@@ -536,7 +540,7 @@ export default function Dashboard() {
   };
 
   const applyAllRecommended = () => {
-    if (bulkApplying || (native && recommendedApplied) || proStatusLoading) return;
+    if (bulkApplying || (native && (!nativeDetectionReady || recommendedApplied)) || proStatusLoading) return;
     if (!isPro) {
       // ProUnlockButton owns the paywall for guests and free users. Do not
       // silently redirect or consume the 15-tweak allowance from this CTA.
@@ -614,14 +618,11 @@ export default function Dashboard() {
   // Filter both out of the score denominator so 100% is always achievable.
   const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
   const achievableIds = Array.from(smartRecs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
-  // Browser toggles are intent only.  Native score/results must come from the
-  // detector (with the confirmed session ledger as a fallback while Windows
-  // refreshes), so a Best 15 preview can never produce God Tier by itself.
+  // Browser toggles are intent only. Native score/results must come from the
+  // detector, so local timestamps can never make a missing Windows change
+  // appear applied.
   const confirmedIds = native
-    ? new Set([
-      ...Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]),
-      ...Object.keys(appliedAt),
-    ])
+    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]))
     : new Set<string>();
   // Native category totals must come from the live Windows detector, not the
   // browser intent store. The latter is persistent, but it is not proof that
@@ -636,6 +637,9 @@ export default function Dashboard() {
   });
   const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
+  const recommendedApplied = matchedRecommendedIds.length > 0
+    && (!native || nativeDetectionReady)
+    && matchedRecommendedIds.every(id => activeIdsForDisplay.has(id));
   const recApplied = native
     ? achievableIds.filter(id => confirmedIds.has(id)).length
     : achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
@@ -701,7 +705,7 @@ export default function Dashboard() {
                 <Button
                   data-testid="button-full-optimize"
                   onClick={applyAllRecommended}
-                  disabled={(native && recommendedApplied) || bulkApplying || proStatusLoading}
+                  disabled={(native && (!nativeDetectionReady || recommendedApplied)) || bulkApplying || proStatusLoading}
                   className={cn(
                     "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
                     recommendedApplied
@@ -711,18 +715,21 @@ export default function Dashboard() {
                 >
                   {recommendedApplied ? (
                     <><CheckCircle2 className="w-4 h-4 mr-2" />Optimized</>
+                  ) : native && !nativeDetectionReady ? (
+                    <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Checking Windows state…</>
                   ) : (
                     <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : `Apply ${missingRecommendedCount} missing tweaks`}</>
                   )}
                 </Button>
               ) : (
                 <ProUnlockButton>
-                  <Button
+                <Button
                     data-testid="button-best15-login"
+                  disabled={native && !nativeDetectionReady}
                     className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
                   >
                     <Rocket className="w-4 h-4 mr-2" />
-                    Apply {missingRecommendedCount} missing tweaks
+                  {native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
                   </Button>
                 </ProUnlockButton>
               )}
@@ -1315,11 +1322,11 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-2">
               <Rocket className={cn("w-5 h-5 shrink-0", recommendedApplied ? "text-emerald-400" : "text-red-400")} />
               <span className={cn("text-xs font-bold uppercase tracking-widest", recommendedApplied ? "text-emerald-400" : "text-red-400")}>
-                 {recommendedApplied ? (native ? "Tweaks Enabled" : "Tweaks Applied — Ready to Download") : "New Here? Start Here"}
+                {recommendedApplied ? (native ? "Tweaks Enabled" : "Tweaks Applied — Ready to Download") : native && !nativeDetectionReady ? "Checking Windows state" : "New Here? Start Here"}
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-                {recommendedApplied ? "Compatible Tweaks Applied" : isPro ? `Apply ${missingRecommendedCount} missing tweaks` : `${matchedRecommendedIds.length} tweaks match your hardware`}
+                {recommendedApplied ? "Compatible Tweaks Applied" : native && !nativeDetectionReady ? "Reading confirmed Windows changes…" : isPro ? `Apply ${missingRecommendedCount} missing tweaks` : `${matchedRecommendedIds.length} tweaks match your hardware`}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -1341,17 +1348,17 @@ export default function Dashboard() {
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-sm"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {enabledCount} Tweaks Enabled
+                {native ? activeTweakCount : enabledCount} Tweaks Enabled
               </div>
             ) : isPro ? (
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
-                disabled={bulkApplying}
+                disabled={bulkApplying || (native && !nativeDetectionReady)}
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                {bulkApplying ? "Applying…" : `Apply ${missingRecommendedCount} missing tweaks`}
+                {bulkApplying ? "Applying…" : native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
               </Button>
             ) : (
               <ProUnlockButton>
@@ -1361,7 +1368,7 @@ export default function Dashboard() {
                   className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-8 py-3 text-base rounded-xl"
                 >
                   <Rocket className="w-5 h-5 mr-2" />
-                  Apply {missingRecommendedCount} missing tweaks
+                  {native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
                 </Button>
               </ProUnlockButton>
             )}
