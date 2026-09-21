@@ -19,6 +19,7 @@ const PUBLIC_PATHS_WEB = new Set<string>([
   "/payment/cancel",
   "/admin",
   "/game-detection",
+  "/updates",
   "/help",
   "/support",
 ]);
@@ -27,6 +28,7 @@ const PUBLIC_PATHS_NATIVE = new Set<string>([
   "/payment/cancel",
   "/admin",
   "/game-detection",
+  "/updates",
   "/help",
   "/support",
 ]);
