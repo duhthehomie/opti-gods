@@ -1,5 +1,5 @@
 // Miscellaneous utility commands for the Opti Gods desktop shell.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
@@ -280,6 +280,259 @@ pub fn open_fivem_folder() -> Result<(), String> {
     #[cfg(not(windows))]
     {
         Err("FiveM folders are only available on Windows.".to_string())
+    }
+}
+
+const FIVEM_PACK_PATHS: [&str; 2] = [
+    "citizen/platform/data/tune/timecycle_mods_1.xml",
+    "citizen/common/data/weather.xml",
+];
+
+#[derive(Deserialize)]
+pub struct FivemPackFile {
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Deserialize)]
+pub struct InstallFivemPackArgs {
+    pub pack_name: String,
+    pub files: Vec<FivemPackFile>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FivemBackupEntry {
+    path: String,
+    existed: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FivemBackupManifest {
+    install_id: String,
+    pack_name: String,
+    files: Vec<FivemBackupEntry>,
+}
+
+#[derive(Serialize)]
+pub struct FivemPackResult {
+    pub ok: bool,
+    pub install_id: String,
+    pub message: String,
+    pub installed_files: Vec<String>,
+}
+
+fn fivem_data_dir() -> Result<std::path::PathBuf, String> {
+    let local = std::env::var("LOCALAPPDATA")
+        .map_err(|_| "LOCALAPPDATA is unavailable.".to_string())?;
+    let candidates = [
+        std::path::PathBuf::from(&local).join("FiveM").join("FiveM Application Data"),
+        std::path::PathBuf::from(&local).join("FiveM").join("FiveM.app"),
+    ];
+    candidates.into_iter().find(|path| path.is_dir())
+        .ok_or_else(|| "FiveM Application Data was not found. Launch FiveM once, then try again.".to_string())
+}
+
+fn validate_pack_file(file: &FivemPackFile) -> Result<(), String> {
+    if !FIVEM_PACK_PATHS.contains(&file.path.as_str()) {
+        return Err(format!("Pack contains a path that Opti Gods will not install: {}", file.path));
+    }
+    if file.content.is_empty() || file.content.len() > 2_000_000 {
+        return Err(format!("{} is empty or exceeds the 2 MB safety limit.", file.path));
+    }
+    if file.content.contains('\0') || file.content.contains("NaN") || file.content.contains("Infinity") {
+        return Err(format!("{} contains invalid content.", file.path));
+    }
+    let valid_xml = if file.path.ends_with("timecycle_mods_1.xml") {
+        file.content.starts_with("<?xml")
+            && file.content.contains("<CTimeCycleModifierList>")
+            && file.content.contains("</CTimeCycleModifierList>")
+    } else {
+        file.content.starts_with("<?xml")
+            && file.content.contains("<CWeatherTypeList>")
+            && file.content.contains("</CWeatherTypeList>")
+    };
+    if !valid_xml {
+        return Err(format!("{} failed XML validation.", file.path));
+    }
+    Ok(())
+}
+
+fn restore_fivem_manifest(
+    root: &std::path::Path,
+    backup_dir: &std::path::Path,
+    manifest: &FivemBackupManifest,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+    for entry in manifest.files.iter().rev() {
+        let destination = root.join(&entry.path);
+        let result = if entry.existed {
+            let backup = backup_dir.join("files").join(&entry.path);
+            if let Some(parent) = destination.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|error| format!("Could not recreate {}: {error}", parent.display()))?;
+            }
+            std::fs::copy(&backup, &destination).map(|_| ())
+        } else if destination.exists() {
+            std::fs::remove_file(&destination)
+        } else {
+            Ok(())
+        };
+        if let Err(error) = result {
+            failures.push(format!("{}: {error}", entry.path));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("Rollback could not restore every file: {}", failures.join("; ")))
+    }
+}
+
+#[tauri::command]
+pub fn install_fivem_pack(args: InstallFivemPackArgs) -> Result<FivemPackResult, String> {
+    #[cfg(windows)]
+    {
+        if args.files.len() != FIVEM_PACK_PATHS.len() {
+            return Err("The generated pack is incomplete or contains extra files.".to_string());
+        }
+        for expected in FIVEM_PACK_PATHS {
+            if args.files.iter().filter(|file| file.path == expected).count() != 1 {
+                return Err(format!("The generated pack must contain exactly one {expected}."));
+            }
+        }
+        for file in &args.files {
+            validate_pack_file(file)?;
+        }
+
+        let root = fivem_data_dir()?;
+        let install_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "System clock is invalid.".to_string())?
+            .as_millis()
+            .to_string();
+        let backups_root = root.join(".optigods-backups");
+        let backup_dir = backups_root.join(&install_id);
+        std::fs::create_dir_all(backup_dir.join("files"))
+            .map_err(|error| format!("Could not create the rollback backup: {error}"))?;
+
+        let manifest = FivemBackupManifest {
+            install_id: install_id.clone(),
+            pack_name: args.pack_name.chars().take(100).collect(),
+            files: args.files.iter().map(|file| FivemBackupEntry {
+                path: file.path.clone(),
+                existed: root.join(&file.path).is_file(),
+            }).collect(),
+        };
+
+        for entry in &manifest.files {
+            if entry.existed {
+                let source = root.join(&entry.path);
+                let backup = backup_dir.join("files").join(&entry.path);
+                if let Some(parent) = backup.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|error| format!("Could not prepare backup for {}: {error}", entry.path))?;
+                }
+                std::fs::copy(&source, &backup)
+                    .map_err(|error| format!("Could not back up {}. Nothing was installed: {error}", entry.path))?;
+            }
+        }
+        let manifest_bytes = serde_json::to_vec_pretty(&manifest)
+            .map_err(|error| format!("Could not create rollback manifest: {error}"))?;
+        std::fs::write(backup_dir.join("manifest.json"), manifest_bytes)
+            .map_err(|error| format!("Could not save rollback manifest: {error}"))?;
+
+        let mut installed = Vec::new();
+        for file in &args.files {
+            let destination = root.join(&file.path);
+            let result = (|| {
+                let parent = destination.parent()
+                    .ok_or_else(|| format!("Invalid destination for {}.", file.path))?;
+                std::fs::create_dir_all(parent)
+                    .map_err(|error| format!("Could not create {}: {error}", parent.display()))?;
+                let temporary = destination.with_extension("optigods-installing");
+                std::fs::write(&temporary, file.content.as_bytes())
+                    .map_err(|error| format!("Could not write {}: {error}", file.path))?;
+                if destination.exists() {
+                    std::fs::remove_file(&destination)
+                        .map_err(|error| format!("Could not replace {}: {error}", file.path))?;
+                }
+                std::fs::rename(&temporary, &destination)
+                    .map_err(|error| format!("Could not finish copying {}: {error}", file.path))?;
+                let written = std::fs::read(&destination)
+                    .map_err(|error| format!("Could not verify {}: {error}", file.path))?;
+                if Sha256::digest(&written) != Sha256::digest(file.content.as_bytes()) {
+                    return Err(format!("Verification failed after copying {}.", file.path));
+                }
+                Ok(())
+            })();
+            if let Err(error) = result {
+                let rollback = restore_fivem_manifest(&root, &backup_dir, &manifest);
+                return Err(match rollback {
+                    Ok(()) => format!("{error} The partial install was rolled back."),
+                    Err(rollback_error) => format!("{error} {rollback_error}"),
+                });
+            }
+            installed.push(file.path.clone());
+        }
+
+        if let Err(error) = std::fs::write(backups_root.join("latest"), install_id.as_bytes()) {
+            let rollback = restore_fivem_manifest(&root, &backup_dir, &manifest);
+            return Err(match rollback {
+                Ok(()) => format!(
+                    "The rollback index could not be saved, so the installation was safely reversed: {error}"
+                ),
+                Err(rollback_error) => format!(
+                    "The rollback index could not be saved: {error}. {rollback_error}"
+                ),
+            });
+        }
+        Ok(FivemPackResult {
+            ok: true,
+            install_id,
+            message: format!("Installed and verified {} files. Existing files were backed up for one-click rollback.", installed.len()),
+            installed_files: installed,
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = args;
+        Err("FiveM pack installation is available only in the Windows app.".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn uninstall_fivem_pack() -> Result<FivemPackResult, String> {
+    #[cfg(windows)]
+    {
+        let root = fivem_data_dir()?;
+        let backups_root = root.join(".optigods-backups");
+        let install_id = std::fs::read_to_string(backups_root.join("latest"))
+            .map_err(|_| "No Opti Gods graphics pack rollback was found.".to_string())?;
+        let install_id = install_id.trim().to_string();
+        if install_id.is_empty() || !install_id.chars().all(|c| c.is_ascii_digit()) {
+            return Err("The rollback index is invalid.".to_string());
+        }
+        let backup_dir = backups_root.join(&install_id);
+        let manifest: FivemBackupManifest = serde_json::from_slice(
+            &std::fs::read(backup_dir.join("manifest.json"))
+                .map_err(|error| format!("Could not read rollback manifest: {error}"))?
+        ).map_err(|error| format!("Rollback manifest is invalid: {error}"))?;
+        if manifest.install_id != install_id {
+            return Err("Rollback manifest does not match the selected installation.".to_string());
+        }
+        restore_fivem_manifest(&root, &backup_dir, &manifest)?;
+        std::fs::remove_file(backups_root.join("latest"))
+            .map_err(|error| format!("Files were restored, but rollback status could not be cleared: {error}"))?;
+        Ok(FivemPackResult {
+            ok: true,
+            install_id,
+            message: format!("Removed {} and restored every file from its backup.", manifest.pack_name),
+            installed_files: manifest.files.into_iter().map(|entry| entry.path).collect(),
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        Err("FiveM pack rollback is available only in the Windows app.".to_string())
     }
 }
 
