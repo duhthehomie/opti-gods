@@ -14,6 +14,7 @@ import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 
@@ -176,11 +177,19 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
          compatibility: "Not for this system",
          execution: "Windows could not apply this tweak",
        };
-      toast({
-         title: errorTitles[kind || ""] || (incompatible ? "Not for this system" : "Windows could not apply this tweak"),
-        description: message,
-        variant: "destructive",
-      });
+      if (incompatible) {
+        playOptimizationActionSound();
+        toast({
+          title: "Skipped for this PC",
+          description: "No Windows change was made because this tweak does not match the detected hardware.",
+        });
+      } else {
+        toast({
+          title: errorTitles[kind || ""] || "Windows could not apply this tweak",
+          description: message,
+          variant: "destructive",
+        });
+      }
     } finally {
       setApplying(false);
     }
