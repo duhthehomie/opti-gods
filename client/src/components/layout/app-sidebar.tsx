@@ -34,7 +34,7 @@ type NavItem = {
 
   const PRIMARY: NavItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "AI Optimize", url: "/system-scan", icon: ScanLine },
+  { title: "AI Optimize", url: "/ai", icon: ScanLine },
   { title: "Tweaks", url: "/tweaks", icon: Settings2 },
   { title: "Applied Tweaks", url: "/applied-tweaks", icon: Undo2 },
   { title: "Power Plans", url: "/power-plans", icon: BatteryCharging },
