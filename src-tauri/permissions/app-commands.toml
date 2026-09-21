@@ -109,6 +109,11 @@ description = "Open the Windows Downloads folder in Explorer."
 commands.allow = ["open_downloads"]
 
 [[permission]]
+identifier = "allow-recovery-actions"
+description = "Run a named, allowlisted recovery action in the Windows app."
+commands.allow = ["run_fix", "run_restore_categories"]
+
+[[permission]]
 identifier = "allow-open-fivem-folder"
 description = "Open a detected FiveM application data folder in Explorer."
 commands.allow = ["open_fivem_folder"]
@@ -127,6 +132,11 @@ commands.allow = ["import_nvidia_preset"]
 identifier = "allow-scan-task-manager"
 description = "Scan running processes and startup entries."
 commands.allow = ["scan_task_manager"]
+
+[[permission]]
+identifier = "allow-detect-installed-games"
+description = "Discover supported installed games from trusted native sources."
+commands.allow = ["detect_installed_games"]
 
 [[permission]]
 identifier = "allow-kill-app"
