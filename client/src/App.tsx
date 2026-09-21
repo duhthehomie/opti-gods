@@ -287,9 +287,11 @@ function App() {
         <Toaster />
         <NativeRestoreReadinessBanner />
         <ClientErrorBoundary>
+          {/* Must run before AuthGate so old/unsigned desktop builds can still
+              reach the mandatory update flow and install the newest release. */}
+          <UpdateModal />
           <AuthGate>
             <Router />
-            <UpdateModal />
             <VersionPin />
           </AuthGate>
         </ClientErrorBoundary>
