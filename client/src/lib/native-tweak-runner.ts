@@ -297,9 +297,8 @@ async function applyTweakBatchInternal(
   if (native) {
     const detected = await detectAppliedTweaks().catch(() => ({} as Record<string, boolean>));
     const forcedIds = new Set(options.forceReapplyIds ?? []);
-    const locallyRecorded = useOptimizationStore.getState().appliedAt;
     alreadyConfirmedIds = compatibleIds.filter(id =>
-      !forcedIds.has(id) && (Boolean(detected[id]) || Boolean(locallyRecorded[id])),
+      !forcedIds.has(id) && Boolean(detected[id]),
     );
     alreadyConfirmedIds.forEach((id, index) => {
       const store = useOptimizationStore.getState();
@@ -310,9 +309,7 @@ async function applyTweakBatchInternal(
         index,
         total: uniqueIds.length,
         status: "applied",
-        message: detected[id]
-          ? "Already confirmed by Windows; skipped."
-          : "Previously confirmed by Opti Gods; skipped.",
+          message: "Already confirmed by Windows; skipped.",
       });
     });
   }
