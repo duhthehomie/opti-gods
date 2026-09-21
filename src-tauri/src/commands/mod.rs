@@ -3,7 +3,10 @@
 
 pub mod discord;
 pub mod env;
+pub mod game_detection;
 pub mod hardware;
+pub mod performance;
+pub mod actions;
 pub mod misc;
 pub mod process_lasso;
 pub mod power;
