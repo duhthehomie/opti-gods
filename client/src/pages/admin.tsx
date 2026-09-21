@@ -2307,6 +2307,8 @@ function FivemServersTab({ headers }: { headers: Record<string, string> }) {
 
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [presence, setPresence] = useState<any[]>([]);
+  const [presenceLoading, setPresenceLoading] = useState(true);
   const [editLogo, setEditLogo] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [editDragging, setEditDragging] = useState<Record<string, boolean>>({});
@@ -2326,7 +2328,19 @@ function FivemServersTab({ headers }: { headers: Record<string, string> }) {
       if (r.ok) setServers(await r.json());
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  const loadPresence = async () => {
+    setPresenceLoading(true);
+    try {
+      const r = await fetch('/api/admin/fivem/presence', { headers });
+      if (r.ok) setPresence(await r.json());
+    } finally { setPresenceLoading(false); }
+  };
+  useEffect(() => {
+    void load();
+    void loadPresence();
+    const interval = window.setInterval(() => { void loadPresence(); }, 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const uploadImage = async (file: File, target: 'add' | string): Promise<string | null> => {
     if (!file.type.startsWith('image/')) { toast({ title: "Not an image file", variant: "destructive" }); return null; }
@@ -2399,9 +2413,46 @@ function FivemServersTab({ headers }: { headers: Record<string, string> }) {
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
           <Server className="w-4 h-4 text-red-500" /> FiveM Servers
         </h2>
-        <button onClick={load} className="text-[10px] text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
+        <button onClick={() => { void load(); void loadPresence(); }} className="text-[10px] text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
+      </div>
+
+      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[.04] p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-white">Live client sessions</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+              Windows app sessions report the server they joined from CitizenFX.log. This identifies the client context; it does not expose server internals or remotely change a user&apos;s PC.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-300">
+            {presence.length} online
+          </span>
+        </div>
+        {presenceLoading ? (
+          <p className="text-[10px] text-zinc-600">Checking live sessions…</p>
+        ) : !presence.length ? (
+          <p className="rounded-lg border border-white/5 bg-black/20 px-3 py-3 text-[10px] text-zinc-600">
+            No authenticated Windows app has reported an active FiveM server yet. Join a server in the app, then refresh this tab.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {presence.map((row: any) => (
+              <div key={`${row.codeRef}-${row.connectCode}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/8 bg-black/20 px-3 py-2.5">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.7)]" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-bold text-white">{row.serverName}</p>
+                  <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{row.connectCode}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-zinc-300">{row.codeRef}</p>
+                  <p className="mt-0.5 text-[9px] text-zinc-600">seen {new Date(row.lastSeenAt).toLocaleTimeString()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Add New Server ─────────────────────────────────── */}
