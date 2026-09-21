@@ -153,6 +153,26 @@ identifier = "allow-read-fivem-log"
 description = "Read the detected CitizenFX log used by the FiveM server helper."
 commands.allow = ["read_fivem_log"]
 
+[[permission]]
+identifier = "allow-save-diagnostic-log"
+description = "Save a diagnostic log file for troubleshooting."
+commands.allow = ["save_diagnostic_log"]
+
+[[permission]]
+identifier = "allow-repair-nvidia-control-panel"
+description = "Repair the NVIDIA Control Panel installation."
+commands.allow = ["repair_nvidia_control_panel"]
+
+[[permission]]
+identifier = "allow-repair-privacy-spool"
+description = "Repair the local privacy diagnostic spool used by the desktop app."
+commands.allow = ["repair_privacy_spool"]
+
+[[permission]]
+identifier = "allow-read-v5-diagnostic-log"
+description = "Read the local V5 diagnostic log for troubleshooting."
+commands.allow = ["read_v5_diagnostic_log"]
+
 [permission_set]
 identifier = "all-app-commands"
 description = "All app-level commands."
@@ -188,4 +208,8 @@ permissions = [
   "allow-get-startup-value",
   "allow-read-text-file",
   "allow-read-fivem-log",
+  "allow-save-diagnostic-log",
+  "allow-repair-nvidia-control-panel",
+   "allow-repair-privacy-spool",
+   "allow-read-v5-diagnostic-log",
 ]
