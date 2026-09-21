@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,7 +18,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { isNative } from "@/lib/tauri-bridge";
+import { checkForUpdate, isNative, performUpdate } from "@/lib/tauri-bridge";
+import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
+import { APP_VERSION } from "@/generated/version";
+import { simpleUpdateNotes } from "@/lib/update-notes";
 
 type Announcement = {
   id: number;
@@ -307,6 +310,165 @@ function AnnouncementCard({
   );
 }
 
+type UpdateCenterStatus = "checking" | "ready" | "downloading" | "installing" | "done" | "error";
+
+function UpdateCenterCard() {
+  const { data } = useVersionInfo();
+  const native = isNative();
+  const [status, setStatus] = useState<UpdateCenterStatus>("checking");
+  const [progress, setProgress] = useState(0);
+  const [nativeVersion, setNativeVersion] = useState<string | null>(null);
+  const [nativeNotes, setNativeNotes] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!native) {
+      setStatus("ready");
+      return;
+    }
+    let mounted = true;
+    void checkForUpdate()
+      .then(update => {
+        if (!mounted) return;
+        setNativeVersion(update?.latest_version ?? null);
+        setNativeNotes(update?.notes ?? null);
+        setStatus(update?.error ? "error" : "ready");
+        if (update?.error) setError(update.error);
+      })
+      .catch(err => {
+        if (!mounted) return;
+        setStatus("error");
+        setError(err instanceof Error ? err.message : "Could not check for updates.");
+      });
+    return () => { mounted = false; };
+  }, [native]);
+
+  const currentVersion = APP_VERSION || data?.currentVersion || "unknown";
+  const latestVersion = nativeVersion ?? data?.latestVersion ?? currentVersion;
+  const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
+  const notes = simpleUpdateNotes(nativeNotes ?? data?.notes);
+
+  const startUpdate = async () => {
+    if (!updateAvailable || status === "downloading" || status === "installing") return;
+    setError(null);
+    setProgress(5);
+    setStatus("downloading");
+
+    if (native) {
+      try {
+        await performUpdate((percent, installing) => {
+          setProgress(Math.max(5, percent));
+          if (installing) setStatus("installing");
+        });
+        setProgress(100);
+        setStatus("done");
+      } catch (err) {
+        // Old shells or a temporarily unavailable Tauri updater still get a
+        // working installer path from the public server endpoint.
+        setError("Native install was unavailable. Downloading the latest installer instead.");
+        const anchor = document.createElement("a");
+        anchor.href = apiUrl(data?.updaterCmdUrl || "/api/download/latest");
+        anchor.download = `OptiGods-Setup-${latestVersion}.exe`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setProgress(100);
+        setStatus("done");
+      }
+      return;
+    }
+
+    const targetUrl = apiUrl(data?.updaterCmdUrl || "/api/download/latest");
+    const anchor = document.createElement("a");
+    anchor.href = targetUrl;
+    anchor.download = `OptiGods-Setup-${latestVersion}.exe`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setProgress(100);
+    setStatus("done");
+  };
+
+  const busy = status === "downloading" || status === "installing";
+  const statusText =
+    status === "checking" ? "Checking release status…" :
+    status === "downloading" ? `Downloading ${latestVersion}…` :
+    status === "installing" ? "Installing update — please wait…" :
+    status === "done" ? (native ? "Update installed — the app will restart." : "Installer downloaded — run it to finish.") :
+    status === "error" ? "Update check or installation needs attention." :
+    updateAvailable ? `Update available · v${latestVersion}` :
+    `You are up to date · v${currentVersion}`;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      data-testid="update-center"
+      className="rounded-2xl border border-red-500/25 bg-red-500/[0.035] p-5 shadow-[0_0_28px_-18px_rgba(239,68,68,.8)]"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
+            <Download className="h-5 w-5 text-red-400" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Opti Gods Update Center</p>
+            <h2 className="mt-1 text-lg font-black text-white">Software Updates</h2>
+            <p className="mt-1 text-xs text-zinc-500">Keep Opti Gods current with security, stability, and compatibility fixes.</p>
+          </div>
+        </div>
+        <span className={cn(
+          "rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider",
+          updateAvailable ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+        )}>
+          {updateAvailable ? "Update required" : "Current"}
+        </span>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-white/8 bg-black/20 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold text-white">{statusText}</p>
+            <p className="mt-1 text-[10px] text-zinc-600">Installed v{currentVersion} · Latest v{latestVersion}</p>
+          </div>
+          {updateAvailable && (
+            <button
+              type="button"
+              data-testid="button-download-install-update"
+              onClick={() => void startUpdate()}
+              disabled={busy || status === "checking"}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {native ? "Download and install update" : "Download latest installer"}
+            </button>
+          )}
+        </div>
+        {(busy || status === "done") && (
+          <div className="mt-3">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+              <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="mt-1 text-right text-[9px] text-zinc-600">{progress}%</p>
+          </div>
+        )}
+        {error && <p className="mt-2 text-[10px] text-red-400">{error}</p>}
+      </div>
+
+      <div className="mt-4">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">What changed for you</p>
+        <div className="grid gap-2 md:grid-cols-3">
+          {notes.slice(0, 6).map(note => (
+            <div key={note} className="rounded-lg border border-white/8 bg-black/15 px-3 py-2.5">
+              <p className="text-[11px] leading-relaxed text-zinc-300">{note}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
 export default function Updates() {
   const { data: announcements = [], isLoading, isError, refetch, isFetching } = useQuery<Announcement[]>({
     queryKey: ["/api/announcements"],
@@ -381,6 +543,8 @@ export default function Updates() {
             Refresh
           </button>
         </motion.div>
+
+        <UpdateCenterCard />
 
         {/* Detected-system panel */}
         <motion.div
