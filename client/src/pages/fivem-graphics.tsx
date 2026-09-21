@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { isNative, discordLogin, openFivemFolder } from "@/lib/tauri-bridge";
+import { isNative, discordLogin, installFivemPack, openFivemFolder, uninstallFivemPack } from "@/lib/tauri-bridge";
 import { loginWithDiscord } from "@/hooks/use-auth";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
@@ -504,6 +504,15 @@ function generateZip(opts: PackOpts): Uint8Array {
   };
 
   return zipSync(files);
+}
+
+function generateNativePackFiles(opts: PackOpts) {
+  const timecycle = buildTimecycleXml(opts);
+  const weather = buildWeatherXml(opts);
+  return [
+    { path: "citizen/platform/data/tune/timecycle_mods_1.xml", content: timecycle },
+    { path: "citizen/common/data/weather.xml", content: weather },
+  ];
 }
 
 function downloadBlob(data: Uint8Array, filename: string) {
@@ -1185,6 +1194,8 @@ export default function FivemGraphics() {
   const [keepProps,      setKeepProps]      = useState(true);
   const [packName,       setPackName]       = useState("My Blue Sky Pack");
   const [generated,      setGenerated]      = useState(false);
+  const [nativePackBusy, setNativePackBusy] = useState(false);
+  const [nativePackStatus, setNativePackStatus] = useState("");
 
   const [disableRain,        setDisableRain]        = useState(false);
   const [disableSnow,        setDisableSnow]        = useState(false);
@@ -1273,9 +1284,18 @@ export default function FivemGraphics() {
     alert("Open %LOCALAPPDATA%\\FiveM in File Explorer, then choose FiveM Application Data or FiveM.app.");
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     try {
       const opts = buildOpts();
+      if (isNative()) {
+        setNativePackBusy(true);
+        setNativePackStatus("");
+        const result = await installFivemPack(packName, generateNativePackFiles(opts));
+        setNativePackStatus(result.message);
+        setGenerated(true);
+        setTimeout(() => setGenerated(false), 3000);
+        return;
+      }
       const zip  = generateZip(opts);
       const safe = packName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
       downloadBlob(zip, `optigods-fivem-${safe}.zip`);
@@ -1283,11 +1303,26 @@ export default function FivemGraphics() {
       setTimeout(() => setGenerated(false), 3000);
     } catch (e) {
       console.error("Pack generation failed:", e);
-      alert("Pack generation failed — please try again.");
+      alert(e instanceof Error ? e.message : "Pack generation failed — please try again.");
+    } finally {
+      setNativePackBusy(false);
     }
   };
 
-  const handleDownloadLeaqPack = () => {
+  const handleRollbackPack = async () => {
+    setNativePackBusy(true);
+    setNativePackStatus("");
+    try {
+      const result = await uninstallFivemPack();
+      setNativePackStatus(result.message);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "FiveM pack rollback failed.");
+    } finally {
+      setNativePackBusy(false);
+    }
+  };
+
+  const handleDownloadLeaqPack = async () => {
     try {
       const opts: PackOpts = {
         packName: "Opti Gods Blue Sky Pack",
@@ -1301,10 +1336,19 @@ export default function FivemGraphics() {
         lightRays: false, lightRayIntensity: 0,
         sunIntensity: 65, atmosphereHaze: false,
       };
+      if (isNative()) {
+        setNativePackBusy(true);
+        setNativePackStatus("");
+        const result = await installFivemPack(opts.packName, generateNativePackFiles(opts));
+        setNativePackStatus(result.message);
+        return;
+      }
       downloadBlob(generateZip(opts), "optigods-blue-sky-pack.zip");
     } catch (e) {
       console.error("Download failed:", e);
-      alert("Download failed — please try again.");
+      alert(e instanceof Error ? e.message : "Download failed — please try again.");
+    } finally {
+      setNativePackBusy(false);
     }
   };
 
@@ -1424,7 +1468,7 @@ export default function FivemGraphics() {
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-300/80 leading-relaxed space-y-0.5">
-              <p><span className="font-bold text-amber-300">Install safely:</span> Close FiveM → back up matching citizen files → copy the ZIP's <span className="font-mono font-bold text-amber-300">citizen</span> folder → restart.</p>
+              <p><span className="font-bold text-amber-300">Install safely:</span> {isNative() ? "Close FiveM, then use one-click Install. Existing matching files are backed up and verified automatically." : <>Close FiveM → back up matching citizen files → copy the ZIP's <span className="font-mono font-bold text-amber-300">citizen</span> folder → restart.</>}</p>
               <p className="text-zinc-500">Client-safe visual overrides only. No installer script, autoexec changes, local resources, or server time/weather claims.</p>
             </div>
           </div>
@@ -1517,13 +1561,19 @@ export default function FivemGraphics() {
                 </p>
                 <button
                   onClick={handleDownloadLeaqPack}
+                  disabled={nativePackBusy}
                   data-testid="button-graphics-pack-download"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  Download Pack ZIP
+                  {nativePackBusy ? "Installing safely…" : isNative() ? "Install Pack" : "Download Pack ZIP"}
                   <ChevronRight className="w-3 h-3 opacity-60" />
                 </button>
+                {isNative() && nativePackStatus && (
+                  <p className="mt-3 text-[11px] leading-relaxed text-emerald-400" data-testid="text-premade-pack-status">
+                    {nativePackStatus}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -2211,7 +2261,7 @@ export default function FivemGraphics() {
 
                 {/* Generate button */}
                 <Button
-                  onClick={handleGenerate} data-testid="button-generate-pack"
+                  onClick={handleGenerate} disabled={nativePackBusy} data-testid="button-generate-pack"
                   className={cn(
                     "w-full py-3 rounded-xl font-bold text-sm transition-all",
                     generated ? "bg-emerald-600 hover:bg-emerald-500" : "bg-red-600 hover:bg-red-500"
@@ -2223,7 +2273,7 @@ export default function FivemGraphics() {
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                         className="flex items-center gap-2"
                       >
-                        <CheckCircle2 className="w-4 h-4" /> Saved to Downloads
+                        <CheckCircle2 className="w-4 h-4" /> {isNative() ? "Installed & verified" : "Saved to Downloads"}
                       </motion.span>
                     ) : (
                       <motion.span key="gen"
@@ -2231,12 +2281,28 @@ export default function FivemGraphics() {
                         className="flex items-center gap-2"
                       >
                         <Download className="w-4 h-4" />
-                        Generate &amp; Download citizen ZIP
+                        {nativePackBusy ? "Installing safely…" : isNative() ? "Generate & Install citizen pack" : "Generate & Download citizen ZIP"}
                         <ChevronRight className="w-4 h-4 opacity-60" />
                       </motion.span>
                     )}
                   </AnimatePresence>
                 </Button>
+                {isNative() && (
+                  <button
+                    type="button"
+                    onClick={handleRollbackPack}
+                    disabled={nativePackBusy}
+                    data-testid="button-rollback-pack"
+                    className="w-full py-2.5 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-300 text-xs font-bold hover:border-red-500/40 hover:text-white disabled:opacity-50"
+                  >
+                    Uninstall latest pack &amp; restore backup
+                  </button>
+                )}
+                {nativePackStatus && (
+                  <p className="text-[11px] leading-relaxed text-emerald-400" data-testid="text-native-pack-status">
+                    {nativePackStatus}
+                  </p>
+                )}
               </div>
             </div>
           </section>
