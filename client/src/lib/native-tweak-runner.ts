@@ -41,6 +41,68 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * A detector-confirmed tweak was already applied by Windows, so the runner
+ * skips the mutation itself. It still needs one native ticket/result pair so
+ * the server's free active-tweak ledger matches the confirmed Windows state.
+ */
+async function reconcileConfirmedNativeTweak(id: string): Promise<void> {
+  const authorization = await fetchWithTimeout(
+    apiUrl("/api/performance-allowance/native-ticket"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({
+        tweakId: id,
+        sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
+        idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
+      }),
+    },
+    NATIVE_REQUEST_TIMEOUT_MS,
+    `OG-NET-004 · Allowance sync timed out for ${id}.`,
+  );
+  const authorizationBody = await authorization.json().catch(() => ({})) as { ticket?: string; error?: string; code?: string };
+  if (!authorization.ok || typeof authorizationBody.ticket !== "string") {
+    throw new Error(`${authorizationBody.code || `OG-HTTP-${authorization.status}`} · ${authorizationBody.error || "Allowance sync was rejected."}`);
+  }
+
+  const consumed = await fetchWithTimeout(
+    apiUrl("/api/performance-allowance/native-ticket/consume"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({ tweakId: id, ticket: authorizationBody.ticket }),
+    },
+    NATIVE_REQUEST_TIMEOUT_MS,
+    `OG-NET-004 · Allowance confirmation timed out for ${id}.`,
+  );
+  const consumedBody = await consumed.json().catch(() => ({})) as { resultSecret?: string; error?: string; code?: string };
+  if (!consumed.ok || typeof consumedBody.resultSecret !== "string") {
+    throw new Error(`${consumedBody.code || `OG-HTTP-${consumed.status}`} · ${consumedBody.error || "Allowance confirmation was rejected."}`);
+  }
+
+  const result = await fetchWithTimeout(
+    apiUrl("/api/performance-allowance/native-ticket/result"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({
+        tweakId: id,
+        ticket: authorizationBody.ticket,
+        resultSecret: consumedBody.resultSecret,
+        success: true,
+        message: "Windows detector confirmed this tweak before the run.",
+      }),
+    },
+    NATIVE_REQUEST_TIMEOUT_MS,
+    `OG-NET-004 · Allowance result sync timed out for ${id}.`,
+  );
+  if (!result.ok) {
+    const resultBody = await result.json().catch(() => ({})) as { error?: string; code?: string };
+    throw new Error(`${resultBody.code || `OG-HTTP-${result.status}`} · ${resultBody.error || "Allowance result sync was rejected."}`);
+  }
+}
+
 export type TweakRunProgress = {
   id: string;
   index: number;
@@ -342,6 +404,19 @@ async function applyTweakBatchInternal(
       ? pendingIds
       : pendingIds.slice(0, Math.max(0, allowance.remaining ?? 0));
   const supportedIds = entitledIds;
+  const reconcileConfirmedIds = async () => {
+    if (allowance.pro || !alreadyConfirmedIds.length) return;
+    for (const id of alreadyConfirmedIds) {
+      if (!NATIVE_TWEAK_ID_SET.has(id)) continue;
+      try {
+        await reconcileConfirmedNativeTweak(id);
+      } catch (error) {
+        // Keep the Windows result authoritative. A later allowance refresh or
+        // rerun can retry accounting without falsely marking the tweak failed.
+        console.warn("[native-tweak-runner] Could not sync confirmed allowance", id, error);
+      }
+    }
+  };
 
   if (!credential) {
     const message = "OG-AUTH-001 · Windows device identity unavailable. Reopen the Windows app to refresh the device identity.";
@@ -355,6 +430,7 @@ async function applyTweakBatchInternal(
   }
 
   if (!supportedIds.length) {
+    await reconcileConfirmedIds();
     localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
     return { appliedIds: alreadyConfirmedIds, selectedIds: uniqueIds, unsupportedIds, failures: unsupportedFailures };
   }
@@ -505,6 +581,7 @@ async function applyTweakBatchInternal(
     }
   }
 
+  await reconcileConfirmedIds();
   window.dispatchEvent(new Event("optigods:allowance-changed"));
   localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
   return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures), stoppedIds };
