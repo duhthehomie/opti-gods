@@ -22,6 +22,7 @@ import {
   type NativeStartupRestoreResult,
 } from "@/lib/tauri-bridge";
 import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
+import { nativeScanToScannedInfo, uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
 import { NATIVE_RESTORE_CREATED_KEY, setNativeRestoreReadiness } from "@/lib/native-readiness";
 
 export interface NativeBootResult {
@@ -122,18 +123,28 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       console.warn("[native] ProBalance held until the safety checkpoint is verified");
     }
 
-    // Step 3 — silent auto-scan if no hardware data exists yet.
-    // Replaces the web onboarding wizard entirely in the .exe.
-    if (!getScannedInfo()) {
-      try {
-        const hw = await withTimeout(scanHardware(), 10_000, "autoScan");
-        if (hw) {
-          saveScannedInfo({ GPU: hw.gpu, CPU: hw.cpu, RAM_GB: hw.ram_gb ?? undefined });
-          console.info("[native] Auto-scan complete — hardware stored silently");
-        }
-      } catch (err) {
-        console.warn("[native] Auto-scan failed (non-fatal)", err);
+    // Step 3 — refresh the full hardware profile silently on every desktop
+    // launch. The optimizer needs the current GPU/CPU/RAM/chassis data before
+    // it chooses a game preset; stale localStorage must never be the source of
+    // truth after a hardware swap or driver upgrade.
+    try {
+      const hw = await withTimeout(scanHardware(), 15_000, "autoScan");
+      if (hw) {
+        saveScannedInfo(nativeScanToScannedInfo(hw));
+        // Upload is best-effort here: the local profile must work before login,
+        // while an existing native session lets the admin see this PC
+        // immediately without requiring a second manual scan button.
+        void uploadValidatedHardwareScan(hw).catch(error => {
+          console.info("[native] Hardware upload deferred until sign-in:", error);
+        });
+        console.info("[native] Full auto-scan complete — hardware profile refreshed");
       }
+    } catch (err) {
+      // Keep an existing profile if Windows WMI is temporarily busy. The next
+      // explicit scan/optimization action retries through the validated path.
+      console.warn("[native] Auto-scan failed (non-fatal):", err, {
+        cachedProfile: Boolean(getScannedInfo()),
+      });
     }
 
     return { native: true, env };
