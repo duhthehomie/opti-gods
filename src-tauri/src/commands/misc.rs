@@ -1,7 +1,7 @@
 // Miscellaneous utility commands for the Opti Gods desktop shell.
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 
 const MSI_UTILITY_SHA256: &str = "695800afad96f858a3f291b7df21c16649528f13d39b63fb7c233e5676c8df6f";
 const PROFILE_INSPECTOR_SHA256: &str = "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e";
