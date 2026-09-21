@@ -12,6 +12,7 @@ import {
   buildSafePreset,
   FORBIDDEN_AUTO_TWEAKS,
   EXPERT_TWEAK_IDS,
+  NVIDIA_CAPTURE_PROTECTED_IDS,
   hardwareFromRig,
   type PresetHardware,
 } from "../shared/preset-builder";
@@ -186,6 +187,21 @@ test("Hardware-mismatch opt-in is recorded in blocked", () => {
   const p = buildSafePreset(nvidiaRtxHw, "balanced", ["AmdAntiLag"]);
   assert.ok(!p.core.includes("AmdAntiLag"), "AmdAntiLag must NOT be in core on NVIDIA");
   assert.ok(p.blocked.some(b => b.id === "AmdAntiLag"), "AmdAntiLag should be in blocked[]");
+});
+
+test("NVIDIA capture protections never enter generated presets", () => {
+  const p = buildSafePreset(nvidiaRtxHw, "balanced");
+  for (const id of NVIDIA_CAPTURE_PROTECTED_IDS) {
+    assert.ok(!p.core.includes(id), `${id} must not be in core`);
+    assert.ok(!p.expert.includes(id), `${id} must not be in expert`);
+  }
+  const opted = buildSafePreset(nvidiaRtxHw, "balanced", ["NvidiaDisableOverlay"]);
+  assert.ok(!opted.core.includes("NvidiaDisableOverlay"));
+  assert.ok(!opted.expert.includes("NvidiaDisableOverlay"));
+  assert.match(
+    opted.blocked.find((entry) => entry.id === "NvidiaDisableOverlay")?.reason ?? "",
+    /protected NVIDIA capture action/i,
+  );
 });
 
 test("Unknown vendor: only universal tweaks, no vendor families", () => {

@@ -93,6 +93,25 @@ const AMD_IGPU_PREFIXES = ["IGpu_Amd", "IGpu_Vega"];
 const INTEL_IGPU_PREFIXES = ["IGpu_Intel"];
 const GENERIC_IGPU_PREFIXES = ["IGpu_"]; // matched after the vendor-specific iGPU prefixes
 
+/**
+ * These actions can disable NVIDIA App overlay, ShadowPlay/clip capture, or
+ * the startup/container services those features require. They are never
+ * allowed into a generated Full Optimize/preset result, even if a stale
+ * category list or future generator accidentally adds one back.
+ */
+export const NVIDIA_CAPTURE_PROTECTED_IDS: ReadonlySet<string> = new Set([
+  "NvidiaDisableTelemetry",
+  "NvidiaDisableOverlay",
+  "NvidiaDisableAnsel",
+  "NvidiaDisableContainerLS",
+  "NvidiaDisableShadowPlay",
+  "RTX50NvidiaAppTelemetryOff",
+  "Cod1650DisableAnsel",
+  "FiveM1650DisableAnsel",
+  "FiveM1060AnselDisable",
+  "su_nvidia",
+]);
+
 function startsWithAny(id: string, prefixes: readonly string[]): boolean {
   for (const p of prefixes) if (id.startsWith(p)) return true;
   return false;
@@ -291,7 +310,7 @@ const SERVICE_SAFE: string[] = [
 const STARTUP_TWEAKS: string[] = [
   "su_ea_app", "su_epic", "su_ubisoft", "su_battlenet",
   "su_razer", "su_chrome", "su_firefox", "su_edge_startup", "su_obs",
-  "su_steam", "su_discord", "su_nvidia", "su_amdradeon", "su_onedrive",
+  "su_steam", "su_discord", "su_amdradeon", "su_onedrive",
   "su_spotify", "su_teams", "su_zoom", "su_skype", "su_logitech",
   "su_corsair", "su_msiab", "su_rtss", "su_ccleaner", "su_realtek",
 ];
@@ -523,13 +542,12 @@ const NVIDIA_RTX50_EXTRA: string[] = [
 ];
 
 const NVIDIA_CORE: string[] = [
-  "NvidiaDisableTelemetry", "NvidiaPreRenderedFrames", "NvidiaLowLatency",
+  "NvidiaPreRenderedFrames", "NvidiaLowLatency",
   "NvidiaPowerMizer", "NvidiaReflexEnable", "NvidiaTripleBufferOff",
-  "NvidiaDisableOverlay", "NvidiaForceVSyncOff", "NvidiaShaderCache",
+  "NvidiaForceVSyncOff", "NvidiaShaderCache",
   "NvidiaMaxPerfMode", "NvidiaAnisoFiltering", "NvidiaThreadedOpt",
   "NvidiaOptimizeLatency", "NvidiaGSyncOptimize", "NvidiaOpenGLOpt",
-  "NvidiaVRAMMax", "NvidiaDisableAnsel", "NvidiaDisableContainerLS",
-  "NvidiaDisableShadowPlay", "NvidiaShaderCacheUnlimited",
+  "NvidiaVRAMMax", "NvidiaShaderCacheUnlimited",
   "NvidiaFrameBufferOpt", "NvidiaGpuBgOptimize", "NvidiaCUDAPriority",
   "NvidiaDisableHDMIAudio",
   "NvLowLatencyUltra", "NvTextureFilterHighPerf", "NvThreadedOptOn",
@@ -539,13 +557,13 @@ const NVIDIA_CORE: string[] = [
 const NVIDIA_RTX_EXTRA: string[] = [
   "EnableHAGS", "NvidiaRTXVideoOff",
   "RTX50DLSS4FrameGen", "RTX50Reflex2", "RTX50PowerModeLock",
-  "RTX50ShaderCacheBump", "RTX50NVCPSettings", "RTX50NvidiaAppTelemetryOff",
+  "RTX50ShaderCacheBump", "RTX50NVCPSettings",
 ];
 const NVIDIA_GTX_EXTRA: string[] = [
   "NvShaderDiskCache", "NvTextureFilterPerf", "NvFXAADriverOff",
   "FiveM1650DisableHAGS", "FiveM1650VRAMBudget",
-  "FiveM1650DisableAnsel", "FiveM1650LowLatencyMode",
-  "FiveM1060VRAMFlag", "FiveM1060DisableHAGS", "FiveM1060AnselDisable",
+  "FiveM1650LowLatencyMode",
+  "FiveM1060VRAMFlag", "FiveM1060DisableHAGS",
 ];
 
 const AMD_DGPU_CORE: string[] = [
@@ -620,7 +638,7 @@ const COD_UNIVERSAL: string[] = [
   "CodQoSPolicy", "CodFramePacing", "CodMemPriority",
 ];
 /** COD tweaks that only apply on NVIDIA hardware */
-const COD_NVIDIA: string[] = ["Cod1650LowLatency", "Cod1650DisableAnsel"];
+const COD_NVIDIA: string[] = ["Cod1650LowLatency"];
 /** COD tweaks that only apply on AMD CPU builds */
 const COD_AMD_CPU: string[] = ["Cod3500PowerPlan"];
 
@@ -808,6 +826,13 @@ export function buildSafePreset(
   //    rejected — they must never reach `core`.
   const FORBIDDEN_LIST = FORBIDDEN_AUTO_TWEAKS as readonly string[];
   for (const optedId of Array.from(optIn)) {
+    if (NVIDIA_CAPTURE_PROTECTED_IDS.has(optedId)) {
+      blocked.push({
+        id: optedId,
+        reason: "protected NVIDIA capture action — never included in automatic presets because it can break overlay, ShadowPlay, or clips",
+      });
+      continue;
+    }
     const isExpert = EXPERT_TWEAK_IDS.has(optedId);
     const isForbidden = FORBIDDEN_LIST.includes(optedId);
     if (!isExpert && !isForbidden) {
@@ -859,6 +884,13 @@ export function buildSafePreset(
   const core: string[] = [];
   const expert: string[] = [];
   for (const id of Array.from(candidates)) {
+    if (NVIDIA_CAPTURE_PROTECTED_IDS.has(id)) {
+      blocked.push({
+        id,
+        reason: "protected NVIDIA capture action — never included in automatic presets because it can break overlay, ShadowPlay, or clips",
+      });
+      continue;
+    }
     // Hardware filter
     const compat = isHardwareCompatible(id, hw);
     if (!compat.ok) {

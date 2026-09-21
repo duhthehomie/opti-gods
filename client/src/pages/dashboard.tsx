@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, detectAppliedTweaks, isNative } from "@/lib/tauri-bridge";
+import { createRestorePoint, detectAppliedTweaks, getNativeAuthToken, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -30,6 +30,8 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
+import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
+import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,15 +162,14 @@ const MAX_FPS_TWEAKS = [
   "FortniteDisableMotionBlur", "FortniteLowShadows", "FortniteDisableRecording",
   "FortniteNetworkBuffer", "FortniteDisableThrottling",
   // Startup app cleanup — removes background launch, apps still open normally
-  "su_discord", "su_spotify", "su_skype", "su_teams", "su_nvidia",
+  "su_discord", "su_spotify", "su_skype", "su_teams",
   "su_ccleaner", "su_battlenet", "su_epic", "su_chrome", "su_razer",
   "su_amdradeon", "su_rtss", "su_logitech",
   // Maximum-performance hardware and process layer — no competitive preset
   // should be stronger than the primary Max FPS choice.
   "EnableMSIMode_Safe",
-  "NvidiaDisableTelemetry", "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
-  "NvidiaShaderCache", "NvidiaOptimizeLatency", "NvidiaDisableOverlay",
-  "NvidiaDisableAnsel", "NvidiaDisableShadowPlay",
+  "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
+  "NvidiaShaderCache", "NvidiaOptimizeLatency",
   "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
   "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
   "AmdOptimizeLatency", "AmdShaderCache", "AmdTextureFilterPerf",
@@ -190,9 +191,8 @@ const COMPETITIVE_TWEAKS = [
   // MSI interrupt mode — safe version (no BSOD risk, filters GPU + NVMe + NIC)
   "EnableMSIMode_Safe",
   // NVIDIA performance pack — no-op on AMD/Intel systems
-  "NvidiaDisableTelemetry", "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
-  "NvidiaShaderCache", "NvidiaOptimizeLatency", "NvidiaDisableOverlay",
-  "NvidiaDisableAnsel", "NvidiaDisableShadowPlay",
+  "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
+  "NvidiaShaderCache", "NvidiaOptimizeLatency",
   // AMD performance pack — no-op on NVIDIA/Intel systems
   "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
   "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
@@ -448,6 +448,35 @@ export default function Dashboard() {
   const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
+  const applySupportedNvidiaPreset = async () => {
+    if (!native) return null;
+    const discreteNvidiaGpus = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated);
+    if (discreteNvidiaGpus.length !== 1 || hw.isHybridGpu) return null;
+    if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
+      const restorePoint = await createRestorePoint("Before Opti Gods NVIDIA preset");
+      if (!restorePoint?.sequence_number) {
+        throw new Error("Windows did not confirm a restore point before the NVIDIA preset.");
+      }
+      sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+    }
+    const nativeAuth = await getNativeAuthToken();
+    const proSession = localStorage.getItem(PRO_SESSION_KEY);
+    const deviceId = getPersistentDeviceId();
+    const auth = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
+    if (!auth) throw new Error("Windows device authorization is unavailable.");
+    const response = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+      body: JSON.stringify({ tweakId: "ImportNvidiaPresetPro", sessionToken: proSession ?? undefined }),
+    });
+    const body = await response.json().catch(() => ({})) as { ticket?: string; error?: string };
+    if (!response.ok || typeof body.ticket !== "string") {
+      throw new Error(body.error || "The supported NVIDIA preset was not authorized.");
+    }
+    return importNvidiaPreset(body.ticket, auth);
+  };
+
   const refreshDetectedState = useCallback(async () => {
     if (!native) return;
     setRefreshingScore(true);
@@ -507,6 +536,20 @@ export default function Dashboard() {
         return;
       }
       if (native) {
+        if (hw.gpus.some(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated)) {
+          try {
+            const presetMessage = await applySupportedNvidiaPreset();
+            if (presetMessage) {
+              toast({ title: "Supported NVIDIA preset applied", description: presetMessage, variant: "success" });
+            }
+          } catch (error) {
+            toast({
+              title: "NVIDIA preset failed",
+              description: error instanceof Error ? error.message : "The NVIDIA preset was not confirmed by Windows.",
+              variant: "destructive",
+            });
+          }
+        }
         const nativeState = await detectAppliedTweaks();
         const pendingIds = compatibleIds.filter(id => !nativeState[id]);
         if (pendingIds.length === 0) {
@@ -1379,7 +1422,6 @@ export default function Dashboard() {
         </motion.div>
 
 
-        
         {!isPro && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}

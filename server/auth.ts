@@ -403,8 +403,12 @@ export function registerAuthRoutes(app: Express): void {
       storage.getAdminSettings(),
       getLatestGhRelease(),
     ]);
-    const fileVersion = readVersionFromFile();
-    const CURRENT = "5.2.26";
+    const fileInfo = readVersionInfoFromFile();
+    const fileVersion = fileInfo?.version ?? null;
+    // Keep the public version floor aligned with the checked-in release
+    // metadata. Older desktop shells use this endpoint before they can use
+    // the native updater, so a stale hardcoded value can hide the update.
+    const CURRENT = fileVersion ?? "5.2.27";
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
 
@@ -422,10 +426,10 @@ export function registerAuthRoutes(app: Express): void {
       currentVersion,
       latestVersion,
       notes: latestVersion === CURRENT
-        ? "V5.2.26 — restores Pro access after Discord username changes.\nAdded a backup-first FiveM UI/input recovery fix.\nRemoved risky FiveM network/system tweaks from automatic presets."
+        ? fileInfo?.notes ?? `V${CURRENT} — the latest Opti Gods release is ready.`
         : null,
       updaterCmdUrl:  settings?.updaterCmdUrl  ?? INSTALLER_URL,
-      updatePageUrl:  settings?.updatePageUrl  ?? gh?.pageUrl ?? "https://optigods.com",
+      updatePageUrl:  settings?.updatePageUrl  ?? `${SITE.replace(/\/$/, "")}/updates`,
     });
   });
 }
@@ -446,17 +450,20 @@ function semverGte(a: string, b: string): boolean {
 // Cached read of /version.json — the file is committed so this never throws
 // in normal operation; the try/catch just means we degrade gracefully if
 // someone deletes it from a fork.
-let _cachedFileVersion: string | null | undefined;
-function readVersionFromFile(): string | null {
-  if (_cachedFileVersion !== undefined) return _cachedFileVersion;
+let _cachedFileInfo: { version: string; notes: string | null } | null | undefined;
+function readVersionInfoFromFile(): { version: string; notes: string | null } | null {
+  if (_cachedFileInfo !== undefined) return _cachedFileInfo;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs") as typeof import("node:fs");
     const path = require("node:path") as typeof import("node:path");
     const raw = fs.readFileSync(path.resolve(process.cwd(), "version.json"), "utf8");
-    _cachedFileVersion = (JSON.parse(raw) as { version?: string }).version ?? null;
+    const parsed = JSON.parse(raw) as { version?: string; notes?: string };
+    _cachedFileInfo = parsed.version
+      ? { version: parsed.version, notes: parsed.notes?.trim() || null }
+      : null;
   } catch {
-    _cachedFileVersion = null;
+    _cachedFileInfo = null;
   }
-  return _cachedFileVersion;
+  return _cachedFileInfo;
 }

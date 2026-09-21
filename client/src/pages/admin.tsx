@@ -3419,6 +3419,20 @@ export default function Admin() {
     refetchInterval: 60000,
   });
 
+  const marketingAttributionQuery = useQuery<{
+    platform: string; campaign: string; landingVisits: number; installerDownloads: number;
+    discordJoins: number; proPurchases: number; qualifiedConversions: number;
+  }[]>({
+    queryKey: ["/api/admin/marketing-attribution", key],
+    queryFn: () => fetch(apiUrl("/api/admin/marketing-attribution"), { headers }).then(r => {
+      if (!r.ok) throw new Error("Unauthorized");
+      return r.json();
+    }),
+    enabled: authed,
+    retry: false,
+    refetchInterval: 60000,
+  });
+
   const codesQuery = useQuery<(ProAccessCode & { lastSessionAt: string | null; sessionIp: string | null; ipCity: string | null; ipRegion: string | null; ipCountry: string | null })[]>({
     queryKey: ["/api/admin/codes", key],
     queryFn: () => fetch(apiUrl("/api/admin/codes"), { headers }).then(r => {
@@ -6095,6 +6109,32 @@ export default function Admin() {
           <div className="space-y-5">
             <div className="text-[10px] text-zinc-600 leading-relaxed">
               Every time a user downloads a script, the tweaks they had enabled are recorded. Data is fully anonymous — no IP, no account info, just tweak IDs and timestamps.
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-zinc-900/40 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-zinc-300">Social Campaign Conversions</h3>
+                <span className="text-[9px] text-zinc-600">anonymous campaign totals</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[10px]">
+                  <thead className="text-zinc-600 uppercase">
+                    <tr><th className="pb-2">Platform / Campaign</th><th>Visits</th><th>Downloads</th><th>Discord clicks</th><th>Pro buyers</th><th>Qualified</th></tr>
+                  </thead>
+                  <tbody>
+                    {(marketingAttributionQuery.data ?? []).map(row => (
+                      <tr key={`${row.platform}:${row.campaign}`} className="border-t border-white/5">
+                        <td className="py-2"><span className="text-white font-bold capitalize">{row.platform}</span><span className="text-zinc-600 ml-2 font-mono">{row.campaign}</span></td>
+                        <td>{row.landingVisits}</td><td>{row.installerDownloads}</td><td>{row.discordJoins}</td>
+                        <td className="text-emerald-400 font-bold">{row.proPurchases}</td><td className="text-red-400 font-bold">{row.qualifiedConversions}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!marketingAttributionQuery.isLoading && !(marketingAttributionQuery.data?.length) && (
+                  <p className="py-5 text-center text-zinc-700">No tracked campaign traffic yet.</p>
+                )}
+              </div>
             </div>
 
             {downloadStatsQuery.isLoading ? (

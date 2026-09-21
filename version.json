@@ -1,4 +1,4 @@
 {
-  "version": "5.2.26",
-  "notes": "V5.2.26 — restores Pro access after Discord username changes, adds a backup-first FiveM UI/input recovery fix, and removes risky FiveM network/system tweaks from automatic presets."
+  "version": "5.2.27",
+  "notes": "V5.2.27 — adds automatic administrator elevation through the Windows manifest, hardens the free 15-slot allowance against stale reservations and oversized queues, keeps failed native results visible, and includes the supported NVIDIA preset path in Full Optimize."
 }

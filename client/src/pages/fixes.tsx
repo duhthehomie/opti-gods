@@ -8,6 +8,7 @@ import {
   Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2,
   ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff,
   Gamepad, Film, Volume2, Target, Undo2,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -558,6 +559,26 @@ export default function Fixes() {
             {nativeAction === "nvidia-overlay" ? "Restoring…" : "Restore NVIDIA Overlay"}
           </Button>
         </section>
+
+        <FixCard
+          testId="button-enable-windows-search"
+          accent="blue"
+          icon={Search}
+          title="Windows Search Indexing disabled?"
+          subtitle="Start Menu search is incomplete · file search stopped · WSearch was disabled by an optimizer"
+          tweaks="WSearch startup · SearchIndexer service"
+          bullets={[
+            ["Restores the Windows Search service", "Sets WSearch to Automatic and starts it immediately so Start Menu and File Explorer indexing can work again."],
+            ["Verifies the service really started", "The action reports an error instead of claiming success when Windows refuses the service change."],
+            ["Does not alter your indexed locations", "Windows keeps the existing index configuration and rebuilds missing entries in the background."],
+          ]}
+          footer="Safe for Windows 10 and 11. Index rebuilding can continue for a few minutes after the fix."
+          btnLabel="Enable Windows Search"
+          downloading={!!dlState["windows-search"] || nativeAction === "windows-search"}
+          onDownload={() => dlFix("windows-search", "/api/windows-search-fix-script", "OptiGods-Windows-Search-Fix.bat", "Windows Search Fix Downloaded", "Run it as administrator. It will enable and verify Windows Search indexing.")}
+          nativeActionId="windows-search"
+          onNativeAction={runFixInApp}
+        />
 
         <section className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 flex flex-wrap items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">

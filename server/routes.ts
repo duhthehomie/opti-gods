@@ -16,9 +16,9 @@ import { randomBytes } from "crypto";
 import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
-import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
+import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, NVIDIA_CAPTURE_PROTECTED_IDS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
 import { getLatestGhRelease, bustGhCache } from "./github-release";
-import { NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
+import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
 const GAME_WHITELIST_PS_ARRAY = GAME_WHITELIST
@@ -257,7 +257,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   su_teams: `$_runKey = Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run' -EA SilentlyContinue; $_teamsFound = ($_runKey.'com.squirrel.Teams.Teams' -ne $null) -or ($_runKey.Teams -ne $null) -or ((Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.TaskName -like '*Teams*' -and $_.State -ne 'Disabled' }) -ne $null); if ($_teamsFound) { $teamsKeys = @("com.squirrel.Teams.Teams","Teams"); foreach ($v in $teamsKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Teams" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Teams*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Microsoft Teams removed from startup" -ForegroundColor Green } else { Write-Host "[SKIP] Teams not on startup" -ForegroundColor DarkGray }`,
   su_skype: `$_runKey = Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run' -EA SilentlyContinue; $_skypeFound = ($_runKey.Skype -ne $null) -or ($_runKey.SkypeWithCalling -ne $null) -or ((Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.TaskName -like '*Skype*' -and $_.State -ne 'Disabled' }) -ne $null); if ($_skypeFound) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Skype" /f 2>$null; reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "SkypeWithCalling" /f 2>$null; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Skype*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Skype removed from startup" -ForegroundColor Green } else { Write-Host "[SKIP] Skype not on startup" -ForegroundColor DarkGray }`,
   su_zoom: `$_runKey = Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run' -EA SilentlyContinue; $_zoomLnk = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Zoom.lnk"; $_zoomFound = ($_runKey.Zoom -ne $null) -or (Test-Path $_zoomLnk); if ($_zoomFound) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Zoom" /f 2>$null; if (Test-Path $_zoomLnk) { Remove-Item $_zoomLnk -Force -EA SilentlyContinue }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "Zoom" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] Zoom removed from startup" -ForegroundColor Green } else { Write-Host "[SKIP] Zoom not on startup" -ForegroundColor DarkGray }`,
-  su_nvidia: `$nvKeys = @("NvBackend","NVIDIA GeForce Experience","ShadowPlay","NvNodeLauncher","nvtray","NVIDIA Share"); foreach ($v in $nvKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null; reg delete "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in @("NvBackend","NVIDIA GeForce Experience","NvNodeLauncher")) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*NvNode*" -or $_.TaskName -like "*GeForce*" -or $_.TaskName -like "*nvidia*" -or $_.TaskName -like "*NvBackend*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] NVIDIA background apps removed from ALL startup locations (HKCU+HKLM registry x6, StartupApproved x3, scheduled tasks)" -ForegroundColor Green`,
+  su_nvidia: `Write-Host "[PROTECTED] NVIDIA startup, overlay, ShadowPlay, and clip-capture entries were not changed." -ForegroundColor Yellow`,
   su_ccleaner: `$ccKeys = @("CCleaner","CCleaner64","CCleaner Smart Cleaning","CCleanerSmartCleaning"); foreach ($v in $ccKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null; reg delete "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in @("CCleaner","CCleaner64")) { New-ItemProperty -Path $saPath -Name $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -PropertyType Binary -Force -EA SilentlyContinue | Out-Null }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*CCleaner*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] CCleaner removed from ALL startup locations (HKCU+HKLM registry x4, StartupApproved, scheduled tasks)" -ForegroundColor Green`,
   su_corsair: `$iCUEKeys = @("iCUE","Corsair iCUE","ICUE","CorsairHID"); foreach ($v in $iCUEKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $lnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\iCUE.lnk","$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Corsair iCUE.lnk"); foreach ($lnk in $lnks) { If (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; foreach ($k in @("iCUE","ICUE")) { Set-ItemProperty $saPath $k -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue }; Get-ScheduledTask | Where-Object { $_.TaskName -like "*Corsair*" -or $_.TaskName -like "*iCUE*" } | Disable-ScheduledTask -EA SilentlyContinue; Write-Host "[OK] Corsair iCUE removed from ALL startup locations (registry x4, StartupApproved, .lnk, scheduled tasks)" -ForegroundColor Green`,
   su_amdradeon: `reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v "RadeonSoftware" /f 2>$null; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "RadeonSoftware" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] Radeon Software removed from startup" -ForegroundColor Green`,
@@ -1345,11 +1345,15 @@ function buildRestoreLastWorkingScript(): string {
 }
 
 function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
+  // Keep legacy/stale clients from generating a script that can disable
+  // NVIDIA App overlay, ShadowPlay, or clip capture. The dashboard also omits
+  // these IDs, but this is the final server-side safety boundary.
+  const generatedTweaks = enabledTweaks.filter((id) => !NVIDIA_CAPTURE_PROTECTED_IDS.has(id));
   const scriptLines: string[] = [
     `# ============================================`,
     `# OPTI GODS by leaq — PC Optimizer`,
     `# Generated: ${new Date().toISOString()}`,
-    `# Tweaks enabled: ${enabledTweaks.length}`,
+    `# Tweaks enabled: ${generatedTweaks.length}`,
     `# ============================================`,
     ``,
     `$ErrorActionPreference = 'Stop'`,
@@ -1392,7 +1396,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
     ``,
     `Write-Host "=====================================" -ForegroundColor Red`,
     `Write-Host "  OPTI GODS by leaq" -ForegroundColor Red`,
-    `Write-Host "  Starting ${enabledTweaks.length} optimizations..." -ForegroundColor White`,
+    `Write-Host "  Starting ${generatedTweaks.length} optimizations..." -ForegroundColor White`,
     `Write-Host "  Running as: \$env:USERNAME (Admin)" -ForegroundColor Cyan`,
     `Write-Host "=====================================" -ForegroundColor Red`,
     ``,
@@ -1490,7 +1494,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   }
 
   const categories: Record<string, string[]> = {};
-  for (const key of enabledTweaks) {
+  for (const key of generatedTweaks) {
     if (key === "OpenMsiUtilityPro" || key === "ImportNvidiaPresetPro") continue;
     const cmd = normalizeWindowsPowerShellCommand(key, TWEAK_COMMANDS[key]);
     if (!cmd) continue;
@@ -1537,7 +1541,7 @@ function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   scriptLines.push(`Write-Host "   OPTI GODS by leaq -- TWEAKS APPLIED" -ForegroundColor Red`);
   scriptLines.push(`Write-Host "=============================================" -ForegroundColor DarkRed`);
   scriptLines.push(`Write-Host "" `);
-  scriptLines.push(`Write-Host "  [OK] $($appliedTweaks.Count) of ${enabledTweaks.length} tweaks completed without a reported error" -ForegroundColor Green`);
+  scriptLines.push(`Write-Host "  [OK] $($appliedTweaks.Count) of ${generatedTweaks.length} tweaks completed without a reported error" -ForegroundColor Green`);
   scriptLines.push(`if ($skippedTweaks.Count -gt 0) {`);
   scriptLines.push(`    Write-Host ""`);
   scriptLines.push(`    Write-Host "  [NOT FOR THIS SYSTEM] ($($skippedTweaks.Count) skipped safely):" -ForegroundColor Yellow`);
@@ -1771,7 +1775,7 @@ export async function registerRoutes(
     // The free/native path is deliberately bounded. Pro receives the complete
     // hardware-compatible core preset, which can exceed 128 app tweaks.
     const invalidIds = ids.some(id => isPro ? !trustedTweakId(id) : !freeEligibleId(id));
-    if (!ids.length || (!isPro && ids.length > 128) || invalidIds) {
+    if (!ids.length || (!isPro && ids.length > FREE_NATIVE_TWEAK_LIMIT) || invalidIds) {
       return res.status(400).json({ error: "One or more requested tweaks are not eligible for the free allowance", code: "OG-TWEAK-001" });
     }
     if (isPro) return res.json({ pro: true, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), remaining: null });
@@ -1780,7 +1784,7 @@ export async function registerRoutes(
       return res.json({ pro: false, idempotencyKey: key, authorizedIds: Array.from(new Set(ids)), ...result });
     } catch (err) {
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") {
-        return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "OG-LIMIT-015" });
+      return res.status(429).json({ error: `Free active tweak limit reached (${FREE_NATIVE_TWEAK_LIMIT} at a time). Undo an active tweak before enabling another.`, code: "OG-LIMIT-015" });
       }
       if (err instanceof Error && err.message === "FREE_ALLOWANCE_RESERVATION_CONFLICT") {
         return res.status(409).json({ error: "One or more tweaks are already being authorized; retry after the active operation completes.", code: "RESERVATION_CONFLICT" });
@@ -1816,7 +1820,7 @@ export async function registerRoutes(
       if (err instanceof Error && ["FREE_ALLOWANCE_RESERVATION_CONFLICT", "NATIVE_TICKET_KEY_CONFLICT", "NATIVE_TICKET_OPERATION_FINALIZED"].includes(err.message)) {
         return res.status(409).json({ error: "Authorization operation conflicts with an existing or finalized ticket.", code: "RESERVATION_CONFLICT" });
       }
-      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: "Free active tweak limit reached (15 at a time). Undo an active tweak before enabling another.", code: "OG-LIMIT-015" });
+      if (err instanceof Error && err.message === "FREE_ALLOWANCE_EXHAUSTED") return res.status(429).json({ error: `Free active tweak limit reached (${FREE_NATIVE_TWEAK_LIMIT} at a time). Undo an active tweak before enabling another.`, code: "OG-LIMIT-015" });
       throw err;
     }
   });
@@ -1889,6 +1893,14 @@ export async function registerRoutes(
     return result.ok ? res.json(result) : res.status(409).json(result);
   });
   const authorizeGeneratedScript = async (req: Request, res: Response, ids: string[]): Promise<boolean> => {
+    const protectedIds = ids.filter((id) => NVIDIA_CAPTURE_PROTECTED_IDS.has(id));
+    if (protectedIds.length > 0) {
+      res.status(400).json({
+        message: "NVIDIA overlay, ShadowPlay, and clip-capture actions are protected and cannot be included in an automatic script.",
+        protectedIds,
+      });
+      return false;
+    }
     const userId = await allowanceAuth(req);
     const pro = await requirePaidPro(req);
     if (pro && ids.every(id => trustedTweakId(id))) return true;
@@ -1920,12 +1932,17 @@ export async function registerRoutes(
   // adminSettings.updaterCmdUrl when present and pointing to a full URL).
   // Canonical fallback — auto-fetched from GitHub releases API every 10 min.
   // Admin override via updaterCmdUrl in admin_settings still takes priority.
-  app.get("/api/download/latest", async (_req, res) => {
+  app.get("/api/download/latest", rateLimit(10, 60_000, 30), async (req, res) => {
     try {
+      const attribution = parseMarketingAttribution(req.query);
+      const recordInstallerDownload = async () => {
+        if (attribution) await storage.recordMarketingEvent("installer_download", attribution.platform, attribution.campaign, attribution.content);
+      };
       // Env-var override — highest priority, set via Replit Secrets as DOWNLOAD_URL.
       // Lets us update the download target without touching the DB or redeploying.
       const envUrl = process.env.DOWNLOAD_URL?.trim();
       if (envUrl && /^https:\/\//i.test(envUrl)) {
+        await recordInstallerDownload();
         console.log(`[download] Redirecting to DOWNLOAD_URL env: ${envUrl}`);
         return res.redirect(302, envUrl);
       }
@@ -1940,6 +1957,7 @@ export async function registerRoutes(
         try {
           const u = new URL(override);
           if (u.host && u.protocol === "https:") {
+            await recordInstallerDownload();
             return res.redirect(302, u.toString());
           }
         } catch {
@@ -1950,6 +1968,7 @@ export async function registerRoutes(
       // The website must prefer the newest GitHub release. Bundled installers
       // are intentionally only an offline fallback because they become stale.
       if (gh?.exeUrl && /^https:\/\//i.test(gh.exeUrl)) {
+        await recordInstallerDownload();
         console.log(`[download] Redirecting to GitHub: ${gh.exeUrl}`);
         return res.redirect(302, gh.exeUrl);
       }
@@ -1973,6 +1992,7 @@ export async function registerRoutes(
           .sort((a, b) => b.mtime - a.mtime);
         if (entries.length > 0) {
           const { name, full } = entries[0];
+          await recordInstallerDownload();
           console.log(`[download] Serving directly: ${full}`);
           res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
           res.setHeader("Content-Type", "application/octet-stream");
@@ -4290,27 +4310,67 @@ Start-Sleep 2
   // apply the FiveM crash workaround that intentionally turns the overlay off.
   app.get('/api/nvidia-overlay-fix-script', (_req, res) => {
     const script = [
-      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `$ErrorActionPreference = 'Stop'`,
       `Write-Host "[NVIDIA] Restoring the in-game overlay..." -ForegroundColor Cyan`,
-      `$serviceNames = @('NvTelemetryContainer','NvDisplayContainerLS','NVDisplay.ContainerLocalSystem','NvContainerLocalSystem')`,
-      `foreach ($name in $serviceNames) { $service = Get-Service -Name $name -ErrorAction SilentlyContinue; if ($service) { Set-Service -Name $name -StartupType Automatic -ErrorAction SilentlyContinue; Start-Service -Name $name -ErrorAction SilentlyContinue } }`,
+      `$failures = @()`,
+      `$displayServiceNames = @('NvDisplayContainerLS','NVDisplay.ContainerLocalSystem','NvContainerLocalSystem')`,
+      `$displayServices = @($displayServiceNames | ForEach-Object { Get-Service -Name $_ -ErrorAction SilentlyContinue })`,
+      `if ($displayServices.Count -eq 0) { throw "No NVIDIA display-container service was found. Reinstall the NVIDIA driver or NVIDIA App before retrying." }`,
+      `foreach ($service in $displayServices) { Set-Service -Name $service.Name -StartupType Automatic; if ($service.Status -ne 'Running') { Start-Service -Name $service.Name } }`,
+      `$telemetry = Get-Service -Name 'NvTelemetryContainer' -ErrorAction SilentlyContinue`,
+      `if ($telemetry) { Set-Service -Name $telemetry.Name -StartupType Automatic; if ($telemetry.Status -ne 'Running') { Start-Service -Name $telemetry.Name } }`,
       `$clientPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NVControlPanel2\\Client'`,
       `if (!(Test-Path $clientPath)) { New-Item -Path $clientPath -Force | Out-Null }`,
       `Set-ItemProperty -Path $clientPath -Name 'OptInOrOutPreference' -Value 1 -Type DWord -Force`,
       `$trayPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\NvTray'`,
-      `if (Test-Path $trayPath) { Set-ItemProperty -Path $trayPath -Name 'EnableSystemTray' -Value 1 -Type DWord -Force }`,
+      `if (!(Test-Path $trayPath)) { New-Item -Path $trayPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path $trayPath -Name 'EnableSystemTray' -Value 1 -Type DWord -Force`,
+      `$shadowPlayPath = 'HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\ShadowPlay\\NVSPCAPS'`,
+      `if (!(Test-Path $shadowPlayPath)) { New-Item -Path $shadowPlayPath -Force | Out-Null }`,
+      `Set-ItemProperty -Path $shadowPlayPath -Name 'ShadowPlayOnSystemStartup' -Value 1 -Type DWord -Force`,
+      `Set-ItemProperty -Path $shadowPlayPath -Name 'IsShadowPlayEnabled' -Value 1 -Type DWord -Force`,
       `$approvedPath = 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run'`,
       `if (Test-Path $approvedPath) {`,
       `  $enabled = [byte[]](0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)`,
       `  foreach ($name in @('NvBackend','NVIDIA App','NVIDIA GeForce Experience')) { if (Get-ItemProperty -Path $approvedPath -Name $name -ErrorAction SilentlyContinue) { Set-ItemProperty -Path $approvedPath -Name $name -Value $enabled -Type Binary -Force } }`,
       `}`,
-      `Write-Host "[OK] NVIDIA container services and overlay preferences restored." -ForegroundColor Green`,
+      `foreach ($service in $displayServices) { $current = Get-Service -Name $service.Name; if ($current.Status -ne 'Running' -or $current.StartType -eq 'Disabled') { $failures += "$($service.Name) is not running with automatic startup" } }`,
+      `if ($telemetry) { $currentTelemetry = Get-Service -Name $telemetry.Name; if ($currentTelemetry.Status -ne 'Running' -or $currentTelemetry.StartType -eq 'Disabled') { $failures += "$($telemetry.Name) is not running with automatic startup" } }`,
+      `$clientPreference = (Get-ItemProperty -Path $clientPath -Name 'OptInOrOutPreference' -ErrorAction SilentlyContinue).OptInOrOutPreference`,
+      `if ($clientPreference -ne 1) { $failures += 'NVIDIA overlay opt-in preference was not restored' }`,
+      `$shadowPlay = Get-ItemProperty -Path $shadowPlayPath -ErrorAction SilentlyContinue`,
+      `if ($shadowPlay.ShadowPlayOnSystemStartup -ne 1 -or $shadowPlay.IsShadowPlayEnabled -ne 1) { $failures += 'ShadowPlay capture preferences were not restored' }`,
+      `if ($failures.Count -gt 0) { throw ("NVIDIA overlay verification failed: " + ($failures -join '; ')) }`,
+      `Write-Host "[OK] NVIDIA display containers, overlay preferences, and ShadowPlay capture preferences verified." -ForegroundColor Green`,
       `Write-Host "[OK] Open NVIDIA App > Settings and confirm In-game overlay is enabled." -ForegroundColor Green`,
       `Write-Host "[INFO] Restart Windows before testing the overlay in a game." -ForegroundColor Yellow`,
     ].join('\r\n');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-NVIDIA-Overlay-Fix.bat"');
     res.end(Buffer.from(wrapInBat(script, { title: 'NVIDIA In-Game Overlay Recovery', tmpName: 'OptiGods-NVIDIAOverlayFix', marker: 'NVIDIA_OVERLAY_FIX_PS1_START' }), 'utf8'));
+  });
+
+  // Public — re-enable Windows Search indexing after an optimizer disabled WSearch.
+  // The native app uses the same allowlisted script through the Rust action map.
+  app.get('/api/windows-search-fix-script', (_req, res) => {
+    const script = [
+      `$ErrorActionPreference = 'Stop'`,
+      `Write-Host "[Windows Search] Re-enabling indexing..." -ForegroundColor Cyan`,
+      `$service = Get-Service -Name 'WSearch' -ErrorAction SilentlyContinue`,
+      `if (-not $service) { throw "Windows Search (WSearch) is not installed or has been removed from this Windows image." }`,
+      `Set-Service -Name 'WSearch' -StartupType Automatic`,
+      `if ((Get-Service -Name 'WSearch').Status -ne 'Running') { Start-Service -Name 'WSearch' }`,
+      `Start-Sleep -Seconds 2`,
+      `$verified = Get-Service -Name 'WSearch'`,
+      `$serviceConfig = Get-CimInstance Win32_Service -Filter "Name='WSearch'" -ErrorAction Stop`,
+      `if ($verified.Status -ne 'Running' -or $serviceConfig.StartMode -eq 'Disabled') { throw "Windows Search was not verified as running with automatic startup." }`,
+      `Write-Host "[OK] Windows Search indexing is enabled and the WSearch service is running." -ForegroundColor Green`,
+      `Write-Host "[INFO] Windows may take a few minutes to rebuild its index." -ForegroundColor Yellow`,
+      `pause`,
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="OptiGods-Windows-Search-Fix.bat"');
+    res.end(Buffer.from(wrapInBat(script, { title: 'Windows Search Indexing Recovery', tmpName: 'OptiGods-WindowsSearchFix', marker: 'WINDOWS_SEARCH_FIX_PS1_START' }), 'utf8'));
   });
 
   // Public — one-click stability fix script (FiveM + Discord crash caused by old bad values)
@@ -5945,6 +6005,41 @@ Start-Sleep 2
     }
   });
 
+  const MARKETING_EVENTS = new Set(["landing_visit", "installer_download", "discord_join_click", "pro_purchase"]);
+  const MARKETING_PLATFORMS = new Set(["tiktok", "instagram", "youtube"]);
+  const MARKETING_CAMPAIGN_PLATFORM = new Map<string, string>();
+  for (const [platform, days] of Object.entries({
+    tiktok: [1, 4, 7, 10, 12, 14, 17, 21, 23, 25, 28],
+    instagram: [3, 5, 8, 11, 15, 18, 20, 24, 27],
+    youtube: [2, 6, 9, 13, 16, 19, 22, 26, 29],
+  })) {
+    for (const day of days) MARKETING_CAMPAIGN_PLATFORM.set(`og30-d${String(day).padStart(2, "0")}`, platform);
+    MARKETING_CAMPAIGN_PLATFORM.set(`og30-d30-${platform}`, platform);
+  }
+  const MARKETING_VALUE = /^[a-z0-9_-]{1,64}$/;
+  function parseMarketingAttribution(input: any): { platform: string; campaign: string; content?: string } | null {
+    const platform = String(input?.platform ?? input?.utm_source ?? "").trim().toLowerCase();
+    const campaign = String(input?.campaign ?? input?.utm_campaign ?? "").trim().toLowerCase();
+    const content = String(input?.content ?? input?.utm_content ?? "").trim().toLowerCase();
+    if (!MARKETING_PLATFORMS.has(platform) || !MARKETING_VALUE.test(campaign) || MARKETING_CAMPAIGN_PLATFORM.get(campaign) !== platform) return null;
+    return { platform, campaign, ...(MARKETING_VALUE.test(content) ? { content } : {}) };
+  }
+
+  app.post('/api/marketing/event', rateLimit(12, 60_000, 30), async (req, res) => {
+    const eventType = String(req.body?.eventType ?? "");
+    const attribution = parseMarketingAttribution(req.body);
+    if (!MARKETING_EVENTS.has(eventType) || eventType === "pro_purchase" || !attribution) {
+      return res.status(400).json({ ok: false });
+    }
+    await storage.recordMarketingEvent(eventType, attribution.platform, attribution.campaign, attribution.content);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/admin/marketing-attribution', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    res.json(await storage.getMarketingAttributionReport());
+  });
+
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
@@ -6076,6 +6171,20 @@ Start-Sleep 2
       const discordUserId = sess.metadata?.discordUserId;
       const tier = sess.metadata?.tier;
       const stripeSessionId = sess.id;
+      const purchaseAttribution = parseMarketingAttribution({
+        platform: sess.metadata?.marketingPlatform,
+        campaign: sess.metadata?.marketingCampaign,
+        content: sess.metadata?.marketingContent,
+      });
+      if (tier !== 'manual' && sess.payment_status === 'paid' && purchaseAttribution) {
+        await storage.recordMarketingEvent(
+          "pro_purchase",
+          purchaseAttribution.platform,
+          purchaseAttribution.campaign,
+          purchaseAttribution.content,
+          `stripe:${stripeSessionId}`,
+        );
+      }
       // Only Pro tier triggers an entitlement — the Manual Opti tier is a
       // done-for-you service that doesn't unlock the dashboard itself.
       if (tier !== 'manual' && discordUserId) {
@@ -6108,6 +6217,7 @@ Start-Sleep 2
     // 'manual' = the $20 done for you Manual Opti service (priced inline so it
     // doesn't need a separate Price object in Stripe).
     const tier: 'pro' | 'manual' = req.body?.tier === 'manual' ? 'manual' : 'pro';
+    const attribution = parseMarketingAttribution(req.body);
 
     const priceId = process.env.STRIPE_PRICE_ID;
     if (tier === 'pro' && !priceId) {
@@ -6179,6 +6289,11 @@ Start-Sleep 2
           // (and any future webhook) can grant a lifetime entitlement.
           ...(req.session?.userId ? { discordUserId: req.session.userId } : {}),
           ...(appliedDiscount ? { discounted: 'true', discountCode: appliedDiscount.code } : {}),
+          ...(attribution ? {
+            marketingPlatform: attribution.platform,
+            marketingCampaign: attribution.campaign,
+            ...(attribution.content ? { marketingContent: attribution.content } : {}),
+          } : {}),
         },
       });
 
@@ -6269,6 +6384,21 @@ Start-Sleep 2
           tier: 'manual',
           email: hasRealEmail ? customerEmail : null,
         });
+      }
+
+      const purchaseAttribution = parseMarketingAttribution({
+        platform: session.metadata?.marketingPlatform,
+        campaign: session.metadata?.marketingCampaign,
+        content: session.metadata?.marketingContent,
+      });
+      if (purchaseAttribution) {
+        await storage.recordMarketingEvent(
+          "pro_purchase",
+          purchaseAttribution.platform,
+          purchaseAttribution.campaign,
+          purchaseAttribution.content,
+          `stripe:${sessionId}`,
+        );
       }
 
       // Check if we already created a code for this Stripe session (idempotent — handles page refresh)

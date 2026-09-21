@@ -14,6 +14,7 @@ import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
 import { isNative, discordLogin, openExternal } from "@/lib/tauri-bridge";
 import { DISCORD_INVITE } from "@/lib/brand-links";
 import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
+import { marketingCheckoutFields } from "@/lib/marketing-attribution";
 
 const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
 const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
@@ -222,13 +223,25 @@ export function ProPaymentDialog({
     };
   }, []);
 
-  const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
-
-  const handleStripeCheckout = (_tier: "pro" | "manual" = "pro") => {
-    if (isNative()) {
-      openExternal(STRIPE_PAYMENT_LINK);
-    } else {
-      window.open(STRIPE_PAYMENT_LINK, "_blank");
+  const handleStripeCheckout = async (tier: "pro" | "manual" = "pro") => {
+    tier === "manual" ? setManualLoading(true) : setStripeLoading(true);
+    try {
+      const discountCode = tier === "manual" ? manualDiscountData?.code : discountData?.code;
+      const response = await fetch(apiUrl("/api/create-checkout"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        credentials: "include",
+        body: JSON.stringify({ tier, ...(discountCode ? { discountCode } : {}), ...marketingCheckoutFields() }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error || "Checkout unavailable");
+      if (isNative()) await openExternal(data.url);
+      else window.location.assign(data.url);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Checkout unavailable");
+    } finally {
+      setStripeLoading(false);
+      setManualLoading(false);
     }
   };
 

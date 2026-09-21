@@ -6,6 +6,7 @@ import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { setProStatus, setProSession } from "@/lib/pro-status";
 import { DISCORD_INVITE } from "@/lib/brand-links";
+import { trackMarketingEvent } from "@/lib/marketing-attribution";
 
 const DISCORD_LINK = DISCORD_INVITE;
 
@@ -43,6 +44,15 @@ export default function PaymentSuccess() {
           if (t === "pro") {
             if (data.sessionToken) setProSession(data.sessionToken);
             setProStatus(true);
+            const trackedKey = `optigods_purchase_tracked_${sessionId}`;
+            try {
+              if (!sessionStorage.getItem(trackedKey)) {
+                trackMarketingEvent("pro_purchase");
+                sessionStorage.setItem(trackedKey, "1");
+              }
+            } catch {
+              trackMarketingEvent("pro_purchase");
+            }
           }
           setEmailInfo({ sent: !!data.emailSent, email: data.email ?? null });
           setStatus("success");

@@ -344,7 +344,10 @@ function UpdateCenterCard() {
   }, [native]);
 
   const currentVersion = APP_VERSION || data?.currentVersion || "unknown";
-  const latestVersion = nativeVersion ?? data?.latestVersion ?? currentVersion;
+  const serverLatest = data?.latestVersion ?? currentVersion;
+  const latestVersion = nativeVersion && compareVersions(nativeVersion, serverLatest) > 0
+    ? nativeVersion
+    : serverLatest;
   const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
   const notes = simpleUpdateNotes(nativeNotes ?? data?.notes);
 

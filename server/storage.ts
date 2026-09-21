@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, performanceTweakAllowance, nativeTweakTickets, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, marketingEvents, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, performanceTweakAllowance, nativeTweakTickets, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
+import { FREE_NATIVE_TWEAK_LIMIT } from "@shared/native-tweak-ids";
 
 export interface IStorage {
   getPresets(ownerId: string): Promise<Preset[]>;
@@ -32,6 +33,8 @@ export interface IStorage {
   // Visit tracking
   recordVisit(referrer?: string): Promise<void>;
   getVisitStats(): Promise<{ total: number; today: number; thisWeek: number }>;
+  recordMarketingEvent(eventType: string, platform: string, campaign: string, content?: string, eventKey?: string): Promise<void>;
+  getMarketingAttributionReport(): Promise<{ platform: string; campaign: string; landingVisits: number; installerDownloads: number; discordJoins: number; proPurchases: number; qualifiedConversions: number }[]>;
   // Email code requests
   createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number, discordUserId?: string | null): Promise<EmailRequest>;
   getEmailRequests(): Promise<EmailRequest[]>;
@@ -414,6 +417,34 @@ export class DatabaseStorage implements IStorage {
       today: todayRow?.count ?? 0,
       thisWeek: weekRow?.count ?? 0,
     };
+  }
+
+  async recordMarketingEvent(eventType: string, platform: string, campaign: string, content?: string, eventKey?: string): Promise<void> {
+    await db.insert(marketingEvents)
+      .values({ eventType, platform, campaign, content: content || null, eventKey: eventKey || null })
+      .onConflictDoNothing();
+  }
+
+  async getMarketingAttributionReport() {
+    const rows = await db.execute(sql`
+      SELECT platform, campaign,
+        count(*) FILTER (WHERE event_type = 'landing_visit')::int AS landing_visits,
+        count(*) FILTER (WHERE event_type = 'installer_download')::int AS installer_downloads,
+        count(*) FILTER (WHERE event_type = 'discord_join_click')::int AS discord_joins,
+        count(*) FILTER (WHERE event_type = 'pro_purchase')::int AS pro_purchases
+      FROM marketing_events
+      GROUP BY platform, campaign
+      ORDER BY pro_purchases DESC, installer_downloads DESC, discord_joins DESC, landing_visits DESC
+    `);
+    return (rows.rows as any[]).map(row => ({
+      platform: row.platform,
+      campaign: row.campaign,
+      landingVisits: row.landing_visits,
+      installerDownloads: row.installer_downloads,
+      discordJoins: row.discord_joins,
+      proPurchases: row.pro_purchases,
+      qualifiedConversions: row.installer_downloads + row.discord_joins + row.pro_purchases,
+    }));
   }
 
   async createEmailRequest(email: string, paymentMethod: string, paymentRef: string, discordUsername?: string, amountPaid?: number, discordUserId?: string | null): Promise<EmailRequest> {
@@ -1308,7 +1339,30 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async reclaimExpiredPerformanceReservations(discordUserId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      await tx.delete(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.status, "reserved"),
+        lt(performanceTweakAllowance.reservedAt, new Date(Date.now() - 15 * 60 * 1000)),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${nativeTweakTickets} nt
+          WHERE nt.discord_user_id = ${performanceTweakAllowance.discordUserId}
+            AND nt.tweak_id = ${performanceTweakAllowance.tweakId}
+            AND nt.idempotency_key = ${performanceTweakAllowance.idempotencyKey}
+            AND nt.consumed_at IS NOT NULL
+            AND nt.result_status IS NULL
+        )`,
+      ));
+    });
+  }
+
   async getPerformanceAllowance(discordUserId: string): Promise<{ used: number; remaining: number }> {
+    // Keep the displayed 15-slot count honest after a renderer or network
+    // crash. An in-flight native ticket is protected until its result arrives
+    // or the ticket's own 15-minute recovery window expires.
+    await this.reclaimExpiredPerformanceReservations(discordUserId);
     const [row] = await db.select({ used: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
       .where(and(
         eq(performanceTweakAllowance.discordUserId, discordUserId),
@@ -1319,6 +1373,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConsumedPerformanceTweakIds(discordUserId: string): Promise<string[]> {
+    await this.reclaimExpiredPerformanceReservations(discordUserId);
     const rows = await db.select({ id: performanceTweakAllowance.tweakId }).from(performanceTweakAllowance)
       .where(and(
         eq(performanceTweakAllowance.discordUserId, discordUserId),
@@ -1352,7 +1407,7 @@ export class DatabaseStorage implements IStorage {
       const charged = new Set([...consumed, ...reserved]);
       const [countRow] = await tx.select({ count: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
         .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), sql`${performanceTweakAllowance.status} IN ('consumed','reserved')`));
-      const capacity = 15 - (countRow?.count ?? 0);
+      const capacity = FREE_NATIVE_TWEAK_LIMIT - (countRow?.count ?? 0);
       const newIds = ids.filter(id => !charged.has(id));
       if (newIds.length > capacity) throw new Error("FREE_ALLOWANCE_EXHAUSTED");
       if (newIds.length) await tx.insert(performanceTweakAllowance).values(newIds.map(tweakId => ({ discordUserId, tweakId, status: "reserved", idempotencyKey }))).onConflictDoNothing();
@@ -1453,7 +1508,7 @@ export class DatabaseStorage implements IStorage {
         if (!existing) {
           const [count] = await tx.select({ n: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
             .where(and(eq(performanceTweakAllowance.discordUserId, discordUserId), sql`${performanceTweakAllowance.status} IN ('reserved','consumed')`));
-          if ((count?.n ?? 0) >= 15) throw new Error("FREE_ALLOWANCE_EXHAUSTED");
+          if ((count?.n ?? 0) >= FREE_NATIVE_TWEAK_LIMIT) throw new Error("FREE_ALLOWANCE_EXHAUSTED");
           await tx.insert(performanceTweakAllowance).values({ discordUserId, tweakId, idempotencyKey, status: "reserved" });
         }
       }
@@ -1502,6 +1557,9 @@ export class DatabaseStorage implements IStorage {
 
   async cancelNativeTweakTicket(discordUserId: string, ticket: string): Promise<boolean> {
     return db.transaction(async (tx) => {
+      // Serialize with consumption so cancellation can only win before native
+      // execution begins, never between consume validation and its update.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
       const [row] = await tx.delete(nativeTweakTickets).where(and(
         eq(nativeTweakTickets.ticket, ticket),
         eq(nativeTweakTickets.discordUserId, discordUserId),
@@ -1521,6 +1579,9 @@ export class DatabaseStorage implements IStorage {
   async finalizeNativeTweakTicket(discordUserId: string, ticket: string, resultSecret: string, success: boolean, tweakId: string): Promise<{ ok: boolean; status: string }> {
     try {
       return await db.transaction(async (tx) => {
+      // Keep finalization ordered with cleanup, cancellation, and issuance for
+      // this account. The first valid result is authoritative.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
       const desired = success ? "success" : "failure";
       const [row] = await tx.update(nativeTweakTickets).set({ resultStatus: desired, resultAt: new Date() }).where(and(
         eq(nativeTweakTickets.discordUserId, discordUserId),

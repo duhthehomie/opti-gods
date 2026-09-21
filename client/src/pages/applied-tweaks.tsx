@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { detectAppliedTweaks, isNative, openDownloadsFolder, undoTweak } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
-import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
+import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakMeta } from "@/lib/tweak-registry";
 import { getHardwareAwareTweakTitle } from "@/lib/tweak-compatibility";
@@ -158,13 +158,10 @@ export default function AppliedTweaksPage() {
   useEffect(() => { detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }, []);
   useEffect(() => {
      const syncRun = (state: NativeTweakRunState | null) => {
-       const safeState = state
-         ? {
-           ...state,
-           ids: state.ids.filter(id => getTweakCompatibility(id).ok),
-           items: state.items.filter(item => getTweakCompatibility(item.id).ok),
-         }
-         : null;
+      // Keep every native result visible, including stale or ineligible IDs.
+      // Filtering failures here made an OG-HTTP-400 result disappear instead
+      // of showing the exact tweak and server error in the run ledger.
+      const safeState = state;
        setRunState(safeState);
       if (!state) return;
        setRunItems(safeState?.items ?? []);
@@ -203,11 +200,15 @@ export default function AppliedTweaksPage() {
     const startRun = async () => {
       // Recommendation buttons on individual tabs can queue script-only IDs.
       // Free users must never send those IDs to the instant-apply ticket API.
-       let executable = recoverable.filter(id => getTweakCompatibility(id).ok);
+      // Fail closed if entitlement lookup is unavailable. A stale local queue
+      // must never turn a free run into an oversized native execution.
+      let executable = recoverable.filter(id => getTweakCompatibility(id).ok).slice(0, FREE_NATIVE_TWEAK_LIMIT);
       try {
         const response = await fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() });
         if (response.ok && (await response.json() as { pro?: boolean }).pro === false) {
-           executable = executable.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+           executable = executable.filter(id => NATIVE_TWEAK_ID_SET.has(id)).slice(0, FREE_NATIVE_TWEAK_LIMIT);
+        } else if (response.ok) {
+           executable = recoverable.filter(id => getTweakCompatibility(id).ok);
         }
       } catch {
         // Keep the queue if status is temporarily unavailable; the server

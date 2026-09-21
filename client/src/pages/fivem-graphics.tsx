@@ -3,7 +3,10 @@ import { isNative, discordLogin, installFivemPack, openFivemFolder, uninstallFiv
 import { loginWithDiscord } from "@/hooks/use-auth";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
-import { zipSync, strToU8 } from "fflate";
+import {
+  buildNativeFivemCitizenFiles,
+  packageFivemCitizenZip,
+} from "@/lib/fivem-pack-builder";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
@@ -486,33 +489,13 @@ function generateZip(opts: PackOpts): Uint8Array {
   const weatherXml = buildWeatherXml(opts);
   const readme     = buildReadme(opts);
 
-  const validateXml = (name: string, value: string, root: string) => {
-    if (!value.startsWith("<?xml") || !value.includes(`<${root}>`) || !value.includes(`</${root}>`)) {
-      throw new Error(`${name} failed validation`);
-    }
-    if (value.includes("NaN") || value.includes("Infinity")) {
-      throw new Error(`${name} contains invalid numeric values`);
-    }
-  };
-  validateXml("timecycle_mods_1.xml", tcXml, "CTimeCycleModifierList");
-  validateXml("weather.xml", weatherXml, "CWeatherTypeList");
-
-  const files: Record<string, Uint8Array> = {
-    "citizen/platform/data/tune/timecycle_mods_1.xml": strToU8(tcXml),
-    "citizen/common/data/weather.xml":                  strToU8(weatherXml),
-    "READ ME - How to install.txt":                     strToU8(readme),
-  };
-
-  return zipSync(files);
+  return packageFivemCitizenZip(tcXml, weatherXml, readme);
 }
 
 function generateNativePackFiles(opts: PackOpts) {
   const timecycle = buildTimecycleXml(opts);
   const weather = buildWeatherXml(opts);
-  return [
-    { path: "citizen/platform/data/tune/timecycle_mods_1.xml", content: timecycle },
-    { path: "citizen/common/data/weather.xml", content: weather },
-  ];
+  return buildNativeFivemCitizenFiles(timecycle, weather);
 }
 
 function downloadBlob(data: Uint8Array, filename: string) {

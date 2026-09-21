@@ -55,6 +55,19 @@ export const siteVisits = pgTable("site_visits", {
   referrer: text("referrer"),
 });
 
+export const marketingEvents = pgTable("marketing_events", {
+  id: serial("id").primaryKey(),
+  eventType: varchar("event_type", { length: 32 }).notNull(),
+  platform: varchar("platform", { length: 24 }).notNull(),
+  campaign: varchar("campaign", { length: 64 }).notNull(),
+  content: varchar("content", { length: 64 }),
+  eventKey: varchar("event_key", { length: 128 }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  campaignCreatedIdx: index("marketing_events_campaign_created_idx").on(table.campaign, table.createdAt),
+  eventKeyUnique: uniqueIndex("marketing_events_event_key_unique").on(table.eventKey),
+}));
+
 export const announcements = pgTable("announcements", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),

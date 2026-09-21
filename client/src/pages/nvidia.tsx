@@ -19,7 +19,8 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { getNativeAuthToken, importNvidiaPreset, isNative, openMsiUtility } from "@/lib/tauri-bridge";
+import { createRestorePoint, getNativeAuthToken, importNvidiaPreset, isNative, openMsiUtility } from "@/lib/tauri-bridge";
+import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","EnableNvidiaMSIPro",
@@ -328,6 +329,11 @@ export default function Nvidia() {
     if (id === "ImportNvidiaPresetPro" && !window.confirm("Create a verified Windows restore point, then import the verified performance preset? This changes the global NVIDIA driver profile.")) return;
     setProToolBusy(id);
     try {
+      if (id === "ImportNvidiaPresetPro" && !sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
+        const restorePoint = await createRestorePoint("Before Opti Gods NVIDIA preset");
+        if (!restorePoint?.sequence_number) throw new Error("Windows did not confirm a restore point before the NVIDIA preset.");
+        sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
+      }
       const nativeAuth = await getNativeAuthToken();
       const proSession = localStorage.getItem(PRO_SESSION_KEY);
       const deviceId = getPersistentDeviceId();
@@ -470,8 +476,8 @@ export default function Nvidia() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
-              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("OpenMsiUtilityPro", "MSI Utility v3")} className="bg-red-700 text-xs hover:bg-red-600">
-                {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3"}
+              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("OpenMsiUtilityPro", "MSI Utility v3 High mode")} className="bg-red-700 text-xs hover:bg-red-600">
+                {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3 · High mode"}
               </Button>
               <Button disabled={!isNative() || !!proToolBusy || discreteNvidiaGpus.length !== 1} onClick={() => void runProTool("ImportNvidiaPresetPro", "verified performance preset")} variant="outline" className="border-red-400/30 text-xs">
                 {proToolBusy === "ImportNvidiaPresetPro" ? "Importing…" : "Import verified performance preset"}
@@ -479,7 +485,7 @@ export default function Nvidia() {
             </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
           <p className="mt-3 text-[11px] text-amber-300">
-            MSI Utility is not automatic: select only the active NVIDIA display adapter, check MSI, choose High, then Apply. Driver updates reset that setting.
+            On supported single-NVIDIA topologies, select only the active graphics card, check MSI, choose High, then Apply in MSI Utility v3. Hybrid and multi-GPU systems stay blocked; driver updates reset this setting.
           </p>
         </section>
 

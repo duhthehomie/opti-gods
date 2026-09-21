@@ -18,6 +18,7 @@ import { ProUnlockButton } from "@/components/pro-gate";
 import { SupportContact } from "@/components/support-contact";
 import { DISCORD_INVITE } from "@/lib/brand-links";
 import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
+import { captureMarketingAttribution, getMarketingAttribution, marketingCheckoutFields, trackMarketingEvent } from "@/lib/marketing-attribution";
 
 const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || "$my1ik";
 const PAYPAL_LINK = (import.meta.env.VITE_PAYPAL_LINK as string | undefined) || "https://paypal.me/accountslg";
@@ -167,8 +168,15 @@ function ReviewsCarousel() {
 
 function DownloadButton() {
   const onClick = () => {
+    trackMarketingEvent("installer_download");
+    const attribution = getMarketingAttribution();
+    const query = attribution ? `?${new URLSearchParams({
+      platform: attribution.platform,
+      campaign: attribution.campaign,
+      ...(attribution.content ? { content: attribution.content } : {}),
+    })}` : "";
     const a = document.createElement("a");
-    a.href = apiUrl("/api/download/latest");
+    a.href = apiUrl(`/api/download/latest${query}`);
     a.download = `OptiGods-Setup-${APP_VERSION}.exe`;
     document.body.appendChild(a);
     a.click();
@@ -304,6 +312,21 @@ function ProductPreview() {
 }
 
 function LandingDesktop() {
+  const openCheckout = async () => {
+    const response = await fetch(apiUrl("/api/create-checkout"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier: "pro", ...marketingCheckoutFields() }),
+    });
+    const data = await response.json();
+    if (response.ok && data.url) window.location.assign(data.url);
+  };
+  const trackDiscord = () => trackMarketingEvent("discord_join_click");
+
+  useEffect(() => {
+    if (captureMarketingAttribution()) trackMarketingEvent("landing_visit");
+  }, []);
+
   return (
     <div
       data-testid="page-landing"
@@ -363,6 +386,7 @@ function LandingDesktop() {
           <div className="flex items-center gap-2">
           <a
             href={DISCORD_INVITE}
+            onClick={trackDiscord}
             target="_blank"
             rel="noreferrer"
             className="hidden items-center gap-2 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/15 px-3 py-2 text-xs font-bold text-[#c0c5ff] transition-colors hover:bg-[#5865F2]/25 sm:inline-flex"
@@ -526,6 +550,7 @@ function LandingDesktop() {
         <div className="flex justify-center">
           <a
             href={DISCORD_INVITE}
+            onClick={trackDiscord}
             target="_blank"
             rel="noreferrer"
             data-testid="link-reviews-discord"
@@ -606,9 +631,8 @@ function LandingDesktop() {
             </div>
 
             <a
-              href="https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400"
-              target="_blank"
-              rel="noreferrer"
+              href="#pricing"
+              onClick={(event) => { event.preventDefault(); void openCheckout(); }}
               data-testid="link-landing-stripe"
               className="flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-600/10 py-3 text-xs font-bold text-red-400 transition-colors hover:bg-red-600/20"
             >
@@ -622,6 +646,7 @@ function LandingDesktop() {
       <section className="relative z-10 w-full px-5 py-12 md:px-10 xl:px-16">
         <a
           href={DISCORD_INVITE}
+          onClick={trackDiscord}
           target="_blank"
           rel="noreferrer"
           data-testid="link-discord-cta"
@@ -689,6 +714,7 @@ function LandingDesktop() {
           <div className="flex items-center gap-5">
             <a
               href={DISCORD_INVITE}
+              onClick={trackDiscord}
               target="_blank"
               rel="noreferrer"
               className="hover:text-white transition-colors flex items-center gap-1.5"

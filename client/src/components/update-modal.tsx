@@ -24,13 +24,13 @@ export function UpdateModal() {
 
   useEffect(() => {
     if (!data || dismissed) return;
-    if (isNative()) return;
     const { latestVersion } = data;
     if (!latestVersion) return;
     const installedVersion = APP_VERSION || data.currentVersion;
     if (!installedVersion) return;
     if (compareVersions(latestVersion, installedVersion) <= 0) return;
 
+    setDetectedVersion(latestVersion);
     setDetectedNotes(data.notes ?? null);
     setPhase("prompt");
   }, [data, dismissed]);
@@ -41,10 +41,21 @@ export function UpdateModal() {
 
     void checkForUpdate()
       .then((update) => {
-        if (!update?.available) return;
-        setDetectedVersion(update.latest_version);
-        setDetectedNotes(update.notes);
-        setPhase("prompt");
+        if (update?.available && update.latest_version) {
+          const serverVersion = data?.latestVersion;
+          const preferredVersion = serverVersion && compareVersions(serverVersion, update.latest_version) > 0
+            ? serverVersion
+            : update.latest_version;
+          if (compareVersions(preferredVersion, APP_VERSION || data?.currentVersion || update.current_version) > 0) {
+            setDetectedVersion(preferredVersion);
+            setDetectedNotes(preferredVersion === serverVersion ? data?.notes ?? null : update.notes);
+            setPhase("prompt");
+          }
+        }
+        // If the native updater cannot resolve a release, the public
+        // /api/version check above still drives the update splash for old
+        // shells. This keeps users pointed at the Updates tab instead of
+        // silently leaving them on an outdated build.
       })
       .catch((error) => {
         console.warn("[update] automatic update check failed:", error);

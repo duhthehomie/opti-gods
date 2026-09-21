@@ -330,7 +330,6 @@ export async function repairNvidiaControlPanel(): Promise<string> {
 
 export interface NativeActionResult {
   ok: boolean;
-  id: string;
   message: string;
   requires_reboot: boolean;
 }

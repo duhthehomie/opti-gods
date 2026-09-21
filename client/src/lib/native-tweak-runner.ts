@@ -4,7 +4,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
-import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
+import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -232,7 +232,9 @@ async function applyTweakBatchInternal(
       id,
       message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
     }));
-    let queuedIds = compatibleIds;
+    // If entitlement status is temporarily unavailable, fail closed to the
+    // free-device ceiling rather than letting a stale queue run oversized.
+    let queuedIds = compatibleIds.slice(0, FREE_NATIVE_TWEAK_LIMIT);
     try {
       const allowanceResponse = await fetchWithTimeout(
         apiUrl("/api/performance-allowance"),
@@ -246,7 +248,9 @@ async function applyTweakBatchInternal(
           // Keep the hardware filter in force for the free path too. The
           // previous code replaced compatibleIds with every native ID, which
           // reintroduced GTX 1060 entries after the first filter.
-          queuedIds = compatibleIds.filter(id => NATIVE_TWEAK_ID_SET.has(id));
+          queuedIds = compatibleIds.filter(id => NATIVE_TWEAK_ID_SET.has(id)).slice(0, FREE_NATIVE_TWEAK_LIMIT);
+        } else {
+          queuedIds = compatibleIds;
         }
       }
     } catch {

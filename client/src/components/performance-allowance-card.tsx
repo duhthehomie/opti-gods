@@ -8,6 +8,7 @@ import { queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useLocation } from "wouter";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { playOptimizationActionSound } from "@/lib/action-sound";
+import { FREE_NATIVE_TWEAK_LIMIT } from "@shared/native-tweak-ids";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,7 +77,7 @@ export function PerformanceAllowanceCard() {
     }).then(async response => {
       if (!response.ok) return;
       const body = await response.json();
-      const ids = [...(body.activeIds || []), ...(body.authorizedIds || [])].slice(0, 15);
+      const ids = Array.from(new Set([...(body.activeIds || []), ...(body.authorizedIds || [])])).slice(0, FREE_NATIVE_TWEAK_LIMIT);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(ids)); } catch { /* ignore */ }
       const selected = { ...useOptimizationStore.getState().tweaks };
       Object.keys(selected).forEach(id => { selected[id] = false; });
@@ -95,7 +96,7 @@ export function PerformanceAllowanceCard() {
     try {
       const body = await authorizeHardwarePreset();
       const ids = body.authorizedIds as string[];
-      const visibleIds = [...(body.activeIds || []), ...ids].slice(0, 15);
+      const visibleIds = Array.from(new Set([...(body.activeIds || []), ...ids])).slice(0, FREE_NATIVE_TWEAK_LIMIT);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(visibleIds)); } catch { /* ignore */ }
       if (!isNative()) {
         const selected = { ...tweaks };
@@ -128,7 +129,7 @@ export function PerformanceAllowanceCard() {
     setBusy(true);
     try {
       const body = await authorizeHardwarePreset();
-      const ids = [...(body.activeIds || []), ...(body.authorizedIds || [])].slice(0, 15);
+      const ids = Array.from(new Set([...(body.activeIds || []), ...(body.authorizedIds || [])])).slice(0, FREE_NATIVE_TWEAK_LIMIT);
       try { localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(ids)); } catch { /* ignore */ }
       navigate("/tweaks?best15=1");
     } catch (error) {

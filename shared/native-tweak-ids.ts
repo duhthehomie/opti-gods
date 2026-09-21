@@ -15,6 +15,7 @@ export const NATIVE_TWEAK_IDS = [
 
 export type NativeTweakId = typeof NATIVE_TWEAK_IDS[number];
 export const NATIVE_TWEAK_ID_SET: ReadonlySet<string> = new Set(NATIVE_TWEAK_IDS);
+export const FREE_NATIVE_TWEAK_LIMIT = 15;
 
 /** Highest-impact order used by the hardware-aware free Best 15 flow. */
 export const BEST_15_PRIORITY = [

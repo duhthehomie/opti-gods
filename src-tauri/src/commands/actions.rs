@@ -107,6 +107,12 @@ fn fix_spec(id: &str) -> Option<ScriptSpec> {
             label: "NVIDIA in-game overlay recovery",
             requires_reboot: true,
         },
+        "windows-search" => ScriptSpec {
+            path: "/api/windows-search-fix-script",
+            marker: "WINDOWS_SEARCH_FIX_PS1_START",
+            label: "Windows Search indexing recovery",
+            requires_reboot: false,
+        },
         _ => return None,
     })
 }
