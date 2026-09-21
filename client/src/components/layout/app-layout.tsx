@@ -39,7 +39,7 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     title: "Registry & System",
     desc: "Deep Windows registry optimizations for timer resolution, priority scheduling, network stack, memory management, and power plan tuning.",
     tweakCount: "45+",
-    highlights: ["Win32 Priority Separation", "Timer Resolution 0.5ms", "Nagle Algorithm Bypass", "DPC Latency Fix", "MSI Mode"],
+    highlights: ["Win32 Priority Separation", "Timer Resolution 0.5ms", "Nagle Algorithm Bypass", "Frame Pacing", "MSI Mode"],
   },
   "/bond007": {
     title: "007: First Light",
