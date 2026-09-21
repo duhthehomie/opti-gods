@@ -1,0 +1,88 @@
+System & Performance
+Disable unnecessary background services (e.g., DiagTrack, Xbox Live, Telemetry)
+Optimize power plans (100% CPU min/max, aggressive boost, disable throttling)
+Adjust timer resolution for low-latency performance
+Disable Core Parking to keep CPU cores active
+Set process priority for games (High/Realtime)
+Disable Game Bar, Widgets, Tips, and Copilot
+Disable HPET (High Precision Event Timer) if conflicting
+Disable Memory Compression to reduce CPU overhead
+Optimize I/O scheduling for faster disk access
+Disable Superfetch/SysMain service
+Disable Windows Defender real-time monitoring (temporarily during gameplay)
+Disable Fullscreen Optimizations per-game
+Disable Nagle’s Algorithm for faster network response
+Enable MSI (Message Signaled Interrupts) for better device handling
+Disable HP Printer Services and other bloatware
+Optimize Visual Effects (best performance, no animations)
+Disable Windows Animations and Transparency Effects
+Set DNS to fastest available (e.g., Cloudflare, Google)
+Disable IPv6 if not in use
+Optimize QoS (Quality of Service) packet scheduling
+Disable Large Send Offload (LSO), Checksum Offload
+Adjust MTU size for optimal network performance
+Disable Wi-Fi Sense and Auto-Login to Public Networks 
+Network & Latency
+Reduce input lag via raw input enforcement
+Optimize TCP/IP stack (window size, congestion provider)
+Enable ECN (Explicit Congestion Notification)
+Disable NetBIOS over TCP/IP
+Prioritize gaming traffic via DSCP tagging
+Reduce DNS query timeout
+Disable Auto-Tuning (or set to restricted/normal)
+BufferBloat mitigation (FQ, PIE, CAKE on supported systems)
+Optimize adapter settings (Interrupt Moderation, Flow Control)
+Disable energy-efficient Ethernet (EEE)
+Route traffic through private nodes (WTFast-style, VTRL)
+Reduce ping via packet prioritization
+Stabilize jitter and packet loss
+Optimize for weak or unstable ISPs 
+Hardware & BIOS-Level (Premium Only)
+Direct BIOS tuning (clocks, voltages, C-states)
+GPU undervolting/overclocking profiles
+Disable VBS (Virtualization-Based Security), HVCI, Core Isolation
+EnableResizable BAR (if supported)
+Disable CSM (Compatibility Support Module)
+Set PCIe link speed to Gen3/Gen4
+Optimize CPU P-states and C-states
+Disable Spread Spectrum Clocking
+Enable CPPC (Collaborative Processor Performance Control) for Ryzen
+Enable XMP/DOCP for RAM overclocking
+Disable C-State Residency
+Set CPU affinity and NUMA optimization
+Prevent NVIDIA GPU downclocking in background 
+Game & Launch Optimization
+Auto-detect and apply game-specific settings
+Launch game in exclusive fullscreen mode
+Disable fullscreen optimizations per-game
+Pre-load game assets into RAM
+Close background apps (Discord, Chrome, etc.) on launch
+Apply GPU driver profiles automatically
+Integrate with Steam, Epic, Battle.net
+Monitor FPS, CPU/GPU usage, temperature
+Revert changes after game exit
+One-click optimization before launch 
+UI & User Experience
+Smooth, modern interface with real-time feedback
+One-click optimization presets
+Safety net: automatic restore point creation
+Backup and revert system state
+Real-time monitoring dashboard
+Plugin support for custom tweaks
+Open-source transparency (e.g., Talon)
+Discord integration for support
+Cloud-synced profiles
+Pro-player preset imports
+Debloat & Cleanup
+Remove Windows bloatware (Cortana, Mail, Store apps)
+Disable telemetry and data collection
+Clean junk files, temp data, logs
+Registry cleanup and defragmentation
+Disable startup bloat (OneDrive, Adobe, etc.)
+Disable background apps and push notifications 
+Security & Stability
+No driver modification or injection (safe for warranties)
+No overclocking unless user-enabled
+Restore point creation before major changes
+Conflict detection with other software
+Reversible changes with full logs 

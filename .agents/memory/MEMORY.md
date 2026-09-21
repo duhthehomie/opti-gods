@@ -1,0 +1,15 @@
+- [Security audit findings](security-audit.md) — full audit Jun 2026: all paths secure except email double-submit (fixed); no freeloaders found in DB.
+- [User rules & hard limits](user-rules.md) — things leaq has explicitly told me never to do or always do; read this first every session
+- [V4 architecture decisions](v3-architecture.md) — V4.0.0 live; server version in server/auth.ts CURRENT constant; frontend in client/src/generated/version.ts
+- [Repeated mistakes to avoid](repeated-mistakes.md) — mistakes that have come up more than once; check before acting
+- [FiveM Graphics sky color system](fivem-sky-colors.md) — V4: 19-color SKY_COLORS map (added golden_sunset, deep_orange, coral_red, blood_orange, violet_dusk, twilight_purple); mesh-fix baseline always included in visualsettings.dat.
+- [FiveM citizen-pack safety](fivem-citizen-pack-safety.md) — generated packs are client-safe citizen overrides only; never claim local control of server time/weather.
+- [FiveM freezeTime consolidation](fivem-freeze-time.md) — freezeWeather removed; freezeTime now clears weather in both XML builders. No separate "freeze weather" toggle.
+- [Reminder — repush .exe to website](reminder-exe-repush.md) — leaq asked 2026-06-17 to be reminded next session: push new tag, grab .exe from GitHub Actions, send it here, republish site.
+- [FiveM server proxy & connect helpers](fivem-server-proxy.md) — cfx.re CORS fix (backend proxy), cleanConnect/extractCfxCode helpers, correct join URL format, auto-detect from CitizenFX.log.
+- [Dashboard 100% score accuracy](dashboard-score-accuracy.md) — og_script_ran localStorage flag gates 100% display; displayScore caps at 99 until confirmed; scriptRan state + confirmScriptRan() in dashboard.tsx.
+- [Registry sections consolidation](registry-consolidation.md) — 10 sections merged to 5; DisableCoreParking and DisableDynamicTick were duplicated between CPU_TWEAKS and POWER_TWEAKS — removed from POWER_TWEAKS.
+- [GitHub publish authentication](github-publish-auth.md) — GitHub App attachment may not replace stale GIT_ASKPASS credentials; verify the actual auth path before retrying pushes.
+- [Free tweak allowance security](free-tweak-allowance.md) — credits require successful native execution with one-use server authorization; selection, downloads, and Undo never alter usage.
+- [Social creative direction](social-creative-direction.md) — approved premium red/black gaming ads; app scenes must show the full interface, centered and uncropped.
+- [Website installer source](website-installer-source.md) — DOWNLOAD_URL overrides release detection; keep it current or the live Download button can stay pinned to an old installer.

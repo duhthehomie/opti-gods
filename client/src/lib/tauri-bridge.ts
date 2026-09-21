@@ -1,0 +1,631 @@
+// Tauri ↔ React bridge.
+//
+// The exact same React bundle ships as both the public web app and the
+// native Opti Gods installer. We avoid forking the codebase by routing every
+// "OS-level" action (apply tweak, scan hardware, Discord OAuth, restore
+// point, etc.) through this module. When running inside Tauri we call into
+// Rust via invoke(); when running in the browser we fall back to the
+// existing flows (download .ps1, fetch /api/auth/discord/…).
+//
+// Detection uses the global `__TAURI_INTERNALS__` that Tauri 2 injects on
+// boot. We deliberately do NOT statically import @tauri-apps/api so that
+// `npm run build` for the web bundle doesn't try to resolve it.
+
+export interface NativeTweakResult {
+  ok: boolean;
+  id: string;
+  message: string;
+  undo_token: string | null;
+  requires_reboot: boolean;
+  via_powershell: boolean;
+  /** Stable classification for a failed native enable. */
+  error_kind?: "restore" | "auth" | "allowance" | "compatibility" | "execution";
+  /** Native stage that produced the failure. */
+  error_stage?: "restore" | "authorization" | "execution" | "result";
+}
+
+export interface NativeHardwareScan {
+  cpu: string;
+  gpu: string;
+  vram_mb: number | null;
+  ram_gb: number | null;
+  ram_mhz: number | null;
+  motherboard: string | null;
+  chassis: string | null;
+  cooling_type: string | null;
+  fan_count: number | null;
+  cpu_temp_c: number | null;
+  refresh_hz: number | null;
+  nic_vendor: string | null;
+  network_ssid: string | null;
+  network_band: string | null;
+  anticheats: string[];
+  system_model?: string | null;
+  os_name?: string | null;
+  os_build?: number | null;
+  cpu_cores?: number | null;
+  cpu_threads?: number | null;
+  is_laptop?: boolean | null;
+}
+
+export interface NativeRestorePoint {
+  sequence_number: number;
+  label: string;
+  created_at: string;
+}
+
+export interface NativeStartupRestoreResult {
+  ok: boolean;
+  status: "verified" | "protection_unavailable" | "verification_failed" | "creation_failed" | "unsupported" | string;
+  repair_attempted: boolean;
+  restore_point: NativeRestorePoint | null;
+  message: string;
+  recovery: string;
+}
+
+export interface NativeDiscordSession {
+  user_id: string;
+  username: string;
+  expires_at_unix: number;
+  /** nativeToken from the server — store in localStorage as X-Native-Auth */
+  native_token: string;
+}
+
+export interface NativeEnvInfo {
+  native: boolean;
+  platform: string;
+  app_version: string;
+  is_admin: boolean;
+}
+
+// ─── environment detection ──────────────────────────────────────────────────
+
+export function isNative(): boolean {
+  if (typeof window === "undefined") return false;
+  // Tauri 2 exposes __TAURI_INTERNALS__; Tauri 1 exposed __TAURI__.
+  const w = window as unknown as Record<string, unknown>;
+  return Boolean(w.__TAURI_INTERNALS__ || w.__TAURI__);
+}
+
+async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isNative()) {
+    throw new Error(`Tauri invoke('${cmd}') called outside the native shell.`);
+  }
+  // Tauri 2 injects __TAURI_INTERNALS__.invoke directly on window — using it
+  // avoids needing @tauri-apps/api as an npm dependency in the web bundle.
+  const w = window as unknown as {
+    __TAURI_INTERNALS__?: { invoke: <R>(c: string, a?: unknown) => Promise<R> };
+  };
+  const internals = w.__TAURI_INTERNALS__;
+  if (!internals?.invoke) {
+    throw new Error("Tauri internals not available — is this the native shell?");
+  }
+  return internals.invoke<T>(cmd, args);
+}
+
+// ─── splash / boot ──────────────────────────────────────────────────────────
+
+export async function finishSplash(): Promise<void> {
+  if (!isNative()) return;
+  try { await invoke<void>("finish_splash"); } catch { /* noop */ }
+}
+
+/**
+ * Show the main window.
+ *
+ * The window starts with visible:false in tauri.conf.json so that the
+ * WebView2 initialisation freeze (which blocks the Win32 message pump for
+ * 2-5 s on some machines) happens invisibly.  We call this as the very
+ * first thing in native-bootstrap.ts — by the time JS executes, WebView2
+ * is already fully initialised and the window appears instantly responsive.
+ */
+export async function showMainWindow(): Promise<void> {
+  if (!isNative()) return;
+  // Use the custom `finish_splash` Rust command — it's registered directly in
+  // the invoke_handler so there's no plugin namespace uncertainty. It calls
+  // window.show() + set_focus() straight from Rust and is guaranteed to work.
+  try {
+    await invoke<void>("finish_splash");
+  } catch (err) {
+    console.warn("[native] showMainWindow via finish_splash failed", err);
+  }
+}
+
+export async function envInfo(): Promise<NativeEnvInfo> {
+  if (!isNative()) {
+    return { native: false, platform: "web", app_version: "web", is_admin: false };
+  }
+  return invoke<NativeEnvInfo>("env_info");
+}
+
+// ─── tweak engine ───────────────────────────────────────────────────────────
+
+// SECURITY: The renderer can no longer pass a PowerShell snippet — the
+// trusted ID→script map lives entirely in Rust (`trusted_ps_snippet`).
+// Anything not in the native registry or that map returns an explicit
+// "unknown tweak id" error.
+export async function applyTweak(id: string, ticket?: string | null, nativeAuth?: string | null): Promise<NativeTweakResult> {
+  if (!isNative()) {
+    return webFallbackTweak(id, "apply");
+  }
+  return invoke<NativeTweakResult>("apply_tweak", { args: { id, ticket: ticket ?? null, native_auth: nativeAuth ?? null } });
+}
+
+export async function openMsiUtility(ticket: string, nativeAuth: string): Promise<string> {
+  return invoke<string>("open_msi_utility", { args: { ticket, native_auth: nativeAuth } });
+}
+
+export async function importNvidiaPreset(ticket: string, nativeAuth: string): Promise<string> {
+  return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth } });
+}
+
+export async function undoTweak(
+  id: string,
+  undoToken?: string | null,
+): Promise<NativeTweakResult> {
+  if (!isNative()) {
+    return webFallbackTweak(id, "undo");
+  }
+  return invoke<NativeTweakResult>("undo_tweak", {
+    args: { id, undo_token: undoToken ?? null },
+  });
+}
+
+export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
+  if (!isNative()) return {};
+  return invoke<Record<string, boolean>>("detect_applied_tweaks");
+}
+
+export interface NativePowerPlan { guid: string; name: string; active: boolean; }
+export async function listPowerPlans(): Promise<NativePowerPlan[]> {
+  if (!isNative()) return [];
+  return invoke<NativePowerPlan[]>("list_power_plans");
+}
+export async function setPowerPlan(guid: string): Promise<void> {
+  if (!isNative()) throw new Error("Power plans are available in the Windows app.");
+  await invoke<void>("set_power_plan", { guid });
+}
+
+// On the web, "apply" really means "queue the tweak into the PowerShell
+// script the user will download" — the existing flow on the dashboard
+// already handles that, so this stub just confirms the queue add.
+function webFallbackTweak(id: string, kind: "apply" | "undo"): NativeTweakResult {
+  return {
+    ok: true,
+    id,
+    message: `Queued ${kind} for the next .ps1 download (web mode).`,
+    undo_token: null,
+    requires_reboot: false,
+    via_powershell: true,
+  };
+}
+
+// ─── hardware scan ──────────────────────────────────────────────────────────
+
+export async function scanHardware(): Promise<NativeHardwareScan | null> {
+  if (!isNative()) return null;
+  return invoke<NativeHardwareScan>("scan_hardware");
+}
+
+export interface NativeLivePerformance {
+  live: boolean;
+  cpu_load_pct?: number | null;
+  gpu_load_pct?: number | null;
+  ram_total_gb?: number | null;
+  ram_free_gb?: number | null;
+  ram_used_pct?: number | null;
+  cpu_temp_c?: number | null;
+  gpu_temp_c?: number | null;
+}
+
+export async function readLivePerformance(): Promise<NativeLivePerformance | null> {
+  if (!isNative()) return null;
+  return invoke<NativeLivePerformance>("read_live_performance");
+}
+
+// ─── system restore ─────────────────────────────────────────────────────────
+
+export async function createRestorePoint(label: string): Promise<NativeRestorePoint | null> {
+  if (!isNative()) return null;
+  return invoke<NativeRestorePoint>("create_restore_point", { label });
+}
+
+/** Run the launch safety check. Failure is structured, not swallowed. */
+export async function startupRestoreCheckpoint(): Promise<NativeStartupRestoreResult> {
+  if (!isNative()) {
+    return {
+      ok: false,
+      status: "unsupported",
+      repair_attempted: false,
+      restore_point: null,
+      message: "System Restore points are available only in the Windows desktop app.",
+      recovery: "Open Opti Gods on Windows to enable native tweaks safely.",
+    };
+  }
+  return invoke<NativeStartupRestoreResult>("startup_restore_checkpoint");
+}
+
+export async function listRestorePoints(): Promise<NativeRestorePoint[]> {
+  if (!isNative()) return [];
+  return invoke<NativeRestorePoint[]>("list_restore_points");
+}
+
+export async function restoreToPoint(sequenceNumber: number): Promise<void> {
+  if (!isNative()) return;
+  // Tauri v2 auto-converts camelCase JS keys → snake_case Rust params.
+  // Rust signature: `fn restore_to_point(sequence_number: i64)` — pass camelCase.
+  await invoke<void>("restore_to_point", { sequenceNumber });
+}
+
+// ─── process lasso ──────────────────────────────────────────────────────────
+
+export async function startProBalance(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("start_pro_balance");
+}
+
+export async function stopProBalance(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("stop_pro_balance");
+}
+
+export interface ProBalanceStatus {
+  active: boolean;
+  current_game: string | null;
+  processes_throttled: number;
+}
+
+export async function proBalanceStatus(): Promise<ProBalanceStatus> {
+  if (!isNative()) {
+    return { active: false, current_game: null, processes_throttled: 0 };
+  }
+  return invoke<ProBalanceStatus>("pro_balance_status");
+}
+
+// ─── Discord OAuth ──────────────────────────────────────────────────────────
+
+// JS-side guard: prevents a second discordLogin call while one is pending.
+// The Rust side has a matching AtomicBool guard as a belt-and-suspenders.
+let _discordLoginInProgress = false;
+
+export async function discordLogin(clientId: string): Promise<NativeDiscordSession> {
+  if (!isNative()) {
+    // Web flow — let the existing /api/auth/discord page handle it.
+    window.location.href = "/api/auth/discord/start";
+    return new Promise(() => { /* navigation */ });
+  }
+  if (_discordLoginInProgress) {
+    throw new Error("A login is already in progress — please wait or try again in a moment.");
+  }
+  _discordLoginInProgress = true;
+  try {
+    // Tauri v2 serialises command args as camelCase — pass clientId directly.
+    // Note: exchange endpoint is pinned in Rust (commands::discord::EXCHANGE_URL)
+    // so a compromised renderer can't redirect the OAuth code to an attacker host.
+    return await invoke<NativeDiscordSession>("discord_login", { clientId });
+  } finally {
+    _discordLoginInProgress = false;
+  }
+}
+
+// Opens the user's Downloads folder in Windows Explorer (native only).
+export async function openDownloadsFolder(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    await invoke<void>("open_downloads");
+  } catch {
+    // Silently fail — user can find their Downloads folder manually
+  }
+}
+
+export async function saveDiagnosticLog(filename: string, content: string): Promise<string> {
+  if (!isNative()) throw new Error("Diagnostic log saving is available in the Windows app.");
+  return invoke<string>("save_diagnostic_log", { args: { filename, content } });
+}
+
+export async function repairNvidiaControlPanel(): Promise<string> {
+  if (!isNative()) throw new Error("NVIDIA Control Panel repair is available in the Windows app.");
+  return invoke<string>("repair_nvidia_control_panel");
+}
+
+export interface NativeActionResult {
+  ok: boolean;
+  message: string;
+  requires_reboot: boolean;
+}
+
+export async function runNativeFix(id: string): Promise<NativeActionResult> {
+  if (!isNative()) throw new Error("Recovery fixes are available in the Windows app.");
+  return invoke<NativeActionResult>("run_fix", { args: { id } });
+}
+
+export async function runNativeRestore(categories: string[]): Promise<NativeActionResult> {
+  if (!isNative()) throw new Error("System restore actions are available in the Windows app.");
+  return invoke<NativeActionResult>("run_restore_categories", { args: { categories } });
+}
+
+export async function openFivemFolder(): Promise<void> {
+  if (!isNative()) throw new Error("Open FiveM Folder is available in the Windows app.");
+  await invoke<void>("open_fivem_folder");
+}
+
+export interface NativeFivemPackResult {
+  ok: boolean;
+  install_id: string;
+  message: string;
+  installed_files: string[];
+}
+
+export interface NativeFivemPackFile {
+  path: string;
+  content: string;
+}
+
+export async function installFivemPack(
+  packName: string,
+  files: NativeFivemPackFile[],
+): Promise<NativeFivemPackResult> {
+  if (!isNative()) throw new Error("One-click FiveM installation is available in the Windows app.");
+  return invoke<NativeFivemPackResult>("install_fivem_pack", {
+    args: { pack_name: packName, files },
+  });
+}
+
+export async function uninstallFivemPack(): Promise<NativeFivemPackResult> {
+  if (!isNative()) throw new Error("FiveM pack rollback is available in the Windows app.");
+  return invoke<NativeFivemPackResult>("uninstall_fivem_pack");
+}
+
+export async function discordLogout(): Promise<void> {
+  if (!isNative()) {
+    window.location.href = "/api/auth/discord/logout";
+    return;
+  }
+  await invoke<void>("discord_logout");
+}
+
+export async function discordCachedToken(): Promise<NativeDiscordSession | null> {
+  if (!isNative()) return null;
+  return invoke<NativeDiscordSession | null>("discord_cached_token");
+}
+
+/**
+ * Return the native bearer token that should accompany server-authorized
+ * Windows actions. LocalStorage is the fast path; the keyring is the source
+ * of truth after a cold desktop start.
+ */
+export async function getNativeAuthToken(): Promise<string | null> {
+  try {
+    const stored = localStorage.getItem("optigods_native_auth_token");
+    if (stored) return stored;
+  } catch { /* localStorage may be unavailable */ }
+  if (!isNative()) return null;
+  const session = await discordCachedToken().catch(() => null);
+  if (!session?.native_token) return null;
+  try { localStorage.setItem("optigods_native_auth_token", session.native_token); } catch { /* best effort */ }
+  return session.native_token;
+}
+
+// ─── updater ────────────────────────────────────────────────────────────────
+
+export interface UpdateInfo {
+  available: boolean;
+  current_version: string;
+  latest_version: string | null;
+  notes: string | null;
+  error: string | null;
+}
+
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  if (!isNative()) return null;
+  return invoke<UpdateInfo>("check_for_update");
+}
+
+// Internal: subscribe to a Tauri event using __TAURI_INTERNALS__ directly,
+// mirroring @tauri-apps/api/event listen() without a static npm import.
+type Unlisten = () => Promise<void>;
+async function tauriListen<T>(
+  event: string,
+  handler: (payload: T) => void,
+): Promise<Unlisten> {
+  if (!isNative()) return async () => {};
+  const w = window as unknown as {
+    __TAURI_INTERNALS__?: {
+      invoke: <R>(c: string, a?: unknown) => Promise<R>;
+      transformCallback: (
+        cb: (e: { payload: unknown }) => void,
+        once?: boolean,
+      ) => number;
+    };
+  };
+  const internals = w.__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals?.transformCallback) return async () => {};
+  const callbackId = internals.transformCallback((e: { payload: unknown }) => {
+    handler(e.payload as T);
+  });
+  const unlistenId = await internals.invoke<number>("plugin:event|listen", {
+    event,
+    target: { kind: "Any" },
+    handler: callbackId,
+  });
+  return async () => {
+    try {
+      await internals.invoke("plugin:event|unlisten", {
+        event,
+        handlerId: unlistenId,
+      });
+    } catch { /* noop */ }
+  };
+}
+
+interface UpdateProgressPayload {
+  downloaded: number;
+  total: number | null;
+  percent: number;
+  installing: boolean;
+}
+
+/**
+ * Download and install the update using Tauri's native updater plugin.
+ * Calls onProgress(percent 0–100, installing) for each progress event.
+ * Throws if no update is available or if the Tauri updater fails
+ * (caller should fall back to browser download in that case).
+ */
+export async function performUpdate(
+  onProgress: (percent: number, installing: boolean) => void,
+): Promise<void> {
+  if (!isNative()) throw new Error("not native");
+  const unlisten = await tauriListen<UpdateProgressPayload>(
+    "update-progress",
+    (payload) => {
+      onProgress(payload.percent ?? 0, payload.installing ?? false);
+    },
+  );
+  try {
+    await invoke<void>("perform_update");
+  } finally {
+    await unlisten();
+  }
+}
+
+// ─── External URL opener ─────────────────────────────────────────────────────
+
+/**
+ * Open a URL in the system's default browser.
+ * In native (Tauri) mode uses plugin:shell|open so the link opens in the real
+ * browser instead of navigating the WebView away from the app.
+ * Falls back to window.location.href on the web.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (isNative()) {
+    try {
+      // shell:allow-open permission is granted in capabilities/default.json
+      await invoke<void>("plugin:shell|open", { path: url });
+      return;
+    } catch (err) {
+      console.warn("[native] openExternal fallback:", err);
+    }
+  }
+  window.location.href = url;
+}
+
+// ─── File drop (drag onto Tauri window) ─────────────────────────────────────
+
+/**
+ * Listen for files dragged onto the Tauri app window.
+ * Returns an unlisten function to clean up the listener.
+ * No-op in web mode.
+ */
+export async function onFileDrop(
+  handler: (paths: string[]) => void,
+): Promise<() => Promise<void>> {
+  type Payload =
+    | { paths: string[] }
+    | { type?: string; paths?: string[] }
+    | string[];
+  return tauriListen<Payload>("tauri://drag-drop", (payload) => {
+    const paths: string[] = Array.isArray(payload)
+      ? (payload as string[])
+      : ((payload as { paths?: string[] }).paths ?? []);
+    if (paths.length > 0) handler(paths);
+  });
+}
+
+/**
+ * Read a local file as UTF-8 text using the custom Rust `read_text_file` command.
+ * Uses std::fs::read_to_string in Rust — no Tauri fs-plugin scope restrictions,
+ * so it can read from any path the OS allows (Desktop, Downloads, etc.).
+ * Requires `allow-read-text-file` in capabilities/default.json.
+ */
+export async function readTauriTextFile(path: string): Promise<string> {
+  return invoke<string>("read_text_file", { path });
+}
+
+// ─── Task Manager native commands ───────────────────────────────────────────
+
+export interface ProcessInfo {
+  name: string;
+  pid: number;
+  instances: number;
+  can_kill: boolean;
+}
+
+export interface StartupEntry {
+  name: string;
+  command: string;
+  location: string;
+  can_disable: boolean;
+}
+
+export interface NativeTaskScan {
+  /** App IDs whose process is currently running */
+  running: string[];
+  /** App IDs whose startup key exists in the registry */
+  in_startup: string[];
+  /** All running non-system processes on this machine */
+  all_processes: ProcessInfo[];
+  /** All entries in HKCU + HKLM Run keys */
+  all_startup_entries: StartupEntry[];
+}
+
+export interface NativeInstalledGame {
+  id: string;
+  executable: string;
+  install_path: string;
+  source: string;
+  running: boolean;
+}
+
+/** Discover allowlisted installed games. The native command accepts no paths. */
+export async function detectInstalledGames(): Promise<NativeInstalledGame[]> {
+  if (!isNative()) return [];
+  return invoke<NativeInstalledGame[]>("detect_installed_games");
+}
+
+export interface NativeActionResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Scan the system for running processes and startup entries matching the
+ * supplied maps. Returns two lists of matching app IDs.
+ */
+export async function scanTaskManager(
+  processMap: Record<string, string>,
+  startupMap: Record<string, string>,
+): Promise<NativeTaskScan> {
+  return invoke<NativeTaskScan>("scan_task_manager", {
+    args: { process_map: processMap, startup_map: startupMap },
+  });
+}
+
+/**
+ * Read the FiveM CitizenFX.log tail (400 lines) to detect the current server.
+ * Returns empty string when not in native shell or FiveM log not found.
+ */
+export async function readFivemLog(): Promise<string> {
+  if (!isNative()) return "";
+  try { return await invoke<string>("read_fivem_log"); } catch { return ""; }
+}
+
+/**
+ * Forcibly terminate a process by image name (allowlisted in Rust).
+ */
+export async function killApp(processName: string): Promise<NativeActionResult> {
+  return invoke<NativeActionResult>("kill_app", { args: { process_name: processName } });
+}
+
+/**
+ * Remove a startup registry entry from HKCU Run (allowlisted in Rust).
+ */
+export async function disableStartupApp(startupKey: string): Promise<NativeActionResult> {
+  return invoke<NativeActionResult>("disable_startup_app", { args: { startup_key: startupKey } });
+}
+
+/**
+ * Read the current value of a HKCU Run startup entry (for undo).
+ */
+export async function getStartupValue(startupKey: string): Promise<string | null> {
+  return invoke<string | null>("get_startup_value", { args: { startup_key: startupKey } });
+}

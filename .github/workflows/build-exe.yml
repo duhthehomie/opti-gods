@@ -1,0 +1,13 @@
+# This workflow is disabled — use build-windows.yml instead.
+# build-windows.yml triggers on push to main and handles everything.
+on:
+  workflow_dispatch:
+    inputs:
+      disabled:
+        description: "Use build-windows.yml instead"
+        default: "true"
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Use build-windows.yml"

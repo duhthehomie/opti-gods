@@ -1,0 +1,59 @@
+modules = ["nodejs-20", "web", "python-3.11", "rust-stable", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", ".local", ".cache", "generated-icon.png", "node_modules", "dist", "src-tauri/target", "attached_assets", "downloads", "releases"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["zip", "unzip"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[env]
+PORT = "5000"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "./dist/index.cjs"]
+build = ["bash", "-lc", "OPTI_DEPLOY_CLEANUP=1 node script/prepare-deployment.mjs before && npm run build && OPTI_DEPLOY_CLEANUP=1 node script/prepare-deployment.mjs after"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+VITE_CASHAPP_TAG = "$my1ik"
+VITE_PAYPAL_LINK = "https://paypal.me/accountslg"
+EMAIL_USER = "tastymemes53@gmail.com"
+VITE_GUMROAD_LINK = "https://duhthehomie.gumroad.com/l/esizt"
+STRIPE_SECRET_KEY = "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"
+STRIPE_PRICE_ID = "price_1TJNVKLcJlSyMFAkbdfnV2T8"
+SITE_URL = "https://optigods.com"
+DISCORD_REDIRECT_URI = "https://optigods.com/api/auth/discord/callback"
+ZERNIO_PROFILE_ID = "6aa0ea4eecb23f483b79d0d6"
+
+[userenv.production]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000

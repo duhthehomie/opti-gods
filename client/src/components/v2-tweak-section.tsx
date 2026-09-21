@@ -1,0 +1,140 @@
+import { TweakRow } from "@/components/tweak-row";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { isNative } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface V2TweakSectionProps {
+  heading: string;
+  ids: string[];
+  accent?: "red" | "purple" | "amber" | "emerald" | "blue";
+  description?: string;
+  testIdSuffix: string;
+}
+
+const ACCENTS: Record<NonNullable<V2TweakSectionProps["accent"]>, { text: string; border: string; bg: string; hover: string }> = {
+  red: { text: "text-red-500", border: "border-red-500/20 hover:border-red-500/40", bg: "hover:bg-red-500/10", hover: "hover:text-red-300" },
+  purple: { text: "text-purple-500", border: "border-purple-500/20 hover:border-purple-500/40", bg: "hover:bg-purple-500/10", hover: "hover:text-purple-300" },
+  amber: { text: "text-amber-500", border: "border-amber-500/20 hover:border-amber-500/40", bg: "hover:bg-amber-500/10", hover: "hover:text-amber-300" },
+  emerald: { text: "text-emerald-500", border: "border-emerald-500/20 hover:border-emerald-500/40", bg: "hover:bg-emerald-500/10", hover: "hover:text-emerald-300" },
+  blue: { text: "text-blue-500", border: "border-blue-500/20 hover:border-blue-500/40", bg: "hover:bg-blue-500/10", hover: "hover:text-blue-300" },
+};
+
+export function V2TweakSection({ heading, ids, accent = "red", description, testIdSuffix }: V2TweakSectionProps) {
+  const tweaks = useOptimizationStore(s => s.tweaks);
+  const appliedAt = useOptimizationStore(s => s.appliedAt);
+  const setTweak = useOptimizationStore(s => s.setTweak);
+  const a = ACCENTS[accent];
+  const [applying, setApplying] = useState(false);
+  const [confirmNative, setConfirmNative] = useState(false);
+  const { toast } = useToast();
+
+  const items = ids
+    .map(id => {
+      const found = TWEAK_REGISTRY.find(t => t.id === id);
+      if (!found && import.meta.env.DEV) console.warn(`[V2TweakSection:${testIdSuffix}] Unknown tweak id "${id}" — missing from TWEAK_REGISTRY.`);
+      return found;
+    })
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+  if (items.length === 0) return null;
+
+  const recIds = items.filter(t => t.recommended).map(t => t.id);
+  const recPending = recIds.filter(id => !(isNative() ? appliedAt[id] : tweaks[id]));
+  const allRecOn = recIds.length > 0 && recPending.length === 0;
+
+  const runRecommended = async () => {
+    if (applying) return;
+    setApplying(true);
+    const compatible = recPending.filter(id => getTweakCompatibility(id).ok);
+    if (compatible.length === 0) {
+      const blocked = recPending.map(id => getTweakCompatibility(id).reason || `${id} is not compatible with this PC.`);
+      toast({ title: "No compatible recommendations", description: blocked.slice(0, 3).join(" ") || "Every pending recommendation is already confirmed or unavailable.", variant: "destructive" });
+      setApplying(false);
+      return;
+    }
+    if (isNative()) {
+      queueTweakBatch(compatible);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
+    try {
+      const result = await applyTweakBatch(compatible);
+      toast({
+        title: `${result.selectedIds.length} recommendations selected`,
+        description: "Download and run the .bat to apply the selected tweaks.",
+        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+      });
+    } catch (error) {
+      toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <section data-testid={`section-v2-${testIdSuffix}`}>
+      <div className="flex items-center gap-2 mb-5 px-1">
+        <h2 className={`text-sm font-bold uppercase tracking-wider ${a.text}`}>{heading}</h2>
+        <span className="text-[10px] font-mono text-zinc-600">({items.length})</span>
+        <div className="flex-1 h-px bg-white/5 ml-2" />
+        {recIds.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => isNative() ? setConfirmNative(true) : void runRecommended()}
+            disabled={allRecOn || applying}
+            data-testid={`button-enable-recommended-v2-${testIdSuffix}`}
+            className={`text-[10px] font-bold uppercase tracking-wider ${a.text} ${a.hover} ${a.bg} border ${a.border} px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            {applying ? "Applying…" : allRecOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recPending.length})`}
+          </Button>
+        )}
+      </div>
+      <AlertDialog open={confirmNative} onOpenChange={setConfirmNative}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply confirmed Windows changes?</AlertDialogTitle>
+            <AlertDialogDescription>Opti Gods will create or verify a restore point, then run {recPending.length} compatible recommended tweak{recPending.length === 1 ? "" : "s"} in Applied Tweaks.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmNative(false); void runRecommended(); }}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {description && <p className="text-xs text-zinc-600 px-1 mb-5">{description}</p>}
+      <div className="space-y-5">
+        {items.map((item, i) => (
+          <TweakRow
+            key={item.id}
+            id={item.id}
+            title={item.title || item.id}
+            description={item.description || item.plainEnglish}
+            badge={item.badge}
+            impact={item.impact}
+            warning={item.warning}
+            checked={tweaks[item.id] || false}
+            onCheckedChange={(v) => setTweak(item.id, v)}
+            delay={i + 1}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}

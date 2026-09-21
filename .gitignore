@@ -1,0 +1,15 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+.local/
+
+# Local uploads and desktop release artifacts are not part of the website.
+# Installers are distributed from GitHub Releases via /api/download/latest.
+attached_assets/
+downloads/
+releases/
+src-tauri/target/
+.cache/

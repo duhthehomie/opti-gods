@@ -1,0 +1,97 @@
+// Opti Gods desktop — Tauri 2.x entrypoint.
+
+mod commands;
+mod state;
+
+#[cfg(windows)]
+mod win32;
+
+use tauri::{Manager, WindowEvent};
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let _ = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info,tauri=warn"),
+    )
+    .try_init();
+
+    #[cfg(windows)]
+    if let Err(error) = win32::restore::initialize_com_security() {
+        // Keep the shell launchable so the UI can show the exact recovery
+        // error; all native mutation commands remain blocked by the same
+        // process-wide guard until COM security is valid.
+        log::error!("[restore] COM security initialization failed: {error:#}");
+    }
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(state::AppState::default())
+        .setup(|app| {
+            #[cfg(windows)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = commands::process_lasso::run_forever(handle).await {
+                        log::error!("[process_lasso] worker exited: {err:#}");
+                    }
+                });
+            }
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                if window.label() == "main" {}
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::splash::finish_splash,
+            commands::actions::run_fix,
+            commands::actions::run_restore_categories,
+            commands::tweaks::apply_tweak,
+            commands::tweaks::undo_tweak,
+            commands::tweaks::list_tweaks,
+            commands::tweaks::detect_applied_tweaks,
+            commands::power::list_power_plans,
+            commands::power::set_power_plan,
+            commands::hardware::scan_hardware,
+            commands::performance::read_live_performance,
+            commands::restore::create_restore_point,
+            commands::restore::restore_to_point,
+            commands::restore::list_restore_points,
+            commands::restore::startup_restore_checkpoint,
+            commands::process_lasso::start_pro_balance,
+            commands::process_lasso::stop_pro_balance,
+            commands::process_lasso::pro_balance_status,
+            commands::discord::discord_login,
+            commands::discord::discord_logout,
+            commands::discord::discord_cached_token,
+            commands::updater::check_for_update,
+            commands::updater::perform_update,
+            commands::env::env_info,
+            commands::misc::open_downloads,
+            commands::misc::save_diagnostic_log,
+            commands::misc::repair_nvidia_control_panel,
+            commands::misc::open_fivem_folder,
+            commands::misc::install_fivem_pack,
+            commands::misc::uninstall_fivem_pack,
+            commands::misc::read_text_file,
+            commands::misc::read_fivem_log,
+             commands::misc::open_msi_utility,
+             commands::misc::import_nvidia_preset,
+            commands::task_manager::scan_task_manager,
+            commands::task_manager::kill_app,
+            commands::task_manager::disable_startup_app,
+            commands::task_manager::get_startup_value,
+            commands::game_detection::detect_installed_games,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Opti Gods");
+}

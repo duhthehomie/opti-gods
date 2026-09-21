@@ -1,0 +1,739 @@
+2026-05-21T04:38:46.9638579Z Current runner version: '2.334.0'
+2026-05-21T04:38:46.9662971Z ##[group]Runner Image Provisioner
+2026-05-21T04:38:46.9664202Z Hosted Compute Agent
+2026-05-21T04:38:46.9664734Z Version: 20260213.493
+2026-05-21T04:38:46.9665273Z Commit: 5c115507f6dd24b8de37d8bbe0bb4509d0cc0fa3
+2026-05-21T04:38:46.9665945Z Build Date: 2026-02-13T00:28:41Z
+2026-05-21T04:38:46.9666515Z Worker ID: {bc15f125-b488-4389-977c-80cda7eb16d7}
+2026-05-21T04:38:46.9667517Z Azure Region: eastus2
+2026-05-21T04:38:46.9668011Z ##[endgroup]
+2026-05-21T04:38:46.9670071Z ##[group]Operating System
+2026-05-21T04:38:46.9670700Z Microsoft Windows Server 2025
+2026-05-21T04:38:46.9671206Z 10.0.26100
+2026-05-21T04:38:46.9671633Z Datacenter
+2026-05-21T04:38:46.9672018Z ##[endgroup]
+2026-05-21T04:38:46.9672488Z ##[group]Runner Image
+2026-05-21T04:38:46.9672949Z Image: windows-2025-vs2026
+2026-05-21T04:38:46.9673443Z Version: 20260518.113.1
+2026-05-21T04:38:46.9674904Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20260518.113/images/windows/Windows2025-VS2026-Readme.md
+2026-05-21T04:38:46.9676443Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260518.113
+2026-05-21T04:38:46.9677308Z ##[endgroup]
+2026-05-21T04:38:46.9678251Z ##[group]GITHUB_TOKEN Permissions
+2026-05-21T04:38:46.9680391Z Contents: write
+2026-05-21T04:38:46.9680899Z Metadata: read
+2026-05-21T04:38:46.9681321Z ##[endgroup]
+2026-05-21T04:38:46.9683378Z Secret source: Actions
+2026-05-21T04:38:46.9684430Z Prepare workflow directory
+2026-05-21T04:38:47.0032711Z Prepare all required actions
+2026-05-21T04:38:47.0070098Z Getting action download info
+2026-05-21T04:38:47.3309782Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-05-21T04:38:47.4269894Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-05-21T04:38:47.5745294Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:29eef336d9b2848a0b548edc03f92a220660cdb8)
+2026-05-21T04:38:47.6892797Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-05-21T04:38:47.8222182Z Download action repository 'softprops/action-gh-release@v2' (SHA:3bb12739c298aeb8a4eeaf626c5b8d85266b0e65)
+2026-05-21T04:38:48.1345821Z Complete job name: build
+2026-05-21T04:38:48.2465928Z ##[group]Run actions/checkout@v4
+2026-05-21T04:38:48.2466918Z with:
+2026-05-21T04:38:48.2467277Z   repository: duhthehomie/opti-gods
+2026-05-21T04:38:48.2467900Z   token: ***
+2026-05-21T04:38:48.2468228Z   ssh-strict: true
+2026-05-21T04:38:48.2468561Z   ssh-user: git
+2026-05-21T04:38:48.2468897Z   persist-credentials: true
+2026-05-21T04:38:48.2469292Z   clean: true
+2026-05-21T04:38:48.2469629Z   sparse-checkout-cone-mode: true
+2026-05-21T04:38:48.2470050Z   fetch-depth: 1
+2026-05-21T04:38:48.2470373Z   fetch-tags: false
+2026-05-21T04:38:48.2470720Z   show-progress: true
+2026-05-21T04:38:48.2471056Z   lfs: false
+2026-05-21T04:38:48.2471384Z   submodules: false
+2026-05-21T04:38:48.2471737Z   set-safe-directory: true
+2026-05-21T04:38:48.2472306Z ##[endgroup]
+2026-05-21T04:38:48.4113708Z Syncing repository: duhthehomie/opti-gods
+2026-05-21T04:38:48.4115491Z ##[group]Getting Git version info
+2026-05-21T04:38:48.4116460Z Working directory is 'D:\a\opti-gods\opti-gods'
+2026-05-21T04:38:48.4760100Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-05-21T04:38:48.6559075Z git version 2.54.0.windows.1
+2026-05-21T04:38:48.6610343Z ##[endgroup]
+2026-05-21T04:38:48.6630851Z Temporarily overriding HOME='D:\a\_temp\e2a2cd32-94e4-4987-9dfe-f2628f41a7bc' before making global git config changes
+2026-05-21T04:38:48.6632612Z Adding repository directory to the temporary git global config as a safe directory
+2026-05-21T04:38:48.6642051Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\opti-gods\opti-gods
+2026-05-21T04:38:48.6934022Z Deleting the contents of 'D:\a\opti-gods\opti-gods'
+2026-05-21T04:38:48.6940518Z ##[group]Initializing the repository
+2026-05-21T04:38:48.6949837Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\opti-gods\opti-gods
+2026-05-21T04:38:48.7395824Z Initialized empty Git repository in D:/a/opti-gods/opti-gods/.git/
+2026-05-21T04:38:48.7438925Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/duhthehomie/opti-gods
+2026-05-21T04:38:48.7738045Z ##[endgroup]
+2026-05-21T04:38:48.7739352Z ##[group]Disabling automatic garbage collection
+2026-05-21T04:38:48.7747600Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-05-21T04:38:48.8027839Z ##[endgroup]
+2026-05-21T04:38:48.8028945Z ##[group]Setting up auth
+2026-05-21T04:38:48.8041763Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-05-21T04:38:48.8333176Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-05-21T04:38:49.7026341Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-05-21T04:38:49.7313712Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-05-21T04:38:50.2624188Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-05-21T04:38:50.2926447Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-05-21T04:38:50.8131880Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-05-21T04:38:50.8430699Z ##[endgroup]
+2026-05-21T04:38:50.8505962Z ##[group]Fetching the repository
+2026-05-21T04:38:50.8507375Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +a713c568109db67b66d5897c2bf2906819b44d35:refs/remotes/origin/main
+2026-05-21T04:38:56.4843959Z From https://github.com/duhthehomie/opti-gods
+2026-05-21T04:38:56.4847359Z  * [new ref]         a713c568109db67b66d5897c2bf2906819b44d35 -> origin/main
+2026-05-21T04:38:56.5094883Z ##[endgroup]
+2026-05-21T04:38:56.5095483Z ##[group]Determining the checkout info
+2026-05-21T04:38:56.5095854Z ##[endgroup]
+2026-05-21T04:38:56.5101833Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-05-21T04:38:56.5425860Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-05-21T04:38:56.5704236Z ##[group]Checking out the ref
+2026-05-21T04:38:56.5714533Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-05-21T04:38:58.1546762Z Updating files:   3% (21/613)
+2026-05-21T04:38:58.4365863Z Updating files:   4% (25/613)
+2026-05-21T04:38:58.4564283Z Updating files:   5% (31/613)
+2026-05-21T04:38:58.5166992Z Updating files:   6% (37/613)
+2026-05-21T04:38:58.5206468Z Updating files:   7% (43/613)
+2026-05-21T04:38:58.5222135Z Updating files:   8% (50/613)
+2026-05-21T04:38:58.5284025Z Updating files:   9% (56/613)
+2026-05-21T04:38:58.5848606Z Updating files:  10% (62/613)
+2026-05-21T04:38:58.6263552Z Updating files:  11% (68/613)
+2026-05-21T04:38:58.6419564Z Updating files:  11% (69/613)
+2026-05-21T04:38:58.6466585Z Updating files:  12% (74/613)
+2026-05-21T04:38:58.6500653Z Updating files:  13% (80/613)
+2026-05-21T04:38:58.6518453Z Updating files:  14% (86/613)
+2026-05-21T04:38:58.6540960Z Updating files:  15% (92/613)
+2026-05-21T04:38:58.6561389Z Updating files:  16% (99/613)
+2026-05-21T04:38:58.6594148Z Updating files:  17% (105/613)
+2026-05-21T04:38:58.6627536Z Updating files:  18% (111/613)
+2026-05-21T04:38:58.6642643Z Updating files:  19% (117/613)
+2026-05-21T04:38:58.6665673Z Updating files:  20% (123/613)
+2026-05-21T04:38:58.6687942Z Updating files:  21% (129/613)
+2026-05-21T04:38:58.6737974Z Updating files:  22% (135/613)
+2026-05-21T04:38:58.6777434Z Updating files:  23% (141/613)
+2026-05-21T04:38:58.6792688Z Updating files:  24% (148/613)
+2026-05-21T04:38:58.7043825Z Updating files:  25% (154/613)
+2026-05-21T04:38:58.7135075Z Updating files:  26% (160/613)
+2026-05-21T04:38:58.7178362Z Updating files:  27% (166/613)
+2026-05-21T04:38:58.7201237Z Updating files:  28% (172/613)
+2026-05-21T04:38:58.7239233Z Updating files:  29% (178/613)
+2026-05-21T04:38:58.7309996Z Updating files:  30% (184/613)
+2026-05-21T04:38:58.7368179Z Updating files:  31% (191/613)
+2026-05-21T04:38:58.7391042Z Updating files:  32% (197/613)
+2026-05-21T04:38:58.7420770Z Updating files:  33% (203/613)
+2026-05-21T04:38:58.7465175Z Updating files:  34% (209/613)
+2026-05-21T04:38:58.7500190Z Updating files:  35% (215/613)
+2026-05-21T04:38:58.7553338Z Updating files:  36% (221/613)
+2026-05-21T04:38:58.7583406Z Updating files:  37% (227/613)
+2026-05-21T04:38:58.7609147Z Updating files:  38% (233/613)
+2026-05-21T04:38:58.7648451Z Updating files:  39% (240/613)
+2026-05-21T04:38:58.7714651Z Updating files:  40% (246/613)
+2026-05-21T04:38:58.7737605Z Updating files:  41% (252/613)
+2026-05-21T04:38:58.7770787Z Updating files:  42% (258/613)
+2026-05-21T04:38:58.7859705Z Updating files:  43% (264/613)
+2026-05-21T04:38:58.7899347Z Updating files:  44% (270/613)
+2026-05-21T04:38:58.7932682Z Updating files:  45% (276/613)
+2026-05-21T04:38:58.7991612Z Updating files:  46% (282/613)
+2026-05-21T04:38:58.8032222Z Updating files:  47% (289/613)
+2026-05-21T04:38:58.8069624Z Updating files:  48% (295/613)
+2026-05-21T04:38:58.8105998Z Updating files:  49% (301/613)
+2026-05-21T04:38:58.8163846Z Updating files:  50% (307/613)
+2026-05-21T04:38:58.8197108Z Updating files:  51% (313/613)
+2026-05-21T04:38:58.8233953Z Updating files:  52% (319/613)
+2026-05-21T04:38:58.8283675Z Updating files:  53% (325/613)
+2026-05-21T04:38:58.8330770Z Updating files:  54% (332/613)
+2026-05-21T04:38:58.8365912Z Updating files:  55% (338/613)
+2026-05-21T04:38:58.8580032Z Updating files:  56% (344/613)
+2026-05-21T04:38:58.8603900Z Updating files:  57% (350/613)
+2026-05-21T04:38:58.9229205Z Updating files:  58% (356/613)
+2026-05-21T04:38:58.9529433Z Updating files:  59% (362/613)
+2026-05-21T04:38:59.0869859Z Updating files:  60% (368/613)
+2026-05-21T04:38:59.0891577Z Updating files:  61% (374/613)
+2026-05-21T04:38:59.0962175Z Updating files:  62% (381/613)
+2026-05-21T04:38:59.4127802Z Updating files:  63% (387/613)
+2026-05-21T04:38:59.4734216Z Updating files:  64% (393/613)
+2026-05-21T04:38:59.4746514Z Updating files:  65% (399/613)
+2026-05-21T04:38:59.4766655Z Updating files:  66% (405/613)
+2026-05-21T04:38:59.4781398Z Updating files:  67% (411/613)
+2026-05-21T04:38:59.4794937Z Updating files:  68% (417/613)
+2026-05-21T04:38:59.4811557Z Updating files:  69% (423/613)
+2026-05-21T04:38:59.4823803Z Updating files:  70% (430/613)
+2026-05-21T04:38:59.4835404Z Updating files:  71% (436/613)
+2026-05-21T04:38:59.4847612Z Updating files:  72% (442/613)
+2026-05-21T04:38:59.4858912Z Updating files:  73% (448/613)
+2026-05-21T04:38:59.4873553Z Updating files:  74% (454/613)
+2026-05-21T04:38:59.4885069Z Updating files:  75% (460/613)
+2026-05-21T04:38:59.4899985Z Updating files:  76% (466/613)
+2026-05-21T04:38:59.4914756Z Updating files:  77% (473/613)
+2026-05-21T04:38:59.4927942Z Updating files:  78% (479/613)
+2026-05-21T04:38:59.4943734Z Updating files:  79% (485/613)
+2026-05-21T04:38:59.4969232Z Updating files:  80% (491/613)
+2026-05-21T04:38:59.5006381Z Updating files:  81% (497/613)
+2026-05-21T04:38:59.5025917Z Updating files:  82% (503/613)
+2026-05-21T04:38:59.5045114Z Updating files:  83% (509/613)
+2026-05-21T04:38:59.5068430Z Updating files:  84% (515/613)
+2026-05-21T04:38:59.5085756Z Updating files:  85% (522/613)
+2026-05-21T04:38:59.5104404Z Updating files:  86% (528/613)
+2026-05-21T04:38:59.5136293Z Updating files:  87% (534/613)
+2026-05-21T04:38:59.5149837Z Updating files:  88% (540/613)
+2026-05-21T04:38:59.5166871Z Updating files:  89% (546/613)
+2026-05-21T04:38:59.5182254Z Updating files:  90% (552/613)
+2026-05-21T04:38:59.5224808Z Updating files:  91% (558/613)
+2026-05-21T04:38:59.5242850Z Updating files:  92% (564/613)
+2026-05-21T04:38:59.5263783Z Updating files:  93% (571/613)
+2026-05-21T04:38:59.5287351Z Updating files:  94% (577/613)
+2026-05-21T04:38:59.5307087Z Updating files:  95% (583/613)
+2026-05-21T04:38:59.5325084Z Updating files:  96% (589/613)
+2026-05-21T04:38:59.5339767Z Updating files:  97% (595/613)
+2026-05-21T04:38:59.5351387Z Updating files:  98% (601/613)
+2026-05-21T04:38:59.7451495Z Updating files:  99% (607/613)
+2026-05-21T04:38:59.7451949Z Updating files: 100% (613/613)
+2026-05-21T04:38:59.7452357Z Updating files: 100% (613/613), done.
+2026-05-21T04:38:59.7579221Z Switched to a new branch 'main'
+2026-05-21T04:38:59.7594483Z branch 'main' set up to track 'origin/main'.
+2026-05-21T04:39:00.0870519Z ##[endgroup]
+2026-05-21T04:39:00.1214685Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-05-21T04:39:00.1490148Z a713c568109db67b66d5897c2bf2906819b44d35
+2026-05-21T04:39:00.1880787Z ##[group]Run $v = (Get-Content -Raw version.json | ConvertFrom-Json).version
+2026-05-21T04:39:00.1881442Z [36;1m$v = (Get-Content -Raw version.json | ConvertFrom-Json).version[0m
+2026-05-21T04:39:00.1881949Z [36;1mif ([string]::IsNullOrWhiteSpace($v)) { throw "version.json missing 'version'" }[0m
+2026-05-21T04:39:00.1882360Z [36;1mecho "version=$v" >> $env:GITHUB_OUTPUT[0m
+2026-05-21T04:39:00.1882649Z [36;1m$tag = if ('' -ne '') { '' } else { "v$v" }[0m
+2026-05-21T04:39:00.1882919Z [36;1mecho "tag=$tag"     >> $env:GITHUB_OUTPUT[0m
+2026-05-21T04:39:00.1883208Z [36;1mWrite-Host "Building OptiGods v$v (tag $tag)"[0m
+2026-05-21T04:39:00.1989545Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:00.1989896Z ##[endgroup]
+2026-05-21T04:39:06.0813145Z Building OptiGods v2.3.6 (tag v2.3.6)
+2026-05-21T04:39:06.3707155Z ##[group]Run actions/setup-node@v4
+2026-05-21T04:39:06.3707470Z with:
+2026-05-21T04:39:06.3707635Z   node-version: 20
+2026-05-21T04:39:06.3707812Z   cache: npm
+2026-05-21T04:39:06.3707965Z   always-auth: false
+2026-05-21T04:39:06.3708143Z   check-latest: false
+2026-05-21T04:39:06.3708457Z   token: ***
+2026-05-21T04:39:06.3708626Z ##[endgroup]
+2026-05-21T04:39:06.5984683Z Attempting to download 20...
+2026-05-21T04:39:07.0384615Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-win32-x64.7z
+2026-05-21T04:39:07.3241208Z Extracting ...
+2026-05-21T04:39:09.4275715Z Adding to the cache ...
+2026-05-21T04:39:12.5650891Z ##[group]Environment details
+2026-05-21T04:39:13.4898554Z node: v20.20.2
+2026-05-21T04:39:13.4898901Z npm: 10.8.2
+2026-05-21T04:39:13.4899063Z yarn: 1.22.22
+2026-05-21T04:39:13.4899689Z ##[endgroup]
+2026-05-21T04:39:13.5433905Z [command]C:\Windows\system32\cmd.exe /D /S /C "C:\hostedtoolcache\windows\node\20.20.2\x64\npm.cmd config get cache"
+2026-05-21T04:39:13.8574952Z C:\npm\cache
+2026-05-21T04:39:14.0568599Z Cache hit for: node-cache-Windows-x64-npm-2fe9b6251c75d3399e12846a2ea3b8cb1c8784f8863d515efd657f08f6a3d718
+2026-05-21T04:39:14.6761407Z Received 89808808 of 89808808 (100.0%), 161.9 MBs/sec
+2026-05-21T04:39:14.6764783Z Cache Size: ~86 MB (89808808 B)
+2026-05-21T04:39:14.6849086Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/8d5d3f5f-d8ab-4428-9178-4527f3fb8eaf/cache.tzst -P -C D:/a/opti-gods/opti-gods --force-local --use-compress-program "zstd -d"
+2026-05-21T04:39:17.8837394Z Cache restored successfully
+2026-05-21T04:39:17.8919316Z Cache restored from key: node-cache-Windows-x64-npm-2fe9b6251c75d3399e12846a2ea3b8cb1c8784f8863d515efd657f08f6a3d718
+2026-05-21T04:39:17.9396163Z ##[group]Run dtolnay/rust-toolchain@stable
+2026-05-21T04:39:17.9396727Z with:
+2026-05-21T04:39:17.9396912Z   targets: x86_64-pc-windows-msvc
+2026-05-21T04:39:17.9397146Z   toolchain: stable
+2026-05-21T04:39:17.9397328Z ##[endgroup]
+2026-05-21T04:39:17.9589994Z ##[group]Run : parse toolchain version
+2026-05-21T04:39:17.9590302Z [36;1m: parse toolchain version[0m
+2026-05-21T04:39:17.9590533Z [36;1mif [[ -z $toolchain ]]; then[0m
+2026-05-21T04:39:17.9591015Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+2026-05-21T04:39:17.9591543Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+2026-05-21T04:39:17.9591796Z [36;1m  exit 1[0m
+2026-05-21T04:39:17.9592096Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+2026-05-21T04:39:17.9592467Z [36;1m  if [[ Windows == macOS ]]; then[0m
+2026-05-21T04:39:17.9592994Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:17.9593467Z [36;1m  else[0m
+2026-05-21T04:39:17.9593823Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:17.9594225Z [36;1m  fi[0m
+2026-05-21T04:39:17.9594476Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+2026-05-21T04:39:17.9595417Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:17.9595824Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+2026-05-21T04:39:17.9596288Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:17.9596713Z [36;1melse[0m
+2026-05-21T04:39:17.9596928Z [36;1m  echo "toolchain=$toolchain" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:17.9597189Z [36;1mfi[0m
+2026-05-21T04:39:17.9609335Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:17.9609728Z env:
+2026-05-21T04:39:17.9609896Z   toolchain: stable
+2026-05-21T04:39:17.9610074Z ##[endgroup]
+2026-05-21T04:39:18.0177078Z ##[group]Run : construct rustup command line
+2026-05-21T04:39:18.0177391Z [36;1m: construct rustup command line[0m
+2026-05-21T04:39:18.0177803Z [36;1mecho "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:18.0178495Z [36;1mecho "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:18.0178951Z [36;1mecho "downgrade=" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:18.0188976Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:18.0189339Z env:
+2026-05-21T04:39:18.0189520Z   targets: x86_64-pc-windows-msvc
+2026-05-21T04:39:18.0189890Z   components: 
+2026-05-21T04:39:18.0190164Z ##[endgroup]
+2026-05-21T04:39:18.0934089Z ##[group]Run : set $CARGO_HOME
+2026-05-21T04:39:18.0934365Z [36;1m: set $CARGO_HOME[0m
+2026-05-21T04:39:18.0934680Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$USERPROFILE\.cargo"} >> $GITHUB_ENV[0m
+2026-05-21T04:39:18.0944957Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:18.0945827Z ##[endgroup]
+2026-05-21T04:39:18.1459600Z ##[group]Run : install rustup if needed on windows
+2026-05-21T04:39:18.1459937Z [36;1m: install rustup if needed on windows[0m
+2026-05-21T04:39:18.1460230Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+2026-05-21T04:39:18.1460980Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://win.rustup.rs/x86_64 --output 'D:\a\_temp\rustup-init.exe'[0m
+2026-05-21T04:39:18.1461767Z [36;1m  'D:\a\_temp\rustup-init.exe' --default-toolchain none --no-modify-path -y[0m
+2026-05-21T04:39:18.1464109Z [36;1m  echo "$CARGO_HOME\bin" >> $GITHUB_PATH[0m
+2026-05-21T04:39:18.1464427Z [36;1mfi[0m
+2026-05-21T04:39:18.1476046Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:18.1476400Z env:
+2026-05-21T04:39:18.1476584Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:18.1476813Z ##[endgroup]
+2026-05-21T04:39:18.2040089Z ##[group]Run rustup toolchain install stable --target x86_64-pc-windows-msvc --profile minimal --no-self-update
+2026-05-21T04:39:18.2041241Z [36;1mrustup toolchain install stable --target x86_64-pc-windows-msvc --profile minimal --no-self-update[0m
+2026-05-21T04:39:18.2051642Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:18.2052000Z env:
+2026-05-21T04:39:18.2052179Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:18.2052436Z   RUSTUP_PERMIT_COPY_RENAME: 1
+2026-05-21T04:39:18.2052658Z ##[endgroup]
+2026-05-21T04:39:21.5544071Z info: syncing channel updates for stable-x86_64-pc-windows-msvc
+2026-05-21T04:39:22.1585566Z info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+2026-05-21T04:39:22.1894552Z info: component rust-std is up to date
+2026-05-21T04:39:22.1963655Z 
+2026-05-21T04:39:22.2175298Z   stable-x86_64-pc-windows-msvc unchanged - rustc 1.95.0 (59807616e 2026-04-14)
+2026-05-21T04:39:22.2177385Z 
+2026-05-21T04:39:22.2430642Z ##[group]Run rustup default stable
+2026-05-21T04:39:22.2430902Z [36;1mrustup default stable[0m
+2026-05-21T04:39:22.2440734Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:22.2441083Z env:
+2026-05-21T04:39:22.2441257Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:22.2441494Z ##[endgroup]
+2026-05-21T04:39:22.3156052Z info: using existing install for stable-x86_64-pc-windows-msvc
+2026-05-21T04:39:22.3260293Z info: default toolchain set to stable-x86_64-pc-windows-msvc
+2026-05-21T04:39:22.3260594Z 
+2026-05-21T04:39:22.3458968Z   stable-x86_64-pc-windows-msvc unchanged - rustc 1.95.0 (59807616e 2026-04-14)
+2026-05-21T04:39:22.3459572Z 
+2026-05-21T04:39:22.3642294Z ##[group]Run : create cachekey
+2026-05-21T04:39:22.3642551Z [36;1m: create cachekey[0m
+2026-05-21T04:39:22.3643023Z [36;1mDATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+2026-05-21T04:39:22.3643632Z [36;1mHASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+2026-05-21T04:39:22.3644157Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+2026-05-21T04:39:22.3654361Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:22.3654733Z env:
+2026-05-21T04:39:22.3654918Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:22.3655163Z ##[endgroup]
+2026-05-21T04:39:23.2216085Z ##[group]Run : disable incremental compilation
+2026-05-21T04:39:23.2216424Z [36;1m: disable incremental compilation[0m
+2026-05-21T04:39:23.2216751Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+2026-05-21T04:39:23.2217087Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+2026-05-21T04:39:23.2217336Z [36;1mfi[0m
+2026-05-21T04:39:23.2226893Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:23.2227263Z env:
+2026-05-21T04:39:23.2227523Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.2227920Z ##[endgroup]
+2026-05-21T04:39:23.2746125Z ##[group]Run : enable colors in Cargo output
+2026-05-21T04:39:23.2746450Z [36;1m: enable colors in Cargo output[0m
+2026-05-21T04:39:23.2746738Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+2026-05-21T04:39:23.2747122Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+2026-05-21T04:39:23.2747387Z [36;1mfi[0m
+2026-05-21T04:39:23.2757681Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:23.2758052Z env:
+2026-05-21T04:39:23.2758233Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.2759199Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:23.2759609Z ##[endgroup]
+2026-05-21T04:39:23.3359191Z ##[group]Run : enable Cargo sparse registry
+2026-05-21T04:39:23.3359506Z [36;1m: enable Cargo sparse registry[0m
+2026-05-21T04:39:23.3359837Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+2026-05-21T04:39:23.3360444Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+2026-05-21T04:39:23.3361061Z [36;1m  if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+2026-05-21T04:39:23.3361521Z [36;1m    touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-05-21T04:39:23.3361955Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+2026-05-21T04:39:23.3362392Z [36;1m  elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+2026-05-21T04:39:23.3362869Z [36;1m    touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-05-21T04:39:23.3363301Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+2026-05-21T04:39:23.3363605Z [36;1m  fi[0m
+2026-05-21T04:39:23.3363761Z [36;1mfi[0m
+2026-05-21T04:39:23.3373120Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:23.3373477Z env:
+2026-05-21T04:39:23.3373654Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.3373896Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:23.3374088Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:23.3374279Z ##[endgroup]
+2026-05-21T04:39:23.5109778Z ##[group]Run : work around spurious network errors in curl 8.0
+2026-05-21T04:39:23.5110301Z [36;1m: work around spurious network errors in curl 8.0[0m
+2026-05-21T04:39:23.5111016Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+2026-05-21T04:39:23.5111613Z [36;1mif rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+2026-05-21T04:39:23.5112045Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+2026-05-21T04:39:23.5112317Z [36;1mfi[0m
+2026-05-21T04:39:23.5121581Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:23.5121937Z env:
+2026-05-21T04:39:23.5122113Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.5122354Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:23.5122546Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:23.5122730Z ##[endgroup]
+2026-05-21T04:39:23.6261019Z ##[group]Run rustc +stable --version --verbose
+2026-05-21T04:39:23.6261336Z [36;1mrustc +stable --version --verbose[0m
+2026-05-21T04:39:23.6272868Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-05-21T04:39:23.6273240Z env:
+2026-05-21T04:39:23.6273418Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.6273666Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:23.6273882Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:23.6274072Z ##[endgroup]
+2026-05-21T04:39:23.7096516Z rustc 1.95.0 (59807616e 2026-04-14)
+2026-05-21T04:39:23.7097283Z binary: rustc
+2026-05-21T04:39:23.7097738Z commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860
+2026-05-21T04:39:23.7098407Z commit-date: 2026-04-14
+2026-05-21T04:39:23.7098772Z host: x86_64-pc-windows-msvc
+2026-05-21T04:39:23.7099110Z release: 1.95.0
+2026-05-21T04:39:23.7099396Z LLVM version: 22.1.2
+2026-05-21T04:39:23.8381142Z ##[group]Run actions/cache@v4
+2026-05-21T04:39:23.8381481Z with:
+2026-05-21T04:39:23.8381761Z   path: ~/.cargo/registry
+~/.cargo/git
+src-tauri/target
+
+2026-05-21T04:39:23.8382319Z   key: cargo-v3-Windows-c8f30c8052c835ee94bc33e7217392021272037d20b4f5e6250596c176efba04
+2026-05-21T04:39:23.8382914Z   enableCrossOsArchive: false
+2026-05-21T04:39:23.8383132Z   fail-on-cache-miss: false
+2026-05-21T04:39:23.8383338Z   lookup-only: false
+2026-05-21T04:39:23.8383517Z   save-always: false
+2026-05-21T04:39:23.8383671Z env:
+2026-05-21T04:39:23.8383842Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:23.8384311Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:23.8384489Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:23.8384690Z ##[endgroup]
+2026-05-21T04:39:24.2111237Z Cache not found for input keys: cargo-v3-Windows-c8f30c8052c835ee94bc33e7217392021272037d20b4f5e6250596c176efba04
+2026-05-21T04:39:24.2335595Z ##[group]Run npm install --global @tauri-apps/cli@2.1
+2026-05-21T04:39:24.2336052Z [36;1mnpm install --global @tauri-apps/cli@2.1[0m
+2026-05-21T04:39:24.2393392Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:24.2393716Z env:
+2026-05-21T04:39:24.2393909Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:24.2394151Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:24.2394354Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:24.2394555Z ##[endgroup]
+2026-05-21T04:39:26.2439528Z 
+2026-05-21T04:39:26.2440292Z added 2 packages in 1s
+2026-05-21T04:39:26.2440976Z 
+2026-05-21T04:39:26.2441599Z 1 package is looking for funding
+2026-05-21T04:39:26.2442152Z   run `npm fund` for details
+2026-05-21T04:39:26.4020112Z ##[group]Run npm install
+2026-05-21T04:39:26.4020534Z [36;1mnpm install[0m
+2026-05-21T04:39:26.4078457Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:26.4078943Z env:
+2026-05-21T04:39:26.4079208Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:26.4079576Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:26.4079851Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:26.4080160Z ##[endgroup]
+2026-05-21T04:39:38.8481373Z 
+2026-05-21T04:39:38.8482062Z added 485 packages, and audited 486 packages in 12s
+2026-05-21T04:39:38.8483478Z 
+2026-05-21T04:39:38.8484266Z 77 packages are looking for funding
+2026-05-21T04:39:38.8484674Z   run `npm fund` for details
+2026-05-21T04:39:38.8780533Z 
+2026-05-21T04:39:38.8781184Z 13 vulnerabilities (1 low, 5 moderate, 7 high)
+2026-05-21T04:39:38.8781438Z 
+2026-05-21T04:39:38.8781636Z To address issues that do not require attention, run:
+2026-05-21T04:39:38.8781943Z   npm audit fix
+2026-05-21T04:39:38.8782162Z 
+2026-05-21T04:39:38.8782355Z To address all issues (including breaking changes), run:
+2026-05-21T04:39:38.8782669Z   npm audit fix --force
+2026-05-21T04:39:38.8782800Z 
+2026-05-21T04:39:38.8782910Z Run `npm audit` for details.
+2026-05-21T04:39:39.0263650Z ##[group]Run npx tsx scripts/sync-version.ts
+2026-05-21T04:39:39.0264063Z [36;1mnpx tsx scripts/sync-version.ts[0m
+2026-05-21T04:39:39.0320954Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:39.0321288Z env:
+2026-05-21T04:39:39.0321466Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:39.0321709Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:39.0322060Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:39.0322367Z ##[endgroup]
+2026-05-21T04:39:40.3469412Z sync-version: wrote 2.3.6 → src-tauri/tauri.conf.json
+2026-05-21T04:39:40.3473239Z sync-version: wrote 2.3.6 → client/src/generated/version.ts
+2026-05-21T04:39:40.5133557Z ##[group]Run npx tsx scripts/test-preset-builder.ts
+2026-05-21T04:39:40.5134093Z [36;1mnpx tsx scripts/test-preset-builder.ts[0m
+2026-05-21T04:39:40.5190351Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:40.5190669Z env:
+2026-05-21T04:39:40.5190854Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:40.5191104Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:40.5191287Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:40.5191481Z ##[endgroup]
+2026-05-21T04:39:41.8294852Z 
+2026-05-21T04:39:41.8295926Z [preset-builder] running tests
+2026-05-21T04:39:41.8296466Z 
+2026-05-21T04:39:41.8315482Z   ✓ NVIDIA RTX build: includes Nvidia tweaks, no Amd* leakage
+2026-05-21T04:39:41.8321639Z   ✓ AMD discrete build: includes Amd* tweaks, no Nvidia leakage
+2026-05-21T04:39:41.8330295Z   ✓ Intel iGPU laptop: includes IGpu_Intel + Lap_ tweaks, no Nvidia/Amd dGPU
+2026-05-21T04:39:41.8334761Z   ✓ Lap_* tweaks blocked on desktop
+2026-05-21T04:39:41.8335604Z   ✓ Win11* tweaks blocked on Win10
+2026-05-21T04:39:41.8338094Z   ✓ FORBIDDEN tweaks are NEVER in core without opt-in
+2026-05-21T04:39:41.8346905Z   ✓ FORBIDDEN tweaks move to expert when explicitly opted in
+2026-05-21T04:39:41.8352096Z   ✓ FORBIDDEN tweaks land in blocked[] with reason when not opted in
+2026-05-21T04:39:41.8354899Z   ✓ expert[] is populated by default with hw-compatible expert tweaks (UI toggles)
+2026-05-21T04:39:41.8359026Z   ✓ Unknown opt-in IDs are rejected — never reach core
+2026-05-21T04:39:41.8361487Z   ✓ Opt-in IDs with digits/underscores survive parsing (Win11DisableVBS, Lap_Intel_DisableECores)
+2026-05-21T04:39:41.8362422Z   ✓ EXPERT tweaks land in expert section, not core
+2026-05-21T04:39:41.8363768Z   ✓ EXPERT registry membership: all FORBIDDEN are in EXPERT set
+2026-05-21T04:39:41.8365056Z   ✓ Hardware-mismatch opt-in is recorded in blocked
+2026-05-21T04:39:41.8367033Z   ✓ Unknown vendor: only universal tweaks, no vendor families
+2026-05-21T04:39:41.8370192Z   ✓ hardwareFromRig: detects NVIDIA RTX correctly
+2026-05-21T04:39:41.8373537Z   ✓ hardwareFromRig: detects laptop chassis
+2026-05-21T04:39:41.8375773Z   ✓ AMD discrete laptop gets full Radeon suite + Lap_ additions (not iGPU path)
+2026-05-21T04:39:41.8377470Z   ✓ Goal=stability drops aggressive scheduler tweaks
+2026-05-21T04:39:41.8377807Z 
+2026-05-21T04:39:41.8378000Z [preset-builder] 19 passed, 0 failed
+2026-05-21T04:39:41.8378251Z 
+2026-05-21T04:39:41.9870356Z ##[group]Run npx tsx scripts/test-hardware-info.ts
+2026-05-21T04:39:41.9871185Z [36;1mnpx tsx scripts/test-hardware-info.ts[0m
+2026-05-21T04:39:41.9927759Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:41.9928080Z env:
+2026-05-21T04:39:41.9928270Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:41.9928512Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:41.9928709Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:41.9928908Z ##[endgroup]
+2026-05-21T04:39:43.3330575Z 
+2026-05-21T04:39:43.3331143Z [hardware-info] running tests
+2026-05-21T04:39:43.3331474Z 
+2026-05-21T04:39:43.3338973Z   ✓ NVIDIA RTX 4090 → nvidia / high / discrete
+2026-05-21T04:39:43.3342786Z   ✓ NVIDIA RTX 3060 → nvidia / mid / discrete (Task #61)
+2026-05-21T04:39:43.3344574Z   ✓ NVIDIA RTX 3060 Laptop GPU → nvidia / mid / discrete (Task #61)
+2026-05-21T04:39:43.3345516Z   ✓ NVIDIA RTX 3060 Ti → nvidia / mid / discrete
+2026-05-21T04:39:43.3346189Z   ✓ NVIDIA RTX 3070 → nvidia / mid / discrete
+2026-05-21T04:39:43.3346756Z   ✓ NVIDIA RTX 3080 → nvidia / high / discrete
+2026-05-21T04:39:43.3347321Z   ✓ NVIDIA RTX 3080 Ti → nvidia / high / discrete
+2026-05-21T04:39:43.3347905Z   ✓ NVIDIA RTX 3090 → nvidia / high / discrete
+2026-05-21T04:39:43.3348900Z   ✓ NVIDIA RTX 4060 → nvidia / mid / discrete (Task #61)
+2026-05-21T04:39:43.3350847Z   ✓ NVIDIA RTX 4070 Ti → nvidia / mid / discrete
+2026-05-21T04:39:43.3353011Z   ✓ NVIDIA RTX 4080 → nvidia / high / discrete
+2026-05-21T04:39:43.3353672Z   ✓ NVIDIA RTX 5070 → nvidia / mid / discrete (Task #61)
+2026-05-21T04:39:43.3354483Z   ✓ NVIDIA RTX 5090 → nvidia / high / discrete
+2026-05-21T04:39:43.3355220Z   ✓ NVIDIA RTX 2060 → nvidia / mid / discrete
+2026-05-21T04:39:43.3356996Z   ✓ NVIDIA GTX 1060 → nvidia / low / discrete
+2026-05-21T04:39:43.3360214Z   ✓ NVIDIA GTX 1660 → nvidia / mid / discrete
+2026-05-21T04:39:43.3361041Z   ✓ NVIDIA Quadro RTX A6000 → nvidia / pro
+2026-05-21T04:39:43.3363910Z   ✓ NVIDIA MX450 → nvidia / low / discrete (mobile)
+2026-05-21T04:39:43.3370011Z   ✓ AMD RX 7900 XTX → amd / high / discrete
+2026-05-21T04:39:43.3372504Z   ✓ AMD RX 6700 XT → amd / high / discrete
+2026-05-21T04:39:43.3375528Z   ✓ AMD RX 5500 XT → amd / mid / discrete
+2026-05-21T04:39:43.3379547Z   ✓ AMD RX 580 → amd / low / discrete
+2026-05-21T04:39:43.3381388Z   ✓ AMD Vega 8 (APU iGPU) → amd / low / INTEGRATED
+2026-05-21T04:39:43.3382703Z   ✓ AMD Ryzen Radeon Graphics (APU iGPU) → amd / INTEGRATED
+2026-05-21T04:39:43.3383349Z   ✓ AMD Radeon Pro W6800 → amd / pro / discrete
+2026-05-21T04:39:43.3388798Z   ✓ Intel UHD Graphics 630 → intel / low / INTEGRATED
+2026-05-21T04:39:43.3391949Z   ✓ Intel Iris Xe → intel / low / INTEGRATED
+2026-05-21T04:39:43.3392498Z   ✓ Intel Arc A770 → intel / mid / DISCRETE
+2026-05-21T04:39:43.3393203Z   ✓ Intel Arc A770 with (TM) marker → intel / mid / DISCRETE (Task #62)
+2026-05-21T04:39:43.3393987Z   ✓ Intel Arc B580 with (TM) marker → intel / mid / DISCRETE
+2026-05-21T04:39:43.3394636Z   ✓ Intel Arc Pro A60 → intel / mid / DISCRETE
+2026-05-21T04:39:43.3395169Z   ✓ Intel Arc B580 → intel / mid / DISCRETE
+2026-05-21T04:39:43.3395746Z   ✓ Intel HD Graphics 4000 → intel / low / INTEGRATED
+2026-05-21T04:39:43.3396268Z   ✓ Empty / garbage → unknown vendor
+2026-05-21T04:39:43.3405880Z   ✓ splitGpuList: semicolon-separated hybrid string
+2026-05-21T04:39:43.3409684Z   ✓ splitGpuList: newline-separated hybrid string
+2026-05-21T04:39:43.3410371Z   ✓ splitGpuList: pipe-separated hybrid string
+2026-05-21T04:39:43.3411389Z   ✓ splitGpuList: single discrete name stays intact (NVIDIA RTX 3060)
+2026-05-21T04:39:43.3413212Z   ✓ splitGpuList: single AMD name stays intact
+2026-05-21T04:39:43.3415374Z   ✓ splitGpuList: run-on vendor boundary (Intel<sp>NVIDIA) splits correctly
+2026-05-21T04:39:43.3416149Z   ✓ splitGpuList: de-duplicates case-insensitively
+2026-05-21T04:39:43.3423000Z   ✓ splitGpuList: empty string → []
+2026-05-21T04:39:43.3423280Z 
+2026-05-21T04:39:43.3425722Z [hardware-info] 42 passed, 0 failed
+2026-05-21T04:39:43.3426056Z 
+2026-05-21T04:39:43.5248152Z ##[group]Run npx tsx scripts/test-smart-recs-hybrid.ts
+2026-05-21T04:39:43.5248960Z [36;1mnpx tsx scripts/test-smart-recs-hybrid.ts[0m
+2026-05-21T04:39:43.5308013Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:43.5308341Z env:
+2026-05-21T04:39:43.5308533Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:43.5308788Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:43.5308977Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:43.5309172Z ##[endgroup]
+2026-05-21T04:39:44.8488824Z 
+2026-05-21T04:39:44.8489425Z [smart-recs hybrid] running tests
+2026-05-21T04:39:44.8489825Z 
+2026-05-21T04:39:44.8515726Z   ✓ Hybrid laptop (Intel UHD + NVIDIA RTX 3060) yields BOTH Lap_NVIDIA_* and Lap_Intel_*
+2026-05-21T04:39:44.8522388Z   ✓ Hybrid laptop also gets the Intel iGPU tweak bundle (IGpu_Intel_*)
+2026-05-21T04:39:44.8531058Z   ✓ Arc-only Intel desktop does NOT pull IGpu_Intel_* tweaks
+2026-05-21T04:39:44.8532232Z   ✓ Arc-only Intel desktop still gets the universal CORE bundle
+2026-05-21T04:39:44.8535167Z   ✓ Pure NVIDIA dGPU desktop: no Lap_*, no IGpu_*
+2026-05-21T04:39:44.8535525Z 
+2026-05-21T04:39:44.8535735Z [smart-recs hybrid] 5 passed, 0 failed
+2026-05-21T04:39:44.8536024Z 
+2026-05-21T04:39:45.0230599Z ##[group]Run npx tsx scripts/smoke-test-ps1.ts
+2026-05-21T04:39:45.0231025Z [36;1mnpx tsx scripts/smoke-test-ps1.ts[0m
+2026-05-21T04:39:45.0231351Z [36;1m$dir = Join-Path (Get-Location) ".local/ps1-smoke"[0m
+2026-05-21T04:39:45.0231707Z [36;1m$fixtures = Get-ChildItem -Path $dir -Filter *.ps1[0m
+2026-05-21T04:39:45.0232133Z [36;1mif ($fixtures.Count -eq 0) { throw "no PS1 fixtures generated" }[0m
+2026-05-21T04:39:45.0232490Z [36;1m$fail = 0[0m
+2026-05-21T04:39:45.0232683Z [36;1mforeach ($f in $fixtures) {[0m
+2026-05-21T04:39:45.0232928Z [36;1m  $tokens = $null; $errors = $null[0m
+2026-05-21T04:39:45.0233285Z [36;1m  $null = [System.Management.Automation.Language.Parser]::ParseFile([0m
+2026-05-21T04:39:45.0233672Z [36;1m    $f.FullName, [ref]$tokens, [ref]$errors)[0m
+2026-05-21T04:39:45.0233966Z [36;1m  if ($errors -and $errors.Count -gt 0) {[0m
+2026-05-21T04:39:45.0234210Z [36;1m    $fail++[0m
+2026-05-21T04:39:45.0234518Z [36;1m    Write-Host "::error file=$($f.Name)::PS1 parse error(s) in $($f.Name)"[0m
+2026-05-21T04:39:45.0234879Z [36;1m    foreach ($e in $errors) {[0m
+2026-05-21T04:39:45.0235314Z [36;1m      Write-Host "  L$($e.Extent.StartLineNumber):$($e.Extent.StartColumnNumber) — $($e.Message)"[0m
+2026-05-21T04:39:45.0235733Z [36;1m    }[0m
+2026-05-21T04:39:45.0235895Z [36;1m  } else {[0m
+2026-05-21T04:39:45.0236321Z [36;1m    Write-Host "[OK] $($f.Name) parsed cleanly"[0m
+2026-05-21T04:39:45.0236577Z [36;1m  }[0m
+2026-05-21T04:39:45.0236726Z [36;1m}[0m
+2026-05-21T04:39:45.0237097Z [36;1mif ($fail -gt 0) { throw "$fail PS1 fixture(s) failed parse — TWEAK_COMMANDS contains invalid PowerShell" }[0m
+2026-05-21T04:39:45.0294305Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:45.0294628Z env:
+2026-05-21T04:39:45.0294823Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:45.0295065Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:45.0295253Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:45.0295466Z ##[endgroup]
+2026-05-21T04:39:46.3823297Z [smoke-test] extracted 539 tweak commands
+2026-05-21T04:39:46.3832670Z [smoke-test] wrote D:\a\opti-gods\opti-gods\.local\ps1-smoke\nvidia-all.ps1 (8401 chars, 12 tweaks)
+2026-05-21T04:39:46.3843220Z [smoke-test] wrote D:\a\opti-gods\opti-gods\.local\ps1-smoke\amd-all.ps1 (6590 chars, 8 tweaks)
+2026-05-21T04:39:46.3846041Z [smoke-test] wrote D:\a\opti-gods\opti-gods\.local\ps1-smoke\nvidia-frame-custom.ps1 (1057 chars, 1 tweaks)
+2026-05-21T04:39:46.3848928Z [smoke-test] wrote D:\a\opti-gods\opti-gods\.local\ps1-smoke\msi-safe-only.ps1 (1939 chars, 1 tweaks)
+2026-05-21T04:39:46.3850284Z [smoke-test] OK — 4 fixture(s) ready in D:\a\opti-gods\opti-gods\.local\ps1-smoke
+2026-05-21T04:39:46.3851586Z [smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.
+2026-05-21T04:39:46.5274568Z [OK] amd-all.ps1 parsed cleanly
+2026-05-21T04:39:46.5287100Z [OK] msi-safe-only.ps1 parsed cleanly
+2026-05-21T04:39:46.5312447Z [OK] nvidia-all.ps1 parsed cleanly
+2026-05-21T04:39:46.5322261Z [OK] nvidia-frame-custom.ps1 parsed cleanly
+2026-05-21T04:39:46.6016292Z ##[group]Run npm run build
+2026-05-21T04:39:46.6016631Z [36;1mnpm run build[0m
+2026-05-21T04:39:46.6071545Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:46.6071881Z env:
+2026-05-21T04:39:46.6072082Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:46.6072323Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:46.6072519Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:46.6072781Z ##[endgroup]
+2026-05-21T04:39:47.1543647Z 
+2026-05-21T04:39:47.1544064Z > rest-express@1.0.0 build
+2026-05-21T04:39:47.1544384Z > tsx script/build.ts
+2026-05-21T04:39:47.1544520Z 
+2026-05-21T04:39:48.1621696Z building client...
+2026-05-21T04:39:48.2645224Z [36mvite v7.3.0 [32mbuilding client environment for production...[36m[39m
+2026-05-21T04:39:48.9042205Z transforming...
+2026-05-21T04:39:49.1657319Z Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+2026-05-21T04:39:49.1657812Z   npx update-browserslist-db@latest
+2026-05-21T04:39:49.1658358Z   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+2026-05-21T04:39:50.9976633Z 
+2026-05-21T04:39:50.9979094Z [1m[33mwarn[39m[22m - The class `duration-[120ms]` is ambiguous and matches multiple utilities.
+2026-05-21T04:39:50.9980714Z [1m[33mwarn[39m[22m - If this is content and not a class, replace it with `duration-&lsqb;120ms&rsqb;` to silence this warning.
+2026-05-21T04:39:55.9467571Z [32m✓[39m 2268 modules transformed.
+2026-05-21T04:39:56.3777378Z rendering chunks...
+2026-05-21T04:39:56.6390638Z [33m[plugin vite:reporter] 
+2026-05-21T04:39:56.6394542Z (!) D:/a/opti-gods/opti-gods/client/src/lib/tauri-bridge.ts is dynamically imported by D:/a/opti-gods/opti-gods/client/src/hooks/use-auth.ts but also statically imported by D:/a/opti-gods/opti-gods/client/src/App.tsx, D:/a/opti-gods/opti-gods/client/src/components/auth-gate.tsx, D:/a/opti-gods/opti-gods/client/src/components/hardware-scan.tsx, D:/a/opti-gods/opti-gods/client/src/components/layout/app-sidebar.tsx, D:/a/opti-gods/opti-gods/client/src/components/script-dialog.tsx, D:/a/opti-gods/opti-gods/client/src/components/update-modal.tsx, D:/a/opti-gods/opti-gods/client/src/lib/api-base.ts, D:/a/opti-gods/opti-gods/client/src/lib/native-bootstrap.ts, D:/a/opti-gods/opti-gods/client/src/pages/account.tsx, D:/a/opti-gods/opti-gods/client/src/pages/welcome.tsx, dynamic import will not move module into another chunk.
+2026-05-21T04:39:56.6397735Z [39m
+2026-05-21T04:39:56.6414810Z [33m[plugin vite:reporter] 
+2026-05-21T04:39:56.6416862Z (!) D:/a/opti-gods/opti-gods/client/src/pages/rust-game.tsx is dynamically imported by D:/a/opti-gods/opti-gods/client/src/pages/tweaks.tsx but also statically imported by D:/a/opti-gods/opti-gods/client/src/App.tsx, dynamic import will not move module into another chunk.
+2026-05-21T04:39:56.6435597Z [39m
+2026-05-21T04:39:56.6836018Z computing gzip size...
+2026-05-21T04:39:56.7280273Z [2m../dist/public/[22m[32mindex.html                              [39m[1m[2m   12.97 kB[22m[1m[22m[2m │ gzip:   3.38 kB[22m
+2026-05-21T04:39:56.7281853Z [2m../dist/public/[22m[35massets/index-BZxLhMv_.css               [39m[1m[2m  148.30 kB[22m[1m[22m[2m │ gzip:  21.90 kB[22m
+2026-05-21T04:39:56.7283449Z [2m../dist/public/[22m[36massets/thermometer-BUsSeBmb.js          [39m[1m[2m    0.15 kB[22m[1m[22m[2m │ gzip:   0.16 kB[22m
+2026-05-21T04:39:56.7285289Z [2m../dist/public/[22m[36massets/v2-tweak-section-DpYpCjc-.js     [39m[1m[2m    2.24 kB[22m[1m[22m[2m │ gzip:   0.98 kB[22m
+2026-05-21T04:39:56.7286853Z [2m../dist/public/[22m[36massets/roblox-CCAE5MRu.js               [39m[1m[2m    7.87 kB[22m[1m[22m[2m │ gzip:   2.87 kB[22m
+2026-05-21T04:39:56.7288540Z [2m../dist/public/[22m[36massets/help-C62JbwxE.js                 [39m[1m[2m    8.45 kB[22m[1m[22m[2m │ gzip:   2.90 kB[22m
+2026-05-21T04:39:56.7293391Z [2m../dist/public/[22m[36massets/startup-apps--2FnC4Ja.js         [39m[1m[2m   10.37 kB[22m[1m[22m[2m │ gzip:   3.67 kB[22m
+2026-05-21T04:39:56.7295131Z [2m../dist/public/[22m[36massets/fortnite-ZmMqnJfr.js             [39m[1m[2m   11.46 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+2026-05-21T04:39:56.7296676Z [2m../dist/public/[22m[36massets/wintitus-D9eEbB1N.js             [39m[1m[2m   12.66 kB[22m[1m[22m[2m │ gzip:   4.18 kB[22m
+2026-05-21T04:39:56.7298156Z [2m../dist/public/[22m[36massets/discord-Duf-pJD2.js              [39m[1m[2m   12.68 kB[22m[1m[22m[2m │ gzip:   4.27 kB[22m
+2026-05-21T04:39:56.7299609Z [2m../dist/public/[22m[36massets/dpc-latency-DIo91eTW.js          [39m[1m[2m   13.54 kB[22m[1m[22m[2m │ gzip:   4.89 kB[22m
+2026-05-21T04:39:56.7300463Z [33m
+2026-05-21T04:39:56.7300979Z (!) Some chunks are larger than 500 kB after minification. Consider:
+2026-05-21T04:39:56.7301661Z - Using dynamic import() to code-split the application
+2026-05-21T04:39:56.7302874Z - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+2026-05-21T04:39:56.7304506Z - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+2026-05-21T04:39:56.7305898Z [2m../dist/public/[22m[36massets/memory-CXGxeZPb.js               [39m[1m[2m   18.99 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+2026-05-21T04:39:56.7307426Z [2m../dist/public/[22m[36massets/processes-BkrFeEz6.js            [39m[1m[2m   19.01 kB[22m[1m[22m[2m │ gzip:   6.37 kB[22m
+2026-05-21T04:39:56.7308884Z [2m../dist/public/[22m[36massets/laptop-DmOFGai9.js               [39m[1m[2m   20.16 kB[22m[1m[22m[2m │ gzip:   7.23 kB[22m
+2026-05-21T04:39:56.7310329Z [2m../dist/public/[22m[36massets/debloat-BVOxCVpv.js              [39m[1m[2m   22.59 kB[22m[1m[22m[2m │ gzip:   6.86 kB[22m
+2026-05-21T04:39:56.7311813Z [2m../dist/public/[22m[36massets/game-detection-DhDs1DoR.js       [39m[1m[2m   23.83 kB[22m[1m[22m[2m │ gzip:   6.62 kB[22m
+2026-05-21T04:39:56.7313203Z [2m../dist/public/[22m[36massets/custom-os-6GJlz5hw.js            [39m[1m[2m   24.87 kB[22m[1m[22m[2m │ gzip:   6.99 kB[22m
+2026-05-21T04:39:56.7314630Z [2m../dist/public/[22m[36massets/fivem-DjBEFG22.js                [39m[1m[2m   26.43 kB[22m[1m[22m[2m │ gzip:   8.81 kB[22m
+2026-05-21T04:39:56.7316450Z [2m../dist/public/[22m[36massets/fixes-COdcUYxS.js                [39m[1m[2m   26.83 kB[22m[1m[22m[2m │ gzip:   7.38 kB[22m
+2026-05-21T04:39:56.7317973Z [2m../dist/public/[22m[36massets/integrated-graphics-DoQpAm14.js  [39m[1m[2m   28.48 kB[22m[1m[22m[2m │ gzip:   8.97 kB[22m
+2026-05-21T04:39:56.7319446Z [2m../dist/public/[22m[36massets/registry-B-M72UpJ.js             [39m[1m[2m   29.08 kB[22m[1m[22m[2m │ gzip:  10.15 kB[22m
+2026-05-21T04:39:56.7320907Z [2m../dist/public/[22m[36massets/amd-BefiN2os.js                  [39m[1m[2m   33.17 kB[22m[1m[22m[2m │ gzip:   9.64 kB[22m
+2026-05-21T04:39:56.7322366Z [2m../dist/public/[22m[36massets/nvidia-DnBJ18c5.js               [39m[1m[2m   33.70 kB[22m[1m[22m[2m │ gzip:  10.35 kB[22m
+2026-05-21T04:39:56.7323788Z [2m../dist/public/[22m[36massets/process-lasso-B2iSlTx4.js        [39m[1m[2m   35.47 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+2026-05-21T04:39:56.7325553Z [2m../dist/public/[22m[36massets/index-CUMWL21d.js                [39m[1m[33m1,308.15 kB[39m[22m[2m │ gzip: 358.71 kB[22m
+2026-05-21T04:39:56.7326467Z [32m✓ built in 8.27s[39m
+2026-05-21T04:39:56.7326816Z building server...
+2026-05-21T04:39:56.9241775Z 
+2026-05-21T04:39:56.9243066Z   dist\index.cjs  1.9mb
+2026-05-21T04:39:56.9246380Z 
+2026-05-21T04:39:56.9247119Z Done in 177ms
+2026-05-21T04:39:57.1723503Z ##[group]Run tauri build --bundles nsis
+2026-05-21T04:39:57.1723880Z [36;1mtauri build --bundles nsis[0m
+2026-05-21T04:39:57.1785023Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-05-21T04:39:57.1785363Z env:
+2026-05-21T04:39:57.1785553Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-05-21T04:39:57.1785799Z   CARGO_INCREMENTAL: 0
+2026-05-21T04:39:57.1786004Z   CARGO_TERM_COLOR: always
+2026-05-21T04:39:57.1786220Z   TAURI_SIGNING_PRIVATE_KEY: 
+2026-05-21T04:39:57.1786438Z   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: 
+2026-05-21T04:39:57.1786695Z ##[endgroup]
+2026-05-21T04:40:00.6126035Z     Running beforeBuildCommand `npx vite build`
+2026-05-21T04:40:01.6469875Z [36mvite v7.3.0 [32mbuilding client environment for production...[36m[39m
+2026-05-21T04:40:01.7513218Z transforming...
+2026-05-21T04:40:02.3475573Z Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+2026-05-21T04:40:02.3476037Z   npx update-browserslist-db@latest
+2026-05-21T04:40:02.3476569Z   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+2026-05-21T04:40:03.9931100Z 
+2026-05-21T04:40:03.9933750Z [1m[33mwarn[39m[22m - The class `duration-[120ms]` is ambiguous and matches multiple utilities.
+2026-05-21T04:40:03.9935393Z [1m[33mwarn[39m[22m - If this is content and not a class, replace it with `duration-&lsqb;120ms&rsqb;` to silence this warning.
+2026-05-21T04:40:08.9370706Z [32m✓[39m 2268 modules transformed.
+2026-05-21T04:40:09.3825312Z rendering chunks...
+2026-05-21T04:40:09.6517949Z [33m[plugin vite:reporter] 
+2026-05-21T04:40:09.6521545Z (!) D:/a/opti-gods/opti-gods/client/src/lib/tauri-bridge.ts is dynamically imported by D:/a/opti-gods/opti-gods/client/src/hooks/use-auth.ts but also statically imported by D:/a/opti-gods/opti-gods/client/src/App.tsx, D:/a/opti-gods/opti-gods/client/src/components/auth-gate.tsx, D:/a/opti-gods/opti-gods/client/src/components/hardware-scan.tsx, D:/a/opti-gods/opti-gods/client/src/components/layout/app-sidebar.tsx, D:/a/opti-gods/opti-gods/client/src/components/script-dialog.tsx, D:/a/opti-gods/opti-gods/client/src/components/update-modal.tsx, D:/a/opti-gods/opti-gods/client/src/lib/api-base.ts, D:/a/opti-gods/opti-gods/client/src/lib/native-bootstrap.ts, D:/a/opti-gods/opti-gods/client/src/pages/account.tsx, D:/a/opti-gods/opti-gods/client/src/pages/welcome.tsx, dynamic import will not move module into another chunk.
+2026-05-21T04:40:09.6524636Z [39m
+2026-05-21T04:40:09.6542176Z [33m[plugin vite:reporter] 
+2026-05-21T04:40:09.6544520Z (!) D:/a/opti-gods/opti-gods/client/src/pages/rust-game.tsx is dynamically imported by D:/a/opti-gods/opti-gods/client/src/pages/tweaks.tsx but also statically imported by D:/a/opti-gods/opti-gods/client/src/App.tsx, dynamic import will not move module into another chunk.
+2026-05-21T04:40:09.6546696Z [39m
+2026-05-21T04:40:09.6962548Z computing gzip size...
+2026-05-21T04:40:09.7397394Z [2m../dist/public/[22m[32mindex.html                              [39m[1m[2m   12.97 kB[22m[1m[22m[2m │ gzip:   3.38 kB[22m
+2026-05-21T04:40:09.7399171Z [2m../dist/public/[22m[35massets/index-BZxLhMv_.css               [39m[1m[2m  148.30 kB[22m[1m[22m[2m │ gzip:  21.90 kB[22m
+2026-05-21T04:40:09.7400924Z [2m../dist/public/[22m[36massets/thermometer-BUsSeBmb.js          [39m[1m[2m    0.15 kB[22m[1m[22m[2m │ gzip:   0.16 kB[22m
+2026-05-21T04:40:09.7402632Z [2m../dist/public/[22m[36massets/v2-tweak-section-DpYpCjc-.js     [39m[1m[2m    2.24 kB[22m[1m[22m[2m │ gzip:   0.98 kB[22m
+2026-05-21T04:40:09.7404250Z [2m../dist/public/[22m[36massets/roblox-CCAE5MRu.js               [39m[1m[2m    7.87 kB[22m[1m[22m[2m │ gzip:   2.87 kB[22m
+2026-05-21T04:40:09.7406063Z [2m../dist/public/[22m[36massets/help-C62JbwxE.js                 [39m[1m[2m    8.45 kB[22m[1m[22m[2m │ gzip:   2.90 kB[22m
+2026-05-21T04:40:09.7410259Z [2m../dist/public/[22m[36massets/startup-apps--2FnC4Ja.js         [39m[1m[2m   10.37 kB[22m[1m[22m[2m │ gzip:   3.67 kB[22m
+2026-05-21T04:40:09.7411266Z [33m
+2026-05-21T04:40:09.7411738Z (!) Some chunks are larger than 500 kB after minification. Consider:
+2026-05-21T04:40:09.7412442Z - Using dynamic import() to code-split the application
+2026-05-21T04:40:09.7413699Z - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+2026-05-21T04:40:09.7415040Z - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+2026-05-21T04:40:09.7416386Z [2m../dist/public/[22m[36massets/fortnite-ZmMqnJfr.js             [39m[1m[2m   11.46 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+2026-05-21T04:40:09.7417916Z [2m../dist/public/[22m[36massets/wintitus-D9eEbB1N.js             [39m[1m[2m   12.66 kB[22m[1m[22m[2m │ gzip:   4.18 kB[22m
+2026-05-21T04:40:09.7419429Z [2m../dist/public/[22m[36massets/discord-Duf-pJD2.js              [39m[1m[2m   12.68 kB[22m[1m[22m[2m │ gzip:   4.27 kB[22m
+2026-05-21T04:40:09.7420851Z [2m../dist/public/[22m[36massets/dpc-latency-DIo91eTW.js          [39m[1m[2m   13.54 kB[22m[1m[22m[2m │ gzip:   4.89 kB[22m
+2026-05-21T04:40:09.7422157Z [2m../dist/public/[22m[36massets/memory-CXGxeZPb.js               [39m[1m[2m   18.99 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+2026-05-21T04:40:09.7423458Z [2m../dist/public/[22m[36massets/processes-BkrFeEz6.js            [39m[1m[2m   19.01 kB[22m[1m[22m[2m │ gzip:   6.37 kB[22m
+2026-05-21T04:40:09.7424792Z [2m../dist/public/[22m[36massets/laptop-DmOFGai9.js               [39m[1m[2m   20.16 kB[22m[1m[22m[2m │ gzip:   7.23 kB[22m
+2026-05-21T04:40:09.7426506Z [2m../dist/public/[22m[36massets/debloat-BVOxCVpv.js              [39m[1m[2m   22.59 kB[22m[1m[22m[2m │ gzip:   6.86 kB[22m
+2026-05-21T04:40:09.7427945Z [2m../dist/public/[22m[36massets/game-detection-DhDs1DoR.js       [39m[1m[2m   23.83 kB[22m[1m[22m[2m │ gzip:   6.62 kB[22m
+2026-05-21T04:40:09.7429346Z [2m../dist/public/[22m[36massets/custom-os-6GJlz5hw.js            [39m[1m[2m   24.87 kB[22m[1m[22m[2m │ gzip:   6.99 kB[22m
+2026-05-21T04:40:09.7430741Z [2m../dist/public/[22m[36massets/fivem-DjBEFG22.js                [39m[1m[2m   26.43 kB[22m[1m[22m[2m │ gzip:   8.81 kB[22m
+2026-05-21T04:40:09.7432090Z [2m../dist/public/[22m[36massets/fixes-COdcUYxS.js                [39m[1m[2m   26.83 kB[22m[1m[22m[2m │ gzip:   7.38 kB[22m
+2026-05-21T04:40:09.7433467Z [2m../dist/public/[22m[36massets/integrated-graphics-DoQpAm14.js  [39m[1m[2m   28.48 kB[22m[1m[22m[2m │ gzip:   8.97 kB[22m
+2026-05-21T04:40:09.7435160Z [2m../dist/public/[22m[36massets/registry-B-M72UpJ.js             [39m[1m[2m   29.08 kB[22m[1m[22m[2m │ gzip:  10.15 kB[22m
+2026-05-21T04:40:09.7436346Z [2m../dist/public/[22m[36massets/amd-BefiN2os.js                  [39m[1m[2m   33.17 kB[22m[1m[22m[2m │ gzip:   9.64 kB[22m
+2026-05-21T04:40:09.7437540Z [2m../dist/public/[22m[36massets/nvidia-DnBJ18c5.js               [39m[1m[2m   33.70 kB[22m[1m[22m[2m │ gzip:  10.35 kB[22m
+2026-05-21T04:40:09.7439015Z [2m../dist/public/[22m[36massets/process-lasso-B2iSlTx4.js        [39m[1m[2m   35.47 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+2026-05-21T04:40:09.7440352Z [2m../dist/public/[22m[36massets/index-CUMWL21d.js                [39m[1m[33m1,308.15 kB[39m[22m[2m │ gzip: 358.71 kB[22m
+2026-05-21T04:40:09.7441195Z [32m✓ built in 8.06s[39m
+2026-05-21T04:40:10.9889716Z [1m[92m    Updating[0m crates.io index
+2026-05-21T04:40:11.6963609Z [1m[91merror[0m: failed to select a version for the requirement `tauri-plugin-dialog = "~2.1"`
+2026-05-21T04:40:11.6964304Z candidate versions found which didn't match: 2.7.1, 2.7.0, 2.6.0, ...
+2026-05-21T04:40:11.6964692Z location searched: crates.io index
+2026-05-21T04:40:11.6965109Z required by package `opti-gods v2.3.6 (D:\a\opti-gods\opti-gods\src-tauri)`
+2026-05-21T04:40:11.6966647Z if you are looking for the prerelease package it needs to be specified explicitly
+2026-05-21T04:40:11.6967110Z     tauri-plugin-dialog = { version = "2.0.0-rc.8" }
+2026-05-21T04:40:11.7031518Z failed to build app: failed to build app
+2026-05-21T04:40:11.7035584Z     Error failed to build app: failed to build app
+2026-05-21T04:40:11.7420175Z ##[error]Process completed with exit code 1.
+2026-05-21T04:40:11.7621925Z Post job cleanup.
+2026-05-21T04:40:11.9604959Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-05-21T04:40:11.9884895Z git version 2.54.0.windows.1
+2026-05-21T04:40:11.9957503Z Temporarily overriding HOME='D:\a\_temp\ca1d4582-71b6-4798-835d-f09af88aa30d' before making global git config changes
+2026-05-21T04:40:11.9958312Z Adding repository directory to the temporary git global config as a safe directory
+2026-05-21T04:40:11.9968144Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\opti-gods\opti-gods
+2026-05-21T04:40:12.0268698Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-05-21T04:40:12.0561499Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-05-21T04:40:12.5907549Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-05-21T04:40:12.6156202Z http.https://github.com/.extraheader
+2026-05-21T04:40:12.6199653Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-05-21T04:40:12.6492686Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-05-21T04:40:13.1583724Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-05-21T04:40:13.1870897Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-05-21T04:40:13.7163313Z Cleaning up orphan processes
+2026-05-21T04:40:13.7197620Z ##[warning]Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/cache@v4, actions/checkout@v4, actions/setup-node@v4. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

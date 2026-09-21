@@ -1,0 +1,451 @@
+import { Link, useLocation } from "wouter";
+import { Home, Settings2, Crown, Download, ChevronRight, LogIn, LogOut, ShieldCheck, X, Gamepad2, HelpCircle, Palette, Cpu, Library, RefreshCw, ScanLine, Undo2, BatteryCharging, UserRound, Wrench } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
+import { BRAND } from "@/components/branding/assets";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+} from "@/components/ui/sidebar";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { useProStatus } from "@/lib/pro-status";
+import { useAuth, useLogout, loginWithDiscord } from "@/hooks/use-auth";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
+import { apiUrl } from "@/lib/api-base";
+import { NATIVE_TOKEN_KEY, NATIVE_ADMIN_KEY, queryClient } from "@/lib/queryClient";
+import { GUEST_MODE_KEY } from "@/pages/welcome";
+import { cn } from "@/lib/utils";
+import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent?: "pro" | "admin";
+};
+
+  const PRIMARY: NavItem[] = [
+  { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "AI Optimize", url: "/ai-optimize", icon: ScanLine },
+  { title: "Tweaks", url: "/tweaks", icon: Settings2 },
+  { title: "Applied Tweaks", url: "/applied-tweaks", icon: Undo2 },
+  { title: "Power Plans", url: "/power-plans", icon: BatteryCharging },
+  { title: "Game Profiles", url: "/game-profiles", icon: Library },
+  { title: "Graphics Studio", url: "/graphics-studio", icon: Palette },
+  { title: "Support", url: "/support", icon: HelpCircle },
+  { title: "Updates", url: "/updates", icon: RefreshCw },
+  { title: "Fixes & Restore", url: "/tools", icon: Wrench },
+  { title: "Account", url: "/account", icon: UserRound },
+];
+
+const ADMIN_NAV: NavItem = { title: "Admin", url: "/admin", icon: ShieldCheck, accent: "admin" };
+
+function isGuestMode(): boolean {
+  try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; }
+}
+
+function clearGuestMode() {
+  try { localStorage.removeItem(GUEST_MODE_KEY); } catch {}
+}
+
+function getStoredAdminKey(): string | null {
+  // Session-only: admin nav disappears when the app/tab closes.
+  try { return sessionStorage.getItem("optigods_admin_session"); } catch { return null; }
+}
+
+function storeAdminKey(key: string) {
+  // sessionStorage only — never persists across app restarts.
+  try { sessionStorage.setItem("optigods_admin_session", key); } catch {}
+}
+
+function clearAdminKey() {
+  try { sessionStorage.removeItem("optigods_admin_session"); } catch {}
+}
+
+export function AppSidebar() {
+  const [location] = useLocation();
+  const native = isNative();
+  const { tweaks } = useOptimizationStore();
+  const osInfo = useOsDetection();
+  const hasProEntitlement = useProStatus();
+  const { user } = useAuth();
+  const isPro = !!user && hasProEntitlement;
+  const logout = useLogout();
+  const enabledCount = useMemo(() => Object.values(tweaks).filter(Boolean).length, [tweaks]);
+  const isGuest = isGuestMode();
+  const showSignIn = isGuest && !user;
+
+  const [adminUnlocked, setAdminUnlocked] = useState(() => !!getStoredAdminKey());
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockInput, setUnlockInput] = useState("");
+  const [unlockError, setUnlockError] = useState(false);
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const tapCount = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tapFlash, setTapFlash] = useState(false);
+  const [tapRemaining, setTapRemaining] = useState<number | null>(null);
+  const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [spinVideoFailed, setSpinVideoFailed] = useState(false);
+
+  const handleLogoTap = useCallback(() => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; setTapRemaining(null); }, 1500);
+
+    // Visual flash on every tap
+    setTapFlash(true);
+    if (tapFlashTimer.current) clearTimeout(tapFlashTimer.current);
+    tapFlashTimer.current = setTimeout(() => setTapFlash(false), 150);
+
+    // Show countdown on taps 3, 4
+    const remaining = 5 - tapCount.current;
+    if (remaining > 0 && remaining <= 2) {
+      setTapRemaining(remaining);
+    } else {
+      setTapRemaining(null);
+    }
+
+    if (tapCount.current >= 5) {
+      tapCount.current = 0;
+      setTapRemaining(null);
+      if (tapTimer.current) clearTimeout(tapTimer.current);
+      setUnlockInput("");
+      setUnlockError(false);
+      setShowUnlockModal(true);
+    }
+  }, []);
+
+  const handleUnlockSubmit = async () => {
+    const key = unlockInput.trim();
+    if (!key) return;
+    setUnlockLoading(true);
+    setUnlockError(false);
+    try {
+      const res = await fetch(apiUrl("/api/admin/codes"), {
+        headers: { "x-admin-key": key },
+      });
+      if (res.ok) {
+        if (adminUnlocked) {
+          // Already unlocked — re-entering valid code LOCKS admin (toggle off)
+          clearAdminKey();
+          setAdminUnlocked(false);
+          setShowUnlockModal(false);
+        } else {
+          storeAdminKey(key);
+          setAdminUnlocked(true);
+          setShowUnlockModal(false);
+        }
+      } else {
+        setUnlockError(true);
+      }
+    } catch {
+      setUnlockError(true);
+    } finally {
+      setUnlockLoading(false);
+    }
+  };
+
+  const handleAdminLock = () => {
+    clearAdminKey();
+    setAdminUnlocked(false);
+  };
+
+  useEffect(() => {
+    return () => { if (tapTimer.current) clearTimeout(tapTimer.current); };
+  }, []);
+
+  const spinVideoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = spinVideoRef.current;
+    if (!v) return;
+    const keepPlaying = () => {
+      if (document.visibilityState === "visible") {
+        v.play().catch(() => {});
+      }
+    };
+    keepPlaying();
+    const obs = new IntersectionObserver(
+      (entries) => { entries.forEach(e => { if (e.isIntersecting) keepPlaying(); }); },
+      { threshold: 0.1 }
+    );
+    obs.observe(v);
+    document.addEventListener("visibilitychange", keepPlaying);
+    window.addEventListener("focus", keepPlaying);
+    return () => {
+      obs.disconnect();
+      document.removeEventListener("visibilitychange", keepPlaying);
+      window.removeEventListener("focus", keepPlaying);
+    };
+  }, [location]);
+
+  const isActive = (url: string) => {
+    if (url === "/dashboard") return location === "/" || location === "/dashboard";
+    if (url === "/support") return location === "/support" || location === "/help";
+    if (url === "/graphics-studio") return location === "/graphics-studio" || location === "/fivem-graphics";
+    return location === url || location.startsWith(url + "/");
+  };
+
+  const handleSignIn = async () => {
+    clearGuestMode();
+    if (isNative()) {
+      try {
+        const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
+        if (!cfgRes.ok) throw new Error("not configured");
+        const { clientId } = await cfgRes.json() as { clientId: string };
+        const session = await discordLogin(clientId);
+        try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+        showLoginSuccess("Discord");
+        window.location.href = "/tweaks";
+      } catch (error) {
+        showLoginError(error);
+      }
+    } else {
+      loginWithDiscord();
+    }
+  };
+
+  const renderItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const active = isActive(item.url);
+    const isProAccent = item.accent === "pro";
+    const isAdminAccent = item.accent === "admin";
+    return (
+      <SidebarMenuItem key={item.url}>
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          className={cn(
+            "h-10 transition-all",
+            active && !isAdminAccent && "bg-red-500/10 text-red-300 border-l-2 border-red-500",
+            active && isAdminAccent && "bg-purple-500/10 text-purple-300 border-l-2 border-purple-500",
+            isProAccent && !active && !isPro && "text-amber-300 hover:text-amber-200",
+            isAdminAccent && !active && "text-purple-300 hover:text-purple-200",
+          )}
+        >
+          <Link href={item.url} data-testid={`nav-${item.title.replace(/\s+/g, "-").toLowerCase()}`}>
+            <Icon className={cn(
+              "w-4 h-4",
+              active && isAdminAccent ? "text-purple-400" :
+              active ? "text-red-400" :
+              isProAccent && !isPro ? "text-amber-400" :
+              isAdminAccent ? "text-purple-500" :
+              "text-zinc-500"
+            )} />
+            <span className="text-sm font-semibold">{item.title}</span>
+            {isProAccent && isPro && (
+              <span className="ml-auto text-[8px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-1.5 py-0.5 rounded uppercase tracking-wider">ON</span>
+            )}
+            {isAdminAccent && (
+              <span className="ml-auto text-[8px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/25 px-1.5 py-0.5 rounded uppercase tracking-wider">DEV</span>
+            )}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
+  const navItems = adminUnlocked ? [...PRIMARY, ADMIN_NAV] : PRIMARY;
+
+  return (
+    <>
+      <Sidebar className="border-r border-white/[0.07] bg-[#050b0d]">
+        <SidebarHeader className="border-b border-white/[0.07] bg-[#071013] p-4 2xl:p-5">
+          <div className="flex items-center gap-3">
+            <div
+              className={cn(
+                "relative h-[72px] w-[72px] 2xl:h-20 2xl:w-20 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.2),#030607_68%)] border flex items-center justify-center overflow-hidden cursor-pointer select-none shrink-0 transition-all duration-150",
+                tapFlash
+                  ? "border-red-400/80 shadow-[0_0_28px_-2px_rgba(239,68,68,0.95)] scale-95"
+                  : "border-red-500/30 shadow-[0_0_20px_-4px_rgba(239,68,68,0.7)] scale-100"
+              )}
+              onClick={handleLogoTap}
+              data-testid="logo-admin-tap"
+            >
+              {spinVideoFailed ? (
+                <Cpu className="w-8 h-8 text-red-500 animate-spin [animation-duration:4s]" />
+              ) : (
+                <video
+                  key={location}
+                  ref={spinVideoRef}
+                  src={BRAND.spinRed}
+                  poster="/branding/optigods-red.png"
+                  autoPlay muted loop playsInline preload="auto"
+                  className="h-full w-full object-cover pointer-events-none"
+                  onCanPlay={(event) => event.currentTarget.play().catch(() => {})}
+                  onError={() => setSpinVideoFailed(true)}
+                />
+              )}
+              {tapRemaining !== null && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl">
+                  <span className="text-red-400 font-display font-black text-2xl leading-none">{tapRemaining}</span>
+                </div>
+              )}
+            </div>
+            <Link href="/" data-testid="link-home-logo">
+              <div className="cursor-pointer">
+                <p className="font-display text-lg font-black leading-tight text-white 2xl:text-xl">
+                  OPTI <span className="text-red-500">GODS</span>
+                </p>
+                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 select-none" data-testid="text-version">
+                  by leaq · V5
+                </p>
+              </div>
+            </Link>
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent className="px-2 py-3 bg-[#050b0d]">
+          <SidebarGroup>
+            <p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-zinc-600">Workspace</p>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map(renderItem)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter className="p-3 border-t border-white/5 space-y-3">
+          {user && (
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-zinc-900/60 border border-white/5">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.username}
+                  className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#5865F2]/20 border border-[#5865F2]/30 flex items-center justify-center shrink-0">
+                  <SiDiscord className="w-4 h-4 text-[#5865F2]" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-white leading-tight truncate">
+                  {user.globalName || user.username}
+                </p>
+                <p className="text-[9px] text-zinc-500 leading-tight truncate">@{user.username}</p>
+              </div>
+              <button
+                data-testid="button-sidebar-logout"
+                onClick={() => logout.mutate()}
+                title="Sign out"
+                className="p-1 rounded-lg hover:bg-white/5 text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {showSignIn && (
+            <button
+              data-testid="button-sidebar-signin"
+              onClick={handleSignIn}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 hover:bg-[#5865F2]/20 hover:border-[#5865F2]/50 transition-all group"
+            >
+              <SiDiscord className="w-4 h-4 text-[#5865F2] shrink-0" />
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-[11px] font-bold text-[#7289DA] leading-tight">Sign in with Discord</p>
+                <p className="text-[9px] text-zinc-600 leading-tight truncate">Save your config permanently</p>
+              </div>
+              <LogIn className="w-3 h-3 text-[#5865F2]/60 shrink-0" />
+            </button>
+          )}
+
+
+          {!native && enabledCount > 0 && (
+            <div
+              data-testid="widget-script-cta"
+              onClick={() => window.dispatchEvent(new CustomEvent("optigods:open-script"))}
+              className="rounded-xl border border-red-500/40 bg-red-500/8 px-3 py-3 cursor-pointer hover:bg-red-500/15 hover:border-red-500/60 transition-all group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/35 flex items-center justify-center shrink-0 group-hover:bg-red-500/30 transition-colors">
+                  <Download className="w-4 h-4 text-red-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-red-300 leading-tight">
+                    {enabledCount} tweak{enabledCount !== 1 ? "s" : ""} selected
+                  </p>
+                  <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 font-semibold">
+                    Hit GET MY SCRIPT ↑
+                  </p>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-red-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </div>
+          )}
+
+             <div className="px-2 py-2.5 rounded-lg bg-[#091418] border border-white/[0.07]">
+            <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Detected System</p>
+            <p className="text-xs text-zinc-400 font-mono truncate">
+              {osInfo.loading ? "Detecting..." : osInfo.os}
+            </p>
+            {osInfo.build && (
+              <p className="text-[9px] text-zinc-600 mt-0.5">Build {osInfo.build}</p>
+            )}
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+
+      {showUnlockModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-72 rounded-2xl border border-purple-500/30 bg-[#0a0a0a] shadow-2xl shadow-purple-900/40 p-6">
+            <button
+              onClick={() => setShowUnlockModal(false)}
+              className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className={cn("w-9 h-9 rounded-xl border flex items-center justify-center", adminUnlocked ? "bg-red-500/15 border-red-500/30" : "bg-purple-500/15 border-purple-500/30")}>
+                <ShieldCheck className={cn("w-4 h-4", adminUnlocked ? "text-red-400" : "text-purple-400")} />
+              </div>
+              <div>
+                <p className={cn("text-[10px] uppercase tracking-[0.15em] font-bold", adminUnlocked ? "text-red-400" : "text-purple-400")}>
+                  {adminUnlocked ? "Lock Admin" : "Admin Access"}
+                </p>
+                <p className="text-sm font-bold text-white">
+                  {adminUnlocked ? "Re-enter code to hide admin tab" : "Enter unlock code"}
+                </p>
+              </div>
+            </div>
+            <input
+              autoFocus
+              type="password"
+              value={unlockInput}
+              onChange={e => { setUnlockInput(e.target.value); setUnlockError(false); }}
+              onKeyDown={e => e.key === "Enter" && !unlockLoading && handleUnlockSubmit()}
+              placeholder="••••"
+              data-testid="input-admin-unlock"
+              className={cn(
+                "w-full bg-zinc-900 border rounded-xl px-4 py-2.5 text-white text-sm font-mono text-center tracking-[0.3em] outline-none transition-colors mb-3",
+                unlockError ? "border-red-500/60 focus:border-red-500" : "border-white/10 focus:border-purple-500/60"
+              )}
+            />
+            {unlockError && (
+              <p className="text-[11px] text-red-400 text-center mb-3">Wrong code</p>
+            )}
+            <button
+              onClick={handleUnlockSubmit}
+              disabled={unlockLoading}
+              data-testid="button-admin-unlock-submit"
+              className={cn("w-full py-2.5 rounded-xl disabled:opacity-50 text-white text-sm font-bold transition-colors", adminUnlocked ? "bg-red-700 hover:bg-red-600" : "bg-purple-600 hover:bg-purple-500")}
+            >
+              {unlockLoading ? "Checking…" : adminUnlocked ? "Lock Admin" : "Unlock"}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

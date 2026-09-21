@@ -1,0 +1,250 @@
+[[permission]]
+identifier = "allow-finish-splash"
+description = "Show and focus the main window."
+commands.allow = ["finish_splash"]
+
+[[permission]]
+identifier = "allow-apply-tweak"
+description = "Apply a registry/system tweak by ID."
+commands.allow = ["apply_tweak"]
+
+[[permission]]
+identifier = "allow-undo-tweak"
+description = "Undo a previously applied tweak."
+commands.allow = ["undo_tweak"]
+
+[[permission]]
+identifier = "allow-list-tweaks"
+description = "List all available tweaks."
+commands.allow = ["list_tweaks"]
+
+[[permission]]
+identifier = "allow-detect-applied-tweaks"
+description = "Read the confirmed applied state for supported native tweaks."
+commands.allow = ["detect_applied_tweaks"]
+
+[[permission]]
+identifier = "allow-list-power-plans"
+description = "Read the Windows power plans and active plan."
+commands.allow = ["list_power_plans"]
+
+[[permission]]
+identifier = "allow-set-power-plan"
+description = "Switch the active Windows power plan by validated GUID."
+commands.allow = ["set_power_plan"]
+
+[[permission]]
+identifier = "allow-scan-hardware"
+description = "Scan hardware configuration."
+commands.allow = ["scan_hardware"]
+
+[[permission]]
+identifier = "allow-create-restore-point"
+description = "Create a Windows restore point."
+commands.allow = ["create_restore_point"]
+
+[[permission]]
+identifier = "allow-startup-restore-checkpoint"
+description = "Run the required startup restore-point readiness check."
+commands.allow = ["startup_restore_checkpoint"]
+
+[[permission]]
+identifier = "allow-restore-to-point"
+description = "Restore to a Windows restore point."
+commands.allow = ["restore_to_point"]
+
+[[permission]]
+identifier = "allow-list-restore-points"
+description = "List all restore points."
+commands.allow = ["list_restore_points"]
+
+[[permission]]
+identifier = "allow-start-pro-balance"
+description = "Start ProBalance process priority manager."
+commands.allow = ["start_pro_balance"]
+
+[[permission]]
+identifier = "allow-stop-pro-balance"
+description = "Stop ProBalance process priority manager."
+commands.allow = ["stop_pro_balance"]
+
+[[permission]]
+identifier = "allow-pro-balance-status"
+description = "Query ProBalance status."
+commands.allow = ["pro_balance_status"]
+
+[[permission]]
+identifier = "allow-discord-login"
+description = "Initiate Discord OAuth login flow."
+commands.allow = ["discord_login"]
+
+[[permission]]
+identifier = "allow-discord-logout"
+description = "Clear Discord session and keyring entry."
+commands.allow = ["discord_logout"]
+
+[[permission]]
+identifier = "allow-discord-cached-token"
+description = "Read cached Discord session from keyring."
+commands.allow = ["discord_cached_token"]
+
+[[permission]]
+identifier = "allow-check-for-update"
+description = "Check GitHub releases for a newer version."
+commands.allow = ["check_for_update"]
+
+[[permission]]
+identifier = "allow-perform-update"
+description = "Download and install a verified Opti Gods update."
+commands.allow = ["perform_update"]
+
+[[permission]]
+identifier = "allow-env-info"
+description = "Read runtime environment info."
+commands.allow = ["env_info"]
+
+[[permission]]
+identifier = "allow-open-downloads"
+description = "Open the Windows Downloads folder in Explorer."
+commands.allow = ["open_downloads"]
+
+[[permission]]
+identifier = "allow-run-fix"
+description = "Run a named, allowlisted recovery action in the Windows app."
+commands.allow = ["run_fix"]
+
+[[permission]]
+identifier = "allow-run-restore-categories"
+description = "Restore the selected tweak categories in the Windows app."
+commands.allow = ["run_restore_categories"]
+
+[[permission]]
+identifier = "allow-read-live-performance"
+description = "Read live Windows performance counters for the dashboard."
+commands.allow = ["read_live_performance"]
+
+[[permission]]
+identifier = "allow-install-fivem-pack"
+description = "Install a validated FiveM graphics pack."
+commands.allow = ["install_fivem_pack"]
+
+[[permission]]
+identifier = "allow-uninstall-fivem-pack"
+description = "Remove a previously installed FiveM graphics pack."
+commands.allow = ["uninstall_fivem_pack"]
+
+[[permission]]
+identifier = "allow-open-fivem-folder"
+description = "Open a detected FiveM application data folder in Explorer."
+commands.allow = ["open_fivem_folder"]
+
+[[permission]]
+identifier = "allow-open-msi-utility"
+description = "Launch the verified bundled MSI Utility v3 for an authorized Pro session."
+commands.allow = ["open_msi_utility"]
+
+[[permission]]
+identifier = "allow-import-nvidia-preset"
+description = "Import the verified bundled NVIDIA performance preset for an authorized Pro session."
+commands.allow = ["import_nvidia_preset"]
+
+[[permission]]
+identifier = "allow-scan-task-manager"
+description = "Scan running processes and startup entries."
+commands.allow = ["scan_task_manager"]
+
+[[permission]]
+identifier = "allow-detect-installed-games"
+description = "Discover supported installed games from trusted native sources."
+commands.allow = ["detect_installed_games"]
+
+[[permission]]
+identifier = "allow-kill-app"
+description = "Terminate a running process by name or PID."
+commands.allow = ["kill_app"]
+
+[[permission]]
+identifier = "allow-disable-startup-app"
+description = "Disable a startup entry in the registry."
+commands.allow = ["disable_startup_app"]
+
+[[permission]]
+identifier = "allow-get-startup-value"
+description = "Read the current value of a startup registry entry."
+commands.allow = ["get_startup_value"]
+
+[[permission]]
+identifier = "allow-read-text-file"
+description = "Read a text file from an absolute path (used by Tauri file-drop zones)."
+commands.allow = ["read_text_file"]
+
+[[permission]]
+identifier = "allow-read-fivem-log"
+description = "Read the detected CitizenFX log used by the FiveM server helper."
+commands.allow = ["read_fivem_log"]
+
+[[permission]]
+identifier = "allow-save-diagnostic-log"
+description = "Save a diagnostic log file for troubleshooting."
+commands.allow = ["save_diagnostic_log"]
+
+[[permission]]
+identifier = "allow-repair-nvidia-control-panel"
+description = "Repair the NVIDIA Control Panel installation."
+commands.allow = ["repair_nvidia_control_panel"]
+
+[[permission]]
+identifier = "allow-repair-privacy-spool"
+description = "Repair the local privacy diagnostic spool used by the desktop app."
+commands.allow = ["repair_privacy_spool"]
+
+[[permission]]
+identifier = "allow-read-v5-diagnostic-log"
+description = "Read the local V5 diagnostic log for troubleshooting."
+commands.allow = ["read_v5_diagnostic_log"]
+
+[permission_set]
+identifier = "all-app-commands"
+description = "All app-level commands."
+permissions = [
+  "allow-finish-splash",
+  "allow-apply-tweak",
+  "allow-undo-tweak",
+  "allow-list-tweaks",
+  "allow-detect-applied-tweaks",
+  "allow-list-power-plans",
+  "allow-set-power-plan",
+  "allow-scan-hardware",
+  "allow-create-restore-point",
+  "allow-startup-restore-checkpoint",
+  "allow-restore-to-point",
+  "allow-list-restore-points",
+  "allow-start-pro-balance",
+  "allow-stop-pro-balance",
+  "allow-pro-balance-status",
+  "allow-discord-login",
+  "allow-discord-logout",
+  "allow-discord-cached-token",
+  "allow-check-for-update",
+  "allow-perform-update",
+  "allow-env-info",
+  "allow-open-downloads",
+  "allow-run-fix",
+  "allow-run-restore-categories",
+  "allow-read-live-performance",
+  "allow-install-fivem-pack",
+  "allow-uninstall-fivem-pack",
+  "allow-open-fivem-folder",
+   "allow-open-msi-utility",
+   "allow-import-nvidia-preset",
+  "allow-scan-task-manager",
+  "allow-kill-app",
+  "allow-disable-startup-app",
+  "allow-get-startup-value",
+  "allow-read-text-file",
+  "allow-read-fivem-log",
+  "allow-save-diagnostic-log",
+  "allow-repair-nvidia-control-panel",
+   "allow-repair-privacy-spool",
+   "allow-read-v5-diagnostic-log",
+]

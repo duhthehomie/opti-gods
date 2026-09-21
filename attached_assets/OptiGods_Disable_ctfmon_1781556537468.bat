@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+    <!-- Primary SEO -->
+    <title>Opti Gods — Windows PC Optimizer by leaq</title>
+    <meta name="description" content="Opti Gods by leaq — 461+ Windows 10/11 optimization tweaks for FiveM, Fortnite, Call of Duty, Valorant &amp; more. FiveM gamer and verified PC optimizer. Custom PowerShell scripts, laptop detection, manual optimization service via Parsec. Discord support system with verified reviews." />
+    <meta name="keywords" content="leaq, opti gods, optigods, optigods.com, leaq pc optimizer, leaq fivem, windows optimizer, FiveM optimizer, Fortnite optimizer, PC performance, registry tweaks, fps boost, Windows 11, gaming PC, manual pc optimization, parsec optimization, laptop optimizer, nvidia tweaks, amd tweaks, who is leaq, opti gods by leaq" />
+    <meta name="author" content="leaq" />
+    <meta name="theme-color" content="#dc2626" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://optigods.com/" />
+
+    <!-- Open Graph — Discord, Facebook, iMessage -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://optigods.com/" />
+    <meta property="og:title" content="Opti Gods — Windows PC Optimizer by leaq" />
+    <meta property="og:description" content="461+ personalized tweaks for FiveM, Fortnite, Call of Duty &amp; more. leaq is a FiveM gamer and verified PC optimizer with a Discord support system and verified reviews. Custom PowerShell scripts, manual optimization via Parsec." />
+    <meta property="og:image" content="https://optigods.com/og-image.png" />
+    <meta property="og:image:width" content="847" />
+    <meta property="og:image:height" content="875" />
+    <meta property="og:site_name" content="Opti Gods by leaq" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://optigods.com/" />
+    <meta name="twitter:title" content="Opti Gods — Windows PC Optimizer by leaq" />
+    <meta name="twitter:description" content="461+ personalized tweaks for FiveM, Fortnite, Call of Duty &amp; more. leaq is a FiveM gamer and verified PC optimizer. Manual optimization via Parsec remote desktop." />
+    <meta name="twitter:image" content="https://optigods.com/og-image.png" />
+    <meta name="twitter:creator" content="@leaq" />
+
+    <!-- Favicon & Manifest -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- JSON-LD: Who is leaq -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "leaq",
+      "alternateName": ["leaq", "leaq optimizer", "leaq fivem"],
+      "description": "leaq is a FiveM gamer and verified Windows PC optimizer. Creator of Opti Gods — a premium PC optimization tool with 461+ tweaks for Windows 10/11. Offers a manual optimization service via Parsec remote desktop. Runs a Discord support system with verified 10/10 reviews.",
+      "url": "https://optigods.com",
+      "sameAs": [
+        "https://optigods.com",
+        "https://discord.gg/optigods",
+        "https://www.instagram.com/leaqinq/",
+        "https://www.youtube.com/@mqhleek"
+      ],
+      "knowsAbout": [
+        "Windows PC Optimization",
+        "FiveM",
+        "Registry Tweaks",
+        "NVIDIA GPU Tuning",
+        "AMD GPU Tuning",
+        "Laptop Optimization",
+        "FPS Optimization",
+        "Network Tweaks",
+        "Fortnite Optimization",
+        "Call of Duty Optimization"
+      ],
+      "hasOccupation": {
+        "@type": "Occupation",
+        "name": "PC Optimizer",
+        "description": "Verified Windows 10/11 PC optimizer specializing in FPS improvement, latency reduction, and gaming performance for FiveM, Fortnite, Call of Duty, and Valorant."
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: What is Opti Gods -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Opti Gods",
+      "alternateName": ["Opti Gods by leaq", "optigods", "optigods.com"],
+      "description": "Opti Gods is a Windows 10/11 PC optimization dashboard created by leaq. It features 461+ optimization toggles across registry, GPU (NVIDIA, AMD), network, FiveM, Fortnite, Call of Duty, Valorant, laptop-specific, and startup tweaks. Generates a personalized PowerShell script. Includes advanced laptop and integrated GPU detection, card payments, and a $25 manual optimization service performed by leaq via Parsec remote desktop.",
+      "url": "https://optigods.com",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Windows 10, Windows 11",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Pro Access — Lifetime",
+          "price": "15.00",
+          "priceCurrency": "USD",
+          "description": "Lifetime access to all 461+ optimization tweaks and custom PowerShell script generation."
+        },
+        {
+          "@type": "Offer",
+          "name": "Manual Opti — Done-For-You",
+          "price": "25.00",
+          "priceCurrency": "USD",
+          "description": "leaq personally optimizes your PC via Parsec remote desktop. Includes full manual optimization session."
+        }
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "leaq",
+        "url": "https://optigods.com"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "10",
+        "bestRating": "10",
+        "worstRating": "1",
+        "ratingCount": "200",
+        "description": "Verified 10/10 reviews via Discord support system."
+      },
+      "featureList": [
+        "461+ Windows optimization tweaks",
+        "FiveM performance optimization",
+        "Fortnite FPS boost",
+        "NVIDIA GPU registry tweaks",
+        "AMD GPU optimization",
+        "Laptop-specific optimizations",
+        "Intel/AMD integrated GPU tweaks",
+        "Network latency reduction",
+        "Custom PowerShell script generation",
+        "Manual PC optimization via Parsec",
+        "Smart game detection",
+        "Discord ticket support system"
+      ]
+    }
+    </script>
+
+    <!-- JSON-LD: Product (V2 download-first landing) — name, price, download URL -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "Opti Gods — Windows PC Optimizer",
+      "description": "Windows 10/11 desktop optimizer with 461+ tweaks, hardware-aware presets, and a built-in AI assistant. One-time $15 unlock for lifetime Pro access.",
+      "url": "https://optigods.com/",
+      "image": "https://optigods.com/og-image.png",
+      "brand": { "@type": "Brand", "name": "Opti Gods" },
+      "manufacturer": { "@type": "Person", "name": "leaq" },
+      "operatingSystem": "Windows 10, Windows 11",
+      "applicationCategory": "UtilitiesApplication",
+      "downloadUrl": "https://optigods.com/api/download/latest",
+      "softwareVersion": "2.0",
+      "offers": {
+        "@type": "Offer",
+        "price": "15.00",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock",
+        "url": "https://optigods.com/",
+        "priceValidUntil": "2026-12-31"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "reviewCount": "247",
+        "bestRating": "5"
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: WebSite with SearchAction (enables Google Sitelinks Search) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Opti Gods by leaq",
+      "url": "https://optigods.com",
+      "description": "Windows PC optimization tool by leaq — FiveM gamer and verified PC optimizer. 461+ tweaks, custom scripts, manual optimization via Parsec.",
+      "author": {
+        "@type": "Person",
+        "name": "leaq"
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://optigods.com/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: FAQPage — directly answers "who is leaq" and "what is opti gods" -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Who is leaq?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "leaq is a FiveM gamer and verified Windows PC optimizer. He created Opti Gods (optigods.com), a premium PC optimization tool with 461+ tweaks for Windows 10 and 11. leaq runs a Discord community of over 200 members, has verified 10/10 reviews, and offers a personal manual optimization service via Parsec remote desktop for $25."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is Opti Gods?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Opti Gods (optigods.com) is a Windows 10/11 PC optimization dashboard created by leaq. It features 461+ optimization tweaks covering registry, GPU (NVIDIA and AMD), network, FiveM, Fortnite, Call of Duty, Valorant, laptop-specific settings, and startup management. It generates a personalized PowerShell script based on your hardware and the tweaks you select. Opti Gods also offers a $25 done-for-you manual optimization service where leaq personally optimizes your PC via Parsec."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is Opti Gods by leaq?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Opti Gods by leaq is a premium Windows PC optimization platform at optigods.com. Built by leaq — a FiveM gamer and verified PC optimizer — it provides 461+ tweaks for maximum FPS and minimum latency. Discord support system with verified 10/10 reviews. Offers Pro lifetime access for $15 and a manual done-for-you optimization via Parsec for $25."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I optimize my PC for FiveM?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Visit optigods.com to access Opti Gods by leaq — a free-to-try Windows optimizer with a dedicated FiveM tab featuring specific registry tweaks, network optimizations, and GPU settings tuned for FiveM performance. Generate a custom PowerShell script with one click."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Oxanium:wght@200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/assets/index-DBDW4YoB.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-jIsgi7LW.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

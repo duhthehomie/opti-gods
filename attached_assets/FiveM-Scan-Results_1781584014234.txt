@@ -1,0 +1,207 @@
+FiveM Config Scanner by leaq 
+Scanned: Mon 06/15/2026 22:26:40.63 
+ 
+== FIVEM SHORTCUT ARGUMENTS == 
+Found shortcut: C:\Users\duhth\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\FiveM.lnk 
+Found shortcut: C:\Users\duhth\Desktop\FiveM.lnk 
+(Open the shortcut Properties and paste the Target line here manually) 
+ 
+== FIVEM APPDATA FOLDERS == 
+--- C:\Users\duhth\AppData\Local\FiveM\FiveM.app --- 
+adhesive.dll
+asi-five.dll
+bin
+botan.dll
+cef_console.txt
+cfx_curl_x86_64.dll
+CitiLaunch_TLSDummy.dll
+citizen
+citizen-devtools.dll
+citizen-game-ipc.dll
+citizen-game-main.dll
+citizen-legacy-net-resources.dll
+citizen-level-loader-five.dll
+citizen-mod-loader-five.dll
+citizen-playernames-five.dll
+citizen-resources-client.dll
+citizen-resources-core.dll
+citizen-resources-gta.dll
+citizen-resources-metadata-lua.dll
+citizen-scripting-core.dll
+citizen-scripting-lua.dll
+citizen-scripting-mono-v2.dll
+citizen-scripting-mono.dll
+citizen-scripting-v8-v12.4.dll
+citizen-scripting-v8client.dll
+citizen-scripting-v8node.dll
+CitizenFX.ini
+CitizenFX_SubProcess_chrome.bin
+CitizenFX_SubProcess_game_1604_aslr.bin
+CitizenFX_SubProcess_game_1_aslr.bin
+CitizenFX_SubProcess_game_2060_aslr.bin
+CitizenFX_SubProcess_game_2189_aslr.bin
+CitizenFX_SubProcess_game_2372_aslr.bin
+CitizenFX_SubProcess_game_2545_aslr.bin
+CitizenFX_SubProcess_game_2612_aslr.bin
+CitizenFX_SubProcess_game_2699_aslr.bin
+CitizenFX_SubProcess_game_2802_aslr.bin
+CitizenFX_SubProcess_game_2944_aslr.bin
+CitizenFX_SubProcess_game_3095_aslr.bin
+CitizenFX_SubProcess_game_3258_aslr.bin
+CitizenFX_SubProcess_game_3323_aslr.bin
+CitizenFX_SubProcess_game_3407_aslr.bin
+CitizenFX_SubProcess_game_3570_aslr.bin
+CitizenFX_SubProcess_game_3751_aslr.bin
+CitizenFX_SubProcess_game_3788_aslr.bin
+CitizenFX_SubProcess_game_mtl.bin
+CitizenGame.dll
+components.json
+conhost-v2.dll
+content_index.xml
+CoreRT.dll
+crashes
+data
+debug-net.dll
+debug-script.dll
+devcon.dll
+devtools-five.dll
+discord.dll
+extra-natives-five.dll
+favorites.json
+FiveM.com
+FiveM_Diag.exe
+font-renderer.dll
+fxdk-main.dll
+glue.dll
+gta-core-five.dll
+gta-game-five.dll
+gta-mission-cleanup-five.dll
+gta-net-five.dll
+gta-streaming-five.dll
+handling-loader-five.dll
+http-client.dll
+imgui.dll
+legitimacy.dll
+libuv.dll
+loading-screens-five.dll
+logs
+lovely-script.dll
+mods
+mojo.dll
+msobj140.dll
+mspdbcore.dll
+net-base.dll
+net-http-server.dll
+net-packet.dll
+net-tcp-server.dll
+net.dll
+nng.dll
+node.dll
+nui-core.dll
+nui-gsclient.dll
+nui-resources.dll
+plugins
+pool-sizes-state.dll
+rage-allocator-five.dll
+rage-device-five.dll
+rage-formats-x.dll
+rage-graphics-five.dll
+rage-input-five.dll
+rage-nutsnbolts-five.dll
+rage-scripting-five.dll
+RGL-ElevationHelper.exe
+scrbind-base.dll
+scrbind-formats.dll
+scripthookv.dll
+scripting-gta.dll
+steam_api64.dll
+sticky.dll
+tool-formats.dll
+tool-vehrec.dll
+v8-9.3.345.16.dll
+vfs-core.dll
+vfs-impl-rage.dll
+voip-mumble.dll
+ 
+--- C:\Users\duhth\AppData\Local\FiveM --- 
+FiveM - Cfx.re Development Kit (FxDK).lnk
+FiveM.app
+FiveM.exe
+FiveM.VisualElementsManifest.xml
+ 
+--- C:\Users\duhth\AppData\Roaming\CitizenFX --- 
+camera_save_structure.xml
+CitizenFX.ini
+fivem.cfg
+gta5_settings.xml
+imgui.ini
+kvs
+media_access.json
+ros_id.dat
+ 
+== CITIZENFX.INI == 
+--- C:\Users\duhth\AppData\Local\FiveM\FiveM.app\CitizenFX.ini --- 
+﻿[Game]
+IVPath=D:\Steam\steamapps\common\Grand Theft Auto V
+PoolSizesIncrease=
+ReplaceExecutable=0
+SavedBuildNumber=3407
+UpdateChannel=beta
+[Addons]
+ReShade5=ID:1e4bcf26 acknowledged that ReShade 5.x has a bug that will lead to game crashes
+DisableNVSP=0
+
+StreamingDistance=500
+DisablePeerToPeer=1
+DisableVSync=1
+PreferredRefreshRate=0
+FrameLimit=0   
+
+Fullscreen=true
+
+nui_maxFramerate=9999
+nui_framerate=9999
+ 
+--- C:\Users\duhth\AppData\Roaming\CitizenFX\CitizenFX.ini --- 
+﻿[Game]
+disable_media_player=1
+steam_child_spawner_disabled=1
+
+
+
+
+
+nui_maxFramerate=9999
+nui_framerate=9999
+ 
+== OTHER CONFIG FILES == 
+== HAGS STATUS == 
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers
+    HwSchMode    REG_DWORD    0x1
+
+(1=Off 2=On) 
+ 
+== NVIDIA OPENGL KEYS == 
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000
+    DriverDesc    REG_SZ    NVIDIA GeForce GTX 1650 SUPER
+
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000
+    OpenGLCompatibilityMode    REG_DWORD    0x0
+
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000
+    OpenGLDefaultSwapInterval    REG_DWORD    0x0
+
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001
+    DriverDesc    REG_SZ    Parsec Virtual Display Adapter
+
+
+
+
+
+ 
+== SCAN COMPLETE == 

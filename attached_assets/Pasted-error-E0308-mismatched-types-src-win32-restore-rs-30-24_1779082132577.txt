@@ -1,0 +1,63 @@
+error[E0308]: mismatched types
+  --> src\win32\restore.rs:30:24
+   |
+30 |         szDescription: desc,
+   |                        ^^^^ expected an array with a size of 256, found one with a size of 64
+
+error[E0277]: the trait bound `WIN32_ERROR: LowerHex` is not satisfied
+  --> src\win32\restore.rs:37:13
+   |
+36 |             "SRSetRestorePointW(BEGIN) failed (status={:#x}, seq={})",
+   |                                                       ----- required by this formatting parameter
+37 |             begin_status.nStatus,
+   |             ^^^^^^^^^^^^^^^^^^^^ the trait `LowerHex` is not implemented for `WIN32_ERROR`
+   |
+   = help: the following other types implement trait `LowerHex`:
+             &T
+             &mut T
+             NonZero<T>
+             Saturating<T>
+             Wrapping<T>
+             brotli::enc::input_pair::InputPair<'a>
+             bytes::bytes::Bytes
+             bytes::bytes_mut::BytesMut
+           and 59 others
+   = note: there are multiple different versions of crate `windows` in the dependency graph
+   = help: you can use `cargo tree` to explore your dependency tree
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+  --> src\win32\restore.rs:49:24
+   |
+49 |         szDescription: desc,
+   |                        ^^^^ expected an array with a size of 256, found one with a size of 64
+
+error[E0277]: the trait bound `WIN32_ERROR: LowerHex` is not satisfied
+  --> src\win32\restore.rs:56:13
+   |
+55 |             "SRSetRestorePointW(END) failed (status={:#x}, seq={})",
+   |                                                     ----- required by this formatting parameter
+56 |             end_status.nStatus,
+   |             ^^^^^^^^^^^^^^^^^^ the trait `LowerHex` is not implemented for `WIN32_ERROR`
+   |
+   = help: the following other types implement trait `LowerHex`:
+             &T
+             &mut T
+             NonZero<T>
+             Saturating<T>
+             Wrapping<T>
+             brotli::enc::input_pair::InputPair<'a>
+             bytes::bytes::Bytes
+             bytes::bytes_mut::BytesMut
+           and 59 others
+   = note: there are multiple different versions of crate `windows` in the dependency graph
+   = help: you can use `cargo tree` to explore your dependency tree
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `anyhow` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0277, E0308, E0432.
+For more information about an error, try `rustc --explain E0277`.
+warning: `opti-gods` (lib) generated 2 warnings
+error: could not compile `opti-gods` (lib) due to 5 previous errors; 2 warnings emitted
+failed to build app: failed to build app
+       Error failed to build app: failed to build app
+Error: Process completed with exit code 1.
