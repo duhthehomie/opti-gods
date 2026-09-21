@@ -125,13 +125,13 @@ function SavePresetCard() {
         <p className="text-[11px] text-zinc-400 leading-relaxed">
           Run a hardware scan first so the AI can select the exact right tweaks for your GPU, CPU, and OS. Without it, the preset can't be hardware-optimized.
         </p>
-        <Link href="/">
+        <Link href="/system-scan">
           <button
             data-testid="button-go-scan"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white border border-amber-500/40 cursor-pointer transition-all"
           >
             <ScanLine className="w-3.5 h-3.5" />
-            Go to Dashboard → Run Scan
+            Open System Scan → Instant Scan
           </button>
         </Link>
       </div>
