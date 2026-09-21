@@ -7,6 +7,10 @@ export const NATIVE_TWEAK_IDS = [
   "DisableTelemetry", "SysHibernateOff", "SetDNSPriority",
   "ClearDnsCache", "DisableMMAgentMemoryCompression", "ResetTcpAutotune",
   "SetHighPerformancePlan",
+  "MousePointerSpeed611", "MouseHoverTimeMin",
+  "MouseDataQueueSize", "KeyboardRepeatRateMax", "KeyboardRepeatDelayMin",
+  "KeyboardDisableStickyKeys", "KeyboardDataQueueSize",
+  "WinTitusShowExtensions", "WinTitusShowHidden",
 ] as const;
 
 export type NativeTweakId = typeof NATIVE_TWEAK_IDS[number];
