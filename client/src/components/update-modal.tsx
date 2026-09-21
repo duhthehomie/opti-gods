@@ -4,7 +4,8 @@ import { APP_VERSION } from "@/generated/version";
 import { checkForUpdate, isNative, performUpdate } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
-import { CheckCircle2, Download, X } from "lucide-react";
+import { CheckCircle2, Download } from "lucide-react";
+import { simpleUpdateNotes } from "@/lib/update-notes";
 
 type Phase = "prompt" | "downloading" | "installing" | "done";
 
@@ -19,6 +20,7 @@ export function UpdateModal() {
   const downloadStarted = useRef(false);
   const updateCheckStarted = useRef(false);
   const [detectedVersion, setDetectedVersion] = useState<string | null>(null);
+  const [detectedNotes, setDetectedNotes] = useState<string | null>(null);
 
   useEffect(() => {
     if (!data || dismissed) return;
@@ -29,7 +31,7 @@ export function UpdateModal() {
     if (!installedVersion) return;
     if (compareVersions(latestVersion, installedVersion) <= 0) return;
 
-    // Browser builds cannot self-install, so retain the explicit prompt.
+    setDetectedNotes(data.notes ?? null);
     setPhase("prompt");
   }, [data, dismissed]);
 
@@ -41,7 +43,8 @@ export function UpdateModal() {
       .then((update) => {
         if (!update?.available) return;
         setDetectedVersion(update.latest_version);
-        void triggerUpdate();
+        setDetectedNotes(update.notes);
+        setPhase("prompt");
       })
       .catch((error) => {
         console.warn("[update] automatic update check failed:", error);
@@ -65,7 +68,7 @@ export function UpdateModal() {
       });
       setProgress(100);
       setPhase("done");
-      window.setTimeout(dismiss, 3000);
+      window.setTimeout(() => setDismissed(true), 3000);
     } catch (err) {
       console.warn("[update] native updater failed, using download fallback:", err);
       fallbackDownload();
@@ -82,12 +85,16 @@ export function UpdateModal() {
     document.body.removeChild(a);
     setProgress(100);
     setPhase("done");
-    window.setTimeout(dismiss, 3000);
+    window.setTimeout(() => setDismissed(true), 3000);
   }
 
-  function dismiss() {
+  function openUpdateCenter() {
     setFadeOut(true);
-    window.setTimeout(() => { setDismissed(true); downloadStarted.current = false; }, 650);
+    window.setTimeout(() => {
+      setDismissed(true);
+      window.history.pushState({}, "", "/updates");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, 250);
   }
 
   if (!phase || dismissed) return null;
@@ -109,16 +116,6 @@ export function UpdateModal() {
           className="relative w-[340px] rounded-2xl border border-white/8 bg-zinc-950 shadow-2xl p-6 flex flex-col items-center gap-4"
           style={{ boxShadow: "0 0 60px 0 rgba(220,38,38,0.12), 0 24px 48px rgba(0,0,0,0.7)" }}
         >
-          {/* Close / Later */}
-          <button
-            data-testid="update-dismiss"
-            onClick={dismiss}
-            className="absolute top-3 right-3 text-zinc-600 hover:text-zinc-400 transition-colors p-1"
-            aria-label="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
-
           {/* Logo */}
           <img
             src={BRAND.goldPng}
@@ -128,32 +125,50 @@ export function UpdateModal() {
           />
 
           <div className="text-center space-y-1">
-            <h2 className="text-base font-black text-white tracking-tight">Update Available</h2>
+            <h2 className="text-base font-black text-white tracking-tight">A new Opti Gods build is ready</h2>
             <p className="text-sm text-zinc-400">
-              V5 is ready to install
+              Required update · v{detectedVersion ?? data?.latestVersion ?? "latest"}
             </p>
             <p className="text-xs text-zinc-600 mt-1">
-              Your current version: V5
+              Update now to continue using Opti Gods.
             </p>
           </div>
 
-          <div className="flex gap-2 w-full mt-1">
-            <button
-              data-testid="update-later"
-              onClick={dismiss}
-              className="flex-1 h-9 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-colors"
-            >
-              Later
-            </button>
-            <button
-              data-testid="update-now"
-              onClick={triggerUpdate}
-              className="flex-1 h-9 rounded-lg bg-red-600 hover:bg-red-700 border border-red-500/30 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Update Now
-            </button>
+          <div className="grid w-full grid-cols-3 gap-2">
+            {[
+              ["Protected", "Your settings stay intact"],
+              ["Verified", "Delivered by Opti Gods"],
+              ["Required", "Keeps every build current"],
+            ].map(([label, copy]) => (
+              <div key={label} className="rounded-lg border border-white/8 bg-white/[0.02] px-2 py-2 text-center">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-300">{label}</p>
+                <p className="mt-1 text-[8px] leading-tight text-zinc-600">{copy}</p>
+              </div>
+            ))}
           </div>
+
+          <div className="w-full rounded-lg border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5">
+            <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-red-400">What changed</p>
+            <ul className="space-y-1">
+              {simpleUpdateNotes(detectedNotes ?? data?.notes).slice(0, 3).map(note => (
+                <li key={note} className="flex gap-1.5 text-[10px] leading-snug text-zinc-400">
+                  <span className="text-red-400">•</span>{note}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <button
+            data-testid="open-update-center"
+            onClick={openUpdateCenter}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-bold text-white transition-colors hover:bg-red-500"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Open Update Center
+          </button>
+          <p className="text-center text-[9px] text-zinc-600">
+            Your saved settings and applied tweak history are protected.
+          </p>
         </div>
       </div>
     );
