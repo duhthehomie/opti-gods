@@ -10,7 +10,7 @@ import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
-  AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
+  AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight, RotateCcw,
   Download, Upload, X, MonitorCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -412,6 +412,14 @@ function SmartRecsBreakdown() {
       .filter(item => item.status === "failed" || item.status === "stopped" || item.status === "queued" || item.status === "running")
       .map(item => item.id)
     : [];
+  const failedRunIds = latestRunIsTerminal
+    ? Array.from(new Set(
+      lastNativeRun!.items
+        .filter(item => item.status === "failed")
+        .map(item => item.id)
+        .filter(id => id in tweaks),
+    ))
+    : [];
   const missingSafeIds = latestRunIsTerminal ? latestRunMissingIds : safeIds.filter(id => !tweaks[id]);
   const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
   const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
@@ -431,6 +439,16 @@ function SmartRecsBreakdown() {
       setTimeout(() => setApplied(false), 3000);
     } catch (error) {
       toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
+  }
+
+  function handleRetryFailed() {
+    try {
+      if (!isNative()) throw new Error("Open Opti Gods for Windows to retry native tweaks.");
+      queueTweakBatch(failedRunIds);
+      window.location.assign("/applied-tweaks?run=1");
+    } catch (error) {
+      toast({ title: "Could not retry failed tweaks", description: error instanceof Error ? error.message : "The failed tweaks could not be queued.", variant: "destructive" });
     }
   }
 
@@ -469,6 +487,17 @@ function SmartRecsBreakdown() {
               ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
               : <><Zap className="w-4 h-4" /> Apply {missingSafeIds.length} missing tweaks</>}
         </button>
+        {failedRunIds.length > 0 && (
+          <button
+            data-testid="button-retry-failed-smart-recs"
+            onClick={handleRetryFailed}
+            disabled={applied}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-red-500/25 bg-red-500/[.04] text-red-300 text-xs font-bold transition-all hover:bg-red-500/10 hover:border-red-500/40 disabled:cursor-default disabled:opacity-60"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Retry {failedRunIds.length} failed tweaks
+          </button>
+        )}
 
       </div>
       {latestRunIsTerminal && (
@@ -479,7 +508,7 @@ function SmartRecsBreakdown() {
             : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-200",
         )}>
           {missingSafeIds.length > 0
-            ? `${missingSafeIds.length} selected tweaks were not confirmed in the last Full Optimize run.`
+            ? `${missingSafeIds.length} selected tweaks were not confirmed in the last Full Optimize run.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed and can be retried above.` : ""}`
             : "The last Full Optimize run completed without a pending or failed result."}
         </div>
       )}
