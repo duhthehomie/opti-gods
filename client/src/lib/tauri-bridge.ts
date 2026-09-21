@@ -207,6 +207,22 @@ export async function scanHardware(): Promise<NativeHardwareScan | null> {
   return invoke<NativeHardwareScan>("scan_hardware");
 }
 
+export interface NativeLivePerformance {
+  live: boolean;
+  cpu_load_pct?: number | null;
+  gpu_load_pct?: number | null;
+  ram_total_gb?: number | null;
+  ram_free_gb?: number | null;
+  ram_used_pct?: number | null;
+  cpu_temp_c?: number | null;
+  gpu_temp_c?: number | null;
+}
+
+export async function readLivePerformance(): Promise<NativeLivePerformance | null> {
+  if (!isNative()) return null;
+  return invoke<NativeLivePerformance>("read_live_performance");
+}
+
 // ─── system restore ─────────────────────────────────────────────────────────
 
 export async function createRestorePoint(label: string): Promise<NativeRestorePoint | null> {
@@ -311,9 +327,54 @@ export async function repairNvidiaControlPanel(): Promise<string> {
   if (!isNative()) throw new Error("NVIDIA Control Panel repair is available in the Windows app.");
   return invoke<string>("repair_nvidia_control_panel");
 }
+
+export interface NativeActionResult {
+  ok: boolean;
+  id: string;
+  message: string;
+  requires_reboot: boolean;
+}
+
+export async function runNativeFix(id: string): Promise<NativeActionResult> {
+  if (!isNative()) throw new Error("Recovery fixes are available in the Windows app.");
+  return invoke<NativeActionResult>("run_fix", { args: { id } });
+}
+
+export async function runNativeRestore(categories: string[]): Promise<NativeActionResult> {
+  if (!isNative()) throw new Error("System restore actions are available in the Windows app.");
+  return invoke<NativeActionResult>("run_restore_categories", { args: { categories } });
+}
+
 export async function openFivemFolder(): Promise<void> {
   if (!isNative()) throw new Error("Open FiveM Folder is available in the Windows app.");
   await invoke<void>("open_fivem_folder");
+}
+
+export interface NativeFivemPackResult {
+  ok: boolean;
+  install_id: string;
+  message: string;
+  installed_files: string[];
+}
+
+export interface NativeFivemPackFile {
+  path: string;
+  content: string;
+}
+
+export async function installFivemPack(
+  packName: string,
+  files: NativeFivemPackFile[],
+): Promise<NativeFivemPackResult> {
+  if (!isNative()) throw new Error("One-click FiveM installation is available in the Windows app.");
+  return invoke<NativeFivemPackResult>("install_fivem_pack", {
+    args: { pack_name: packName, files },
+  });
+}
+
+export async function uninstallFivemPack(): Promise<NativeFivemPackResult> {
+  if (!isNative()) throw new Error("FiveM pack rollback is available in the Windows app.");
+  return invoke<NativeFivemPackResult>("uninstall_fivem_pack");
 }
 
 export async function discordLogout(): Promise<void> {
@@ -506,6 +567,20 @@ export interface NativeTaskScan {
   all_processes: ProcessInfo[];
   /** All entries in HKCU + HKLM Run keys */
   all_startup_entries: StartupEntry[];
+}
+
+export interface NativeInstalledGame {
+  id: string;
+  executable: string;
+  install_path: string;
+  source: string;
+  running: boolean;
+}
+
+/** Discover allowlisted installed games. The native command accepts no paths. */
+export async function detectInstalledGames(): Promise<NativeInstalledGame[]> {
+  if (!isNative()) return [];
+  return invoke<NativeInstalledGame[]>("detect_installed_games");
 }
 
 export interface NativeActionResult {
