@@ -19,7 +19,12 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { playFeedbackSound, useToast } from "@/hooks/use-toast";
 import { useOptimizationStore } from "@/store/use-optimization-store";
-import { queueTweakBatch } from "@/lib/native-tweak-runner";
+import {
+  queueTweakBatch,
+  readNativeTweakRun,
+  subscribeNativeTweakRun,
+  type NativeTweakRunState,
+} from "@/lib/native-tweak-runner";
 import { uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
 const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
@@ -389,14 +394,34 @@ function SmartRecsBreakdown() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const [applied, setApplied] = useState(false);
+  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => isNative() ? readNativeTweakRun() : null);
 
   const total = recs.ids.size;
 
   const safeIds = Array.from(recs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
-  const missingSafeIds = safeIds.filter(id => !tweaks[id]);
+  const latestRunIsTerminal = isNative()
+    && Boolean(lastNativeRun)
+    && lastNativeRun!.items.length > 0
+    && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
+  const latestRunAppliedCount = latestRunIsTerminal
+    ? lastNativeRun!.items.filter(item => item.status === "applied").length
+    : 0;
+  const latestRunMissingIds = latestRunIsTerminal
+    ? lastNativeRun!.items
+      .filter(item => item.status === "failed" || item.status === "stopped" || item.status === "queued" || item.status === "running")
+      .map(item => item.id)
+    : [];
+  const missingSafeIds = latestRunIsTerminal ? latestRunMissingIds : safeIds.filter(id => !tweaks[id]);
   const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
   const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
+
+  useEffect(() => {
+    if (!isNative()) return;
+    const syncRun = (state: NativeTweakRunState | null) => setLastNativeRun(state);
+    syncRun(readNativeTweakRun());
+    return subscribeNativeTweakRun(syncRun);
+  }, []);
 
   async function handleApply() {
     try {
@@ -439,13 +464,25 @@ function SmartRecsBreakdown() {
           )}
         >
           {allOn || missingSafeIds.length === 0
-            ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks applied</>
+            ? <><CheckCircle2 className="w-4 h-4" /> {latestRunIsTerminal ? `${latestRunAppliedCount} tweaks applied` : `${alreadyOnCount} tweaks applied`}</>
             : applied
               ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
               : <><Zap className="w-4 h-4" /> Apply {missingSafeIds.length} missing tweaks</>}
         </button>
 
       </div>
+      {latestRunIsTerminal && (
+        <div className={cn(
+          "rounded-xl border px-3 py-2 text-[11px]",
+          missingSafeIds.length > 0
+            ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-200"
+            : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-200",
+        )}>
+          {missingSafeIds.length > 0
+            ? `${missingSafeIds.length} selected tweaks were not confirmed in the last Full Optimize run.`
+            : "The last Full Optimize run completed without a pending or failed result."}
+        </div>
+      )}
 
       {/* Expert tweaks callout */}
       {expertIds.length > 0 && (

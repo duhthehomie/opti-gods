@@ -25,7 +25,13 @@ import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
 import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
-import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
+import {
+  applyTweakBatch,
+  queueTweakBatch,
+  readNativeTweakRun,
+  subscribeNativeTweakRun,
+  type NativeTweakRunState,
+} from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { playOptimizationActionSound } from "@/lib/action-sound";
@@ -370,6 +376,7 @@ export default function Dashboard() {
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
+  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
   const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
     staleTime: 5 * 60 * 1000,
@@ -498,6 +505,13 @@ export default function Dashboard() {
     return () => window.clearInterval(interval);
   }, [native, refreshDetectedState]);
 
+  useEffect(() => {
+    if (!native) return;
+    const syncRun = (state: NativeTweakRunState | null) => setLastNativeRun(state);
+    syncRun(readNativeTweakRun());
+    return subscribeNativeTweakRun(syncRun);
+  }, [native]);
+
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
     if (!isAuthenticated && !native) {
@@ -589,6 +603,12 @@ export default function Dashboard() {
       // silently redirect or consume the 15-tweak allowance from this CTA.
       return;
     }
+    if (native && latestRunMissingIds.length > 0) {
+      playOptimizationActionSound();
+      queueTweakBatch(latestRunMissingIds);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
     playOptimizationActionSound();
     setConfirmFullOptimize(true);
   };
@@ -661,12 +681,28 @@ export default function Dashboard() {
   // Filter both out of the score denominator so 100% is always achievable.
   const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
   const achievableIds = Array.from(smartRecs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
+  const latestRunIsTerminal = native
+    && Boolean(lastNativeRun)
+    && lastNativeRun!.items.length > 0
+    && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
+  const latestRunAppliedIds = new Set(
+    latestRunIsTerminal
+      ? lastNativeRun!.items.filter(item => item.status === "applied").map(item => item.id)
+      : [],
+  );
+  const latestRunMissingIds = latestRunIsTerminal
+    ? lastNativeRun!.items
+      .filter(item => item.status === "failed" || item.status === "stopped" || item.status === "queued" || item.status === "running")
+      .map(item => item.id)
+    : [];
   // Browser toggles are intent only. Native score/results must come from the
-  // detector, so local timestamps can never make a missing Windows change
-  // appear applied.
+  // detector. A completed native run is also authoritative for the result
+  // just shown to the user; the detector only exposes a smaller supported
+  // subset of all registry and app actions.
   const confirmedIds = native
     ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]))
     : new Set<string>();
+  latestRunAppliedIds.forEach(id => confirmedIds.add(id));
   // Native category totals must come from the live Windows detector, not the
   // browser intent store. The latter is persistent, but it is not proof that
   // a registry/service change still exists on this PC.
@@ -678,15 +714,24 @@ export default function Dashboard() {
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
     return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
   });
-  const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
+  const missingRecommendedCount = latestRunIsTerminal
+    ? latestRunMissingIds.length
+    : matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
-  const recommendedApplied = matchedRecommendedIds.length > 0
-    && (!native || nativeDetectionReady)
-    && matchedRecommendedIds.every(id => activeIdsForDisplay.has(id));
+  const recommendedApplied = latestRunIsTerminal
+    ? latestRunMissingIds.length === 0
+    : matchedRecommendedIds.length > 0
+      && (!native || nativeDetectionReady)
+      && matchedRecommendedIds.every(id => activeIdsForDisplay.has(id));
+  const scoreIds = latestRunIsTerminal
+    ? lastNativeRun!.items
+      .map(item => item.id)
+      .filter(id => !_expertIdSet.has(id) && getTweakCompatibility(id).ok)
+    : achievableIds;
   const recApplied = native
-    ? achievableIds.filter(id => confirmedIds.has(id)).length
+    ? scoreIds.filter(id => confirmedIds.has(id)).length
     : achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
-  const scorePercent = achievableIds.length > 0 ? Math.round((recApplied / achievableIds.length) * 100) : 0;
+  const scorePercent = scoreIds.length > 0 ? Math.round((recApplied / scoreIds.length) * 100) : 0;
   const displayScore = scorePercent;
   const tierLabel = native
     ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED")

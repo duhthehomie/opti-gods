@@ -155,6 +155,12 @@ export default function AppliedTweaksPage() {
   const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
   const startedRef = useRef(false);
+  const runResultsRef = useRef<HTMLDivElement>(null);
+  const notifiedRunRef = useRef<string | null>(
+    typeof window !== "undefined" ? (() => {
+      try { return sessionStorage.getItem("optigods-native-run-notified"); } catch { return null; }
+    })() : null,
+  );
   useEffect(() => { detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }, []);
   useEffect(() => {
      const syncRun = (state: NativeTweakRunState | null) => {
@@ -168,6 +174,20 @@ export default function AppliedTweaksPage() {
       setRunning(state.status === "running" || state.status === "stopping");
       setRunFinished(state.status === "completed" || state.status === "stopped" || state.status === "failed");
        setRunHadFailures((safeState?.items ?? []).some(item => item.status === "failed"));
+       const terminal = state.status === "completed" || state.status === "stopped" || state.status === "failed";
+       if (terminal && state.items.length > 0 && notifiedRunRef.current !== state.runId) {
+         notifiedRunRef.current = state.runId;
+         try { sessionStorage.setItem("optigods-native-run-notified", state.runId); } catch {}
+         const appliedCount = state.items.filter(item => item.status === "applied").length;
+         const failedCount = state.items.filter(item => item.status === "failed").length;
+         toast({
+           title: failedCount > 0 ? `${appliedCount} tweaks applied · ${failedCount} need attention` : `${appliedCount} tweaks applied`,
+           description: failedCount > 0
+             ? "The Windows run finished. Open the Failed tab to review or retry only those items."
+             : "Windows confirmed every selected tweak. Restart your PC before testing the game.",
+           variant: failedCount > 0 ? "destructive" : "success",
+         });
+       }
     };
     syncRun(readNativeTweakRun());
     return subscribeNativeTweakRun(syncRun);
@@ -229,11 +249,6 @@ export default function AppliedTweaksPage() {
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
        const failureCount = result.failures.length;
-      toast({
-         title: failureCount === 0 ? `${result.appliedIds.length} tweaks applied` : `${failureCount} tweak${failureCount === 1 ? "" : "s"} failed`,
-          description: summarizeFailures(result.failures, result.appliedIds.length),
-         variant: failureCount === 0 ? "success" : "destructive",
-      });
     }).catch(error => {
        const message = error instanceof Error ? error.message : "Windows could not start this tweak run.";
        setRunItems(items => items.map(item =>
@@ -242,7 +257,6 @@ export default function AppliedTweaksPage() {
            : { ...item, status: "failed", message },
        ));
       setRunFinished(true);
-       toast({ title: "Tweak run stopped", description: message, variant: "destructive" });
     }).finally(() => {
       setRunning(false);
       detectAppliedTweaks().then(setNativeState);
@@ -283,11 +297,6 @@ export default function AppliedTweaksPage() {
       });
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
-      toast({
-        title: result.failures.length ? "Rerun needs attention" : title,
-        description: summarizeFailures(result.failures, result.appliedIds.length),
-        variant: result.failures.length ? "destructive" : "success",
-      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Windows could not restart these tweaks.";
       setRunItems(items => items.map(item =>
@@ -295,7 +304,6 @@ export default function AppliedTweaksPage() {
       ));
       setRunFinished(true);
       setRunHadFailures(true);
-      toast({ title: "Rerun failed", description: message, variant: "destructive" });
     } finally {
       setRunning(false);
       detectAppliedTweaks().then(setNativeState);
@@ -319,25 +327,25 @@ export default function AppliedTweaksPage() {
       );
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
-      toast({
-        title: result.failures.length ? "Reapply needs attention" : "Tweak reapplied",
-        description: result.failures.length
-          ? summarizeFailures(result.failures, result.appliedIds.length)
-          : "Windows confirmed the tweak again.",
-        variant: result.failures.length ? "destructive" : "success",
-      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Windows could not reapply this tweak.";
       setRunItems(items => items.map(item => ({ ...item, status: "failed", message })));
       setRunFinished(true);
       setRunHadFailures(true);
-      toast({ title: "Reapply failed", description: message, variant: "destructive" });
     } finally {
       setReapplying(null);
       setRunning(false);
       detectAppliedTweaks().then(setNativeState);
     }
   };
+  useEffect(() => {
+    if (!runItems.length || runTab !== "all") return;
+    const frame = window.requestAnimationFrame(() => {
+      const list = runResultsRef.current;
+      if (list) list.scrollTop = list.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [runItems, runTab]);
   // Keep provenance separate: a local timestamp is a session record, not proof
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.
@@ -473,7 +481,7 @@ export default function AppliedTweaksPage() {
          <button onClick={() => setRunTab("all")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "all" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>All ({runItems.length})</button>
           <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
        </div>
-       <div className="max-h-80 space-y-1 overflow-y-auto p-3">
+        <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
          {runItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
            {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
            <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}</div>

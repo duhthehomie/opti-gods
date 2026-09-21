@@ -1,4 +1,0 @@
-{
-  "version": "5.2.27",
-  "notes": "V5.2.27 — adds automatic administrator elevation through the Windows manifest, hardens the free 15-slot allowance against stale reservations and oversized queues, keeps failed native results visible, and includes the supported NVIDIA preset path in Full Optimize."
-}
