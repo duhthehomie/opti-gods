@@ -358,8 +358,7 @@ export default function Fivem() {
 
           {/* HAGS OFF DPC callout — shown for GTX 1650 Super users */}
           {hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") && (
-            <motion.a
-              href="/tools-fixes#dpc-latency"
+            <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex items-start gap-3 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/50 transition-all group cursor-pointer"
@@ -368,21 +367,21 @@ export default function Fivem() {
                 <Zap className="w-4 h-4 text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-amber-300 group-hover:text-amber-200 transition-colors">Gun aiming in the air? FPS spike on kills? → DPC Latency Fixes</p>
+                <p className="text-sm font-bold text-amber-300">Gun aiming in the air? FPS spike on kills?</p>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                   Random aim input spikes and the 160→60 FPS cliff during action are caused by <span className="text-white font-medium">DPC latency bursts</span> — GPU interrupts and Ryzen C-state ACPI wake events dumping buffered inputs all at once.
-                  Apply the <span className="text-amber-300 font-medium">NVIDIA DPC Fix</span> (MSI mode) and <span className="text-amber-300 font-medium">Ryzen C-State Fix</span> in the DPC Latency tab — these are separate downloadable scripts, not toggles.
+                  Review the supported NVIDIA, input, and frame-pacing controls in the FiveM and Tweaks sections. Apply only changes shown as compatible with this PC.
                 </p>
-                <p className="text-[11px] text-amber-500/70 mt-2 font-medium">Click to open Tools & Fixes → DPC Latency tab →</p>
+                <p className="text-[11px] text-amber-500/70 mt-2 font-medium">Unsupported kernel download packs are not shown here.</p>
               </div>
-            </motion.a>
+            </motion.div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { title: "Stutters with High Priority?", body: "If you experience micro-stutters with High Priority enabled, your CPU may be saturated. Disable it and use 'Pin to Physical Cores' instead for stable frametimes." },
               { title: "Cache Clearing", body: "Clearing FiveM cache fixes most crash/texture issues. Re-downloading server assets on first join is expected — it rebuilds the cache." },
-              { title: "HAGS OFF on GTX 1650 Super — Full Stack", body: "HAGS OFF alone isn't enough. You need all four companion tweaks: Disable HAGS → Low Latency Ultra → HAGS OFF Stability Pack → NVIDIA + Ryzen DPC fixes in the DPC Latency tab. All four together eliminate the 160→60 drop and aim input spikes." },
+              { title: "HAGS OFF on GTX 1650 Super — Full Stack", body: "HAGS OFF alone isn't enough. Pair it with the compatible low-latency and frame-pacing controls shown in Tweaks. Apply only changes that are confirmed for this PC." },
             ].map((c, i) => (
               <motion.div key={c.title} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 + i * 0.1 }}
                 className="p-5 rounded-lg bg-red-500/5 border border-red-500/20">
