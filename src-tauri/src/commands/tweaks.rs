@@ -714,9 +714,20 @@ mod native_impls {
         name: &str,
         new_value: u32,
     ) -> anyhow::Result<Option<String>> {
-        let prior = r::read_value(hive, path, name).ok();
+        let prior = r::read_value(hive, path, name).unwrap_or(r::RegValue::None);
         r::write_dword(hive, path, name, new_value)?;
-        Ok(prior.map(|v| r::encode_token(hive, path, name, &v)))
+        Ok(Some(r::encode_token(hive, path, name, &prior)))
+    }
+
+    pub fn reg_set_sz(
+        hive: r::Hive,
+        path: &str,
+        name: &str,
+        new_value: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let prior = r::read_value(hive, path, name).unwrap_or(r::RegValue::None);
+        r::write_sz(hive, path, name, new_value)?;
+        Ok(Some(r::encode_token(hive, path, name, &prior)))
     }
 
     pub fn reg_undo(token: Option<&str>) -> anyhow::Result<()> {
@@ -963,6 +974,58 @@ mod native_impls {
             86400,
         )
     }
+    pub fn apply_mouse_pointer_speed_611() -> anyhow::Result<Option<String>> {
+        reg_set_sz(r::Hive::CurrentUser, r"Control Panel\Mouse", "MouseSensitivity", "10")
+    }
+    pub fn apply_mouse_hover_time_min() -> anyhow::Result<Option<String>> {
+        reg_set_sz(r::Hive::CurrentUser, r"Control Panel\Mouse", "MouseHoverTime", "10")
+    }
+    pub fn apply_mouse_data_queue_size() -> anyhow::Result<Option<String>> {
+        reg_set_dword(
+            r::Hive::LocalMachine,
+            r"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+            "MouseDataQueueSize",
+            20,
+        )
+    }
+    pub fn apply_keyboard_repeat_rate_max() -> anyhow::Result<Option<String>> {
+        reg_set_sz(r::Hive::CurrentUser, r"Control Panel\Keyboard", "KeyboardSpeed", "31")
+    }
+    pub fn apply_keyboard_repeat_delay_min() -> anyhow::Result<Option<String>> {
+        reg_set_sz(r::Hive::CurrentUser, r"Control Panel\Keyboard", "KeyboardDelay", "0")
+    }
+    pub fn apply_keyboard_disable_sticky_keys() -> anyhow::Result<Option<String>> {
+        reg_set_sz(
+            r::Hive::CurrentUser,
+            r"Control Panel\Accessibility\StickyKeys",
+            "Flags",
+            "506",
+        )
+    }
+    pub fn apply_keyboard_data_queue_size() -> anyhow::Result<Option<String>> {
+        reg_set_dword(
+            r::Hive::LocalMachine,
+            r"SYSTEM\CurrentControlSet\Services\kbdclass\Parameters",
+            "KeyboardDataQueueSize",
+            20,
+        )
+    }
+    pub fn apply_show_file_extensions() -> anyhow::Result<Option<String>> {
+        reg_set_dword(
+            r::Hive::CurrentUser,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
+            "HideFileExt",
+            0,
+        )
+    }
+    pub fn apply_show_hidden_files() -> anyhow::Result<Option<String>> {
+        reg_set_dword(
+            r::Hive::CurrentUser,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
+            "Hidden",
+            1,
+        )
+    }
 }
 
 #[cfg(not(windows))]
@@ -999,6 +1062,15 @@ mod native_impls {
     stub!(apply_disable_memory_compression);
     stub!(apply_optimize_dns);
     stub!(apply_high_performance_plan);
+    stub!(apply_mouse_pointer_speed_611);
+    stub!(apply_mouse_hover_time_min);
+    stub!(apply_mouse_data_queue_size);
+    stub!(apply_keyboard_repeat_rate_max);
+    stub!(apply_keyboard_repeat_delay_min);
+    stub!(apply_keyboard_disable_sticky_keys);
+    stub!(apply_keyboard_data_queue_size);
+    stub!(apply_show_file_extensions);
+    stub!(apply_show_hidden_files);
     pub fn undo_high_performance_plan(_token: Option<&str>) -> anyhow::Result<()> {
         anyhow::bail!("Windows-only");
     }
@@ -1017,7 +1089,54 @@ const NATIVE_TWEAKS: &[(&str, NativeTweak)] = &[
     ("DisableGameDVR",            NativeTweak { apply: native_impls::apply_disable_game_dvr,       undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("DisableTelemetry",          NativeTweak { apply: native_impls::apply_disable_telemetry,      undo: native_impls::reg_undo, category: "registry",       requires_reboot: false }),
     ("SetHighPerformancePlan",    NativeTweak { apply: native_impls::apply_high_performance_plan,  undo: native_impls::undo_high_performance_plan, category: "power", requires_reboot: false }),
+    ("MousePointerSpeed611",      NativeTweak { apply: native_impls::apply_mouse_pointer_speed_611, undo: native_impls::reg_undo, category: "mouse", requires_reboot: false }),
+    ("MouseHoverTimeMin",         NativeTweak { apply: native_impls::apply_mouse_hover_time_min, undo: native_impls::reg_undo, category: "mouse", requires_reboot: false }),
+    ("MouseDataQueueSize",        NativeTweak { apply: native_impls::apply_mouse_data_queue_size, undo: native_impls::reg_undo, category: "mouse", requires_reboot: true }),
+    ("KeyboardRepeatRateMax",     NativeTweak { apply: native_impls::apply_keyboard_repeat_rate_max, undo: native_impls::reg_undo, category: "keyboard", requires_reboot: false }),
+    ("KeyboardRepeatDelayMin",    NativeTweak { apply: native_impls::apply_keyboard_repeat_delay_min, undo: native_impls::reg_undo, category: "keyboard", requires_reboot: false }),
+    ("KeyboardDisableStickyKeys", NativeTweak { apply: native_impls::apply_keyboard_disable_sticky_keys, undo: native_impls::reg_undo, category: "keyboard", requires_reboot: false }),
+    ("KeyboardDataQueueSize",     NativeTweak { apply: native_impls::apply_keyboard_data_queue_size, undo: native_impls::reg_undo, category: "keyboard", requires_reboot: true }),
+    ("WinTitusShowExtensions",    NativeTweak { apply: native_impls::apply_show_file_extensions, undo: native_impls::reg_undo, category: "windows", requires_reboot: false }),
+    ("WinTitusShowHidden",        NativeTweak { apply: native_impls::apply_show_hidden_files, undo: native_impls::reg_undo, category: "windows", requires_reboot: false }),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frequent_safe_tweaks_are_native() {
+        let ids = native_ids();
+        for id in [
+            "MousePointerSpeed611",
+            "MouseHoverTimeMin",
+            "MouseDataQueueSize",
+            "KeyboardRepeatRateMax",
+            "KeyboardRepeatDelayMin",
+            "KeyboardDisableStickyKeys",
+            "KeyboardDataQueueSize",
+            "WinTitusShowExtensions",
+            "WinTitusShowHidden",
+        ] {
+            assert!(ids.contains_key(id), "{id} should use the native engine");
+        }
+    }
+
+    #[test]
+    fn expert_and_unsupported_tweaks_stay_out_of_native_registry() {
+        let ids = native_ids();
+        for id in [
+            "DisableDefender",
+            "Win11DisableVBS",
+            "SysHypervisorOff",
+            "DisableMemoryCompression",
+            "Lap_Intel_DisableECores",
+            "DebloatOneDrive",
+        ] {
+            assert!(!ids.contains_key(id), "{id} must keep using the trusted queue");
+        }
+    }
+}
 
 // Re-exported so other modules can validate IDs without re-listing.
 pub fn native_ids() -> BTreeMap<&'static str, &'static str> {
