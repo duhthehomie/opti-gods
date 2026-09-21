@@ -119,7 +119,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Card href="/system-scan" icon={Activity} title="System Scan" desc="Hardware + OS detection report" testid="card-scan" />
             <Card href="/tweaks" icon={Settings2} title="Tweaks" desc="All optimization toggles, grouped" testid="card-tweaks" />
-            <Card href="/tools" icon={Wrench} title="Tools & Fixes" desc="Crash fixes, game scanner, Custom OS" testid="card-tools" />
+            <Card href="/tools" icon={Wrench} title="Tools & Fixes" desc="Crash fixes, restore points, and recovery tools" testid="card-tools" />
             <Card href="/ai" icon={Bot} title="Opti Gods AI" desc="Chat your way to the perfect preset" accent="violet" testid="card-ai" />
             <Card href="/pro" icon={Crown} title="Pro" desc={isPro ? "Manage your Pro unlock" : "Unlock everything for $20"} accent="amber" testid="card-pro" />
           </div>
@@ -130,7 +130,7 @@ export default function HomePage() {
           <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-red-500/70 mb-4">What's new</h2>
           <div className="rounded-xl border border-white/5 bg-zinc-950/40 divide-y divide-white/5">
             {[
-              { tag: "V4", title: "580+ tweaks across 15+ dedicated tabs — nothing missed", desc: "DPC Latency · Fortnite · Discord While Gaming · Game Detection · Background Manager · Laptop · AMD iGPU · Intel iGPU · full audit every system" },
+              { tag: "V5", title: "A focused set of supported Windows controls", desc: "Hardware-aware registry, GPU, network, memory, game, and recovery tools with native confirmation where available" },
               { tag: "PERF", title: "100+ FPS Fortnite · 120+ FPS FiveM · 300+ FPS Valorant", desc: "Verified on GTX 1650 Super + Ryzen 5 3500. Works on any Windows PC — Alienware, CyberPowerPC, Dell, Lenovo, HP, ASUS, iBUYPOWER & more" },
               { tag: "BAT", title: ".bat downloads — double-click and done", desc: "No PowerShell execution policy issues. Hardware-matched preset from native scan." },
               { tag: "AI", title: "Opti Gods AI — ask 'give me a smart preset'", desc: "Screenshot analysis, vision mode, streaming chat. V4 changelog aware." },
