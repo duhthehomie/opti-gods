@@ -421,6 +421,9 @@ export function registerAuthRoutes(app: Express): void {
     res.json({
       currentVersion,
       latestVersion,
+      notes: latestVersion === CURRENT
+        ? "V5.2.26 — restores Pro access after Discord username changes.\nAdded a backup-first FiveM UI/input recovery fix.\nRemoved risky FiveM network/system tweaks from automatic presets."
+        : null,
       updaterCmdUrl:  settings?.updaterCmdUrl  ?? INSTALLER_URL,
       updatePageUrl:  settings?.updatePageUrl  ?? gh?.pageUrl ?? "https://optigods.com",
     });
