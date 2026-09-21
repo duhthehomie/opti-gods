@@ -1,16 +1,11 @@
 import { useState, useEffect } from "react";
-import { apiUrl } from "@/lib/api-base";
-import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
-import { TabSmartBar } from "@/components/tab-smart-bar";
-import { useOptimizationStore } from "@/store/use-optimization-store";
-import { Power, AlertTriangle, XCircle, Clock, Loader2 } from "lucide-react";
+import { Power, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { isNative } from "@/lib/tauri-bridge";
+import { disableStartupApp, isNative, scanTaskManager, type StartupEntry } from "@/lib/tauri-bridge";
 
 const STARTUP_SAVINGS: Record<string, number> = {
   su_discord: 3.2, su_spotify: 2.8, su_steam: 2.1, su_onedrive: 3.5,
@@ -65,69 +60,78 @@ const IMPACT_COLOR: Record<string, string> = {
 };
 
 interface DetectedStartupApp {
+  key: string;
   name: string;
   path: string;
-  type: string;
+  location: string;
+  canDisable: boolean;
+  disabled: boolean;
 }
 
 export default function StartupApps() {
   const { toast } = useToast();
-  const { tweaks, setTweak, setAllTweaks } = useOptimizationStore();
   const [detectedApps, setDetectedApps] = useState<DetectedStartupApp[]>([]);
   const [scanning, setScanning] = useState(false);
 
-  // Fetch and display actual startup apps scan script
-  const handleScanStartupApps = async () => {
+  const scanStartupApps = async (showToast = true) => {
+    if (!isNative()) {
+      if (showToast) toast({ title: "Windows scan unavailable", description: "Open the Opti Gods Windows app to read startup entries from this PC.", variant: "destructive" });
+      return;
+    }
     setScanning(true);
     try {
-      const response = await fetch(apiUrl('/api/startup/scan'), { headers: getNativeAuthHeaders() });
-      const ps1Script = await response.text();
-      
-      // Download the scan script for user to run
-      const blob = new Blob([ps1Script], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "OptiGods-ScanStartup.bat";
-      a.click();
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Scan script downloaded",
-        description: "Run scan-startup-apps.ps1 in PowerShell to detect all startup apps. Output will be JSON you can paste back here."
-      });
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to download scan script" });
+      const result = await scanTaskManager({}, {});
+      const apps = result.all_startup_entries.map((entry: StartupEntry) => ({
+        key: entry.name,
+        name: entry.name,
+        path: entry.command,
+        location: entry.location,
+        canDisable: entry.can_disable,
+        disabled: false,
+      }));
+      setDetectedApps(apps);
+      if (showToast) {
+        toast({
+          title: apps.length ? `${apps.length} startup entries found` : "No startup entries found",
+          description: apps.length ? "Only entries currently reported by Windows are shown." : "Windows did not report any Run entries for this account or the local machine.",
+          variant: apps.length ? "success" : undefined,
+        });
+      }
+    } catch (error) {
+      if (showToast) toast({ title: "Could not scan startup apps", description: error instanceof Error ? error.message : "Windows did not return startup entries.", variant: "destructive" });
     } finally {
       setScanning(false);
     }
   };
 
-  const disabledCount = ALL_STARTUP_APPS.filter(a => tweaks[a.id]).length;
-  const savedSeconds = ALL_STARTUP_IDS
-    .filter(id => tweaks[id])
-    .reduce((sum, id) => sum + (STARTUP_SAVINGS[id] || 0), 0);
+  useEffect(() => { void scanStartupApps(false); }, []);
 
   const handleDisableAll = async () => {
-    const ids = ALL_STARTUP_APPS.filter(a => !a.essential).map(a => a.id);
+    const eligible = detectedApps.filter(app => app.canDisable && !app.disabled);
+    if (!eligible.length) {
+      toast({ title: "No removable startup entries", description: "Windows did not report any non-protected entries to disable.", variant: "destructive" });
+      return;
+    }
     try {
-      const result = await applyTweakBatch(ids);
+      let changed = 0;
+      const failures: string[] = [];
+      for (const app of eligible) {
+        const result = await disableStartupApp(app.key);
+        if (result.ok) changed++;
+        else failures.push(`${app.name}: ${result.message}`);
+      }
+      setDetectedApps(apps => apps.map(app => eligible.some(item => item.key === app.key) ? { ...app, disabled: true } : app));
       toast({
-        title: isNative() ? `${result.appliedIds.length} startup tweaks applied` : `${result.selectedIds.length} startup tweaks selected`,
-        description: isNative() ? `${result.appliedIds.length} Windows changes confirmed${result.selectedIds.length ? ` · ${result.selectedIds.length} script-only selected` : ""}${result.unsupportedIds.length ? ` · ${result.unsupportedIds.length} incompatible skipped` : ""}.` : "Download and run the .bat to apply the selected startup changes.",
-        variant: result.failures.length && !result.appliedIds.length ? "destructive" : "success",
+        title: changed ? `${changed} startup entries disabled` : "No startup entries changed",
+        description: failures.length ? failures.slice(0, 2).join(" ") : "Windows confirmed the change. Refresh to read the current Run entries again.",
+        variant: failures.length && !changed ? "destructive" : "success",
       });
     } catch (error) {
       toast({ title: "Could not disable startup apps", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
     }
   };
 
-  const handleEnableAll = () => {
-    const next: Record<string, boolean> = { ...useOptimizationStore.getState().tweaks };
-    ALL_STARTUP_APPS.forEach(a => { next[a.id] = false; });
-    setAllTweaks(next);
-    toast({ title: "Enabled all startup apps" });
-  };
+  const disabledCount = detectedApps.filter(app => app.disabled).length;
 
   return (
     <AppLayout>
@@ -153,10 +157,10 @@ export default function StartupApps() {
         >
           <div className="flex-1">
             <p className="text-sm font-semibold text-blue-400 mb-1">Scan for All Startup Apps</p>
-            <p className="text-xs text-zinc-400">Run a PowerShell scan to detect ALL startup apps currently on your system — including ones not in this list.</p>
+            <p className="text-xs text-zinc-400">Reads the current HKCU and HKLM Run entries from Windows. This page never shows a hard-coded app catalog.</p>
           </div>
           <Button
-            onClick={handleScanStartupApps}
+            onClick={() => void scanStartupApps()}
             disabled={scanning}
             variant="outline"
             size="sm"
@@ -169,41 +173,10 @@ export default function StartupApps() {
                 Scanning...
               </>
             ) : (
-              "Download Scan Script"
+              "Refresh Windows list"
             )}
           </Button>
         </motion.div>
-
-        <TabSmartBar
-          tweakIds={ALL_STARTUP_IDS}
-          recommendedIds={RECOMMENDED_DISABLE_IDS}
-          label="Startup Apps"
-          applyLabel={`Disable ${RECOMMENDED_DISABLE_IDS.filter(id => !tweaks[id]).length} Recommended`}
-          context="Disabling startup apps prevents them from launching automatically with Windows. Your data and settings are preserved — you can still open apps manually. Essential peripheral apps (Afterburner, RTSS, Logitech) are protected."
-          tips={[
-            "Microsoft Teams and OneDrive are the biggest offenders — each adds 3–4 seconds to boot time.",
-            "Discord, Spotify, and Zoom all start hidden in the tray and use RAM even if you never open them.",
-            "MSI Afterburner and RTSS are marked ESSENTIAL — keep them if you use GPU monitoring or frame caps.",
-          ]}
-        />
-
-        {savedSeconds > 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-3 p-3.5 rounded-xl bg-green-500/5 border border-green-500/15"
-          >
-            <Clock className="w-5 h-5 text-green-400 shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-green-400">
-                ~{savedSeconds.toFixed(1)}s faster boot
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Estimated time saved per startup with {disabledCount} app{disabledCount !== 1 ? "s" : ""} disabled
-              </p>
-            </div>
-          </motion.div>
-        )}
 
         <motion.div
           initial={{ opacity: 0 }}
@@ -221,72 +194,73 @@ export default function StartupApps() {
           </div>
           <div className="flex gap-2 ml-4 shrink-0">
             <Button
-              data-testid="button-enable-all"
-              onClick={handleEnableAll}
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-white/5 text-xs"
-            >
-              Enable All
-            </Button>
-            <Button
               data-testid="button-disable-all"
               onClick={handleDisableAll}
               size="sm"
               className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold border border-red-500/30"
             >
               <XCircle className="w-3 h-3 mr-1" />
-              Disable Non-Essential
+              Disable Detected Entries
             </Button>
           </div>
         </motion.div>
 
         <div className="space-y-2">
-          {ALL_STARTUP_APPS.map((app, i) => (
+          {!detectedApps.length && !scanning && (
+            <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-zinc-500">
+              No Windows startup entries are currently available. Refresh the list to scan again.
+            </div>
+          )}
+          {detectedApps.map((app, i) => (
             <motion.div
-              key={app.id}
+              key={app.key}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              data-testid={`row-startup-${app.id}`}
+              data-testid={`row-startup-${app.key}`}
               className={cn(
                 "flex items-center gap-4 p-4 rounded-xl border transition-all duration-200",
-                tweaks[app.id]
+                app.disabled
                   ? "bg-black/50 border-red-500/20"
                   : "bg-black/40 border-white/5 hover:border-white/10"
               )}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className={cn("font-medium text-sm", tweaks[app.id] ? "text-zinc-400 line-through" : "text-white")}>
+                  <h3 className={cn("font-medium text-sm", app.disabled ? "text-zinc-400 line-through" : "text-white")}>
                     {app.name}
                   </h3>
-                  {app.essential && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-700/50 text-zinc-400 border border-zinc-600/30">
-                      ESSENTIAL
-                    </span>
-                  )}
-                  <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold border", IMPACT_COLOR[app.impact])}>
-                    {app.impact.toUpperCase()} IMPACT
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-700/50 text-zinc-400 border border-zinc-600/30">
+                    {app.location}
                   </span>
+                  {!app.canDisable && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/25">PROTECTED</span>}
                 </div>
                 <p className="text-xs text-zinc-600 font-mono truncate">
-                  {app.path.startsWith("AppData\\Local\\") ? `%LocalAppData%\\${app.path.slice("AppData\\Local\\".length)}` : app.path.startsWith("AppData\\Roaming\\") ? `%AppData%\\${app.path.slice("AppData\\Roaming\\".length)}` : `C:\\${app.path}`}
+                  {app.path}
                 </p>
               </div>
 
               <button
-                data-testid={`toggle-startup-${app.id}`}
-                onClick={() => setTweak(app.id, !tweaks[app.id])}
+                data-testid={`toggle-startup-${app.key}`}
+                disabled={!app.canDisable || app.disabled}
+                onClick={() => void (async () => {
+                  const result = await disableStartupApp(app.key);
+                  if (result.ok) {
+                    setDetectedApps(apps => apps.map(item => item.key === app.key ? { ...item, disabled: true } : item));
+                    toast({ title: `${app.name} disabled`, description: "Windows confirmed that this startup entry was removed.", variant: "success" });
+                  } else {
+                    toast({ title: `Could not disable ${app.name}`, description: result.message, variant: "destructive" });
+                  }
+                })()}
                 className={cn(
                   "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none",
-                  tweaks[app.id] ? "bg-red-600" : "bg-zinc-700"
+                  app.disabled ? "bg-red-600" : "bg-zinc-700"
                 )}
               >
                 <span
                   className={cn(
                     "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200",
-                    tweaks[app.id] ? "translate-x-5" : "translate-x-0.5"
+                    app.disabled ? "translate-x-5" : "translate-x-0.5"
                   )}
                 />
               </button>
