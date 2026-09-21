@@ -53,6 +53,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::splash::finish_splash,
+            commands::actions::run_fix,
+            commands::actions::run_restore_categories,
             commands::tweaks::apply_tweak,
             commands::tweaks::undo_tweak,
             commands::tweaks::list_tweaks,
@@ -60,6 +62,7 @@ pub fn run() {
             commands::power::list_power_plans,
             commands::power::set_power_plan,
             commands::hardware::scan_hardware,
+            commands::performance::read_live_performance,
             commands::restore::create_restore_point,
             commands::restore::restore_to_point,
             commands::restore::list_restore_points,
@@ -77,6 +80,8 @@ pub fn run() {
             commands::misc::save_diagnostic_log,
             commands::misc::repair_nvidia_control_panel,
             commands::misc::open_fivem_folder,
+            commands::misc::install_fivem_pack,
+            commands::misc::uninstall_fivem_pack,
             commands::misc::read_text_file,
             commands::misc::read_fivem_log,
              commands::misc::open_msi_utility,
@@ -85,6 +90,7 @@ pub fn run() {
             commands::task_manager::kill_app,
             commands::task_manager::disable_startup_app,
             commands::task_manager::get_startup_value,
+            commands::game_detection::detect_installed_games,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Opti Gods");
