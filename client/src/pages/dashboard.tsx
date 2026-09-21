@@ -740,8 +740,6 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
-        {!proStatusLoading && !isPro && <PerformanceAllowanceCard />}
-        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -787,6 +785,8 @@ export default function Dashboard() {
                   </Button>
                 </ProUnlockButton>
               )}
+
+               {!isPro && <PerformanceAllowanceCard embedded />}
 
               {isPro ? (
                 <Button

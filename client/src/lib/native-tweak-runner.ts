@@ -49,58 +49,21 @@ async function fetchWithTimeout(
  */
 async function reconcileConfirmedNativeTweak(id: string): Promise<void> {
   const authorization = await fetchWithTimeout(
-    apiUrl("/api/performance-allowance/native-ticket"),
+    apiUrl("/api/performance-allowance/native-confirmed"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
       body: JSON.stringify({
         tweakId: id,
         sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
-        idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
       }),
     },
     NATIVE_REQUEST_TIMEOUT_MS,
     `OG-NET-004 · Allowance sync timed out for ${id}.`,
   );
-  const authorizationBody = await authorization.json().catch(() => ({})) as { ticket?: string; error?: string; code?: string };
-  if (!authorization.ok || typeof authorizationBody.ticket !== "string") {
+  const authorizationBody = await authorization.json().catch(() => ({})) as { error?: string; code?: string };
+  if (!authorization.ok) {
     throw new Error(`${authorizationBody.code || `OG-HTTP-${authorization.status}`} · ${authorizationBody.error || "Allowance sync was rejected."}`);
-  }
-
-  const consumed = await fetchWithTimeout(
-    apiUrl("/api/performance-allowance/native-ticket/consume"),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-      body: JSON.stringify({ tweakId: id, ticket: authorizationBody.ticket }),
-    },
-    NATIVE_REQUEST_TIMEOUT_MS,
-    `OG-NET-004 · Allowance confirmation timed out for ${id}.`,
-  );
-  const consumedBody = await consumed.json().catch(() => ({})) as { resultSecret?: string; error?: string; code?: string };
-  if (!consumed.ok || typeof consumedBody.resultSecret !== "string") {
-    throw new Error(`${consumedBody.code || `OG-HTTP-${consumed.status}`} · ${consumedBody.error || "Allowance confirmation was rejected."}`);
-  }
-
-  const result = await fetchWithTimeout(
-    apiUrl("/api/performance-allowance/native-ticket/result"),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-      body: JSON.stringify({
-        tweakId: id,
-        ticket: authorizationBody.ticket,
-        resultSecret: consumedBody.resultSecret,
-        success: true,
-        message: "Windows detector confirmed this tweak before the run.",
-      }),
-    },
-    NATIVE_REQUEST_TIMEOUT_MS,
-    `OG-NET-004 · Allowance result sync timed out for ${id}.`,
-  );
-  if (!result.ok) {
-    const resultBody = await result.json().catch(() => ({})) as { error?: string; code?: string };
-    throw new Error(`${resultBody.code || `OG-HTTP-${result.status}`} · ${resultBody.error || "Allowance result sync was rejected."}`);
   }
 }
 

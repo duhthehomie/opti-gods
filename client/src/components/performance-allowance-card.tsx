@@ -22,7 +22,7 @@ import {
 
 type Allowance = { pro: boolean; limit: number | null; used: number; remaining: number | null };
 /** Small, non-Pro-only choice surface; the server remains authoritative. */
-export function PerformanceAllowanceCard() {
+export function PerformanceAllowanceCard({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState<Allowance | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
@@ -156,34 +156,48 @@ export function PerformanceAllowanceCard() {
   // return "Windows app required" in an unsigned browser session.
   if (!loaded || status?.pro || !isNative()) return null;
 
+  const bestButton = (
+    <button
+      type="button"
+      data-testid="button-enable-best-15"
+      disabled={busy || status?.remaining === 0}
+      onClick={() => void chooseBest()}
+      className={embedded
+        ? "inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.45)] transition-all hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+        : "rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"}
+    >
+      {busy ? "Enabling…" : status?.remaining === 0 ? "15 / 15 Used" : "Enable Best 15 Tweaks"}
+    </button>
+  );
+
   return (
     <>
-      <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-white">15 Active Free Tweak Slots</h2>
-          <p className="mt-1 text-xs text-zinc-400">
-            {authRequired
-              ? "Open the Opti Gods Windows app to enable the 15 best free tweaks for this PC. Discord is only required for Pro."
-              : "Free accounts can keep up to 15 native tweaks enabled at once. Undo a tweak to free its slot for another choice."}
-          </p>
-          {status && <p className="mt-2 text-xs font-semibold text-red-300">{status.used} / {status.limit} used · {status.remaining} left</p>}
-        </div>
-        <div className="flex gap-2">
-          <button type="button" disabled={busy || status?.remaining === 0} onClick={() => void chooseBest()} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-            {busy ? "Enabling…" : status?.remaining === 0 ? "15 / 15 Used" : "Enable Best 15 Tweaks"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void chooseMyself()}
-            className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-white"
-          >
-            {busy ? "Loading…" : "Choose Myself"}
-          </button>
-        </div>
-        </div>
-      </section>
+      {embedded ? bestButton : (
+        <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-5" data-testid="performance-allowance-card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">15 Active Free Tweak Slots</h2>
+              <p className="mt-1 text-xs text-zinc-400">
+                {authRequired
+                  ? "Open the Opti Gods Windows app to enable the 15 best free tweaks for this PC. Discord is only required for Pro."
+                  : "Free accounts can keep up to 15 native tweaks enabled at once. Undo a tweak to free its slot for another choice."}
+              </p>
+              {status && <p className="mt-2 text-xs font-semibold text-red-300">{status.used} / {status.limit} used · {status.remaining} left</p>}
+            </div>
+            <div className="flex gap-2">
+              {bestButton}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void chooseMyself()}
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-white"
+              >
+                {busy ? "Loading…" : "Choose Myself"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <AlertDialog open={confirmBest} onOpenChange={setConfirmBest}>
         <AlertDialogContent>

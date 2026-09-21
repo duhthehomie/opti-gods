@@ -33,12 +33,14 @@ async function main() {
   const userId = `allowance-race-${randomUUID()}`;
   const duplicateUserId = `allowance-duplicate-${randomUUID()}`;
   const lifecycleUserId = `allowance-lifecycle-${randomUUID()}`;
+  const reconcileUserId = `allowance-reconcile-${randomUUID()}`;
 
   try {
     await db.insert(users).values([
       { discordId: userId, username: "allowance-concurrency-test" },
       { discordId: duplicateUserId, username: "allowance-duplicate-test" },
       { discordId: lifecycleUserId, username: "allowance-lifecycle-test" },
+      { discordId: reconcileUserId, username: "allowance-reconcile-test" },
     ]);
 
     // Model 16 simultaneous clicks for 16 distinct eligible actions. The
@@ -171,6 +173,26 @@ async function main() {
       true,
     );
 
+    // Detector-confirmed Best 15 entries must reconcile into the same
+    // server-authoritative ledger even though native execution was skipped.
+    const confirmedIds = Array.from({ length: 15 }, (_, index) => `ConfirmedTweak${index + 1}`);
+    const confirmedResults = await Promise.all(
+      confirmedIds.map(id => storage.reconcileConfirmedPerformanceTweak(reconcileUserId, id)),
+    );
+    assert.equal(confirmedResults.filter(result => result === "consumed").length, 15);
+    assert.deepEqual(await storage.getPerformanceAllowance(reconcileUserId), { used: 15, remaining: 0 });
+    assert.equal(
+      await storage.reconcileConfirmedPerformanceTweak(reconcileUserId, "ConfirmedTweak16"),
+      "full",
+    );
+    assert.equal(await storage.releasePerformanceTweak(reconcileUserId, confirmedIds[0]!), true);
+    assert.deepEqual(await storage.getPerformanceAllowance(reconcileUserId), { used: 14, remaining: 1 });
+    assert.equal(
+      await storage.reconcileConfirmedPerformanceTweak(reconcileUserId, "ConfirmedTweak16"),
+      "consumed",
+    );
+    assert.deepEqual(await storage.getPerformanceAllowance(reconcileUserId), { used: 15, remaining: 0 });
+
     // Competing success/failure reports are one-shot. Repeating the winning
     // result is idempotent; the opposite result can never overwrite it.
     const [successResult, failureResult] = await Promise.all([
@@ -214,10 +236,12 @@ async function main() {
     console.log("PASS: cancellation cannot release a begun execution.");
     console.log("PASS: finalization is one-shot and repeated winning results are idempotent.");
     console.log("PASS: Undo releases an active slot for a different tweak.");
+    console.log("PASS: detector-confirmed Best 15 entries fill the ledger and Undo makes one slot reusable.");
   } finally {
     await cleanup(userId);
     await cleanup(duplicateUserId);
     await cleanup(lifecycleUserId);
+    await cleanup(reconcileUserId);
     await pool.end();
   }
 }

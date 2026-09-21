@@ -1818,6 +1818,24 @@ export async function registerRoutes(
     return res.status(410).json({ error: "Results are accepted only from the native executor." });
   });
 
+  app.post("/api/performance-allowance/native-confirmed", async (req, res) => {
+    const userId = await allowanceAuth(req);
+    if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });
+    if (!await allowanceOwnerMatches(req, userId)) {
+      return res.status(403).json({ error: "Native Windows authorization required", code: "OG-AUTH-002" });
+    }
+    const tweakId = req.body?.tweakId;
+    const pro = await requirePaidPro(req);
+    if (pro || !freeEligibleId(tweakId) || !NATIVE_EXECUTABLE_ALLOWLIST.has(tweakId)) {
+      return res.status(400).json({ error: "This tweak cannot be reconciled into the free native allowance.", code: "OG-TWEAK-002" });
+    }
+    const status = await storage.reconcileConfirmedPerformanceTweak(userId, tweakId);
+    if (status === "full") {
+      return res.status(409).json({ error: `Free active tweak limit reached (${FREE_NATIVE_TWEAK_LIMIT} at a time).`, code: "OG-LIMIT-015" });
+    }
+    return res.json({ ok: true, status });
+  });
+
   app.post("/api/performance-allowance/native-ticket", async (req, res) => {
     const userId = await allowanceAuth(req);
     if (!userId) return res.status(401).json({ error: "Windows device authorization required", code: "OG-AUTH-001" });

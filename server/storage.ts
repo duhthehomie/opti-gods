@@ -163,6 +163,7 @@ export interface IStorage {
   saveHudSettings(s: { coverWidth: number; iconSize: number; iconLeft: number; iconTop: number; showServerName: boolean }): Promise<void>;
   getPerformanceAllowance(discordUserId: string): Promise<{ used: number; remaining: number }>;
   getConsumedPerformanceTweakIds(discordUserId: string): Promise<string[]>;
+  reconcileConfirmedPerformanceTweak(discordUserId: string, tweakId: string): Promise<"consumed" | "already-consumed" | "full">;
   reservePerformanceTweaks(discordUserId: string, tweakIds: string[], idempotencyKey: string): Promise<{ reservedIds: string[]; alreadyConsumed: string[]; remaining: number }>;
   completePerformanceTweaks(discordUserId: string, idempotencyKey: string, tweakIds?: string[]): Promise<{ ok: boolean; updated: number }>;
   failPerformanceTweaks(discordUserId: string, idempotencyKey: string): Promise<void>;
@@ -1380,6 +1381,35 @@ export class DatabaseStorage implements IStorage {
         sql`${performanceTweakAllowance.status} IN ('consumed','reserved')`,
       ));
     return rows.map(row => row.id);
+  }
+
+  async reconcileConfirmedPerformanceTweak(discordUserId: string, tweakId: string): Promise<"consumed" | "already-consumed" | "full"> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${discordUserId}))`);
+      const [existing] = await tx.select().from(performanceTweakAllowance).where(and(
+        eq(performanceTweakAllowance.discordUserId, discordUserId),
+        eq(performanceTweakAllowance.tweakId, tweakId),
+      ));
+      if (existing?.status === "consumed") return "already-consumed";
+      if (existing?.status === "reserved") {
+        await tx.update(performanceTweakAllowance).set({ status: "consumed", consumedAt: new Date() }).where(eq(performanceTweakAllowance.id, existing.id));
+        return "consumed";
+      }
+      const [count] = await tx.select({ n: sql<number>`count(*)::int` }).from(performanceTweakAllowance)
+        .where(and(
+          eq(performanceTweakAllowance.discordUserId, discordUserId),
+          sql`${performanceTweakAllowance.status} IN ('reserved','consumed')`,
+        ));
+      if ((count?.n ?? 0) >= FREE_NATIVE_TWEAK_LIMIT) return "full";
+      await tx.insert(performanceTweakAllowance).values({
+        discordUserId,
+        tweakId,
+        status: "consumed",
+        idempotencyKey: `detected-${randomBytes(16).toString("hex")}`,
+        consumedAt: new Date(),
+      });
+      return "consumed";
+    });
   }
 
   async reservePerformanceTweaks(discordUserId: string, tweakIds: string[], idempotencyKey: string): Promise<{ reservedIds: string[]; alreadyConsumed: string[]; remaining: number }> {
