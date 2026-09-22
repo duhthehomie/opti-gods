@@ -216,11 +216,24 @@ export interface NativeLivePerformance {
   ram_used_pct?: number | null;
   cpu_temp_c?: number | null;
   gpu_temp_c?: number | null;
+  running_processes_count?: number | null;
+  visible_apps_count?: number | null;
+  fivem_running?: boolean;
+  game_running?: boolean;
+  game_processes?: string[];
+  server_target?: string | null;
+  process_names_text?: string | null;
+  visible_app_names_text?: string | null;
 }
 
 export async function readLivePerformance(): Promise<NativeLivePerformance | null> {
   if (!isNative()) return null;
   return invoke<NativeLivePerformance>("read_live_performance");
+}
+
+export async function savePerformanceRecording(filename: string, content: string): Promise<string> {
+  if (!isNative()) throw new Error("Performance recording saving is available in the Windows app.");
+  return invoke<string>("save_performance_recording", { args: { filename, content } });
 }
 
 // ─── system restore ─────────────────────────────────────────────────────────

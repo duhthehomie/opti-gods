@@ -1,557 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
-import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, detectAppliedTweaks, getNativeAuthToken, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
-import { motion } from "framer-motion";
-import { AppLayout } from "@/components/layout/app-layout";
-import {
-  ShieldAlert, Zap, Cpu, HardDrive, Monitor, Trash2,
-  CheckCircle2, Download, Terminal, RotateCcw, RefreshCw, ChevronRight,
-  MemoryStick, Wifi, Settings2, Gamepad2, Crosshair, Power, Search, Lock, Rocket, Flame, Shield, Radio, ScanLine,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@shared/routes";
-import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useToast } from "@/hooks/use-toast";
-import { useOsDetection } from "@/hooks/use-os-detection";
-import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { cn } from "@/lib/utils";
-import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
-import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
-import { ProUnlockButton } from "@/components/pro-gate";
-import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
-import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
-import { ScanImport } from "@/components/scan-import";
-import { HardwareScanZone } from "@/components/hardware-scan";
-import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
-import {
-  applyTweakBatch,
-  queueTweakBatch,
-  readNativeTweakRun,
-  subscribeNativeTweakRun,
-  type NativeTweakRunState,
-} from "@/lib/native-tweak-runner";
-import { getTweakCompatibility } from "@/lib/tweak-compatibility";
-import { authorizeHardwarePreset } from "@/lib/hardware-preset";
-import { playOptimizationActionSound } from "@/lib/action-sound";
-import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
-import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
-import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-// Feature categories
-const FEATURES = [
-  { icon: Settings2, title: "Registry Tweaks", desc: "Deep Windows registry optimizations for latency and responsiveness" },
-  { icon: Wifi, title: "Network Stack", desc: "TCP/IP tuning, nagle disable, DNS and connection optimizations" },
-  { icon: Monitor, title: "GPU / NVIDIA", desc: "HAGS, MSI interrupt mode, driver tweaks, and shader cache control" },
-  { icon: MemoryStick, title: "Memory Optimizer", desc: "RAM priority pinning, pagefile control, and heap management" },
-  { icon: Power, title: "Power Plan", desc: "Processor performance states, C-states, and idle inhibit" },
-  { icon: Gamepad2, title: "FiveM Optimizer", desc: "GTA V and FiveM-specific process tweaks for max FPS" },
-  { icon: Crosshair, title: "Fortnite Pack", desc: "Epic Games launcher, Fortnite CPU affinity and priority tweaks" },
-  { icon: Search, title: "Game Detection", desc: "Auto-detect 27 games and apply per-game optimization packs" },
-  { icon: Trash2, title: "Win10/11 Debloat", desc: "Remove bloatware, telemetry, and unnecessary background services" },
-];
-
-const GAME_PACK_LABELS: Record<string, string> = {
-  game_valorant: "VALORANT",
-  game_cod: "Call of Duty",
-  game_apex: "Apex Legends",
-  game_warzone: "Warzone",
-  game_lol: "League of Legends",
-  game_overwatch: "Overwatch",
-  game_siege: "Rainbow Six Siege",
-  game_rust: "Rust",
-  game_minecraft: "Minecraft",
-  game_roblox: "Roblox",
-  game_tarkov: "Escape from Tarkov",
-  game_pubg: "PUBG",
-  game_dbd: "Dead by Daylight",
-  game_dota2: "Dota 2",
-  game_warframe: "Warframe",
-  game_forza: "Forza",
-  game_readyornot: "Ready or Not",
-  game_phasmo: "Phasmophobia",
-  game_battlefield: "Battlefield",
-  game_gta5: "GTA V",
-  game_fivem: "FiveM",
-  game_rocketleague: "Rocket League",
-  game_arcraiders: "ARC Raiders",
-  game_marvelrivals: "Marvel Rivals",
-  game_007firstlight: "007: First Light",
-  game_fortnite: "Fortnite",
-};
-
-// Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
-
-// ── Safe Boost ─────────────────────────────────────────────────────────────
-// No service stops, no uninstalls — pure registry + power plan + privacy tweaks.
-const SAFE_TWEAKS = [
-  // CPU scheduling & responsiveness
-  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
-  // Network baseline
-  "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority",
-  // Power & hardware
-  "SetHighPerformancePlan", "DisableCoreParking", "EnableHAGS",
-  // Input
-  "DisablePointerPrecision",
-  // Windows cleanup — zero risk
-  "DisableXboxGameBar", "DisableGameDVR", "DisableFastStartup",
-  "DisableWindowsError", "DisableHungAppDetection", "SysVisualBestPerf",
-  "DisableAutoMaintenance", "SysHibernateOff",
-  // Memory
-  "OptimizeRAMUsage", "DisableNDU", "MemGPUOptimize", "MemGPUSchedulerTweak",
-  // Privacy — no functional change
-  "PrivacyTelemetry", "PrivacyActivityHistory", "PrivacyAdvertisingID",
-  "PrivacyLocationTracking", "ServiceDiagTrack",
-  // WinTitus — safe visual / background registry tweaks
-  "WinTitusConsumerFeatures", "WinTitusBgApps", "WinTitusDisplayPerf",
-  "WinTitusShowExtensions", "WinTitusIPv4Prefer",
-  // Spotify — no-op if not installed
-  "SpotifyLowPriority", "SpotifyDisableGPU",
-  // COD — no-op if not installed
-  "CodGPUPriority", "CodDefenderExclusion", "CodGameMode",
-  // Fortnite — no-op if not installed
-  "FortniteGameMode",
-  // Startup cleanup — removes background auto-launch only; apps still open normally
-  "su_onedrive", "su_edge_startup", "su_zoom",
-];
-
-// ── Max FPS Gaming ─────────────────────────────────────────────────────────
-// Everything Safe plus power-throttle removal, full service list, COD/FiveM/Fortnite packs, startup cleanup.
-const MAX_FPS_TWEAKS = [
-  ...SAFE_TWEAKS,
-  // Power throttle removal
-  "DisablePowerThrottling", "DisablePowerThrottlingAdv",
-  // Hardware interrupts
-  "DisableUSBSuspend",
-  // Network full stack
-  "OptimizeTCP", "EnableTCPAutoTuning",
-  // Visual & search overhead
-  "DisableAnimations", "ServiceWSearch", "DisableSearchIndexer",
-  // Windows background services — individually safe, collectively frees significant CPU/RAM
-  "ServiceSysMain", "ServiceRemoteReg", "ServiceWMPNetworkSvc", "ServiceFax",
-  "ServiceRetailDemo", "ServiceTabletInput", "ServiceMapsBroker", "ServiceWerSvc",
-  "ServiceDPS", "ServiceDusmSvc", "ServiceTrkWks", "ServiceLltdsvc",
-  "ServiceFDHost", "ServiceWbioSrvc", "ServicePcaSvc", "ServiceAeLookupSvc",
-  // WinTitus batch service pass + telemetry opt-outs
-  "WinTitusServicesManual", "WinTitusPosh7Telemetry", "WinTitusShowHidden",
-  "WinTitusWPBT", "WinTitusRazerBlock",
-  // Memory deep tuning
-  "DisablePrefetch", "MemFixedPagefile",
-  // FiveM full pack (no-op if not installed)
-  "FiveMHighPriority", "FiveMFullPerfStack", "FiveMGTAProcessPerfOptions", "FiveMRenderingBoost",
-  "FiveMGPUPriorityStack", "FiveMDisableMPO", "FiveMReduceNPCDensity", "FiveMCommandLineTweaks",
-  "FiveMDisableLSO", "FiveMEnableRSS", "FiveMCacheClear", "FiveMNetworkBuffer",
-  "FiveMDisableNvidiaTelemetry", "FiveMGameModeAdd",
-  // Registry deep tuning
-  "RegistryNTFSOptimize", "RegistryIOPageLock",
-  // COD full pack (no-op if not installed)
-   "CodDirectXQueue", "CodHighPriority", "CodMMCSS",
-  "CodTCPOptimize", "CodNetworkBuffer", "CodRawInput", "CodDisableXboxCapture",
-  "CodDisableLSO", "CodDisableTelemetry", "CodQoSPolicy",
-   "CodTdrDelay", "CodFramePacing", "CodPagefileOptimize", "CodMemPriority",
-  // Spotify full pack
-  "SpotifyDisableAutoUpdate", "SpotifyLimitBandwidth",
-  // Fortnite FPS pack (no-op if not installed)
-  "FortniteHighPriority", "FortniteUncapGameFPS", "FortniteUncapLobbyFPS",
-  "FortniteDisableMotionBlur", "FortniteLowShadows", "FortniteDisableRecording",
-  "FortniteNetworkBuffer", "FortniteDisableThrottling",
-  // Startup app cleanup — removes background launch, apps still open normally
-  "su_discord", "su_spotify", "su_skype", "su_teams",
-  "su_ccleaner", "su_battlenet", "su_epic", "su_chrome", "su_razer",
-  "su_amdradeon", "su_rtss", "su_logitech",
-  // Maximum-performance hardware and process layer — no competitive preset
-  // should be stronger than the primary Max FPS choice.
-  "EnableMSIMode_Safe",
-  "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
-  "NvidiaShaderCache", "NvidiaOptimizeLatency",
-  "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
-  "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
-  "AmdOptimizeLatency", "AmdShaderCache", "AmdTextureFilterPerf",
-  "AmdSurfaceFormatOpt", "AmdTessOverride16x", "AmdRadeonBoostOff",
-  "AmdD3DOptimize", "AmdPCIeOptimize",
-  "ProcessLassoAffinityGaming", "ProcessLassoProBalance", "ProcessAutoKillHung",
-  "ProcessLassoInstanceBalancer",
-  "FortniteDisableVSync", "FortniteInputLatency", "FortniteDisableSSR",
-  "FortniteRawInput", "FortniteDisableLumen", "FortniteAffinityPhysical",
-  "DiscordLowPriority", "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
-  "DiscordDisableVAD", "DiscordDisableClips", "DiscordDisableUpdateCheck",
-  "DiscordDisableCrashHandler", "DiscordDisableAnimations",
-];
-
-// ── Competitive Shooter ────────────────────────────────────────────────────
-// Everything Max FPS + full GPU vendor packs (NVIDIA + AMD), Process Lasso, complete Discord tuning.
-const COMPETITIVE_TWEAKS = [
-  ...MAX_FPS_TWEAKS,
-  // MSI interrupt mode — safe version (no BSOD risk, filters GPU + NVMe + NIC)
-  "EnableMSIMode_Safe",
-  // NVIDIA performance pack — no-op on AMD/Intel systems
-  "NvidiaMaxPerfMode", "NvidiaPreRenderedFrames",
-  "NvidiaShaderCache", "NvidiaOptimizeLatency",
-  // AMD performance pack — no-op on NVIDIA/Intel systems
-  "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
-  "AmdMaxClockState", "AmdDisableTelemetry", "AmdDisableCrashDefender",
-  "AmdOptimizeLatency", "AmdShaderCache", "AmdTextureFilterPerf",
-  "AmdSurfaceFormatOpt", "AmdTessOverride16x", "AmdRadeonBoostOff",
-  "AmdD3DOptimize", "AmdPCIeOptimize",
-  // Process management
-  "ProcessLassoAffinityGaming", "ProcessLassoProBalance", "ProcessAutoKillHung",
-  "ProcessLassoInstanceBalancer",
-  // Fortnite competitive extras
-  "FortniteDisableVSync", "FortniteInputLatency", "FortniteDisableSSR",
-  "FortniteRawInput", "FortniteDisableLumen", "FortniteAffinityPhysical",
-  // Discord — full competitive footprint reduction
-  "DiscordLowPriority", "DiscordOptimizeCodec", "DiscordReduceGPUPriority",
-  "DiscordDisableVAD", "DiscordDisableClips", "DiscordDisableUpdateCheck",
-  "DiscordDisableCrashHandler", "DiscordDisableAnimations",
-];
-
-// ── Streamer Mode ──────────────────────────────────────────────────────────
-// Goal: game performance + stable OBS encode + smooth Discord + low-noise desktop.
-// Deliberately OMITS DisableXboxGameBar / DisableGameDVR — some capture setups need them.
-const STREAMER_TWEAKS = [
-  // CPU scheduling — balanced between game priority and encoder threads
-  "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
-  // Power — sustained high clocks for both game + encoder (no throttling)
-  "SetHighPerformancePlan", "DisableCoreParking",
-  "DisablePowerThrottling", "DisablePowerThrottlingAdv",
-  // HAGS — better GPU scheduling for game + OBS simultaneous workload
-  "EnableHAGS",
-  // Input
-  "DisablePointerPrecision",
-  // Network — stability & low jitter (not raw speed) for stream upload
-  "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority", "OptimizeTCP",
-  // Memory — game + OBS + browser tabs + Discord all need headroom
-  "OptimizeRAMUsage", "DisableNDU", "MemGPUOptimize", "MemFixedPagefile",
-  // Kill background noise that steals encoder CPU time
-  "ServiceDiagTrack", "PrivacyTelemetry", "PrivacyActivityHistory", "PrivacyAdvertisingID",
-  "DisableWindowsError", "DisableHungAppDetection", "DisableAutoMaintenance", "SysHibernateOff",
-  // WinTitus — background apps, display perf, consumer features
-  "WinTitusConsumerFeatures", "WinTitusBgApps", "WinTitusDisplayPerf",
-  "WinTitusPosh7Telemetry", "WinTitusIPv4Prefer", "WinTitusShowExtensions",
-  // Light service pass — frees background CPU without touching streaming-critical services
-  "ServiceFax", "ServiceRetailDemo", "ServiceTabletInput",
-  "ServiceMapsBroker", "ServiceWbioSrvc", "ServicePcaSvc",
-  // USB suspend causes stutter-freeze on USB headsets / capture cards mid-stream
-  "DisableUSBSuspend",
-  // Disk I/O — OBS writes large VOD files continuously; NTFS optimisation helps
-  "RegistryNTFSOptimize",
-  // Desktop
-  "SysVisualBestPerf", "DisableFastStartup",
-  // Discord — full footprint reduction for streamers
-  "DiscordOptimizeCodec", "DiscordDisableAnimations", "DiscordReduceGPUPriority",
-  "DiscordDisableHWAccel", "DiscordClearCache", "DiscordDisableVAD",
-  "DiscordLowPriority", "DiscordDisableClips", "DiscordDisableUpdateCheck",
-  "DiscordDisableCrashHandler", "DiscordDisableStreaming",
-  // Spotify — keep music playing but yield CPU/I/O to game + encoder
-  "SpotifyLowPriority", "SpotifyDisableGPU", "SpotifyLimitBandwidth", "SpotifyDisableAutoUpdate",
-  // Startup cleanup — frees RAM at boot for OBS + game
-  "su_discord", "su_onedrive", "su_edge_startup", "su_zoom", "su_teams", "su_chrome",
-  // Game mode / COD no-op packs
-  "CodGameMode", "CodDefenderExclusion",
-  // Process priority
-  "ProcessLassoProBalance", "ProcessAutoKillHung",
-  // Xbox / search overhead removed (OBS capture works without Game Bar on most setups)
-  "DisableSearchIndexer",
-];
-
-const QUICK_BOOST_PRESETS = [
-  {
-    id: "safe",
-    icon: Shield,
-    title: "Safe Boost",
-    tag: "NO RISK",
-    desc: "Pure registry tweaks — CPU scheduling, power plan, privacy, memory, and game packs. Zero service stops. Safe for any PC.",
-    color: "text-emerald-400",
-    border: "border-emerald-500/30 hover:border-emerald-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
-    activeBg: "bg-emerald-950/30",
-    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
-    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
-    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
-    tweaks: SAFE_TWEAKS,
-  },
-  {
-    id: "maxfps",
-    icon: Flame,
-    title: "Max FPS Gaming",
-    tag: "RECOMMENDED",
-    desc: "Power throttle OFF, full FiveM/COD/Fortnite packs, service cleanup, startup strip, and deep memory tuning.",
-    color: "text-red-400",
-    border: "border-red-500/30 hover:border-red-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(239,68,68,0.25)]",
-    activeBg: "bg-red-950/30",
-    accentBar: "bg-gradient-to-r from-red-600 to-red-400",
-    iconBg: "bg-red-500/10 border border-red-500/20",
-    tagBg: "bg-red-500/10 border-red-500/25 text-red-400",
-    tweaks: MAX_FPS_TWEAKS,
-  },
-  {
-    id: "competitive",
-    icon: Crosshair,
-    title: "Competitive Shooter",
-    tag: "GPU TUNED",
-    desc: "Max FPS + full NVIDIA & AMD driver packs, MSI interrupt mode, Process Lasso engine, Discord footprint crush.",
-    color: "text-orange-400",
-    border: "border-orange-500/30 hover:border-orange-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(249,115,22,0.25)]",
-    activeBg: "bg-orange-950/30",
-    accentBar: "bg-gradient-to-r from-orange-600 to-amber-400",
-    iconBg: "bg-orange-500/10 border border-orange-500/20",
-    tagBg: "bg-orange-500/10 border-orange-500/25 text-orange-400",
-    tweaks: COMPETITIVE_TWEAKS,
-  },
-  {
-    id: "streamer",
-    icon: Radio,
-    title: "Streamer Mode",
-    tag: "OBS STABLE",
-    desc: "Game perf balanced with stable OBS encoder threads — no stutter drops. Full Discord + Spotify yield. Boot cleanup.",
-    color: "text-violet-400",
-    border: "border-violet-500/30 hover:border-violet-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(139,92,246,0.25)]",
-    activeBg: "bg-violet-950/30",
-    accentBar: "bg-gradient-to-r from-violet-600 to-violet-400",
-    iconBg: "bg-violet-500/10 border border-violet-500/20",
-    tagBg: "bg-violet-500/10 border-violet-500/25 text-violet-400",
-    tweaks: STREAMER_TWEAKS,
-  },
-];
-
-
-// How to use steps
-const HOW_TO_STEPS = [
-  {
-    icon: Terminal,
-    title: "Browse & Toggle",
-    desc: `Hit 'Enable All Tweaks' on the Home tab — it enables every tweak in the app. Or open any tab (Registry, FiveM, NVIDIA, etc.) and flip toggles manually. Red = will be applied.`,
-  },
-  {
-    icon: Download,
-    title: "Get Your Script",
-    desc: "Use the Enable controls in Tweaks. Supported desktop actions apply instantly and are tracked automatically.",
-  },
-  {
-    icon: ShieldAlert,
-    title: "Click Yes on the Prompt",
-    desc: "Open your Downloads folder and double-click OptiGods-by-leaq.bat. A Windows security prompt will appear — click Yes. The script runs automatically and applies every tweak.",
-  },
-  {
-    icon: RotateCcw,
-    title: "Restart & Done",
-    desc: "Restart your PC after the script finishes. All registry and system changes take effect on the next boot. Create a Windows Restore Point first as a safety net.",
-  },
-];
-
-// Pro pricing bullet points
-const PRO_BULLETS = [
-  `${TOTAL_TWEAKS_LABEL} registry, network, memory, and GPU tweaks`,
-  "FiveM, Fortnite, Call of Duty, Valorant, and Apex packs",
-  "Download your personalized .bat script (double-click to run)",
-  "Game auto-detection for 14 titles",
-  "Preset save/load for quick re-apply",
-  "Lifetime access — pay once, no subscription",
-];
-
-export default function Dashboard() {
-  const native = isNative();
-  const { isAuthenticated } = useAuth();
-  const osInfo = useOsDetection();
-  const hw = useHardwareInfo();
-  const smartRecs = computeSmartRecs(hw, osInfo);
-  const hasProEntitlement = useProStatus();
-  const isPro = isAuthenticated && hasProEntitlement;
-  const proStatusLoading = useProStatusLoading();
-  const { tweaks, setAllTweaks } = useOptimizationStore();
-  const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
-  const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
-  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
-  const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
-    queryKey: ["/api/pricing"],
-    staleTime: 5 * 60 * 1000,
-  });
-  const { data: serverStats } = useQuery<{ cpu: number; gpu: number; memory: number; os: string }>({
-    queryKey: [api.system.stats.path],
-    staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000,
-  });
-  const proPrice = pricingData?.price ?? 25;
-  const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
-  const { toast } = useToast();
-
-  const handleScanned = useCallback((_info: ScannedSysInfo) => {
-    window.location.reload();
-  }, []);
-  const handleScanCleared = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  const downloadRestorePointBat = async () => {
-    const res = await fetch(apiUrl("/api/script/create-restore-point"));
-    if (!res.ok) throw new Error("Server error generating BAT");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "OptiGods-CreateRestorePoint.bat";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  };
-
-  const [creatingRestore, setCreatingRestore] = useState(false);
-  const handleRestorePoint = async () => {
-    setCreatingRestore(true);
-    try {
-      if (native) {
-        let nativeOk = false;
-        let nativeErr = "";
-        try {
-          const result = await createRestorePoint("OptiGods V4 — Before Optimization");
-          if (result) {
-            toast({ title: "Restore point created", description: `Checkpoint #${result.sequence_number} saved — review or undo applied changes anytime from Applied Tweaks.` });
-            nativeOk = true;
-          }
-        } catch (e: unknown) {
-          nativeErr = e instanceof Error ? e.message : String(e);
-        }
-        if (!nativeOk) {
-          toast({
-            title: "Restore point failed",
-            description: nativeErr
-              ? nativeErr.replace("create_restore_point: ", "").slice(0, 160)
-              : "Could not create restore point. Check that System Restore is enabled and the app is running as administrator.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        await downloadRestorePointBat();
-        toast({ title: "Restore point script downloaded", description: "Run OptiGods-CreateRestorePoint.bat as admin before optimizing." });
-      }
-    } catch {
-      toast({ title: "Error", description: "Could not create restore point.", variant: "destructive" });
-    } finally {
-      setCreatingRestore(false);
-    }
-  };
-
-  const [activeBoost, setActiveBoost] = useState<string | null>(null);
-  const [bulkApplying, setBulkApplying] = useState(false);
-  const [confirmFullOptimize, setConfirmFullOptimize] = useState(false);
-  const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
-  const [selectedFullOptimizeDebloat, setSelectedFullOptimizeDebloat] = useState<string[]>([]);
-  const [refreshingScore, setRefreshingScore] = useState(false);
-  const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
-
-  const applySupportedNvidiaPreset = async () => {
-    if (!native) return null;
-    const discreteNvidiaGpus = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated);
-    if (discreteNvidiaGpus.length !== 1 || hw.isHybridGpu) return null;
-    if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
-      const restorePoint = await createRestorePoint("Before Opti Gods NVIDIA preset");
-      if (!restorePoint?.sequence_number) {
-        throw new Error("Windows did not confirm a restore point before the NVIDIA preset.");
-      }
-      sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
-    }
-    const nativeAuth = await getNativeAuthToken();
-    const proSession = localStorage.getItem(PRO_SESSION_KEY);
-    const deviceId = getPersistentDeviceId();
-    const auth = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
-    if (!auth) throw new Error("Windows device authorization is unavailable.");
-    const response = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-      body: JSON.stringify({ tweakId: "ImportNvidiaPresetPro", sessionToken: proSession ?? undefined }),
-    });
-    const body = await response.json().catch(() => ({})) as { ticket?: string; error?: string };
-    if (!response.ok || typeof body.ticket !== "string") {
-      throw new Error(body.error || "The supported NVIDIA preset was not authorized.");
-    }
-    return importNvidiaPreset(body.ticket, auth);
-  };
-
-  const refreshDetectedState = useCallback(async () => {
-    if (!native) return;
-    setRefreshingScore(true);
-    try {
-      setDetectedNativeTweaks(await detectAppliedTweaks());
-      setNativeDetectionReady(true);
-    } catch {
-      // Never use local browser timestamps as proof that Windows changed.
-      setNativeDetectionReady(true);
-    } finally {
-      setRefreshingScore(false);
-    }
-  }, [native]);
-
-  useEffect(() => {
-    void refreshDetectedState();
-    if (!native) return;
-    const interval = window.setInterval(() => { void refreshDetectedState(); }, 15_000);
-    return () => window.clearInterval(interval);
-  }, [native, refreshDetectedState]);
-
-  useEffect(() => {
-    if (!native) return;
-    const syncRun = (state: NativeTweakRunState | null) => setLastNativeRun(state);
-    syncRun(readNativeTweakRun());
-    return subscribeNativeTweakRun(syncRun);
-  }, [native]);
-
-  const executeFullOptimize = async () => {
-    if (bulkApplying) return;
-    if (!isAuthenticated && !native) {
-      loginWithDiscord("/dashboard");
-      return;
-    }
-    if (!isPro) {
-      document.querySelector('[data-testid="performance-allowance-card"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.dispatchEvent(new Event("optigods:enable-best-free"));
-      return;
-    }
-    setBulkApplying(true);
-    try {
-      const body = await authorizeHardwarePreset(selectedFullOptimizeGames);
-      const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
-      const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
-      const recognizedIds = ids.filter(id => !unknownIds.includes(id));
-      if (recognizedIds.length === 0) {
-        throw new Error("The server returned no tweaks recognized by this app. Refresh the Windows app and run the hardware scan again.");
-      }
-      const compatibleIds = recognizedIds.filter(id => getTweakCompatibility(id).ok);
-      const blockedIds = recognizedIds.filter(id => !getTweakCompatibility(id).ok);
-      if (unknownIds.length > 0) {
-        toast({
-          title: "Skipped outdated preset entries",
-          description: `${unknownIds.length} unsupported preset entr${unknownIds.length === 1 ? "y was" : "ies were"} skipped. The recognized tweaks will continue.`,
-          variant: "destructive",
-        });
-      }
-      if (compatibleIds.length === 0) {
-        toast({
-          title: "No compatible tweaks to run",
-          description: "The saved hardware scan does not support any tweak in this preset. Run a fresh scan before Full Optimize.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (native) {
-        if (hw.gpus.some(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated)) {
-          try {
-            const presetMessage = await applySupportedNvidiaPreset();
+plySupportedNvidiaPreset();
             if (presetMessage) {
               toast({ title: "Supported NVIDIA preset applied", description: presetMessage, variant: "success" });
             }
@@ -602,9 +49,11 @@ export default function Dashboard() {
       // silently redirect or consume the 15-tweak allowance from this CTA.
       return;
     }
-    if (native && latestRunMissingIds.length > 0) {
+    if (native) {
+      const missingIds = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id));
+      if (!missingIds.length) return;
       playOptimizationActionSound();
-      queueTweakBatch(latestRunMissingIds);
+      queueTweakBatch(missingIds);
       window.location.assign("/applied-tweaks?run=1");
       return;
     }
@@ -684,57 +133,53 @@ export default function Dashboard() {
     && Boolean(lastNativeRun)
     && lastNativeRun!.items.length > 0
     && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
-  const latestRunAppliedIds = new Set(
-    latestRunIsTerminal
-      ? lastNativeRun!.items.filter(item => item.status === "applied").map(item => item.id)
-      : [],
-  );
-  const latestRunMissingIds = latestRunIsTerminal
-    ? lastNativeRun!.items
-      .filter(item => item.status === "failed" || item.status === "stopped" || item.status === "queued" || item.status === "running")
-      .map(item => item.id)
-    : [];
   // Browser toggles are intent only. Native score/results must come from the
-  // detector. A completed native run is also authoritative for the result
-  // just shown to the user; the detector only exposes a smaller supported
-  // subset of all registry and app actions.
+  // detector. A run ledger can explain what just happened, but it cannot
+  // replace the full hardware-matched denominator.
+  const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const confirmedIds = native
-    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]))
+    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)))
     : new Set<string>();
-  latestRunAppliedIds.forEach(id => confirmedIds.add(id));
+  const liveRunActive = native
+    && Boolean(lastNativeRun)
+    && ["running", "stopping"].includes(lastNativeRun!.status);
+  if (liveRunActive) {
+    lastNativeRun!.items
+      .filter(item => item.status === "applied" && registryIds.has(item.id))
+      .forEach(item => confirmedIds.add(item.id));
+  }
   // Native category totals must come from the live Windows detector, not the
   // browser intent store. The latter is persistent, but it is not proof that
   // a registry/service change still exists on this PC.
   const activeIdsForDisplay = native
-    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id]))
+    ? confirmedIds
     : new Set(Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id));
   const activeTweakCount = activeIdsForDisplay.size;
   const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
     return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
   });
-  const missingRecommendedCount = latestRunIsTerminal
-    ? latestRunMissingIds.length
-    : matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
+  const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const recommendedActionLabel = missingRecommendedCount === 0
     ? "Review recommended tweaks"
     : `Apply ${missingRecommendedCount} missing tweaks`;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
-  const recommendedApplied = latestRunIsTerminal
-    ? latestRunMissingIds.length === 0
-    : matchedRecommendedIds.length > 0
-      && (!native || nativeDetectionReady)
-      && matchedRecommendedIds.every(id => activeIdsForDisplay.has(id));
-  const scoreIds = latestRunIsTerminal
-    ? lastNativeRun!.items
-      .map(item => item.id)
-      .filter(id => !_expertIdSet.has(id) && getTweakCompatibility(id).ok)
-    : achievableIds;
+  const scoreIds = matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
   const recApplied = native
-    ? scoreIds.filter(id => confirmedIds.has(id)).length
-    : achievableIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
-  const scorePercent = scoreIds.length > 0 ? Math.round((recApplied / scoreIds.length) * 100) : 0;
-  const displayScore = scorePercent;
+    ? scoreIds.filter(id => activeIdsForDisplay.has(id)).length
+    : scoreIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
+  const rawScorePercent = scoreIds.length > 0 ? Math.round((recApplied / scoreIds.length) * 100) : 0;
+  const fullOptimizeSucceeded = native
+    && isPro
+    && latestRunIsTerminal
+    && lastNativeRun!.status === "completed"
+    && lastNativeRun!.items.length > 0
+    && lastNativeRun!.items.every(item => item.status === "applied")
+    && scoreIds.every(id => activeIdsForDisplay.has(id));
+  const recommendedApplied = fullOptimizeSucceeded;
+  // 100% is reserved for a failure-free Pro full optimization. Detection can
+  // still show the exact partial score, but a partial/Free run must stop at 99.
+  const displayScore = rawScorePercent === 100 && !fullOptimizeSucceeded ? 99 : rawScorePercent;
   const tierLabel = native
     ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED")
     : (displayScore === 100 ? "100% SELECTED" : displayScore >= 90 ? "PREVIEW — NOT APPLIED" : displayScore >= 70 ? "PREVIEW — NOT APPLIED" : displayScore >= 46 ? "DECENT PREVIEW" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED");
@@ -1113,7 +558,7 @@ export default function Dashboard() {
                   <span className={displayScore === 100 ? "text-amber-400 font-bold" : "text-zinc-400"}>
                     <span className="text-white font-bold">{recApplied}</span>
                     <span className="text-zinc-600"> of </span>
-                    <span className="text-white font-bold">{achievableIds.length}</span>
+                    <span className="text-white font-bold">{scoreIds.length}</span>
                      {" "}{native ? "compatible tweaks confirmed" : "compatible tweaks selected"} ·{" "}
                     <span className="text-zinc-500">
                       {native ? "Windows results are confirmed in Applied Tweaks." : "Windows changes are not verified in the browser."}

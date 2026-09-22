@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { discordCachedToken, isNative } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 import { clearProStatus } from "@/lib/pro-status";
+import { beginAuthTransition } from "@/lib/auth-transition";
 
 export type AuthUser = {
   discordId: string;
@@ -69,6 +70,9 @@ export function useAuth(): AuthState {
 export function useLogout() {
   return useMutation({
     mutationFn: async () => {
+      // Cover the native WebView's document reload so the partially painted
+      // sidebar logo cannot flash during logout.
+      beginAuthTransition();
       // 1. Tell the server to destroy the session cookie.
       await apiRequest("POST", "/api/logout").catch(() => {});
       // 2. In native mode, also clear the OS keyring and localStorage token
@@ -103,6 +107,7 @@ export function useLogout() {
 }
 
 export function loginWithDiscord(returnTo?: string): void {
+  beginAuthTransition();
   const path = returnTo && returnTo.startsWith("/") ? returnTo : window.location.pathname + window.location.search;
   const url = `/api/auth/discord/login?returnTo=${encodeURIComponent(path)}`;
   window.location.href = url;

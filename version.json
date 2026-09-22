@@ -1,4 +1,4 @@
 {
-  "version": "5.2.31",
-  "notes": "V5.2.31 — fixes the Dashboard render crash after Discord login, reload, and Apply missing tweaks navigation."
+  "version": "5.2.33",
+  "notes": "V5.2.33 — fixes Windows native tweak execution, preserves hardware incompatibility failures, and adds exact hardware context to downloaded tweak diagnostics."
 }

@@ -124,6 +124,11 @@ description = "Read live Windows performance counters for the dashboard."
 commands.allow = ["read_live_performance"]
 
 [[permission]]
+identifier = "allow-save-performance-recording"
+description = "Save a local admin performance recording in Downloads."
+commands.allow = ["save_performance_recording"]
+
+[[permission]]
 identifier = "allow-install-fivem-pack"
 description = "Install a validated FiveM graphics pack."
 commands.allow = ["install_fivem_pack"]

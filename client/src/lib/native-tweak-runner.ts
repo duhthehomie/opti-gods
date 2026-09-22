@@ -88,6 +88,8 @@ export type NativeTweakRunState = {
 export type TweakBatchOptions = {
   /** Re-run these IDs even when native Windows detection says they are applied. */
   forceReapplyIds?: readonly string[];
+  /** Optional UI source label for analytics and run history. */
+  source?: string;
 };
 
 let activeRunPromise: Promise<BulkTweakResult> | null = null;

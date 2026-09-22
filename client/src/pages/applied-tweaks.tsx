@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { detectAppliedTweaks, isNative, openDownloadsFolder, undoTweak } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, isNative, openDownloadsFolder, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakMeta } from "@/lib/tweak-registry";
-import { getHardwareAwareTweakTitle } from "@/lib/tweak-compatibility";
+import { getHardwareAwareTweakTitle, getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { getScannedInfo } from "@/hooks/use-hardware-info";
 import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -21,7 +22,6 @@ import {
   type NativeTweakRunState,
   type TweakRunProgress,
 } from "@/lib/native-tweak-runner";
-import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,15 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
   const detail = messages.join(" ");
   const remaining = failures.length - messages.length;
   return `${appliedCount} applied. ${failures.length} failed. ${detail}${remaining > 0 ? ` ${remaining} other result${remaining === 1 ? "" : "s"} are listed below.` : ""}`;
+}
+
+function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
+  const savedScanResult = getTweakCompatibility(item.id);
+  const runtimeLooksIncompatible = item.status === "failed"
+    && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|did not expose|unavailable/i.test(item.message || "");
+  return runtimeLooksIncompatible
+    ? { ok: false, reason: item.message || "Windows rejected this hardware configuration." }
+    : savedScanResult;
 }
 
 async function downloadUndoScript(id: string): Promise<boolean> {
@@ -65,6 +74,45 @@ async function downloadRunDiagnosticLog(
   items: TweakRunProgress[],
   nativeState: Record<string, boolean>,
 ): Promise<string> {
+  let hardware: NativeHardwareScan | null = null;
+  let hardwareSource = "not available";
+  if (isNative()) {
+    try {
+      hardware = await scanHardware();
+      if (hardware) hardwareSource = "live native WMI scan";
+    } catch {
+      // Fall through to the last saved scan so the log still identifies the PC.
+    }
+  }
+  if (!hardware) {
+    const saved = getScannedInfo();
+    if (saved) {
+      hardware = {
+        cpu: saved.CPU || "unknown",
+        gpu: saved.GPU || "unknown",
+        vram_mb: saved.VRAM_MB ?? null,
+        ram_gb: saved.RAM_GB ?? null,
+        ram_mhz: saved.RAM_MHz ?? null,
+        motherboard: saved.Motherboard ?? null,
+        chassis: saved.Chassis ?? null,
+        cooling_type: saved.CoolingType ?? null,
+        fan_count: null,
+        cpu_temp_c: null,
+        refresh_hz: saved.RefreshHz ?? null,
+        nic_vendor: saved.NicVendor ?? null,
+        network_ssid: null,
+        network_band: null,
+        anticheats: saved.Anticheats ?? [],
+        system_model: saved.SystemModel ?? null,
+        os_name: saved.OsName ?? null,
+        os_build: saved.OsBuild ?? null,
+        cpu_cores: saved.Cores ?? null,
+        cpu_threads: saved.Threads ?? null,
+        is_laptop: saved.IsLaptop ?? null,
+      };
+      hardwareSource = "last saved hardware scan";
+    }
+  }
   const generatedAt = new Date().toISOString();
   const applied = items.filter(item => item.status === "applied");
   const failed = items.filter(item => item.status === "failed");
@@ -79,6 +127,23 @@ async function downloadRunDiagnosticLog(
     `Native Windows app: ${isNative() ? "yes" : "no"}`,
     `User agent: ${navigator.userAgent}`,
     `Platform: ${navigator.platform || "unknown"}`,
+        "",
+        "Exact hardware snapshot",
+        "------------------------",
+        `Hardware source: ${hardwareSource}`,
+        `CPU: ${hardware?.cpu || "unknown"}`,
+        `CPU cores / threads: ${hardware?.cpu_cores ?? "unknown"} / ${hardware?.cpu_threads ?? "unknown"}`,
+        `GPU(s): ${hardware?.gpu || "unknown"}`,
+        `VRAM: ${hardware?.vram_mb != null ? `${hardware.vram_mb} MB` : "unknown"}`,
+        `RAM: ${hardware?.ram_gb != null ? `${hardware.ram_gb} GB` : "unknown"}${hardware?.ram_mhz ? ` @ ${hardware.ram_mhz} MHz` : ""}`,
+        `Motherboard: ${hardware?.motherboard || "unknown"}`,
+        `System model: ${hardware?.system_model || "unknown"}`,
+        `Chassis / laptop: ${hardware?.chassis || "unknown"} / ${hardware?.is_laptop == null ? "unknown" : hardware.is_laptop ? "yes" : "no"}`,
+        `Cooling: ${hardware?.cooling_type || "unknown"}; fans: ${hardware?.fan_count ?? "unknown"}`,
+        `OS: ${hardware?.os_name || "unknown"}${hardware?.os_build ? ` (build ${hardware.os_build})` : ""}`,
+        `Display refresh: ${hardware?.refresh_hz != null ? `${hardware.refresh_hz} Hz` : "unknown"}`,
+        `Network adapter vendor: ${hardware?.nic_vendor || "unknown"}`,
+        `Anti-cheat services: ${hardware?.anticheats?.length ? hardware.anticheats.join(", ") : "none detected"}`,
     "",
     "Run context",
     "-----------",
@@ -98,10 +163,15 @@ async function downloadRunDiagnosticLog(
     "----------------------",
     ...items.map(item => {
       const meta = getTweakMeta(item.id);
+      const compatibility = getRunCompatibility(item);
+      const compatibilityLine = compatibility.ok
+        ? "compatible according to the saved hardware scan"
+        : `INCOMPATIBLE / hardware-specific: ${compatibility.reason || item.message || "Windows rejected this hardware configuration"}`;
       return [
         `[${item.status.toUpperCase()}] ${item.id}`,
         `  Title: ${meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : "Unknown tweak"}`,
         `  Category: ${meta?.category || "unknown"}`,
+        `  Hardware compatibility: ${compatibilityLine}`,
         `  Position: ${item.index + 1}/${item.total}`,
         `  Message: ${item.message || "(no message returned)"}`,
       ].join("\n");
@@ -116,6 +186,8 @@ async function downloadRunDiagnosticLog(
     JSON.stringify({
       appVersion: APP_VERSION,
       native: isNative(),
+      hardwareSource,
+      hardware,
       runState,
       items,
       nativeConfirmedIds: Object.keys(nativeState).filter(id => nativeState[id]),
@@ -280,7 +352,10 @@ export default function AppliedTweaksPage() {
     runItems
       .filter(item => item.status === "failed")
       .map(item => item.id)
-      .filter(id => getTweakCompatibility(id).ok),
+       .filter(id => {
+         const item = runItems.find(candidate => candidate.id === id);
+         return item ? getRunCompatibility(item).ok : false;
+       }),
   ));
   const stopRun = () => {
     if (stopNativeTweakRun()) {
@@ -344,14 +419,10 @@ export default function AppliedTweaksPage() {
       detectAppliedTweaks().then(setNativeState);
     }
   };
-  useEffect(() => {
-    if (!runItems.length || runTab !== "all") return;
-    const frame = window.requestAnimationFrame(() => {
-      const list = runResultsRef.current;
-      if (list) list.scrollTop = list.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [runItems, runTab]);
+  const orderedRunItems = [...runItems].sort((a, b) => {
+    const rank = (item: TweakRunProgress) => item.status === "applied" ? 0 : 1;
+    return rank(a) - rank(b) || a.index - b.index;
+  });
   // Keep provenance separate: a local timestamp is a session record, not proof
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.
@@ -487,10 +558,10 @@ export default function AppliedTweaksPage() {
          <button onClick={() => setRunTab("all")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "all" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>All ({runItems.length})</button>
           <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
        </div>
-        <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
-         {runItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
+         <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
+           {orderedRunItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
            {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
-           <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}</div>
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{item.status === "failed" && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
            <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
         </div>; })}
       </div>

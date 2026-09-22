@@ -2,6 +2,7 @@ export const BRAND = {
   goldPng: "/branding/optigods-gold.png",
   redPng: "/branding/optigods-red.png",
   spinRed: "/branding/spin-red.mp4",
+  loadingGif: "/branding/opti-gods-loading-splash.gif",
   spinSilver: "/branding/spin-silver.mp4",
   spinWhiteGold: "/branding/spin-whitegold.mp4",
 } as const;

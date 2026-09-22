@@ -14,10 +14,11 @@ import { loginWithDiscord, useAuth } from "@/hooks/use-auth";
 import { isNative, discordLogin, openExternal } from "@/lib/tauri-bridge";
 import { DISCORD_INVITE } from "@/lib/brand-links";
 import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
+import { beginAuthTransition, clearAuthTransition } from "@/lib/auth-transition";
 import { marketingCheckoutFields } from "@/lib/marketing-attribution";
 
-const CASHAPP_TAG = import.meta.env.VITE_CASHAPP_TAG as string | undefined;
-const PAYPAL_LINK = import.meta.env.VITE_PAYPAL_LINK as string | undefined;
+const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || "$my1ik";
+const PAYPAL_LINK = (import.meta.env.VITE_PAYPAL_LINK as string | undefined) || "https://paypal.me/accountslg";
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
@@ -137,6 +138,7 @@ export function ProPaymentDialog({
     if (isNative()) {
       setLinkingDiscord(true);
       setLinkDiscordError("");
+      beginAuthTransition();
       try {
         const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
         if (!cfgRes.ok) throw new Error("Discord not configured on server");
@@ -149,6 +151,7 @@ export function ProPaymentDialog({
         showLoginSuccess("Discord");
         setTimeout(() => { onOpenChange(false); setSuccess(false); setCode(""); }, 1400);
       } catch (err: unknown) {
+        clearAuthTransition();
         const msg = showLoginError(err);
         setLinkDiscordError(msg.replace(/^Error:\s*/i, ""));
       } finally {

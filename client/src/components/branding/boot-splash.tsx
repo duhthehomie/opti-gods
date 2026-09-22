@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { BRAND } from "./assets";
 
 const SESSION_KEY = "optigods_boot_splash_shown";
@@ -14,8 +14,7 @@ export function BootSplash() {
     if (sessionStorage.getItem(SESSION_KEY)) return "hidden";
     return "show";
   });
-  const [videoFailed, setVideoFailed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [gifFailed, setGifFailed] = useState(false);
 
   useEffect(() => {
     if (phase === "hidden") return;
@@ -39,7 +38,7 @@ export function BootSplash() {
         transition: `opacity ${FADE_MS}ms ease-out`,
       }}
     >
-      {videoFailed ? (
+      {gifFailed ? (
         /* CSS ring fallback — no white-background PNG */
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
           <div
@@ -68,14 +67,11 @@ export function BootSplash() {
           <style>{`@keyframes og-splash-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
-        <video
-          ref={videoRef}
-          src={BRAND.spinRed}
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          onError={() => setVideoFailed(true)}
+        <img
+          src={BRAND.loadingGif}
+          alt=""
+          aria-hidden="true"
+          onError={() => setGifFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
         />
       )}

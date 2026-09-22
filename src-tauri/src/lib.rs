@@ -63,6 +63,7 @@ pub fn run() {
             commands::power::set_power_plan,
             commands::hardware::scan_hardware,
             commands::performance::read_live_performance,
+            commands::performance::save_performance_recording,
             commands::restore::create_restore_point,
             commands::restore::restore_to_point,
             commands::restore::list_restore_points,

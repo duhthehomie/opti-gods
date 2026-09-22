@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Welcome from "@/pages/welcome";
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { useLocation } from "wouter";
-import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
+import { BRAND } from "@/components/branding/assets";
 import { isNative } from "@/lib/tauri-bridge";
 
 // Paths that must remain reachable without a Discord session.
@@ -82,18 +82,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
         data-testid="status-auth-loading"
         className="fixed inset-0 z-50 bg-black flex items-center justify-center"
       >
-        {prefersReducedMotion() ? (
-          <img src={BRAND.redPng} alt="Opti Gods" className="w-44 h-44 object-contain drop-shadow-[0_0_30px_rgba(239,68,68,0.55)]" />
-        ) : (
-          <video
-            src={BRAND.spinRed}
-            autoPlay
-            muted
-            playsInline
-            preload="metadata"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        )}
+        <video
+          src={BRAND.spinRed}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
       </div>
     );
   }

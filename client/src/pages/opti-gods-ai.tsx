@@ -10,8 +10,10 @@ import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { useAuth } from "@/hooks/use-auth";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { ProUnlockButton } from "@/components/pro-gate";
 
 type Message = {
   role: "user" | "assistant";
@@ -80,6 +82,9 @@ function hardwareToPresetPayload(hw: ReturnType<typeof useHardwareInfo>, os: Ret
 function SavePresetCard() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
+  const hasProEntitlement = useProStatus();
+  const isPro = isAuthenticated && hasProEntitlement;
   const hw = useHardwareInfo();
   const os = useOsDetection();
   const [saved, setSaved] = useState(false);
@@ -139,7 +144,7 @@ function SavePresetCard() {
   }
 
   const save = async () => {
-    if (!preset) return;
+    if (!preset || !isPro) return;
     const presetTweaks: Record<string, boolean> = {};
     preset.core.forEach(k => { presetTweaks[k] = true; });
     // Only expert tweaks the user explicitly opted in to (red section toggles).
@@ -262,20 +267,33 @@ function SavePresetCard() {
         </div>
       )}
 
-      <button
-        data-testid="button-save-preset"
-        onClick={save}
-        disabled={saved}
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-          saved
-            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
-            : "bg-red-600 hover:bg-red-500 text-white border border-red-500/40 cursor-pointer"
-        )}
-      >
-        <Download className="w-3.5 h-3.5" />
-        {saved ? "Saved to Dashboard ✓" : `Save ${tweakCount} Tweaks to Dashboard`}
-      </button>
+      {isPro ? (
+        <button
+          data-testid="button-save-preset"
+          onClick={save}
+          disabled={saved}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+            saved
+              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+              : "bg-red-600 hover:bg-red-500 text-white border border-red-500/40 cursor-pointer"
+          )}
+        >
+          <Download className="w-3.5 h-3.5" />
+          {saved ? "Saved to Dashboard ✓" : `Apply ${tweakCount} Hardware-Matched Tweaks`}
+        </button>
+      ) : (
+        <ProUnlockButton>
+          <button
+            data-testid="button-save-preset"
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-500/40 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Unlock Pro to Apply {tweakCount} Tweaks
+          </button>
+        </ProUnlockButton>
+      )}
     </div>
   );
 }

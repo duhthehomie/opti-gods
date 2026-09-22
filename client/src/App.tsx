@@ -12,6 +12,7 @@ import { UpdateModal } from "@/components/update-modal";
 import { VersionPin } from "@/components/version-pin";
 import NotFound from "@/pages/not-found";
 import { BootSplash } from "@/components/branding/boot-splash";
+import { AuthTransitionOverlay } from "@/components/branding/auth-transition-overlay";
 import { ProCelebration } from "@/components/branding/pro-celebration";
 import { bootstrapNative } from "@/lib/native-bootstrap";
 import { isNative, discordCachedToken } from "@/lib/tauri-bridge";
@@ -276,6 +277,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <AuthTransitionOverlay />
         <BootSplash />
         <ProCelebration />
         <NativeTokenHandler />

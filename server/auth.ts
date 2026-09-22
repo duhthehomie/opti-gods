@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { randomBytes } from "crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { storage } from "./storage";
 import { getLatestGhRelease } from "./github-release";
 
@@ -454,10 +456,7 @@ let _cachedFileInfo: { version: string; notes: string | null } | null | undefine
 function readVersionInfoFromFile(): { version: string; notes: string | null } | null {
   if (_cachedFileInfo !== undefined) return _cachedFileInfo;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
-    const raw = fs.readFileSync(path.resolve(process.cwd(), "version.json"), "utf8");
+    const raw = readFileSync(resolve(process.cwd(), "version.json"), "utf8");
     const parsed = JSON.parse(raw) as { version?: string; notes?: string };
     _cachedFileInfo = parsed.version
       ? { version: parsed.version, notes: parsed.notes?.trim() || null }

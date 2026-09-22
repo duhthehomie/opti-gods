@@ -23,6 +23,7 @@ import { NATIVE_TOKEN_KEY, NATIVE_ADMIN_KEY, queryClient } from "@/lib/queryClie
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { cn } from "@/lib/utils";
 import { showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
+import { beginAuthTransition, clearAuthTransition } from "@/lib/auth-transition";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 type NavItem = {
@@ -196,6 +197,7 @@ export function AppSidebar() {
   const handleSignIn = async () => {
     clearGuestMode();
     if (isNative()) {
+      beginAuthTransition();
       try {
         const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
         if (!cfgRes.ok) throw new Error("not configured");
@@ -207,6 +209,7 @@ export function AppSidebar() {
         showLoginSuccess("Discord");
         window.location.href = "/tweaks";
       } catch (error) {
+        clearAuthTransition();
         showLoginError(error);
       }
     } else {

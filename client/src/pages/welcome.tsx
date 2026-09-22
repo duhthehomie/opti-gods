@@ -9,6 +9,7 @@ import { setProSession, setProStatus } from "@/lib/pro-status";
 import { getNativeAuthHeaders, getNativeSessionHeaders, NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { showAccessCodeError, showAccessCodeSuccess, showLoginError, showLoginSuccess } from "@/lib/auth-feedback";
+import { beginAuthTransition, clearAuthTransition } from "@/lib/auth-transition";
 
 export const GUEST_MODE_KEY = "og_guest_mode";
 
@@ -84,6 +85,7 @@ export default function Welcome() {
     setSigningIn(true);
     setLoginError(null);
     if (isNative()) {
+      beginAuthTransition();
       try {
         // Fetch the Discord client ID from the server (not shipped in the binary).
         const cfgRes = await fetch(apiUrl("/api/auth/discord/config"));
@@ -118,6 +120,7 @@ export default function Welcome() {
         showLoginSuccess("Discord");
         navigate("/tweaks");
       } catch (err: unknown) {
+        clearAuthTransition();
         const msg = showLoginError(err);
         setLoginError(`Sign-in failed: ${msg.replace(/^Error:\s*/i, "")}`);
         setSigningIn(false);

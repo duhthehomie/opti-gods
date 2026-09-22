@@ -1,7 +1,14 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use tauri::{AppHandle, Manager};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::process::Command;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RunningProcess {
+    pub name: String,
+    pub visible: bool,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct LivePerformance {
@@ -13,6 +20,32 @@ pub struct LivePerformance {
     pub ram_used_pct: Option<f32>,
     pub cpu_temp_c: Option<f32>,
     pub gpu_temp_c: Option<f32>,
+    /// Task Manager-style total process count. Individual process names are
+    /// intentionally not exported by the performance recorder.
+    pub running_processes_count: Option<u32>,
+    /// Number of user-facing processes with a top-level window.
+    pub visible_apps_count: Option<u32>,
+    /// True when any FiveM process is present, including the launcher.
+    pub fivem_running: bool,
+    /// True only when a GTA/FiveM game process is present, not just the launcher.
+    pub game_running: bool,
+    /// The detected game process image names, kept small and useful for
+    /// diagnosing launcher-vs-game confusion.
+    pub game_processes: Vec<String>,
+    /// The latest connection target exposed by CitizenFX.log while the game is running.
+    pub server_target: Option<String>,
+    /// Newline-separated process image names observed in this sample.
+    /// Kept as text so PowerShell always serializes an unambiguous JSON string,
+    /// including when exactly one process is present.
+    pub process_names_text: Option<String>,
+    /// Newline-separated visible application image names observed in this sample.
+    pub visible_app_names_text: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PerformanceRecordingArgs {
+    pub filename: String,
+    pub content: String,
 }
 
 #[tauri::command]
@@ -32,6 +65,50 @@ if ($os) {
   $out.ram_free_gb = [math]::Round($free, 1)
   $out.ram_used_pct = [math]::Round((1 - ($free / $total)) * 100, 1)
 }
+
+/// Save the locally captured performance evidence in Downloads and reveal it
+/// in Explorer. The recorder never uploads this content from the native app.
+#[tauri::command]
+pub fn save_performance_recording(
+    app: AppHandle,
+    args: PerformanceRecordingArgs,
+) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let filename = std::path::Path::new(&args.filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| {
+                name.starts_with("OptiGods-Performance-Recording-")
+                    && name.ends_with(".json")
+                    && !name.contains("..")
+            })
+            .ok_or_else(|| "Invalid performance recording filename.".to_string())?;
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
+        std::fs::create_dir_all(&downloads)
+            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
+        let path = downloads.join(filename);
+        std::fs::write(&path, args.content.as_bytes())
+            .map_err(|error| format!("Could not save the performance recording: {error}"))?;
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+            .map_err(|error| {
+                format!(
+                    "Performance recording was saved, but Explorer could not open it: {error}"
+                )
+            })?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Performance recording saving is available in the Windows app.".to_string())
+    }
+}
 $gpu = $null
 $nvidia = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
 if ($nvidia) {
@@ -48,12 +125,64 @@ if ($null -eq $out.gpu_load_pct) {
     if ($null -ne $sum) { $out.gpu_load_pct = [math]::Min(100, [math]::Round([double]$sum, 1)) }
   }
 }
+
+# Match Task Manager's total-process view without exporting every process name.
+$processes = @(Get-Process -ErrorAction SilentlyContinue)
+$taskRows = @(tasklist.exe /FO CSV /NH 2>$null | Where-Object { $_ -match '^"' })
+if ($taskRows.Count -gt 0) {
+  $out.running_processes_count = [int]$taskRows.Count
+} else {
+  $out.running_processes_count = [int]$processes.Count
+}
+$out.visible_apps_count = [int]@($processes | Where-Object {
+  $_.MainWindowHandle -ne 0 -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle)
+}).Count
+$out.process_names_text = (@($processes | ForEach-Object {
+  "$($_.ProcessName).exe"
+} | Sort-Object -Unique) -join "`n"
+$out.visible_app_names_text = (@($processes | Where-Object {
+  $_.MainWindowHandle -ne 0 -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle)
+} | ForEach-Object {
+  "$($_.ProcessName).exe"
+} | Sort-Object -Unique) -join "`n"
+
+$fivemProcesses = @($processes | Where-Object {
+  $_.ProcessName -match '^FiveM($|_)'
+})
+$gameProcesses = @($processes | Where-Object {
+  $_.ProcessName -match '^(FiveM(_b\d+)?_GTAProcess|FiveM_GTAProcess|GTA5)$'
+})
+$out.fivem_running = $fivemProcesses.Count -gt 0
+$out.game_running = $gameProcesses.Count -gt 0
+$out.game_processes = @($gameProcesses | ForEach-Object { "$($_.ProcessName).exe" } | Sort-Object -Unique)
+
+# FiveM's local log exposes the last connection target. Only report it while
+# the actual game process is present so a stale previous session is not called
+# the current RP server.
+if ($out.game_running) {
+  $logPath = Join-Path $env:LOCALAPPDATA 'FiveM\FiveM.app\logs\CitizenFX.log'
+  if (Test-Path -LiteralPath $logPath) {
+    $line = Get-Content -LiteralPath $logPath -Tail 400 -ErrorAction SilentlyContinue |
+      Select-String -Pattern 'Connecting to\s+(?:cfx\.re/join/)?([^\s,;]+)' |
+      Select-Object -Last 1
+    if ($line -and $line.Matches.Count -gt 0) {
+      $out.server_target = $line.Matches[0].Groups[1].Value
+    }
+  }
+}
 $out.live = $true
 $out | ConvertTo-Json -Compress
 "#;
 
         let output = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ])
             .creation_flags(0x0800_0000)
             .output()
             .map_err(|error| format!("live performance command failed: {error}"))?;
@@ -66,7 +195,8 @@ $out | ConvertTo-Json -Compress
             .rev()
             .find(|line| line.trim_start().starts_with('{'))
             .ok_or_else(|| "Windows returned no live performance payload.".to_string())?;
-        serde_json::from_str(json).map_err(|error| format!("invalid live performance payload: {error}"))
+        serde_json::from_str(json)
+            .map_err(|error| format!("invalid live performance payload: {error}"))
     }
     #[cfg(not(windows))]
     {

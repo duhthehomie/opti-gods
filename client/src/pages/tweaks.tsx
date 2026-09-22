@@ -18,9 +18,14 @@ import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { useToast } from "@/hooks/use-toast";
-import { isNative } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import {
+  readNativeTweakRun,
+  subscribeNativeTweakRun,
+  type NativeTweakRunState,
+} from "@/lib/native-tweak-runner";
 
 const Registry         = lazy(() => import("@/pages/registry"));
 const Nvidia           = lazy(() => import("@/pages/nvidia"));
@@ -133,10 +138,10 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 // ─── Per-section active-tweak count ───────────────────────────────────────────
-function sectionActiveTweaks(section: Section, tweaks: Record<string, boolean>): number {
-  if (section.tweakIds) return section.tweakIds.filter(id => tweaks[id]).length;
+function sectionActiveTweaks(section: Section, activeIds: ReadonlySet<string>): number {
+  if (section.tweakIds) return section.tweakIds.filter(id => activeIds.has(id)).length;
   return section.categories.reduce((sum, c) => {
-    return sum + tweaksByCategory(c).filter(t => tweaks[t.id]).length;
+    return sum + tweaksByCategory(c).filter(t => activeIds.has(t.id)).length;
   }, 0);
 }
 
@@ -301,9 +306,47 @@ export default function TweaksPage() {
   const detecting = isDetecting(hw);
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const native = isNative();
+  const [detectedTweaks, setDetectedTweaks] = useState<Record<string, boolean>>({});
+  const [nativeRun, setNativeRun] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
   const [confirmApply, setConfirmApply] = useState(false);
   const [applyingMatched, setApplyingMatched] = useState(false);
-  const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  useEffect(() => {
+    if (!native) return;
+    let mounted = true;
+    const refreshDetected = () => {
+      void detectAppliedTweaks()
+        .then(state => { if (mounted) setDetectedTweaks(state); })
+        .catch(() => {});
+    };
+    const syncRun = (state: NativeTweakRunState | null) => {
+      if (!mounted) return;
+      setNativeRun(state);
+      if (state && ["completed", "failed", "stopped"].includes(state.status)) refreshDetected();
+    };
+    refreshDetected();
+    syncRun(readNativeTweakRun());
+    const unsubscribe = subscribeNativeTweakRun(syncRun);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [native]);
+  const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
+  const displayedActiveIds = new Set(
+    native
+      ? Object.keys(detectedTweaks).filter(id => detectedTweaks[id] && registryIds.has(id))
+      : Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id),
+  );
+  const liveRunActive = native
+    && Boolean(nativeRun)
+    && ["running", "stopping"].includes(nativeRun!.status);
+  if (liveRunActive) {
+    nativeRun!.items
+      .filter(item => item.status === "applied" && registryIds.has(item.id))
+      .forEach(item => displayedActiveIds.add(item.id));
+  }
+  const enabledCount = displayedActiveIds.size;
   const showBest15 = new URLSearchParams(window.location.search).get("best15") === "1";
   const best15Ids = (() => {
     if (!showBest15) return [] as string[];
@@ -321,7 +364,7 @@ export default function TweaksPage() {
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
     return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
   });
-  const missingMatchedIds = matchedProIds.filter(id => !tweaks[id]);
+  const missingMatchedIds = matchedProIds.filter(id => !displayedActiveIds.has(id));
 
   const applyMatched = async () => {
     if (applyingMatched || !missingMatchedIds.length) return;
@@ -671,7 +714,7 @@ export default function TweaksPage() {
                       section={s}
                       active={activeSectionId === s.id}
                       onClick={() => toggle(s.id)}
-                      activeTweaks={sectionActiveTweaks(s, tweaks)}
+                      activeTweaks={sectionActiveTweaks(s, displayedActiveIds)}
                       compact
                     />
                   ))}
@@ -702,7 +745,7 @@ export default function TweaksPage() {
                       <span className="text-xs font-bold text-white">{activeSection.title}</span>
                       <span className="text-[10px] text-zinc-600 font-mono">— {sectionCount(activeSection)} tweaks</span>
                       {(() => {
-                        const on = sectionActiveTweaks(activeSection, tweaks);
+                        const on = sectionActiveTweaks(activeSection, displayedActiveIds);
                         return on > 0 ? (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
                             <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
@@ -746,7 +789,7 @@ export default function TweaksPage() {
                     section={s}
                     active={false}
                     onClick={() => toggle(s.id)}
-                    activeTweaks={sectionActiveTweaks(s, tweaks)}
+                    activeTweaks={sectionActiveTweaks(s, displayedActiveIds)}
                   />
                 ))}
               </div>
