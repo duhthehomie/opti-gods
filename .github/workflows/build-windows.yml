@@ -117,13 +117,13 @@ jobs:
           $fail = 0
           foreach ($f in $fixtures) {
             $tokens = $null; $errors = $null
-            $null = [System.Management.Automation.Language.Parser]::ParseFile(
-              $f.FullName, [ref]$tokens, [ref]$errors)
+            $source = Get-Content -LiteralPath $f.FullName -Raw
+            $null = [System.Management.Automation.Language.Parser]::ParseInput(
+              $source, [ref]$tokens, [ref]$errors)
             if ($errors -and $errors.Count -gt 0) {
               $fail++
-              Write-Host "::error file=$($f.Name)::PS1 parse error(s) in $($f.Name)"
               foreach ($e in $errors) {
-                Write-Host "  L$($e.Extent.StartLineNumber):$($e.Extent.StartColumnNumber) — $($e.Message)"
+                Write-Host "::error file=$($f.Name),line=$($e.Extent.StartLineNumber),col=$($e.Extent.StartColumnNumber)::$($e.Message)"
               }
             } else {
               Write-Host "[OK] $($f.Name) parsed cleanly"
