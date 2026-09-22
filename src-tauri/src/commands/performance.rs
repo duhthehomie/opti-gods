@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct RunningProcess {
@@ -27,8 +27,14 @@ pub struct LivePerformance {
     pub visible_apps_count: Option<u32>,
     /// True when any FiveM process is present, including the launcher.
     pub fivem_running: bool,
-    /// True only when a GTA/FiveM game process is present, not just the launcher.
+    /// True only when a supported game process is present, not just a launcher.
     pub game_running: bool,
+    /// Stable Opti Gods identifier for the active game process.
+    pub game_id: Option<String>,
+    /// User-facing game name for the admin recorder menu.
+    pub game_label: Option<String>,
+    /// Process image that caused the active-game match.
+    pub game_process: Option<String>,
     /// The detected game process image names, kept small and useful for
     /// diagnosing launcher-vs-game confusion.
     pub game_processes: Vec<String>,
@@ -66,49 +72,6 @@ if ($os) {
   $out.ram_used_pct = [math]::Round((1 - ($free / $total)) * 100, 1)
 }
 
-/// Save the locally captured performance evidence in Downloads and reveal it
-/// in Explorer. The recorder never uploads this content from the native app.
-#[tauri::command]
-pub fn save_performance_recording(
-    app: AppHandle,
-    args: PerformanceRecordingArgs,
-) -> Result<String, String> {
-    #[cfg(windows)]
-    {
-        let filename = std::path::Path::new(&args.filename)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .filter(|name| {
-                name.starts_with("OptiGods-Performance-Recording-")
-                    && name.ends_with(".json")
-                    && !name.contains("..")
-            })
-            .ok_or_else(|| "Invalid performance recording filename.".to_string())?;
-        let downloads = app
-            .path()
-            .download_dir()
-            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
-        std::fs::create_dir_all(&downloads)
-            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
-        let path = downloads.join(filename);
-        std::fs::write(&path, args.content.as_bytes())
-            .map_err(|error| format!("Could not save the performance recording: {error}"))?;
-        std::process::Command::new("explorer.exe")
-            .arg(format!("/select,{}", path.display()))
-            .spawn()
-            .map_err(|error| {
-                format!(
-                    "Performance recording was saved, but Explorer could not open it: {error}"
-                )
-            })?;
-        Ok(path.to_string_lossy().into_owned())
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (app, args);
-        Err("Performance recording saving is available in the Windows app.".to_string())
-    }
-}
 $gpu = $null
 $nvidia = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
 if ($nvidia) {
@@ -153,13 +116,48 @@ $gameProcesses = @($processes | Where-Object {
   $_.ProcessName -match '^(FiveM(_b\d+)?_GTAProcess|FiveM_GTAProcess|GTA5)$'
 })
 $out.fivem_running = $fivemProcesses.Count -gt 0
-$out.game_running = $gameProcesses.Count -gt 0
 $out.game_processes = @($gameProcesses | ForEach-Object { "$($_.ProcessName).exe" } | Sort-Object -Unique)
+
+# Prefer FiveM when it is present, then identify other supported games by
+# process image. This is a process-level signal, not a claim that a window is
+# focused.
+$knownGames = @(
+  [pscustomobject]@{ id = 'fivem'; label = 'FiveM'; pattern = '^FiveM(_b\d+)?_GTAProcess$' },
+  [pscustomobject]@{ id = 'gta5'; label = 'Grand Theft Auto V'; pattern = '^GTA5$' },
+  [pscustomobject]@{ id = 'fortnite'; label = 'Fortnite'; pattern = '^FortniteClient' },
+  [pscustomobject]@{ id = 'valorant'; label = 'VALORANT'; pattern = '^(VALORANT|VALORANT-Win64-Shipping)$' },
+  [pscustomobject]@{ id = 'cs2'; label = 'Counter-Strike 2'; pattern = '^(cs2|csgo)$' },
+  [pscustomobject]@{ id = 'roblox'; label = 'Roblox'; pattern = '^RobloxPlayerBeta$' },
+  [pscustomobject]@{ id = 'apex'; label = 'Apex Legends'; pattern = '^r5apex$' },
+  [pscustomobject]@{ id = 'overwatch'; label = 'Overwatch'; pattern = '^Overwatch$' },
+  [pscustomobject]@{ id = 'rust'; label = 'Rust'; pattern = '^RustClient$' },
+  [pscustomobject]@{ id = 'tarkov'; label = 'Escape from Tarkov'; pattern = '^EscapeFromTarkov$' },
+  [pscustomobject]@{ id = 'league'; label = 'League of Legends'; pattern = '^(LeagueClient|League of Legends)$' },
+  [pscustomobject]@{ id = 'minecraft'; label = 'Minecraft'; pattern = '^(java|MinecraftLauncher)$' }
+)
+$activeGame = $null
+foreach ($rule in $knownGames) {
+  $match = @($processes | Where-Object { $_.ProcessName -match $rule.pattern } | Select-Object -First 1)
+  if ($match.Count -gt 0) {
+    $activeGame = [pscustomobject]@{
+      id = $rule.id
+      label = $rule.label
+      process = "$($match[0].ProcessName).exe"
+    }
+    break
+  }
+}
+$out.game_running = $null -ne $activeGame
+if ($activeGame) {
+  $out.game_id = $activeGame.id
+  $out.game_label = $activeGame.label
+  $out.game_process = $activeGame.process
+}
 
 # FiveM's local log exposes the last connection target. Only report it while
 # the actual game process is present so a stale previous session is not called
 # the current RP server.
-if ($out.game_running) {
+if ($out.fivem_running -and $out.game_running) {
   $logPath = Join-Path $env:LOCALAPPDATA 'FiveM\FiveM.app\logs\CitizenFX.log'
   if (Test-Path -LiteralPath $logPath) {
     $line = Get-Content -LiteralPath $logPath -Tail 400 -ErrorAction SilentlyContinue |
@@ -201,5 +199,47 @@ $out | ConvertTo-Json -Compress
     #[cfg(not(windows))]
     {
         Err("Live performance telemetry is Windows-only.".into())
+    }
+}
+
+/// Save the locally captured performance evidence in Downloads and reveal it
+/// in Explorer. The recorder never uploads this content from the native app.
+#[tauri::command]
+pub fn save_performance_recording(
+    app: AppHandle,
+    args: PerformanceRecordingArgs,
+) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let filename = std::path::Path::new(&args.filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| {
+                name.starts_with("OptiGods-Performance-Recording-")
+                    && name.ends_with(".json")
+                    && !name.contains("..")
+            })
+            .ok_or_else(|| "Invalid performance recording filename.".to_string())?;
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
+        std::fs::create_dir_all(&downloads)
+            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
+        let path = downloads.join(filename);
+        std::fs::write(&path, args.content.as_bytes())
+            .map_err(|error| format!("Could not save the performance recording: {error}"))?;
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+            .map_err(|error| {
+                format!("Performance recording was saved, but Explorer could not open it: {error}")
+            })?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Performance recording saving is available in the Windows app.".to_string())
     }
 }

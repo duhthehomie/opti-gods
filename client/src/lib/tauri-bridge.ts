@@ -220,6 +220,9 @@ export interface NativeLivePerformance {
   visible_apps_count?: number | null;
   fivem_running?: boolean;
   game_running?: boolean;
+  game_id?: string | null;
+  game_label?: string | null;
+  game_process?: string | null;
   game_processes?: string[];
   server_target?: string | null;
   process_names_text?: string | null;

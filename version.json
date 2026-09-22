@@ -1,4 +1,4 @@
 {
-  "version": "5.2.33",
-  "notes": "V5.2.33 — fixes Windows native tweak execution, preserves hardware incompatibility failures, and adds exact hardware context to downloaded tweak diagnostics."
+  "version": "5.2.34",
+  "notes": "V5.2.34 — adds live game detection to the Admin performance recorder, FiveM server context, manual refresh, and more reliable game-not-detected status."
 }
