@@ -78,6 +78,7 @@ pub fn run() {
             commands::env::env_info,
             commands::misc::open_downloads,
             commands::misc::save_diagnostic_log,
+            commands::misc::save_performance_recording,
             commands::misc::repair_nvidia_control_panel,
             commands::misc::open_fivem_folder,
             commands::misc::install_fivem_pack,

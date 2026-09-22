@@ -203,6 +203,11 @@ identifier = "allow-read-v5-diagnostic-log"
 description = "Read the local V5 diagnostic log for troubleshooting."
 commands.allow = ["read_v5_diagnostic_log"]
 
+[[permission]]
+identifier = "allow-save-performance-recording"
+description = "Save the local admin performance recorder export in Downloads."
+commands.allow = ["save_performance_recording"]
+
 [permission_set]
 identifier = "all-app-commands"
 description = "All app-level commands."
@@ -244,6 +249,7 @@ permissions = [
   "allow-read-text-file",
   "allow-read-fivem-log",
   "allow-save-diagnostic-log",
+  "allow-save-performance-recording",
   "allow-repair-nvidia-control-panel",
    "allow-repair-privacy-spool",
    "allow-read-v5-diagnostic-log",

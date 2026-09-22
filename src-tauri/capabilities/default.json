@@ -56,6 +56,7 @@
     "allow-disable-startup-app",
     "allow-get-startup-value",
     "allow-save-diagnostic-log",
+    "allow-save-performance-recording",
     "allow-repair-nvidia-control-panel",
     "allow-repair-privacy-spool",
     "allow-read-v5-diagnostic-log"

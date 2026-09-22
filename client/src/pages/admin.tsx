@@ -3,7 +3,15 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api-base";
-import { isNative, openExternal } from "@/lib/tauri-bridge";
+import {
+  isNative,
+  openExternal,
+  readLivePerformance,
+  savePerformanceRecording,
+  scanHardware,
+  type NativeHardwareScan,
+  type NativeLivePerformance,
+} from "@/lib/tauri-bridge";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Trash2, Plus, Key, Link, Check, AlertCircle, Shield,
@@ -140,7 +148,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem" | "hud";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem" | "hud" | "recorder";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -3311,6 +3319,283 @@ function TicketsTab({ headers }: { headers: Record<string, string> }) {
   );
 }
 
+type RecorderPhase = "before" | "after";
+
+type RecorderSample = NativeLivePerformance & {
+  at: string;
+  elapsed_seconds: number;
+  phase: RecorderPhase;
+  session_id: number;
+};
+
+function PerformanceRecorder() {
+  const { toast } = useToast();
+  const native = isNative();
+  const [phase, setPhase] = useState<RecorderPhase>("before");
+  const [activePhase, setActivePhase] = useState<RecorderPhase | null>(null);
+  const [label, setLabel] = useState("tmfrz-test");
+  const [samples, setSamples] = useState<RecorderSample[]>([]);
+  const [hardware, setHardware] = useState<NativeHardwareScan | null>(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const startedAtRef = useRef<number | null>(null);
+  const sessionIdRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
+  const samplingRef = useRef(false);
+
+  const captureSample = useCallback(async (
+    samplePhase: RecorderPhase,
+    startedAt: number,
+    sessionId: number,
+  ) => {
+    if (samplingRef.current) return;
+    samplingRef.current = true;
+    try {
+      const live = await readLivePerformance();
+      if (!live) throw new Error("Windows performance data was unavailable.");
+      setSamples(previous => [...previous, {
+        ...live,
+        at: new Date().toISOString(),
+        elapsed_seconds: Math.round((Date.now() - startedAt) / 100) / 10,
+        phase: samplePhase,
+        session_id: sessionId,
+      }]);
+      setError("");
+    } catch (captureError) {
+      setError(String(captureError));
+    } finally {
+      samplingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearInterval(timerRef.current);
+  }, []);
+
+  const start = async () => {
+    if (!native || activePhase) return;
+    setError("");
+    if (!hardware) {
+      try {
+        setHardware(await scanHardware());
+      } catch (scanError) {
+        // A performance recording is still useful when WMI cannot return the
+        // optional hardware snapshot, so keep sampling and record the error.
+        setError(`Hardware snapshot unavailable: ${String(scanError)}`);
+      }
+    }
+    const startedAt = Date.now();
+    const sessionId = sessionIdRef.current + 1;
+    sessionIdRef.current = sessionId;
+    startedAtRef.current = startedAt;
+    setActivePhase(phase);
+    void captureSample(phase, startedAt, sessionId);
+    timerRef.current = window.setInterval(() => {
+      void captureSample(phase, startedAt, sessionId);
+    }, 1000);
+  };
+
+  const stop = () => {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    startedAtRef.current = null;
+    setActivePhase(null);
+  };
+
+  const average = (rows: RecorderSample[], key: "cpu_load_pct" | "gpu_load_pct" | "ram_used_pct") => {
+    const values = rows
+      .map(row => row[key])
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    return values.length ? `${(values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1)}%` : "—";
+  };
+
+  const payload = () => {
+    const before = samples.filter(sample => sample.phase === "before");
+    const after = samples.filter(sample => sample.phase === "after");
+    return {
+      schema_version: 1,
+      recorder: "Opti Gods admin performance recorder",
+      label: label.trim() || "tmfrz-test",
+      created_at: new Date().toISOString(),
+      app_mode: "native-admin-only",
+      note: "System telemetry captured once per second. Keep the same TMFRZ map, settings, route, and background apps for Before and After. This file is not a video recording and does not invent FPS values when the game does not expose them.",
+      hardware,
+      sessions: {
+        before: {
+          samples: before.length,
+          started_at: before[0]?.at ?? null,
+          ended_at: before.at(-1)?.at ?? null,
+          average_cpu_load_pct: average(before, "cpu_load_pct"),
+          average_gpu_load_pct: average(before, "gpu_load_pct"),
+          average_ram_used_pct: average(before, "ram_used_pct"),
+        },
+        after: {
+          samples: after.length,
+          started_at: after[0]?.at ?? null,
+          ended_at: after.at(-1)?.at ?? null,
+          average_cpu_load_pct: average(after, "cpu_load_pct"),
+          average_gpu_load_pct: average(after, "gpu_load_pct"),
+          average_ram_used_pct: average(after, "ram_used_pct"),
+        },
+      },
+      samples,
+    };
+  };
+
+  const download = async () => {
+    if (!samples.length || saving) return;
+    setSaving(true);
+    try {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `OptiGods-Performance-Recording-${stamp}.json`;
+      const content = JSON.stringify(payload(), null, 2);
+      if (native) {
+        const path = await savePerformanceRecording(filename, content);
+        toast({ title: "Recording saved", description: `Saved to ${path}` });
+      } else {
+        const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "Recording downloaded", description: filename });
+      }
+    } catch (saveError) {
+      toast({ title: "Recording export failed", description: String(saveError), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const latest = samples.at(-1);
+  const beforeCount = samples.filter(sample => sample.phase === "before").length;
+  const afterCount = samples.filter(sample => sample.phase === "after").length;
+
+  return (
+    <div className="space-y-4" data-testid="admin-performance-recorder">
+      <div className="rounded-xl border border-red-500/20 bg-red-950/10 p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-red-400 text-[10px] font-bold uppercase tracking-widest">
+              <Activity className="w-4 h-4" />
+              Admin-only PC performance recorder
+            </div>
+            <h2 className="mt-2 text-xl font-display font-bold text-white">TMFRZ Before / After capture</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-400">
+              Record the same test once before changes and once after changes. The export stays on this PC until you download it;
+              regular users never see this tab or its controls.
+            </p>
+          </div>
+          <span className={cn(
+            "rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest",
+            native ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400",
+          )}>
+            {native ? "Windows native build" : "Preview only"}
+          </span>
+        </div>
+
+        {!native ? (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+            Install the Windows executable to collect real hardware telemetry. The browser preview only shows the admin UI.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                Test label
+                <input
+                  data-testid="input-performance-recording-label"
+                  value={label}
+                  onChange={event => setLabel(event.target.value)}
+                  disabled={Boolean(activePhase)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-red-500/50"
+                  placeholder="tmfrz-test"
+                />
+              </label>
+              <div className="flex items-end gap-2">
+                {(["before", "after"] as RecorderPhase[]).map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    data-testid={`button-recording-phase-${option}`}
+                    onClick={() => setPhase(option)}
+                    disabled={Boolean(activePhase)}
+                    className={cn(
+                      "rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                      phase === option
+                        ? "border-red-500/50 bg-red-600 text-white"
+                        : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500",
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {!activePhase ? (
+                <Button
+                  data-testid="button-start-performance-recording"
+                  onClick={() => void start()}
+                  className="gap-2 bg-red-600 font-bold text-white hover:bg-red-500"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Start {phase} recording
+                </Button>
+              ) : (
+                <Button
+                  data-testid="button-stop-performance-recording"
+                  onClick={stop}
+                  className="gap-2 bg-zinc-100 font-bold text-black hover:bg-white"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Stop {activePhase} recording
+                </Button>
+              )}
+              <Button
+                data-testid="button-download-performance-recording"
+                onClick={() => void download()}
+                disabled={!samples.length || Boolean(activePhase) || saving}
+                variant="outline"
+                className="gap-2 border-zinc-700 text-zinc-200 hover:bg-zinc-800"
+              >
+                <Download className="w-4 h-4" />
+                {saving ? "Saving…" : "Download recording file"}
+              </Button>
+              <span className="text-[11px] text-zinc-500">
+                {activePhase ? `Sampling ${activePhase} every second…` : "Stop before downloading the combined file."}
+              </span>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Before samples", beforeCount],
+                ["After samples", afterCount],
+                ["CPU now", latest?.cpu_load_pct == null ? "—" : `${latest.cpu_load_pct.toFixed(1)}%`],
+                ["GPU now", latest?.gpu_load_pct == null ? "—" : `${latest.gpu_load_pct.toFixed(1)}%`],
+              ].map(([name, value]) => (
+                <div key={String(name)} className="rounded-lg border border-white/5 bg-black/30 px-3 py-2">
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">{name}</div>
+                  <div className="mt-1 font-mono text-sm font-bold text-zinc-200">{value}</div>
+                </div>
+              ))}
+            </div>
+            {error && <p className="text-xs text-amber-400">{error}</p>}
+            <p className="text-[11px] leading-relaxed text-zinc-600">
+              The file contains hardware context and one-second CPU/GPU/RAM telemetry. It is intended to show bottlenecks while
+              you run the same TMFRZ test. It is not a screen/video capture and will not fabricate FPS or frame-time data.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -4494,7 +4779,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem", "hud"] as Tab[]).map(t => {
+          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem", "hud", "recorder"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -4515,6 +4800,7 @@ export default function Admin() {
               drivers: Monitor,
               fivem: Server,
               hud: Sliders,
+              recorder: Activity,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -4547,6 +4833,7 @@ export default function Admin() {
                    t === "drivers" ? "NVIDIA Drivers" :
                    t === "fivem" ? "FiveM Servers" :
                    t === "hud" ? "HUD Editor" :
+                   t === "recorder" ? "Perf Recorder" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -4566,6 +4853,7 @@ export default function Admin() {
                    t === "drivers" ? "" :
                    t === "fivem" ? "" :
                    t === "hud" ? "" :
+                   t === "recorder" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -6290,6 +6578,7 @@ export default function Admin() {
         )}
 
         {tab === "security" && <SecurityTab headers={headers} />}
+        {tab === "recorder" && <PerformanceRecorder />}
         {tab === "preset" && (
           <AdminPresetGenerator
             key={presetFillKey}

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.31",
-  "notes": "V5.2.31 — fixes the Dashboard render crash after Discord login, reload, and Apply missing tweaks navigation."
+  "version": "5.2.32",
+  "notes": "V5.2.32 — adds the admin-only TMFRZ Before/After performance recorder with local JSON export."
 }

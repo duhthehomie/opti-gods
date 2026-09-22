@@ -570,3 +570,60 @@ pub fn read_fivem_log() -> String {
         String::new()
     }
 }
+
+#[derive(Deserialize)]
+pub struct PerformanceRecordingArgs {
+    pub filename: String,
+    pub content: String,
+}
+
+/// Persist the admin-only performance recorder export in Downloads.
+///
+/// The renderer owns the in-memory recording and this command only accepts a
+/// constrained filename and bounded JSON payload. This avoids unreliable
+/// WebView2 browser downloads while keeping the recording local to the
+/// Windows test machine.
+#[tauri::command]
+pub fn save_performance_recording(
+    app: AppHandle,
+    args: PerformanceRecordingArgs,
+) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        if args.content.len() > 10 * 1024 * 1024 {
+            return Err("Performance recording is larger than the 10 MB safety limit.".to_string());
+        }
+        let filename = std::path::Path::new(&args.filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| {
+                name.starts_with("OptiGods-Performance-Recording-")
+                    && name.ends_with(".json")
+                    && !name.contains("..")
+            })
+            .ok_or_else(|| "Invalid performance recording filename.".to_string())?;
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
+        std::fs::create_dir_all(&downloads)
+            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
+        let path = downloads.join(filename);
+        std::fs::write(&path, args.content.as_bytes())
+            .map_err(|error| format!("Could not save the performance recording: {error}"))?;
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+            .map_err(|error| {
+                format!(
+                    "Performance recording was saved, but Explorer could not open it: {error}"
+                )
+            })?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Performance recording export is available in the Windows app.".to_string())
+    }
+}
