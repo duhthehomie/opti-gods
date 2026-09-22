@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { BRAND } from "./assets";
 
-const SESSION_KEY = "optigods_boot_splash_shown";
 const SHOW_MS = 3500;
 const FADE_MS = 500;
 
@@ -11,7 +10,6 @@ export function BootSplash() {
     // The branded boot sequence belongs to the Windows shell. Showing it on
     // the public website/preview hides the landing page on every fresh load.
     if (!("__TAURI_INTERNALS__" in window)) return "hidden";
-    if (sessionStorage.getItem(SESSION_KEY)) return "hidden";
     return "show";
   });
   const [gifFailed, setGifFailed] = useState(false);
@@ -19,7 +17,6 @@ export function BootSplash() {
   useEffect(() => {
     if (phase === "hidden") return;
     if (phase === "show") {
-      sessionStorage.setItem(SESSION_KEY, "1");
       const t = window.setTimeout(() => setPhase("fade"), SHOW_MS);
       return () => window.clearTimeout(t);
     }
