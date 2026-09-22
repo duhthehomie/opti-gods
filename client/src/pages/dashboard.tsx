@@ -718,7 +718,7 @@ export default function Dashboard() {
     : matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const recommendedActionLabel = missingRecommendedCount === 0
     ? "Review recommended tweaks"
-    : recommendedActionLabel;
+    : `Apply ${missingRecommendedCount} missing tweaks`;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
   const recommendedApplied = latestRunIsTerminal
     ? latestRunMissingIds.length === 0

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.30",
-  "notes": "V5.2.30 \u2014 fixes Best 15 allowance reconciliation, prevents zero-count apply prompts, and verifies Windows Search recovery."
+  "version": "5.2.31",
+  "notes": "V5.2.31 — fixes the Dashboard render crash after Discord login, reload, and Apply missing tweaks navigation."
 }
