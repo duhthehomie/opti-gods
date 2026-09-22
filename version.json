@@ -1,4 +1,4 @@
 {
-  "version": "5.2.28",
-  "notes": "V5.2.28 — fixes Best 15 allowance reconciliation, moves the free-tweak action into the OPTI GODS by leaq dashboard hero, and preserves COD menu and desktop responsiveness."
+  "version": "5.2.30",
+  "notes": "V5.2.30 \u2014 fixes Best 15 allowance reconciliation, prevents zero-count apply prompts, and verifies Windows Search recovery."
 }

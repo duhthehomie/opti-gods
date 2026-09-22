@@ -4404,6 +4404,8 @@ Start-Sleep 2
       `$serviceConfig = Get-CimInstance Win32_Service -Filter "Name='WSearch'" -ErrorAction Stop`,
       `if ($verified.Status -ne 'Running' -or $serviceConfig.StartMode -eq 'Disabled') { throw "Windows Search was not verified as running with automatic startup." }`,
       `Write-Host "[OK] Windows Search indexing is enabled and the WSearch service is running." -ForegroundColor Green`,
+      `$indexer = Get-Process -Name 'SearchIndexer' -ErrorAction SilentlyContinue`,
+      `if ($indexer) { Write-Host "[OK] SearchIndexer.exe is active." -ForegroundColor Green } else { Write-Host "[INFO] WSearch is ready; SearchIndexer.exe will start when Windows requests an index update." -ForegroundColor Yellow }`,
       `Write-Host "[INFO] Windows may take a few minutes to rebuild its index." -ForegroundColor Yellow`,
       `pause`,
     ].join('\r\n');

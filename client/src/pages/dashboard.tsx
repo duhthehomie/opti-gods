@@ -716,6 +716,9 @@ export default function Dashboard() {
   const missingRecommendedCount = latestRunIsTerminal
     ? latestRunMissingIds.length
     : matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
+  const recommendedActionLabel = missingRecommendedCount === 0
+    ? "Review recommended tweaks"
+    : recommendedActionLabel;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
   const recommendedApplied = latestRunIsTerminal
     ? latestRunMissingIds.length === 0
@@ -805,7 +808,7 @@ export default function Dashboard() {
                   ) : native && !nativeDetectionReady ? (
                     <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Checking Windows state…</>
                   ) : (
-                    <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : `Apply ${missingRecommendedCount} missing tweaks`}</>
+                    <><Rocket className="w-4 h-4 mr-2" />{bulkApplying ? "Applying…" : proStatusLoading ? "Checking Access…" : recommendedActionLabel}</>
                   )}
                 </Button>
               ) : (
@@ -816,7 +819,7 @@ export default function Dashboard() {
                     className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
                   >
                     <Rocket className="w-4 h-4 mr-2" />
-                  {native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
+                  {native && !nativeDetectionReady ? "Checking Windows state…" : recommendedActionLabel}
                   </Button>
                 </ProUnlockButton>
               )}
@@ -1413,7 +1416,7 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-                {recommendedApplied ? "Compatible Tweaks Applied" : native && !nativeDetectionReady ? "Reading confirmed Windows changes…" : isPro ? `Apply ${missingRecommendedCount} missing tweaks` : `${matchedRecommendedIds.length} tweaks match your hardware`}
+                {recommendedApplied ? "Compatible Tweaks Applied" : native && !nativeDetectionReady ? "Reading confirmed Windows changes…" : isPro ? recommendedActionLabel : `${matchedRecommendedIds.length} tweaks match your hardware`}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -1423,7 +1426,9 @@ export default function Dashboard() {
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
                   : isPro
-                    ? `${missingRecommendedCount} compatible tweaks are not confirmed yet. Apply only what is missing from this PC.`
+                    ? (missingRecommendedCount === 0
+                      ? "All compatible tweaks are accounted for. Review the controls below if you want to change them."
+                      : `${missingRecommendedCount} compatible tweaks are not confirmed yet. Apply only what is missing from this PC.`)
                     : `${freeUnavailableCount} additional matched tweaks are unavailable on Free. Unlock Pro to apply the full hardware-matched set.`}
             </p>
           </div>
@@ -1445,7 +1450,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
-                {bulkApplying ? "Applying…" : native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
+                {bulkApplying ? "Applying…" : native && !nativeDetectionReady ? "Checking Windows state…" : recommendedActionLabel}
               </Button>
             ) : (
               <ProUnlockButton>
@@ -1455,7 +1460,7 @@ export default function Dashboard() {
                   className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-8 py-3 text-base rounded-xl"
                 >
                   <Rocket className="w-5 h-5 mr-2" />
-                  {native && !nativeDetectionReady ? "Checking Windows state…" : `Apply ${missingRecommendedCount} missing tweaks`}
+                  {native && !nativeDetectionReady ? "Checking Windows state…" : recommendedActionLabel}
                 </Button>
               </ProUnlockButton>
             )}

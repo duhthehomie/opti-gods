@@ -108,7 +108,8 @@ export function PerformanceAllowanceCard({ embedded = false }: { embedded?: bool
         return;
       }
 
-      queueTweakBatch(ids);
+      // Queue the complete visible Best 15 set; detector-confirmed IDs are skipped natively.
+      queueTweakBatch(visibleIds, { source: "best15" });
       navigate("/applied-tweaks?run=1");
     } catch (e) {
       toast({ title: "Could not select best tweaks", description: e instanceof Error ? e.message : "A saved scan is required.", variant: "destructive" });
