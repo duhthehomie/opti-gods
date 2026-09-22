@@ -7,7 +7,7 @@
  * `Identifier: \`...\`,` entry from the TWEAK_COMMANDS block. This avoids
  * importing routes.ts (which starts the Express server on import).
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const NVIDIA_REAPPLY = [
@@ -66,6 +66,9 @@ console.log(`[smoke-test] extracted ${Object.keys(TWEAK_COMMANDS).length} tweak 
 
 const outDir = join(process.cwd(), ".local", "ps1-smoke");
 mkdirSync(outDir, { recursive: true });
+for (const name of readdirSync(outDir)) {
+  if (name.endsWith(".ps1")) unlinkSync(join(outDir, name));
+}
 
 function buildScript(label: string, ids: string[]): string {
   const header = `# Opti Gods by leaq — Reapply ${label} (SMOKE TEST FIXTURE)\r\n$ErrorActionPreference = 'Continue'\r\n\r\n`;
