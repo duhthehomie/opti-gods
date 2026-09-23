@@ -18,6 +18,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { playFeedbackSound, useToast } from "@/hooks/use-toast";
+import { playOptimizationActionSound } from "@/lib/action-sound";
+import { useProStatus } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   queueTweakBatch,
@@ -393,6 +395,7 @@ function SmartRecsBreakdown() {
   const recs = computeSmartRecs(hw, os);
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
+  const isPro = useProStatus();
   const [applied, setApplied] = useState(false);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => isNative() ? readNativeTweakRun() : null);
 
@@ -434,6 +437,7 @@ function SmartRecsBreakdown() {
   async function handleApply() {
     try {
       if (!isNative()) throw new Error("Open Opti Gods for Windows to apply tweaks in the app.");
+      if (isPro) playOptimizationActionSound();
       queueTweakBatch(missingSafeIds);
       window.location.assign("/applied-tweaks?run=1");
       setTimeout(() => setApplied(false), 3000);

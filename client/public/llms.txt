@@ -1,0 +1,28 @@
+# Opti Gods
+
+> Opti Gods is a Windows 10/11 gaming PC optimizer by leaq (Mylik Tisdale). It scans a computer's hardware, explains applicable recommendations, and generates transparent PowerShell scripts for review before changes are applied.
+
+## Canonical pages
+
+- [Opti Gods homepage](https://optigods.com/): Product overview, free Windows download, features, FAQ, and support links.
+- [Opti Gods showcase](https://optigods.com/showcase): Product preview, performance examples, included tools, and Pro access information.
+- [Opti Gods updates](https://optigods.com/updates): V5 product updates and changelog.
+- [Opti Gods Pro](https://optigods.com/pro): Lifetime Pro features and access information.
+- [Game profiles](https://optigods.com/game-profiles): Game-specific optimization information for FiveM, Fortnite, Call of Duty, Rust, Roblox, and other supported titles.
+- [About leaq](https://optigods.com/leaq): Creator profile for leaq (Mylik Tisdale), including public social links.
+- [XML sitemap](https://optigods.com/sitemap.xml): Complete list of public pages.
+
+## Product scope
+
+Opti Gods provides hardware-aware recommendations for NVIDIA, AMD, and Intel graphics, desktop and laptop systems, registry and Windows settings, GPU and memory tuning, network latency, power, startup, FiveM, Fortnite, Call of Duty, Valorant, Rust, Roblox, and related gaming workflows. Users can review individual tweaks and generate a custom script rather than applying an undisclosed bundle.
+
+## Creator and support
+
+- Creator: leaq (Mylik Tisdale)
+- Instagram: https://www.instagram.com/leaqinq/
+- YouTube: https://www.youtube.com/@mqhleek
+- Discord community: https://discord.gg/nQagPU5a4Z
+
+## Accuracy guidance
+
+Performance results vary by hardware, drivers, thermals, Windows configuration, and game settings. Treat published FPS examples as user or product-page examples, not universal guarantees. The canonical website and linked pages are the source of truth for current version and feature details.

@@ -36,7 +36,7 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
-import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
+import { BEST_15_IDS_KEY, getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import {
   AlertDialog,
@@ -48,6 +48,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+function readBest15Ids(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(BEST_15_IDS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 // Feature categories
 const FEATURES = [
@@ -91,7 +101,8 @@ const GAME_PACK_LABELS: Record<string, string> = {
   game_fortnite: "Fortnite",
 };
 
-// Quick Boost Presets — V4.0 (massively expanded — Safe ~44, Max FPS ~133, Competitive ~175, Streamer ~74)
+// Quick Boost Presets — V5.2.34. Max FPS uses the same hardware-aware action
+// as Full Optimize; the other cards remain focused preset selections.
 
 // ── Safe Boost ─────────────────────────────────────────────────────────────
 // No service stops, no uninstalls — pure registry + power plan + privacy tweaks.
@@ -286,14 +297,14 @@ const QUICK_BOOST_PRESETS = [
     icon: Flame,
     title: "Max FPS Gaming",
     tag: "RECOMMENDED",
-    desc: "Power throttle OFF, full FiveM/COD/Fortnite packs, service cleanup, startup strip, and deep memory tuning.",
-    color: "text-red-400",
-    border: "border-red-500/30 hover:border-red-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(239,68,68,0.25)]",
-    activeBg: "bg-red-950/30",
-    accentBar: "bg-gradient-to-r from-red-600 to-red-400",
-    iconBg: "bg-red-500/10 border border-red-500/20",
-    tagBg: "bg-red-500/10 border-red-500/25 text-red-400",
+    desc: "Runs the same hardware-aware Full Optimize flow, including the compatible Windows, game, GPU, memory, and performance recommendations for this PC.",
+    color: "text-emerald-400",
+    border: "border-emerald-500/30 hover:border-emerald-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
+    activeBg: "bg-emerald-950/30",
+    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
+    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
     tweaks: MAX_FPS_TWEAKS,
   },
   {
@@ -302,13 +313,13 @@ const QUICK_BOOST_PRESETS = [
     title: "Competitive Shooter",
     tag: "GPU TUNED",
     desc: "Max FPS + full NVIDIA & AMD driver packs, MSI interrupt mode, Process Lasso engine, Discord footprint crush.",
-    color: "text-orange-400",
-    border: "border-orange-500/30 hover:border-orange-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(249,115,22,0.25)]",
-    activeBg: "bg-orange-950/30",
-    accentBar: "bg-gradient-to-r from-orange-600 to-amber-400",
-    iconBg: "bg-orange-500/10 border border-orange-500/20",
-    tagBg: "bg-orange-500/10 border-orange-500/25 text-orange-400",
+    color: "text-emerald-400",
+    border: "border-emerald-500/30 hover:border-emerald-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
+    activeBg: "bg-emerald-950/30",
+    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
+    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
     tweaks: COMPETITIVE_TWEAKS,
   },
   {
@@ -317,13 +328,13 @@ const QUICK_BOOST_PRESETS = [
     title: "Streamer Mode",
     tag: "OBS STABLE",
     desc: "Game perf balanced with stable OBS encoder threads — no stutter drops. Full Discord + Spotify yield. Boot cleanup.",
-    color: "text-violet-400",
-    border: "border-violet-500/30 hover:border-violet-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(139,92,246,0.25)]",
-    activeBg: "bg-violet-950/30",
-    accentBar: "bg-gradient-to-r from-violet-600 to-violet-400",
-    iconBg: "bg-violet-500/10 border border-violet-500/20",
-    tagBg: "bg-violet-500/10 border-violet-500/25 text-violet-400",
+    color: "text-emerald-400",
+    border: "border-emerald-500/30 hover:border-emerald-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
+    activeBg: "bg-emerald-950/30",
+    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
+    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
     tweaks: STREAMER_TWEAKS,
   },
 ];
@@ -671,6 +682,13 @@ export default function Dashboard() {
 
   const applyQuickBoost = (preset: typeof QUICK_BOOST_PRESETS[number]) => {
     if (bulkApplying) return;
+    // Max FPS Gaming is intentionally the same hardware-aware operation as
+    // the Full Optimize CTA. Keep one execution path so authorization,
+    // compatibility checks, and native result handling cannot drift.
+    if (preset.id === "maxfps") {
+      applyAllRecommended();
+      return;
+    }
     if (!isPro) {
       void applyAllRecommended();
       return;
@@ -695,6 +713,10 @@ export default function Dashboard() {
   // detector. A run ledger can explain what just happened, but it cannot
   // replace the full hardware-matched denominator.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
+  const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
+    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
+    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
+  });
   const confirmedIds = native
     ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)))
     : new Set<string>();
@@ -709,14 +731,17 @@ export default function Dashboard() {
   // Native category totals must come from the live Windows detector, not the
   // browser intent store. The latter is persistent, but it is not proof that
   // a registry/service change still exists on this PC.
-  const activeIdsForDisplay = native
+  const allActiveIdsForDisplay = native
     ? confirmedIds
     : new Set(Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id));
+  const savedBest15Ids = readBest15Ids();
+  const freeAllowedIds = matchedRecommendedIds
+    .filter(id => savedBest15Ids.length === 0 || savedBest15Ids.includes(id))
+    .slice(0, 15);
+  const activeIdsForDisplay = isPro
+    ? allActiveIdsForDisplay
+    : new Set(freeAllowedIds.filter(id => allActiveIdsForDisplay.has(id)));
   const activeTweakCount = activeIdsForDisplay.size;
-  const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
-    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
-    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
-  });
   const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const recommendedActionLabel = missingRecommendedCount === 0
     ? "Review recommended tweaks"
@@ -739,9 +764,25 @@ export default function Dashboard() {
   // still show the exact partial score, but a partial/Free run must stop at 99.
   const displayScore = rawScorePercent === 100 && !fullOptimizeSucceeded ? 99 : rawScorePercent;
   const tierLabel = native
-    ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED")
-    : (displayScore === 100 ? "100% SELECTED" : displayScore >= 90 ? "PREVIEW — NOT APPLIED" : displayScore >= 70 ? "PREVIEW — NOT APPLIED" : displayScore >= 46 ? "DECENT PREVIEW" : displayScore >= 21 ? "GETTING THERE" : "UNOPTIMIZED");
-  const tierColor = displayScore === 100 ? "text-red-400" : displayScore >= 70 ? "text-red-400" : displayScore >= 46 ? "text-orange-400" : "text-zinc-500";
+    ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore > 0 ? "PARTIALLY OPTIMIZED" : "UNOPTIMIZED")
+    : (displayScore === 100 ? "100% SELECTED" : displayScore >= 90 ? "PREVIEW — NOT APPLIED" : displayScore >= 70 ? "PREVIEW — NOT APPLIED" : displayScore >= 46 ? "DECENT PREVIEW" : displayScore > 0 ? "PARTIALLY OPTIMIZED" : "UNOPTIMIZED");
+  const tierColor = displayScore > 0 ? "text-red-400" : "text-zinc-500";
+
+  const boostScoreButton = (
+    <Button
+      data-testid="button-boost-score"
+      onClick={applyAllRecommended}
+      className={cn(
+        "font-bold text-sm px-6 transition-all",
+        displayScore >= 90
+          ? "bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30"
+          : "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)]",
+      )}
+    >
+      <Zap className="w-4 h-4 mr-1.5" />
+      {displayScore === 0 ? "Get Started" : "Boost My Score"}
+    </Button>
+  );
 
   return (
     <AppLayout>
@@ -1027,7 +1068,7 @@ export default function Dashboard() {
                     <p className="text-[11px] text-zinc-500 leading-relaxed mb-4">{preset.desc}</p>
                     <div className={cn("inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border", preset.tagBg)}>
                       <Zap className="w-2.5 h-2.5" />
-                      {preset.tweaks.length} tweaks
+                      {preset.id === "maxfps" ? "Full Optimize" : `${preset.tweaks.length} tweaks`}
                     </div>
                   </div>
                 </motion.button>
@@ -1149,19 +1190,7 @@ export default function Dashboard() {
               <div className="shrink-0">
                 {displayScore < 100 ? (
                   <div className="flex flex-col gap-2">
-                    <Button
-                      data-testid="button-boost-score"
-                      onClick={applyAllRecommended}
-                      className={cn(
-                        "font-bold text-sm px-6 transition-all",
-                        displayScore >= 90
-                          ? "bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30"
-                          : "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_-4px_rgba(220,38,38,0.4)]"
-                      )}
-                    >
-                      <Zap className="w-4 h-4 mr-1.5" />
-                      {displayScore === 0 ? "Get Started" : "Boost My Score"}
-                    </Button>
+                    {isPro ? boostScoreButton : <ProUnlockButton>{boostScoreButton}</ProUnlockButton>}
                   </div>
                 ) : native ? (
                   <div className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-emerald-300">

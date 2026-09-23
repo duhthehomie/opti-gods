@@ -1,4 +1,4 @@
 {
-  "version": "5.2.34",
-  "notes": "V5.2.34 — adds live game detection to the Admin performance recorder, FiveM server context, manual refresh, and more reliable game-not-detected status."
+  "version": "5.2.35",
+  "notes": "V5.2.35 — keeps the fullscreen login, logout, and startup splash while replacing the stretched 10 FPS GIF with the high-resolution 30 FPS video. Includes V5.2.34 live game detection, FiveM server context, manual refresh, and more reliable game-not-detected status."
 }

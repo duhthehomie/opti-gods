@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { useAuth } from "@/hooks/use-auth";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
 import { DISCORD_INVITE } from "@/lib/brand-links";
@@ -147,7 +148,7 @@ function StatCard({
   );
 }
 
-type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem" | "hud";
+type Tab = "codes" | "friends" | "activity" | "email" | "sessions" | "pro" | "announcements" | "analytics" | "security" | "preset" | "recorder" | "aether" | "tickets" | "discounts" | "rigs" | "suggestions" | "drivers" | "fivem";
 
 // ── Aether Security Intelligence Center ─────────────────────────────────────
 type BlockedIp = { key: string; ip: string; path: string; resetAt: number; minutesLeft: number };
@@ -1355,12 +1356,18 @@ type CustomerHW = {
   refreshHz?: number | null;
 };
 
-// Game-specific tweak packs — mirrored from GAME_TWEAK_IDS in game-detection.tsx
+// Game-specific packs come from the canonical V5 registry so this admin
+// generator cannot silently drift behind the game pages.
+const registryGameIds = (category: string) => TWEAK_REGISTRY
+  .filter(tweak => tweak.category === category)
+  .map(tweak => tweak.id);
 const GAME_PACKS: Record<string, { label: string; icon: string; ids: string[] }> = {
-  fivem:    { label: "FiveM",       icon: "🏎️", ids: ["FiveMCacheClear","FiveMHighPriority","FiveMNetworkBuffer","FiveMQueueFix","FiveMFullPerfStack","FiveMGTAProcessPerfOptions","FiveMRenderingBoost","FiveMGPUPriorityStack","FiveMDisableLSO","FiveMEnableRSS","FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks","FiveMDisableMPO"] },
-  fortnite: { label: "Fortnite",    icon: "⚡",  ids: ["FortniteHighPriority","FortniteUncapLobbyFPS","FortniteUncapGameFPS","FortniteDisableVSync","FortniteEngineStreaming","FortniteDisableMotionBlur","FortniteNetworkBuffer","FortniteLowShadows","FortniteDisableLumen","FortniteGameMode","FortniteDisableThrottling","CpuFortniteIFEO"] },
-  cod:      { label: "CoD / WZ",    icon: "🎯", ids: ["CodDisableTelemetry","CodTdrDelay","CodMMCSS","CodQoSPolicy","CodFramePacing","CodMemPriority","CpuCodIFEO"] },
-  gta5:     { label: "GTA V",       icon: "🚗", ids: ["FiveMHighPriority","FiveMNetworkBuffer","FiveMReduceNPCDensity","FiveMReduceShadowQuality","FiveMCommandLineTweaks","FiveMGPUPriorityStack"] },
+  fivem:    { label: "FiveM",       icon: "🏎️", ids: registryGameIds("fivem") },
+  fortnite: { label: "Fortnite",    icon: "⚡",  ids: registryGameIds("fortnite") },
+  cod:      { label: "CoD / WZ",    icon: "🎯", ids: registryGameIds("cod") },
+  gta5:     { label: "GTA V",       icon: "🚗", ids: registryGameIds("fivem") },
+  rust:     { label: "Rust",        icon: "🛠️", ids: registryGameIds("rust") },
+  roblox:   { label: "Roblox",      icon: "🧱", ids: registryGameIds("roblox") },
 };
 
 function AdminPresetGenerator({
@@ -4258,18 +4265,21 @@ export default function Admin() {
   const hardwareMap = Object.fromEntries((customerHardwareQuery.data || []).map(h => [h.codeRef, h]));
 
   const sendEmailCode = useMutation({
-    mutationFn: (id: number) => fetch(apiUrl(`/api/admin/email-requests/${id}/send`), {
-      method: "POST", headers,
+    mutationFn: ({ id, fresh = false }: { id: number; fresh?: boolean }) => fetch(apiUrl(`/api/admin/email-requests/${id}/send`), {
+      method: "POST", headers, body: JSON.stringify({ fresh }),
     }).then(async r => {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Failed to send");
       return data;
     }),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/email-requests", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/codes", key] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
-      toast({ title: "Code sent!", description: "The access code was emailed to the customer." });
+      toast({
+        title: variables.fresh ? "Fresh code sent!" : "Code sent!",
+        description: `The access code was emailed to ${data.email || "the customer"}.`,
+      });
     },
     onError: (err: Error) => {
       toast({ title: "Failed to send", description: err.message, variant: "destructive" });
@@ -5040,7 +5050,7 @@ export default function Admin() {
         {/* Tabs — horizontally scrollable on mobile */}
         <div className="flex items-center border-b border-white/5 overflow-x-auto scrollbar-none"
           style={{ WebkitOverflowScrolling: "touch" }}>
-          {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem", "hud"] as Tab[]).map(t => {
+           {(["codes", "friends", "activity", "email", "sessions", "pro", "announcements", "analytics", "security", "preset", "recorder", "aether", "tickets", "discounts", "rigs", "suggestions", "drivers", "fivem"] as Tab[]).map(t => {
             const pendingEmails = (emailRequestsQuery.data || []).filter(r => r.status === "pending").length;
             const TAB_ICONS: Record<Tab, React.ElementType> = {
               codes: Key,
@@ -5053,6 +5063,7 @@ export default function Admin() {
               analytics: TrendingUp,
               security: Shield,
               preset: Sliders,
+               recorder: Activity,
               aether: Bot,
               tickets: Flag,
               discounts: Percent,
@@ -5060,7 +5071,6 @@ export default function Admin() {
               suggestions: Inbox,
               drivers: Monitor,
               fivem: Server,
-              hud: Sliders,
             };
             const TIcon = TAB_ICONS[t];
             return (
@@ -5085,6 +5095,7 @@ export default function Admin() {
                    t === "analytics" ? "Analytics" :
                    t === "security" ? "Security" :
                    t === "preset" ? "Preset Gen" :
+                   t === "recorder" ? "Perf Recorder" :
                    t === "aether" ? "Aether AI" :
                    t === "tickets" ? "Tickets" :
                    t === "discounts" ? "Discounts" :
@@ -5092,7 +5103,6 @@ export default function Admin() {
                    t === "suggestions" ? "Suggestions" :
                    t === "drivers" ? "NVIDIA Drivers" :
                    t === "fivem" ? "FiveM Servers" :
-                   t === "hud" ? "HUD Editor" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -5111,7 +5121,6 @@ export default function Admin() {
                    t === "suggestions" ? "" :
                    t === "drivers" ? "" :
                    t === "fivem" ? "" :
-                   t === "hud" ? "" :
                    `${activityItems.length}`}
                 </span>
                 {t === "email" && pendingEmails > 0 && (
@@ -6128,26 +6137,28 @@ export default function Admin() {
                         {req.note && <p className="text-[10px] text-zinc-600 italic">{req.note}</p>}
 
                         {/* Action buttons */}
-                        {req.status === "pending" && (
+                         {(req.status === "pending" || req.status === "sent" || req.status === "auto-sent") && (
                           <div className="flex gap-2 pt-1.5">
                             <button
-                              data-testid={`button-send-email-${req.id}`}
-                              onClick={() => sendEmailCode.mutate(req.id)}
+                               data-testid={`button-send-email-${req.id}`}
+                               onClick={() => sendEmailCode.mutate({ id: req.id, fresh: req.status !== "pending" })}
                               disabled={sendEmailCode.isPending}
                               className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black transition-colors disabled:opacity-50"
                             >
                               <Send className="w-3 h-3" />
-                              Send Code Now
+                               {req.status === "pending" ? "Send Code Now" : "Send Fresh Code"}
                             </button>
-                            <button
-                              data-testid={`button-reject-email-${req.id}`}
-                              onClick={() => rejectEmailReq.mutate(req.id)}
-                              disabled={rejectEmailReq.isPending}
-                              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-xs font-bold transition-colors"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              Reject
-                            </button>
+                             {req.status === "pending" && (
+                               <button
+                                 data-testid={`button-reject-email-${req.id}`}
+                                 onClick={() => rejectEmailReq.mutate(req.id)}
+                                 disabled={rejectEmailReq.isPending}
+                                 className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-xs font-bold transition-colors"
+                               >
+                                 <XCircle className="w-3.5 h-3.5" />
+                                 Reject
+                               </button>
+                             )}
                           </div>
                         )}
                         {/* Revoke — kills active Pro sessions for this customer instantly */}
@@ -6653,8 +6664,35 @@ export default function Admin() {
         {/* ─── IMPACT ANALYTICS TAB ──────────────────────────────────── */}
         {tab === "analytics" && (
           <div className="space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[10px] text-zinc-600 leading-relaxed">
+                Every time a user downloads a script, the tweaks they had enabled are recorded. Data is fully anonymous — no IP, no account info, just tweak IDs and timestamps.
+              </div>
+              <button
+                type="button"
+                data-testid="button-refresh-analytics"
+                onClick={() => {
+                  void marketingAttributionQuery.refetch();
+                  void downloadStatsQuery.refetch();
+                }}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:border-red-500/40 hover:text-red-400"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Refresh
+              </button>
+            </div>
+
+            {(marketingAttributionQuery.isError || downloadStatsQuery.isError) && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-xs text-amber-300">
+                <p className="font-bold">Analytics request failed</p>
+                <p className="mt-1 text-[10px] text-amber-400/80">
+                  {String((marketingAttributionQuery.error || downloadStatsQuery.error)?.message || "The admin analytics API did not return data.")}
+                </p>
+              </div>
+            )}
+
             <div className="text-[10px] text-zinc-600 leading-relaxed">
-              Every time a user downloads a script, the tweaks they had enabled are recorded. Data is fully anonymous — no IP, no account info, just tweak IDs and timestamps.
+              Campaign totals and script-download analytics refresh automatically every minute.
             </div>
 
             <div className="rounded-xl border border-white/5 bg-zinc-900/40 p-4">
@@ -6683,7 +6721,11 @@ export default function Admin() {
               </div>
             </div>
 
-            {downloadStatsQuery.isLoading ? (
+            {downloadStatsQuery.isError ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 py-10 text-center text-sm text-amber-400">
+                Download analytics could not be loaded. Use Refresh above after confirming the admin session.
+              </div>
+            ) : downloadStatsQuery.isLoading ? (
               <div className="flex items-center gap-3 py-10 justify-center text-zinc-600 text-sm">
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 Loading analytics...
@@ -6861,6 +6903,7 @@ export default function Admin() {
           />
         )}
 
+        {tab === "recorder" && <PerformanceRecorder />}
         {tab === "aether" && <AetherAdminChat headers={headers} />}
         {tab === "tickets" && <TicketsTab headers={headers} />}
         {tab === "pro" && <ProUsersTab headers={headers} />}
@@ -6869,7 +6912,6 @@ export default function Admin() {
         {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}
         {tab === "drivers" && <NvidiaTrackerTab headers={headers} />}
         {tab === "fivem" && <FivemServersTab headers={headers} />}
-        {tab === "hud" && <HudEditorTab headers={headers} />}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

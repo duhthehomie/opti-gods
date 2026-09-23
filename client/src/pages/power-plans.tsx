@@ -12,7 +12,23 @@ export default function PowerPlansPage() {
   const { toast } = useToast();
   const refresh = () => { setLoading(true); listPowerPlans().then(setPlans).catch(e => toast({ title: "Power plan read failed", description: e instanceof Error ? e.message : "Windows did not return plan data.", variant: "destructive" })).finally(() => setLoading(false)); };
   useEffect(refresh, []);
-  const choose = async (guid: string) => { setSwitching(guid); try { await setPowerPlan(guid); toast({ title: "Power plan changed", description: "Windows confirmed the active plan." }); refresh(); } catch (e) { toast({ title: "Could not change plan", description: e instanceof Error ? e.message : "The native action failed.", variant: "destructive" }); } finally { setSwitching(null); } };
+  const choose = async (guid: string) => {
+    setSwitching(guid);
+    try {
+      await setPowerPlan(guid);
+      toast({ title: "Power plan changed", description: "Windows confirmed the active plan." });
+      refresh();
+    } catch (e) {
+      const description = e instanceof Error
+        ? e.message
+        : typeof e === "string"
+          ? e
+          : "Windows rejected the power-plan change.";
+      toast({ title: "Could not change plan", description, variant: "destructive" });
+    } finally {
+      setSwitching(null);
+    }
+  };
   return <AppLayout><div className="og-page-enter space-y-5">
     <header className="flex items-end justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Windows power control</p><h1 className="text-3xl font-display font-bold text-white">Power Plans</h1><p className="mt-1 text-sm text-zinc-500">Read and switch real Windows plans through the elevated native bridge. Duplicate Windows names are consolidated.</p></div><button onClick={refresh} className="rounded-lg border border-white/10 p-2 text-zinc-400 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></button></header>
     {!isNative() && <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[.05] p-4"><ShieldAlert className="mt-0.5 h-4 w-4 text-amber-400" /><div><p className="text-sm font-bold text-amber-200">Windows app required</p><p className="mt-1 text-xs text-amber-200/60">The browser cannot read or modify operating-system power plans. Launch Opti Gods Desktop to connect to Windows.</p></div></div>}

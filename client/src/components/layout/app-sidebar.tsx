@@ -95,6 +95,7 @@ export function AppSidebar() {
   const [tapRemaining, setTapRemaining] = useState<number | null>(null);
   const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [spinVideoFailed, setSpinVideoFailed] = useState(false);
+  const navItemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
 
   const handleLogoTap = useCallback(() => {
     tapCount.current += 1;
@@ -217,7 +218,19 @@ export function AppSidebar() {
     }
   };
 
-  const renderItem = (item: NavItem) => {
+  const handleNavKeyDown = (event: React.KeyboardEvent<HTMLAnchorElement>, index: number) => {
+    if (event.key !== "Tab") return;
+
+    const nextIndex = index + (event.shiftKey ? -1 : 1);
+    // Keep native Tab behavior at either end so users can enter and leave
+    // the workspace navigation without getting trapped in the sidebar.
+    if (nextIndex < 0 || nextIndex >= navItems.length) return;
+
+    event.preventDefault();
+    navItemRefs.current[nextIndex]?.focus();
+  };
+
+  const renderItem = (item: NavItem, index: number) => {
     const Icon = item.icon;
     const active = isActive(item.url);
     const isProAccent = item.accent === "pro";
@@ -227,6 +240,7 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={active}
+          tabIndex={0}
           className={cn(
             "h-10 transition-all",
             active && !isAdminAccent && "bg-red-500/10 text-red-300 border-l-2 border-red-500",
@@ -235,7 +249,13 @@ export function AppSidebar() {
             isAdminAccent && !active && "text-purple-300 hover:text-purple-200",
           )}
         >
-          <Link href={item.url} data-testid={`nav-${item.title.replace(/\s+/g, "-").toLowerCase()}`}>
+          <Link
+            href={item.url}
+            ref={(element) => { navItemRefs.current[index] = element; }}
+            onKeyDown={(event) => handleNavKeyDown(event, index)}
+            aria-current={active ? "page" : undefined}
+            data-testid={`nav-${item.title.replace(/\s+/g, "-").toLowerCase()}`}
+          >
             <Icon className={cn(
               "w-4 h-4",
               active && isAdminAccent ? "text-purple-400" :
@@ -311,9 +331,11 @@ export function AppSidebar() {
           <SidebarGroup>
             <p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-zinc-600">Workspace</p>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {navItems.map(renderItem)}
-              </SidebarMenu>
+              <nav aria-label="Workspace tabs">
+                <SidebarMenu>
+                  {navItems.map(renderItem)}
+                </SidebarMenu>
+              </nav>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>

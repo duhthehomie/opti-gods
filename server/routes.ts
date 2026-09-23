@@ -7262,7 +7262,10 @@ try {
     const allRequests = await storage.getEmailRequests();
     const emailReq = allRequests.find(r => r.id === id);
     if (!emailReq) return res.status(404).json({ error: "Request not found" });
-    if (emailReq.status === "sent" || emailReq.status === "auto-sent") return res.status(400).json({ error: "Code already sent to this customer" });
+    const fresh = req.body?.fresh === true;
+    if ((emailReq.status === "sent" || emailReq.status === "auto-sent") && !fresh) {
+      return res.status(400).json({ error: "Code already sent to this customer. Use Send Fresh Code to resend." });
+    }
 
     // Cross-email duplicate guard — prevent accidentally sending a second code
     // to the same email address from a different request entry.
@@ -7271,7 +7274,7 @@ try {
            r.email.toLowerCase() === emailReq.email.toLowerCase() &&
            (r.status === "sent" || r.status === "auto-sent")
     );
-    if (alreadySentToEmail) {
+    if (alreadySentToEmail && !fresh) {
       return res.status(409).json({
         error: `A code was already sent to ${emailReq.email} (request #${alreadySentToEmail.id}). This looks like a duplicate submission. Reject this request to avoid giving out two codes.`,
         duplicateRequestId: alreadySentToEmail.id,
@@ -7285,14 +7288,23 @@ try {
         .filter(r => r.sentCodeId && (r.status === "sent" || r.status === "auto-sent"))
         .map(r => r.sentCodeId)
     );
-    const available = allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
-    if (!available) return res.status(503).json({ error: "No available codes — generate more first" });
+    let available = fresh
+      ? undefined
+      : allCodes.find(c => !c.usedAt && !reservedCodeIds.has(c.id));
+    if (!available) {
+      const freshCode = `EMAIL-${randomBytes(5).toString("hex").toUpperCase()}`;
+      const created = await storage.createCode(
+        freshCode,
+        `Email delivery for ${emailReq.email} | request:${emailReq.id}`,
+      );
+      available = { ...created, lastSessionAt: null, sessionIp: null };
+    }
 
     // Do NOT call redeemCode here — the customer needs to be able to enter the code on the site.
     // Revenue is counted when the request is accepted (status="sent"), not when customer redeems.
     const siteUrl = `${req.protocol}://${req.get("host")}`;
     await sendProCode(emailReq.email, available.code, siteUrl);
-    await storage.updateEmailRequestStatus(id, "sent", available.id);
+    await storage.updateEmailRequestStatus(id, "sent", available.id, fresh ? "Fresh code emailed by admin" : undefined);
 
     // Task #41: if the buyer was signed in when they submitted the proof,
     // also bind a lifetime Pro entitlement to their Discord ID. This is the
@@ -7318,7 +7330,7 @@ try {
       }
     }
 
-    return res.json({ ok: true, code: available.code, proGranted });
+    return res.json({ ok: true, code: available.code, email: emailReq.email, proGranted });
   });
 
   app.post("/api/admin/email-requests/:id/reject", async (req, res) => {

@@ -12,7 +12,7 @@ export function BootSplash() {
     if (!("__TAURI_INTERNALS__" in window)) return "hidden";
     return "show";
   });
-  const [gifFailed, setGifFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
 
   useEffect(() => {
     if (phase === "hidden") return;
@@ -35,7 +35,7 @@ export function BootSplash() {
         transition: `opacity ${FADE_MS}ms ease-out`,
       }}
     >
-      {gifFailed ? (
+      {videoFailed ? (
         /* CSS ring fallback — no white-background PNG */
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
           <div
@@ -64,11 +64,15 @@ export function BootSplash() {
           <style>{`@keyframes og-splash-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
-        <img
-          src={BRAND.loadingGif}
-          alt=""
+        <video
+          src={BRAND.spinRed}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
           aria-hidden="true"
-          onError={() => setGifFailed(true)}
+          onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
         />
       )}

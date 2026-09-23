@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Zap, Trophy, TrendingUp, Star, Cpu, Monitor, Wifi, HardDrive, CheckCircle, ExternalLink, Copy, CreditCard, Laptop } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
@@ -119,6 +119,32 @@ function ShowcaseStripeCard() {
 export default function Showcase() {
   const [copied, setCopied] = useState<"cashapp" | "paypal" | null>(null);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [loadVideo, setLoadVideo] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setLoadVideo(false);
+      return;
+    }
+
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") {
+      return;
+    }
+
+    const requestIdle = window.requestIdleCallback;
+    if (requestIdle) {
+      const idleId = requestIdle(() => setLoadVideo(true), { timeout: 2500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(() => setLoadVideo(true), 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, [reduceMotion]);
 
   const copy = (text: string, which: "cashapp" | "paypal") => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -144,42 +170,50 @@ export default function Showcase() {
             }}
           />
 
-          {/* Spinning logo */}
+          {/* Static logo paints immediately; animation loads later on capable connections. */}
           <motion.div
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
             className="relative z-10 mb-5 flex justify-center"
           >
-            {videoFailed ? (
-              <div style={{ position: "relative", width: 96, height: 96 }}>
-                <div style={{
-                  width: 96, height: 96, borderRadius: "50%",
-                  border: "3px solid rgba(255,80,20,0.18)",
-                  borderTopColor: "#ff5010",
-                  animation: "og-hero-spin 1.2s linear infinite",
-                  boxShadow: "0 0 36px rgba(255,80,20,0.6), inset 0 0 14px rgba(255,80,20,0.25)",
-                }} />
-                <div style={{
-                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 900, color: "#ff6020", letterSpacing: "0.05em",
-                }}>OG</div>
-                <style>{`@keyframes og-hero-spin { to { transform: rotate(360deg); } }`}</style>
-              </div>
-            ) : (
+            <div style={{ position: "relative", width: 104, height: 104 }}>
+              <img
+                src="/branding/spin-whitegold-poster.webp"
+                alt="Opti Gods"
+                width={104}
+                height={104}
+                decoding="async"
+                style={{
+                  width: 104, height: 104, objectFit: "contain",
+                  filter: "drop-shadow(0 0 22px rgba(255,160,30,0.65))",
+                }}
+              />
+              {loadVideo && !videoFailed && (
               <video
                 src={BRAND.spinWhiteGold}
                 autoPlay
                 muted
                 playsInline
                 loop
-                onError={() => setVideoFailed(true)}
+                preload="metadata"
+                poster="/branding/spin-whitegold-poster.webp"
+                aria-hidden="true"
+                onCanPlay={() => setVideoReady(true)}
+                onError={() => {
+                  setVideoFailed(true);
+                  setVideoReady(false);
+                }}
                 style={{
+                  position: "absolute", inset: 0,
                   width: 104, height: 104, objectFit: "contain",
+                  opacity: videoReady ? 1 : 0,
+                  transition: "opacity 180ms ease",
                   filter: "drop-shadow(0 0 22px rgba(255,160,30,0.65))",
                 }}
               />
-            )}
+              )}
+            </div>
           </motion.div>
 
           {/* Neon title box — matches reference screenshot */}

@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { getNativeAuthHeaders, queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -21,6 +21,105 @@ import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { NativeRestoreReadinessBanner } from "@/components/native-restore-readiness-banner";
 import { installGlobalErrorReporting, reportClientError } from "@/lib/client-error-reporter";
+import { APP_VERSION } from "@/generated/version";
+
+const PUBLIC_SITE_ORIGIN = "https://optigods.com";
+const ROUTE_SEO: Record<string, { title: string; description: string; index: boolean }> = {
+  "/": {
+    title: `Opti Gods V${APP_VERSION} — Windows Gaming PC Optimizer by leaq`,
+    description: `Opti Gods V${APP_VERSION} by leaq: 608+ hardware-aware Windows 10/11 tweaks, game packs, green presets, and transparent scripts.`,
+    index: true,
+  },
+  "/showcase": {
+    title: `Opti Gods V${APP_VERSION} Showcase — Gaming PC Optimization by leaq`,
+    description: "See Opti Gods V5 in action with transparent Windows tweaks, game optimization packs, and real product previews.",
+    index: true,
+  },
+  "/updates": {
+    title: `Opti Gods V${APP_VERSION} Updates — V5 Changelog`,
+    description: `Follow the Opti Gods V${APP_VERSION} changelog for Windows optimizer improvements, game packs, native app updates, and fixes.`,
+    index: true,
+  },
+  "/pro": {
+    title: `Opti Gods V${APP_VERSION} Pro — Lifetime Windows Gaming Optimization`,
+    description: "Unlock hardware-aware Windows tweaks, game packs, AI tools, presets, and transparent script generation with lifetime Pro access.",
+    index: true,
+  },
+  "/game-profiles": {
+    title: `Opti Gods V${APP_VERSION} Game Profiles — FiveM, Fortnite, CoD, Rust & Roblox`,
+    description: "Explore Opti Gods V5 game-specific Windows optimization profiles for FiveM, Fortnite, Call of Duty, Rust, Roblox, and more.",
+    index: true,
+  },
+  "/game-profiles/fivem": {
+    title: `FiveM FPS Optimization V${APP_VERSION} — Opti Gods by leaq`,
+    description: "Hardware-aware FiveM and GTA V Windows optimization tools, transparent tweaks, and game-specific recommendations.",
+    index: true,
+  },
+  "/game-profiles/fortnite": {
+    title: `Fortnite FPS Optimization V${APP_VERSION} — Opti Gods by leaq`,
+    description: "Hardware-aware Fortnite Windows optimization tools for FPS, latency, input, GPU, and memory settings.",
+    index: true,
+  },
+  "/game-profiles/call-of-duty": {
+    title: `Call of Duty Optimization V${APP_VERSION} — Opti Gods by leaq`,
+    description: "Windows optimization tools for Call of Duty and Warzone with transparent network, input, memory, and performance tweaks.",
+    index: true,
+  },
+  "/game-profiles/rust": {
+    title: `Rust FPS Optimization V${APP_VERSION} — Opti Gods by leaq`,
+    description: "Hardware-aware Rust game optimization tools for Windows gaming performance and transparent script generation.",
+    index: true,
+  },
+  "/game-profiles/roblox": {
+    title: `Roblox Performance Optimization V${APP_VERSION} — Opti Gods by leaq`,
+    description: "Windows performance recommendations for Roblox with hardware-aware tweaks and transparent optimization scripts.",
+    index: true,
+  },
+};
+
+function RouteSeo() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const path = location.split("?")[0] || "/";
+    const seo = ROUTE_SEO[path] ?? {
+      title: `Opti Gods V${APP_VERSION} — Windows Gaming PC Optimizer by leaq`,
+      description: `Opti Gods V${APP_VERSION}: hardware-aware Windows gaming optimization with transparent tweaks and game-specific tools.`,
+      index: false,
+    };
+    const canonical = `${PUBLIC_SITE_ORIGIN}${path === "/" ? "/" : path}`;
+    document.title = seo.title;
+
+    const setMeta = (attribute: "name" | "property", key: string, value: string) => {
+      const selector = `meta[${attribute}="${key}"]`;
+      let element = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!element) {
+        element = document.createElement("meta");
+        element.setAttribute(attribute, key);
+        document.head.appendChild(element);
+      }
+      element.content = value;
+    };
+    setMeta("name", "description", seo.description);
+    setMeta("name", "robots", seo.index ? "index, follow" : "noindex, nofollow");
+    setMeta("property", "og:title", seo.title);
+    setMeta("property", "og:description", seo.description);
+    setMeta("property", "og:url", canonical);
+    setMeta("name", "twitter:title", seo.title);
+    setMeta("name", "twitter:description", seo.description);
+    setMeta("name", "twitter:url", canonical);
+
+    let link = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "canonical";
+      document.head.appendChild(link);
+    }
+    link.href = canonical;
+  }, [location]);
+
+  return null;
+}
 
 // Always eager — these are the first screens the user sees
 import Landing from "@/pages/landing";
@@ -135,8 +234,10 @@ function FriendUnlockHandler() {
 function Router() {
   const HomeComponent = isNative() ? Dashboard : SmartHome;
   return (
-    <Suspense fallback={null}>
-      <Switch>
+    <>
+      <RouteSeo />
+      <Suspense fallback={null}>
+        <Switch>
         <Route path="/" component={HomeComponent} />
         <Route path="/dashboard" component={Dashboard} />
 
@@ -172,9 +273,10 @@ function Router() {
         <Route path="/task-manager" component={TaskManagerPage} />
         <Route path="/fivem-graphics" component={FivemGraphicsPage} />
         <Route path="/graphics-studio" component={FivemGraphicsPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </Suspense>
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
+    </>
   );
 }
 

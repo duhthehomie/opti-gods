@@ -20,6 +20,8 @@ import { marketingCheckoutFields } from "@/lib/marketing-attribution";
 const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || "$my1ik";
 const PAYPAL_LINK = (import.meta.env.VITE_PAYPAL_LINK as string | undefined) || "https://paypal.me/accountslg";
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
+const STRIPE_PAYMENT_LINK = (import.meta.env.VITE_STRIPE_PAYMENT_LINK as string | undefined)?.trim()
+  || "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
 
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;
@@ -236,11 +238,20 @@ export function ProPaymentDialog({
         credentials: "include",
         body: JSON.stringify({ tier, ...(discountCode ? { discountCode } : {}), ...marketingCheckoutFields() }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.url) throw new Error(data.error || "Checkout unavailable");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.url) {
+        // Keep the card button usable in native builds even if the server-side
+        // checkout configuration is temporarily unavailable. The existing
+        // Stripe Payment Link still takes the buyer to the card checkout.
+        if (tier === "pro") {
+          await openExternal(STRIPE_PAYMENT_LINK);
+          return;
+        }
+        throw new Error(data.error || "Checkout unavailable");
+      }
       if (isNative()) await openExternal(data.url);
       else window.location.assign(data.url);
-    } catch (error) {
+      } catch (error) {
       setError(error instanceof Error ? error.message : "Checkout unavailable");
     } finally {
       setStripeLoading(false);
