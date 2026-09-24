@@ -39,7 +39,7 @@ const GAME_LIBRARY: GameProfile[] = [
     id: "game_silenthilltownfall",
     title: "Silent Hill: Townfall",
     publisher: "Konami / Screen Burn",
-    cover: "/game-covers/silent-hill-townfall.jpg",
+    cover: "/game-covers/silent-hill-townfall.png",
     gradient: "from-slate-950 via-zinc-900 to-black",
     recommendationIds: [
       "TownfallProcessPriority", "TownfallIOPriority", "TownfallGPUPriority",
