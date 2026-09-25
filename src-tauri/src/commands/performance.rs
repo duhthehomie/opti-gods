@@ -164,7 +164,8 @@ $knownGames = @(
   [pscustomobject]@{ id = 'rust'; label = 'Rust'; pattern = '^RustClient$' },
   [pscustomobject]@{ id = 'tarkov'; label = 'Escape from Tarkov'; pattern = '^EscapeFromTarkov$' },
   [pscustomobject]@{ id = 'league'; label = 'League of Legends'; pattern = '^(LeagueClient|League of Legends)$' },
-  [pscustomobject]@{ id = 'minecraft'; label = 'Minecraft'; pattern = '^(java|MinecraftLauncher)$' }
+  [pscustomobject]@{ id = 'minecraft'; label = 'Minecraft'; pattern = '^(java|MinecraftLauncher)$' },
+  [pscustomobject]@{ id = 'game_silenthilltownfall'; label = 'Silent Hill: Townfall'; pattern = '^(SilentHillTownfall-Win64-Shipping|Townfall-Win64-Shipping|SHTownfall|Silent Hill Townfall)$' }
 )
 $activeGame = $null
 foreach ($rule in $knownGames) {
