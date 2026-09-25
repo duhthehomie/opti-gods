@@ -51,12 +51,24 @@ const GAMES: &[GameSpec] = &[
     GameSpec { id: "game_007firstlight", executables: &["007FirstLight.exe", "007FirstLight-Win64-Shipping.exe"], names: &["007 first light"], known_paths: &[] },
     GameSpec { id: "game_fortnite", executables: &["FortniteClient-Win64-Shipping.exe"], names: &["fortnite"], known_paths: &[] },
     GameSpec { id: "game_marvelrivals", executables: &["MarvelRivals-Win64-Shipping.exe"], names: &["marvel rivals"], known_paths: &[] },
+    GameSpec {
+        id: "game_silenthilltownfall",
+        executables: &["SilentHillTownfall-Win64-Shipping.exe", "Townfall-Win64-Shipping.exe", "SHTownfall.exe", "Silent Hill Townfall.exe"],
+        names: &["silent hill: townfall", "silent hill townfall", "townfall"],
+        known_paths: &[
+            "C:\\Games\\Silent Hill Townfall",
+            "D:\\Games\\Silent Hill Townfall",
+            "E:\\Games\\Silent Hill Townfall",
+            "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Silent Hill Townfall",
+            "D:\\SteamLibrary\\steamapps\\common\\Silent Hill Townfall",
+        ],
+    },
 ];
 
 #[cfg(windows)]
 fn expand_env_path(value: &str) -> PathBuf {
     let mut expanded = value.to_string();
-    for key in ["LOCALAPPDATA", "APPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA"] {
+    for key in ["LOCALAPPDATA", "APPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA", "USERPROFILE"] {
         if let Ok(v) = std::env::var(key) {
             expanded = expanded.replace(&format!("%{key}%"), &v);
         }
@@ -87,6 +99,20 @@ fn find_executable(root: &Path, names: &[&str], max_depth: usize) -> Option<Path
         }
     }
     None
+}
+
+#[cfg(windows)]
+fn trusted_standalone_roots() -> Vec<PathBuf> {
+    [
+        r"C:\Games", r"D:\Games", r"E:\Games", r"F:\Games",
+        r"C:\Program Files", r"C:\Program Files (x86)",
+        r"D:\Program Files", r"D:\Program Files (x86)",
+        r"E:\Program Files", r"E:\Program Files (x86)",
+        r"%LOCALAPPDATA%", r"%USERPROFILE%\Desktop", r"%USERPROFILE%\Downloads",
+    ]
+    .into_iter()
+    .map(expand_env_path)
+    .collect()
 }
 
 #[cfg(windows)]
@@ -228,6 +254,24 @@ pub fn detect_installed_games() -> Vec<InstalledGame> {
                         running: running.contains(&exe_name.to_lowercase()),
                     });
                     break;
+                }
+            }
+        }
+        // A standalone or modified install may not have a storefront manifest
+        // or uninstall record. Only inspect fixed local roots owned by this
+        // detector; the renderer never supplies a path.
+        for root in trusted_standalone_roots() {
+            for spec in GAMES {
+                if matches.contains_key(spec.id) { continue; }
+                if let Some(exe) = find_executable(&root, spec.executables, 6) {
+                    let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    matches.insert(spec.id, InstalledGame {
+                        id: spec.id.into(),
+                        executable: exe_name.clone(),
+                        install_path: exe.to_string_lossy().to_string(),
+                        source: "Trusted local install location".into(),
+                        running: running.contains(&exe_name.to_lowercase()),
+                    });
                 }
             }
         }

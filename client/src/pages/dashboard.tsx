@@ -283,13 +283,13 @@ const QUICK_BOOST_PRESETS = [
     title: "Safe Boost",
     tag: "NO RISK",
     desc: "Pure registry tweaks — CPU scheduling, power plan, privacy, memory, and game packs. Zero service stops. Safe for any PC.",
-    color: "text-emerald-400",
-    border: "border-emerald-500/30 hover:border-emerald-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
-    activeBg: "bg-emerald-950/30",
-    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
-    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
-    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
+    color: "text-white",
+    border: "border-white/30 hover:border-white/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(255,255,255,0.25)]",
+    activeBg: "bg-white/[0.06]",
+    accentBar: "bg-gradient-to-r from-white to-zinc-300",
+    iconBg: "bg-white/10 border border-white/20",
+    tagBg: "bg-white/10 border-white/25 text-white",
     tweaks: SAFE_TWEAKS,
   },
   {
@@ -298,13 +298,13 @@ const QUICK_BOOST_PRESETS = [
     title: "Max FPS Gaming",
     tag: "RECOMMENDED",
     desc: "Runs the same hardware-aware Full Optimize flow, including the compatible Windows, game, GPU, memory, and performance recommendations for this PC.",
-    color: "text-emerald-400",
-    border: "border-emerald-500/30 hover:border-emerald-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
-    activeBg: "bg-emerald-950/30",
-    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
-    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
-    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
+    color: "text-red-400",
+    border: "border-red-500/30 hover:border-red-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(239,68,68,0.3)]",
+    activeBg: "bg-red-950/30",
+    accentBar: "bg-gradient-to-r from-red-600 to-red-400",
+    iconBg: "bg-red-500/10 border border-red-500/20",
+    tagBg: "bg-red-500/10 border-red-500/25 text-red-400",
     tweaks: MAX_FPS_TWEAKS,
   },
   {
@@ -328,13 +328,13 @@ const QUICK_BOOST_PRESETS = [
     title: "Streamer Mode",
     tag: "OBS STABLE",
     desc: "Game perf balanced with stable OBS encoder threads — no stutter drops. Full Discord + Spotify yield. Boot cleanup.",
-    color: "text-emerald-400",
-    border: "border-emerald-500/30 hover:border-emerald-500/60",
-    glow: "shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)]",
-    activeBg: "bg-emerald-950/30",
-    accentBar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
-    iconBg: "bg-emerald-500/10 border border-emerald-500/20",
-    tagBg: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400",
+    color: "text-blue-400",
+    border: "border-blue-500/30 hover:border-blue-500/60",
+    glow: "shadow-[0_0_28px_-6px_rgba(59,130,246,0.3)]",
+    activeBg: "bg-blue-950/30",
+    accentBar: "bg-gradient-to-r from-blue-600 to-blue-400",
+    iconBg: "bg-blue-500/10 border border-blue-500/20",
+    tagBg: "bg-blue-500/10 border-blue-500/25 text-blue-400",
     tweaks: STREAMER_TWEAKS,
   },
 ];
@@ -383,7 +383,7 @@ export default function Dashboard() {
   const hasProEntitlement = useProStatus();
   const isPro = isAuthenticated && hasProEntitlement;
   const proStatusLoading = useProStatusLoading();
-  const { tweaks, setAllTweaks } = useOptimizationStore();
+  const { tweaks, appliedAt, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
@@ -619,7 +619,7 @@ export default function Dashboard() {
       return;
     }
     if (native) {
-      const missingIds = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id));
+      const missingIds = scoreIds.filter(id => !activeIdsForDisplay.has(id));
       if (!missingIds.length) return;
       playOptimizationActionSound();
       queueTweakBatch(missingIds);
@@ -709,22 +709,30 @@ export default function Dashboard() {
     && Boolean(lastNativeRun)
     && lastNativeRun!.items.length > 0
     && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
-  // Browser toggles are intent only. Native score/results must come from the
-  // detector. A run ledger can explain what just happened, but it cannot
-  // replace the full hardware-matched denominator.
+  // Browser toggles are intent only. Native score/results come from Windows
+  // plus the runner's confirmed-success ledger. The detector covers only a
+  // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
     return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
   });
   const confirmedIds = native
-    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)))
+    ? new Set([
+      ...Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)),
+      ...Object.keys(appliedAt).filter(id => registryIds.has(id)),
+    ])
     : new Set<string>();
   const liveRunActive = native
     && Boolean(lastNativeRun)
     && ["running", "stopping"].includes(lastNativeRun!.status);
   if (liveRunActive) {
     lastNativeRun!.items
+      .filter(item => item.status === "applied" && registryIds.has(item.id))
+      .forEach(item => confirmedIds.add(item.id));
+  }
+  if (native && lastNativeRun) {
+    lastNativeRun.items
       .filter(item => item.status === "applied" && registryIds.has(item.id))
       .forEach(item => confirmedIds.add(item.id));
   }
@@ -741,13 +749,22 @@ export default function Dashboard() {
   const activeIdsForDisplay = isPro
     ? allActiveIdsForDisplay
     : new Set(freeAllowedIds.filter(id => allActiveIdsForDisplay.has(id)));
+  const latestLargeRunIds = latestRunIsTerminal && lastNativeRun
+    ? Array.from(new Set(lastNativeRun.items
+      .map(item => item.id)
+      .filter(id => matchedRecommendedIds.includes(id))))
+    : [];
+  // A full native run is much larger than a retry or quick preset. Use its
+  // exact set for the score and CTA so 373 applied / 10 failed stays visible.
+  const scoreIds = latestLargeRunIds.length >= 100
+    ? latestLargeRunIds
+    : matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
   const activeTweakCount = activeIdsForDisplay.size;
-  const missingRecommendedCount = matchedRecommendedIds.filter(id => !activeIdsForDisplay.has(id)).length;
+  const missingRecommendedCount = scoreIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const recommendedActionLabel = missingRecommendedCount === 0
     ? "Review recommended tweaks"
     : `Apply ${missingRecommendedCount} missing tweaks`;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
-  const scoreIds = matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
   const recApplied = native
     ? scoreIds.filter(id => activeIdsForDisplay.has(id)).length
     : scoreIds.filter(id => (tweaks as Record<string, boolean>)[id]).length;
@@ -1366,19 +1383,17 @@ export default function Dashboard() {
               <span className="text-xs font-bold text-white">{activeTweakCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} tweaks</span></span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {[
-                { label: "FiveM",     keys: (k: string) => k.startsWith("FiveM"),    total: TWEAK_REGISTRY.filter(t => t.id.startsWith("FiveM")).length },
-                { label: "Fortnite",  keys: (k: string) => k.startsWith("Fortnite"), total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Fortnite")).length },
-                { label: "Memory",    keys: (k: string) => k.startsWith("Mem") || k.startsWith("mem"), total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Mem") || t.id.startsWith("mem")).length },
-                { label: "Games",     keys: (k: string) => k.startsWith("game_"),    total: TWEAK_REGISTRY.filter(t => t.id.startsWith("game_")).length },
-                { label: "Services",  keys: (k: string) => k.startsWith("Service"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Service")).length },
-                { label: "Privacy",   keys: (k: string) => k.startsWith("Privacy"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Privacy")).length },
-                { label: "Process",   keys: (k: string) => k.startsWith("Process"),  total: TWEAK_REGISTRY.filter(t => t.id.startsWith("Process")).length },
-                { label: "Registry",  keys: (k: string) => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => k.startsWith(p)), total: TWEAK_REGISTRY.filter(t => !["FiveM","Fortnite","game_","Process","Mem","mem","Service","Privacy"].some(p => t.id.startsWith(p))).length },
-              ].map(({ label, keys, total }) => {
-                const active = Array.from(activeIdsForDisplay).filter(keys).length;
+              {Array.from(new Set(TWEAK_REGISTRY.map(tweak => tweak.category)))
+                .map(category => {
+                  const categoryTweaks = TWEAK_REGISTRY.filter(tweak => tweak.category === category);
+                  const active = categoryTweaks.filter(tweak => activeIdsForDisplay.has(tweak.id)).length;
+                  const label = category.replace(/(^|-)(\w)/g, (_, separator, letter) => `${separator ? " " : ""}${letter.toUpperCase()}`);
+                  return { label, total: categoryTweaks.length, active };
+                })
+                .filter(group => group.active > 0)
+                .sort((a, b) => b.active - a.active)
+                .map(({ label, active, total }) => {
                 const pct = Math.round((active / total) * 100);
-                if (active === 0) return null;
                 return (
                   <div key={label} className="space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -1393,7 +1408,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 );
-              }).filter(Boolean)}
+              })}
             </div>
           </motion.div>
         )}

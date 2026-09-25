@@ -401,7 +401,7 @@ export const GAME_DETECT_PACK_IDS: string[] = [
   "game_dota2", "game_warframe", "game_forza", "game_readyornot",
   "game_phasmo", "game_battlefield", "game_gta5", "game_fivem",
   "game_rocketleague", "game_arcraiders", "game_marvelrivals",
-  "game_007firstlight", "game_fortnite", "game_pubg",
+  "game_007firstlight", "game_fortnite", "game_silenthilltownfall", "game_pubg",
 ];
 
 /** Universal system tweaks not in the core arrays */

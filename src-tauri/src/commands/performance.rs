@@ -81,6 +81,16 @@ if ($nvidia) {
     $out.gpu_temp_c = [double]$matches[2]
   }
 }
+if ($null -eq $out.gpu_temp_c) {
+  foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
+    $sensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
+      Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU Core|GPU Hot Spot|GPU Temperature|GPU' -and $_.Name -notmatch 'CPU' })
+    if ($sensors) {
+      $value = ($sensors | Measure-Object -Property Value -Maximum).Maximum
+      if ($value -gt 5 -and $value -lt 130) { $out.gpu_temp_c = [double][math]::Round($value, 1); break }
+    }
+  }
+}
 if ($null -eq $out.gpu_load_pct) {
   $samples = (Get-Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 0.25 -MaxSamples 1).CounterSamples
   if ($samples) {
@@ -88,6 +98,27 @@ if ($null -eq $out.gpu_load_pct) {
     if ($null -ne $sum) { $out.gpu_load_pct = [math]::Min(100, [math]::Round([double]$sum, 1)) }
   }
 }
+
+# CPU package temperature. ACPI is available on some systems; Ryzen boards
+# commonly expose the real package sensor through OpenHardwareMonitor or
+# LibreHardwareMonitor instead.
+$cpuTemp = $null
+$zones = @(Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue)
+if ($zones) {
+  $values = @($zones | ForEach-Object { [math]::Round(([double]$_.CurrentTemperature / 10) - 273.15, 1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 })
+  if ($values) { $cpuTemp = ($values | Measure-Object -Maximum).Maximum }
+}
+if ($null -eq $cpuTemp) {
+  foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
+    $sensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
+      Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'CPU Package|CPU Core|Tctl|Tdie|CPU CCD' })
+    if ($sensors) {
+      $value = ($sensors | Measure-Object -Property Value -Maximum).Maximum
+      if ($value -gt 5 -and $value -lt 120) { $cpuTemp = [math]::Round([double]$value, 1); break }
+    }
+  }
+}
+if ($null -ne $cpuTemp) { $out.cpu_temp_c = [double]$cpuTemp }
 
 # Match Task Manager's total-process view without exporting every process name.
 $processes = @(Get-Process -ErrorAction SilentlyContinue)

@@ -139,21 +139,12 @@ const Showcase       = lazy(() => import("@/pages/showcase"));
 const GetCode        = lazy(() => import("@/pages/get-code"));
 const PaymentSuccess = lazy(() => import("@/pages/payment-success"));
 const PaymentCancel  = lazy(() => import("@/pages/payment-cancel"));
-const GameDetectionPage = lazy(() => import("@/pages/game-detection"));
 const ProcessesPage  = lazy(() => import("@/pages/processes"));
 const HelpPage       = lazy(() => import("@/pages/help"));
 const TaskManagerPage    = lazy(() => import("@/pages/task-manager"));
 const FivemGraphicsPage  = lazy(() => import("@/pages/fivem-graphics"));
 const GameProfilesPage   = lazy(() => import("@/pages/game-profiles"));
 const UpdatesPage        = lazy(() => import("@/pages/updates"));
-const FivemPage          = lazy(() => import("@/pages/fivem"));
-const FortnitePage       = lazy(() => import("@/pages/fortnite"));
-const CallOfDutyPage     = lazy(() => import("@/pages/call-of-duty"));
-const Bond007Page        = lazy(() => import("@/pages/bond-007"));
-const RustGamePage       = lazy(() => import("@/pages/rust-game"));
-const RobloxPage         = lazy(() => import("@/pages/roblox"));
-const DiscordPage        = lazy(() => import("@/pages/discord"));
-const SpotifyPage        = lazy(() => import("@/pages/spotify"));
 
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 
@@ -256,16 +247,10 @@ function Router() {
         <Route path="/get-code" component={GetCode} />
         <Route path="/payment/success" component={PaymentSuccess} />
         <Route path="/payment/cancel" component={PaymentCancel} />
-        <Route path="/game-detection" component={GameDetectionPage} />
         <Route path="/game-profiles" component={GameProfilesPage} />
-        <Route path="/game-profiles/fivem" component={FivemPage} />
-        <Route path="/game-profiles/fortnite" component={FortnitePage} />
-        <Route path="/game-profiles/call-of-duty" component={CallOfDutyPage} />
-        <Route path="/game-profiles/007-first-light" component={Bond007Page} />
-        <Route path="/game-profiles/rust" component={RustGamePage} />
-        <Route path="/game-profiles/roblox" component={RobloxPage} />
-        <Route path="/game-profiles/discord" component={DiscordPage} />
-        <Route path="/game-profiles/spotify" component={SpotifyPage} />
+        {/* Keep old bookmarks inside the single Game Profiles screen. */}
+        <Route path="/game-detection" component={GameProfilesPage} />
+        <Route path="/game-profiles/:slug" component={GameProfilesPage} />
         <Route path="/processes" component={ProcessesPage} />
         <Route path="/help" component={HelpPage} />
         <Route path="/support" component={HelpPage} />

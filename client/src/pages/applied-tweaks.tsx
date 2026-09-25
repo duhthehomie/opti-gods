@@ -352,10 +352,12 @@ export default function AppliedTweaksPage() {
     runItems
       .filter(item => item.status === "failed")
       .map(item => item.id)
-       .filter(id => {
-         const item = runItems.find(candidate => candidate.id === id);
-         return item ? getRunCompatibility(item).ok : false;
-       }),
+  ));
+  const retryableFailedIds = Array.from(new Set(
+    failedIds.filter(id => {
+      const item = runItems.find(candidate => candidate.id === id);
+      return item ? getRunCompatibility(item).ok : false;
+    }),
   ));
   const stopRun = () => {
     if (stopNativeTweakRun()) {
@@ -392,7 +394,7 @@ export default function AppliedTweaksPage() {
     }
   };
   const rerunQueued = () => rerunIds(queuedIds, "Queued tweaks reapplied");
-  const rerunFailed = () => rerunIds(failedIds, "Failed tweaks reapplied", true);
+  const rerunFailed = () => rerunIds(retryableFailedIds, "Failed tweaks reapplied", true);
   const reapply = async (id: string) => {
     if (runActive || reapplying || !isNative()) return;
     setReapplying(id);
@@ -549,7 +551,7 @@ export default function AppliedTweaksPage() {
              {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop tweaks"}</button>}
              {(ids.length > 0 || runItems.length > 0) && <button onClick={() => void undoAll()} disabled={runActive || batchUndoing} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Undo2 className="h-3 w-3" />{batchUndoing ? "Undoing…" : "Undo all tweaks"}</button>}
             {queuedIds.length > 0 && <button onClick={() => void rerunQueued()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun queued</button>}
-            {failedIds.length > 0 && <button onClick={() => void rerunFailed()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun failed ({failedIds.length})</button>}
+            {retryableFailedIds.length > 0 && <button onClick={() => void rerunFailed()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun compatible failed ({retryableFailedIds.length}){retryableFailedIds.length !== failedIds.length ? ` · ${failedIds.length - retryableFailedIds.length} skipped` : ""}</button>}
            {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
          </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "failed").length / runItems.length) * 100)}%` }} /></div>

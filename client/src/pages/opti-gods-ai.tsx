@@ -5,7 +5,7 @@ import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Send, ImagePlus, X, Zap, Cpu, RotateCcw, ChevronRight, ScanLine, Sparkles, Download, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Send, ImagePlus, X, Zap, Cpu, Thermometer, RotateCcw, ChevronRight, ScanLine, Sparkles, Download, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
 import { ProUnlockButton } from "@/components/pro-gate";
+import { useLiveStats } from "@/hooks/use-live-stats";
 
 type Message = {
   role: "user" | "assistant";
@@ -566,6 +567,8 @@ function ReportIssueModal({ onClose }: { onClose: () => void }) {
 
 export default function OptiGodsAI() {
   const isPro = useProStatus();
+  const hw = useHardwareInfo();
+  const live = useLiveStats(hw.ramGB);
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -802,6 +805,23 @@ export default function OptiGodsAI() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="mx-4 mt-3 grid grid-cols-2 gap-2 shrink-0">
+          {[
+            { label: "CPU Temp", value: live.cpuTemp, icon: Cpu },
+            { label: "GPU Temp", value: live.gpuTemp, icon: Thermometer },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="rounded-xl border border-white/8 bg-zinc-900/50 px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-500"><Icon className="h-3 w-3" />{label}</span>
+                <span className={cn("text-[9px] font-bold", live.isLive ? "text-emerald-400" : "text-zinc-600")}>{live.isStale ? "STALE" : live.isLive ? "LIVE" : "NO SENSOR"}</span>
+              </div>
+              <p className={cn("mt-1 font-mono text-lg font-black", value == null ? "text-zinc-600" : value < 60 ? "text-emerald-400" : value < 80 ? "text-amber-400" : "text-red-400")}>
+                {value == null ? "—" : `${Math.round(value)}°C`}
+              </p>
+            </div>
+          ))}
         </div>
 
         {/* Messages */}

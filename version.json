@@ -1,4 +1,4 @@
 {
-  "version": "5.2.36",
-  "notes": "V5.2.36 — adds Silent Hill: Townfall support with supplied artwork, a focused 15-action UE5 FPS/stability profile, and native-resolution low-end tuning for 4 GB GPUs."
+  "version": "5.2.37",
+  "notes": "V5.2.37 — ships the Silent Hill: Townfall cover artwork with its 15-action UE5 FPS/stability profile; keeps the admin before/after performance recorder intact."
 }

@@ -423,6 +423,9 @@ function SmartRecsBreakdown() {
         .filter(id => id in tweaks),
     ))
     : [];
+  const overallFailedRunCount = latestRunIsTerminal
+    ? lastNativeRun!.items.filter(item => item.status === "failed").length
+    : 0;
   const missingSafeIds = latestRunIsTerminal ? latestRunMissingIds : safeIds.filter(id => !tweaks[id]);
   const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
   const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
@@ -499,8 +502,13 @@ function SmartRecsBreakdown() {
             className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-red-500/25 bg-red-500/[.04] text-red-300 text-xs font-bold transition-all hover:bg-red-500/10 hover:border-red-500/40 disabled:cursor-default disabled:opacity-60"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Retry {failedRunIds.length} failed tweaks
+            Retry {failedRunIds.length} AI-matched failed tweaks
           </button>
+        )}
+        {overallFailedRunCount > failedRunIds.length && (
+          <p className="text-center text-[10px] text-zinc-500">
+            {failedRunIds.length} of {overallFailedRunCount} failed items belong to this AI recommendation set. Review Applied Tweaks for the complete run.
+          </p>
         )}
 
       </div>
@@ -1356,6 +1364,10 @@ export default function SystemScanPage() {
 
         {/* Smart Recs Breakdown — shown for both native and web after hardware is known */}
         {!loading && <SmartRecsBreakdown />}
+
+        {/* Live telemetry is separate from the one-shot hardware scan. Keep
+            the scan card useful for specs while these values update every 2s. */}
+        {!loading && <LiveMonitorPanel ramGB={nativeScan?.ram_gb ?? hw.ramGB} />}
 
         {/* Native error */}
         {!loading && native && scanError && (
