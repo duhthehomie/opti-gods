@@ -6,7 +6,7 @@ import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { Button } from "@/components/ui/button";
 import { Download, X, Zap, MessageSquare, Trophy, Shield, Gamepad2, Monitor, ChevronRight, CheckCircle2 } from "lucide-react";
 import { BRAND } from "@/components/branding/assets";
-import { useOptimizationStore } from "@/store/use-optimization-store";
+import { DEFAULT_TWEAKS, useOptimizationStore } from "@/store/use-optimization-store";
 import { ScriptDialog } from "../script-dialog";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { ProGate } from "@/components/pro-gate";
@@ -456,7 +456,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const native = isNative();
 
-  const { tweaks, appliedAt, nvidiaPreset, reset } = useOptimizationStore();
+  const { tweaks, appliedAt, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
 
   const handleApply = () => {
@@ -470,7 +470,8 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   }, []);
 
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
-  const enabledCount = Object.values(tweaks).filter(Boolean).length;
+  const enabledCount = Object.entries(tweaks).filter(([id, enabled]) => enabled && id in DEFAULT_TWEAKS && !appliedAt[id]).length;
+  const hasEnabledTweaks = Object.entries(tweaks).some(([id, enabled]) => enabled && id in DEFAULT_TWEAKS);
   const appliedCount = Object.keys(appliedAt).length;
 
   const isMobileDashboard = isMobile && location === "/";
@@ -532,32 +533,42 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
-              <Link href="/applied-tweaks">
-                <button
-                  data-testid="button-tweak-status"
-                  className="hidden sm:inline-flex items-center overflow-hidden rounded-xl border border-white/10 bg-black/40 text-left transition-colors hover:border-red-500/35"
-                  title="Open Applied Tweaks"
-                >
-                  <span className="flex items-center gap-1.5 border-r border-white/10 px-3 py-2">
+              <div className="hidden sm:inline-flex items-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                <Link href="/applied-tweaks?view=selected">
+                  <button
+                    data-testid="button-tweak-status"
+                    className="inline-flex items-center border-r border-white/10 px-3 py-2 text-left transition-colors hover:bg-white/[0.04]"
+                    title="View selected tweaks"
+                  >
+                    <span className="flex items-center gap-1.5">
                     <Zap className="h-3.5 w-3.5 text-red-400" />
                     <span><span className="block text-[8px] font-bold uppercase tracking-wider text-zinc-600">Selected</span><span className="block text-xs font-black text-white">{enabledCount}</span></span>
                   </span>
-                  <span className="flex items-center gap-1.5 px-3 py-2">
+                  </button>
+                </Link>
+                <Link href="/applied-tweaks?view=applied">
+                  <button
+                    data-testid="button-applied-status"
+                    className="inline-flex items-center px-3 py-2 text-left transition-colors hover:bg-white/[0.04]"
+                    title="View applied tweaks"
+                  >
+                    <span className="flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                     <span><span className="block text-[8px] font-bold uppercase tracking-wider text-zinc-600">Applied</span><span className="block text-xs font-black text-emerald-300">{appliedCount}</span></span>
                   </span>
-                </button>
-              </Link>
+                  </button>
+                </Link>
+              </div>
               <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 lg:inline-flex">
                 <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                 System online
               </span>
-              {!isMobile && enabledCount > 0 && (
+              {!isMobile && hasEnabledTweaks && (
                 <Button
                   data-testid="button-clear-all-tweaks"
                   variant="ghost"
                   size="sm"
-                  onClick={() => reset()}
+                  onClick={() => setAllTweaks({ ...DEFAULT_TWEAKS })}
                   className="text-zinc-400 hover:text-white hover:bg-zinc-800 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-200 font-mono text-xs px-3"
                 >
                   <X className="w-3.5 h-3.5 mr-1.5" />

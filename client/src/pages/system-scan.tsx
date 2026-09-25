@@ -550,12 +550,33 @@ function SmartRecsBreakdown() {
           ))}
         </div>
       </div>
+      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">AI-selected tweaks and what each changes</p>
+          <span className="text-[10px] font-bold text-zinc-500">{recs.ids.size} tweaks · {recs.profile}</span>
+        </div>
+        <p className="mt-1 text-[10px] text-zinc-600">Each description explains the specific Windows change for this recommendation.</p>
+        <div className="mt-2 max-h-96 space-y-1 overflow-y-auto pr-1">
+          {Array.from(recs.ids)
+            .sort((a, b) => (TWEAK_REGISTRY.find(t => t.id === a)?.title || a).localeCompare(TWEAK_REGISTRY.find(t => t.id === b)?.title || b))
+            .map(id => {
+              const meta = TWEAK_REGISTRY.find(tweak => tweak.id === id);
+              return (
+                <div key={id} className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg border border-white/[.04] bg-white/[.015] px-2.5 py-2">
+                  <p className="min-w-[12rem] flex-1 text-[10px] font-bold text-zinc-200">{meta?.title || id}</p>
+                  <p className="min-w-[16rem] flex-[2] text-[10px] leading-relaxed text-zinc-500">{meta?.plainEnglish || meta?.description || "Included in the detected hardware recommendation profile."}</p>
+                  {meta?.safety === "expert" && <span className="text-[8px] font-black uppercase tracking-wider text-amber-400">Manual only</span>}
+                </div>
+              );
+            })}
+        </div>
+      </div>
     </motion.div>
   );
 }
 
 // ── HW Monitor Panel ─────────────────────────────────────────────────────────
-function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
+export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
   const [hw, setHw] = useState<HwMonitorData | null>(() => loadHwMonitor());
   const [dragging, setDragging] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -1040,8 +1061,9 @@ function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
 }
 
 // ── Live Monitor Panel ────────────────────────────────────────────────────────
-function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
-  const stats = useLiveStats(ramGB);
+export function LiveMonitorPanel() {
+  const hw = useHardwareInfo();
+  const stats = useLiveStats(hw.ramGB);
   const { toast } = useToast();
 
   const downloadLiveBat = () => {
@@ -1052,11 +1074,15 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
     const ps1Lines = [
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$postUrl = '${postUrl}'`,
+      `$startedAt = Get-Date`,
+      `$samples = New-Object 'System.Collections.Generic.List[object]'`,
+      `$stopRequested = $false`,
       ``,
       `Write-Host ""`,
       `Write-Host "  Opti Gods -- Live Hardware Monitor" -ForegroundColor Red`,
       `Write-Host "  Posts real-time CPU/GPU/RAM stats to: $postUrl" -ForegroundColor DarkGray`,
-      `Write-Host "  Press Ctrl+C to stop." -ForegroundColor Yellow`,
+      `Write-Host "  Press Q or Esc to stop and save a JSON log to your Desktop." -ForegroundColor Yellow`,
+      `Write-Host "  Ctrl+C also runs the save cleanup." -ForegroundColor DarkGray`,
       `Write-Host ""`,
       ``,
       `# Locate nvidia-smi`,
@@ -1068,7 +1094,8 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
       `else { Write-Host "  [INFO] nvidia-smi not found — GPU load/temp will be omitted (NVIDIA driver not installed or GTX card)" -ForegroundColor DarkGray }`,
       `Write-Host ""`,
       ``,
-      `while ($true) {`,
+      `try {`,
+      `while (-not $stopRequested) {`,
       `  $d = @{}`,
       `  # GPU`,
       `  if ($smiExe) {`,
@@ -1090,10 +1117,40 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
       `  if ($null -ne $cpuT) { $d.cpu_temp_c = $cpuT }`,
       `  # RAM`,
       `  try { $os2 = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue; if ($os2) { $d.ram_total_gb=[math]::Round($os2.TotalVisibleMemorySize/1MB,1); $d.ram_free_gb=[math]::Round($os2.FreePhysicalMemory/1MB,1); $d.ram_used_pct=[math]::Round(100*(1-$os2.FreePhysicalMemory/$os2.TotalVisibleMemorySize),1) } } catch {}`,
+      `  $d.timestamp = (Get-Date).ToString('o')`,
+      `  $samples.Add($d)`,
       `  # POST to Opti Gods`,
       `  $json = $d | ConvertTo-Json -Compress`,
       `  try { Invoke-WebRequest -Uri $postUrl -Method POST -Body $json -ContentType 'application/json' -UseBasicParsing -TimeoutSec 3 | Out-Null } catch {}`,
-      `  Start-Sleep -Seconds 2`,
+      `  for ($wait = 0; $wait -lt 20; $wait++) {`,
+      `    try {`,
+      `      if ([Console]::KeyAvailable) {`,
+      `        $key = [Console]::ReadKey($true)`,
+      `        if ($key.KeyChar -eq 'q' -or $key.Key -eq 'Escape') { $stopRequested = $true; break }`,
+      `      }`,
+      `    } catch {}`,
+      `    Start-Sleep -Milliseconds 100`,
+      `  }`,
+      `}`,
+      `} finally {`,
+      `  try {`,
+      `    $desktop = [Environment]::GetFolderPath('Desktop')`,
+      `    $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')`,
+      `    $outPath = Join-Path $desktop ("OptiGods-Live-Monitor-" + $stamp + ".json")`,
+      `    $log = [ordered]@{`,
+      `      schema_version = 1`,
+      `      recorder = "Opti Gods Live Hardware Monitor"`,
+      `      started_at = $startedAt.ToString('o')`,
+      `      stopped_at = (Get-Date).ToString('o')`,
+      `      interval_seconds = 2`,
+      `      sample_count = $samples.Count`,
+      `      samples = @($samples.ToArray())`,
+      `    }`,
+      `    [IO.File]::WriteAllText($outPath, ($log | ConvertTo-Json -Depth 6))`,
+      `    Write-Host ""`,
+      `    Write-Host "  [OK] JSON recording saved: $outPath" -ForegroundColor Green`,
+      `    Write-Host "  Samples: $($samples.Count)" -ForegroundColor DarkGray`,
+      `  } catch { Write-Host "  [ERROR] Could not save the JSON log: $_" -ForegroundColor Red }`,
       `}`,
     ].join('\r\n');
 
@@ -1127,7 +1184,7 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast({ title: "Live Monitor downloaded", description: "Keep the window open while gaming — Opti Gods will show real CPU/GPU stats." });
+    toast({ title: "Live Monitor downloaded", description: "Press Q or Esc to stop; a time-series JSON log will be saved to your Desktop." });
   };
 
   const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";
@@ -1205,7 +1262,7 @@ function LiveMonitorPanel({ ramGB }: { ramGB: number }) {
           <div>
             <p className="text-sm text-zinc-300 font-medium mb-0.5">Real-time CPU / GPU / RAM stats</p>
             <p className="text-[11px] text-zinc-500 leading-relaxed">
-              Download the BAT above, run it while gaming, and this page will show live temps and usage — updated every 2 seconds from your actual hardware.
+              Download the BAT above and run it while gaming. Press Q or Esc to stop and save the captured samples as a JSON log on your Desktop.
             </p>
             <p className="text-[10px] text-zinc-600 mt-1.5">
               Uses <span className="font-mono text-zinc-500">nvidia-smi</span> for GPU · WMI for CPU/RAM · ACPI/OHM for CPU temp
@@ -1365,10 +1422,6 @@ export default function SystemScanPage() {
         {/* Smart Recs Breakdown — shown for both native and web after hardware is known */}
         {!loading && <SmartRecsBreakdown />}
 
-        {/* Live telemetry is separate from the one-shot hardware scan. Keep
-            the scan card useful for specs while these values update every 2s. */}
-        {!loading && <LiveMonitorPanel ramGB={nativeScan?.ram_gb ?? hw.ramGB} />}
-
         {/* Native error */}
         {!loading && native && scanError && (
           <div className="space-y-4">
@@ -1443,8 +1496,6 @@ export default function SystemScanPage() {
           </div>
         )}
 
-        {/* Sensor Scan — drag OptiGods-HW-Monitor.json once, persists permanently */}
-        {!loading && <HwMonitorPanel onData={d => setHwMonitorData(d ?? null)} />}
       </div>
     </AppLayout>
   );

@@ -34,6 +34,7 @@ import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
 import { DISCORD_INVITE } from "@/lib/brand-links";
 import { HardwareDbTab, SuggestionsInboxTab, NvidiaTrackerTab } from "@/components/admin/hardware-db-tabs";
 import { ProPaymentDialog } from "@/components/pro-gate";
+import { HwMonitorPanel, LiveMonitorPanel } from "@/pages/system-scan";
 
 const ADMIN_KEY_STORAGE = "optigods_admin_key";
 const PRICE_PER_CODE = 25;
@@ -6903,7 +6904,13 @@ export default function Admin() {
           />
         )}
 
-        {tab === "recorder" && <PerformanceRecorder />}
+        {tab === "recorder" && (
+          <div className="space-y-5">
+            <PerformanceRecorder />
+            <LiveMonitorPanel />
+            <HwMonitorPanel />
+          </div>
+        )}
         {tab === "aether" && <AetherAdminChat headers={headers} />}
         {tab === "tickets" && <TicketsTab headers={headers} />}
         {tab === "pro" && <ProUsersTab headers={headers} />}

@@ -26,6 +26,13 @@ import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, S
 import { cn } from "@/lib/utils";
 
 const TOKEN_KEY = "optigods-native-undo-tokens";
+type LedgerView = "selected" | "applied" | "failed";
+
+function initialLedgerView(): LedgerView {
+  const requested = new URLSearchParams(window.location.search).get("view");
+  return requested === "selected" || requested === "failed" ? requested : "applied";
+}
+
 function tokenFor(id: string) { try { return (JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}") as Record<string,string>)[id] || null; } catch { return null; } }
 function summarizeFailures(failures: { id: string; message: string }[], appliedCount: number): string {
   if (!failures.length) return "Every selected Windows change was confirmed. Restart your PC for the full boost.";
@@ -219,6 +226,7 @@ export default function AppliedTweaksPage() {
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [ledgerView, setLedgerView] = useState<LedgerView>(initialLedgerView);
   const [batchUndoing, setBatchUndoing] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
   const [running, setRunning] = useState(false);
@@ -353,6 +361,13 @@ export default function AppliedTweaksPage() {
       .filter(item => item.status === "failed")
       .map(item => item.id)
   ));
+  const selectLedgerView = (view: LedgerView) => {
+    setLedgerView(view);
+    setRunTab(view === "failed" ? "failed" : "all");
+    if (view === "failed") {
+      window.setTimeout(() => runResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+    }
+  };
   const retryableFailedIds = Array.from(new Set(
     failedIds.filter(id => {
       const item = runItems.find(candidate => candidate.id === id);
@@ -431,6 +446,10 @@ export default function AppliedTweaksPage() {
   const nativeIds = Object.keys(nativeState).filter(id => nativeState[id]);
   const sessionIds = Object.keys(appliedAt).filter(id => !nativeState[id]);
   const ids = Array.from(new Set([...nativeIds, ...sessionIds]));
+  const selectedTweakIds = Object.entries(tweaks)
+    .filter(([id, enabled]) => enabled && Boolean(getTweakMeta(id)) && !ids.includes(id))
+    .map(([id]) => id)
+    .sort((a, b) => (getTweakMeta(a)?.title || a).localeCompare(getTweakMeta(b)?.title || b));
   const undo = async (id: string, quiet = false): Promise<UndoOutcome> => {
     setUndoing(id);
     try {
@@ -516,7 +535,7 @@ export default function AppliedTweaksPage() {
   };
   return <AppLayout><div className="og-page-enter space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Native state ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Only changes confirmed by the native engine appear here. Undo is per tweak, never a category reset.</p><p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-zinc-600">Undo all reverses supported Opti Gods changes only. It does not roll back ReviOS, WinUtil, O&amp;O ShutUp10, Process Lasso, MSI Utility, or NVIDIA Control Panel settings.</p></div>
+      <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Tweak status ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Selected shows enabled tweaks not yet recorded as applied; Applied shows recorded Windows changes; Failed shows errors from the latest run.</p><p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-zinc-600">Undo all reverses supported Opti Gods changes only. It does not roll back ReviOS, WinUtil, O&amp;O ShutUp10, Process Lasso, MSI Utility, or NVIDIA Control Panel settings.</p></div>
       <div className="flex items-center gap-2">
          {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
@@ -525,9 +544,9 @@ export default function AppliedTweaksPage() {
       </div>
     </header>
      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-       <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-[10px] uppercase tracking-widest text-zinc-500">Selected</p><p className="mt-1 text-2xl font-mono font-bold text-white">{runItems.length || ids.length}</p><p className="mt-1 text-[10px] text-zinc-600">Original run set</p></div>
-       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[.04] p-4"><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{runItems.filter(item => item.status === "applied").length || nativeIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Windows confirmed</p></div>
-       <div className="rounded-xl border border-red-500/20 bg-red-500/[.04] p-4"><p className="text-[10px] uppercase tracking-widest text-red-300">Failed</p><p className="mt-1 text-2xl font-mono font-bold text-white">{runItems.filter(item => item.status === "failed").length}</p><p className="mt-1 text-[10px] text-zinc-600">Needs retry</p></div>
+       <button type="button" data-testid="button-ledger-selected" aria-pressed={ledgerView === "selected"} onClick={() => selectLedgerView("selected")} className={cn("rounded-xl border bg-black/20 p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "selected" ? "border-red-500/40" : "border-white/10")}><p className="text-[10px] uppercase tracking-widest text-zinc-500">Selected</p><p className="mt-1 text-2xl font-mono font-bold text-white">{selectedTweakIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Enabled, not yet applied · open list</p></button>
+       <button type="button" data-testid="button-ledger-applied" aria-pressed={ledgerView === "applied"} onClick={() => selectLedgerView("applied")} className={cn("rounded-xl border bg-emerald-500/[.04] p-4 text-left transition-colors hover:border-emerald-500/40", ledgerView === "applied" ? "border-emerald-500/40" : "border-emerald-500/20")}><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{ids.length}</p><p className="mt-1 text-[10px] text-zinc-600">Recorded Windows state · open list</p></button>
+       <button type="button" data-testid="button-ledger-failed" aria-pressed={ledgerView === "failed"} onClick={() => selectLedgerView("failed")} className={cn("rounded-xl border bg-red-500/[.04] p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "failed" ? "border-red-500/40" : "border-red-500/20")}><p className="text-[10px] uppercase tracking-widest text-red-300">Failed</p><p className="mt-1 text-2xl font-mono font-bold text-white">{failedIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Latest run errors · open list</p></button>
        <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-[10px] uppercase tracking-widest text-zinc-500">Safety</p><p className="mt-1 flex items-center gap-1.5 text-sm font-bold text-emerald-400"><ShieldCheck className="h-4 w-4" /> Direct undo only</p></div>
     </div>
      {allowance && !allowance.pro && <div className={cn("rounded-xl border px-4 py-3 text-xs", allowance.remaining === 0 ? "border-amber-500/25 bg-amber-500/[.06] text-amber-200" : "border-emerald-500/20 bg-emerald-500/[.04] text-emerald-200")}>
@@ -568,7 +587,15 @@ export default function AppliedTweaksPage() {
         </div>; })}
       </div>
     </section>}
-    {ids.length === 0 ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
+     {ledgerView === "selected" ? (
+       selectedTweakIds.length === 0
+         ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No pending tweaks are selected</p><p className="mt-1 text-xs text-zinc-600">Select tweaks on a category page or use Smart Recommendations. Applied changes stay in the Applied ledger; Unselect All clears saved toggles without removing that history.</p></div>
+         : <div className="space-y-2">{selectedTweakIds.map(id => { const meta = getTweakMeta(id); const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id; const applied = ids.includes(id); return <div key={id} data-testid={`selected-tweak-${id}`} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/8 bg-black/30 px-4 py-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{title}</p><p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {meta?.plainEnglish || "Selected for optimization."}</p></div>{applied && <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[.05] px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-300">Applied</span>}<button onClick={() => setTweak(id, false)} className="rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:border-red-500/35 hover:text-red-300">Unselect</button></div>; })}</div>
+     ) : ledgerView === "failed" ? (
+       failedIds.length === 0
+         ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No failed tweaks in the latest run</p><p className="mt-1 text-xs text-zinc-600">When a Windows action fails, its exact error and retry option appear in the run results above.</p></div>
+         : <div className="rounded-xl border border-red-500/20 bg-red-500/[.04] px-4 py-3 text-xs text-red-200">Showing {failedIds.length} failed item{failedIds.length === 1 ? "" : "s"} in the Windows results above. Review the error details there before retrying.</div>
+     ) : ids.length === 0 ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
       <div className="space-y-2"><div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>{ids.map(id => { const meta = getTweakMeta(id); const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id; const confirmed = Boolean(nativeState[id]); const timestamp = appliedAt[id]; const provenance = confirmed ? "native confirmed" : (isNative() ? "session-recorded · pending verification" : "session-recorded · browser mode"); return <div key={id} className={cn("flex flex-wrap items-center gap-3 rounded-xl border bg-black/30 px-4 py-3 transition-colors hover:border-red-500/30", selected.has(id) ? "border-red-500/40" : "border-white/8")}><input type="checkbox" checked={selected.has(id)} onChange={() => setSelected(s => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} aria-label={`Select ${title}`} className="h-4 w-4 accent-red-600" /><div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", confirmed ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10")}><CheckCircle2 className={cn("h-4 w-4", confirmed ? "text-emerald-400" : "text-amber-400")} /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{title}</p><p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {provenance}</p>{timestamp && <p className="mt-0.5 text-[10px] text-emerald-300/75">Applied {new Date(timestamp).toLocaleString()}</p>}</div><span className={cn("text-[10px] font-mono", confirmed ? "text-emerald-400" : "text-amber-300")}>{confirmed ? "ALREADY APPLIED" : "RECORDED"}</span>{confirmed && <button disabled={runActive || reapplying === id || batchUndoing} onClick={() => void reapply(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {reapplying === id ? "Reapplying" : "Reapply tweak"}</button>}<button disabled={undoing === id || batchUndoing || reapplying === id} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button></div>; })}</div>}
   </div></AppLayout>;
 }

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.37",
-  "notes": "V5.2.37 — ships the Silent Hill: Townfall cover artwork with its 15-action UE5 FPS/stability profile; keeps the admin before/after performance recorder intact."
+  "version": "5.2.38",
+  "notes": "V5.2.38 — fixes Selected/Applied/Failed counts and navigation, moves hardware monitors into Admin Performance Recorder with downloadable JSON logs, and explains every AI-selected tweak."
 }

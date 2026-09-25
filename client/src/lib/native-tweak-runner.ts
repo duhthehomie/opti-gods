@@ -353,7 +353,6 @@ async function applyTweakBatchInternal(
     );
     alreadyConfirmedIds.forEach((id, index) => {
       const store = useOptimizationStore.getState();
-      store.setTweak(id, true);
       store.markApplied([id]);
       emitProgress({
         id,
@@ -542,7 +541,6 @@ async function applyTweakBatchInternal(
       if (!result.ok) throw new Error(result.message || "Windows rejected the change.");
       osApplied = true;
       const store = useOptimizationStore.getState();
-      store.setTweak(id, true);
       store.markApplied([id]);
       saveUndoToken(id, result.undo_token);
       appliedIds.push(id);
