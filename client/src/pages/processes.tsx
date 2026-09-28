@@ -229,14 +229,6 @@ const BACKGROUND_SERVICES: ServiceTweak[] = [
     recommended: true,
   },
   {
-    id: "ProcSvc_WSearch",
-    title: "WSearch — Windows Search (Indexing)",
-    desc: "Indexes your files for fast Start Menu search. Constant disk I/O. Set Manual if you use Everything or rarely use Windows search.",
-    impact: "HIGH",
-    recommended: true,
-    badge: "HIGH IMPACT",
-  },
-  {
     id: "ProcSvc_SysMain",
     title: "SysMain — Superfetch / Prefetch",
     desc: "Pre-loads frequently used apps into RAM. Useful on HDDs, wasteful on NVMe/SSD systems. Set Manual if you have SSD + 16GB+ RAM.",

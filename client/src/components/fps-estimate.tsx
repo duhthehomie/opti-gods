@@ -31,7 +31,7 @@ const PROCESS_TWEAKS = [
   "ProcessAutoKillHung", "ProcessTrimWorkingSet",
 ];
 const SERVICE_TWEAKS = [
-  "ServiceDiagTrack", "ServiceWSearch", "ServiceSysMain",
+  "ServiceDiagTrack", "ServiceSysMain",
   "DebloatCortana", "DebloatOneDrive",
 ];
 

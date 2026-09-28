@@ -16,6 +16,8 @@ import {
   hardwareFromRig,
   type PresetHardware,
 } from "../shared/preset-builder";
+import { getOptimalSystemResponsiveness } from "../client/src/lib/hardware-optimization";
+import { computeSmartRecs } from "../client/src/lib/smart-recommendations";
 
 let passed = 0;
 let failed = 0;
@@ -75,7 +77,7 @@ const intelIgpuLaptopHw: PresetHardware = {
 test("NVIDIA RTX build: includes Nvidia tweaks, no Amd* leakage", () => {
   const p = buildSafePreset(nvidiaRtxHw, "balanced");
   assert.ok(p.core.some(id => id.startsWith("Nvidia")), "expected Nvidia tweaks");
-  assert.ok(p.core.includes("EnableHAGS"), "RTX should opt into HAGS");
+  assert.ok(!p.core.includes("EnableHAGS"), "automatic presets must preserve the current HAGS setting");
   assert.ok(!p.core.some(id => id.startsWith("Amd")), "AMD tweaks must NOT appear on NVIDIA box");
   assert.ok(!p.core.some(id => id.startsWith("IGpu_")), "iGPU tweaks must NOT appear when dGPU present");
 });
@@ -86,10 +88,62 @@ test("AMD discrete build: includes Amd* tweaks, no Nvidia leakage", () => {
   assert.ok(!p.core.some(id => id.startsWith("Nvidia")), "Nvidia tweaks must NOT appear on AMD box");
 });
 
+test("every Pro preset uses one universal scheduler policy without conflicting duplicates", () => {
+  const p = buildSafePreset(nvidiaRtxHw, "balanced");
+  assert.ok(p.core.includes("SetResponsiveness"), "SystemResponsiveness must be universal");
+  assert.ok(p.core.includes("GameModeTweaks"), "the requested Games MMCSS policy must be universal");
+  assert.ok(!p.core.includes("ProcMMCSSGaming"), "do not add a duplicate universal Games writer");
+  assert.ok(!p.core.includes("CodMMCSS"), "the COD preset must not override the universal Games policy");
+  assert.ok(!p.core.includes("FiveMMMCSSAudio"), "do not override the universal responsiveness value with the FiveM-only variant");
+});
+
+test("SystemResponsiveness recommendation stays at 10 across hardware profiles", () => {
+  assert.equal(getOptimalSystemResponsiveness({} as Parameters<typeof getOptimalSystemResponsiveness>[0]), 10);
+  assert.equal(
+    getOptimalSystemResponsiveness({
+      cpuPhysicalCores: 64,
+      nvidiaIsRTX: true,
+      isAmdGpu: false,
+    } as Parameters<typeof getOptimalSystemResponsiveness>[0]),
+    10,
+  );
+});
+
+test("Smart Recommendations do not re-add conflicting MMCSS writers", () => {
+  const recs = computeSmartRecs(
+    {
+      cpuGeneration: 8,
+      isIntelCore: true,
+      cpuCores: 8,
+      cpuPhysicalCores: 8,
+    } as Parameters<typeof computeSmartRecs>[0],
+    { isWindows: true, isWindows11: true } as Parameters<typeof computeSmartRecs>[1],
+  );
+  assert.ok(recs.ids.has("SetResponsiveness"), "SystemResponsiveness remains recommended");
+  assert.ok(recs.ids.has("GameModeTweaks"), "the universal Games profile remains recommended");
+  for (const id of ["ProcMMCSSGaming", "CodMMCSS", "FiveMMMCSSAudio", "Lap_MMCSS_Games"]) {
+    assert.ok(!recs.ids.has(id), `${id} must not be auto-recommended alongside the universal writer`);
+  }
+  const laptopRecs = computeSmartRecs(
+    {
+      cpuGeneration: 8,
+      isIntelCore: true,
+      isLaptop: true,
+      hasIntegratedGpu: true,
+      cpuCores: 8,
+      cpuPhysicalCores: 8,
+    } as Parameters<typeof computeSmartRecs>[0],
+    { isWindows: true, isWindows11: true } as Parameters<typeof computeSmartRecs>[1],
+  );
+  assert.ok(!laptopRecs.ids.has("Lap_MMCSS_Games"), "laptop recommendations must not add a second Games profile writer");
+});
+
 test("Intel iGPU laptop: includes IGpu_Intel + Lap_ tweaks, no Nvidia/Amd dGPU", () => {
   const p = buildSafePreset(intelIgpuLaptopHw);
   assert.ok(p.core.some(id => id.startsWith("IGpu_Intel")), "expected IGpu_Intel tweaks");
   assert.ok(p.core.some(id => id.startsWith("Lap_")), "expected Lap_ tweaks");
+  assert.ok(p.core.includes("GameModeTweaks"), "the universal Games profile must apply to laptops too");
+  assert.ok(!p.core.includes("Lap_MMCSS_Games"), "laptop presets must not add a second Games profile writer");
   assert.ok(!p.core.some(id => id.startsWith("Nvidia")), "no Nvidia tweaks on Intel iGPU");
 });
 

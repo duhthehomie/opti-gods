@@ -2,15 +2,18 @@ import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { useLiveStats } from "@/hooks/use-live-stats";
 import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
-  AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight, RotateCcw,
+  AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
   Download, Upload, X, MonitorCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -396,66 +399,92 @@ function SmartRecsBreakdown() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const isPro = useProStatus();
+  const native = isNative();
   const [applied, setApplied] = useState(false);
-  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => isNative() ? readNativeTweakRun() : null);
+  const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
+  const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
+  const [nativeAppliedStateError, setNativeAppliedStateError] = useState(false);
+  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
 
   const total = recs.ids.size;
 
-  const safeIds = Array.from(recs.ids).filter(id => !_expertIdSet.has(id) && id in tweaks);
+  const safeIds = getEligibleSmartRecommendationIds(
+    recs.ids,
+    id => getTweakCompatibility(id).ok,
+  );
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
-  const latestRunIsTerminal = isNative()
+  const latestRunIsTerminal = native
     && Boolean(lastNativeRun)
     && lastNativeRun!.items.length > 0
     && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
-  const latestRunAppliedCount = latestRunIsTerminal
-    ? lastNativeRun!.items.filter(item => item.status === "applied").length
-    : 0;
-  const latestRunMissingIds = latestRunIsTerminal
-    ? lastNativeRun!.items
-      .filter(item => item.status === "failed" || item.status === "stopped" || item.status === "queued" || item.status === "running")
-      .map(item => item.id)
-    : [];
   const failedRunIds = latestRunIsTerminal
     ? Array.from(new Set(
       lastNativeRun!.items
         .filter(item => item.status === "failed")
         .map(item => item.id)
-        .filter(id => id in tweaks),
+        .filter(id => safeIds.includes(id)),
     ))
     : [];
   const overallFailedRunCount = latestRunIsTerminal
     ? lastNativeRun!.items.filter(item => item.status === "failed").length
     : 0;
-  const missingSafeIds = latestRunIsTerminal ? latestRunMissingIds : safeIds.filter(id => !tweaks[id]);
-  const alreadyOnCount = safeIds.filter(id => tweaks[id]).length;
-  const allOn = safeIds.length > 0 && missingSafeIds.length === 0;
+  const nativeAppliedStateUsable = !native || (nativeAppliedStateReady && !nativeAppliedStateError);
+  const latestRunAppliedIds = new Set(
+    lastNativeRun?.items.filter(item => item.status === "applied").map(item => item.id) ?? [],
+  );
+  const missingSafeIds = native
+    ? nativeAppliedStateUsable
+      ? safeIds.filter(id => !confirmedAppliedState[id] && !latestRunAppliedIds.has(id))
+      : []
+    : safeIds.filter(id => !tweaks[id]);
+  const alreadyOnCount = native
+    ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
+    : safeIds.filter(id => tweaks[id]).length;
+  const actionIds = Array.from(new Set([...missingSafeIds, ...failedRunIds]));
 
   useEffect(() => {
-    if (!isNative()) return;
-    const syncRun = (state: NativeTweakRunState | null) => setLastNativeRun(state);
-    syncRun(readNativeTweakRun());
-    return subscribeNativeTweakRun(syncRun);
-  }, []);
+    if (!native) return;
+    let mounted = true;
+    const refreshAppliedState = () => {
+      void getAppliedTweakState()
+        .then(state => {
+          if (!mounted) return;
+          setConfirmedAppliedState(state);
+          setNativeAppliedStateError(false);
+          setNativeAppliedStateReady(true);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setNativeAppliedStateError(true);
+          setNativeAppliedStateReady(true);
+        });
+    };
+    const syncRun = (state: NativeTweakRunState | null) => {
+      if (!mounted) return;
+      setLastNativeRun(state);
+      if (state && ["completed", "failed", "stopped"].includes(state.status)) refreshAppliedState();
+    };
+    refreshAppliedState();
+    const unsubscribe = subscribeNativeTweakRun(syncRun);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [native]);
 
-  async function handleApply() {
+  function handleApplyAndRetry() {
     try {
-      if (!isNative()) throw new Error("Open Opti Gods for Windows to apply tweaks in the app.");
+      if (!isNative()) throw new Error("Open Opti Gods for Windows to apply or retry tweaks in the app.");
+      if (!nativeAppliedStateReady || nativeAppliedStateError) {
+        throw new Error("Windows applied tweaks could not be verified. Refresh the scan before applying recommendations.");
+      }
+      if (actionIds.length === 0) return;
       if (isPro) playOptimizationActionSound();
-      queueTweakBatch(missingSafeIds);
-      window.location.assign("/applied-tweaks?run=1");
-      setTimeout(() => setApplied(false), 3000);
-    } catch (error) {
-      toast({ title: "Could not apply recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
-    }
-  }
-
-  function handleRetryFailed() {
-    try {
-      if (!isNative()) throw new Error("Open Opti Gods for Windows to retry native tweaks.");
-       queueTweakBatch(failedRunIds, { forceReapplyIds: failedRunIds });
+      queueTweakBatch(actionIds, { forceReapplyIds: failedRunIds });
+      setApplied(true);
       window.location.assign("/applied-tweaks?run=1");
     } catch (error) {
-      toast({ title: "Could not retry failed tweaks", description: error instanceof Error ? error.message : "The failed tweaks could not be queued.", variant: "destructive" });
+      toast({ title: "Could not apply or retry recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
     }
   }
 
@@ -479,31 +508,39 @@ function SmartRecsBreakdown() {
         {/* Apply / applied button */}
         <button
           data-testid="button-apply-smart-recs"
-          onClick={handleApply}
-          disabled={allOn || applied || missingSafeIds.length === 0}
+          onClick={handleApplyAndRetry}
+          disabled={actionIds.length === 0 || applied || (native && (!nativeAppliedStateReady || nativeAppliedStateError))}
           className={cn(
             "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
-            allOn || applied || missingSafeIds.length === 0
+            actionIds.length === 0
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
               : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
           )}
         >
-          {allOn || missingSafeIds.length === 0
-            ? <><CheckCircle2 className="w-4 h-4" /> {latestRunIsTerminal ? `${latestRunAppliedCount} tweaks applied` : `${alreadyOnCount} tweaks applied`}</>
+          {native && !nativeAppliedStateReady
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking applied state…</>
+            : native && nativeAppliedStateError
+              ? <><AlertTriangle className="w-4 h-4" /> Applied state unavailable</>
+              : actionIds.length === 0
+                ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks {native ? "confirmed applied" : "selected"}</>
             : applied
               ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
-              : <><Zap className="w-4 h-4" /> Apply {missingSafeIds.length} missing tweaks</>}
+              : <>
+                  <Zap className="w-4 h-4" />
+                  <span>
+                    {missingSafeIds.length > 0
+                      ? `Apply ${missingSafeIds.length} missing tweaks`
+                      : `Retry ${failedRunIds.length} failed tweaks`}
+                    {missingSafeIds.length > 0 && failedRunIds.length > 0
+                      ? ` · Retry ${failedRunIds.length} failed`
+                      : ""}
+                  </span>
+                </>}
         </button>
-        {failedRunIds.length > 0 && (
-          <button
-            data-testid="button-retry-failed-smart-recs"
-            onClick={handleRetryFailed}
-            disabled={applied}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-red-500/25 bg-red-500/[.04] text-red-300 text-xs font-bold transition-all hover:bg-red-500/10 hover:border-red-500/40 disabled:cursor-default disabled:opacity-60"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Retry {failedRunIds.length} AI-matched failed tweaks
-          </button>
+        {overallFailedRunCount > failedRunIds.length && (
+          <p className="text-center text-[10px] text-zinc-500">
+            {failedRunIds.length} of {overallFailedRunCount} failed items belong to this AI recommendation set. Review Applied Tweaks for the complete run.
+          </p>
         )}
         {overallFailedRunCount > failedRunIds.length && (
           <p className="text-center text-[10px] text-zinc-500">
@@ -515,13 +552,17 @@ function SmartRecsBreakdown() {
       {latestRunIsTerminal && (
         <div className={cn(
           "rounded-xl border px-3 py-2 text-[11px]",
-          missingSafeIds.length > 0
+          native && (!nativeAppliedStateReady || nativeAppliedStateError) || missingSafeIds.length > 0
             ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-200"
             : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-200",
         )}>
-          {missingSafeIds.length > 0
-            ? `${missingSafeIds.length} selected tweaks were not confirmed in the last Full Optimize run.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed and can be retried above.` : ""}`
-            : "The last Full Optimize run completed without a pending or failed result."}
+          {native && !nativeAppliedStateReady
+            ? "Checking applied tweaks on this PC."
+            : native && nativeAppliedStateError
+              ? "Could not verify applied tweaks, so the missing count is unavailable."
+              : missingSafeIds.length > 0
+                ? `${missingSafeIds.length} recommendations remain unapplied.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed in the last run and can be retried above.` : ""}`
+                : `${alreadyOnCount} recommended tweaks are confirmed applied.`}
         </div>
       )}
 

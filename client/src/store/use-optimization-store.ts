@@ -181,7 +181,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   DebloatAlarmsAndClock: false,
   // Debloat - Services
   ServiceDiagTrack: false,
-  ServiceWSearch: false,
+  DisableSearchIndexing: false,
   ServiceSysMain: false,
   ServiceRemoteReg: false,
   ServiceWMPNetworkSvc: false,
@@ -480,7 +480,6 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   ProcSvc_TrkWks: false,
   ProcSvc_W32Time: false,
   ProcSvc_BITS: false,
-  ProcSvc_WSearch: false,
   ProcSvc_SysMain: false,
   ProcSvc_RemoteReg: false,
   ProcSvc_ApplyAll: false,
@@ -626,7 +625,6 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   SpotifyDisableAutoUpdate: false,
   SpotifyLimitBandwidth: false,
   // Registry — misc safe tweaks
-  DisableSearchIndexer: false,
   DisableAutoMaintenance: false,
   // V2.2 Driver Reapply — NVIDIA
   NvTextureFilterHighPerf: false,

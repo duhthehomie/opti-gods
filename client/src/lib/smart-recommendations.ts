@@ -1,6 +1,7 @@
 import type { HardwareInfo } from "@/hooks/use-hardware-info";
 import type { OsInfo } from "@/hooks/use-os-detection";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 
 export interface SmartRecs {
   ids: Set<string>;
@@ -15,6 +16,25 @@ export interface SmartRecs {
   categories: { performance: number; latency: number; internet: number; stability: number };
 }
 
+/**
+ * Shared eligibility gate for dashboard scoring and Smart Recommendations.
+ * Keeping both views on this set prevents a missing toggle-store key from
+ * hiding an applicable tweak in one view but counting it in the other.
+ */
+export function getEligibleSmartRecommendationIds(
+  ids: Iterable<string>,
+  isCompatible: (id: string) => boolean,
+): string[] {
+  const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
+  return Array.from(ids).filter(id => {
+    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
+    return registryIds.has(id)
+      && tweak?.safety !== "expert"
+      && !MANUAL_ONLY_TWEAK_IDS.has(id)
+      && isCompatible(id);
+  });
+}
+
 // Tweak IDs that are primarily about reducing latency/input delay (not raw FPS)
 const LATENCY_TWEAK_IDS = new Set([
   "DisableNagle","InputLagTCP","SetDNSPriority","DisableNDU","RegistryDPCLatency",
@@ -24,7 +44,6 @@ const LATENCY_TWEAK_IDS = new Set([
   "NvidiaCUDAPriority","AmdOptimizeLatency","AmdAntiLag","AmdAntiLagPlus",
   "EnableMSIMode","EnableMSIMode_Safe","FiveMDisableLSO","FiveMEnableRSS",
   "FiveMRenderingBoost","FiveMDisableMPO","FiveM1650LowLatencyMode",
-  "FiveM1060DisableHAGS","FiveM1650DisableHAGS",
 ]);
 
 function classifyTweak(id: string, category: string): "performance" | "latency" | "internet" | "stability" {
@@ -71,7 +90,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "ServiceDiagTrack","ServiceSysMain","ServiceFax","ServiceRemoteReg","ServiceRetailDemo",
     "ServiceDPS","ServiceDusmSvc","ServiceLltdsvc","ServiceMapsBroker","ServicePcaSvc",
     "ServiceTrkWks","ServiceWbioSrvc","ServiceWerSvc","ServiceWMPNetworkSvc",
-    "ServiceFDHost","ServicePrintSpooler","ServiceWSearch","ServiceTabletInput",
+    "ServiceFDHost","ServicePrintSpooler","ServiceTabletInput",
     "ServiceAeLookupSvc",
     // Privacy
     "PrivacyTelemetry","PrivacyAdvertisingID","PrivacyLocationTracking",
@@ -88,7 +107,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "FiveMReduceNPCDensity","FiveMCommandLineTweaks","FiveMDisableLSO","FiveMEnableRSS",
     "FiveMRenderingBoost","FiveMDisableMPO",
     "FiveMReduceShadowQuality","FiveMStreamDistance","FiveMDisableVSync",
-    "FiveMMMCSSAudio","FiveMCommandlineMax","FiveMIOPriority",
+    "FiveMCommandlineMax","FiveMIOPriority",
     "FiveMCitizenDisableMedia","FiveMDisableDWM","FiveMDisableFullscreen",
     "FiveMDisableP2P","FiveMDNSOverride","FiveMSteamChildOff","FiveMSteamOverlayOff",
     "FiveMStreamPool","FiveMWorkingSet","FiveMExtendedMemory","FiveMAffinityMask",
@@ -102,7 +121,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     // NOTE: NetDNSGoogle is intentionally EXCLUDED — it is a manual alternative to NetDNSCloudflare.
     // Only one DNS provider should be applied; Cloudflare is recommended by default for lower latency.
     // Process Scheduling — safe for all gaming PCs
-    "ProcMMCSSGaming","ProcGPUSchedulerHigh",
+    "ProcGPUSchedulerHigh",
     // WinUtil
     "WinTitusBgApps","WinTitusFullscreenOpt","WinTitusTeredo","WinTitusIPv4Prefer",
     "WinTitusNotifTray","OOShutupPrivacy","WinTitusConsumerFeatures",
@@ -145,7 +164,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "ProcSvc_SharedAccess","ProcSvc_SharedRealitySvc","ProcSvc_SSDP","ProcSvc_SysMain",
     "ProcSvc_TabletInput","ProcSvc_TrkWks","ProcSvc_W32Time","ProcSvc_WbioSrvc",
     "ProcSvc_WerSvc","ProcSvc_WFDSConMgr","ProcSvc_WinRM","ProcSvc_WMPNet",
-    "ProcSvc_WpnService","ProcSvc_WSearch","ProcSvc_XblAuth","ProcSvc_XblGame",
+    "ProcSvc_WpnService","ProcSvc_XblAuth","ProcSvc_XblGame",
     "ProcSvc_XboxGip","ProcSvc_XboxNet",
     // Debloat — universal
     "DebloatCortana","DebloatOneDrive","DebloatXboxApp","DebloatXboxGameBar",
@@ -210,7 +229,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       // No E-cores — max all cores, aggressive C-state suppression, full turbo
       ["DisableCoreParking","DisableDynamicTick","Win32PrioritySeparation",
        "SetHighPerformancePlan","DisablePowerThrottling","DisablePowerThrottlingAdv",
-       "ProcMMCSSGaming","ProcGPUSchedulerHigh",
+       "ProcGPUSchedulerHigh",
       ].forEach(id => ids.add(id));
       if (hw.cpuGeneration === 6) {
         // i5-6600K / i7-6700: Skylake — no E-cores, all cores equal, push them hard
@@ -245,38 +264,35 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     ].forEach(id => ids.add(id));
 
     if (hw.nvidiaIsLowEnd) {
-      // HAGS HURTS GTX 10xx/16xx — do NOT enable it for these cards
+      // Preserve the user's HAGS setting on every GPU.
       ["NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff"].forEach(id => ids.add(id));
       if (hw.gpuName && /1650/i.test(hw.gpuName)) {
-        ["FiveM1650DisableHAGS","FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode"].forEach(id => ids.add(id));
-        reasons.push(`GTX 1650 SUPER — HAGS disabled (Pascal/Turing = micro-stutters with HAGS), 4GB VRAM unlocked, Ansel removed, Low Latency Ultra`);
+        ["FiveM1650VRAMBudget","FiveM1650DisableAnsel","FiveM1650LowLatencyMode"].forEach(id => ids.add(id));
+        reasons.push(`GTX 1650 SUPER — HAGS setting preserved, 4GB VRAM unlocked, Ansel removed, Low Latency Ultra`);
       } else if (hw.gpuName && /1060/i.test(hw.gpuName)) {
-        ["FiveM1060VRAMFlag","FiveM1060DisableHAGS","FiveM1060AnselDisable"].forEach(id => ids.add(id));
-        reasons.push(`GTX 1060 — HAGS disabled (Pascal = micro-stutters with HAGS), 6GB VRAM unlocked, Ansel removed`);
+        ["FiveM1060VRAMFlag","FiveM1060AnselDisable"].forEach(id => ids.add(id));
+        reasons.push(`GTX 1060 — HAGS setting preserved, 6GB VRAM unlocked, Ansel removed`);
       } else {
-        reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — HAGS disabled, shader cache maximized, texture filter optimized`);
+        reasons.push(`Low-end NVIDIA (GTX/Pascal/Turing) — HAGS setting preserved, shader cache maximized, texture filter optimized`);
       }
     } else if (hw.nvidiaIsRTX) {
-      // HAGS only benefits RTX 2000+ on Windows 11 — safe to enable
-      ids.add("EnableHAGS");
       ids.add("NvidiaRTXVideoOff");
-      // RTX 5000 series (Ada Lovelace successor) — specific VRAM/HAGS/LL tweaks
+      // RTX 5000 series — specific VRAM and low-latency tweaks
       if (hw.gpuName && /506[0-9]|507[0-9]|508[0-9]|509[0-9]|50[7-9][0-9]/i.test(hw.gpuName)) {
-        ["FiveM5060VRAMBudget","FiveM5060EnableHAGS","FiveM5060LowLatency"].forEach(id => ids.add(id));
-        reasons.push(`RTX 5000 series (${hw.gpuName}) — VRAM budget maximised, HAGS enabled, Low Latency Ultra`);
+        ["FiveM5060VRAMBudget","FiveM5060LowLatency"].forEach(id => ids.add(id));
+        reasons.push(`RTX 5000 series (${hw.gpuName}) — HAGS setting preserved, VRAM budget maximised, Low Latency Ultra`);
       } else {
-        reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS enabled (RTX 2000+), full RTX optimization suite + DPC latency reduction`);
+        reasons.push(`NVIDIA RTX GPU (${hw.gpuName}) — HAGS setting preserved, full RTX optimization suite + DPC latency reduction`);
       }
     } else {
-      // Mid-range GTX (non-Pascal/Turing low-end, non-RTX) — enable HAGS conservatively
-      ids.add("EnableHAGS");
+      // Preserve HAGS; do not set either registry value automatically.
       ["NvShaderDiskCache","NvFXAADriverOff"].forEach(id => ids.add(id));
       reasons.push(`NVIDIA GPU (${hw.gpuName}) — NVIDIA optimization suite enabled`);
     }
   }
   if (hw.isAmdGpu) {
     [
-      "EnableHAGS","AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency",
+      "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency",
       "AmdMaxClockState","AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag",
       "AmdDisableTelemetry","AmdDisableCrashDefender","AmdShaderCache","AmdDisableVSR",
       "AmdDisableVariBright","AmdSmartAccessMemory","AmdAntiLagPlus","AmdTDRTweak",
@@ -302,11 +318,11 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "IGpu_DisableTransparency","IGpu_DisableAnimations","IGpu_DisableXboxGameBar",
       "IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
       "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_SetTimerResolution",
-      "IGpu_NetworkThrottling","IGpu_DisableSysMain","IGpu_DisableHAGSForIGpu",
+      "IGpu_NetworkThrottling","IGpu_DisableSysMain",
       "IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
       "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
     ].forEach(id => ids.add(id));
-    reasons.push(`AMD iGPU/APU (${apuName}) — Vega/APU tweaks, HAGS disabled`);
+    reasons.push(`AMD iGPU/APU (${apuName}) — Vega/APU tweaks, HAGS setting preserved`);
   }
   if (hw.isIntel) {
     // Only apply the Intel iGPU bundle when an Intel iGPU is actually present
@@ -320,16 +336,15 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
         "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan",
         "IGpu_MaxProcessorState","IGpu_DisableCoreParking","IGpu_GameModeOn",
         "IGpu_SetTimerResolution","IGpu_NetworkThrottling","IGpu_DisableSysMain",
-        "IGpu_DisableHAGSForIGpu","IGpu_DisableMPO",
+        "IGpu_DisableMPO",
         "IGpu_CloseBrowserGPU","IGpu_DisableDWMColorSpace","IGpu_DisableHDR","IGpu_DisableNightLight",
       ].forEach(id => ids.add(id));
       const intelName = intelIntegrated?.name || hw.gpuName;
-      reasons.push(`Intel iGPU (${intelName}) — Intel driver TDR fix, Panel Fitter off, HAGS disabled${hw.isHybridGpu ? " (hybrid — applied alongside discrete GPU tweaks)" : ""}`);
+      reasons.push(`Intel iGPU (${intelName}) — Intel driver TDR fix, Panel Fitter off, HAGS setting preserved${hw.isHybridGpu ? " (hybrid — applied alongside discrete GPU tweaks)" : ""}`);
     }
   }
   if (!hw.isNvidia && !hw.isAmdGpu && !hw.isAmdApu && !hw.isIntel) {
-    ids.add("EnableHAGS");
-    reasons.push("GPU unknown — safe defaults applied");
+    reasons.push("GPU unknown — safe defaults applied; current HAGS setting preserved");
   }
 
   // ===== RAM =====
@@ -375,8 +390,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "Lap_Net_DisableUSBSelSuspend","Lap_Net_WiFiPerfMode","Lap_Net_OptimizeDNS",
       "Lap_USBPowerSave","Lap_WifiPerfMode",
       "Lap_TimerResolution","Lap_DisablePowerThrottling","Lap_DisableXboxGameBar",
-      "Lap_DisableFullscreenOpt","Lap_MMCSS_Games","Lap_DisableMPO","Lap_VisualPerformance",
-      "Lap_DisableHAGS","Lap_DisableHibernate","Lap_DisableTurboOnBattery",
+      "Lap_DisableFullscreenOpt","Lap_DisableMPO","Lap_VisualPerformance",
+      "Lap_DisableHibernate","Lap_DisableTurboOnBattery",
     ].forEach(id => ids.add(id));
     // Parallel branches — a hybrid laptop (Intel iGPU + NVIDIA dGPU) gets BOTH
     // vendor packs so the right tweaks apply whichever GPU each game uses.
@@ -417,7 +432,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "DebloatXboxIdentity","DebloatBing","DebloatWeather","DebloatNews","DebloatMaps",
       "DebloatSolitaire","DebloatMixedReality","DebloatSkype","DebloatFeedback",
       "DebloatGetHelp","DebloatOfficeHub","DebloatYourPhone","DebloatTeamsConsumer",
-      "ServiceWSearch","ServiceRemoteReg","ServiceFax","ServiceRetailDemo","ServiceTabletInput",
+      "ServiceRemoteReg","ServiceFax","ServiceRetailDemo","ServiceTabletInput",
       "PrivacyActivityHistory","PrivacyDiagFeedback","PrivacyAdvertisingID",
       "WinTitusConsumerFeatures","WinTitusHibernation","WinTitusDiskCleanup",
       "WinTitusServicesManual","WinTitusBgApps","WinTitusTeredo",
@@ -435,10 +450,16 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "EnableMSIMode",          // V2.1: BSOD risk — use EnableMSIMode_Safe instead
     "DisableIPv6",            // V2.1: breaks FiveM/Rockstar/Xbox — use WinTitusIPv4Prefer
     "NvidiaDisableContainerLS", // known crash: NVIDIA Overlay 0x80000003 on many systems
+    "DisableSearchIndexing", // manual-only: preserve Start Menu and File Explorer search by default
+    "ProcMMCSSGaming", // duplicate of universal GameModeTweaks
+    "CodMMCSS", // legacy game-pack writer; universal Games profile owns these values
+    "FiveMMMCSSAudio", // sets SystemResponsiveness=0 and conflicts with the universal value of 10
+    "Lap_MMCSS_Games", // laptop duplicate of universal GameModeTweaks
   ]);
   for (const tweak of TWEAK_REGISTRY) {
     if (ids.has(tweak.id)) continue;
     if (tweak.safety === "expert") continue;
+    if (MANUAL_ONLY_TWEAK_IDS.has(tweak.id)) continue;
     if (CATCH_ALL_EXCLUDED.has(tweak.id)) continue;
     if (tweak.category === "game-detection") continue; // requires actual game scan
     // Vendor / hardware gating — same rules as the manual branches above
@@ -501,6 +522,10 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   const ramLabel = hw.loading ? "Detecting..." : (hw.ramGB >= 8 ? "16GB+" : hw.ramGB > 0 ? `${hw.ramGB}GB+` : "Unknown");
   const cpuLabel = hw.loading ? "Detecting..." : hw.cpuCores > 0 ? hw.cpuLabel : "Unknown";
   const osLabel  = os.loading ? "Detecting..." : os.displayName || os.os;
+
+  // HAGS changes are only available as explicit manual tweaks. Automatic
+  // recommendations must preserve the system's current setting.
+  MANUAL_ONLY_TWEAK_IDS.forEach(id => ids.delete(id));
 
   // ===== CATEGORY BREAKDOWN =====
   const categories = { performance: 0, latency: 0, internet: 0, stability: 0 };

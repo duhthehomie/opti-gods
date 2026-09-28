@@ -471,18 +471,17 @@ Write-Host ""`,
     label: "DirectX / GPU Scheduler",
     severity: "high",
     reboot: true,
-    // HAGS hurts GTX Pascal/Turing and older AMD. RTX 2000+ actually benefits from HAGS — hide this card for them.
+    // Keep this cache-cleanup action available on non-RTX systems without changing HAGS.
     visible: (hw) => !hw.isNvidia || hw.nvidiaIsLowEnd,
-    detectedLabel: (hw) => hw.nvidiaIsLowEnd ? "GTX — HAGS should be OFF" : hw.isAmdGpu ? "AMD GPU detected" : "GPU detected",
-    desc: "Disables Hardware-Accelerated GPU Scheduling (HAGS) which causes dxgkrnl DPC spikes on GTX 10xx/16xx and older AMD GPUs. Also clears all stale DirectX shader caches. Not shown for RTX users — HAGS helps RTX 2000+.",
+    detectedLabel: (hw) => hw.nvidiaIsLowEnd ? "GTX — HAGS setting preserved" : hw.isAmdGpu ? "AMD GPU detected" : "GPU detected",
+    desc: "Clears stale DirectX shader caches. This action leaves Hardware-Accelerated GPU Scheduling (HAGS) unchanged.",
     ps1: `$ErrorActionPreference = 'SilentlyContinue'
 $Host.UI.RawUI.WindowTitle = "Opti Gods — DirectX DPC Fix"
 Write-Host ""
 Write-Host " OPTI GODS — DirectX GPU Scheduler DPC Fix" -ForegroundColor Red
 Write-Host " =============================================" -ForegroundColor DarkRed
 Write-Host ""
-Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force
-Write-Host " [OK] HAGS disabled — reduces dxgkrnl DPC overhead on GTX 10xx/16xx and older AMD cards" -ForegroundColor Green
+Write-Host " [OK] HAGS setting left unchanged" -ForegroundColor Green
 $caches = @(
     "$env:LOCALAPPDATA\\NVIDIA\\DXCache",
     "$env:LOCALAPPDATA\\NVIDIA\\GLCache",

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.38",
-  "notes": "V5.2.38 — fixes Selected/Applied/Failed counts and navigation, moves hardware monitors into Admin Performance Recorder with downloadable JSON logs, and explains every AI-selected tweak."
+  "version": "5.2.39",
+  "notes": "V5.2.39 — verifies Defender exclusions before reporting success, rolls back failed power-plan changes with exact setting diagnostics, reports unsupported NVIDIA MSI display topologies safely, and restores Disable Windows Search Indexer as an opt-in Windows tweak outside Full Optimize."
 }

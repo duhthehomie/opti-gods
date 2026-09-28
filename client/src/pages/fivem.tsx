@@ -73,11 +73,11 @@ export default function Fivem() {
     ...(hw.isRyzen && hw.cpuGeneration === 5 && hw.cpuLabel.toLowerCase().includes("5600") ? ["FiveM5600CoreAffinity","FiveM5600PowerPlan"] : []),
     ...(hw.isRyzen && hw.cpuGeneration === 3 && hw.cpuLabel.toLowerCase().includes("3500") ? ["FiveM3500CoreAffinity","FiveM3500PerfPlan"] : []),
     ...(hw.isIntelCore && hw.cpuGeneration === 4 ? ["FiveMi5CoreAffinity"] : []),
-    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? ["FiveM1060VRAMFlag","FiveM1060DisableHAGS"] : []),
-    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? ["FiveM1650VRAMBudget","FiveM1650DisableHAGS","FiveM1650LowLatencyMode"] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? ["FiveM1060VRAMFlag"] : []),
+    ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? ["FiveM1650VRAMBudget","FiveM1650LowLatencyMode"] : []),
     ...(hw.gpuName.toLowerCase().includes("2060") ? ["FiveM2060VRAMBudget"] : []),
     ...(hw.isIntelCore && hw.cpuGeneration >= 12 ? ["FiveMIntel14PcoreAffinity","FiveMIntel14PowerPlan"] : []),
-    ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? ["FiveM5060VRAMBudget","FiveM5060EnableHAGS","FiveM5060LowLatency"] : []),
+    ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? ["FiveM5060VRAMBudget","FiveM5060LowLatency"] : []),
   ];
 
   const PROCESS_TWEAKS: Tweak[] = [
@@ -153,17 +153,17 @@ export default function Fivem() {
     { id: "FiveMRenderingBoost", title: "Disable Rendering Preemption (FiveM + GTA5)", desc: "Sets DisableRenderingContextPreemption=1, DisableRenderingPreemption=1, EnableHWAcceleration=1, GpuIdle=0 on both FiveM.exe and GTA5.exe — eliminates GPU preemption micro-stutters during scene transitions.", impact: "HIGH" },
     { id: "FiveMGPUPriorityStack", title: "GPU Priority Stack (GpuPriorityClass=8 + HAGS)", desc: "Sets GpuPriorityClass=8, GPU Priority=8, GpuMaxPerformance=256, GpuThrottling=0 on FiveM.exe and applies GPU Priority=8, MaximumPreRenderedFrames=1 to the system Games multimedia profile.", badge: "NVIDIA/AMD", impact: "HIGH" },
     ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1060") ? [
-      { id: "FiveM1060DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS adds frame-time variance on older Pascal-gen cards — these GPUs predate HAGS and the scheduler overhead costs more than it saves. Disabling it reduces micro-stutters on populated FiveM servers.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1060DisableHAGS", title: "Manually Disable Hardware-Accelerated GPU Scheduling", desc: "Manual-only system-wide toggle. Sets HwSchMode=1 and requires a reboot. Use only if you explicitly want HAGS off; automatic recommendations preserve the current setting.", badge: "MANUAL", impact: "HIGH" as const },
       { id: "FiveM1060AnselDisable", title: "Disable NVIDIA Ansel Screenshot Hook", desc: "Stops NVIDIA Ansel from injecting into GTA V every frame — on older cards this overhead is measurable. Disabling it frees a consistent amount of GPU time per frame.", badge: "GPU DRIVER", impact: "MED" as const },
     ] : []),
     ...(hw.nvidiaIsLowEnd && hw.gpuName.toLowerCase().includes("1650") ? [
-      { id: "FiveM1650DisableHAGS", title: "Disable Hardware-Accelerated GPU Scheduling", desc: "HAGS was designed for RTX 2000+ and RX 6000+ — on Turing 16xx cards it adds frame-time variance instead of reducing it. Turning it off is the correct call for GTX 1650 Super. Apply all three companion tweaks below for full stability: Low Latency Ultra + HAGS OFF Pack + DPC fixes. Reboot required.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650DisableHAGS", title: "Manually Disable Hardware-Accelerated GPU Scheduling", desc: "Manual-only system-wide toggle. Sets HwSchMode=1 and requires a reboot. Use only if you explicitly choose HAGS off; automatic recommendations preserve the current setting.", badge: "MANUAL", impact: "HIGH" as const },
       { id: "FiveM1650DisableAnsel", title: "Disable NVIDIA Ansel Frame Hook", desc: "Sets AnselEnable=0 in NVIDIA registry. Ansel injects into every render frame — disabling removes hook overhead and keeps the display container stable.", badge: "GPU DRIVER", impact: "MED" as const },
-      { id: "FiveM1650LowLatencyMode", title: "Low Latency Mode = Ultra (Driver-Level)", desc: "Sets RmLowLatencyMode=2 (Ultra), FlipQueueSize=1, PowerMizer P0 in both the GPU class registry and global NVTweak. Equivalent to NVCP Ultra but applied at the driver level so it survives NVCP resets. Critical companion to HAGS OFF — without it the render queue can back up and cause the 160→60 FPS drop pattern.", badge: "GPU DRIVER", impact: "HIGH" as const },
-      { id: "FiveM1650HAGSOffPack", title: "HAGS OFF Stability Pack — DXGI + Frame Pipeline", desc: "Applies three fixes that HAGS OFF requires to work cleanly: (1) DXGI AllowTearing=1 + MaxFrameLatency=1 — enables immediate present without HAGS so frames don't queue up and dump all at once causing the 60 FPS cliff. (2) RenderThrottlingOff=1 + GpuIdleEnabled=0 + PowerSavingVsyncOn=0 on all GTA5/FiveM process IFEO keys — prevents the driver from throttling render submission between heavy frames. (3) MMCSS Games PreRenderedFrames=1 — keeps the system multimedia profile aligned with the driver setting.", badge: "HAGS OFF", impact: "HIGH" as const },
+      { id: "FiveM1650LowLatencyMode", title: "Low Latency Mode = Ultra (Driver-Level)", desc: "Sets RmLowLatencyMode=2 (Ultra), FlipQueueSize=1, and PowerMizer P0 in both the GPU class registry and global NVTweak. This GPU-driver tweak is independent of HAGS; applying it leaves the current HAGS setting unchanged.", badge: "GPU DRIVER", impact: "HIGH" as const },
+      { id: "FiveM1650HAGSOffPack", title: "Manual HAGS-Off Frame-Pacing Pack", desc: "Manual-only companion settings for users who have explicitly chosen HAGS off. This pack does not change HAGS itself; do not apply it while testing with HAGS on.", badge: "MANUAL", impact: "HIGH" as const },
     ] : []),
     ...(hw.nvidiaIsRTX && hw.gpuName.toLowerCase().includes("5060") ? [
-      { id: "FiveM5060EnableHAGS", title: "Enable Hardware-Accelerated GPU Scheduling (RTX 5060 — Correct ON)", desc: "Sets HwSchMode=2 (enabled) in the graphics drivers registry. Unlike older Pascal/Turing cards where HAGS hurt frametimes, Blackwell (RTX 5000-series) is architecturally optimized for HAGS — the GPU manages its own DMA work queue without CPU intervention. Reboot required after applying.", badge: "HAGS ON", impact: "HIGH" as const },
+      { id: "FiveM5060EnableHAGS", title: "Manually Enable Hardware-Accelerated GPU Scheduling", desc: "Manual-only system-wide toggle. Sets HwSchMode=2 and requires a reboot. Use only if you explicitly want HAGS enabled; automatic recommendations preserve the current setting.", badge: "MANUAL", impact: "HIGH" as const },
       { id: "FiveM5060LowLatency", title: "Low Latency Mode = Ultra + Flip Queue = 1 (RTX 5060)", desc: "Sets RmLowLatencyMode=2 (Ultra) and FlipQueueSize=1 both per-adapter and globally in NVTweak. Equivalent to NVCP Low Latency = Ultra but survives NVCP resets. On GDDR7 RTX 5060, pairing Low Latency Ultra with HAGS ON gives the tightest possible frame-to-display pipeline — the GPU pre-renders exactly 1 frame ahead, eliminating input lag from queued frames.", badge: "GPU DRIVER", impact: "HIGH" as const },
     ] : []),
   ];
@@ -381,7 +381,7 @@ export default function Fivem() {
             {[
               { title: "Stutters with High Priority?", body: "If you experience micro-stutters with High Priority enabled, your CPU may be saturated. Disable it and use 'Pin to Physical Cores' instead for stable frametimes." },
               { title: "Cache Clearing", body: "Clearing FiveM cache fixes most crash/texture issues. Re-downloading server assets on first join is expected — it rebuilds the cache." },
-              { title: "HAGS OFF on GTX 1650 Super — Full Stack", body: "HAGS OFF alone isn't enough. Pair it with the compatible low-latency and frame-pacing controls shown in Tweaks. Apply only changes that are confirmed for this PC." },
+              { title: "Your HAGS setting", body: "HAGS is a system-wide Windows choice. Automatic recommendations, bulk actions, Fixes & Restore, and DirectX cache cleanup preserve it. The manual HAGS entries are available only if you choose to change the setting." },
             ].map((c, i) => (
               <motion.div key={c.title} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 + i * 0.1 }}
                 className="p-5 rounded-lg bg-red-500/5 border border-red-500/20">

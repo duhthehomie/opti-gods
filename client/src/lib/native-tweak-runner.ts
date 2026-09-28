@@ -43,9 +43,9 @@ async function fetchWithTimeout(
 }
 
 /**
- * A detector-confirmed tweak was already applied by Windows, so the runner
- * skips the mutation itself. It still needs one native ticket/result pair so
- * the server's free active-tweak ledger matches the confirmed Windows state.
+ * Only a tweak currently reported by the native Windows detector can be
+ * reconciled into the server's free active-tweak ledger. Browser app history
+ * can skip a rerun, but is not proof for server-side allowance accounting.
  */
 async function reconcileConfirmedNativeTweak(id: string): Promise<void> {
   const authorization = await fetchWithTimeout(
@@ -86,7 +86,7 @@ export type NativeTweakRunState = {
 };
 
 export type TweakBatchOptions = {
-  /** Re-run these IDs even when native Windows detection says they are applied. */
+  /** Re-run these IDs even when detection or successful app history says applied. */
   forceReapplyIds?: readonly string[];
   /** Optional UI source label for analytics and run history. */
   source?: string;
@@ -342,24 +342,29 @@ async function applyTweakBatchInternal(
   }
 
   // A full optimize rerun can contain hundreds of IDs that already succeeded
-  // in an earlier run. Detect those first so reruns are fast, do not consume a
-  // new allowance, and report them as confirmed immediately.
+  // in an earlier run. Check both live Windows detection and the successful
+  // app-run ledger so those IDs are not mutated or charged a second time.
   let alreadyConfirmedIds: string[] = [];
+  let windowsDetectedIds: string[] = [];
   if (native) {
     const detected = await detectAppliedTweaks().catch(() => ({} as Record<string, boolean>));
+    const appliedAt = useOptimizationStore.getState().appliedAt;
     const forcedIds = new Set(options.forceReapplyIds ?? []);
     alreadyConfirmedIds = compatibleIds.filter(id =>
+      !forcedIds.has(id) && (Boolean(detected[id]) || id in appliedAt),
+    );
+    windowsDetectedIds = compatibleIds.filter(id =>
       !forcedIds.has(id) && Boolean(detected[id]),
     );
     alreadyConfirmedIds.forEach((id, index) => {
       const store = useOptimizationStore.getState();
-      store.markApplied([id]);
+      if (detected[id] && !(id in store.appliedAt)) store.markApplied([id]);
       emitProgress({
         id,
         index,
         total: uniqueIds.length,
         status: "applied",
-          message: "Already confirmed by Windows; skipped.",
+          message: "Already recorded as applied; skipped.",
       });
     });
   }
@@ -389,8 +394,8 @@ async function applyTweakBatchInternal(
       : pendingIds.slice(0, Math.max(0, allowance.remaining ?? 0));
   const supportedIds = entitledIds;
   const reconcileConfirmedIds = async () => {
-    if (allowance.pro || !alreadyConfirmedIds.length) return;
-    for (const id of alreadyConfirmedIds) {
+    if (allowance.pro || !windowsDetectedIds.length) return;
+    for (const id of windowsDetectedIds) {
       if (!NATIVE_TWEAK_ID_SET.has(id)) continue;
       try {
         await reconcileConfirmedNativeTweak(id);

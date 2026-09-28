@@ -16,9 +16,10 @@ import { randomBytes } from "crypto";
 import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
-import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, NVIDIA_CAPTURE_PROTECTED_IDS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
+import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, MANUAL_ONLY_TWEAK_IDS, NVIDIA_CAPTURE_PROTECTED_IDS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
 import { getLatestGhRelease, bustGhCache } from "./github-release";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
+import { buildSafeWindowsCommandOverride } from "./windows-tweak-commands";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
 const GAME_WHITELIST_PS_ARRAY = GAME_WHITELIST
@@ -124,6 +125,9 @@ async function runAutoResolveSafe() {
 setTimeout(runAutoResolveSafe, 30_000);
 setInterval(runAutoResolveSafe, 24 * 60 * 60 * 1000);
 
+const WIN32_PRIORITY_SEPARATION_COMMAND =
+  `$logicalProcessors = [Environment]::ProcessorCount; $value = if ($logicalProcessors -ge 12) { 0x26 } else { 0x1A }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value $value -Type DWord -Force; Write-Host ("[OK] Win32PrioritySeparation = 0x{0:X2} ({0} decimal), selected for {1} logical processors" -f $value, $logicalProcessors) -ForegroundColor Green`;
+
 const TWEAK_COMMANDS: Record<string, string> = {
   EnableNvidiaMSIPro: `$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' }); $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' }); if ($active.Count -ne 1) { throw "NVIDIA MSI requires exactly one active display adapter; detected $($active.Count). Hybrid or multi-GPU display topology is not supported." }; if ($nvidia.Count -ne 1) { throw "NVIDIA MSI requires exactly one active NVIDIA display adapter; the active adapter is not NVIDIA or the topology is ambiguous." }; $gpu = $nvidia[0]; $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; if (!(Test-Path $msiPath)) { throw "Windows did not expose an MSI capability path for the detected NVIDIA adapter ($($gpu.FriendlyName))." }; $before = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($before -notin @(0,1)) { throw "The detected NVIDIA adapter has an unsupported MSISupported value ($before)." }; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop; $after = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the detected NVIDIA adapter." }; Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). NICs, NVMe devices, affinity, and priority were not changed." -ForegroundColor Green`,
   // These two IDs are consumed by dedicated native commands.  They deliberately
@@ -132,7 +136,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   OpenMsiUtilityPro: `throw "This is a native-only Pro tool action."`,
   ImportNvidiaPresetPro: `throw "This is a native-only Pro tool action."`,
   // CPU
-  Win32PrioritySeparation: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26`,
+  Win32PrioritySeparation: WIN32_PRIORITY_SEPARATION_COMMAND,
   DisableHungAppDetection: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '1000'`,
   DisableCTFMonTracking: `$p = 'HKLM:\\SOFTWARE\\Microsoft\\Input'; If (!(Test-Path $p)) { New-Item -Path $p -Force | Out-Null }; Set-ItemProperty -Path $p -Name 'InputServiceEnabled' -Value 0 -Type DWord -Force; Set-ItemProperty -Path $p -Name 'InputServiceEnabledForCCI' -Value 0 -Type DWord -Force; Write-Host "[OK] CTF Monitor keystroke tracking disabled — InputServiceEnabled=0, InputServiceEnabledForCCI=0. Keyboard input works normally, ctfmon.exe watchdog goes idle." -ForegroundColor Green`,
   SetTimerResolution: `bcdedit /set disabledynamictick yes 2>$null; bcdedit /deletevalue useplatformtick 2>$null; bcdedit /deletevalue useplatformclock 2>$null; Write-Host "[OK] Dynamic tick disabled (safe timer precision boost — no useplatformtick boot-hang risk)" -ForegroundColor Green`,
@@ -204,7 +208,6 @@ const TWEAK_COMMANDS: Record<string, string> = {
   DebloatWindowsCamera: `Get-AppxPackage *WindowsCamera* -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue; Get-AppxProvisionedPackage -Online -EA SilentlyContinue | Where-Object { $_.DisplayName -like '*WindowsCamera*' } | Remove-AppxProvisionedPackage -Online -EA SilentlyContinue; Write-Host "[OK] Windows Camera removed" -ForegroundColor Green`,
   DebloatYourPhone: `Get-AppxPackage *YourPhone* -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue; Get-AppxPackage *PhoneLink* -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue; Get-AppxProvisionedPackage -Online -EA SilentlyContinue | Where-Object { $_.DisplayName -like '*YourPhone*' -or $_.DisplayName -like '*PhoneLink*' } | Remove-AppxProvisionedPackage -Online -EA SilentlyContinue; Write-Host "[OK] Your Phone / Phone Link removed" -ForegroundColor Green`,
   ServiceDiagTrack: `Stop-Service -Name "DiagTrack" -Force; Set-Service -Name "DiagTrack" -StartupType Disabled`,
-  ServiceWSearch: `Stop-Service -Name "WSearch" -Force; Set-Service -Name "WSearch" -StartupType Disabled`,
   ServiceSysMain: `Stop-Service -Name "SysMain" -Force; Set-Service -Name "SysMain" -StartupType Disabled`,
   ServiceRemoteReg: `Stop-Service -Name "RemoteRegistry" -Force; Set-Service -Name "RemoteRegistry" -StartupType Disabled`,
   ServiceWMPNetworkSvc: `Stop-Service -Name "WMPNetworkSvc" -Force; Set-Service -Name "WMPNetworkSvc" -StartupType Disabled`,
@@ -276,7 +279,7 @@ const TWEAK_COMMANDS: Record<string, string> = {
   su_obs: `$obsKeys = @("OBS Studio","obs64","obs"); foreach ($v in $obsKeys) { reg delete "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" /v $v /f 2>$null }; $lnks = @("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OBS Studio.lnk"); foreach ($lnk in $lnks) { If (Test-Path $lnk) { Remove-Item $lnk -Force } }; $saPath = "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"; if (!(Test-Path $saPath)) { New-Item $saPath -Force | Out-Null }; Set-ItemProperty $saPath "OBS Studio" -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -EA SilentlyContinue; Write-Host "[OK] OBS Studio removed from startup — OBS still works fine when launched manually" -ForegroundColor Green`,
   // Registry - Extra
   SetResponsiveness: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 10`,
-  GameModeTweaks: `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item -Path $gamePath -Force | Out-Null }; Set-ItemProperty -Path $gamePath -Name 'Scheduling Category' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'SFIO Priority' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'GPU Priority' -Value 8 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'Priority' -Value 6 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'MaximumPreRenderedFrames' -Value 1 -Type DWord; Write-Host "[OK] Game Mode Scheduler: High Category, High SFIO, GPU Priority 8, CPU Priority 6, MaxPreRendered 1" -ForegroundColor Green`,
+  GameModeTweaks: `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $gamePath)) { New-Item -Path $gamePath -Force | Out-Null }; Set-ItemProperty -Path $gamePath -Name 'Scheduling Category' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'SFIO Priority' -Value 'High' -Type String; Set-ItemProperty -Path $gamePath -Name 'GPU Priority' -Value 8 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'Priority' -Value 6 -Type DWord; Set-ItemProperty -Path $gamePath -Name 'MaximumPreRenderedFrames' -Value 1 -Type DWord; Write-Host "[OK] MMCSS Games Scheduler: High category, High SFIO, GPU Priority 8 (DWORD), Priority 6 (DWORD), MaxPreRenderedFrames 1" -ForegroundColor Green`,
   EnableMSIMode: `$gpus = Get-PnpDevice -Class Display -EA SilentlyContinue | Where-Object { $_.Status -eq 'OK' }; $gpuCount = @($gpus).Count; If ($gpuCount -eq 0) { Write-Host "[MSI] No active display device found — rerun after GPU driver is loaded" -ForegroundColor Yellow } ElseIf ($gpuCount -gt 1) { Write-Host "[MSI] SKIPPED — multiple GPUs detected ($gpuCount). Hybrid setups (iGPU + dGPU, or AMD+NVIDIA combos) can BSOD with forced MSI mode. Apply manually via Device Manager only if you know your config is supported." -ForegroundColor Yellow } Else { $gpu = $gpus | Select-Object -First 1; $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; New-Item -Path $msiPath -Force -EA SilentlyContinue | Out-Null; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -EA SilentlyContinue; $affinityPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\Affinity Policy"; If (Test-Path $affinityPath) { Remove-ItemProperty -Path $affinityPath -Name 'DevicePolicy' -EA SilentlyContinue; Remove-ItemProperty -Path $affinityPath -Name 'DevicePriority' -EA SilentlyContinue; Remove-ItemProperty -Path $affinityPath -Name 'AssignmentSetOverride' -EA SilentlyContinue }; Write-Host "[MSI] MSI mode enabled on $($gpu.Name). Affinity policy left at Windows default (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED BSOD fix — older preset wrote DevicePolicy=4 which is invalid without an AssignmentSetOverride and BSOD'd on next boot)." -ForegroundColor Green }`,
   DisableNDU: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Ndu' -Name 'Start' -Value 4`,
   DisableIPv6: `$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty -Path $p -Name 'DisabledComponents' -Value 0x20 -Type DWord -Force; Write-Host "[OK] IPv6 prefer-IPv4 set via supported registry method (DisabledComponents=0x20). Tunnel/binding stays intact — FiveM/Rockstar entitlement, Discord voice, Xbox party chat continue to work." -ForegroundColor Green`,
@@ -367,11 +370,10 @@ const TWEAK_COMMANDS: Record<string, string> = {
   CodVRAMShaderBudget: `Write-Host "[COD] GPU shader caches were preserved so COD can use its compiled texture pipeline without a long rebuild or black menus." -ForegroundColor Yellow`,
   CodDisableTelemetry: `$names = @('CrashReport','CrashReporter','AdobeGCInvoker','adobeupd','Blizzard','atvi','callofduty_analytics','CodAnalytics'); foreach ($n in $names) { Get-Process -Name $n -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue }; $tasks = Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.TaskName -match 'activision|callofduty|blizzard.?update|acti.?crash' }; foreach ($t in $tasks) { Disable-ScheduledTask -TaskPath $t.TaskPath -TaskName $t.TaskName -EA SilentlyContinue; Write-Host "[COD] Disabled task: $($t.TaskName)" -ForegroundColor Cyan }; $hostsPath = 'C:\\Windows\\System32\\drivers\\etc\\hosts'; $block = @('crash.callofduty.com','analytics.callofduty.com','telemetry.activision.com','atvi-error.callofduty.com'); $hosts = Get-Content $hostsPath -Raw -EA SilentlyContinue; foreach ($h in $block) { if ($hosts -notmatch [regex]::Escape($h)) { Add-Content $hostsPath "0.0.0.0 $h" -EA SilentlyContinue; Write-Host "[COD] Blocked telemetry host: $h" -ForegroundColor Green } }; Write-Host "[COD] Activision/COD telemetry tasks disabled + crash/analytics endpoints blocked — removes background analytics CPU usage and network spikes mid-game." -ForegroundColor Green`,
   CodTdrDelay: `$gd = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; If (!(Test-Path $gd)) { New-Item $gd -Force | Out-Null }; Set-ItemProperty $gd 'TdrDelay' 8 -Type DWord -Force; Set-ItemProperty $gd 'TdrDdiDelay' 8 -Type DWord -Force; Set-ItemProperty $gd 'TdrLimitCount' 20 -Type DWord -Force; Write-Host "[COD] GPU TDR delay extended to 8s (was 2s) — BO6 and Warzone do heavy shader compilation during level loads which can trigger Windows' GPU hang detection on 4GB cards. Extending TDR prevents false 'GPU stopped responding' crashes and black screen resets. Reboot required." -ForegroundColor Green`,
-  CodMMCSS: `$base = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $base)) { New-Item $base -Force | Out-Null }; Set-ItemProperty $base 'Affinity' 0 -Type DWord -Force; Set-ItemProperty $base 'Background Only' 'False' -Type String -Force; Set-ItemProperty $base 'Clock Rate' 10000 -Type DWord -Force; Set-ItemProperty $base 'GPU Priority' 2 -Type DWord -Force; Set-ItemProperty $base 'Priority' 2 -Type DWord -Force; Set-ItemProperty $base 'Scheduling Category' 'Medium' -Type String -Force; Set-ItemProperty $base 'SFIO Priority' 'Normal' -Type String -Force; $sp = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'; Set-ItemProperty $sp 'SystemResponsiveness' 20 -Type DWord -Force; Write-Host "[COD] MMCSS Games scheduling restored to balanced values so DWM, input, audio, and Alt-Tab remain responsive." -ForegroundColor Green`,
+  CodMMCSS: `$base = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $base)) { New-Item $base -Force | Out-Null }; Set-ItemProperty $base 'Affinity' 0 -Type DWord -Force; Set-ItemProperty $base 'Background Only' 'False' -Type String -Force; Set-ItemProperty $base 'Clock Rate' 10000 -Type DWord -Force; Set-ItemProperty $base 'GPU Priority' 8 -Type DWord -Force; Set-ItemProperty $base 'Priority' 6 -Type DWord -Force; Set-ItemProperty $base 'Scheduling Category' 'High' -Type String -Force; Set-ItemProperty $base 'SFIO Priority' 'High' -Type String -Force; Set-ItemProperty $base 'MaximumPreRenderedFrames' 1 -Type DWord -Force; $sp = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'; Set-ItemProperty $sp 'SystemResponsiveness' 10 -Type DWord -Force; Write-Host "[COD] MMCSS Games uses the universal profile: High/High, GPU=8, Priority=6, SystemResponsiveness=10." -ForegroundColor Green`,
   CodQoSPolicy: `$pol = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\COD Gaming'; If (!(Test-Path $pol)) { New-Item $pol -Force | Out-Null }; Set-ItemProperty $pol 'Version' '1.0' -Type String -Force; Set-ItemProperty $pol 'Application Name' 'cod.exe' -Type String -Force; Set-ItemProperty $pol 'DSCP Value' '46' -Type String -Force; Set-ItemProperty $pol 'Local Port' '*' -Type String -Force; Set-ItemProperty $pol 'Remote Port' '*' -Type String -Force; Set-ItemProperty $pol 'Protocol' '17' -Type String -Force; Set-ItemProperty $pol 'Local IP' '*' -Type String -Force; Set-ItemProperty $pol 'Remote IP' '*' -Type String -Force; $pol2 = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\COD TCP'; If (!(Test-Path $pol2)) { New-Item $pol2 -Force | Out-Null }; Set-ItemProperty $pol2 'Version' '1.0' -Type String -Force; Set-ItemProperty $pol2 'Application Name' 'cod.exe' -Type String -Force; Set-ItemProperty $pol2 'DSCP Value' '46' -Type String -Force; Set-ItemProperty $pol2 'Protocol' '6' -Type String -Force; Set-ItemProperty $pol2 'Local Port' '*' -Type String -Force; Set-ItemProperty $pol2 'Remote Port' '*' -Type String -Force; Set-ItemProperty $pol2 'Local IP' '*' -Type String -Force; Set-ItemProperty $pol2 'Remote IP' '*' -Type String -Force; Write-Host "[COD] QoS policy applied: cod.exe UDP+TCP traffic marked DSCP 46 (Expedited Forwarding). Your router/switch will prioritize COD packets over background traffic — reduces jitter during Warzone BR drops with 100 players." -ForegroundColor Green`,
 
   // ── Universal gaming improvements (V3) ─────────────────────────────────────
-  DisableSearchIndexer: `Stop-Service 'WSearch' -Force -EA SilentlyContinue; Set-Service 'WSearch' -StartupType Disabled -EA SilentlyContinue; Write-Host "[Registry] Windows Search Indexer disabled — stops SearchIndexer.exe from spiking disk I/O and CPU during gaming. Re-enable via Services.msc (WSearch) if you need Windows Search." -ForegroundColor Green`,
   DisableAutoMaintenance: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\Maintenance' -Name 'MaintenanceDisabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[Registry] Automatic Maintenance disabled — prevents Defender scans and disk cleanup from triggering mid-session. Re-enable via Control Panel > Security and Maintenance." -ForegroundColor Green`,
   FortniteDisableSSR: `$ep = "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini"; If (!(Test-Path $ep)) { New-Item -ItemType File -Path $ep -Force | Out-Null }; $c = Get-Content $ep -Raw -EA SilentlyContinue; If ($c -notmatch 'r\.ssr\.quality') { Add-Content $ep ([Environment]::NewLine + "[SystemSettings]" + [Environment]::NewLine + "r.ssr.quality=0" + [Environment]::NewLine + "r.ReflectionCaptureResolution=64") }; Write-Host "[Fortnite] Screen-space reflections off (r.ssr.quality=0) — saves 5-15% GPU per frame on mid-range cards with no competitive impact." -ForegroundColor Green`,
   FortniteRawInput: `$ep = "$env:LOCALAPPDATA\\FortniteGame\\Saved\\Config\\WindowsClient\\Engine.ini"; If (!(Test-Path $ep)) { New-Item -ItemType File -Path $ep -Force | Out-Null }; $c = Get-Content $ep -Raw -EA SilentlyContinue; If ($c -notmatch 'bEnableMouseSmoothing') { Add-Content $ep ([Environment]::NewLine + "[/Script/Engine.InputSettings]" + [Environment]::NewLine + "bEnableMouseSmoothing=False" + [Environment]::NewLine + "bViewAccelerationEnabled=False" + [Environment]::NewLine + "WindowsMouseSpeedFix=False") }; Write-Host "[Fortnite] Raw mouse input configured — smoothing + view acceleration off. 1:1 aim tracking." -ForegroundColor Green`,
@@ -451,7 +453,7 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   ProcessLassoSmartTrim: `$plKey = 'HKLM:\\SOFTWARE\\Process Lasso'; If (Test-Path $plKey) { Set-ItemProperty -Path $plKey -Name 'EnableSmartTrim' -Value 1 -Type DWord; Write-Host "[OK] Process Lasso SmartTrim enabled" -ForegroundColor Green } Else { Add-Type -MemberDefinition '[DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr hProcess);' -Name 'MemTrimPL' -Namespace 'WinAPI' -EA SilentlyContinue; [WinAPI.MemTrimPL]::EmptyWorkingSet([IntPtr](-1)) | Out-Null; Write-Host "[OK] Working set trimmed (Process Lasso not installed — ran manual trim)" -ForegroundColor Yellow }`,
   ProcessLassoRestrain: `$plKey = 'HKLM:\\SOFTWARE\\Process Lasso'; If (Test-Path $plKey) { Set-ItemProperty -Path $plKey -Name 'RestrainMode' -Value 1 -Type DWord; Write-Host "[OK] Process Lasso Restrain mode enabled" -ForegroundColor Green } Else { Write-Host "[INFO] Install Process Lasso to use CPU Restrain — download at bitsum.com" -ForegroundColor Yellow }`,
   ProcessLassoAffinityGaming: `$ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; @('cs2.exe','VALORANT-Win64-Shipping.exe','r5apex.exe','cod.exe','RustClient.exe','GTA5.exe','FortniteClient-Win64-Shipping.exe') | ForEach-Object { $p = "$ifeo\\$_\\PerfOptions"; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null } ; Set-ItemProperty $p 'CpuPriorityClass' 3; Set-ItemProperty $p 'IoPriority' 3 }; Write-Host "[OK] Above Normal CPU + High I/O priority applied to 7 game executables" -ForegroundColor Green`,
-  ProcessLassoInstanceBalancer: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26 -Type DWord; Write-Host "[OK] Win32PrioritySeparation=26 — short quantum, variable, max foreground boost (gaming-optimal scheduler mode)" -ForegroundColor Green`,
+  ProcessLassoInstanceBalancer: `${WIN32_PRIORITY_SEPARATION_COMMAND}; Write-Host "[OK] Process Lasso scheduler value matches this hardware." -ForegroundColor Green`,
   ProcessTrimWorkingSet: `Add-Type -MemberDefinition '[DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr hProcess);' -Name 'MemTrimWT' -Namespace 'WinAPI' -EA SilentlyContinue; Get-Process | ForEach-Object { try { [WinAPI.MemTrimWT]::EmptyWorkingSet($_.Handle) } catch {} }; Write-Host "[OK] Working set trimmed across all running processes" -ForegroundColor Green`,
   ProcessDisableWindowsErrorReporting: `Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting' -Name 'Disabled' -Value 1; Stop-Service 'WerSvc' -Force -EA SilentlyContinue; Set-Service 'WerSvc' -StartupType Disabled -EA SilentlyContinue; Write-Host "[OK] Windows Error Reporting service disabled" -ForegroundColor Green`,
   ProcessAutoKillHung: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'AutoEndTasks' -Value 1; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'HungAppTimeout' -Value '1000'; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'WaitToKillAppTimeout' -Value '2000'; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'WaitToKillServiceTimeout' -Value '2000'; Write-Host "[OK] Hung app auto-kill: AutoEndTasks=1, HungApp=1s, WaitToKill=2s" -ForegroundColor Green`,
@@ -794,7 +796,6 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   ProcSvc_TrkWks: `Stop-Service 'TrkWks' -Force -EA SilentlyContinue; Set-Service 'TrkWks' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Distributed Link Tracking Client set to Manual" -ForegroundColor Green`,
   ProcSvc_W32Time: `Stop-Service 'W32Time' -Force -EA SilentlyContinue; Set-Service 'W32Time' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Windows Time set to Manual — clock syncs on-demand, no constant background polling" -ForegroundColor Green`,
   ProcSvc_BITS: `Stop-Service 'BITS' -Force -EA SilentlyContinue; Set-Service 'BITS' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Background Intelligent Transfer Service set to Manual — no more background bandwidth usage" -ForegroundColor Green`,
-  ProcSvc_WSearch: `Stop-Service 'WSearch' -Force -EA SilentlyContinue; Set-Service 'WSearch' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Windows Search indexing set to Manual — stops constant disk I/O from file indexing" -ForegroundColor Green`,
   ProcSvc_SysMain: `Stop-Service 'SysMain' -Force -EA SilentlyContinue; Set-Service 'SysMain' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Superfetch / SysMain set to Manual — no more RAM pre-loading overhead (beneficial on SSD+16GB+)" -ForegroundColor Green`,
   ProcSvc_RemoteReg: `Stop-Service 'RemoteRegistry' -Force -EA SilentlyContinue; Set-Service 'RemoteRegistry' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Remote Registry set to Manual — reduces remote attack surface" -ForegroundColor Green`,
   // Cloud & Notification Services
@@ -817,7 +818,7 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   ProcSvc_AppReadiness: `Stop-Service 'AppReadiness' -Force -EA SilentlyContinue; Set-Service 'AppReadiness' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] App Readiness (AppReadiness) set to Manual — prepares UWP apps on first login, wasteful overhead on already-configured PCs" -ForegroundColor Green`,
   ProcSvc_PcaSvc: `Stop-Service 'PcaSvc' -Force -EA SilentlyContinue; Set-Service 'PcaSvc' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Program Compatibility Assistant (PcaSvc) set to Manual — monitors every app launch for compat issues, pure CPU overhead on modern software" -ForegroundColor Green`,
   ProcSvc_PrintNotify: `Stop-Service 'PrintNotify' -Force -EA SilentlyContinue; Set-Service 'PrintNotify' -StartupType Manual -EA SilentlyContinue; Write-Host "[Processes] Printer Extensions and Notifications (PrintNotify) set to Manual — useless without an active printer" -ForegroundColor Green`,
-  ProcSvc_ApplyAll: `$svcs = @('DiagTrack','WerSvc','wercplsupport','DPS','DusmSvc','DoSvc','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM','WbioSrvc','TabletInputService','Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time','BITS','WSearch','SysMain','RemoteRegistry','OneSyncSvc','CDPSvc','WpnService','dmwappushsvc','PushToInstall','AJRouter','SharedRealitySvc','icssvc','WFDSConMgrSvc','p2pimsvc','PNRPsvc','EapHost','seclogon','SCardSvr','ScDeviceEnum','AppReadiness','PcaSvc','PrintNotify'); $count = 0; foreach ($s in $svcs) { $svc = Get-Service $s -EA SilentlyContinue; if ($svc) { try { Stop-Service $s -Force -EA SilentlyContinue; Set-Service $s -StartupType Manual -EA SilentlyContinue; $count++ } catch {} } }; $perUser = @('OneSyncSvc','CDPUserSvc','WpnUserService','cbdhsvc'); foreach ($b in $perUser) { Get-Service "\${b}_*" -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue; $count++ } }; Write-Host "[Processes] \${count} non-essential services set to Manual — fewer background processes, more CPU/RAM for games" -ForegroundColor Green`,
+  ProcSvc_ApplyAll: `$svcs = @('DiagTrack','WerSvc','wercplsupport','DPS','DusmSvc','DoSvc','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM','WbioSrvc','TabletInputService','Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time','BITS','SysMain','RemoteRegistry','OneSyncSvc','CDPSvc','WpnService','dmwappushsvc','PushToInstall','AJRouter','SharedRealitySvc','icssvc','WFDSConMgrSvc','p2pimsvc','PNRPsvc','EapHost','seclogon','SCardSvr','ScDeviceEnum','AppReadiness','PcaSvc','PrintNotify'); $count = 0; foreach ($s in $svcs) { $svc = Get-Service $s -EA SilentlyContinue; if ($svc) { try { Stop-Service $s -Force -EA SilentlyContinue; Set-Service $s -StartupType Manual -EA SilentlyContinue; $count++ } catch {} } }; $perUser = @('OneSyncSvc','CDPUserSvc','WpnUserService','cbdhsvc'); foreach ($b in $perUser) { Get-Service "\${b}_*" -EA SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -EA SilentlyContinue; Set-Service $_ -StartupType Manual -EA SilentlyContinue; $count++ } }; Write-Host "[Processes] \${count} non-essential services set to Manual — fewer background processes, more CPU/RAM for games" -ForegroundColor Green`,
   // ===== V2 NEW (Task #38) =====
   NetMTUAutotune: `netsh interface ipv4 set subinterface "Wi-Fi" mtu=1472 store=persistent`,
   NetTCPAutotuneAggressive: `netsh int tcp set global autotuninglevel=experimental; netsh int tcp set global congestionprovider=ctcp`,
@@ -874,12 +875,36 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
 // catalog block.
 TWEAK_COMMANDS.game_silenthilltownfall = `$ErrorActionPreference='SilentlyContinue'; $paths=@("C:\\Games\\Silent Hill Townfall","D:\\Games\\Silent Hill Townfall","E:\\Games\\Silent Hill Townfall","C:\\Program Files (x86)\\Steam\\steamapps\\common\\Silent Hill Townfall","D:\\SteamLibrary\\steamapps\\common\\Silent Hill Townfall"); $found=$paths|Where-Object{Test-Path $_}|Select-Object -First 1; If($found){ $gpuRam=[math]::Round(((Get-CimInstance Win32_VideoController|Measure-Object -Property AdapterRAM -Sum).Sum/1GB),1); $lowEnd=($gpuRam -le 4); $ifeo='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; $exes=@('SilentHillTownfall-Win64-Shipping.exe','Townfall-Win64-Shipping.exe','SHTownfall.exe','Silent Hill Townfall.exe'); foreach($exe in $exes){ $k="$ifeo\\$exe\\PerfOptions"; If(!(Test-Path $k)){New-Item $k -Force|Out-Null}; Set-ItemProperty $k 'CpuPriorityClass' 6 -Type DWord -Force; Set-ItemProperty $k 'CpuPriorityBoost' 1 -Type DWord -Force; Set-ItemProperty $k 'DisableEnergyThrottling' 1 -Type DWord -Force; Set-ItemProperty $k 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $k 'GPUPriority' 8 -Type DWord -Force }; $gameBar='HKCU:\\Software\\Microsoft\\GameBar'; If(!(Test-Path $gameBar)){New-Item $gameBar -Force|Out-Null}; Set-ItemProperty $gameBar 'AllowAutoGameMode' 1 -Type DWord -Force; Set-ItemProperty $gameBar 'AutoGameModeEnabled' 1 -Type DWord -Force; $capture='HKCU:\\System\\GameConfigStore'; If(!(Test-Path $capture)){New-Item $capture -Force|Out-Null}; Set-ItemProperty $capture 'GameDVR_Enabled' 0 -Type DWord -Force; Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR' 'AppCaptureEnabled' 0 -Type DWord -Force; $cfgs=@("$env:LOCALAPPDATA\\SilentHillTownfall\\Saved\\Config\\Windows\\Engine.ini","$found\\Saved\\Config\\Windows\\Engine.ini","$found\\Saved\\Config\\WindowsNoEditor\\Engine.ini")|Select-Object -Unique; foreach($cfg in $cfgs){ $dir=Split-Path $cfg -Parent; New-Item -ItemType Directory -Path $dir -Force|Out-Null; If(!(Test-Path $cfg)){New-Item -ItemType File -Path $cfg -Force|Out-Null}; $lines=@(Get-Content $cfg -ErrorAction SilentlyContinue); If(-not($lines -contains '[SystemSettings]')){Add-Content $cfg '[SystemSettings]'}; $settings=@('r.MotionBlurQuality=0','r.SceneColorFringeQuality=0','r.LensFlareQuality=0','r.DepthOfFieldQuality=0','r.ShaderPipelineCache.Enabled=1','s.AsyncLoadingThreadEnabled=1','r.TextureStreaming=1'); If($lowEnd){$settings+=@('r.TemporalAA.Upsampling=1','r.Streaming.PoolSize=2048','r.Streaming.LimitPoolSizeToVRAM=1','r.ShadowQuality=0','r.Shadow.MaxResolution=512','r.VolumetricFog=0','r.Lumen.Reflections.Allow=0','r.DynamicGlobalIlluminationMethod=0','r.ReflectionMethod=0')}; foreach($line in $settings){If(-not($lines -contains $line)){Add-Content $cfg $line}} }; $mode=If($lowEnd){'low-end 4GB GPU mode at native resolution'}Else{'hardware-balanced mode at native resolution'}; Write-Host "[OK] Silent Hill: Townfall 15-action UE5 FPS/stability pack applied ($mode; detected VRAM $gpuRam GB)" -ForegroundColor Green } Else { Write-Host "[SKIP] Silent Hill: Townfall not detected" -ForegroundColor DarkGray }`;
 
+// Replace legacy literals with the guarded implementations before any caller
+// can use the command map. The runtime normalizer also returns these same
+// implementations so pack generation and native tickets stay aligned.
+for (const id of ["EnableNvidiaMSIPro", "CodDefenderExclusion", "IntelOldGenPowerOpt", "FiveM3500PerfPlan", "DisableSearchIndexing"]) {
+  const safeCommand = buildSafeWindowsCommandOverride(id);
+  if (safeCommand) TWEAK_COMMANDS[id] = safeCommand;
+}
+
+// Keep embedded legacy game-pack scripts on the same system-wide policy:
+// SystemResponsiveness may be 0 or 10, but never a hardware-derived 14/20/26/38.
+function normalizeSystemResponsivenessCommand(command: string): string {
+  const clampAboveTen = (match: string, prefix: string, value: string) =>
+    Number(value) > 10 ? `${prefix}10` : match;
+  return command
+    .replace(/((?:-Name\s+)?['"]SystemResponsiveness['"]\s+(?:-Value\s+)?)(\d+)/gi, clampAboveTen)
+    .replace(/(SystemResponsiveness=)(\d+)/gi, clampAboveTen);
+}
+
+for (const id of Object.keys(TWEAK_COMMANDS)) {
+  TWEAK_COMMANDS[id] = normalizeSystemResponsivenessCommand(TWEAK_COMMANDS[id]);
+}
+
 /**
  * Windows PowerShell 5.1 has no null-conditional member operator (`?.`).
  * Normalize the three game detection commands before they reach the native
  * runner so older Windows builds do not fail at parse time.
  */
 function normalizeWindowsPowerShellCommand(id: string, command: string): string {
+  const safeOverride = buildSafeWindowsCommandOverride(id);
+  if (safeOverride) return safeOverride;
   if (id === "CodDefenderExclusion") {
     return `$ErrorActionPreference = 'Stop'; $candidatePaths = @('C:\\Program Files\\Call of Duty','C:\\Program Files (x86)\\Call of Duty','C:\\Program Files\\Battle.net Apps\\Call of Duty','C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Modern Warfare 2','D:\\Call of Duty','D:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2','E:\\Call of Duty','E:\\SteamLibrary\\steamapps\\common\\Call of Duty Modern Warfare 2'); $found = @($candidatePaths | Where-Object { Test-Path -LiteralPath $_ }); if (-not $found.Count) { Write-Host "[SKIP] Call of Duty installation folder was not found on the available drives." -ForegroundColor Yellow; return }; foreach ($path in $found) { Add-MpPreference -ExclusionPath $path -ErrorAction Stop; Write-Host "[COD] Defender exclusion added: $path" -ForegroundColor Green }; Write-Host "[COD] Defender exclusions applied to the detected Call of Duty folders." -ForegroundColor Cyan`;
   }
@@ -977,7 +1002,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `Write-Host "[RESTORE] Visual Effects & Gaming..." -ForegroundColor Cyan`,
       `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name 'AppCaptureEnabled' -Value 1 -EA SilentlyContinue; Write-Host "[OK] Xbox Game DVR capture re-enabled" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKCU:\\System\\GameConfigStore' -Name 'GameDVR_Enabled' -Value 1 -EA SilentlyContinue; Write-Host "[OK] GameDVR re-enabled" -ForegroundColor Green`,
-      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] HAGS disabled (HwSchMode=1)" -ForegroundColor Green`,
+      `Write-Host "[OK] Current HAGS setting preserved" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseSpeed' -Value 1 -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold1' -Value 6 -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name 'MouseThreshold2' -Value 10 -EA SilentlyContinue; Write-Host "[OK] Mouse pointer precision (enhance pointer precision) re-enabled" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x9E,0x1E,0x07,0x80,0x12,0x00,0x00,0x00)) -EA SilentlyContinue; Write-Host "[OK] UI animations restored" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] Fast Startup re-enabled" -ForegroundColor Green`,
@@ -1013,7 +1038,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
       `Write-Host "[RESTORE] NVIDIA Settings..." -ForegroundColor Cyan`,
       `@('NvTelemetryContainer','NvDisplayContainerLS','NVDisplay.ContainerLocalSystem') | ForEach-Object { Set-Service $_ -StartupType Automatic -EA SilentlyContinue; Start-Service $_ -EA SilentlyContinue }; Write-Host "[OK] NVIDIA telemetry services re-enabled" -ForegroundColor Green`,
       `$gamePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (Test-Path $gamePath) { Remove-ItemProperty $gamePath 'MaximumPreRenderedFrames' -EA SilentlyContinue; Set-ItemProperty $gamePath 'GPU Priority' 2 -Type DWord -EA SilentlyContinue }; Write-Host "[OK] Pre-rendered frames limit removed (back to driver default)" -ForegroundColor Green`,
-      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -EA SilentlyContinue; Write-Host "[OK] HAGS disabled" -ForegroundColor Green`,
+      `Write-Host "[OK] Current HAGS setting preserved" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -EA SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'PlatformSupportMiracast' -EA SilentlyContinue; Write-Host "[OK] GraphicsDrivers registry hints cleared" -ForegroundColor Green`,
       `$nvNames = @('FrameRateLimit','FrameRateLimitEnable','PS_TexFilterAnisoOptOn','PS_TexFilterLODBiasAllow','PS_TexFilterNoNeg','PS_TexFilterQuality','RmLowLatencyMode','FlipQueueSize','OGL_ThreadControl','D3D_ThreadControl','PowerMizerEnable','PerfLevelSrc','PowerMizerLevel','PowerMizerLevelAC'); @('HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak','HKCU:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak') | ForEach-Object { $p = $_; If (Test-Path $p) { foreach ($n in $nvNames) { Remove-ItemProperty -Path $p -Name $n -EA SilentlyContinue } } }; Write-Host "[OK] V2.2 NVIDIA driver tweaks (Frame Limit / Tex Filter / Low Latency Ultra / Threaded Opt / Power Mgmt Max) cleared from NVIDIA Corporation\\Global\\NVTweak" -ForegroundColor Green`,
       // EnableMSIMode_Safe rollback — INTENTIONALLY BROADER than apply scope.
@@ -1092,7 +1117,7 @@ const RESTORE_BLOCKS: Record<string, { label: string; commands: string[] }> = {
     label: "High GPU Usage / Driver Issues",
     commands: [
       `Write-Host "[RESTORE] GPU Usage and Driver Settings..." -ForegroundColor Cyan`,
-      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] HAGS (HwSchMode) disabled — set to 1 (Windows default off)" -ForegroundColor Green`,
+      `Write-Host "[OK] Current HAGS setting preserved" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrLevel' -Value 3 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] TdrLevel reset to 3 (Windows default)" -ForegroundColor Green`,
       `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'TdrDelay' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] TdrDelay reset to 2 seconds (default)" -ForegroundColor Green`,
       `Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'PagingAllocation' -EA SilentlyContinue; Write-Host "[OK] GPU PagingAllocation key removed — default GPU paging restored" -ForegroundColor Green`,
@@ -1789,7 +1814,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Your hardware scan is incomplete. Rescan your system before selecting Best 15.", code: "OG-SCAN-003" });
       }
       const compatibleCore = buildSafePreset(hardwareFromRig(rig), "balanced").core
-        .filter(id => trustedTweakId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any));
+        .filter(id => trustedTweakId(id) && !FORBIDDEN_AUTO_TWEAKS.includes(id as any) && !MANUAL_ONLY_TWEAK_IDS.has(id));
       const hasGameSelection = Array.isArray(req.body?.gameIds);
       const selectedGameIds = new Set(
         hasGameSelection
@@ -2290,7 +2315,8 @@ export async function registerRoutes(
       `Write-Host "" `,
       ``,
       `# CPU / Scheduling`,
-      `Check "Win32PrioritySeparation = 26 (gaming-optimal)" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -EA SilentlyContinue).Win32PrioritySeparation -eq 26"`,
+      `$expectedWin32PrioritySeparation = if ([Environment]::ProcessorCount -ge 12) { 38 } else { 26 }`,
+      `Check "Win32PrioritySeparation = hardware-matched" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -EA SilentlyContinue).Win32PrioritySeparation -eq $expectedWin32PrioritySeparation"`,
       `Check "Timer Resolution (bcdedit useplatformclock)" "(bcdedit /enum | Select-String 'useplatformclock') -match 'Yes'"`,
       `Check "DisableHungAppDetection" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SessionManager' -EA SilentlyContinue).HungAppTimeout -eq 1000"`,
       `Check "EnableMSIMode (GPU)" "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\PCI' -EA SilentlyContinue -Recurse | Where { \$_.DeviceDesc -match 'VGA' } | Select -First 1) -ne \$null"`,
@@ -2329,7 +2355,6 @@ export async function registerRoutes(
       ``,
       `# Services`,
       `Check "DiagTrack Disabled" "(Get-Service DiagTrack -EA SilentlyContinue).StartType -eq 'Disabled'"`,
-      `Check "Windows Search Disabled" "(Get-Service WSearch -EA SilentlyContinue).StartType -eq 'Disabled'"`,
       `Check "SysMain Disabled" "(Get-Service SysMain -EA SilentlyContinue).StartType -eq 'Disabled'"`,
       ``,
       `# Privacy`,
@@ -2387,7 +2412,7 @@ $allServices = @(
   'SSDPSRV','upnphost','FDResPub','fdPHost','lltdsvc','SharedAccess','WinRM',
   'WbioSrvc','TabletInputService',
   'Fax','MapsBroker','lfsvc','PhoneSvc','RetailDemo','WMPNetworkSvc','TrkWks','W32Time',
-  'BITS','WSearch','SysMain','RemoteRegistry',
+  'BITS','SysMain','RemoteRegistry',
   'OneSyncSvc','CDPSvc','WpnService','dmwappushsvc','PushToInstall',
   'AJRouter','SharedRealitySvc','icssvc','WFDSConMgrSvc',
   'p2pimsvc','PNRPsvc',
@@ -4460,10 +4485,10 @@ Start-Sleep 2
       `\$mmPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'`,
       `Set-ItemProperty -Path \$mmPath -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force`,
       `Write-Host "  [OK] SystemResponsiveness = 10 (Discord-safe — 10% reserved for audio/background)" -ForegroundColor Green`,
-      `# FIX 3: Fix Win32PrioritySeparation (38 = server mode, wrong for gaming)`,
+      `# FIX 3: Apply the hardware-matched Win32PrioritySeparation gaming value`,
       `Write-Host "[FIX 3] Correcting CPU scheduler mode..." -ForegroundColor Cyan`,
-      `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 26 -Type DWord -Force`,
-      `Write-Host "  [OK] Win32PrioritySeparation = 26 (short quantum, max foreground boost)" -ForegroundColor Green`,
+      `$logicalProcessors = [Environment]::ProcessorCount; $priorityValue = if ($logicalProcessors -ge 12) { 0x26 } else { 0x1A }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value $priorityValue -Type DWord -Force`,
+      `Write-Host ("  [OK] Win32PrioritySeparation = 0x{0:X2} ({0} decimal) for {1} logical processors" -f $priorityValue, $logicalProcessors) -ForegroundColor Green`,
       `# FIX 4: Restart Discord so it picks up new scheduling`,
       `Write-Host "[FIX 4] Restarting Discord if running..." -ForegroundColor Cyan`,
       `\$disc = Get-Process 'Discord' -EA SilentlyContinue`,
@@ -5026,15 +5051,13 @@ Start-Sleep 2
       `Set-ItemProperty -Path \$mmPath -Name 'SystemResponsiveness' -Value 10 -Type DWord -Force`,
       `Write-Host "        Was: \$old -> Now: 10  (Discord-safe game priority)" -ForegroundColor Green`,
       ``,
-      `# -- FIX 2: Win32PrioritySeparation was set to 38 (server scheduler mode) --`,
-      `# Value 38 = Windows server scheduling mode - reduces foreground thread priority.`,
-      `# This actively fought against game performance and caused instability.`,
-      `# Fix: set to 26 = short quantum + max foreground boost (gaming-optimal).`,
+      `# -- FIX 2: Set the hardware-matched gaming scheduler value (0x1A or 0x26) --`,
       `Write-Host "[FIX 2] Correcting CPU scheduler mode..." -ForegroundColor Yellow`,
       `\$pcPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl'`,
       `\$old2 = (Get-ItemProperty \$pcPath -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
-      `Set-ItemProperty -Path \$pcPath -Name 'Win32PrioritySeparation' -Value 26 -Type DWord -Force`,
-      `Write-Host "        Was: \$old2 -> Now: 26  (short quantum, max foreground boost)" -ForegroundColor Green`,
+      `\$w32Expected = if ([Environment]::ProcessorCount -ge 12) { 0x26 } else { 0x1A }`,
+      `Set-ItemProperty -Path \$pcPath -Name 'Win32PrioritySeparation' -Value \$w32Expected -Type DWord -Force`,
+      `Write-Host ("        Was: \$old2 -> Now: 0x{0:X2} ({0} decimal)" -f \$w32Expected) -ForegroundColor Green`,
       ``,
       `# -- FIX 3: Restart Discord so it picks up the new CPU scheduling -----------`,
       `Write-Host "[FIX 3] Checking Discord..." -ForegroundColor Yellow`,
@@ -5057,9 +5080,10 @@ Start-Sleep 2
       `\$sr  = (Get-ItemProperty \$mmPath -Name SystemResponsiveness -EA SilentlyContinue).SystemResponsiveness`,
       `\$w32 = (Get-ItemProperty \$pcPath  -Name Win32PrioritySeparation -EA SilentlyContinue).Win32PrioritySeparation`,
       `\$srOk  = \$sr  -eq 10`,
-      `\$w32Ok = \$w32 -eq 26`,
+      `\$w32Expected = if ([Environment]::ProcessorCount -ge 12) { 0x26 } else { 0x1A }`,
+      `\$w32Ok = \$w32 -eq \$w32Expected`,
       `If (\$srOk)  { Write-Host "  SystemResponsiveness    = \$sr   [OK]"  -ForegroundColor Green } Else { Write-Host "  SystemResponsiveness    = \$sr   [FAIL - expected 10]" -ForegroundColor Red }`,
-      `If (\$w32Ok) { Write-Host "  Win32PrioritySeparation = \$w32  [OK]"  -ForegroundColor Green } Else { Write-Host "  Win32PrioritySeparation = \$w32  [FAIL - expected 26]" -ForegroundColor Red }`,
+      `If (\$w32Ok) { Write-Host "  Win32PrioritySeparation = \$w32  [OK]"  -ForegroundColor Green } Else { Write-Host "  Win32PrioritySeparation = \$w32  [FAIL - expected hardware-matched \$w32Expected]" -ForegroundColor Red }`,
       `Write-Host ""`,
       `If (\$srOk -and \$w32Ok) {`,
       `    Write-Host "  ALL FIXES APPLIED. Restart your PC to fully apply changes." -ForegroundColor Cyan`,
@@ -6582,12 +6606,13 @@ $state = @{}
 function Check { param($key, $expr) try { $state[$key] = [bool](Invoke-Expression $expr) } catch { $state[$key] = $false } }
 
 # --- Registry: CPU & Timer ---
-Check 'Win32PrioritySeparation'  '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -EA SilentlyContinue).Win32PrioritySeparation) -eq 26'
+$expectedWin32PrioritySeparation = if ([Environment]::ProcessorCount -ge 12) { 38 } else { 26 }
+Check 'Win32PrioritySeparation'  '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -EA SilentlyContinue).Win32PrioritySeparation) -eq $expectedWin32PrioritySeparation'
 Check 'SetResponsiveness'         '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile" -EA SilentlyContinue).SystemResponsiveness) -eq 10'
 Check 'DisableCoreParking'        '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583" -EA SilentlyContinue).ValueMax) -eq 0'
 Check 'DisableDynamicTick'        '(bcdedit /enum | Select-String "disabledynamictick.*yes") -ne $null'
 Check 'SetTimerResolution'        '(bcdedit /enum | Select-String "disabledynamictick.*yes") -ne $null'
-Check 'GameModeTweaks'            '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name "GPU Priority" -EA SilentlyContinue)."GPU Priority") -eq 8'
+Check 'GameModeTweaks'            '($g=Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -EA SilentlyContinue) -and $g."Scheduling Category" -eq "High" -and $g."SFIO Priority" -eq "High" -and $g."GPU Priority" -eq 8 -and $g.Priority -eq 6 -and $g.MaximumPreRenderedFrames -eq 1'
 
 # --- Registry: Network ---
 Check 'NetworkThrottling'  '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile" -Name NetworkThrottlingIndex -EA SilentlyContinue).NetworkThrottlingIndex) -eq 4294967295'
@@ -6622,7 +6647,6 @@ Check 'MemGPUOptimize'           '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentCont
 # --- Services (Disabled = tweak applied) ---
 foreach ($svc in @(
   @{id='ServiceDiagTrack';  name='DiagTrack'},
-  @{id='ServiceWSearch';    name='WSearch'},
   @{id='ServiceSysMain';    name='SysMain'},
   @{id='ServiceRemoteReg';  name='RemoteRegistry'},
   @{id='ServiceWMPNetworkSvc'; name='WMPNetworkSvc'},
@@ -6734,7 +6758,7 @@ Check 'CodGPUPriority'       '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Wi
 Check 'CodNetworkBuffer'     '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters" -Name DefaultReceiveWindow -EA SilentlyContinue).DefaultReceiveWindow) -eq 524288'
 Check 'CodTdrDelay'          '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrDelay -EA SilentlyContinue).TdrDelay) -ge 8'
 Check 'CodFramePacing'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name TdrDdiDelay -EA SilentlyContinue).TdrDdiDelay) -eq 8'
-Check 'CodMMCSS'             '((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -Name "Scheduling Category" -EA SilentlyContinue)."Scheduling Category") -eq "High"'
+Check 'CodMMCSS'             '($g=Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games" -EA SilentlyContinue) -and $g."Scheduling Category" -eq "High" -and $g."SFIO Priority" -eq "High" -and $g."GPU Priority" -eq 8 -and $g.Priority -eq 6 -and ((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile" -EA SilentlyContinue).SystemResponsiveness) -eq 10'
 Check 'CodQoSPolicy'         'Test-Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\QoS\\COD Gaming"'
 Check 'CodDisableHAGS'       '((Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" -Name HwSchMode -EA SilentlyContinue).HwSchMode) -eq 1'
 Check 'CodDirectXQueue'      '((Get-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Direct3D" -Name MaxFrameLatency -EA SilentlyContinue).MaxFrameLatency) -eq 1'
@@ -7792,7 +7816,7 @@ CRITICAL SAFETY RULES (NEVER VIOLATE):
 4. Never recommend undervolting without warning about potential instability.
 
 REGISTRY TWEAKS — EXACT VALUES:
-Win32PrioritySeparation: Gaming=0x26(38) short fixed quanta foreground 3x boost. Alt competitive=0x28(40). Default=0x02. Path: HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl
+Win32PrioritySeparation: hardware-matched gaming value; use 0x1A (decimal 26) below 12 logical processors and 0x26 (decimal 38) at 12 or more. 0x28 and 0x40 are manual-only, not automatic recommendations. Default=0x02. Path: HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl
 SystemResponsiveness: Gaming=0 (100% CPU to foreground, removes 20% multimedia reserve). Default=20. Path: HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile
 GPU Priority (Games tasks): Path HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games → GPU Priority=8, Priority=6, Scheduling Category=High, SFIO Priority=High, Background Only=False, Clock Rate=10000
 NetworkThrottlingIndex: Disable=0xffffffff (4294967295). Default=10. Path: HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile
@@ -7842,7 +7866,7 @@ LAPTOP: Ultimate Performance power plan. Enable MUX Switch (dGPU Direct) in manu
 
 DISCORD: Hardware Acceleration=OFF (major GPU save). Krisp=OFF (heavy CPU). Overlay=OFF (frame pacing issues). Set to High priority in Task Manager.
 
-QUICK BOOST COMPETITIVE PROFILE: Win32PrioritySeparation=0x26, SystemResponsiveness=0, GPU Priority=8, NetworkThrottlingIndex=0xffffffff, Ultimate Performance plan, disable Xbox Game Bar, Nagle disabled, timer 0.5ms.
+QUICK BOOST COMPETITIVE PROFILE: Win32PrioritySeparation is hardware-matched (0x1A below 12 logical processors, 0x26 at 12+), SystemResponsiveness=10, GPU Priority=8, NetworkThrottlingIndex=0xffffffff, Ultimate Performance plan, disable Xbox Game Bar, Nagle disabled.
 
 DRIVER BEST PRACTICE: Always use DDU (boot to Safe Mode → clean all → restart → install new driver custom without GFE). Clear shader cache: %LOCALAPPDATA%\\Temp\\NVIDIA Corporation\\NV_Cache.
 

@@ -1,5 +1,6 @@
 import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 
 /**
  * Native recommendation controls must reflect a confirmed runner result, not
@@ -13,6 +14,8 @@ export function getPendingRecommendationIds(
 ): string[] {
   const native = isNative();
   return ids.filter(id =>
-    !getTweakCompatibility(id).ok ? false : native ? !appliedAt[id] : !tweaks[id],
+    !MANUAL_ONLY_TWEAK_IDS.has(id)
+      && getTweakCompatibility(id).ok
+      && (native ? !appliedAt[id] : !tweaks[id]),
   );
 }

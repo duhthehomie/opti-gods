@@ -1,36 +1,39 @@
 import type { HardwareInfo } from "@/hooks/use-hardware-info";
 
 /**
- * Map hardware profile to optimal SystemResponsiveness value.
- * Lower = more CPU priority to game, higher = more to background.
- * 0 = 99% game (breaks Discord), 10 = 90% game, 26 = 77% game, 38 = 65% game
+ * Select one of the two preferred gaming scheduler values using the detected
+ * logical processor count. Keep the threshold aligned with the native and
+ * generated-script implementations.
  *
- * Uses cpuPhysicalCores (not logical threads) to avoid misclassifying
- * SMT/HT CPUs. E.g. Ryzen 7 3700X = 8 physical / 16 threads — should be
- * mid-range (26), not high-end (38).
+ * Win32PrioritySeparation is a bit field: 0x1A is decimal 26, while 0x26 is
+ * decimal 38. Unknown/low thread counts use the conservative 0x1A value.
  */
-export function getOptimalSystemResponsiveness(hw: HardwareInfo): number {
-  const phys = hw.cpuPhysicalCores || Math.ceil(hw.cpuCores / 2);
+export function getOptimalWin32PrioritySeparation(hw: Pick<HardwareInfo, "cpuCores">): number {
+  return hw.cpuCores >= 12 ? 0x26 : 0x1a;
+}
 
-  // High-end systems (RTX + 12+ physical cores, e.g. Ryzen 9 5900X, i9-12900K)
-  if ((hw.nvidiaIsRTX || hw.isAmdGpu) && phys >= 12) {
-    return 38; // hex 26 — breathing room for powerful hardware
-  }
+export function getWin32PrioritySeparationExplanation(hw: Pick<HardwareInfo, "cpuCores">): string {
+  const logicalProcessors = Number.isFinite(hw.cpuCores) ? hw.cpuCores : 0;
+  const value = logicalProcessors >= 12 ? 0x26 : 0x1a;
+  const hex = value.toString(16).toUpperCase().padStart(2, "0");
+  const tier = logicalProcessors >= 12
+    ? "12 or more logical processors"
+    : "fewer than 12 logical processors";
+  return `Hardware-matched recommendation: 0x${hex} (${value} decimal) for ${tier}. Automatic selection uses 0x1A or 0x26; 0x28 and 0x40 are not selected automatically.`;
+}
 
-  // Mid-range (RTX/AMD discrete + 8-10 physical cores, e.g. R7 3700X, i7-10700K)
-  if ((hw.nvidiaIsRTX || hw.isAmdGpu || hw.nvidiaIsLowEnd) && phys >= 8) {
-    return 26; // hex 1A — balanced sweet spot
-  }
-
-  // Low-end or laptop (iGPU, <6 physical cores, or GTX 10xx)
-  return 10; // hex 0A — conservative, stable
+/**
+ * Use one stable value across hardware profiles. The server, native desktop
+ * path, and every Pro preset apply SystemResponsiveness=10.
+ */
+export function getOptimalSystemResponsiveness(_hw: HardwareInfo): number {
+  return 10;
 }
 
 /**
  * Get a human-readable recommendation explanation.
  */
-export function getSystemResponsivenessExplanation(hw: HardwareInfo, value: number): string {
-  const hex = value.toString(16).toUpperCase().padStart(2, "0");
+export function getSystemResponsivenessExplanation(hw: HardwareInfo, _value: number): string {
   const phys = hw.cpuPhysicalCores || Math.ceil(hw.cpuCores / 2);
   const cpuDesc =
     phys >= 12
@@ -48,7 +51,7 @@ export function getSystemResponsivenessExplanation(hw: HardwareInfo, value: numb
           ? "APU/iGPU (low-end)"
           : "Unknown";
 
-  return `System: ${gpuDesc} GPU, ${cpuDesc} CPU • Recommended: 0x${hex} (${value}d) — ${value === 10 ? "conservative, stable" : value === 26 ? "balanced sweet spot" : "high-power friendly"}`;
+  return `System: ${gpuDesc} GPU, ${cpuDesc} CPU • Universal recommendation: 0x0A (10d) — keeps 10% available to audio and background apps while prioritizing games.`;
 }
 
 /**

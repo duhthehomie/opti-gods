@@ -8,6 +8,9 @@
 // auto-CORE set (those three caused BSODs / FiveM crashes / boot hangs).
 // `buildSafePreset` enforces V2.1 rules in one place.
 
+import { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
+export { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
+
 export type PresetGpuVendor = "nvidia" | "amd" | "intel" | "unknown";
 export type PresetOsVersion = "win11" | "win10" | "unknown";
 export type PresetGoal = "balanced" | "fps" | "latency" | "stability";
@@ -44,8 +47,8 @@ export interface SafePreset {
 
 /**
  * The three tweaks the V2.1 stability surgery removed from auto-CORE.
- * They are still legal tweaks, but the AI/admin generators must NEVER include
- * them in `core` — only in `expert` and only when explicitly opted in.
+ * They remain legal, but AI/admin generators must never include them in `core`
+ * without an exact expert opt-in.
  *
  * - EnableMSIMode: V1 BSOD `SYSTEM_THREAD_EXCEPTION_NOT_HANDLED`.
  *   No MSI-mode action is auto-selected; capability must be validated manually.
@@ -65,8 +68,8 @@ export const FORBIDDEN_AUTO_TWEAKS = [
  * NEVER auto-include these; they belong in `expert` only.
  *
  * Sourced from `safety: "expert"` entries in `client/src/lib/tweak-registry.ts`
- * plus the three FORBIDDEN_AUTO_TWEAKS above (which carry the strongest "do
- * not auto-include" semantics post-V2.1).
+ * plus the FORBIDDEN_AUTO_TWEAKS above (which carry the strongest "do
+ * not auto-include" semantics).
  */
 export const EXPERT_TWEAK_IDS: ReadonlySet<string> = new Set<string>([
   ...FORBIDDEN_AUTO_TWEAKS,
@@ -253,7 +256,7 @@ const UNIVERSAL_CORE: string[] = [
   "DisableCoreParking", "DisableDynamicTick", "OptimizeRAMUsage",
   "DisablePrefetch", "MemTrimStandbyList", "MemTrimOnMinimize",
   "NetDNSCloudflare", "NetDisableQoS", "NetInterruptModeration",
-  "NetRSSQueues", "NetAdapterPowerSave", "ProcMMCSSGaming",
+  "NetRSSQueues", "NetAdapterPowerSave",
   "ProcGPUSchedulerHigh", "PrivacyTelemetry", "PrivacyAdvertisingID",
   "DisablePointerPrecision", "DisableAutoUpdate",
 ];
@@ -302,7 +305,7 @@ const SERVICE_SAFE: string[] = [
   "ServiceLltdsvc", "ServiceAeLookupSvc", "ServiceWbioSrvc",
   "ServiceFDHost", "ServiceDusmSvc", "ServicePcaSvc",
   "ServiceDPS", "ServiceSysMain", "ServiceRemoteReg",
-  "ServiceTabletInput", "ServiceWerSvc", "ServiceWSearch",
+  "ServiceTabletInput", "ServiceWerSvc",
   "ServicePrintSpooler",
 ];
 
@@ -407,7 +410,7 @@ export const GAME_DETECT_PACK_IDS: string[] = [
 /** Universal system tweaks not in the core arrays */
 const SYSTEM_EXTRA: string[] = [
   "DisableAutoMaintenance", "DisableCTFMonTracking",
-  "DisableSearchIndexer", "DisableTelemetry",
+  "DisableTelemetry",
   "OOShutupPrivacy",
   "ToolDPCLatencyCheck",
 ];
@@ -462,7 +465,7 @@ const PROCSVC_TWEAKS: string[] = [
   "ProcSvc_TabletInput", "ProcSvc_BthServ", "ProcSvc_Fax",
   "ProcSvc_MapsBroker", "ProcSvc_lfsvc", "ProcSvc_PhoneSvc",
   "ProcSvc_RetailDemo", "ProcSvc_WMPNet", "ProcSvc_TrkWks",
-  "ProcSvc_W32Time", "ProcSvc_BITS", "ProcSvc_WSearch",
+  "ProcSvc_W32Time", "ProcSvc_BITS",
   "ProcSvc_SysMain", "ProcSvc_RemoteReg", "ProcSvc_OneSyncSvc",
   "ProcSvc_CDPSvc", "ProcSvc_WpnService", "ProcSvc_cbdhsvc",
   "ProcSvc_dmwappushsvc", "ProcSvc_PushToInstall", "ProcSvc_AJRouter",
@@ -599,7 +602,7 @@ const INTEL_IGPU_CORE: string[] = [
 const LAPTOP_CORE: string[] = [
   "Lap_UltimatePerformance", "Lap_DisableCoreParking", "Lap_DisableThrottleStates",
   "Lap_MaxProcessorStateAC", "Lap_USBPowerSave", "Lap_WifiPerfMode",
-  "Lap_DisablePowerThrottling", "Lap_MMCSS_Games", "Lap_DisableHibernate",
+  "Lap_DisablePowerThrottling", "Lap_DisableHibernate",
   "Lap_DisableTurboOnBattery", "Lap_DisableAdaptiveBrightness",
   "Lap_Net_DisableNagle", "Lap_Net_DisableThrottle", "Lap_Net_OptimizeDNS",
   "Lap_Net_DisableUSBSelSuspend", "Lap_Net_WiFiPerfMode",
@@ -634,7 +637,7 @@ const COD_UNIVERSAL: string[] = [
   "CodHighPriority", "CodGameMode",
   "CodPagefileOptimize", "CodDisableHAGS", "CodNetworkBuffer",
   "CodDisableLSO", "CodTCPOptimize",
-  "CodDisableTelemetry", "CodTdrDelay", "CodMMCSS",
+  "CodDisableTelemetry", "CodTdrDelay",
   "CodQoSPolicy", "CodFramePacing", "CodMemPriority",
 ];
 /** COD tweaks that only apply on NVIDIA hardware */
@@ -733,13 +736,13 @@ export function buildSafePreset(
       NVIDIA_RTX_EXTRA.forEach(id => candidates.add(id));
       if (isRtx50) {
         NVIDIA_RTX50_EXTRA.forEach(id => candidates.add(id));
-        reasons.push(`NVIDIA RTX 50 (Blackwell) detected (${hw.gpuName ?? "RTX 50"}) — HAGS, full RTX stack, Blackwell driver extras, DLSS4`);
+        reasons.push(`NVIDIA RTX 50 (Blackwell) detected (${hw.gpuName ?? "RTX 50"}) — current HAGS setting preserved, full RTX stack, Blackwell driver extras, DLSS4`);
       } else {
-        reasons.push(`NVIDIA RTX detected (${hw.gpuName ?? "RTX"}) — HAGS enabled, full RTX stack, RTX video off`);
+        reasons.push(`NVIDIA RTX detected (${hw.gpuName ?? "RTX"}) — current HAGS setting preserved, full RTX stack, RTX video off`);
       }
     } else {
       NVIDIA_GTX_EXTRA.forEach(id => candidates.add(id));
-      reasons.push(`NVIDIA GTX-class detected (${hw.gpuName ?? "GTX"}) — HAGS skipped (causes stutters on Pascal/Turing), GTX shader/texture/FiveM GTX extras`);
+      reasons.push(`NVIDIA GTX-class detected (${hw.gpuName ?? "GTX"}) — current HAGS setting preserved, GTX shader/texture/FiveM GTX extras`);
     }
     if (hw.isLaptop) {
       LAPTOP_NVIDIA.forEach(id => candidates.add(id));
@@ -762,14 +765,14 @@ export function buildSafePreset(
   } else if (hw.gpuVendor === "amd") {
     AMD_IGPU_CORE.forEach(id => candidates.add(id));
     AMD_IGPU_EXTRA.forEach(id => candidates.add(id));
-    reasons.push(`AMD APU/iGPU detected (${hw.gpuName ?? "Vega"}) — Vega/APU tweaks, HAGS disabled, HDCP off, audio co-proc gated, browser GPU close, transparency off`);
+    reasons.push(`AMD APU/iGPU detected (${hw.gpuName ?? "Vega"}) — Vega/APU tweaks, current HAGS setting preserved, HDCP off, audio co-proc gated, browser GPU close, transparency off`);
   } else if (hw.gpuVendor === "intel") {
     INTEL_IGPU_CORE.forEach(id => candidates.add(id));
     INTEL_ARROW_TWEAKS.forEach(id => candidates.add(id));
     reasons.push(`Intel iGPU detected (${hw.gpuName ?? "Intel"}) — Intel driver TDR fix, Panel Fitter off, Arrow Lake / Lunar Lake extras`);
     if (hw.isLaptop) {
       LAPTOP_INTEL.forEach(id => candidates.add(id));
-      reasons.push("Intel laptop detected — speed shift / turbo limits / timer / HAGS tweaks");
+      reasons.push("Intel laptop detected — speed shift / turbo limits / timer tweaks; current HAGS setting preserved");
     }
   } else {
     reasons.push("GPU vendor unknown — vendor-specific tweaks skipped, safe defaults only");
@@ -826,6 +829,13 @@ export function buildSafePreset(
   //    rejected — they must never reach `core`.
   const FORBIDDEN_LIST = FORBIDDEN_AUTO_TWEAKS as readonly string[];
   for (const optedId of Array.from(optIn)) {
+    if (MANUAL_ONLY_TWEAK_IDS.has(optedId)) {
+      blocked.push({
+        id: optedId,
+        reason: "manual-only Windows tweak; enable it directly in Windows Tweaks instead of adding it to an automatic preset",
+      });
+      continue;
+    }
     if (NVIDIA_CAPTURE_PROTECTED_IDS.has(optedId)) {
       blocked.push({
         id: optedId,
@@ -884,6 +894,13 @@ export function buildSafePreset(
   const core: string[] = [];
   const expert: string[] = [];
   for (const id of Array.from(candidates)) {
+    if (MANUAL_ONLY_TWEAK_IDS.has(id)) {
+      blocked.push({
+        id,
+        reason: "manual-only Windows tweak; automatic presets must not disable Windows Search indexing",
+      });
+      continue;
+    }
     if (NVIDIA_CAPTURE_PROTECTED_IDS.has(id)) {
       blocked.push({
         id,

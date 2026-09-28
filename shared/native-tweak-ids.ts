@@ -2,7 +2,7 @@
 export const NATIVE_TWEAK_IDS = [
   "Win32PrioritySeparation", "SetTimerResolution", "SetResponsiveness",
   "GameModeTweaks", "NetworkThrottling", "DisableNagle", "InputLagTCP",
-  "DisableNDU", "DisablePrefetch", "EnableHAGS", "DisablePointerPrecision",
+  "DisableNDU", "DisablePrefetch", "DisableSearchIndexing", "EnableHAGS", "DisablePointerPrecision",
   "DisableFastStartup", "DisableGameDVR", "SysVisualBestPerf",
   "DisableTelemetry", "SysHibernateOff", "SetDNSPriority",
   "ClearDnsCache", "DisableMMAgentMemoryCompression", "ResetTcpAutotune",

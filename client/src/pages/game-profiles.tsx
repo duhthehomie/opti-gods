@@ -9,12 +9,14 @@ import { detectInstalledGames, isNative, type NativeInstalledGame } from "@/lib/
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { TWEAK_REGISTRY, type TweakCategory } from "@/lib/tweak-registry";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 
 type GameProfile = {
   id: string;
   title: string;
   publisher: string;
   cover: string;
+  coverMode?: "icon";
   gradient: string;
   category?: TweakCategory;
   recommendationIds?: readonly string[];
@@ -34,12 +36,12 @@ const GAME_LIBRARY: GameProfile[] = [
   { id: "game_007firstlight", title: "007: First Light", publisher: "IO Interactive", cover: "/game-covers/007-first-light.jpg", gradient: "from-yellow-950 via-zinc-900 to-black", description: "UE5 Engine.ini tuning, Lumen controls, process priority, and shader-cache preparation." },
   { id: "game_rust", title: "Rust", publisher: "Facepunch Studios", cover: "/game-covers/rust.png", gradient: "from-amber-950 via-zinc-900 to-black", category: "rust", description: "Client configuration, CPU priority, frame cap, shadows, networking, and launch tuning." },
   { id: "game_roblox", title: "Roblox", publisher: "Roblox Corporation", cover: "/game-covers/roblox.png", gradient: "from-red-950 via-zinc-900 to-black", category: "roblox", description: "FFlags, frame-rate controls, process priority, post-processing, and rendering settings." },
-  { id: "game_valorant", title: "VALORANT", publisher: "Riot Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1270540/header.jpg", gradient: "from-red-950 via-zinc-900 to-black", description: "Competitive frame pacing, input latency, process priority, and network tuning." },
+  { id: "game_valorant", title: "VALORANT", publisher: "Riot Games", cover: "/game-covers/valorant.png", gradient: "from-red-950 via-zinc-900 to-black", description: "Competitive frame pacing, input latency, process priority, and network tuning." },
   {
     id: "game_silenthilltownfall",
     title: "Silent Hill: Townfall",
     publisher: "Konami / Screen Burn",
-    cover: "/game-covers/silent-hill-townfall.png",
+    cover: "/game-covers/silent-hill-townfall.jpg",
     gradient: "from-slate-950 via-zinc-900 to-black",
     recommendationIds: [
       "TownfallProcessPriority", "TownfallIOPriority", "TownfallGPUPriority",
@@ -61,7 +63,7 @@ const GAME_LIBRARY: GameProfile[] = [
   { id: "game_rocketleague", title: "Rocket League", publisher: "Psyonix / Epic Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/252950/header.jpg", gradient: "from-blue-950 via-zinc-900 to-black", description: "Competitive frame pacing, input latency, and network tuning." },
   { id: "game_gta5", title: "Grand Theft Auto V", publisher: "Rockstar Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/header.jpg", gradient: "from-green-950 via-zinc-900 to-black", description: "GTA V process, streaming, frame pacing, and network tuning." },
   { id: "game_eldenring", title: "Elden Ring", publisher: "FromSoftware", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/header.jpg", gradient: "from-amber-950 via-zinc-900 to-black", description: "Frame pacing, process priority, and shader-stutter reduction." },
-  { id: "game_tarkov", title: "Escape from Tarkov", publisher: "Battlestate Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2215430/header.jpg", gradient: "from-stone-950 via-zinc-900 to-black", description: "Streaming, CPU priority, memory, and frame pacing tuning." },
+  { id: "game_tarkov", title: "Escape from Tarkov", publisher: "Battlestate Games", cover: "/game-covers/tarkov-user.webp", gradient: "from-stone-950 via-zinc-900 to-black", description: "Streaming, CPU priority, memory, and frame pacing tuning." },
   { id: "game_pubg", title: "PUBG: Battlegrounds", publisher: "Krafton", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/578080/header.jpg", gradient: "from-amber-950 via-zinc-900 to-black", description: "Competitive input, process, frame pacing, and network tuning." },
   { id: "game_dbd", title: "Dead by Daylight", publisher: "Behaviour Interactive", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/381210/header.jpg", gradient: "from-red-950 via-zinc-900 to-black", description: "Unreal Engine process priority, asset streaming, and frame pacing." },
   { id: "game_dota2", title: "Dota 2", publisher: "Valve", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/570/header.jpg", gradient: "from-red-950 via-zinc-900 to-black", description: "CPU scheduling, input, frame pacing, and network tuning." },
@@ -71,8 +73,8 @@ const GAME_LIBRARY: GameProfile[] = [
   { id: "game_phasmo", title: "Phasmophobia", publisher: "Kinetic Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/739630/header.jpg", gradient: "from-indigo-950 via-zinc-900 to-black", description: "Unity process priority and frame pacing tuning." },
   { id: "game_battlefield", title: "Battlefield", publisher: "Electronic Arts", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1517290/header.jpg", gradient: "from-green-950 via-zinc-900 to-black", description: "CPU scheduling, streaming, input, and network tuning." },
   { id: "game_lol", title: "League of Legends", publisher: "Riot Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/20590/header.jpg", gradient: "from-blue-950 via-zinc-900 to-black", description: "Low-latency process, input, and network tuning." },
-  { id: "game_discord", title: "Discord While Gaming", publisher: "Discord", cover: "https://cdn.simpleicons.org/discord/5865F2", gradient: "from-indigo-950 via-zinc-900 to-black", description: "Reduce background GPU, media, notification, and process overhead during games." },
-  { id: "game_spotify", title: "Spotify While Gaming", publisher: "Spotify", cover: "https://cdn.simpleicons.org/spotify/1DB954", gradient: "from-green-950 via-zinc-900 to-black", description: "Reduce GPU, CPU, startup, and bandwidth overhead while keeping music available." },
+  { id: "game_discord", title: "Discord While Gaming", publisher: "Discord", cover: "https://cdn.simpleicons.org/discord/5865F2", coverMode: "icon", gradient: "from-indigo-950 via-zinc-900 to-black", description: "Reduce background GPU, media, notification, and process overhead during games." },
+  { id: "game_spotify", title: "Spotify While Gaming", publisher: "Spotify", cover: "https://cdn.simpleicons.org/spotify/1DB954", coverMode: "icon", gradient: "from-green-950 via-zinc-900 to-black", description: "Reduce GPU, CPU, startup, and bandwidth overhead while keeping music available." },
 ];
 
 // These are the common hardware and Windows optimizations that can be used
@@ -114,7 +116,9 @@ function GameCard({
   return (
     <article className={`group relative w-[248px] min-w-[248px] overflow-hidden rounded-2xl border bg-[#080d0f] transition-colors ${enabled ? "border-red-500/60" : "border-white/[0.08] hover:border-red-500/35"}`}>
       <div className={`relative h-[142px] overflow-hidden bg-gradient-to-br ${profile.gradient}`}>
-        {showImage && <img src={profile.cover} alt="" onError={() => setImageFailed(true)} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />}
+        {showImage && <img src={profile.cover} alt="" onError={() => setImageFailed(true)} className={profile.coverMode === "icon"
+          ? "absolute left-1/2 top-1/2 h-[88px] w-[88px] -translate-x-1/2 -translate-y-1/2 object-contain"
+          : "h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"} />}
         <div className="absolute inset-0 bg-gradient-to-t from-[#080d0f] via-black/15 to-transparent" />
         {installation?.running && <span className="absolute left-3 top-3 rounded-full bg-emerald-600 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white">Running</span>}
         <span className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[9px] font-bold text-zinc-300">{count} compatible</span>
@@ -153,6 +157,7 @@ export default function GameProfiles() {
   const [error, setError] = useState<string | null>(null);
 
   const runDetection = useCallback(async () => {
+    if (scanning) return;
     if (!native) {
       toast({ title: "Open Opti Gods for Windows", description: "Only the desktop app can inspect local installs, including standalone and non-store copies.", variant: "destructive" });
       return;
@@ -163,16 +168,40 @@ export default function GameProfiles() {
       const found = await detectInstalledGames();
       setInstallations(Object.fromEntries(found.map((game) => [game.id, game])));
       setHasScanned(true);
+      if (found.length > 0) {
+        playOptimizationActionSound();
+        const names = found.map((game) =>
+          GAME_LIBRARY.find((profile) => profile.id === game.id)?.title
+            ?? game.executable.replace(/\.exe$/i, ""),
+        );
+        const shownNames = names.slice(0, 5).join(", ");
+        const remainingCount = names.length - Math.min(names.length, 5);
+        toast({
+          title: `Found ${found.length} installed game${found.length === 1 ? "" : "s"}`,
+          description: `${shownNames}${remainingCount ? `, and ${remainingCount} more` : ""}. All detected games are listed below.`,
+          variant: "success",
+        });
+      } else {
+        toast({
+          title: "Game scan complete",
+          description: "No supported game installations were found in the checked libraries and known game folders.",
+        });
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Installed-game detection failed.");
+      const message = cause instanceof Error ? cause.message : "Installed-game detection failed.";
+      setError(message);
+      toast({ title: "Game detection failed", description: message, variant: "destructive" });
     } finally {
       setScanning(false);
     }
-  }, [native, toast]);
+  }, [native, scanning, toast]);
 
   const visibleGames = hasScanned
     ? GAME_LIBRARY.filter((profile) => installations[profile.id])
     : GAME_LIBRARY;
+  const detectedGames = Object.values(installations);
+  const profileById = new Map(GAME_LIBRARY.map((profile) => [profile.id, profile]));
+  const unprofiledDetections = detectedGames.filter((game) => !profileById.has(game.id));
   const selectedGames = visibleGames.filter((profile) => tweaks[profile.id]);
   // Recalculate after a hardware scan event or native detection refresh. The
   // compatibility helper reads the current scan snapshot from localStorage.
@@ -209,7 +238,7 @@ export default function GameProfiles() {
           </Button>
         </header>
 
-        <section className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-4">
+        <section className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-4" aria-live="polite">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Shield className="h-5 w-5 shrink-0 text-red-400" />
@@ -222,6 +251,20 @@ export default function GameProfiles() {
             </div>
             {hasScanned && <Button onClick={runDetection} disabled={scanning} variant="outline" size="sm" className="gap-1.5 border-zinc-700 text-xs text-zinc-300"><RefreshCw className="h-3 w-3" /> Re-scan</Button>}
           </div>
+          {hasScanned && detectedGames.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/[0.06] pt-3" aria-label="Detected games">
+              {detectedGames.map((game) => (
+                <span key={game.id} className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-semibold text-emerald-200">
+                  {profileById.get(game.id)?.title ?? game.executable.replace(/\.exe$/i, "")}
+                </span>
+              ))}
+            </div>
+          )}
+          {unprofiledDetections.length > 0 && (
+            <p className="mt-2 text-[11px] text-amber-200">
+              {unprofiledDetections.length} detected game{unprofiledDetections.length === 1 ? " has" : "s have"} no profile card yet.
+            </p>
+          )}
           {!native && <p className="mt-3 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">Open the Windows desktop app to detect Steam, Epic, standalone, cracked, and other local installs without uploading paths.</p>}
           {error && <p className="mt-3 text-xs text-red-300">Installed-game detection could not finish: {error}</p>}
         </section>

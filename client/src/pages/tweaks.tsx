@@ -17,10 +17,12 @@ import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { useToast } from "@/hooks/use-toast";
-import { detectAppliedTweaks, isNative } from "@/lib/tauri-bridge";
+import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import {
   readNativeTweakRun,
   subscribeNativeTweakRun,
@@ -83,7 +85,7 @@ const SECTIONS: Section[] = [
   { id: "cpu",          title: "CPU Tweaks",                    desc: "Scheduler, power plan, core parking, affinity, Win32Priority", icon: Cpu,         group: "cpu",     Component: CpuPage,            categories: [] as TweakCategory[],
     tweakIds: [
       "Win32PrioritySeparation","SetTimerResolution","SetResponsiveness","GameModeTweaks",
-      "ProcMMCSSGaming","ProcGPUSchedulerHigh","DisableHungAppDetection","DisableSearchIndexer","DisableAutoMaintenance",
+      "ProcMMCSSGaming","ProcGPUSchedulerHigh","DisableHungAppDetection","DisableAutoMaintenance",
       "SetHighPerformancePlan","DisableCoreParking","CpuBoostModeAggressive","CpuIdleMin100",
       "DisableDynamicTick","DisablePowerThrottlingAdv","DisableUSBSuspend","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
       "ProcNUMAAware","ProcAffinityFPS",
@@ -308,6 +310,8 @@ export default function TweaksPage() {
   const { toast } = useToast();
   const native = isNative();
   const [detectedTweaks, setDetectedTweaks] = useState<Record<string, boolean>>({});
+  const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
+  const [nativeDetectionError, setNativeDetectionError] = useState(false);
   const [nativeRun, setNativeRun] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
   const [confirmApply, setConfirmApply] = useState(false);
   const [applyingMatched, setApplyingMatched] = useState(false);
@@ -315,9 +319,18 @@ export default function TweaksPage() {
     if (!native) return;
     let mounted = true;
     const refreshDetected = () => {
-      void detectAppliedTweaks()
-        .then(state => { if (mounted) setDetectedTweaks(state); })
-        .catch(() => {});
+      void getAppliedTweakState()
+        .then(state => {
+          if (!mounted) return;
+          setDetectedTweaks(state);
+          setNativeDetectionError(false);
+          setNativeDetectionReady(true);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setNativeDetectionError(true);
+          setNativeDetectionReady(true);
+        });
     };
     const syncRun = (state: NativeTweakRunState | null) => {
       if (!mounted) return;
@@ -362,12 +375,17 @@ export default function TweaksPage() {
     .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
   const matchedProIds = Array.from(smartRecs.ids).filter(id => {
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
-    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
+    return Boolean(tweak)
+      && tweak?.safety !== "expert"
+      && !MANUAL_ONLY_TWEAK_IDS.has(id)
+      && getTweakCompatibility(id).ok;
   });
-  const missingMatchedIds = matchedProIds.filter(id => !displayedActiveIds.has(id));
+  const missingMatchedIds = (!native || (nativeDetectionReady && !nativeDetectionError))
+    ? matchedProIds.filter(id => !displayedActiveIds.has(id))
+    : [];
 
   const applyMatched = async () => {
-    if (applyingMatched || !missingMatchedIds.length) return;
+    if (applyingMatched || !missingMatchedIds.length || (native && (!nativeDetectionReady || nativeDetectionError))) return;
     setApplyingMatched(true);
     try {
       const result = await applyTweakBatch(missingMatchedIds);
@@ -566,7 +584,11 @@ export default function TweaksPage() {
               </div>
               <p className="mt-1 text-xs text-zinc-400">
                 {isPro
-                  ? `${missingMatchedIds.length} compatible tweaks are still missing. Apply only what is not already selected.`
+                  ? native && !nativeDetectionReady
+                    ? "Checking which compatible tweaks are already applied on this PC."
+                    : native && nativeDetectionError
+                      ? "Could not verify applied tweaks, so the missing count is unavailable."
+                      : `${missingMatchedIds.length} compatible tweaks are still missing. Already-applied Windows changes are excluded.`
                   : `${Math.max(0, matchedProIds.length - 15)} additional matched tweaks are unavailable on Free. Unlock Pro to use the full hardware-matched set.`}
               </p>
             </div>
@@ -574,11 +596,19 @@ export default function TweaksPage() {
               <button
                 type="button"
                 data-testid="button-apply-matched-tweaks"
-                disabled={applyingMatched || !missingMatchedIds.length}
+                disabled={applyingMatched || !missingMatchedIds.length || (native && (!nativeDetectionReady || nativeDetectionError))}
                 onClick={() => void applyMatched()}
                 className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_20px_-5px_rgba(220,38,38,0.7)] transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {applyingMatched ? "Applying…" : missingMatchedIds.length ? `Apply ${missingMatchedIds.length} missing tweaks` : "All matched tweaks selected"}
+                {applyingMatched
+                  ? "Applying…"
+                  : native && !nativeDetectionReady
+                    ? "Checking applied state…"
+                    : native && nativeDetectionError
+                      ? "Applied state unavailable"
+                      : missingMatchedIds.length
+                        ? `Apply ${missingMatchedIds.length} missing tweaks`
+                        : "All matched tweaks already applied"}
               </button>
             ) : (
               <ProUnlockButton>

@@ -38,7 +38,7 @@ const MOUSE_TWEAKS = [
   {
     id: "Win32PrioritySeparation",
     title: "CPU Scheduler: Short Quanta + Max Foreground Boost",
-    desc: "Sets Win32PrioritySeparation=26 — short variable time quanta with max foreground boost. The kernel processes mouse move and click events with tighter timing between hardware interrupt and game thread response.",
+    desc: "Uses the hardware-matched Win32PrioritySeparation value: 0x1A below 12 logical processors or 0x26 at 12 or more.",
     badge: "RECOMMENDED",
     impact: "HIGH" as const,
     recommended: true,

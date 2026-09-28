@@ -18,6 +18,22 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+fn recommended_win32_priority_separation_for(logical_processors: usize) -> u32 {
+    if logical_processors >= 12 {
+        0x26
+    } else {
+        0x1A
+    }
+}
+
+#[cfg(windows)]
+fn recommended_win32_priority_separation() -> u32 {
+    let logical_processors = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    recommended_win32_priority_separation_for(logical_processors)
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TweakResult {
     pub ok: bool,
@@ -113,10 +129,8 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
         use std::process::Command;
 
         let checks: &[(&str, Hive, &str, &str, u32)] = &[
-            ("Win32PrioritySeparation", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 0x26),
             ("SetTimerResolution", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1),
             ("SetResponsiveness", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 10),
-            ("GameModeTweaks", Hive::CurrentUser, r"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1),
             ("NetworkThrottling", Hive::LocalMachine, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", 0xFFFFFFFF),
             ("InputLagTCP", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TCPNoDelay", 1),
             ("DisableNDU", Hive::LocalMachine, r"SYSTEM\CurrentControlSet\Services\NDU", "Start", 4),
@@ -133,6 +147,37 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
                 ((*id).to_string(), applied)
             })
             .collect();
+
+        let priority_separation_applied = matches!(
+            read_value(
+                Hive::LocalMachine,
+                r"SYSTEM\CurrentControlSet\Control\PriorityControl",
+                "Win32PrioritySeparation"
+            ),
+            Ok(RegValue::Dword(value)) if value == recommended_win32_priority_separation()
+        );
+        detected.insert(
+            "Win32PrioritySeparation".to_string(),
+            priority_separation_applied,
+        );
+
+        let games_path =
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games";
+        let games_profile_applied = matches!(read_value(Hive::LocalMachine, games_path, "Scheduling Category"), Ok(RegValue::Sz(value)) if value.eq_ignore_ascii_case("High"))
+            && matches!(read_value(Hive::LocalMachine, games_path, "SFIO Priority"), Ok(RegValue::Sz(value)) if value.eq_ignore_ascii_case("High"))
+            && matches!(
+                read_value(Hive::LocalMachine, games_path, "GPU Priority"),
+                Ok(RegValue::Dword(8))
+            )
+            && matches!(
+                read_value(Hive::LocalMachine, games_path, "Priority"),
+                Ok(RegValue::Dword(6))
+            )
+            && matches!(
+                read_value(Hive::LocalMachine, games_path, "MaximumPreRenderedFrames"),
+                Ok(RegValue::Dword(1))
+            );
+        detected.insert("GameModeTweaks".to_string(), games_profile_applied);
 
         // The registry table above is deliberately cheap and synchronous, but
         // debloat/service/file tweaks need one consolidated read-only probe.
@@ -815,7 +860,7 @@ mod native_impls {
             r::Hive::LocalMachine,
             r"SYSTEM\CurrentControlSet\Control\PriorityControl",
             "Win32PrioritySeparation",
-            0x26,
+            super::recommended_win32_priority_separation(),
         )
     }
     pub fn apply_timer_resolution() -> anyhow::Result<Option<String>> {

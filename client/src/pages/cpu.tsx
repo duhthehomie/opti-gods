@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { TweakRow } from "@/components/tweak-row";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { getOptimalWin32PrioritySeparation } from "@/lib/hardware-optimization";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { Cpu, CheckCircle2, AlertTriangle, Zap, Shield, Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,7 @@ export default function CpuPage() {
   const { tweaks, appliedAt, setTweak } = useOptimizationStore();
   const { toast } = useToast();
   const hw = useHardwareInfo();
+  const recommendedPrioritySeparation = getOptimalWin32PrioritySeparation(hw);
   const os = useOsDetection();
   const isWin11 = os.os === "Windows 11";
 
@@ -108,14 +110,13 @@ export default function CpuPage() {
   };
 
   const SCHEDULER_TWEAKS: TweakDef[] = [
-    { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Short Variable)", desc: "Sets CPU time-slice quanta to short+variable — the foreground game gets far more CPU attention than background apps. Single most impactful CPU scheduler tweak.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "Win32PrioritySeparation", title: `Win32PrioritySeparation = 0x${recommendedPrioritySeparation.toString(16).toUpperCase()} (${recommendedPrioritySeparation} decimal)`, desc: "Hardware-matched scheduler value: 0x1A for fewer than 12 logical processors, or 0x26 for 12 or more.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "SetTimerResolution",      title: "Disable Dynamic Tick (0.5ms Timer Precision)", desc: "Runs bcdedit /set disabledynamictick yes — forces the Windows clock to tick constantly at high resolution. Better frame-time consistency and input precision.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "SetResponsiveness",       title: "SystemResponsiveness = 10 (Game-Optimal)", desc: "90% of CPU scheduling goes to the foreground game, 10% kept for background (audio, Discord). 0 breaks audio; 10 is the sweet spot for gaming.", badge: "RECOMMENDED", impact: "MED", recommended: true },
     { id: "GameModeTweaks",          title: "MMCSS Games: High Category, GPU Priority 8", desc: "Writes MMCSS\\Tasks\\Games keys: SchedulingCategory=High, SFIO=High, GPU Priority=8, CPU Priority=6. Windows will always prefer your game over every other process for CPU+GPU time.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
-    { id: "ProcMMCSSGaming",         title: "MMCSS Gaming Profile: Maximum Priority", desc: "Sets the MMCSS Gaming profile's Scheduling Category to High and Background Only to False — Windows reserves dedicated CPU slices for any process that joins the Games task.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "ProcMMCSSGaming",         title: "MMCSS Gaming Profile: High Priority", desc: "Sets Scheduling Category=High, SFIO Priority=High, GPU Priority=8, Priority=6, and Background Only=False.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "ProcGPUSchedulerHigh",    title: "GPU Scheduler Priority = 8 (High) for Game Exes", desc: "Sets GpuPriority=8 via IFEO PerfOptions for GTA5, FiveM, Valorant, CS2, Fortnite, Apex — GPU work queue is serviced before anything else.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableHungAppDetection", title: "Disable Hung App Detection Delay (5s → instant)", desc: "Removes the 5-second freeze while Windows waits to decide if an app is hung. Crashed processes are killed immediately.", impact: "LOW" },
-    { id: "DisableSearchIndexer",    title: "Disable Windows Search Indexer", desc: "Stops the WSearch service. SearchIndexer.exe won't spike disk I/O and CPU during gaming. Re-enable via Services.msc if you need Start Menu search.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableAutoMaintenance",  title: "Disable Automatic Maintenance (No mid-game scans)", desc: "Sets MaintenanceDisabled=1 — prevents Defender scans, disk cleanup, and other scheduled tasks from running mid-session.", impact: "MED" },
   ];
 

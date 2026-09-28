@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { detectAppliedTweaks, isNative, openDownloadsFolder, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
+import { isNative, openDownloadsFolder, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
@@ -35,7 +36,7 @@ function initialLedgerView(): LedgerView {
 
 function tokenFor(id: string) { try { return (JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}") as Record<string,string>)[id] || null; } catch { return null; } }
 function summarizeFailures(failures: { id: string; message: string }[], appliedCount: number): string {
-  if (!failures.length) return "Every selected Windows change was confirmed. Restart your PC for the full boost.";
+  if (!failures.length) return "Every selected tweak succeeded or was already recorded as applied. Restart your PC for the full boost.";
   const messages = Array.from(new Set(failures.map(failure => failure.message))).slice(0, 2);
   const detail = messages.join(" ");
   const remaining = failures.length - messages.length;
@@ -45,7 +46,7 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
 function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
   const savedScanResult = getTweakCompatibility(item.id);
   const runtimeLooksIncompatible = item.status === "failed"
-    && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|did not expose|unavailable/i.test(item.message || "");
+    && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|multi[- ]gpu|ambiguous display|did not expose|unavailable/i.test(item.message || "");
   return runtimeLooksIncompatible
     ? { ok: false, reason: item.message || "Windows rejected this hardware configuration." }
     : savedScanResult;
@@ -243,7 +244,7 @@ export default function AppliedTweaksPage() {
       try { return sessionStorage.getItem("optigods-native-run-notified"); } catch { return null; }
     })() : null,
   );
-  useEffect(() => { detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }, []);
+  useEffect(() => { getAppliedTweakState().then(setNativeState).finally(() => setLoading(false)); }, []);
   useEffect(() => {
      const syncRun = (state: NativeTweakRunState | null) => {
       // Keep every native result visible, including stale or ineligible IDs.
@@ -266,7 +267,7 @@ export default function AppliedTweaksPage() {
            title: failedCount > 0 ? `${appliedCount} tweaks applied · ${failedCount} need attention` : `${appliedCount} tweaks applied`,
            description: failedCount > 0
              ? "The Windows run finished. Open the Failed tab to review or retry only those items."
-             : "Windows confirmed every selected tweak. Restart your PC before testing the game.",
+              : "Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.",
            variant: failedCount > 0 ? "destructive" : "success",
          });
        }
@@ -345,7 +346,7 @@ export default function AppliedTweaksPage() {
     }).finally(() => {
       setRunning(false);
        clearQueuedTweakBatch();
-      detectAppliedTweaks().then(setNativeState);
+      getAppliedTweakState().then(setNativeState);
       refreshAllowance();
     });
   }, [toast]);
@@ -404,7 +405,7 @@ export default function AppliedTweaksPage() {
       setRunHadFailures(true);
     } finally {
       setRunning(false);
-      detectAppliedTweaks().then(setNativeState);
+      getAppliedTweakState().then(setNativeState);
       refreshAllowance();
     }
   };
@@ -433,7 +434,7 @@ export default function AppliedTweaksPage() {
     } finally {
       setReapplying(null);
       setRunning(false);
-      detectAppliedTweaks().then(setNativeState);
+      getAppliedTweakState().then(setNativeState);
     }
   };
   const orderedRunItems = [...runItems].sort((a, b) => {
@@ -540,7 +541,7 @@ export default function AppliedTweaksPage() {
          {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
         {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
-        <button onClick={() => { setLoading(true); detectAppliedTweaks().then(setNativeState).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
+        <button onClick={() => { setLoading(true); getAppliedTweakState().then(setNativeState).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
       </div>
     </header>
      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -558,7 +559,7 @@ export default function AppliedTweaksPage() {
         <div>
           <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : "Run finished successfully"}</p>
           <p className="mt-0.5 text-xs opacity-80">
-            {runItems.filter(item => item.status === "applied").length} of {runItems.length} tweaks confirmed by Windows.
+            {runItems.filter(item => item.status === "applied").length} of {runItems.length} tweaks marked applied.
             {runHadFailures ? " Open the Failed tab below for the exact Windows error and retry only those items." : ""}
           </p>
         </div>

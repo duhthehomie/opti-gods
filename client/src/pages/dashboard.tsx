@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, detectAppliedTweaks, getNativeAuthToken, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
+import { createRestorePoint, getNativeAuthToken, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -15,13 +16,14 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
 import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
 import { ProUnlockButton } from "@/components/pro-gate";
-import { TOTAL_TWEAKS, TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
+import { TOTAL_TWEAKS_LABEL } from "@/lib/tweak-count";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { ScanImport } from "@/components/scan-import";
 import { HardwareScanZone } from "@/components/hardware-scan";
 import { PerformanceAllowanceCard } from "@/components/performance-allowance-card";
@@ -112,7 +114,7 @@ const SAFE_TWEAKS = [
   // Network baseline
   "NetworkThrottling", "DisableNagle", "InputLagTCP", "SetDNSPriority",
   // Power & hardware
-  "SetHighPerformancePlan", "DisableCoreParking", "EnableHAGS",
+  "SetHighPerformancePlan", "DisableCoreParking",
   // Input
   "DisablePointerPrecision",
   // Windows cleanup — zero risk
@@ -147,8 +149,8 @@ const MAX_FPS_TWEAKS = [
   "DisableUSBSuspend",
   // Network full stack
   "OptimizeTCP", "EnableTCPAutoTuning",
-  // Visual & search overhead
-  "DisableAnimations", "ServiceWSearch", "DisableSearchIndexer",
+  // Visual overhead
+  "DisableAnimations",
   // Windows background services — individually safe, collectively frees significant CPU/RAM
   "ServiceSysMain", "ServiceRemoteReg", "ServiceWMPNetworkSvc", "ServiceFax",
   "ServiceRetailDemo", "ServiceTabletInput", "ServiceMapsBroker", "ServiceWerSvc",
@@ -236,8 +238,6 @@ const STREAMER_TWEAKS = [
   // Power — sustained high clocks for both game + encoder (no throttling)
   "SetHighPerformancePlan", "DisableCoreParking",
   "DisablePowerThrottling", "DisablePowerThrottlingAdv",
-  // HAGS — better GPU scheduling for game + OBS simultaneous workload
-  "EnableHAGS",
   // Input
   "DisablePointerPrecision",
   // Network — stability & low jitter (not raw speed) for stream upload
@@ -272,8 +272,7 @@ const STREAMER_TWEAKS = [
   "CodGameMode", "CodDefenderExclusion",
   // Process priority
   "ProcessLassoProBalance", "ProcessAutoKillHung",
-  // Xbox / search overhead removed (OBS capture works without Game Bar on most setups)
-  "DisableSearchIndexer",
+  // OBS capture works without Game Bar on most setups.
 ];
 
 const QUICK_BOOST_PRESETS = [
@@ -498,7 +497,7 @@ export default function Dashboard() {
     if (!native) return;
     setRefreshingScore(true);
     try {
-      setDetectedNativeTweaks(await detectAppliedTweaks());
+      setDetectedNativeTweaks(await getAppliedTweakState());
       setNativeDetectionReady(true);
     } catch {
       // Never use local browser timestamps as proof that Windows changed.
@@ -520,7 +519,7 @@ export default function Dashboard() {
     const syncRun = (state: NativeTweakRunState | null) => {
       setLastNativeRun(state);
       if (state && ["completed", "failed", "stopped"].includes(state.status)) {
-        void detectAppliedTweaks().then(setDetectedNativeTweaks).catch(() => {});
+        void getAppliedTweakState().then(setDetectedNativeTweaks).catch(() => {});
       }
     };
     syncRun(readNativeTweakRun());
@@ -547,8 +546,13 @@ export default function Dashboard() {
       if (recognizedIds.length === 0) {
         throw new Error("The server returned no tweaks recognized by this app. Refresh the Windows app and run the hardware scan again.");
       }
-      const compatibleIds = recognizedIds.filter(id => getTweakCompatibility(id).ok);
-      const blockedIds = recognizedIds.filter(id => !getTweakCompatibility(id).ok);
+      const compatibleIds = recognizedIds.filter(id =>
+        !MANUAL_ONLY_TWEAK_IDS.has(id) && getTweakCompatibility(id).ok,
+      );
+      const blockedIds = recognizedIds.filter(id =>
+        !MANUAL_ONLY_TWEAK_IDS.has(id) && !getTweakCompatibility(id).ok,
+      );
+      const manualOnlyIds = recognizedIds.filter(id => MANUAL_ONLY_TWEAK_IDS.has(id));
       if (unknownIds.length > 0) {
         toast({
           title: "Skipped outdated preset entries",
@@ -559,7 +563,9 @@ export default function Dashboard() {
       if (compatibleIds.length === 0) {
         toast({
           title: "No compatible tweaks to run",
-          description: "The saved hardware scan does not support any tweak in this preset. Run a fresh scan before Full Optimize.",
+          description: manualOnlyIds.length
+            ? "This preset has no automatic tweaks to run. Manual-only settings such as HAGS are intentionally excluded."
+            : "The saved hardware scan does not support any tweak in this preset. Run a fresh scan before Full Optimize.",
           variant: "destructive",
         });
         return;
@@ -579,10 +585,10 @@ export default function Dashboard() {
             });
           }
         }
-        const nativeState = await detectAppliedTweaks();
+        const nativeState = await getAppliedTweakState();
         const pendingIds = compatibleIds.filter(id => !nativeState[id]);
         if (pendingIds.length === 0) {
-          toast({ title: "Full Optimize is already confirmed", description: `Every compatible preset tweak is already confirmed on this Windows session.${blockedIds.length ? ` ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} were left out.` : ""}`, variant: "destructive" });
+          toast({ title: "Full Optimize is already applied", description: `Every compatible preset tweak is already recorded as applied or detected on this PC.${blockedIds.length ? ` ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} were left out.` : ""}${manualOnlyIds.length ? ` ${manualOnlyIds.length} manual-only setting${manualOnlyIds.length === 1 ? " was" : "s were"} left for you to choose.` : ""}`, variant: "destructive" });
           return;
         }
         queueTweakBatch(pendingIds);
@@ -650,12 +656,23 @@ export default function Dashboard() {
        if (known.length === 0) {
          throw new Error("This preset has no tweaks recognized by the current app. Refresh the Windows app and try again.");
        }
-       const compatible = known.filter(id => getTweakCompatibility(id).ok);
-       const blocked = known.filter(id => !getTweakCompatibility(id).ok);
-        const nativeState = native ? await detectAppliedTweaks() : {};
+       const compatible = known.filter(id =>
+         !MANUAL_ONLY_TWEAK_IDS.has(id) && getTweakCompatibility(id).ok,
+       );
+       const blocked = known.filter(id =>
+         !MANUAL_ONLY_TWEAK_IDS.has(id) && !getTweakCompatibility(id).ok,
+       );
+       const manualOnly = known.filter(id => MANUAL_ONLY_TWEAK_IDS.has(id));
+         const nativeState = native ? await getAppliedTweakState() : {};
         const pending = native ? compatible.filter(id => !nativeState[id]) : compatible;
        if (pending.length === 0) {
-         toast({ title: `${preset.title} is already confirmed`, description: "Every compatible tweak in this preset is already confirmed on this Windows session.", variant: "destructive" });
+          toast({
+            title: compatible.length ? `${preset.title} is already applied` : `${preset.title} has no automatic tweaks`,
+            description: compatible.length
+              ? `Every compatible tweak in this preset is already recorded as applied or detected on this PC.${manualOnly.length ? ` ${manualOnly.length} manual-only setting${manualOnly.length === 1 ? " was" : "s were"} left for you to choose.` : ""}`
+              : "Manual-only settings such as HAGS are intentionally excluded from automatic presets.",
+            variant: "destructive",
+          });
          return;
        }
        const result = await applyTweakBatch(pending);
@@ -696,8 +713,7 @@ export default function Dashboard() {
     setConfirmQuickBoost(preset);
   };
 
-  const enabledCount = Object.values(tweaks).filter(Boolean).length;
-  const totalTweaks = TOTAL_TWEAKS;
+  const enabledCount = TWEAK_REGISTRY.filter(tweak => tweaks[tweak.id]).length;
   const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
   const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
   // Expert tweaks are intentionally excluded from auto-enable (require manual opt-in).
@@ -713,10 +729,13 @@ export default function Dashboard() {
   // plus the runner's confirmed-success ledger. The detector covers only a
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
-  const matchedRecommendedIds = Array.from(smartRecs.ids).filter(id => {
-    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
-    return Boolean(tweak) && tweak?.safety !== "expert" && getTweakCompatibility(id).ok;
-  });
+  const matchedRecommendedIds = getEligibleSmartRecommendationIds(
+    smartRecs.ids,
+    id => getTweakCompatibility(id).ok,
+  );
+  const matchedRecommendedSet = new Set(matchedRecommendedIds);
+  const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
+  const totalTweaks = matchedRecommendedTweaks.length;
   const confirmedIds = native
     ? new Set([
       ...Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)),
@@ -736,12 +755,13 @@ export default function Dashboard() {
       .filter(item => item.status === "applied" && registryIds.has(item.id))
       .forEach(item => confirmedIds.add(item.id));
   }
-  // Native category totals must come from the live Windows detector, not the
-  // browser intent store. The latter is persistent, but it is not proof that
-  // a registry/service change still exists on this PC.
+  // Native totals combine read-only Windows detection with successful app-run
+  // history; browser toggle intent alone is never treated as an applied change.
   const allActiveIdsForDisplay = native
     ? confirmedIds
-    : new Set(Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id));
+    : new Set(Object.entries(tweaks)
+      .filter(([id, enabled]) => enabled && registryIds.has(id))
+      .map(([id]) => id));
   const savedBest15Ids = readBest15Ids();
   const freeAllowedIds = matchedRecommendedIds
     .filter(id => savedBest15Ids.length === 0 || savedBest15Ids.includes(id))
@@ -759,7 +779,9 @@ export default function Dashboard() {
   const scoreIds = latestLargeRunIds.length >= 100
     ? latestLargeRunIds
     : matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
-  const activeTweakCount = activeIdsForDisplay.size;
+  const compatibleAppliedCount = matchedRecommendedIds.filter(id => activeIdsForDisplay.has(id)).length;
+  const compatibleSelectedCount = matchedRecommendedIds.filter(id => tweaks[id]).length;
+  const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
   const missingRecommendedCount = scoreIds.filter(id => !activeIdsForDisplay.has(id)).length;
   const recommendedActionLabel = missingRecommendedCount === 0
     ? "Review recommended tweaks"
@@ -1284,7 +1306,7 @@ export default function Dashboard() {
               <div className="shrink-0 flex items-center gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/20">
                   <Zap className="w-3.5 h-3.5 text-red-400" />
-                  <span className="text-xs font-bold text-red-400">{totalTweaks} tweaks available</span>
+                  <span className="text-xs font-bold text-red-400">{totalTweaks} compatible tweaks</span>
                 </div>
                 {hw.scanned && (
                   <HardwareScanZone
@@ -1368,7 +1390,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* ─── TWEAK CATEGORY BREAKDOWN ─── */}
-        {activeTweakCount > 0 && (
+        {compatibleAppliedCount > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1380,12 +1402,12 @@ export default function Dashboard() {
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Active Tweaks by Category</span>
               </div>
-              <span className="text-xs font-bold text-white">{activeTweakCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} tweaks</span></span>
+              <span className="text-xs font-bold text-white">{compatibleAppliedCount} <span className="text-zinc-600 font-normal">/ {totalTweaks} compatible tweaks</span></span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {Array.from(new Set(TWEAK_REGISTRY.map(tweak => tweak.category)))
+              {Array.from(new Set(matchedRecommendedTweaks.map(tweak => tweak.category)))
                 .map(category => {
-                  const categoryTweaks = TWEAK_REGISTRY.filter(tweak => tweak.category === category);
+                  const categoryTweaks = matchedRecommendedTweaks.filter(tweak => tweak.category === category);
                   const active = categoryTweaks.filter(tweak => activeIdsForDisplay.has(tweak.id)).length;
                   const label = category.replace(/(^|-)(\w)/g, (_, separator, letter) => `${separator ? " " : ""}${letter.toUpperCase()}`);
                   return { label, total: categoryTweaks.length, active };
@@ -1463,7 +1485,7 @@ export default function Dashboard() {
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-display font-bold text-white mb-1 leading-tight">
-                {recommendedApplied ? "Compatible Tweaks Applied" : native && !nativeDetectionReady ? "Reading confirmed Windows changes…" : isPro ? recommendedActionLabel : `${matchedRecommendedIds.length} tweaks match your hardware`}
+                {recommendedApplied ? "Compatible Tweaks Applied" : native && !nativeDetectionReady ? "Reading applied tweak state…" : isPro ? recommendedActionLabel : `${matchedRecommendedIds.length} tweaks match your hardware`}
             </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">
               {recommendedApplied
@@ -1487,7 +1509,7 @@ export default function Dashboard() {
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-sm"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {native ? activeTweakCount : enabledCount} Tweaks Enabled
+                {dashboardTweakCount} Tweaks Enabled
               </div>
             ) : isPro ? (
               <Button
@@ -1635,8 +1657,8 @@ export default function Dashboard() {
             {[
               {
                 label: "Tweaks Enabled",
-                value: String(enabledCount),
-                sub: `of ${totalTweaks} available`,
+                value: String(dashboardTweakCount),
+                sub: `of ${totalTweaks} hardware-matched`,
                 color: optColor,
               },
               {

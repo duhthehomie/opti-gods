@@ -87,7 +87,6 @@ const WHATS_KEPT = [
 
 const SERVICES_DISABLED = [
   "DiagTrack — Connected User Experiences",
-  "WSearch — Windows Search indexer",
   "SysMain — Superfetch",
   "RemoteRegistry — remote access",
   "WMPNetworkSvc — Media sharing",

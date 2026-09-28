@@ -19,7 +19,7 @@ const ALL_DEBLOAT_IDS = [
   "DebloatSkype","DebloatZune","DebloatGrooveMusic","DebloatOfficeHub","DebloatFeedback",
   "DebloatGetHelp","DebloatMSPaint3D","DebloatWindowsCamera","DebloatYourPhone","DebloatClipchamp",
   "DebloatPowerAutomate","DebloatQuickAssist","DebloatTeamsConsumer","DebloatAlarmsAndClock",
-  "ServiceDiagTrack","ServiceWSearch","ServiceSysMain","ServiceRemoteReg","ServiceWMPNetworkSvc",
+  "ServiceDiagTrack","ServiceSysMain","ServiceRemoteReg","ServiceWMPNetworkSvc",
   "ServiceFax","ServiceRetailDemo","ServiceTabletInput","ServiceMapsBroker",
   "ServiceWerSvc","ServiceDPS","ServicePrintSpooler","ServiceDusmSvc","ServiceTrkWks",
   "ServiceLltdsvc","ServiceFDHost","ServiceWbioSrvc","ServicePcaSvc","ServiceAeLookupSvc",
@@ -89,7 +89,7 @@ const WIN10_APPS: DebloatItem[] = [
 
 const SERVICES: DebloatItem[] = [
   { id: "ServiceDiagTrack", title: "Disable DiagTrack (Telemetry Service)", desc: "Stops Connected User Experiences and Telemetry — blocks all data uploads.", status: "preinstalled" },
-  { id: "ServiceWSearch", title: "Disable Windows Search Indexer", desc: "Stops WSearch from consuming CPU/disk during background indexing.", status: "preinstalled", warning: "Disabling Windows Search completely removes the ability to search for files and apps through the Start Menu and File Explorer. You will need to browse manually to find files. Only disable this if you never use Windows Search or use a third-party search tool like Everything." },
+  { id: "DisableSearchIndexing", title: "Disable Windows Search Indexer", desc: "Stops and disables background file indexing. Re-enable it with the Windows Search Indexing Recovery fix.", status: "preinstalled", warning: "Start Menu and File Explorer searches may be incomplete until you re-enable indexing with the Windows Search Indexing Recovery fix." },
   { id: "ServiceSysMain", title: "Disable SysMain (Superfetch)", desc: "Disables Superfetch — beneficial for NVMe/SSD users.", status: "preinstalled", warning: "On systems with a traditional hard drive (HDD), Superfetch actively pre-loads apps you use regularly into RAM, significantly speeding up launch times. Disabling it on an HDD system can make common apps feel slower to open. Only recommended if your system has an SSD or NVMe drive." },
   { id: "ServiceRemoteReg", title: "Disable Remote Registry", desc: "Prevents remote modification of registry — security win.", status: "likely", warning: "Some enterprise software, IT management tools, and certain applications rely on the Remote Registry service to function correctly. If you use work-managed software, domain-joined PCs, or remote IT support tools, disabling this may cause them to break or fail silently." },
   { id: "ServiceWMPNetworkSvc", title: "Disable WMP Network Sharing", desc: "Stops Windows Media Player network sharing service.", status: "preinstalled" },
@@ -141,7 +141,11 @@ export default function Debloat() {
   const isWin11 = osInfo.isWindows11;
   const [pendingWarn, setPendingWarn] = useState<{ id: string; title: string; warning: string } | null>(null);
 
-  const allWin10Keys = [...WIN10_APPS, ...SERVICES, ...PRIVACY].map(i => i.id);
+  // Search indexing is deliberately available only as a manual Windows tweak,
+  // never through the bulk Full Debloat action.
+  const allWin10Keys = [...WIN10_APPS, ...SERVICES, ...PRIVACY]
+    .filter(item => item.id !== "DisableSearchIndexing")
+    .map(item => item.id);
   const allWin11Keys = WIN11_ITEMS.map(i => i.id);
 
   const applyBulk = async (ids: string[], label: string) => {

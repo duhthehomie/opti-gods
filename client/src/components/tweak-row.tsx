@@ -169,7 +169,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       if (!osApplied) onCheckedChange(false);
        const message = error instanceof Error ? error.message : "Nothing was changed.";
        const kind = error instanceof Error ? (error as Error & { nativeKind?: string }).nativeKind : undefined;
-       const incompatible = kind === "compatibility" || /not for this system|not compatible|requires an? (nvidia|amd|intel|laptop|desktop)|not detected/i.test(message);
+       const incompatible = kind === "compatibility" || /not for this system|not compatible|requires exactly|requires an? (nvidia|amd|intel|laptop|desktop)|not detected|hybrid|multi[- ]gpu|ambiguous display/i.test(message);
        const errorTitles: Record<string, string> = {
          restore: "Restore point unavailable",
          auth: "Authorization required",
@@ -181,7 +181,7 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
         playOptimizationActionSound();
         toast({
           title: "Skipped for this PC",
-          description: "No Windows change was made because this tweak does not match the detected hardware.",
+          description: message || "No Windows change was made because this tweak does not match the detected hardware.",
         });
       } else {
         toast({

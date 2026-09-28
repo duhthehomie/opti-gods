@@ -7,6 +7,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { getOptimalWin32PrioritySeparation } from "@/lib/hardware-optimization";
 import { Settings2, AlertTriangle, CheckCircle2, Info, ShieldAlert, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageGuide } from "@/components/page-guide";
@@ -33,7 +34,7 @@ const ALL_REGISTRY_IDS = [
   "Win11DisableVBS","Win11DisableHVCI","Win11ParkingCoreOverride","Win11ProcessorIdleMin",
   "ProcNUMAAware","ProcAffinityFPS","ProcMMCSSGaming","ProcGPUSchedulerHigh",
   "IntelOldGenPowerOpt",
-  "DisableSearchIndexer","DisableAutoMaintenance",
+  "DisableAutoMaintenance",
   "ToolDPCLatencyCheck","CodDisableTelemetry","CodTdrDelay","CodMMCSS","CodQoSPolicy",
 ];
 const REGISTRY_RECOMMENDED_IDS = [
@@ -120,6 +121,7 @@ export default function Registry() {
   const hw = useHardwareInfo();
   const osInfo = useOsDetection();
   const smartRecs = computeSmartRecs(hw, osInfo);
+  const recommendedPrioritySeparation = getOptimalWin32PrioritySeparation(hw);
   const enableRecommended = async (ids: string[]) => {
     const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
     if (!pending.length) {
@@ -137,15 +139,14 @@ export default function Registry() {
   };
 
   const CPU_TWEAKS: TweakDef[] = [
-    { id: "Win32PrioritySeparation", title: "Win32PrioritySeparation = 26 (Hex 1A)", desc: "Sets CPU quantum slices to short, variable — maximizes foreground app/game priority over background tasks.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "Win32PrioritySeparation", title: `Win32PrioritySeparation = 0x${recommendedPrioritySeparation.toString(16).toUpperCase()} (${recommendedPrioritySeparation} decimal)`, desc: "Hardware-matched scheduler value: 0x1A for fewer than 12 logical processors, or 0x26 for 12 or more.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableHungAppDetection", title: "Disable Hung App Detection Delay", desc: "Removes the 5-second wait for unresponsive app dialogs — kills hung processes instantly.", impact: "LOW" },
     { id: "SetTimerResolution", title: "Set System Timer to 0.5ms", desc: "Forces Windows timer interrupt to high-resolution — better CPU scheduling precision for games.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
-    { id: "SetResponsiveness", title: "Set System Responsiveness (Hardware-Optimized)", desc: "Adjusts SystemResponsiveness based on your CPU/GPU — balances game priority with stability. 0 = audio/Discord breaks; 10 = stable baseline; 26 = balanced sweet spot; 38 = high-power friendly. Will auto-detect your best value.", badge: "RECOMMENDED", impact: "MED", recommended: true },
-    { id: "GameModeTweaks", title: "Game Mode Scheduler: High Priority", desc: "Sets Games task profile: Scheduling Category=High, SFIO=High, GPU Priority=8, CPU Priority=6, MaxPreRenderedFrames=1 — Windows treats your game as top-priority process.", badge: "NEW", impact: "HIGH", recommended: true },
+    { id: "SetResponsiveness", title: "SystemResponsiveness = 10 (Universal)", desc: "Uses the same stable value on every PC: SystemResponsiveness=10 (0x0A), leaving 10% for audio and background apps.", badge: "RECOMMENDED", impact: "MED", recommended: true },
+    { id: "GameModeTweaks", title: "MMCSS Games Task: High Priority", desc: "Sets Scheduling Category=High, SFIO Priority=High, GPU Priority=8 (DWORD), Priority=6 (DWORD), and MaximumPreRenderedFrames=1.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "EnableMSIMode", title: "Enable MSI Mode for GPU", desc: "Forces Message Signaled Interrupts on the GPU — eliminates interrupt sharing latency with other PCI-e devices.", impact: "HIGH", badge: "RECOMMENDED", recommended: true },
     { id: "DisableCoreParking", title: "Disable CPU Core Parking (Advanced)", desc: "Forces all CPU cores active via PowerSettings registry path + powercfg — removes 1–3ms wake latency on parked cores.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableDynamicTick", title: "Disable Dynamic Tick (bcdedit)", desc: "Forces constant timer interrupt — reduces scheduler jitter at the cost of ~0.5% idle power.", impact: "MED" },
-    { id: "DisableSearchIndexer", title: "Disable Windows Search Indexer", desc: "Stops the WSearch service so SearchIndexer.exe cannot spike disk I/O and CPU during gaming. Re-enable via Services.msc if you need Windows Search. Safe — doesn't remove the service, just stops it.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "DisableAutoMaintenance", title: "Disable Automatic Maintenance", desc: "Sets MaintenanceDisabled=1 in the Windows schedule — prevents Defender scans, disk cleanup, and maintenance tasks from launching mid-session. Re-enable via Control Panel > Security and Maintenance if needed.", impact: "MED" },
   ];
 
@@ -222,7 +223,7 @@ export default function Registry() {
   const PROCESS_TWEAKS: TweakDef[] = [
     { id: "ProcNUMAAware", title: "Enable NUMA-Aware Scheduling", desc: "Hints Windows scheduler to keep game threads on the same NUMA node — reduces cross-node memory latency on multi-CCX Ryzen CPUs.", badge: "RYZEN", impact: "MED" },
     { id: "ProcAffinityFPS", title: "Set Game Affinity to Physical Cores Only", desc: "Configures IFEO to assign game processes to physical cores only (skip hyperthreaded/SMT cores) — reduces context-switch overhead in CPU-bound games.", badge: "SMT", impact: "MED" },
-    { id: "ProcMMCSSGaming", title: "MMCSS Gaming Profile: Maximum Priority", desc: "Sets MMCSS (Multimedia Class Scheduler) gaming profile to SchedulingCategory=High, Priority=8, BackgroundOnly=False — Windows reserves CPU time for game threads over all other applications.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
+    { id: "ProcMMCSSGaming", title: "MMCSS Gaming Profile: High Priority", desc: "Sets Scheduling Category=High, SFIO Priority=High, GPU Priority=8, Priority=6, and Background Only=False.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
     { id: "ProcGPUSchedulerHigh", title: "GPU Scheduler Priority: High", desc: "Sets GPU scheduling priority to 8 (High) for game processes via IFEO PerfOptions — ensures GPU work queue is serviced before background compute.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   ];
 

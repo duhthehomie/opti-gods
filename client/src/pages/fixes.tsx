@@ -66,7 +66,7 @@ const RESTORE_CATEGORIES = [
     color: "text-zinc-300", border: "border-zinc-700", bg: "bg-zinc-900/40",
     desc: "Re-enables Game Bar, GameDVR, mouse pointer precision, UI animations, Fast Startup, and Windows Error Reporting.",
     restores: [
-      "Xbox Game DVR re-enabled", "HAGS disabled (HwSchMode=1)",
+      "Xbox Game DVR re-enabled", "HAGS setting preserved",
       "Mouse pointer precision restored", "UI animations re-enabled",
       "Fast Startup re-enabled", "Windows Error Reporting re-enabled",
     ],
@@ -143,9 +143,9 @@ const RESTORE_CATEGORIES = [
   {
     id: "gpu-usage", label: "High GPU Usage / Driver Issues", icon: MonitorPlay,
     color: "text-purple-400", border: "border-purple-500/20", bg: "bg-purple-500/5",
-    desc: "Fixes idle/background GPU usage spiking caused by HAGS, TDR settings, or NVIDIA overlay processes. Re-enables TDR defaults and resets GPU scheduling.",
+    desc: "Fixes idle/background GPU usage by restoring TDR defaults and clearing nondefault GPU scheduler hints. The current HAGS setting is preserved.",
     restores: [
-      "HAGS (HwSchMode) → 1 — disabled by default", "TdrLevel → 3 (Windows default)",
+      "HAGS setting preserved", "TdrLevel → 3 (Windows default)",
       "TdrDelay → 2 seconds (default)", "PagingAllocation → removed (default GPU paging)",
       "NVIDIA overlay container processes reset", "GraphicsDrivers Scheduler hint cleared",
     ],

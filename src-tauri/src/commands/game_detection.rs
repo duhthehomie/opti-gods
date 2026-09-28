@@ -89,16 +89,37 @@ fn find_executable(root: &Path, names: &[&str], max_depth: usize) -> Option<Path
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
+            let Ok(file_type) = entry.file_type() else { continue };
+            if file_type.is_file() {
                 if path.file_name().map(|n| wanted.contains(&n.to_string_lossy().to_lowercase())).unwrap_or(false) {
                     return Some(path);
                 }
-            } else if depth < max_depth {
+            } else if file_type.is_dir()
+                && depth < max_depth
+                && !skip_detection_directory(&entry.file_name().to_string_lossy())
+            {
                 stack.push((path, depth + 1));
             }
         }
     }
     None
+}
+
+#[cfg(windows)]
+fn skip_detection_directory(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "$recycle.bin"
+            | "system volume information"
+            | "windowsapps"
+            | "windows.old"
+            | "node_modules"
+            | ".git"
+            | "temp"
+            | "tmp"
+            | "shadercache"
+            | "crashdumps"
+    )
 }
 
 #[cfg(windows)]
@@ -108,11 +129,65 @@ fn trusted_standalone_roots() -> Vec<PathBuf> {
         r"C:\Program Files", r"C:\Program Files (x86)",
         r"D:\Program Files", r"D:\Program Files (x86)",
         r"E:\Program Files", r"E:\Program Files (x86)",
-        r"%LOCALAPPDATA%", r"%USERPROFILE%\Desktop", r"%USERPROFILE%\Downloads",
+        r"%USERPROFILE%\Games",
+        r"%USERPROFILE%\Desktop", r"%USERPROFILE%\Downloads",
+        r"%LOCALAPPDATA%\Games", r"%LOCALAPPDATA%\Programs",
+        r"%PROGRAMDATA%\Games", r"%PROGRAMFILES%\Games", r"%PROGRAMFILES(X86)%\Games",
     ]
     .into_iter()
     .map(expand_env_path)
     .collect()
+}
+
+#[cfg(windows)]
+fn find_standalone_games(
+    roots: Vec<PathBuf>,
+    already_found: &HashSet<&str>,
+) -> HashMap<&'static str, PathBuf> {
+    let mut by_executable: HashMap<String, Vec<&'static str>> = HashMap::new();
+    let mut remaining: HashSet<&'static str> = HashSet::new();
+    for spec in GAMES {
+        if already_found.contains(spec.id) { continue; }
+        remaining.insert(spec.id);
+        for executable in spec.executables {
+            by_executable
+                .entry(executable.to_ascii_lowercase())
+                .or_default()
+                .push(spec.id);
+        }
+    }
+
+    let mut found = HashMap::new();
+    'roots: for root in roots {
+        if remaining.is_empty() { break; }
+        if !root.is_dir() { continue; }
+        let mut stack = vec![(root, 0usize)];
+        while let Some((dir, depth)) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let Ok(file_type) = entry.file_type() else { continue };
+                if file_type.is_file() {
+                    let Some(name) = path.file_name() else { continue };
+                    let key = name.to_string_lossy().to_ascii_lowercase();
+                    if let Some(ids) = by_executable.get(&key) {
+                        for id in ids {
+                            if remaining.remove(id) {
+                                found.insert(*id, path.clone());
+                            }
+                        }
+                        if remaining.is_empty() { break 'roots; }
+                    }
+                } else if file_type.is_dir()
+                    && depth < 6
+                    && !skip_detection_directory(&entry.file_name().to_string_lossy())
+                {
+                    stack.push((path, depth + 1));
+                }
+            }
+        }
+    }
+    found
 }
 
 #[cfg(windows)]
@@ -217,70 +292,73 @@ fn match_candidate(spec: &GameSpec, display_name: &str, root: &Path) -> Option<P
     find_executable(root, spec.executables, 7)
 }
 
-#[tauri::command]
-pub fn detect_installed_games() -> Vec<InstalledGame> {
-    #[cfg(windows)]
-    {
-        let running = running_processes();
-        let mut matches: HashMap<&str, InstalledGame> = HashMap::new();
-        let mut candidates = candidates_from_steam();
-        candidates.extend(candidates_from_epic());
-        candidates.extend(candidates_from_uninstall_registry());
+#[cfg(windows)]
+fn detect_installed_games_blocking() -> Vec<InstalledGame> {
+    let running = running_processes();
+    let mut matches: HashMap<&str, InstalledGame> = HashMap::new();
+    let mut candidates = candidates_from_steam();
+    candidates.extend(candidates_from_epic());
+    candidates.extend(candidates_from_uninstall_registry());
 
-        for spec in GAMES {
-            for (display_name, root, source) in &candidates {
-                if let Some(exe) = match_candidate(spec, display_name, root) {
-                    let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    matches.entry(spec.id).or_insert(InstalledGame {
-                        id: spec.id.into(),
-                        executable: exe_name.clone(),
-                        install_path: exe.to_string_lossy().to_string(),
-                        source: source.clone(),
-                        running: running.contains(&exe_name.to_lowercase()),
-                    });
-                    break;
-                }
-            }
-            if matches.contains_key(spec.id) { continue; }
-            for raw_path in spec.known_paths {
-                let root = expand_env_path(raw_path);
-                if let Some(exe) = find_executable(&root, spec.executables, 7) {
-                    let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    matches.insert(spec.id, InstalledGame {
-                        id: spec.id.into(),
-                        executable: exe_name.clone(),
-                        install_path: exe.to_string_lossy().to_string(),
-                        source: "Known install location".into(),
-                        running: running.contains(&exe_name.to_lowercase()),
-                    });
-                    break;
-                }
+    for spec in GAMES {
+        for (display_name, root, source) in &candidates {
+            if let Some(exe) = match_candidate(spec, display_name, root) {
+                let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
+                matches.entry(spec.id).or_insert(InstalledGame {
+                    id: spec.id.into(),
+                    executable: exe_name.clone(),
+                    install_path: exe.to_string_lossy().to_string(),
+                    source: source.clone(),
+                    running: running.contains(&exe_name.to_lowercase()),
+                });
+                break;
             }
         }
-        // A standalone or modified install may not have a storefront manifest
-        // or uninstall record. Only inspect fixed local roots owned by this
-        // detector; the renderer never supplies a path.
-        for root in trusted_standalone_roots() {
-            for spec in GAMES {
-                if matches.contains_key(spec.id) { continue; }
-                if let Some(exe) = find_executable(&root, spec.executables, 6) {
-                    let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    matches.insert(spec.id, InstalledGame {
-                        id: spec.id.into(),
-                        executable: exe_name.clone(),
-                        install_path: exe.to_string_lossy().to_string(),
-                        source: "Trusted local install location".into(),
-                        running: running.contains(&exe_name.to_lowercase()),
-                    });
-                }
+        if matches.contains_key(spec.id) { continue; }
+        for raw_path in spec.known_paths {
+            let root = expand_env_path(raw_path);
+            if let Some(exe) = find_executable(&root, spec.executables, 7) {
+                let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
+                matches.insert(spec.id, InstalledGame {
+                    id: spec.id.into(),
+                    executable: exe_name.clone(),
+                    install_path: exe.to_string_lossy().to_string(),
+                    source: "Known install location".into(),
+                    running: running.contains(&exe_name.to_lowercase()),
+                });
+                break;
             }
         }
-        let mut result: Vec<_> = matches.into_values().collect();
-        result.sort_by(|a, b| a.id.cmp(&b.id));
-        result
     }
-    #[cfg(not(windows))]
-    {
-        Vec::new()
+
+    // Scan each trusted local root once for all remaining executable names.
+    // This preserves broad standalone discovery without repeating the same
+    // directory traversal for every game.
+    let already_found: HashSet<&str> = matches.keys().copied().collect();
+    for (id, exe) in find_standalone_games(trusted_standalone_roots(), &already_found) {
+        let exe_name = exe.file_name().unwrap_or_default().to_string_lossy().to_string();
+        matches.insert(id, InstalledGame {
+            id: id.into(),
+            executable: exe_name.clone(),
+            install_path: exe.to_string_lossy().to_string(),
+            source: "Trusted local install location".into(),
+            running: running.contains(&exe_name.to_lowercase()),
+        });
     }
+
+    let mut result: Vec<_> = matches.into_values().collect();
+    result.sort_by(|a, b| a.id.cmp(&b.id));
+    result
+}
+
+#[cfg(not(windows))]
+fn detect_installed_games_blocking() -> Vec<InstalledGame> {
+    Vec::new()
+}
+
+#[tauri::command]
+pub async fn detect_installed_games() -> Result<Vec<InstalledGame>, String> {
+    tokio::task::spawn_blocking(detect_installed_games_blocking)
+        .await
+        .map_err(|error| format!("The game-detection worker stopped unexpectedly: {error}"))
 }

@@ -22,26 +22,31 @@ export function ScanImport() {
       const detected = await detectAppliedTweaks();
       const store = useOptimizationStore.getState();
       const next = { ...store.tweaks };
-      const appliedIds: string[] = [];
+      const liveAppliedIds: string[] = [];
 
       for (const [id, applied] of Object.entries(detected)) {
         if (applied && id in next) {
           next[id] = true;
-          appliedIds.push(id);
+          liveAppliedIds.push(id);
         }
       }
 
       store.setAllTweaks(next);
-      if (appliedIds.length > 0) store.markApplied(appliedIds);
-      setDetectedCount(appliedIds.length);
+      const newLiveAppliedIds = liveAppliedIds.filter(id => !(id in store.appliedAt));
+      if (newLiveAppliedIds.length > 0) store.markApplied(newLiveAppliedIds);
+      const appliedIds = new Set([
+        ...liveAppliedIds,
+        ...Object.keys(store.appliedAt).filter(id => id in next),
+      ]);
+      setDetectedCount(appliedIds.size);
       setStatus("success");
 
       if (!quiet) {
         toast({
           title: "Hardware and tweak scan complete",
-          description: appliedIds.length
-            ? `${appliedIds.length} existing optimizations recognized.`
-            : "No supported Opti Gods tweaks are currently applied.",
+          description: appliedIds.size
+            ? `${appliedIds.size} existing optimizations recognized.`
+            : "No supported Opti Gods tweaks were detected or previously recorded as applied.",
         });
       }
     } catch (error) {
@@ -84,7 +89,7 @@ export function ScanImport() {
                 ? status === "scanning"
                   ? "Reading your Windows optimization state…"
                   : status === "success"
-                    ? `${detectedCount} supported tweaks already applied. Nothing was changed.`
+                    ? `${detectedCount} supported tweaks detected or recorded as applied. No Windows settings were changed.`
                     : "Opti Gods quietly recognizes supported tweaks already on this PC."
                 : "Automatic state detection is available inside the Opti Gods Windows app."}
             </p>

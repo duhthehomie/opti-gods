@@ -276,8 +276,10 @@ Write-Host "   [OK] MMCSS Games -> GPU=8, CPU=6, Scheduling=High" -ForegroundCol
 
 Write-Host ""
 Write-Host " [3/3] Throttling background processes..." -ForegroundColor Cyan
-Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
-Write-Host "   [OK] Win32PrioritySeparation = 26" -ForegroundColor Green
+$logicalProcessors = [Environment]::ProcessorCount
+$win32PriorityValue = if ($logicalProcessors -ge 12) { 0x26 } else { 0x1A }
+Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value $win32PriorityValue -Type DWord -Force
+Write-Host ("   [OK] Win32PrioritySeparation = 0x{0:X2} ({0} decimal) for {1} logical processors" -f $win32PriorityValue, $logicalProcessors) -ForegroundColor Green
 
 Write-Host ""
 Write-Host " =====================================" -ForegroundColor DarkRed
@@ -343,7 +345,7 @@ export default function ProcessLasso() {
     { id: "ProcessLassoSmartTrim",         title: "Enable SmartTrim (RAM)",                           desc: "Trims working set of background processes to free physical memory for your game.", impact: "HIGH" as const, recommended: true },
     { id: "ProcessLassoRestrain",          title: "Restrain Background Apps After 5s Idle",           desc: "Drops background process CPU priority 5 seconds after they stop receiving input.", impact: "MED" as const, recommended: true },
     { id: "ProcessLassoAffinityGaming",    title: "Auto-Affinity: Gaming Mode",                       desc: "Moves background tasks to a subset of cores so your game gets dedicated CPU access.", impact: "HIGH" as const, recommended: true },
-    { id: "ProcessLassoInstanceBalancer",  title: "CPU Scheduler: Short Quantum + Max Foreground Boost (Win32PrioritySeparation=26)", desc: "Sets Win32PrioritySeparation=26 — short time quanta, variable mode, maximum foreground boost. Gaming-optimal Windows scheduler mode.", impact: "MED" as const },
+    { id: "ProcessLassoInstanceBalancer",  title: "CPU Scheduler: Hardware-Matched Win32PrioritySeparation", desc: "Uses 0x1A below 12 logical processors or 0x26 at 12 or more, matching the main scheduler recommendation.", impact: "MED" as const },
   ];
 
   const memTweaks = [
