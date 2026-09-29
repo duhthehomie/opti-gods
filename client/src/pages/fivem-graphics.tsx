@@ -50,6 +50,10 @@ const SKY_COLORS = {
   blood_orange:   { label: "Blood Orange",    r: 180, g: 40,  b: 5,   group: "warm",   swatch: "#B42805" },
   violet_dusk:    { label: "Violet Dusk",     r: 110, g: 40,  b: 140, group: "warm",   swatch: "#6E288C" },
   twilight_purple:{ label: "Twilight Purple", r: 75,  g: 20,  b: 130, group: "warm",   swatch: "#4B1482" },
+  emerald_green:  { label: "Emerald Green",   r: 22,  g: 150, b: 74,  group: "green",  swatch: "#16964A" },
+  forest_green:   { label: "Forest Green",    r: 12,  g: 82,  b: 46,  group: "green",  swatch: "#0C522E" },
+  crimson_red:    { label: "Crimson Red",     r: 178, g: 18,  b: 42,  group: "red",    swatch: "#B2122A" },
+  scarlet_red:    { label: "Scarlet Red",     r: 220, g: 30,  b: 38,  group: "red",    swatch: "#DC1E26" },
   // Grey / Mono
   steel_grey:     { label: "Steel Grey",      r: 78,  g: 88,  b: 102, group: "grey",   swatch: "#4E5866" },
   dark_grey:      { label: "Dark Grey",       r: 28,  g: 30,  b: 38,  group: "grey",   swatch: "#1C1E26" },
@@ -1369,7 +1373,7 @@ export default function FivemGraphics() {
       if (data.keepProps          != null) setKeepProps(data.keepProps);
       if (data.disableBloodDecals != null) setDisableBloodDecals(data.disableBloodDecals);
       if (data.fixFaceQuality     != null) setFixFaceQuality(data.fixFaceQuality);
-      setAiSuccess(data.mood || "Pack configured — review below, then download.");
+      setAiSuccess(`${data.source === "local" ? "BUILT-IN LOCAL RULES" : "AI"} — ${data.mood || "Pack configured — review below, then download."}`);
       setActiveTab("builder");
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : "AI failed — try again");
@@ -1629,7 +1633,7 @@ export default function FivemGraphics() {
                     </div>
                     <div>
                       <p className="text-sm font-black text-white">AI Pack Generator</p>
-                      <p className="text-[10px] text-zinc-500">Describe the vibe — get sliders pre-filled instantly.</p>
+                      <p className="text-[10px] text-zinc-500">Describe the vibe — AI or built-in local rules pre-fill your sliders.</p>
                     </div>
                   </div>
                   <textarea

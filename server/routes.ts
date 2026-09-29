@@ -1,3 +1,4 @@
+import { buildLocalGraphicsPack } from "./graphics-pack-local";
 import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
@@ -8223,13 +8224,17 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
   // ── FiveM Graphics Pack AI Generator ─────────────────────────────────────────
   // Parses a plain-English description into slider/toggle values for the citizen pack builder.
   app.post("/api/ai/graphics-pack", rateLimit(20, 60_000, 30), async (req, res) => {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) return res.status(503).json({ error: "AI not configured" });
-
     const { description } = req.body as { description?: string };
     if (!description || typeof description !== "string" || description.length > 500) {
       return res.status(400).json({ error: "description required (max 500 chars)" });
     }
+
+    const localFallback = () => res.json({
+      ...buildLocalGraphicsPack(description),
+      source: "local",
+    });
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return localFallback();
 
     const systemPrompt = `You are a FiveM graphics pack generator. Output ONLY a JSON object — no prose, no markdown fences.
 
@@ -8238,7 +8243,7 @@ Required fields:
   "packName": string (creative name, max 30 chars),
   "cloudThickness": number 0-100 (0=no clouds = best FPS),
   "jetStreams": number 0-100 (0=no contrails),
-  "skyColorKey": string (MUST be exactly one of: vivid_blue, sky_blue, cyan, deep_blue, navy, bubblegum, hot_pink, rose, magenta, warm_amber, golden_sunset, deep_orange, coral_red, blood_orange, violet_dusk, twilight_purple, steel_grey, dark_grey, black_sky),
+  "skyColorKey": string (MUST be exactly one of: vivid_blue, sky_blue, cyan, deep_blue, navy, bubblegum, hot_pink, rose, magenta, warm_amber, golden_sunset, deep_orange, coral_red, blood_orange, violet_dusk, twilight_purple, emerald_green, forest_green, crimson_red, scarlet_red, steel_grey, dark_grey, black_sky),
   "skyBrightness": number 35-100 (35=very dark/dim, 75=natural, 100=max vivid),
   "aerialClouds": boolean,
   "aerialDensity": number 10-100,
@@ -8277,6 +8282,12 @@ Sunsets / Warm (use these for ANY sunset, golden, orange, dusk, fire, warm reque
 - blood_orange    : intense blood orange (skyBrightness 80-92) — maximum warm impact
 - violet_dusk     : purple twilight dusk (skyBrightness 65-82) — purple-blue gradient
 - twilight_purple : deep twilight purple (skyBrightness 55-75) — darkest purple dusk
+Green:
+- emerald_green   : rich vivid emerald green (skyBrightness 70-85)
+- forest_green    : deep natural forest green (skyBrightness 50-75)
+Red:
+- crimson_red     : dark crimson red (skyBrightness 65-85)
+- scarlet_red     : bright scarlet red (skyBrightness 70-90)
 Grey / Dark:
 - steel_grey      : cool steel overcast grey (skyBrightness 50-75)
 - dark_grey       : dark stormy grey (skyBrightness 40-65)
@@ -8291,6 +8302,8 @@ Rules:
 - twilight / dusk / purple: violet_dusk or twilight_purple, skyBrightness 65-78, lightRays true, lightRayIntensity 40, atmosphereHaze true, freezeHour 20-21, sunIntensity 70
 - hot pink / Miami / GTA 6 vibes: hot_pink, skyBrightness 85-92, jetStreams 60-80, lightRays true, freezeHour 18-20, sunIntensity 78
 - pink / pastel / bubblegum: bubblegum or rose, skyBrightness 70-85
+- green / emerald / forest: emerald_green or forest_green, skyBrightness 65-82
+- red / crimson / scarlet: crimson_red or scarlet_red, skyBrightness 72-86, lightRays true for a sunset
 - stormy / dark / moody: dark_grey, cloudThickness 50-80, atmosphereHaze true, freezeTime true, freezeHour 12
 - clear / sunny / blue sky: vivid_blue or sky_blue, cloudThickness 0, freezeTime true, freezeHour 12
 - winter / snow: steel_grey or dark_grey, disableSnow false, aerialClouds true
@@ -8304,21 +8317,68 @@ Rules:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "openai/gpt-oss-20b",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a FiveM graphics pack for: "${description}"` },
           ],
           temperature: 0.4,
-          max_tokens: 500,
-          response_format: { type: "json_object" },
+          max_tokens: 1500,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "fivem_graphics_pack",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  packName: { type: "string" },
+                  cloudThickness: { type: "integer" },
+                  jetStreams: { type: "integer" },
+                  skyColorKey: {
+                    type: "string",
+                    enum: [
+                      "vivid_blue", "sky_blue", "cyan", "deep_blue", "navy",
+                      "bubblegum", "hot_pink", "rose", "magenta",
+                      "warm_amber", "golden_sunset", "deep_orange", "coral_red", "blood_orange",
+                      "violet_dusk", "twilight_purple", "emerald_green", "forest_green",
+                      "crimson_red", "scarlet_red", "steel_grey", "dark_grey", "black_sky",
+                    ],
+                  },
+                  skyBrightness: { type: "integer" },
+                  aerialClouds: { type: "boolean" },
+                  aerialDensity: { type: "integer" },
+                  lightRays: { type: "boolean" },
+                  lightRayIntensity: { type: "integer" },
+                  sunIntensity: { type: "integer" },
+                  atmosphereHaze: { type: "boolean" },
+                  freezeTime: { type: "boolean" },
+                  freezeHour: { type: "integer" },
+                  freezeMinute: { type: "integer" },
+                  disableRain: { type: "boolean" },
+                  disableSnow: { type: "boolean" },
+                  keepProps: { type: "boolean" },
+                  disableBloodDecals: { type: "boolean" },
+                  fixFaceQuality: { type: "boolean" },
+                  mood: { type: "string" },
+                },
+                required: [
+                  "packName", "cloudThickness", "jetStreams", "skyColorKey", "skyBrightness",
+                  "aerialClouds", "aerialDensity", "lightRays", "lightRayIntensity", "sunIntensity",
+                  "atmosphereHaze", "freezeTime", "freezeHour", "freezeMinute", "disableRain",
+                  "disableSnow", "keepProps", "disableBloodDecals", "fixFaceQuality", "mood",
+                ],
+                additionalProperties: false,
+              },
+            },
+          },
         }),
       });
 
       if (!response.ok) {
         const err = await response.text();
         console.error("[ai/graphics-pack] Groq error:", err);
-        return res.status(502).json({ error: "AI request failed" });
+        return localFallback();
       }
 
       const data = await response.json() as { choices?: { message?: { content?: string } }[] };
@@ -8331,7 +8391,7 @@ Rules:
         parsed = JSON.parse(jsonStr);
       } catch {
         console.error("[ai/graphics-pack] JSON parse failed:", raw);
-        return res.status(502).json({ error: "AI returned invalid JSON — try rephrasing your description" });
+        return localFallback();
       }
 
       // Sanitise numeric ranges
@@ -8345,6 +8405,7 @@ Rules:
         "vivid_blue","sky_blue","cyan","deep_blue","navy",
         "bubblegum","hot_pink","rose","magenta",
         "warm_amber","golden_sunset","deep_orange","coral_red","blood_orange","violet_dusk","twilight_purple",
+        "emerald_green","forest_green","crimson_red","scarlet_red",
         "steel_grey","dark_grey","black_sky",
       ] as const;
       const rawKey = typeof parsed.skyColorKey === "string" ? parsed.skyColorKey.trim().toLowerCase().replace(/\s+/g,"_") : "";
@@ -8371,10 +8432,11 @@ Rules:
         disableBloodDecals: bool(parsed.disableBloodDecals, false),
         fixFaceQuality:     bool(parsed.fixFaceQuality, true),
         mood: typeof parsed.mood === "string" ? parsed.mood.slice(0, 200) : "Pack generated — review sliders in the Builder tab.",
+        source: "ai",
       });
     } catch (err) {
       console.error("[ai/graphics-pack] error:", err);
-      return res.status(500).json({ error: "AI request failed" });
+      return localFallback();
     }
   });
 

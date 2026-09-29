@@ -1,4 +1,4 @@
 {
-  "version": "5.2.39",
-  "notes": "V5.2.39 — verifies Defender exclusions before reporting success, rolls back failed power-plan changes with exact setting diagnostics, reports unsupported NVIDIA MSI display topologies safely, and restores Disable Windows Search Indexer as an opt-in Windows tweak outside Full Optimize."
+  "version": "5.2.40",
+  "notes": "V5.2.40 — improves FiveM Graphics Studio with structured AI output, deterministic built-in fallback settings, and clear AI/local source labels."
 }
