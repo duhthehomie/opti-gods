@@ -16,7 +16,7 @@ assert.doesNotMatch(defender, /\[SKIP\].*return/);
 
 const ryzen = buildSafeWindowsCommandOverride("FiveM3500PerfPlan");
 assert.ok(ryzen);
-assert.match(ryzen, /Name = 'PERFBOOSTMODE'/);
+assert.doesNotMatch(ryzen, /Name = 'PERFBOOSTMODE'/);
 assert.doesNotMatch(ryzen, /Name = 'PERFBOOSTPOL'|Name = 'CPMINCORES'/);
 assert.match(ryzen, /powercfg exit/);
 assert.match(ryzen, /Original power values and active plan were restored/);
@@ -55,6 +55,14 @@ assert.equal(TWEAK_REGISTRY.find(tweak => tweak.id === "DisableSearchIndexing")?
 const autoPreset = buildSafePreset({ gpuVendor: "unknown" }, "balanced");
 assert.ok(!autoPreset.core.includes("DisableSearchIndexing"));
 assert.ok(!autoPreset.expert.includes("DisableSearchIndexing"));
+const nvidiaAutoPreset = buildSafePreset(
+  { gpuVendor: "nvidia", gpuName: "GeForce RTX 3060", cpuBrand: "amd", cpuLabel: "Ryzen 5 3500", cpuCores: 6 },
+  "balanced",
+);
+const nvidiaAutoIds = [...nvidiaAutoPreset.core, ...nvidiaAutoPreset.expert];
+for (const id of ["NvidiaDisableOverlay", "NvidiaDisableShadowPlay", "FiveMFixNvidiaOverlay"]) {
+  assert.ok(!nvidiaAutoIds.includes(id), `${id} should never be in an automatic NVIDIA preset`);
+}
 const optedPreset = buildSafePreset({ gpuVendor: "unknown" }, "balanced", ["DisableSearchIndexing"]);
 assert.ok(!optedPreset.core.includes("DisableSearchIndexing"));
 assert.ok(!optedPreset.expert.includes("DisableSearchIndexing"));

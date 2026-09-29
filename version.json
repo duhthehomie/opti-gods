@@ -1,4 +1,4 @@
 {
-  "version": "5.2.40",
-  "notes": "V5.2.40 — improves FiveM Graphics Studio with structured AI output, deterministic built-in fallback settings, and clear AI/local source labels."
+  "version": "5.2.41",
+  "notes": "V5.2.41 — reports hardware-incompatible tweaks as skipped, avoids firmware-specific Ryzen boost settings, and adds NVIDIA App overlay recovery without disabling capture or startup."
 }

@@ -18,6 +18,7 @@ import {
   readNativeTweakRun,
   readQueuedTweakBatch,
   readQueuedTweakBatchOptions,
+  readQueuedTweakBatchSkippedIds,
   stopNativeTweakRun,
   subscribeNativeTweakRun,
   type NativeTweakRunState,
@@ -45,8 +46,9 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
 
 function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
   const savedScanResult = getTweakCompatibility(item.id);
-  const runtimeLooksIncompatible = item.status === "failed"
-    && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|multi[- ]gpu|ambiguous display|did not expose|unavailable/i.test(item.message || "");
+  const runtimeLooksIncompatible = item.status === "skipped"
+    || (item.status === "failed"
+      && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|multi[- ]gpu|ambiguous display|did not expose|unavailable/i.test(item.message || ""));
   return runtimeLooksIncompatible
     ? { ok: false, reason: item.message || "Windows rejected this hardware configuration." }
     : savedScanResult;
@@ -123,6 +125,7 @@ async function downloadRunDiagnosticLog(
   }
   const generatedAt = new Date().toISOString();
   const applied = items.filter(item => item.status === "applied");
+  const skipped = items.filter(item => item.status === "skipped");
   const failed = items.filter(item => item.status === "failed");
   const stopped = items.filter(item => item.status === "stopped");
   const pending = items.filter(item => item.status === "queued" || item.status === "running");
@@ -162,6 +165,7 @@ async function downloadRunDiagnosticLog(
     `Stop requested: ${runState?.stopRequested ? "yes" : "no"}`,
     `Total selected: ${items.length}`,
     `Applied: ${applied.length}`,
+    `Skipped as incompatible: ${skipped.length}`,
     `Failed: ${failed.length}`,
     `Stopped: ${stopped.length}`,
     `Still queued/running: ${pending.length}`,
@@ -233,7 +237,7 @@ export default function AppliedTweaksPage() {
   const [running, setRunning] = useState(false);
   const [runFinished, setRunFinished] = useState(false);
   const [runHadFailures, setRunHadFailures] = useState(false);
-  const [runTab, setRunTab] = useState<"all" | "failed">("all");
+  const [runTab, setRunTab] = useState<"all" | "failed" | "skipped">("all");
   const [runState, setRunState] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
   const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
@@ -262,13 +266,20 @@ export default function AppliedTweaksPage() {
          notifiedRunRef.current = state.runId;
          try { sessionStorage.setItem("optigods-native-run-notified", state.runId); } catch {}
          const appliedCount = state.items.filter(item => item.status === "applied").length;
+          const skippedCount = state.items.filter(item => item.status === "skipped").length;
          const failedCount = state.items.filter(item => item.status === "failed").length;
          toast({
-           title: failedCount > 0 ? `${appliedCount} tweaks applied · ${failedCount} need attention` : `${appliedCount} tweaks applied`,
+            title: failedCount > 0
+              ? `${appliedCount} applied · ${failedCount} need attention`
+              : skippedCount > 0
+                ? `${appliedCount} applied · ${skippedCount} skipped`
+                : `${appliedCount} tweaks applied`,
            description: failedCount > 0
              ? "The Windows run finished. Open the Failed tab to review or retry only those items."
-              : "Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.",
-           variant: failedCount > 0 ? "destructive" : "success",
+              : skippedCount > 0
+                ? "Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones."
+                : "Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.",
+            variant: failedCount > 0 ? "destructive" : "success",
          });
        }
     };
@@ -292,6 +303,7 @@ export default function AppliedTweaksPage() {
     const persisted = readNativeTweakRun();
     const queued = readQueuedTweakBatch();
     const queuedOptions = readQueuedTweakBatchOptions();
+    const queuedSkippedIds = readQueuedTweakBatchSkippedIds();
     const recoverable = queued.length
       ? queued
       : persisted && (persisted.status === "running" || persisted.status === "stopping")
@@ -299,35 +311,56 @@ export default function AppliedTweaksPage() {
           .filter(item => item.status === "queued" || item.status === "running")
           .map(item => item.id)
         : [];
-    if (!recoverable.length) return;
+    if (!recoverable.length && !queuedSkippedIds.length) return;
     startedRef.current = true;
     const startRun = async () => {
       // Recommendation buttons on individual tabs can queue script-only IDs.
       // Free users must never send those IDs to the instant-apply ticket API.
       // Fail closed if entitlement lookup is unavailable. A stale local queue
       // must never turn a free run into an oversized native execution.
-      let executable = recoverable.filter(id => getTweakCompatibility(id).ok).slice(0, FREE_NATIVE_TWEAK_LIMIT);
+      const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
+      let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds]));
+      let skippedSet = new Set(initialSkippedIds);
+      let executable = recoverable
+        .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok)
+        .slice(0, FREE_NATIVE_TWEAK_LIMIT);
       try {
         const response = await fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() });
         if (response.ok && (await response.json() as { pro?: boolean }).pro === false) {
-           executable = executable.filter(id => NATIVE_TWEAK_ID_SET.has(id)).slice(0, FREE_NATIVE_TWEAK_LIMIT);
+          executable = executable
+            .filter(id => NATIVE_TWEAK_ID_SET.has(id) && !skippedSet.has(id))
+            .slice(0, FREE_NATIVE_TWEAK_LIMIT);
         } else if (response.ok) {
-           executable = recoverable.filter(id => getTweakCompatibility(id).ok);
+          executable = recoverable.filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
         }
       } catch {
         // Keep the queue if status is temporarily unavailable; the server
         // remains the final authority and reports any rejected item.
       }
       if (!executable.length) {
-        localStorage.removeItem("optigods-native-run-queue");
-        return;
+        if (!initialSkippedIds.length) {
+          clearQueuedTweakBatch();
+          return;
+        }
       }
+      const runTotal = executable.length + initialSkippedIds.length;
+      const skipProgress = initialSkippedIds.map((id, index) => ({
+        id,
+        index: executable.length + index,
+        total: runTotal,
+        status: "skipped" as const,
+        message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
+      }));
       setRunning(true);
-      setRunItems(executable.map((id, index) => ({ id, index, total: executable.length, status: "queued" })));
-       return applyTweakBatch(executable, progress => {
+      setRunItems([
+        ...executable.map((id, index) => ({ id, index, total: runTotal, status: "queued" as const })),
+        ...skipProgress,
+      ]);
+      return applyTweakBatch(executable, progress => {
         setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
        }, {
          forceReapplyIds: executable.filter(id => queuedOptions.forceReapplyIds?.includes(id)),
+          initialSkippedIds,
        });
     };
     void startRun().then(result => {
@@ -338,7 +371,7 @@ export default function AppliedTweaksPage() {
     }).catch(error => {
        const message = error instanceof Error ? error.message : "Windows could not start this tweak run.";
        setRunItems(items => items.map(item =>
-         item.status === "applied" || item.status === "failed"
+          item.status === "applied" || item.status === "skipped" || item.status === "failed"
            ? item
            : { ...item, status: "failed", message },
        ));
@@ -399,7 +432,7 @@ export default function AppliedTweaksPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Windows could not restart these tweaks.";
       setRunItems(items => items.map(item =>
-        item.status === "applied" || item.status === "failed" ? item : { ...item, status: "failed", message },
+        item.status === "applied" || item.status === "skipped" || item.status === "failed" ? item : { ...item, status: "failed", message },
       ));
       setRunFinished(true);
       setRunHadFailures(true);
@@ -438,9 +471,10 @@ export default function AppliedTweaksPage() {
     }
   };
   const orderedRunItems = [...runItems].sort((a, b) => {
-    const rank = (item: TweakRunProgress) => item.status === "applied" ? 0 : 1;
+    const rank = (item: TweakRunProgress) => item.status === "applied" ? 0 : item.status === "skipped" ? 1 : 2;
     return rank(a) - rank(b) || a.index - b.index;
   });
+  const skippedRunCount = runItems.filter(item => item.status === "skipped").length;
   // Keep provenance separate: a local timestamp is a session record, not proof
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.
@@ -554,12 +588,13 @@ export default function AppliedTweaksPage() {
        <span className="font-bold">Free native allowance: {allowance.used} / {allowance.limit} active.</span>{" "}
        {allowance.remaining === 0 ? "The server is blocking additional instant tweaks. Undo one confirmed tweak to free a slot." : `${allowance.remaining} slot${allowance.remaining === 1 ? "" : "s"} remaining.`}
      </div>}
-      {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
-        {runHadFailures ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
+      {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures || skippedRunCount > 0 ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
+        {runHadFailures || skippedRunCount > 0 ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
         <div>
-          <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : "Run finished successfully"}</p>
+          <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : skippedRunCount > 0 ? "Run finished; incompatible items were skipped" : "Run finished successfully"}</p>
           <p className="mt-0.5 text-xs opacity-80">
             {runItems.filter(item => item.status === "applied").length} of {runItems.length} tweaks marked applied.
+            {skippedRunCount > 0 ? ` ${skippedRunCount} unsupported item${skippedRunCount === 1 ? " was" : "s were"} skipped without changing Windows.` : ""}
             {runHadFailures ? " Open the Failed tab below for the exact Windows error and retry only those items." : ""}
           </p>
         </div>
@@ -574,17 +609,18 @@ export default function AppliedTweaksPage() {
             {retryableFailedIds.length > 0 && <button onClick={() => void rerunFailed()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun compatible failed ({retryableFailedIds.length}){retryableFailedIds.length !== failedIds.length ? ` · ${failedIds.length - retryableFailedIds.length} skipped` : ""}</button>}
            {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
          </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "failed").length / runItems.length) * 100)}%` }} /></div>
+         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "skipped" || item.status === "failed" || item.status === "stopped").length / runItems.length) * 100)}%` }} /></div>
       </div>
        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
          <button onClick={() => setRunTab("all")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "all" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>All ({runItems.length})</button>
           <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
+          <button onClick={() => setRunTab("skipped")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "skipped" ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-200")}>Skipped ({skippedRunCount})</button>
        </div>
          <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
-           {orderedRunItems.filter(item => runTab === "all" || item.status === "failed").map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
-           {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{item.status === "failed" && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
-           <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
+            {orderedRunItems.filter(item => runTab === "all" || item.status === runTab).map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
+            {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "skipped" ? <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{(item.status === "failed" || item.status === "skipped") && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
+           <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
         </div>; })}
       </div>
     </section>}

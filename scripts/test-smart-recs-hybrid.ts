@@ -98,6 +98,13 @@ console.log("\n[smart-recs hybrid] running tests\n");
 // Hybrid laptop: Intel iGPU + NVIDIA dGPU
 // ---------------------------------------------------------------------------
 
+test("NVIDIA overlay and capture controls are not automatic recommendations", () => {
+  const ids = computeSmartRecs(makeHw(["NVIDIA GeForce RTX 3060"]), win11).ids;
+  for (const id of ["NvidiaDisableOverlay", "NvidiaDisableShadowPlay", "FiveMFixNvidiaOverlay"]) {
+    assert.ok(!ids.has(id), `${id} should remain a manual-only choice`);
+  }
+});
+
 test("Hybrid laptop (Intel UHD + NVIDIA RTX 3060) yields BOTH Lap_NVIDIA_* and Lap_Intel_*", () => {
   const hw = makeHw(
     ["Intel(R) UHD Graphics 630", "NVIDIA GeForce RTX 3060 Laptop GPU"],

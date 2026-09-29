@@ -1,72 +1,3 @@
-// Single shared preset-selection function for AI generators (Aether admin chat,
-// Opti Gods user chat, admin Preset Generator tab). Replaces ad-hoc preset
-// construction so every path produces hardware-filtered, expert-gated output.
-//
-// Why centralised: V1 had three different preset code paths and they drifted —
-// the user chat kept emitting `EnableMSIMode` / `SetTimerResolution` /
-// `DisableIPv6` long after the V2.1 stability surgery removed them from the
-// auto-CORE set (those three caused BSODs / FiveM crashes / boot hangs).
-// `buildSafePreset` enforces V2.1 rules in one place.
-
-import { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
-export { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
-
-export type PresetGpuVendor = "nvidia" | "amd" | "intel" | "unknown";
-export type PresetOsVersion = "win11" | "win10" | "unknown";
-export type PresetGoal = "balanced" | "fps" | "latency" | "stability";
-
-export interface PresetHardware {
-  gpuVendor: PresetGpuVendor;
-  gpuName?: string;          // e.g. "RTX 3070", "RX 6700 XT"
-  cpuBrand?: "intel" | "amd" | "unknown";
-  cpuLabel?: string;         // e.g. "Ryzen 5 5600X"
-  cpuCores?: number;         // logical thread count
-  cpuGeneration?: number;    // Intel gen / Ryzen series digit
-  ramGB?: number;
-  osVersion?: PresetOsVersion;
-  isLaptop?: boolean;
-  hasDiscreteGpu?: boolean;  // when true, iGPU tweaks are excluded
-}
-
-export interface SafePreset {
-  /** Human-readable profile, e.g. "RTX FPS Build". */
-  profile: string;
-  /** Goal used to seed the preset. */
-  goal: PresetGoal;
-  /** One-line summary of detected hardware for prompts/UI. */
-  hardwareSummary: string;
-  /** Tweak IDs auto-included for the user — safe + recommended only. */
-  core: string[];
-  /** Tweak IDs flagged expert/dangerous — REQUIRE explicit opt-in to apply. */
-  expert: string[];
-  /** Tweak IDs the AI/admin asked for but were blocked (forbidden or hardware-mismatched). */
-  blocked: { id: string; reason: string }[];
-  /** Hardware/goal reasoning strings for UI / model explanation. */
-  reasons: string[];
-}
-
-/**
- * The three tweaks the V2.1 stability surgery removed from auto-CORE.
- * They remain legal, but AI/admin generators must never include them in `core`
- * without an exact expert opt-in.
- *
- * - EnableMSIMode: V1 BSOD `SYSTEM_THREAD_EXCEPTION_NOT_HANDLED`.
- *   No MSI-mode action is auto-selected; capability must be validated manually.
- * - DisableIPv6: V1 FiveM `productId != ProductID::INVALID` crash; also breaks
- *   Discord voice / Xbox party chat / Rockstar entitlement.
- * - SetTimerResolution: V1 boot hang on Ryzen APUs / Intel chipsets
- *   (use `DisableDynamicTick` instead — that's already in CORE).
- */
-export const FORBIDDEN_AUTO_TWEAKS = [
-  "EnableMSIMode",
-  "DisableIPv6",
-  "SetTimerResolution",
-] as const;
-
-/**
- * Tweaks that need user understanding before applying. The AI generators must
- * NEVER auto-include these; they belong in `expert` only.
- *
  * Sourced from `safety: "expert"` entries in `client/src/lib/tweak-registry.ts`
  * plus the FORBIDDEN_AUTO_TWEAKS above (which carry the strongest "do
  * not auto-include" semantics).
@@ -108,6 +39,7 @@ export const NVIDIA_CAPTURE_PROTECTED_IDS: ReadonlySet<string> = new Set([
   "NvidiaDisableAnsel",
   "NvidiaDisableContainerLS",
   "NvidiaDisableShadowPlay",
+  "FiveMFixNvidiaOverlay",
   "RTX50NvidiaAppTelemetryOff",
   "Cod1650DisableAnsel",
   "FiveM1650DisableAnsel",
@@ -369,7 +301,7 @@ const FIVEM_INTEL_12_14: string[] = [
 /** FiveM tweaks that require NVIDIA */
 const FIVEM_NVIDIA: string[] = [
   "FiveMDisablePhysX", "FiveMDisableNvidiaTelemetry",
-  "FiveMFixNvidiaOverlay", "FiveMGPUPriorityStack",
+  "FiveMGPUPriorityStack",
 ];
 
 /** Fortnite performance pack */

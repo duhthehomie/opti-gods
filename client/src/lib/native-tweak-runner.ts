@@ -9,6 +9,7 @@ import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-twe
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
 export const NATIVE_RUN_FORCE_KEY = "optigods-native-run-force";
+export const NATIVE_RUN_SKIPPED_KEY = "optigods-native-run-skipped";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
@@ -71,7 +72,7 @@ export type TweakRunProgress = {
   id: string;
   index: number;
   total: number;
-  status: "queued" | "running" | "applied" | "failed" | "stopped";
+  status: "queued" | "running" | "applied" | "skipped" | "failed" | "stopped";
   message?: string;
 };
 
@@ -88,6 +89,8 @@ export type NativeTweakRunState = {
 export type TweakBatchOptions = {
   /** Re-run these IDs even when detection or successful app history says applied. */
   forceReapplyIds?: readonly string[];
+  /** IDs excluded by the pre-navigation hardware compatibility check. */
+  initialSkippedIds?: readonly string[];
   /** Optional UI source label for analytics and run history. */
   source?: string;
 };
@@ -129,13 +132,22 @@ export function subscribeNativeTweakRun(listener: (state: NativeTweakRunState | 
   return () => window.removeEventListener(NATIVE_RUN_EVENT, handler);
 }
 
-function beginPersistedRun(ids: string[]): string {
+function beginPersistedRun(ids: string[], skippedIds: readonly string[] = []): string {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const skipped = new Set(skippedIds);
   stopRequested = false;
   writeRunState({
     runId,
     ids,
-    items: ids.map((id, index) => ({ id, index, total: ids.length, status: "queued" })),
+    items: ids.map((id, index) => ({
+      id,
+      index,
+      total: ids.length,
+      status: skipped.has(id) ? "skipped" : "queued",
+      ...(skipped.has(id) ? {
+        message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
+      } : {}),
+    })),
     status: "running",
     startedAt: Date.now(),
   });
@@ -161,7 +173,7 @@ function finishPersistedRun(runId: string, result?: BulkTweakResult, error?: unk
     finishedAt: Date.now(),
     stopRequested: stopped,
     items: error
-      ? state.items.map(item => item.status === "applied" || item.status === "failed" || item.status === "stopped"
+      ? state.items.map(item => item.status === "applied" || item.status === "skipped" || item.status === "failed" || item.status === "stopped"
         ? item
         : { ...item, status: "failed", message: error instanceof Error ? error.message : "The runner stopped unexpectedly." })
       : state.items,
@@ -177,14 +189,28 @@ export function stopNativeTweakRun(): boolean {
   return true;
 }
 
-export function queueTweakBatch(ids: readonly string[], options: TweakBatchOptions = {}) {
+export function queueTweakBatch(
+  ids: readonly string[],
+  options: TweakBatchOptions = {},
+  skippedIds: readonly string[] = [],
+) {
   localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
   localStorage.setItem(NATIVE_RUN_FORCE_KEY, JSON.stringify(Array.from(new Set(options.forceReapplyIds ?? []))));
+  localStorage.setItem(NATIVE_RUN_SKIPPED_KEY, JSON.stringify(Array.from(new Set(skippedIds))));
 }
 
 export function readQueuedTweakBatch(): string[] {
   try {
     const value = JSON.parse(localStorage.getItem(NATIVE_RUN_QUEUE_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function readQueuedTweakBatchSkippedIds(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(NATIVE_RUN_SKIPPED_KEY) || "[]");
     return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
@@ -207,6 +233,7 @@ export function readQueuedTweakBatchOptions(): TweakBatchOptions {
 export function clearQueuedTweakBatch() {
   localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
   localStorage.removeItem(NATIVE_RUN_FORCE_KEY);
+  localStorage.removeItem(NATIVE_RUN_SKIPPED_KEY);
 }
 
 function saveUndoToken(id: string, token: string | null) {
@@ -223,6 +250,7 @@ export type BulkTweakResult = {
   appliedIds: string[];
   selectedIds: string[];
   unsupportedIds: string[];
+  skippedIds: string[];
   failures: { id: string; message: string }[];
   stoppedIds?: string[];
 };
@@ -233,11 +261,15 @@ export async function applyTweakBatch(
   options: TweakBatchOptions = {},
 ): Promise<BulkTweakResult> {
   const uniqueIds = Array.from(new Set(ids));
+  const initialSkippedIds = Array.from(new Set(options.initialSkippedIds ?? []))
+    .filter(id => !uniqueIds.includes(id));
+  const batchIds = Array.from(new Set([...uniqueIds, ...initialSkippedIds]));
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {
     if (activeRunPromise) return activeRunPromise;
-    const runId = beginPersistedRun(uniqueIds);
-    const promise = applyTweakBatchInternal(uniqueIds, onProgress, options, runId)
+    const runId = beginPersistedRun(batchIds, initialSkippedIds);
+    const runOptions = initialSkippedIds.length ? { ...options, initialSkippedIds } : options;
+    const promise = applyTweakBatchInternal(uniqueIds, onProgress, runOptions, runId)
       .then(result => {
         finishPersistedRun(runId, result);
         return result;
@@ -261,6 +293,12 @@ async function applyTweakBatchInternal(
   persistedRunId?: string,
 ): Promise<BulkTweakResult> {
   const native = isNative();
+  const initialSkippedIds = Array.from(new Set(options.initialSkippedIds ?? []))
+    .filter(id => !uniqueIds.includes(id));
+  const initialSkippedSet = new Set(initialSkippedIds);
+  const batchIds = Array.from(new Set([...uniqueIds, ...initialSkippedIds]));
+  const batchTotal = batchIds.length;
+  const progressIndexById = new Map(batchIds.map((id, index) => [id, index]));
   const emitProgress = (progress: TweakRunProgress) => {
     onProgress?.(progress);
     if (persistedRunId) updatePersistedProgress(persistedRunId, progress);
@@ -274,11 +312,10 @@ async function applyTweakBatchInternal(
     // produce the misleading "could not apply" toast seen on the Tweaks page.
     // Pro keeps the full trusted server command surface.
     const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
-    const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
-    const unsupportedFailures = unsupportedIds.map(id => ({
-      id,
-      message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
-    }));
+    const unsupportedIds = Array.from(new Set([
+      ...initialSkippedIds,
+      ...uniqueIds.filter(id => !getTweakCompatibility(id).ok),
+    ]));
     // If entitlement status is temporarily unavailable, fail closed to the
     // free-device ceiling rather than letting a stale queue run oversized.
     let queuedIds = compatibleIds.slice(0, FREE_NATIVE_TWEAK_LIMIT);
@@ -305,32 +342,41 @@ async function applyTweakBatchInternal(
       // allowance check could not be read before navigation.
     }
     if (!queuedIds.length) {
+      if (!compatibleIds.length && unsupportedIds.length) {
+        queueTweakBatch([], options, unsupportedIds);
+        window.location.assign("/applied-tweaks?run=1");
+        return new Promise<never>(() => {});
+      }
       return {
         appliedIds: [],
-        selectedIds: compatibleIds,
+        selectedIds: batchIds,
         unsupportedIds,
-        failures: unsupportedFailures.concat(compatibleIds.map(id => ({
+        skippedIds: unsupportedIds,
+        failures: compatibleIds.map(id => ({
           id,
           message: "This tweak is script-only and is not available for instant apply.",
-        }))),
+        })),
       };
     }
-    queueTweakBatch(queuedIds);
+    queueTweakBatch(queuedIds, options, unsupportedIds);
     window.location.assign("/applied-tweaks?run=1");
     // The Applied Tweaks page owns native terminal feedback.  Never resolve
     // here with a synthetic zero-applied result: callers on the originating
     // page would otherwise show a false success toast before navigation.
     return new Promise<never>(() => {});
   }
-  const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
-  const unsupportedIds = uniqueIds.filter(id => !getTweakCompatibility(id).ok);
-  const unsupportedFailures = unsupportedIds.map(id => ({
-    id,
-    message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
-  }));
+  const compatibleIds = uniqueIds.filter(id => !initialSkippedSet.has(id) && getTweakCompatibility(id).ok);
+  const unsupportedIds = Array.from(new Set([
+    ...initialSkippedIds,
+    ...uniqueIds.filter(id => !initialSkippedSet.has(id) && !getTweakCompatibility(id).ok),
+  ]));
+  const skippedIds = [...unsupportedIds];
   unsupportedIds.forEach((id, index) => emitProgress({
-    id, index, total: uniqueIds.length, status: "failed",
-    message: unsupportedFailures.find(failure => failure.id === id)?.message,
+    id,
+    index: progressIndexById.get(id) ?? index,
+    total: batchTotal,
+    status: "skipped",
+    message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
   }));
 
   // Browser mode is selection/script mode, not native execution mode. Do not
@@ -338,7 +384,12 @@ async function applyTweakBatchInternal(
   // and generate a script without a Discord session or device identity.
   if (!native) {
     for (const id of compatibleIds) useOptimizationStore.getState().setTweak(id, true);
-    return { appliedIds: [], selectedIds: compatibleIds, unsupportedIds, failures: unsupportedFailures };
+    return { appliedIds: [], selectedIds: batchIds, unsupportedIds, skippedIds, failures: [] };
+  }
+
+  if (!compatibleIds.length) {
+    clearQueuedTweakBatch();
+    return { appliedIds: [], selectedIds: batchIds, unsupportedIds, skippedIds, failures: [] };
   }
 
   // A full optimize rerun can contain hundreds of IDs that already succeeded
@@ -362,7 +413,7 @@ async function applyTweakBatchInternal(
       emitProgress({
         id,
         index,
-        total: uniqueIds.length,
+        total: batchTotal,
         status: "applied",
           message: "Already recorded as applied; skipped.",
       });
@@ -409,19 +460,22 @@ async function applyTweakBatchInternal(
 
   if (!credential) {
     const message = "OG-AUTH-001 · Windows device identity unavailable. Reopen the Windows app to refresh the device identity.";
-    supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
+    supportedIds.forEach((id, index) => emitProgress({
+      id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message,
+    }));
     return {
       appliedIds: alreadyConfirmedIds,
-      selectedIds: [],
+      selectedIds: batchIds,
       unsupportedIds,
-      failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
+      skippedIds,
+      failures: supportedIds.map(id => ({ id, message })),
     };
   }
 
   if (!supportedIds.length) {
     await reconcileConfirmedIds();
     clearQueuedTweakBatch();
-    return { appliedIds: alreadyConfirmedIds, selectedIds: uniqueIds, unsupportedIds, failures: unsupportedFailures };
+    return { appliedIds: alreadyConfirmedIds, selectedIds: batchIds, unsupportedIds, skippedIds, failures: [] };
   }
 
   if (!sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
@@ -433,24 +487,30 @@ async function applyTweakBatchInternal(
       );
       if (!restorePoint?.sequence_number) {
         const message = "Windows did not confirm a restore point. Turn on System Protection for drive C: and try Full Optimize again.";
-        supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
+        supportedIds.forEach((id, index) => emitProgress({
+          id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message,
+        }));
         return {
           appliedIds: alreadyConfirmedIds,
-          selectedIds: [],
+          selectedIds: batchIds,
           unsupportedIds,
-          failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
+          skippedIds,
+          failures: supportedIds.map(id => ({ id, message })),
         };
       }
       sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Could not create a verified restore point.";
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
-      supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "failed", message }));
+      supportedIds.forEach((id, index) => emitProgress({
+        id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message,
+      }));
       return {
         appliedIds: alreadyConfirmedIds,
-        selectedIds: uniqueIds,
+        selectedIds: batchIds,
         unsupportedIds,
-        failures: supportedIds.map(id => ({ id, message })).concat(unsupportedFailures),
+          skippedIds,
+          failures: supportedIds.map(id => ({ id, message })),
       };
     }
   }
@@ -458,7 +518,9 @@ async function applyTweakBatchInternal(
   const appliedIds: string[] = [...alreadyConfirmedIds];
   const failures: { id: string; message: string }[] = [];
   const stoppedIds: string[] = [];
-  supportedIds.forEach((id, index) => emitProgress({ id, index, total: uniqueIds.length, status: "queued" }));
+  supportedIds.forEach((id, index) => emitProgress({
+    id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "queued",
+  }));
 
   // Authorization is independent of the Windows mutation. Pipeline one
   // ticket ahead so the network round-trip is hidden behind PowerShell/native
@@ -512,8 +574,8 @@ async function applyTweakBatchInternal(
         stoppedIds.push(remainingId);
         emitProgress({
           id: remainingId,
-          index: remainingIndex,
-          total: uniqueIds.length,
+          index: progressIndexById.get(remainingId) ?? remainingIndex,
+          total: batchTotal,
           status: "stopped",
           message: "Stopped by user before Windows changed this tweak.",
         });
@@ -522,7 +584,8 @@ async function applyTweakBatchInternal(
     }
     let ticket: string | null = null;
     let osApplied = false;
-    emitProgress({ id, index, total: uniqueIds.length, status: "running" });
+    emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running" });
+    let compatibilitySkipMessage: string | null = null;
     try {
       const authorization = nextAuthorizationId === id && nextAuthorization
         ? await nextAuthorization
@@ -543,13 +606,20 @@ async function applyTweakBatchInternal(
       // PowerShell before returning. Do not add a renderer-only timeout here:
       // it could report failure while Windows continued mutating in the background.
       const result = await applyTweak(id, ticket, credential);
-      if (!result.ok) throw new Error(result.message || "Windows rejected the change.");
+      if (!result.ok) {
+        if (result.error_kind === "compatibility") {
+          compatibilitySkipMessage = result.message || "This tweak is not compatible with this PC.";
+        }
+        throw new Error(result.message || "Windows rejected the change.");
+      }
       osApplied = true;
       const store = useOptimizationStore.getState();
       store.markApplied([id]);
       saveUndoToken(id, result.undo_token);
       appliedIds.push(id);
-      emitProgress({ id, index, total: uniqueIds.length, status: "applied", message: result.message });
+      emitProgress({
+        id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied", message: result.message,
+      });
       // Keep allowance cards and the Applied Tweaks page current during a
       // long run, not only after the final item. The server result callback
       // has already finalized this ticket before applyTweak resolves.
@@ -568,13 +638,20 @@ async function applyTweakBatchInternal(
         ).catch(() => {});
       }
       const message = error instanceof Error ? error.message : "Windows rejected the change.";
+      if (compatibilitySkipMessage) {
+        skippedIds.push(id);
+        emitProgress({
+          id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "skipped", message: compatibilitySkipMessage,
+        });
+        continue;
+      }
       failures.push({ id, message });
-      emitProgress({ id, index, total: uniqueIds.length, status: "failed", message });
+      emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message });
     }
   }
 
   await reconcileConfirmedIds();
   window.dispatchEvent(new Event("optigods:allowance-changed"));
   clearQueuedTweakBatch();
-  return { appliedIds, selectedIds: uniqueIds, unsupportedIds, failures: failures.concat(unsupportedFailures), stoppedIds };
+  return { appliedIds, selectedIds: batchIds, unsupportedIds, skippedIds, failures, stoppedIds };
 }

@@ -251,13 +251,15 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     [
       "NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaLowLatency",
       "NvidiaOptimizeLatency","NvidiaPowerMizer","NvidiaReflexEnable","NvidiaTripleBufferOff",
-      "NvidiaDisableOverlay","NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
+      "NvidiaForceVSyncOff","NvidiaShaderCache","NvidiaMaxPerfMode",
       "NvidiaAnisoFiltering","NvidiaOpenGLOpt","NvidiaThreadedOpt","NvidiaVRAMMax",
       "NvidiaGSyncOptimize","NvidiaDisableHDMIAudio","NvidiaGpuBgOptimize",
-      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX","FiveMFixNvidiaOverlay",
+      "FiveMDisableNvidiaTelemetry","FiveMDisablePhysX",
       "FiveMGPUPriorityStack",
       // New NVIDIA tweaks
-      "NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableShadowPlay",
+      "NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel",
+      // Overlay and capture toggles stay manual: disabling them can break
+      // NVIDIA App startup, Alt+Z, or ShadowPlay for users who rely on them.
       // NOTE: NvidiaDisableContainerLS is intentionally EXCLUDED from auto-recommendations.
       // Stopping NVDisplay.ContainerLocalSystem causes NVIDIA Overlay 0x80000003 crash for many users.
       // It is exposed in the UI as a manual opt-in tweak with an explicit warning.
@@ -450,6 +452,9 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     "EnableMSIMode",          // V2.1: BSOD risk — use EnableMSIMode_Safe instead
     "DisableIPv6",            // V2.1: breaks FiveM/Rockstar/Xbox — use WinTitusIPv4Prefer
     "NvidiaDisableContainerLS", // known crash: NVIDIA Overlay 0x80000003 on many systems
+    "NvidiaDisableOverlay", // Keep the NVIDIA App overlay available by default.
+    "NvidiaDisableShadowPlay", // Capture controls remain an explicit user choice.
+    "FiveMFixNvidiaOverlay", // Crash workaround must not run as part of automatic optimization.
     "DisableSearchIndexing", // manual-only: preserve Start Menu and File Explorer search by default
     "ProcMMCSSGaming", // duplicate of universal GameModeTweaks
     "CodMMCSS", // legacy game-pack writer; universal Games profile owns these values

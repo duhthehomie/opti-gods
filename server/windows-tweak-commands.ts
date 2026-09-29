@@ -38,11 +38,11 @@ function buildPowerPlanCommand(id: string): string {
   const label = id === "IntelOldGenPowerOpt" ? "Intel 4th-8th Gen" : "Ryzen 5 3500";
   const names = id === "IntelOldGenPowerOpt"
     ? ["PROCTHROTTLEMIN", "PROCTHROTTLEMAX", "PERFBOOSTMODE", "PERFBOOSTPOL"]
-    // Keep the Ryzen plan to settings exposed consistently across Windows
-    // power schemes; optional boost-policy/core-parking values can be
-    // unsupported or out of range on individual Ryzen 3000 systems.
-    : ["PROCTHROTTLEMIN", "PROCTHROTTLEMAX", "PERFBOOSTMODE"];
-  const values = id === "IntelOldGenPowerOpt" ? [100, 100, 2, 100] : [100, 100, 2];
+    // Ryzen 3000 firmware exposes different PERFBOOSTMODE ranges. Keep this
+    // plan to the two processor-throttle values consistently supported by
+    // Windows so an OEM power scheme cannot reject the whole change.
+    : ["PROCTHROTTLEMIN", "PROCTHROTTLEMAX"];
+  const values = id === "IntelOldGenPowerOpt" ? [100, 100, 2, 100] : [100, 100];
   const settingIds: Record<string, string> = {
     PROCTHROTTLEMIN: "893dee8e-2bef-41e0-89c6-b55d0929964c",
     PROCTHROTTLEMAX: "bc5038f7-23e0-4960-96da-33abaf5935ec",

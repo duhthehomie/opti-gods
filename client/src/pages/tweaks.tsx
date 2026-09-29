@@ -1,25 +1,3 @@
-import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
-import { useLocation } from "wouter";
-import { AppLayout } from "@/components/layout/app-layout";
-import { EmbeddedProvider } from "@/lib/embedded-context";
-import {
-  ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
-  Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
-  Swords, Blocks, Target, Eye, Music, X, Zap, Shield, Mouse, Keyboard,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
-import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
-import { useOsDetection } from "@/hooks/use-os-detection";
-import { useOptimizationStore } from "@/store/use-optimization-store";
-import { useAuth } from "@/hooks/use-auth";
-import { useProStatus } from "@/lib/pro-status";
-import { ProUnlockButton } from "@/components/pro-gate";
-import { BEST_15_IDS_KEY } from "@/lib/queryClient";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { getAppliedTweakState } from "@/lib/applied-tweak-state";
-import { useToast } from "@/hooks/use-toast";
-import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
@@ -456,17 +434,14 @@ export default function TweaksPage() {
       const result = await applyTweakBatch(selectedIds);
       // Native mode navigates to the live runner. Browser mode still reports
       // selection/compatibility clearly and never claims an OS change.
-      if (result.failures.length || result.unsupportedIds.length) {
-        const failures = result.failures.length
-          ? result.failures
-          : result.unsupportedIds.map(id => ({
-              id,
-              message: getTweakCompatibility(id).reason || "This tweak is not compatible with this PC.",
-            }));
+      if (result.failures.length || result.skippedIds.length) {
+        const skippedMessage = result.skippedIds.length
+          ? `${result.skippedIds.length} incompatible tweak${result.skippedIds.length === 1 ? " was" : "s were"} skipped without changing Windows.`
+          : "";
         toast({
-          title: "Some selected tweaks could not run",
-          description: summarizeRunFailures(failures),
-          variant: "destructive",
+          title: result.failures.length ? "Some selected tweaks failed" : "Incompatible tweaks skipped",
+          description: [result.failures.length ? summarizeRunFailures(result.failures) : "", skippedMessage].filter(Boolean).join(" "),
+          variant: result.failures.length ? "destructive" : undefined,
         });
       } else if (!isNative()) {
         toast({

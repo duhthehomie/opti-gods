@@ -105,7 +105,7 @@ fn fix_spec(id: &str) -> Option<ScriptSpec> {
             path: "/api/nvidia-overlay-fix-script",
             marker: "NVIDIA_OVERLAY_FIX_PS1_START",
             label: "NVIDIA in-game overlay recovery",
-            requires_reboot: true,
+            requires_reboot: false,
         },
         "windows-search" => ScriptSpec {
             path: "/api/windows-search-fix-script",
