@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfProfile>
+  <Profile>
+    <ProfileName>GLOBAL DRIVER PROFILE</ProfileName>
+    <Executeables />
+    <Settings>
+      <ProfileSetting>
+        <SettingNameInfo>Frame Rate Limiter V3</SettingNameInfo>
+        <SettingID>0x10835002</SettingID>
+        <SettingValue>0x00000000</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>MFAA</SettingNameInfo>
+        <SettingID>0x0098C1AC</SettingID>
+        <SettingValue>0x00000000</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>OpenGL - GDI Compatibility</SettingNameInfo>
+        <SettingID>0x2072C5A3</SettingID>
+        <SettingValue>0x00000002</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Power management mode</SettingNameInfo>
+        <SettingID>0x1057EB71</SettingID>
+        <SettingValue>0x00000001</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Anisotropic sample optimization</SettingNameInfo>
+        <SettingID>0x00E73211</SettingID>
+        <SettingValue>0x00000001</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Negative LOD bias</SettingNameInfo>
+        <SettingID>0x0019BB68</SettingID>
+        <SettingValue>0x00000000</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Texture filtering - Quality</SettingNameInfo>
+        <SettingID>0x00CE2691</SettingID>
+        <SettingValue>0x00000014</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Texture filtering - Trilinear optimization</SettingNameInfo>
+        <SettingID>0x002ECAF2</SettingID>
+        <SettingValue>0x00000001</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Threaded optimization</SettingNameInfo>
+        <SettingID>0x20C1221E</SettingID>
+        <SettingValue>0x00000000</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Triple buffering</SettingNameInfo>
+        <SettingID>0x20FDD1F9</SettingID>
+        <SettingValue>0x00000000</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Vertical Sync</SettingNameInfo>
+        <SettingID>0x00A879CF</SettingID>
+        <SettingValue>0x60925292</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>OpenGL - Vulkan Present and Swapchain Behavior</SettingNameInfo>
+        <SettingID>0x20D690F8</SettingID>
+        <SettingValue>0x00000002</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+    </Settings>
+  </Profile>
+</ArrayOfProfile>

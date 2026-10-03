@@ -7,7 +7,7 @@ const MSI_UTILITY_SHA256: &str = "695800afad96f858a3f291b7df21c16649528f13d39b63
 const PROFILE_INSPECTOR_SHA256: &str = "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e";
 const PROFILE_REFERENCE_SHA256: &str = "0ea7b055aee5c543047243d2dd7abdd1b8c6d96f5d2b7bb5fe17be8130e005ef";
 const PROFILE_CONFIG_SHA256: &str = "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa";
-const PROFILE_PRESET_SHA256: &str = "495a88042d441c91c1aaa7ce79c69ef2e18e27aaaf02c49da7fed39917289f85";
+const PROFILE_PRESET_SHA256: &str = "4fe7c497ef1d49bc22ff8797897b3e16928baf7723105c095b371ab59e4b0dfc";
 const BASE_PROD: &str = "https://optigods.com";
 const MSI_TWEAK_ID: &str = "OpenMsiUtilityPro";
 const PRESET_TWEAK_ID: &str = "ImportNvidiaPresetPro";
@@ -31,7 +31,7 @@ fn verify_nvidia_bundle(dir: &std::path::Path) -> Result<(), String> {
     verify_sha256(&dir.join("nvidiaProfileInspector.exe"), PROFILE_INSPECTOR_SHA256)?;
     verify_sha256(&dir.join("nvidiaProfileInspector.exe.config"), PROFILE_CONFIG_SHA256)?;
     verify_sha256(&dir.join("Reference.xml"), PROFILE_REFERENCE_SHA256)?;
-    verify_sha256(&dir.join("OptiGods-Global.nip"), PROFILE_PRESET_SHA256)?;
+    verify_sha256(&dir.join("OptiGods-Global-utf8.nip"), PROFILE_PRESET_SHA256)?;
     Ok(())
 }
 
@@ -120,20 +120,40 @@ pub async fn open_msi_utility(app: tauri::AppHandle, args: ProToolArgs) -> Resul
 pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> Result<String, String> {
     #[cfg(windows)]
     {
+        if !is_nvidia_control_panel_installed()? {
+            return Err("NVIDIA Control Panel is not installed. Reinstall it from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.".into());
+        }
         let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
         let result = async {
             crate::commands::restore::require_verified_checkpoint()?;
             let dir = app.path().resource_dir().map_err(|e| format!("Resource directory unavailable: {e}"))?;
             let inspector_dir = dir.join("resources").join("nvidia-profile-inspector");
             let inspector = inspector_dir.join("nvidiaProfileInspector.exe");
-            let preset = inspector_dir.join("OptiGods-Global.nip");
+            let preset = inspector_dir.join("OptiGods-Global-utf8.nip");
             verify_nvidia_bundle(&inspector_dir)?;
             let status = tokio::process::Command::new(&inspector)
                 .arg("-silentImport").arg(&preset).current_dir(&inspector_dir).status().await
                 .map_err(|e| format!("Could not launch NVIDIA Profile Inspector: {e}"))?;
             if !status.success() { return Err(format!("NVIDIA Profile Inspector exited with {status}. No preset success was claimed.")); }
-            Ok::<String, String>("Verified performance preset import completed (Profile Inspector exited successfully). Twelve mapped global settings were submitted; dynamic display/GPU choices, shader-cache defaults, and VRSS were omitted. The driver does not expose safe readback.".into())
+            Ok::<String, String>("Verified performance preset submitted through Profile Inspector (exit code 0). Twelve mapped global settings were submitted; dynamic display/GPU choices, shader-cache defaults, and VRSS were omitted. The driver settings were not read back.".into())
         }.await;
+        if let Ok(message) = &mut result {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0);
+            if timestamp > 0 {
+                if let Err(error) = crate::win32::registry::write_qword(
+                    crate::win32::registry::Hive::CurrentUser,
+                    r"Software\OptiGods\AppliedTweaks",
+                    "NvidiaControlPanelSettings",
+                    timestamp,
+                ) {
+                    eprintln!("[applied-history] Could not save NVIDIA preset submission history: {error:#}");
+                    message.push_str(" The submission succeeded, but its local history marker could not be saved.");
+                }
+            }
+        }
         match &result {
             Ok(message) => finalize_pro_ticket(&base, &args, &secret, PRESET_TWEAK_ID, true, message).await,
             Err(error) => finalize_pro_ticket(&base, &args, &secret, PRESET_TWEAK_ID, false, error).await,
@@ -206,6 +226,50 @@ pub fn save_diagnostic_log(app: AppHandle, args: DiagnosticLogArgs) -> Result<St
 /// Repair the common NVIDIA Control Panel launch failure without claiming
 /// success unless the installed executable actually starts.
 #[tauri::command]
+pub fn is_nvidia_control_panel_installed() -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+$candidates = @(
+  (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
+  (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$exe = $candidates | Select-Object -First 1
+if (-not $exe) {
+  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($package) {
+    $candidate = Join-Path $package.InstallLocation 'nvcplui.exe'
+    if (Test-Path -LiteralPath $candidate) { $exe = $candidate }
+  }
+}
+if ($exe) { 'true' } else { 'false' }
+"#;
+        let output = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+            .output()
+            .map_err(|error| format!("Could not check NVIDIA Control Panel installation: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if detail.is_empty() {
+                "Could not check NVIDIA Control Panel installation.".to_string()
+            } else {
+                detail
+            });
+        }
+        match String::from_utf8_lossy(&output.stdout).trim().to_ascii_lowercase().as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err("Windows returned an invalid NVIDIA Control Panel installation status.".into()),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
 pub fn repair_nvidia_control_panel() -> Result<String, String> {
     #[cfg(windows)]
     {
@@ -232,12 +296,35 @@ if (-not $exe) {
   }
 }
 if (-not $exe) { throw 'NVIDIA Control Panel executable was not found. Reinstall NVIDIA Control Panel from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.' }
-$process = Start-Process -FilePath $exe -PassThru
-Start-Sleep -Milliseconds 700
-if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) -and -not (Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue)) {
-  throw 'NVIDIA Control Panel was found but exited immediately. Reinstall the NVIDIA driver/Control Panel package.'
+$existing = Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($existing) {
+  Write-Output 'NVIDIA Control Panel is already running.'
+  return
 }
-Write-Output "NVIDIA Control Panel started from $exe"
+$process = Start-Process -FilePath $exe -PassThru -ErrorAction Stop
+$deadline = (Get-Date).AddSeconds(5)
+while ((Get-Date) -lt $deadline) {
+  $running = Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($running) {
+    Write-Output "NVIDIA Control Panel started from $exe"
+    return
+  }
+  $process.Refresh()
+  if ($process.HasExited) {
+    if ($process.ExitCode -eq 0) {
+      Write-Output "NVIDIA Control Panel launch submitted from $exe; the launcher exited cleanly."
+      return
+    }
+    throw "NVIDIA Control Panel launcher exited with code $($process.ExitCode). Reinstall the NVIDIA driver/Control Panel package."
+  }
+  Start-Sleep -Milliseconds 250
+}
+$process.Refresh()
+if (-not $process.HasExited) {
+  Write-Output "NVIDIA Control Panel started from $exe"
+  return
+}
+throw 'NVIDIA Control Panel was not observed after launch. Reinstall the NVIDIA driver/Control Panel package.'
 "#;
         let output = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
@@ -344,8 +431,8 @@ fn validate_pack_file(file: &FivemPackFile) -> Result<(), String> {
     }
     let valid_xml = if file.path.ends_with("timecycle_mods_1.xml") {
         file.content.starts_with("<?xml")
-            && file.content.contains("<CTimeCycleModifierList>")
-            && file.content.contains("</CTimeCycleModifierList>")
+            && file.content.contains("<timecycle_mods_file>")
+            && file.content.contains("</timecycle_mods_file>")
     } else {
         file.content.starts_with("<?xml")
             && file.content.contains("<CWeatherTypeList>")
@@ -355,6 +442,29 @@ fn validate_pack_file(file: &FivemPackFile) -> Result<(), String> {
         return Err(format!("{} failed XML validation.", file.path));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod fivem_pack_validation_tests {
+    use super::{validate_pack_file, FivemPackFile, FIVEM_PACK_PATHS};
+
+    #[test]
+    fn accepts_the_timecycle_root_generated_by_graphics_studio() {
+        let file = FivemPackFile {
+            path: FIVEM_PACK_PATHS[0].to_string(),
+            content: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><timecycle_mods_file></timecycle_mods_file>".to_string(),
+        };
+        assert!(validate_pack_file(&file).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_different_timecycle_root() {
+        let file = FivemPackFile {
+            path: FIVEM_PACK_PATHS[0].to_string(),
+            content: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CTimeCycleModifierList></CTimeCycleModifierList>".to_string(),
+        };
+        assert!(validate_pack_file(&file).is_err());
+    }
 }
 
 fn restore_fivem_manifest(

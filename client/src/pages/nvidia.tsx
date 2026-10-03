@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
+import { getRecordedAppliedTweaks, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
@@ -324,6 +325,31 @@ export default function Nvidia() {
             : "";
   const canEnableSafeMsi = safeMsiBlockReason === "";
   const [proToolBusy, setProToolBusy] = useState<string | null>(null);
+  const [controlPanelInstalled, setControlPanelInstalled] = useState<boolean | null>(null);
+  const [controlPanelCheckFailed, setControlPanelCheckFailed] = useState(false);
+  const [nvidiaPresetSubmittedAt, setNvidiaPresetSubmittedAt] = useState<number | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    if (!isNative()) {
+      setControlPanelInstalled(false);
+      return () => { disposed = true; };
+    }
+    void isNvidiaControlPanelInstalled()
+      .then(installed => { if (!disposed) setControlPanelInstalled(installed); })
+      .catch(() => {
+        if (!disposed) {
+          setControlPanelInstalled(null);
+          setControlPanelCheckFailed(true);
+        }
+      });
+    void getRecordedAppliedTweaks()
+      .then(history => {
+        const timestamp = history.NvidiaControlPanelSettings;
+        if (!disposed && timestamp > 0) setNvidiaPresetSubmittedAt(timestamp);
+      })
+      .catch(() => {});
+    return () => { disposed = true; };
+  }, []);
   const runProTool = async (id: "OpenMsiUtilityPro" | "ImportNvidiaPresetPro", label: string) => {
     if (!isPro || !isNative() || proToolBusy) return;
     if (id === "ImportNvidiaPresetPro" && !window.confirm("Create a verified Windows restore point, then import the verified performance preset? This changes the global NVIDIA driver profile.")) return;
@@ -349,7 +375,17 @@ export default function Nvidia() {
       const message = id === "OpenMsiUtilityPro"
         ? await openMsiUtility(body.ticket, auth)
         : await importNvidiaPreset(body.ticket, auth);
-      toast({ title: `${label} complete`, description: message, variant: "success" });
+      if (id === "ImportNvidiaPresetPro") {
+        setNvidiaPresetSubmittedAt(Date.now());
+        void getRecordedAppliedTweaks().then(history => {
+          if (history.NvidiaControlPanelSettings) setNvidiaPresetSubmittedAt(history.NvidiaControlPanelSettings);
+        }).catch(() => {});
+      }
+      toast({
+        title: id === "ImportNvidiaPresetPro" ? "NVIDIA Control Panel Settings" : `${label} complete`,
+        description: message,
+        variant: "success",
+      });
     } catch (error) {
       toast({ title: `${label} failed`, description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally { setProToolBusy(null); }
@@ -479,11 +515,19 @@ export default function Nvidia() {
               <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("OpenMsiUtilityPro", "MSI Utility v3 High mode")} className="bg-red-700 text-xs hover:bg-red-600">
                 {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3 · High mode"}
               </Button>
-              <Button disabled={!isNative() || !!proToolBusy || discreteNvidiaGpus.length !== 1} onClick={() => void runProTool("ImportNvidiaPresetPro", "verified performance preset")} variant="outline" className="border-red-400/30 text-xs">
+              <Button disabled={!isNative() || !!proToolBusy || discreteNvidiaGpus.length !== 1 || controlPanelInstalled !== true} onClick={() => void runProTool("ImportNvidiaPresetPro", "verified performance preset")} variant="outline" className="border-red-400/30 text-xs">
                 {proToolBusy === "ImportNvidiaPresetPro" ? "Importing…" : "Import verified performance preset"}
               </Button>
             </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
+          {controlPanelInstalled === false && isNative() && <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">NVIDIA Control Panel is not installed. Preset import is disabled on this PC.</p>}
+          {controlPanelInstalled === null && isNative() && (controlPanelCheckFailed
+            ? <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">Could not verify NVIDIA Control Panel installation. Preset import remains disabled; retry after restarting the app.</p>
+            : <p className="mt-3 text-[11px] text-zinc-500">Checking NVIDIA Control Panel installation…</p>)}
+          {controlPanelInstalled && nvidiaPresetSubmittedAt && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-500/[.04] px-3 py-2">
+            <div><p className="text-xs font-bold text-zinc-100">NVIDIA Control Panel Settings</p><p className="text-[10px] text-zinc-400">Preset submitted successfully; the NVIDIA driver does not expose safe readback.</p></div>
+            <span className="text-[9px] font-mono font-bold text-blue-300">SUBMITTED · NOT READ BACK</span>
+          </div>}
           <p className="mt-3 text-[11px] text-amber-300">
             On supported single-NVIDIA topologies, select only the active graphics card, check MSI, choose High, then Apply in MSI Utility v3. Hybrid and multi-GPU systems stay blocked; driver updates reset this setting.
           </p>

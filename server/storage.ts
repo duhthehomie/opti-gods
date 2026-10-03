@@ -287,7 +287,11 @@ export class DatabaseStorage implements IStorage {
       await this._revokeCodeEntitlements(row.code);
       await db.delete(proSessions).where(eq(proSessions.codeRef, row.code));
     }
-    await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, id));
+    // Clear the old IP binding with the single-use marker so an intentionally
+    // reset code can be redeemed again from the customer's current device.
+    await db.update(proAccessCodes)
+      .set({ usedAt: null, usedByIp: null })
+      .where(eq(proAccessCodes.id, id));
   }
 
   /**
@@ -319,7 +323,11 @@ export class DatabaseStorage implements IStorage {
       // Revoke the Discord entitlement tied to this code so the next redeemer
       // starts with a clean slate and can link their own Discord account
       await this._revokeCodeEntitlements(dc.code);
-      await db.update(proAccessCodes).set({ usedAt: null }).where(eq(proAccessCodes.id, dc.id));
+      // A revived code is a fresh redemption; retaining usedByIp would still
+      // reject the customer when they retry from another network or device.
+      await db.update(proAccessCodes)
+        .set({ usedAt: null, usedByIp: null })
+        .where(eq(proAccessCodes.id, dc.id));
     }
     return dead.length;
   }

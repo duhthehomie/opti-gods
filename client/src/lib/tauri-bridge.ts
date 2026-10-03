@@ -159,6 +159,11 @@ export async function importNvidiaPreset(ticket: string, nativeAuth: string): Pr
   return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth } });
 }
 
+export async function isNvidiaControlPanelInstalled(): Promise<boolean> {
+  if (!isNative()) return false;
+  return invoke<boolean>("is_nvidia_control_panel_installed");
+}
+
 export async function undoTweak(
   id: string,
   undoToken?: string | null,
@@ -174,6 +179,11 @@ export async function undoTweak(
 export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
   if (!isNative()) return {};
   return invoke<Record<string, boolean>>("detect_applied_tweaks");
+}
+
+export async function getRecordedAppliedTweaks(): Promise<Record<string, number>> {
+  if (!isNative()) return {};
+  return invoke<Record<string, number>>("get_recorded_applied_tweaks");
 }
 
 export interface NativePowerPlan { guid: string; name: string; active: boolean; }

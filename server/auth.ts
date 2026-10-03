@@ -410,7 +410,7 @@ export function registerAuthRoutes(app: Express): void {
     // Keep the public version floor aligned with the checked-in release
     // metadata. Older desktop shells use this endpoint before they can use
     // the native updater, so a stale hardcoded value can hide the update.
-    const CURRENT = fileVersion ?? "5.2.27";
+    const CURRENT = fileVersion ?? "5.2.41";
     const SITE = process.env.SITE_URL ?? "https://optigods.com";
     const INSTALLER_URL = `${SITE}/api/download/latest`;
 

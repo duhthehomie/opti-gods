@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, openDownloadsFolder, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
-import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
@@ -11,6 +11,7 @@ import { getHardwareAwareTweakTitle, getTweakCompatibility } from "@/lib/tweak-c
 import { getScannedInfo } from "@/hooks/use-hardware-info";
 import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 import {
   applyTweakBatch,
   clearQueuedTweakBatch,
@@ -228,6 +229,8 @@ export default function AppliedTweaksPage() {
   const { tweaks, appliedAt, setTweak, clearApplied } = useOptimizationStore();
   const { toast } = useToast();
   const [nativeState, setNativeState] = useState<Record<string, boolean>>({});
+  const [recordedAt, setRecordedAt] = useState<Record<string, number>>({});
+  const [nvidiaPresetSubmittedAt, setNvidiaPresetSubmittedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -248,7 +251,13 @@ export default function AppliedTweaksPage() {
       try { return sessionStorage.getItem("optigods-native-run-notified"); } catch { return null; }
     })() : null,
   );
-  useEffect(() => { getAppliedTweakState().then(setNativeState).finally(() => setLoading(false)); }, []);
+  const refreshAppliedState = async () => {
+    const sources = await getAppliedTweakSources();
+    setNativeState(sources.currentWindows);
+    setRecordedAt(sources.recordedAt);
+    setNvidiaPresetSubmittedAt(sources.nvidiaPresetSubmittedAt);
+  };
+  useEffect(() => { void refreshAppliedState().finally(() => setLoading(false)); }, []);
   useEffect(() => {
      const syncRun = (state: NativeTweakRunState | null) => {
       // Keep every native result visible, including stale or ineligible IDs.
@@ -268,18 +277,26 @@ export default function AppliedTweaksPage() {
          const appliedCount = state.items.filter(item => item.status === "applied").length;
           const skippedCount = state.items.filter(item => item.status === "skipped").length;
          const failedCount = state.items.filter(item => item.status === "failed").length;
+          const userStoppedRun = state.status === "stopped";
+          if (state.status === "completed" && failedCount === 0 && appliedCount > 0) {
+            playOptimizationActionSound();
+          }
          toast({
             title: failedCount > 0
               ? `${appliedCount} applied · ${failedCount} need attention`
-              : skippedCount > 0
+               : userStoppedRun
+                 ? `${appliedCount} applied · run stopped`
+                 : skippedCount > 0
                 ? `${appliedCount} applied · ${skippedCount} skipped`
-                : `${appliedCount} tweaks applied`,
+                 : `${appliedCount} applied · restart required`,
            description: failedCount > 0
              ? "The Windows run finished. Open the Failed tab to review or retry only those items."
-              : skippedCount > 0
-                ? "Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones."
+               : userStoppedRun
+                 ? "The run was stopped. Restart your PC before testing the changes that were applied."
+                 : skippedCount > 0
+                 ? `Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones.${appliedCount > 0 ? " Restart your PC before testing the changes." : ""}`
                 : "Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.",
-            variant: failedCount > 0 ? "destructive" : "success",
+             variant: failedCount > 0 ? "destructive" : userStoppedRun ? "default" : "success",
          });
        }
     };
@@ -379,7 +396,7 @@ export default function AppliedTweaksPage() {
     }).finally(() => {
       setRunning(false);
        clearQueuedTweakBatch();
-      getAppliedTweakState().then(setNativeState);
+      void refreshAppliedState();
       refreshAllowance();
     });
   }, [toast]);
@@ -438,7 +455,7 @@ export default function AppliedTweaksPage() {
       setRunHadFailures(true);
     } finally {
       setRunning(false);
-      getAppliedTweakState().then(setNativeState);
+      void refreshAppliedState();
       refreshAllowance();
     }
   };
@@ -467,7 +484,7 @@ export default function AppliedTweaksPage() {
     } finally {
       setReapplying(null);
       setRunning(false);
-      getAppliedTweakState().then(setNativeState);
+      void refreshAppliedState();
     }
   };
   const orderedRunItems = [...runItems].sort((a, b) => {
@@ -479,8 +496,8 @@ export default function AppliedTweaksPage() {
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.
   const nativeIds = Object.keys(nativeState).filter(id => nativeState[id]);
-  const sessionIds = Object.keys(appliedAt).filter(id => !nativeState[id]);
-  const ids = Array.from(new Set([...nativeIds, ...sessionIds]));
+  const recordedIds = Object.keys(recordedAt).filter(id => !nativeState[id]);
+  const ids = Array.from(new Set([...nativeIds, ...recordedIds]));
   const selectedTweakIds = Object.entries(tweaks)
     .filter(([id, enabled]) => enabled && Boolean(getTweakMeta(id)) && !ids.includes(id))
     .map(([id]) => id)
@@ -569,18 +586,18 @@ export default function AppliedTweaksPage() {
     await undoSelected(ids);
   };
   return <AppLayout><div className="og-page-enter space-y-5">
-    <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Tweak status ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Selected shows enabled tweaks not yet recorded as applied; Applied shows recorded Windows changes; Failed shows errors from the latest run.</p><p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-zinc-600">Undo all reverses supported Opti Gods changes only. It does not roll back ReviOS, WinUtil, O&amp;O ShutUp10, Process Lasso, MSI Utility, or NVIDIA Control Panel settings.</p></div>
+       <header className="flex flex-wrap items-end justify-between gap-4">
+       <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-red-400">Tweak status ledger</p><h1 className="text-3xl font-display font-bold text-white">Applied Tweaks</h1><p className="mt-1 text-sm text-zinc-500">Applied shows live Windows confirmations and recorded Opti Gods history with its verification status; Failed shows errors from the latest run.</p><p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-zinc-600">Undo all reverses supported Opti Gods changes only. It does not roll back ReviOS, WinUtil, O&amp;O ShutUp10, Process Lasso, MSI Utility, or NVIDIA Control Panel settings.</p></div>
       <div className="flex items-center gap-2">
          {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
         {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
-        <button onClick={() => { setLoading(true); getAppliedTweakState().then(setNativeState).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
+        <button onClick={() => { setLoading(true); void refreshAppliedState().catch(error => toast({ title: "Could not refresh applied state", description: error instanceof Error ? error.message : String(error), variant: "destructive" })).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
       </div>
     </header>
      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
        <button type="button" data-testid="button-ledger-selected" aria-pressed={ledgerView === "selected"} onClick={() => selectLedgerView("selected")} className={cn("rounded-xl border bg-black/20 p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "selected" ? "border-red-500/40" : "border-white/10")}><p className="text-[10px] uppercase tracking-widest text-zinc-500">Selected</p><p className="mt-1 text-2xl font-mono font-bold text-white">{selectedTweakIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Enabled, not yet applied · open list</p></button>
-       <button type="button" data-testid="button-ledger-applied" aria-pressed={ledgerView === "applied"} onClick={() => selectLedgerView("applied")} className={cn("rounded-xl border bg-emerald-500/[.04] p-4 text-left transition-colors hover:border-emerald-500/40", ledgerView === "applied" ? "border-emerald-500/40" : "border-emerald-500/20")}><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{ids.length}</p><p className="mt-1 text-[10px] text-zinc-600">Recorded Windows state · open list</p></button>
+        <button type="button" data-testid="button-ledger-applied" aria-pressed={ledgerView === "applied"} onClick={() => selectLedgerView("applied")} className={cn("rounded-xl border bg-emerald-500/[.04] p-4 text-left transition-colors hover:border-emerald-500/40", ledgerView === "applied" ? "border-emerald-500/40" : "border-emerald-500/20")}><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{ids.length + (nvidiaPresetSubmittedAt ? 1 : 0)}</p><p className="mt-1 text-[10px] text-zinc-600">Live checks and recorded results · open list</p></button>
        <button type="button" data-testid="button-ledger-failed" aria-pressed={ledgerView === "failed"} onClick={() => selectLedgerView("failed")} className={cn("rounded-xl border bg-red-500/[.04] p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "failed" ? "border-red-500/40" : "border-red-500/20")}><p className="text-[10px] uppercase tracking-widest text-red-300">Failed</p><p className="mt-1 text-2xl font-mono font-bold text-white">{failedIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Latest run errors · open list</p></button>
        <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-[10px] uppercase tracking-widest text-zinc-500">Safety</p><p className="mt-1 flex items-center gap-1.5 text-sm font-bold text-emerald-400"><ShieldCheck className="h-4 w-4" /> Direct undo only</p></div>
     </div>
@@ -632,7 +649,43 @@ export default function AppliedTweaksPage() {
        failedIds.length === 0
          ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No failed tweaks in the latest run</p><p className="mt-1 text-xs text-zinc-600">When a Windows action fails, its exact error and retry option appear in the run results above.</p></div>
          : <div className="rounded-xl border border-red-500/20 bg-red-500/[.04] px-4 py-3 text-xs text-red-200">Showing {failedIds.length} failed item{failedIds.length === 1 ? "" : "s"} in the Windows results above. Review the error details there before retrying.</div>
-     ) : ids.length === 0 ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
-      <div className="space-y-2"><div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>{ids.map(id => { const meta = getTweakMeta(id); const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id; const confirmed = Boolean(nativeState[id]); const timestamp = appliedAt[id]; const provenance = confirmed ? "native confirmed" : (isNative() ? "session-recorded · pending verification" : "session-recorded · browser mode"); return <div key={id} className={cn("flex flex-wrap items-center gap-3 rounded-xl border bg-black/30 px-4 py-3 transition-colors hover:border-red-500/30", selected.has(id) ? "border-red-500/40" : "border-white/8")}><input type="checkbox" checked={selected.has(id)} onChange={() => setSelected(s => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} aria-label={`Select ${title}`} className="h-4 w-4 accent-red-600" /><div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", confirmed ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10")}><CheckCircle2 className={cn("h-4 w-4", confirmed ? "text-emerald-400" : "text-amber-400")} /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{title}</p><p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {provenance}</p>{timestamp && <p className="mt-0.5 text-[10px] text-emerald-300/75">Applied {new Date(timestamp).toLocaleString()}</p>}</div><span className={cn("text-[10px] font-mono", confirmed ? "text-emerald-400" : "text-amber-300")}>{confirmed ? "ALREADY APPLIED" : "RECORDED"}</span>{confirmed && <button disabled={runActive || reapplying === id || batchUndoing} onClick={() => void reapply(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {reapplying === id ? "Reapplying" : "Reapply tweak"}</button>}<button disabled={undoing === id || batchUndoing || reapplying === id} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button></div>; })}</div>}
+      ) : ids.length === 0 && !nvidiaPresetSubmittedAt ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
+       <div className="space-y-2">
+         {nvidiaPresetSubmittedAt && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
+           <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10"><CheckCircle2 className="h-4 w-4 text-blue-300" /></div>
+           <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">Opti Gods NVIDIA Preset</p><p className="text-[11px] text-zinc-400">Profile Inspector submitted the supported preset. The NVIDIA driver does not expose safe readback, so current values are not confirmed.</p><p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p></div>
+           <span className="text-[10px] font-mono text-blue-300">SUBMITTED · NOT READ BACK</span>
+         </div>}
+         {ids.length > 0 && <div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>}
+         {ids.map(id => {
+           const meta = getTweakMeta(id);
+           const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id;
+           const confirmed = nativeState[id] === true;
+           const differs = nativeState[id] === false && id in recordedAt;
+           const timestamp = recordedAt[id] ?? appliedAt[id];
+           const provenance = confirmed
+             ? "current Windows value confirmed"
+             : differs
+               ? "previously applied; current Windows value differs"
+               : isNative()
+                 ? "Opti Gods recorded success · current setting not verified"
+                 : "browser record · Windows state unavailable";
+           const status = confirmed ? "WINDOWS CONFIRMED" : differs ? "CURRENT VALUE DIFFERS" : "RECORDED · NOT VERIFIED";
+           return <div key={id} className={cn("flex flex-wrap items-center gap-3 rounded-xl border bg-black/30 px-4 py-3 transition-colors hover:border-red-500/30", selected.has(id) ? "border-red-500/40" : differs ? "border-orange-500/25" : "border-white/8")}>
+             <input type="checkbox" checked={selected.has(id)} onChange={() => setSelected(s => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} aria-label={`Select ${title}`} className="h-4 w-4 accent-red-600" />
+             <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", confirmed ? "border-emerald-500/25 bg-emerald-500/10" : differs ? "border-orange-500/25 bg-orange-500/10" : "border-amber-500/25 bg-amber-500/10")}>
+               <CheckCircle2 className={cn("h-4 w-4", confirmed ? "text-emerald-400" : differs ? "text-orange-300" : "text-amber-400")} />
+             </div>
+             <div className="min-w-0 flex-1">
+               <p className="truncate text-sm font-bold text-zinc-100">{title}</p>
+               <p className="text-[11px] text-zinc-600">{meta?.category || "System tweak"} · {provenance}</p>
+               {timestamp && <p className="mt-0.5 text-[10px] text-zinc-500">Opti Gods recorded a successful apply on {new Date(timestamp).toLocaleString()}</p>}
+             </div>
+             <span className={cn("text-[10px] font-mono", confirmed ? "text-emerald-400" : differs ? "text-orange-300" : "text-amber-300")}>{status}</span>
+             {(confirmed || id in recordedAt) && <button disabled={runActive || reapplying === id || batchUndoing} onClick={() => void reapply(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {reapplying === id ? "Reapplying" : "Reapply tweak"}</button>}
+             <button disabled={undoing === id || batchUndoing || reapplying === id} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button>
+           </div>;
+         })}
+       </div>}
   </div></AppLayout>;
 }

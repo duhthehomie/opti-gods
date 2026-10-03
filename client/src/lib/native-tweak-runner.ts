@@ -1,5 +1,5 @@
 import { apiUrl } from "@/lib/api-base";
-import { applyTweak, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, isNative } from "@/lib/tauri-bridge";
+import { applyTweak, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, getRecordedAppliedTweaks, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
@@ -11,9 +11,16 @@ export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
 export const NATIVE_RUN_FORCE_KEY = "optigods-native-run-force";
 export const NATIVE_RUN_SKIPPED_KEY = "optigods-native-run-skipped";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
+export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
+const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
+
+function isRunActionCompatible(id: string, native: boolean) {
+  if (native && id === NVIDIA_PRESET_ACTION_ID) return true;
+  return getTweakCompatibility(id).ok;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -311,10 +318,10 @@ async function applyTweakBatchInternal(
     // script-only IDs before navigation so they never reach the ticket API and
     // produce the misleading "could not apply" toast seen on the Tweaks page.
     // Pro keeps the full trusted server command surface.
-    const compatibleIds = uniqueIds.filter(id => getTweakCompatibility(id).ok);
+    const compatibleIds = uniqueIds.filter(id => isRunActionCompatible(id, native));
     const unsupportedIds = Array.from(new Set([
       ...initialSkippedIds,
-      ...uniqueIds.filter(id => !getTweakCompatibility(id).ok),
+      ...uniqueIds.filter(id => !isRunActionCompatible(id, native)),
     ]));
     // If entitlement status is temporarily unavailable, fail closed to the
     // free-device ceiling rather than letting a stale queue run oversized.
@@ -365,10 +372,10 @@ async function applyTweakBatchInternal(
     // page would otherwise show a false success toast before navigation.
     return new Promise<never>(() => {});
   }
-  const compatibleIds = uniqueIds.filter(id => !initialSkippedSet.has(id) && getTweakCompatibility(id).ok);
+  const compatibleIds = uniqueIds.filter(id => !initialSkippedSet.has(id) && isRunActionCompatible(id, native));
   const unsupportedIds = Array.from(new Set([
     ...initialSkippedIds,
-    ...uniqueIds.filter(id => !initialSkippedSet.has(id) && !getTweakCompatibility(id).ok),
+    ...uniqueIds.filter(id => !initialSkippedSet.has(id) && !isRunActionCompatible(id, native)),
   ]));
   const skippedIds = [...unsupportedIds];
   unsupportedIds.forEach((id, index) => emitProgress({
@@ -398,11 +405,17 @@ async function applyTweakBatchInternal(
   let alreadyConfirmedIds: string[] = [];
   let windowsDetectedIds: string[] = [];
   if (native) {
-    const detected = await detectAppliedTweaks().catch(() => ({} as Record<string, boolean>));
+    const [detected, machineHistory] = await Promise.all([
+      detectAppliedTweaks().catch(() => ({} as Record<string, boolean>)),
+      getRecordedAppliedTweaks().catch(() => ({} as Record<string, number>)),
+    ]);
     const appliedAt = useOptimizationStore.getState().appliedAt;
     const forcedIds = new Set(options.forceReapplyIds ?? []);
     alreadyConfirmedIds = compatibleIds.filter(id =>
-      !forcedIds.has(id) && (Boolean(detected[id]) || id in appliedAt),
+      !forcedIds.has(id) && (
+        detected[id] === true ||
+        (detected[id] !== false && (id in appliedAt || (machineHistory[id] ?? 0) > 0))
+      ),
     );
     windowsDetectedIds = compatibleIds.filter(id =>
       !forcedIds.has(id) && Boolean(detected[id]),
@@ -500,7 +513,11 @@ async function applyTweakBatchInternal(
       }
       sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "Could not create a verified restore point.";
+      const detail = error instanceof Error
+        ? error.message
+        : typeof error === "string" && error.trim()
+          ? error.trim()
+          : "Could not create a verified restore point.";
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
       supportedIds.forEach((id, index) => emitProgress({
         id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message,
@@ -525,20 +542,23 @@ async function applyTweakBatchInternal(
   // Authorization is independent of the Windows mutation. Pipeline one
   // ticket ahead so the network round-trip is hidden behind PowerShell/native
   // execution, while keeping actual system writes strictly serial.
-  const authorize = (tweakId: string) => fetchWithTimeout(
-    apiUrl("/api/performance-allowance/native-ticket"),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
-      body: JSON.stringify({
-        tweakId,
-        sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
-        idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
-      }),
-    },
-    NATIVE_REQUEST_TIMEOUT_MS,
-    `OG-NET-002 · Authorization timed out for ${tweakId}.`,
-  );
+  const authorize = (actionId: string) => {
+    const tweakId = actionId === NVIDIA_PRESET_ACTION_ID ? NVIDIA_PRESET_TICKET_ID : actionId;
+    return fetchWithTimeout(
+      apiUrl("/api/performance-allowance/native-ticket"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getNativeAuthHeaders() },
+        body: JSON.stringify({
+          tweakId,
+          sessionToken: localStorage.getItem(PRO_SESSION_KEY) ?? undefined,
+          idempotencyKey: crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ""),
+        }),
+      },
+      NATIVE_REQUEST_TIMEOUT_MS,
+      `OG-NET-002 · Authorization timed out for ${actionId}.`,
+    );
+  };
   let nextAuthorization: Promise<Response> | null = null;
   let nextAuthorizationId: string | null = null;
 
@@ -605,7 +625,17 @@ async function applyTweakBatchInternal(
       // Rust enforces the real 90-second process deadline and kills timed-out
       // PowerShell before returning. Do not add a renderer-only timeout here:
       // it could report failure while Windows continued mutating in the background.
-      const result = await applyTweak(id, ticket, credential);
+      if (id === NVIDIA_PRESET_ACTION_ID && !credential) {
+        throw new Error("Windows device authorization is unavailable.");
+      }
+      const result = id === NVIDIA_PRESET_ACTION_ID
+        ? {
+          ok: true,
+          message: await importNvidiaPreset(ticket!, credential!),
+          error_kind: undefined,
+          undo_token: null,
+        }
+        : await applyTweak(id, ticket, credential);
       if (!result.ok) {
         if (result.error_kind === "compatibility") {
           compatibilitySkipMessage = result.message || "This tweak is not compatible with this PC.";

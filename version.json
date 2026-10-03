@@ -1,4 +1,4 @@
 {
   "version": "5.2.41",
-  "notes": "V5.2.41 — reports hardware-incompatible tweaks as skipped, avoids firmware-specific Ryzen boost settings, and adds NVIDIA App overlay recovery without disabling capture or startup."
+  "notes": "V5.2.41 — preserves applied-tweak history separately from live Windows checks, uses Revision Ultra Performance without duplicates, reports NVIDIA preset submissions accurately, and improves FiveM Graphics Studio previews and navigation."
 }
