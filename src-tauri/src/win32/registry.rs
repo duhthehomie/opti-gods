@@ -82,6 +82,23 @@ pub fn write_sz(hive: Hive, path: &str, name: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn write_qword(hive: Hive, path: &str, name: &str, value: u64) -> Result<()> {
+    let (key, _) = hive
+        .hkey()
+        .create_subkey(path)
+        .with_context(|| format!("create_subkey {path}"))?;
+    key.set_value(name, &value)
+        .with_context(|| format!("set_value {name} = {value}"))?;
+    match read_value(hive, path, name)? {
+        RegValue::Qword(actual) if actual == value => {}
+        RegValue::Qword(actual) => {
+            anyhow::bail!("registry verification failed for {name}: expected {value}, found {actual}")
+        }
+        _ => anyhow::bail!("registry verification failed for {name}: value is not a QWORD"),
+    }
+    Ok(())
+}
+
 pub fn read_value(hive: Hive, path: &str, name: &str) -> Result<RegValue> {
     let key = hive
         .hkey()
