@@ -81,6 +81,7 @@ pub fn run() {
             commands::misc::save_diagnostic_log,
             commands::misc::repair_nvidia_control_panel,
             commands::misc::open_fivem_folder,
+            commands::misc::save_fivem_pack_zip,
             commands::misc::install_fivem_pack,
             commands::misc::uninstall_fivem_pack,
             commands::misc::read_text_file,
