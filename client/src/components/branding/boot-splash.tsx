@@ -7,12 +7,19 @@ const FADE_MS = 500;
 export function BootSplash() {
   const [phase, setPhase] = useState<"hidden" | "show" | "fade">(() => {
     if (typeof window === "undefined") return "hidden";
-    // The branded boot sequence belongs to the Windows shell. Showing it on
-    // the public website/preview hides the landing page on every fresh load.
-    if (!("__TAURI_INTERNALS__" in window)) return "hidden";
+    // Show the same short branded startup on the public website and in the app.
     return "show";
   });
   const [videoFailed, setVideoFailed] = useState(false);
+
+  useEffect(() => {
+    const firstPaintSplash = document.getElementById("og-first-paint-splash");
+    if (firstPaintSplash) {
+      firstPaintSplash.style.opacity = "0";
+      const handoff = window.setTimeout(() => firstPaintSplash.remove(), FADE_MS);
+      return () => window.clearTimeout(handoff);
+    }
+  }, []);
 
   useEffect(() => {
     if (phase === "hidden") return;
