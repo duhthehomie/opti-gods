@@ -387,6 +387,13 @@ export interface NativeFivemPackFile {
   content: string;
 }
 
+export async function saveFivemPackZip(packName: string, zipBytes: Uint8Array): Promise<string> {
+  if (!isNative()) throw new Error("Saving a FiveM graphics ZIP is available in the Windows app.");
+  return invoke<string>("save_fivem_pack_zip", {
+    args: { pack_name: packName, zip_bytes: Array.from(zipBytes) },
+  });
+}
+
 export async function installFivemPack(
   packName: string,
   files: NativeFivemPackFile[],
