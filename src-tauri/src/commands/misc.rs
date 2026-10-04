@@ -395,7 +395,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             return Err("NVIDIA Control Panel is not installed. Reinstall it from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.".into());
         }
         let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
-        let result = async {
+        let mut result = async {
             crate::commands::restore::require_verified_checkpoint()?;
             let dir = app.path().resource_dir().map_err(|e| format!("Resource directory unavailable: {e}"))?;
             let inspector_dir = dir.join("resources").join("nvidia-profile-inspector");
