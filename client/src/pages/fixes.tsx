@@ -1,4 +1,250 @@
-Name="w-3.5 h-3.5" />}
+import { useState } from "react";
+import { apiUrl } from "@/lib/api-base";
+import { getNativeAuthHeaders } from "@/lib/queryClient";
+import { motion } from "framer-motion";
+import { AppLayout } from "@/components/layout/app-layout";
+import {
+  AlertTriangle, Download, CheckCircle2, RotateCcw, Cpu, Wifi, MemoryStick,
+  Monitor, Power, Settings2, MonitorPlay, Flame, Activity, Gamepad2,
+  ChevronDown, ChevronUp, Siren, CheckCheck, Server, Shield, MonitorOff, WifiOff,
+  Gamepad, Film, Volume2, Target, Undo2,
+  Search,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { isNative, repairNvidiaControlPanel, runNativeFix, runNativeRestore } from "@/lib/tauri-bridge";
+import { getAppliedTweakIds, undoAppliedTweaks } from "@/lib/undo-applied-tweaks";
+
+// ─── Accent color map ─────────────────────────────────────────────────────────
+const A = {
+  red:    { card: "border-red-600/60 bg-red-950/40",      hdr: "bg-red-700/30",     hdrBorder: "border-red-600/40",    icon: "text-red-400",    btn: "bg-red-700 hover:bg-red-600 border-red-500/40",    glow: "shadow-[0_0_24px_-4px_rgba(220,38,38,0.5)]"    },
+  purple: { card: "border-purple-500/50 bg-purple-950/30", hdr: "bg-purple-600/20",  hdrBorder: "border-purple-500/30", icon: "text-purple-400", btn: "bg-purple-700 hover:bg-purple-600 border-purple-500/40", glow: "shadow-[0_0_24px_-4px_rgba(168,85,247,0.5)]" },
+  orange: { card: "border-orange-500/40 bg-orange-950/20", hdr: "bg-orange-600/20",  hdrBorder: "border-orange-500/30", icon: "text-orange-400", btn: "bg-orange-700 hover:bg-orange-600 border-orange-500/40", glow: "shadow-[0_0_24px_-4px_rgba(249,115,22,0.5)]" },
+  teal:   { card: "border-teal-500/40 bg-teal-950/30",    hdr: "bg-teal-600/20",    hdrBorder: "border-teal-500/30",   icon: "text-teal-400",   btn: "bg-teal-700 hover:bg-teal-600 border-teal-500/40",   glow: "shadow-[0_0_24px_-4px_rgba(20,184,166,0.5)]"  },
+  blue:   { card: "border-blue-500/40 bg-blue-950/30",    hdr: "bg-blue-600/20",    hdrBorder: "border-blue-500/30",   icon: "text-blue-400",   btn: "bg-blue-700 hover:bg-blue-600 border-blue-500/40",   glow: "shadow-[0_0_24px_-4px_rgba(59,130,246,0.5)]"  },
+  amber:  { card: "border-amber-500/40 bg-amber-950/20",  hdr: "bg-amber-600/20",   hdrBorder: "border-amber-500/30",  icon: "text-amber-400",  btn: "bg-amber-700 hover:bg-amber-600 border-amber-500/40",  glow: "shadow-[0_0_24px_-4px_rgba(245,158,11,0.5)]"  },
+  green:  { card: "border-green-500/40 bg-green-950/20",  hdr: "bg-green-600/20",   hdrBorder: "border-green-500/30",  icon: "text-green-400",  btn: "bg-green-700 hover:bg-green-600 border-green-500/40",  glow: "shadow-[0_0_24px_-4px_rgba(34,197,94,0.5)]"   },
+  sky:    { card: "border-sky-500/40 bg-sky-950/30",      hdr: "bg-sky-600/20",     hdrBorder: "border-sky-500/30",    icon: "text-sky-400",    btn: "bg-sky-700 hover:bg-sky-600 border-sky-500/40",    glow: "shadow-[0_0_24px_-4px_rgba(14,165,233,0.5)]"  },
+} as const;
+type AccentKey = keyof typeof A;
+
+// ─── Restore categories ───────────────────────────────────────────────────────
+const RESTORE_CATEGORIES = [
+  {
+    id: "cpu", label: "CPU Scheduling & Timer", icon: Cpu,
+    color: "text-red-400", border: "border-red-500/20", bg: "bg-red-500/5",
+    desc: "Resets Win32PrioritySeparation, system timer, game scheduler, MSI interrupt mode, and dynamic tick to Windows defaults.",
+    restores: [
+      "Win32PrioritySeparation → 2 (Windows default)", "SystemResponsiveness → 20",
+      "Game Scheduler: High → Medium", "MSI Mode disabled on GPU",
+      "Dynamic tick restored", "Timer resolution flags cleared",
+    ],
+  },
+  {
+    id: "network", label: "Network & TCP Stack", icon: Wifi,
+    color: "text-blue-400", border: "border-blue-500/20", bg: "bg-blue-500/5",
+    desc: "Restores Nagle's algorithm, TCP ACK frequency, NetworkThrottlingIndex, IPv6, NDU, DNS cache TTL, and AFD buffer sizes.",
+    restores: [
+      "NetworkThrottlingIndex → 10 (default)", "Nagle's algorithm re-enabled",
+      "TCP ACK frequency keys removed", "NDU service re-enabled",
+      "IPv6 re-enabled on all adapters", "DNS cache TTL reset to default", "AFD send/receive buffers reset",
+    ],
+  },
+  {
+    id: "memory", label: "Memory Management", icon: MemoryStick,
+    color: "text-violet-400", border: "border-violet-500/20", bg: "bg-violet-500/5",
+    desc: "Re-enables Memory Compression, Prefetch/Superfetch, restores pagefile to automatic, and resets kernel paging.",
+    restores: [
+      "Memory Compression re-enabled", "Prefetch + Superfetch re-enabled",
+      "Pagefile restored to automatic", "ClearPageFileAtShutdown disabled",
+      "Pagefile encryption re-enabled", "Heap decommit threshold reset",
+    ],
+  },
+  {
+    id: "visual", label: "Visual Effects & Gaming", icon: Monitor,
+    color: "text-zinc-300", border: "border-zinc-700", bg: "bg-zinc-900/40",
+    desc: "Re-enables Game Bar, GameDVR, mouse pointer precision, UI animations, Fast Startup, and Windows Error Reporting.",
+    restores: [
+      "Xbox Game DVR re-enabled", "HAGS setting preserved",
+      "Mouse pointer precision restored", "UI animations re-enabled",
+      "Fast Startup re-enabled", "Windows Error Reporting re-enabled",
+    ],
+  },
+  {
+    id: "power", label: "Power Plan", icon: Power,
+    color: "text-yellow-400", border: "border-yellow-500/20", bg: "bg-yellow-500/5",
+    desc: "Switches back to Balanced power plan, re-enables USB selective suspend, core parking, and power throttling.",
+    restores: [
+      "Power plan → Balanced", "USB Selective Suspend re-enabled",
+      "CPU Core Parking re-enabled", "Power Throttling re-enabled", "Dynamic tick restored",
+    ],
+  },
+  {
+    id: "services", label: "Windows Services", icon: Settings2,
+    color: "text-orange-400", border: "border-orange-500/20", bg: "bg-orange-500/5",
+    desc: "Restarts DiagTrack, Windows Search, SysMain (Superfetch), Windows Update, and Defender real-time protection.",
+    restores: [
+      "DiagTrack re-enabled + started", "WSearch (Windows Search) re-enabled",
+      "SysMain (Superfetch) re-enabled", "Windows Update re-enabled",
+      "Defender real-time protection on",
+    ],
+  },
+  {
+    id: "nvidia", label: "NVIDIA", icon: MonitorPlay,
+    color: "text-green-400", border: "border-green-500/20", bg: "bg-green-500/5",
+    desc: "Re-enables NVIDIA telemetry services, removes pre-rendered frame limit, disables HAGS, clears GraphicsDrivers hints.",
+    restores: [
+      "NvTelemetryContainer re-enabled", "NvDisplayContainerLS re-enabled",
+      "Pre-rendered frames limit removed", "HAGS set back to off",
+      "GraphicsDrivers hints cleared",
+    ],
+  },
+  {
+    id: "amd", label: "AMD", icon: Flame,
+    color: "text-red-400", border: "border-red-500/20", bg: "bg-red-500/5",
+    desc: "Re-enables AMD ULPS, Radeon Chill, power gating, and AMD telemetry services.",
+    restores: [
+      "ULPS re-enabled on AMD GPU", "Radeon Chill re-enabled",
+      "GPU power gating restored", "AMD telemetry services re-enabled",
+    ],
+  },
+  {
+    id: "process", label: "Process Priority & IFEO", icon: Activity,
+    color: "text-amber-400", border: "border-amber-500/20", bg: "bg-amber-500/5",
+    desc: "Clears all IFEO PerfOptions for 15 game executables, restores app kill timeouts, and re-enables WER.",
+    restores: [
+      "All game IFEO PerfOptions cleared (15 executables)", "AutoEndTasks disabled",
+      "WaitToKillAppTimeout → 20000ms", "Windows Error Reporting re-enabled",
+    ],
+  },
+  {
+    id: "fivem", label: "FiveM / GTA V", icon: Gamepad2,
+    color: "text-cyan-400", border: "border-cyan-500/20", bg: "bg-cyan-500/5",
+    desc: "Fixes FiveM_GTAProcess.exe memory write crashes and FiveM_ChromeBrowser 0xe0000008 heap errors. Also removes IFEO entries, cleans CitizenFX.ini tweaks, and re-enables NvTelemetry.",
+    restores: [
+      "LargeSystemCache → 0 (fixes GTA process memory write crash 0xDEED)",
+      "Memory Compression re-enabled (fixes CEF/ChromeBrowser 0xe0000008 crash)",
+      "GTA5.exe IFEO PerfOptions removed", "FiveM.exe IFEO PerfOptions removed",
+      "CitizenFX.ini P2P entry removed", "CitizenFX.ini StreamingDistance removed",
+      "NvTelemetryContainer re-enabled",
+    ],
+  },
+  {
+    id: "bcdedit", label: "BCD Boot Config (bcdedit Fixes)", icon: Settings2,
+    color: "text-yellow-400", border: "border-yellow-500/20", bg: "bg-yellow-500/5",
+    desc: "Restores bcdedit entries that can cause boot issues or unexpected behavior — removes useplatformtick override, restores dynamic tick, and resets hypervisor launch type.",
+    restores: [
+      "useplatformtick → removed (Windows default)", "uselegacyapicmode → removed",
+      "disabledynamictick → removed (restored to default)",
+      "hypervisorlaunchtype → Auto (safe default)", "nx → OptIn (re-enables DEP protection)",
+    ],
+  },
+  {
+    id: "gpu-usage", label: "High GPU Usage / Driver Issues", icon: MonitorPlay,
+    color: "text-purple-400", border: "border-purple-500/20", bg: "bg-purple-500/5",
+    desc: "Fixes idle/background GPU usage by restoring TDR defaults and clearing nondefault GPU scheduler hints. The current HAGS setting is preserved.",
+    restores: [
+      "HAGS setting preserved", "TdrLevel → 3 (Windows default)",
+      "TdrDelay → 2 seconds (default)", "PagingAllocation → removed (default GPU paging)",
+      "NVIDIA overlay container processes reset", "GraphicsDrivers Scheduler hint cleared",
+    ],
+  },
+  {
+    id: "time-sync", label: "Windows Time & Clock Sync", icon: Activity,
+    color: "text-teal-400", border: "border-teal-500/20", bg: "bg-teal-500/5",
+    desc: "Fixes clock drift and wrong time caused by disabling W32Time service (often disabled by WinUtil). Re-enables Windows Time service and syncs with time.windows.com.",
+    restores: [
+      "W32Time service re-enabled (Manual start)", "w32tm /resync — forces immediate NTP sync",
+      "NTP server reset to time.windows.com", "Time sync on startup re-enabled",
+      "Fixes clock that runs fast/slow after WinUtil tweaks",
+    ],
+  },
+  {
+    id: "processes-reduction", label: "Processes Reduction (Service Restore)", icon: Server,
+    color: "text-emerald-400", border: "border-emerald-500/20", bg: "bg-emerald-500/5",
+    desc: "Restores all 31 services changed by the Processes Reduction tab back to their Windows default startup types. Auto-restarts the ones that should be running.",
+    restores: [
+      "DiagTrack, DPS, DusmSvc, DoSvc → Automatic + restarted",
+      "BITS, WSearch, SysMain, TrkWks, MapsBroker → Automatic + restarted",
+      "WerSvc, Xbox services, SSDP, UPnP, FD services → Manual (Windows default)",
+      "WinRM, WbioSrvc, TabletInput, Bluetooth, Fax → Manual (Windows default)",
+      "Geolocation, Phone, WMP Network, W32Time → Manual (Windows default)",
+      "RemoteRegistry → Disabled (Windows default)",
+    ],
+  },
+];
+
+// ─── Section header ───────────────────────────────────────────────────────────
+function SectionHeader({
+  icon: Icon, iconClass, title, desc,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  iconClass: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 pt-4 pb-1">
+      <div className="p-1.5 bg-zinc-900 rounded-lg border border-white/5 shrink-0">
+        <Icon className={cn("w-4 h-4", iconClass)} />
+      </div>
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-white uppercase tracking-wider">{title}</h2>
+        <p className="text-[11px] text-zinc-500 leading-none mt-0.5">{desc}</p>
+      </div>
+      <div className="flex-1 border-t border-white/5 ml-2" />
+    </div>
+  );
+}
+
+// ─── Fix card (compact, collapsible) ─────────────────────────────────────────
+function FixCard({
+  title, subtitle, tweaks, icon: Icon, accent, urgent = false,
+  bullets, footer, btnLabel, downloading, onDownload, testId, nativeActionId, onNativeAction,
+}: {
+  title: string;
+  subtitle: string;
+  tweaks: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: AccentKey;
+  urgent?: boolean;
+  bullets: Array<[string, string]>;
+  footer: string;
+  btnLabel: string;
+  downloading: boolean;
+  onDownload: () => void;
+  testId: string;
+  nativeActionId?: string;
+  onNativeAction?: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const a = A[accent];
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn("rounded-xl border-2 overflow-hidden", a.card)}
+    >
+      {/* Header bar */}
+      <div className={cn("flex items-center gap-3 px-4 py-2.5 border-b", a.hdr, a.hdrBorder)}>
+        <Icon className={cn("w-3.5 h-3.5 shrink-0", a.icon, urgent && "animate-pulse")} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-widest text-white leading-none">{title}</p>
+          <p className="text-[10px] text-zinc-400 mt-0.5 leading-snug">{subtitle}</p>
+        </div>
+        <span className={cn("text-[9px] font-mono hidden lg:block shrink-0 ml-2 opacity-50", a.icon)}>
+          {tweaks}
+        </span>
+      </div>
+
+      {/* Action row */}
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors text-[11px] shrink-0"
+        >
+          {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           {expanded ? "Hide details" : "What this fixes"}
         </button>
         <div className="flex-1" />
