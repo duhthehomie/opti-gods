@@ -668,6 +668,77 @@ pub fn open_fivem_folder() -> Result<(), String> {
     }
 }
 
+#[derive(Deserialize)]
+pub struct SaveFivemPackZipArgs {
+    pub pack_name: String,
+    pub zip_bytes: Vec<u8>,
+}
+
+fn fivem_pack_zip_slug(name: &str) -> String {
+    let mut slug = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if slug.len() < 48 {
+                slug.push(ch.to_ascii_lowercase());
+            }
+        } else if !slug.is_empty() && !slug.ends_with('-') && slug.len() < 48 {
+            slug.push('-');
+        }
+    }
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+    if slug.is_empty() { "graphics-pack".to_string() } else { slug }
+}
+
+/// Save the generated ZIP in the user's Downloads folder before any game files are installed.
+#[tauri::command]
+pub fn save_fivem_pack_zip(app: AppHandle, args: SaveFivemPackZipArgs) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        const MAX_ZIP_BYTES: usize = 25 * 1024 * 1024;
+        let has_zip_signature = args.zip_bytes.starts_with(b"PK\x03\x04")
+            || args.zip_bytes.starts_with(b"PK\x05\x06")
+            || args.zip_bytes.starts_with(b"PK\x07\x08");
+        if args.zip_bytes.len() < 4 || args.zip_bytes.len() > MAX_ZIP_BYTES || !has_zip_signature {
+            return Err("The generated FiveM ZIP is empty, invalid, or too large to save. No game files were changed.".to_string());
+        }
+        let downloads = app.path().download_dir()
+            .map_err(|e| format!("Could not locate the Windows Downloads folder: {e}"))?;
+        std::fs::create_dir_all(&downloads)
+            .map_err(|e| format!("Could not prepare the Downloads folder: {e}"))?;
+        let slug = fivem_pack_zip_slug(&args.pack_name);
+        let stem = format!("optigods-fivem-{slug}");
+        for suffix in 1..=1000 {
+            let file_name = if suffix == 1 {
+                format!("{stem}.zip")
+            } else {
+                format!("{stem}-{suffix}.zip")
+            };
+            let path = downloads.join(&file_name);
+            let mut file = match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(format!("Could not save the FiveM ZIP to Downloads: {error}")),
+            };
+            let write_result = std::io::Write::write_all(&mut file, &args.zip_bytes)
+                .and_then(|_| file.sync_all());
+            if let Err(error) = write_result {
+                drop(file);
+                let _ = std::fs::remove_file(&path);
+                return Err(format!("Could not finish saving the FiveM ZIP to Downloads: {error}"));
+            }
+            return Ok(file_name);
+        }
+        Err("Could not find an unused filename for the FiveM ZIP in Downloads.".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Saving FiveM graphics ZIPs to Downloads is available only in the Windows app.".to_string())
+    }
+}
+
 const FIVEM_PACK_PATHS: [&str; 2] = [
     "citizen/platform/data/tune/timecycle_mods_1.xml",
     "citizen/common/data/weather.xml",
