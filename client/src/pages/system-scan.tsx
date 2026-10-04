@@ -8,7 +8,7 @@ import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { useLiveStats } from "@/hooks/use-live-stats";
-import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -20,12 +20,14 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { ProUnlockButton } from "@/components/pro-gate";
 import { playFeedbackSound, useToast } from "@/hooks/use-toast";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import { useProStatus } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   queueTweakBatch,
+  NVIDIA_PRESET_ACTION_ID,
   readNativeTweakRun,
   subscribeNativeTweakRun,
   type NativeTweakRunState,
@@ -400,6 +402,10 @@ function SmartRecsBreakdown() {
   const { toast } = useToast();
   const isPro = useProStatus();
   const native = isNative();
+  const [nvidiaPresetBusy, setNvidiaPresetBusy] = useState(false);
+  const nvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
+  const showNvidiaPreset = native && nvidiaGpuCount > 0;
+  const canApplyNvidiaPreset = nvidiaGpuCount === 1 && !hw.isHybridGpu;
   const [applied, setApplied] = useState(false);
   const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
   const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
@@ -491,10 +497,52 @@ function SmartRecsBreakdown() {
     }
   }
 
-  if (!recs.ready || total === 0) return null;
+  const applyNvidiaPreset = async () => {
+    if (nvidiaPresetBusy || !canApplyNvidiaPreset || !isPro) return;
+    setNvidiaPresetBusy(true);
+    try {
+      if (!(await isNvidiaControlPanelInstalled())) {
+        toast({ title: "NVIDIA Control Panel is not installed", description: "Install NVIDIA Control Panel before applying the Opti Gods profile." });
+        return;
+      }
+      playOptimizationActionSound();
+      queueTweakBatch([NVIDIA_PRESET_ACTION_ID]);
+      window.location.assign("/applied-tweaks?run=1");
+    } catch (error) {
+      toast({ title: "Could not prepare NVIDIA preset", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    } finally {
+      setNvidiaPresetBusy(false);
+    }
+  };
+
+  const nvidiaPresetPanel = showNvidiaPreset ? (
+    <div data-testid="card-ai-nvidia-preset" className="flex flex-col gap-3 rounded-xl border border-red-500/20 bg-red-500/[.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <Monitor className="h-4 w-4 text-red-400" />
+          <p className="text-xs font-bold text-white">Opti Gods NVIDIA Control Panel preset</p>
+          <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-300">Separate Pro action</span>
+        </div>
+        <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">Applies the Control Panel profile and sets standard Digital Vibrance to 85%. This separate action is not included in the generic missing-tweak count.</p>
+        {!canApplyNvidiaPreset && <p className="mt-1 text-[10px] text-amber-300">Available only with exactly one dedicated, non-hybrid NVIDIA GPU.</p>}
+      </div>
+      {canApplyNvidiaPreset && (
+        <ProUnlockButton>
+          <button type="button" data-testid="button-apply-nvidia-preset" onClick={() => void applyNvidiaPreset()} disabled={nvidiaPresetBusy} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-red-500 disabled:cursor-wait disabled:opacity-60">
+            {nvidiaPresetBusy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Checking…</> : <><Monitor className="h-3.5 w-3.5" />Apply preset</>}
+          </button>
+        </ProUnlockButton>
+      )}
+    </div>
+  ) : null;
+
+  if (!recs.ready) return null;
+  if (total === 0) return nvidiaPresetPanel;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+    <>
+      {nvidiaPresetPanel}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
       {/* Header row */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
@@ -611,6 +659,7 @@ function SmartRecsBreakdown() {
         </div>
       </div>
     </motion.div>
+    </>
   );
 }
 
