@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { isNative, discordLogin, installFivemPack, openFivemFolder, uninstallFivemPack } from "@/lib/tauri-bridge";
+import { isNative, discordLogin, installFivemPack, saveFivemPackZip, openFivemFolder, uninstallFivemPack } from "@/lib/tauri-bridge";
 import { loginWithDiscord } from "@/hooks/use-auth";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
@@ -1272,13 +1272,15 @@ export default function FivemGraphics() {
   };
 
   const handleGenerate = async () => {
+    let savedZipName: string | null = null;
     try {
       const opts = buildOpts();
       if (isNative()) {
         setNativePackBusy(true);
         setNativePackStatus("");
+        savedZipName = await saveFivemPackZip(packName, generateZip(opts));
         const result = await installFivemPack(packName, generateNativePackFiles(opts));
-        setNativePackStatus(result.message);
+        setNativePackStatus(`${result.message} ZIP saved in Downloads as ${savedZipName}.`);
         setGenerated(true);
         setTimeout(() => setGenerated(false), 3000);
         return;
@@ -1290,7 +1292,8 @@ export default function FivemGraphics() {
       setTimeout(() => setGenerated(false), 3000);
     } catch (e) {
       console.error("Pack generation failed:", e);
-      alert(e instanceof Error ? e.message : "Pack generation failed — please try again.");
+      const message = e instanceof Error ? e.message : "Pack generation failed — please try again.";
+      alert(savedZipName ? `${message}\n\nThe ZIP was saved in Downloads as ${savedZipName}.` : message);
     } finally {
       setNativePackBusy(false);
     }
@@ -1310,6 +1313,7 @@ export default function FivemGraphics() {
   };
 
   const handleDownloadLeaqPack = async () => {
+    let savedZipName: string | null = null;
     try {
       const opts: PackOpts = {
         packName: "Opti Gods Blue Sky Pack",
@@ -1326,14 +1330,16 @@ export default function FivemGraphics() {
       if (isNative()) {
         setNativePackBusy(true);
         setNativePackStatus("");
+        savedZipName = await saveFivemPackZip(opts.packName, generateZip(opts));
         const result = await installFivemPack(opts.packName, generateNativePackFiles(opts));
-        setNativePackStatus(result.message);
+        setNativePackStatus(`${result.message} ZIP saved in Downloads as ${savedZipName}.`);
         return;
       }
       downloadBlob(generateZip(opts), "optigods-blue-sky-pack.zip");
     } catch (e) {
       console.error("Download failed:", e);
-      alert(e instanceof Error ? e.message : "Download failed — please try again.");
+      const message = e instanceof Error ? e.message : "Download failed — please try again.";
+      alert(savedZipName ? `${message}\n\nThe ZIP was saved in Downloads as ${savedZipName}.` : message);
     } finally {
       setNativePackBusy(false);
     }
