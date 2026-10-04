@@ -382,9 +382,10 @@ export default function Dashboard() {
   const hasProEntitlement = useProStatus();
   const isPro = isAuthenticated && hasProEntitlement;
   const proStatusLoading = useProStatusLoading();
-  const { tweaks, appliedAt, setAllTweaks } = useOptimizationStore();
+  const { tweaks, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
+  const [nativeDetectionError, setNativeDetectionError] = useState(false);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
   const { data: pricingData } = useQuery<{ price: number; isWeekendDeal: boolean }>({
     queryKey: ["/api/pricing"],
@@ -500,9 +501,11 @@ export default function Dashboard() {
     setRefreshingScore(true);
     try {
       setDetectedNativeTweaks(await getAppliedTweakState());
+      setNativeDetectionError(false);
       setNativeDetectionReady(true);
     } catch {
-      // Never use local browser timestamps as proof that Windows changed.
+      // A failed Windows read is not proof that tweaks are missing or applied.
+      setNativeDetectionError(true);
       setNativeDetectionReady(true);
     } finally {
       setRefreshingScore(false);
@@ -613,14 +616,14 @@ export default function Dashboard() {
   };
 
   const applyAllRecommended = () => {
-    if (bulkApplying || (native && (!nativeDetectionReady || recommendedApplied)) || proStatusLoading) return;
+    if (bulkApplying || (native && (!nativeDetectionReady || nativeDetectionError || recommendedApplied)) || proStatusLoading) return;
     if (!isPro) {
       // ProUnlockButton owns the paywall for guests and free users. Do not
       // silently redirect or consume the 15-tweak allowance from this CTA.
       return;
     }
     if (native) {
-      const missingIds = scoreIds.filter(id => !activeIdsForDisplay.has(id));
+      const missingIds = missingRecommendedIds;
       if (!missingIds.length) return;
       playOptimizationActionSound();
       queueTweakBatch(missingIds);
@@ -729,13 +732,15 @@ export default function Dashboard() {
     id => getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
+  const latestRunSkippedIds = new Set(
+    native && lastNativeRun
+      ? lastNativeRun.items.filter(item => item.status === "skipped" && matchedRecommendedSet.has(item.id)).map(item => item.id)
+      : [],
+  );
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
   const totalTweaks = matchedRecommendedTweaks.length;
   const confirmedIds = native
-    ? new Set([
-      ...Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)),
-      ...Object.keys(appliedAt).filter(id => registryIds.has(id)),
-    ])
+    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)))
     : new Set<string>();
   const liveRunActive = native
     && Boolean(lastNativeRun)
@@ -769,18 +774,27 @@ export default function Dashboard() {
       .map(item => item.id)
       .filter(id => matchedRecommendedIds.includes(id))))
     : [];
-  // A full native run is much larger than a retry or quick preset. Use its
-  // exact set for the score and CTA so 373 applied / 10 failed stays visible.
+  // A full native run is much larger than a retry or quick preset. Preserve its
+  // exact set for the score; the missing-action count uses current eligible recs.
   const scoreIds = latestLargeRunIds.length >= 100
     ? latestLargeRunIds
     : matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
   const compatibleAppliedCount = matchedRecommendedIds.filter(id => activeIdsForDisplay.has(id)).length;
   const compatibleSelectedCount = matchedRecommendedIds.filter(id => tweaks[id]).length;
   const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
-  const missingRecommendedCount = scoreIds.filter(id => !activeIdsForDisplay.has(id)).length;
-  const recommendedActionLabel = missingRecommendedCount === 0
-    ? "Review recommended tweaks"
-    : `Apply ${missingRecommendedCount} missing tweaks`;
+  // Keep the score tied to the complete run, but match AI Optimize's missing
+  // count to current eligible recommendations and verified native state.
+  const missingRecommendedIds = native
+    ? nativeDetectionReady && !nativeDetectionError
+      ? matchedRecommendedIds.filter(id => !allActiveIdsForDisplay.has(id) && !latestRunSkippedIds.has(id))
+      : []
+    : matchedRecommendedIds.filter(id => !tweaks[id]);
+  const missingRecommendedCount = missingRecommendedIds.length;
+  const recommendedActionLabel = native && (!nativeDetectionReady || nativeDetectionError)
+    ? (!nativeDetectionReady ? "Checking Windows state…" : "Applied state unavailable")
+    : missingRecommendedCount === 0
+      ? "Review recommended tweaks"
+      : `Apply ${missingRecommendedCount} missing tweaks`;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
   const recApplied = native
     ? scoreIds.filter(id => activeIdsForDisplay.has(id)).length
@@ -806,6 +820,7 @@ export default function Dashboard() {
     <Button
       data-testid="button-boost-score"
       onClick={applyAllRecommended}
+      disabled={native && (!nativeDetectionReady || nativeDetectionError)}
       className={cn(
         "font-bold text-sm px-6 transition-all",
         displayScore >= 90
@@ -873,7 +888,7 @@ export default function Dashboard() {
                 <Button
                   data-testid="button-full-optimize"
                   onClick={applyAllRecommended}
-                  disabled={(native && (!nativeDetectionReady || recommendedApplied)) || bulkApplying || proStatusLoading}
+                  disabled={(native && (!nativeDetectionReady || nativeDetectionError || recommendedApplied)) || bulkApplying || proStatusLoading}
                   className={cn(
                     "font-display font-bold px-7 py-2.5 text-sm tracking-wide transition-all",
                     recommendedApplied
@@ -893,7 +908,7 @@ export default function Dashboard() {
                 <ProUnlockButton>
                 <Button
                     data-testid="button-best15-login"
-                  disabled={native && !nativeDetectionReady}
+                  disabled={native && (!nativeDetectionReady || nativeDetectionError)}
                     className="bg-red-600 hover:bg-red-500 text-white font-display font-bold px-7 py-2.5 text-sm tracking-wide"
                   >
                     <Rocket className="w-4 h-4 mr-2" />
@@ -1499,9 +1514,11 @@ export default function Dashboard() {
                 : native
                   ? `Review the recommended controls and enable the ones you want. Supported actions apply directly inside Opti Gods.`
                   : isPro
-                    ? (missingRecommendedCount === 0
-                      ? "All compatible tweaks are accounted for. Review the controls below if you want to change them."
-                      : `${missingRecommendedCount} compatible tweaks are not confirmed yet. Apply only what is missing from this PC.`)
+                    ? (native && (!nativeDetectionReady || nativeDetectionError)
+                      ? (!nativeDetectionReady ? "Checking applied tweaks on this PC." : "Could not verify applied tweaks, so the missing count is unavailable. Refresh before applying.")
+                      : missingRecommendedCount === 0
+                        ? "All compatible tweaks are accounted for. Review the controls below if you want to change them."
+                        : `${missingRecommendedCount} compatible tweaks are not confirmed yet. Apply only what is missing from this PC.`)
                     : `${freeUnavailableCount} additional matched tweaks are unavailable on Free. Unlock Pro to apply the full hardware-matched set.`}
             </p>
           </div>
@@ -1519,7 +1536,7 @@ export default function Dashboard() {
               <Button
                 data-testid="button-apply-all-recommended"
                 onClick={applyAllRecommended}
-                disabled={bulkApplying || (native && !nativeDetectionReady)}
+                disabled={bulkApplying || (native && (!nativeDetectionReady || nativeDetectionError))}
                 className="bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-bold px-8 py-3 text-base rounded-xl border border-red-500/50 shadow-[0_0_24px_-4px_rgba(220,38,38,0.6)] transition-all hover:shadow-[0_0_32px_-4px_rgba(220,38,38,0.8)] hover:scale-[1.02]"
               >
                 <Rocket className="w-5 h-5 mr-2" />
