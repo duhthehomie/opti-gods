@@ -35,6 +35,277 @@ fn verify_nvidia_bundle(dir: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+
+fn dvc_level_for_percent(min_level: u32, max_level: u32, percent: u32) -> Result<u32, String> {
+    if min_level > max_level || percent > 100 || min_level == max_level {
+        return Err("NVIDIA display reported an invalid Digital Vibrance range.".into());
+    }
+    let span = u64::from(max_level - min_level);
+    let offset = (span * u64::from(percent) + 50) / 100;
+    Ok((u64::from(min_level) + offset) as u32)
+}
+
+#[cfg(test)]
+mod digital_vibrance_tests {
+    use super::dvc_level_for_percent;
+
+    #[test]
+    fn maps_85_percent_to_the_reported_driver_range() {
+        assert_eq!(dvc_level_for_percent(0, 100, 85).unwrap(), 85);
+        assert_eq!(dvc_level_for_percent(0, 60, 85).unwrap(), 51);
+        assert_eq!(dvc_level_for_percent(0, 63, 85).unwrap(), 54);
+        assert_eq!(dvc_level_for_percent(10, 110, 85).unwrap(), 95);
+    }
+
+    #[test]
+    fn rejects_invalid_driver_ranges() {
+        assert!(dvc_level_for_percent(10, 10, 85).is_err());
+        assert!(dvc_level_for_percent(20, 10, 85).is_err());
+        assert!(dvc_level_for_percent(0, 100, 101).is_err());
+    }
+}
+
+#[cfg(windows)]
+type NvApiQueryInterfaceFn = unsafe extern "C" fn(u32) -> *mut std::ffi::c_void;
+#[cfg(windows)]
+type NvApiStatusFn = unsafe extern "C" fn() -> i32;
+#[cfg(windows)]
+type NvApiEnumDisplayHandleFn = unsafe extern "C" fn(u32, *mut *mut std::ffi::c_void) -> i32;
+#[cfg(windows)]
+type NvApiGetDvcInfoFn = unsafe extern "C" fn(*mut std::ffi::c_void, u32, *mut NvDisplayDvcInfo) -> i32;
+#[cfg(windows)]
+type NvApiSetDvcLevelFn = unsafe extern "C" fn(*mut std::ffi::c_void, u32, u32) -> i32;
+
+#[cfg(windows)]
+#[repr(C)]
+struct NvDisplayDvcInfo {
+    version: u32,
+    current_level: u32,
+    min_level: u32,
+    max_level: u32,
+}
+
+#[cfg(windows)]
+struct NvApiLibrary {
+    module: *mut std::ffi::c_void,
+    query: NvApiQueryInterfaceFn,
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn LoadLibraryExW(name: *const u16, file: *mut std::ffi::c_void, flags: u32) -> *mut std::ffi::c_void;
+    fn GetProcAddress(module: *mut std::ffi::c_void, name: *const u8) -> *mut std::ffi::c_void;
+    fn FreeLibrary(module: *mut std::ffi::c_void) -> i32;
+}
+
+#[cfg(windows)]
+impl NvApiLibrary {
+    fn load() -> Result<Self, String> {
+        let dll_name = if cfg!(target_pointer_width = "64") { "nvapi64.dll" } else { "nvapi.dll" };
+        let wide_name: Vec<u16> = dll_name.encode_utf16().chain(std::iter::once(0)).collect();
+        let module = unsafe { LoadLibraryExW(wide_name.as_ptr(), std::ptr::null_mut(), 0x0000_0800) };
+        if module.is_null() {
+            return Err("NVIDIA driver API is unavailable. Verify the NVIDIA driver and Control Panel are installed.".into());
+        }
+        let export = unsafe { GetProcAddress(module, b"nvapi_QueryInterface\0".as_ptr()) };
+        if export.is_null() {
+            unsafe { FreeLibrary(module); }
+            return Err("NVIDIA driver API is missing nvapi_QueryInterface.".into());
+        }
+        let query: NvApiQueryInterfaceFn = unsafe { std::mem::transmute(export) };
+        let initialize_ptr = unsafe { query(0x0150_E828) };
+        if initialize_ptr.is_null() {
+            unsafe { FreeLibrary(module); }
+            return Err("NVIDIA driver API initialization entry point is unavailable.".into());
+        }
+        let initialize: NvApiStatusFn = unsafe { std::mem::transmute(initialize_ptr) };
+        let status = unsafe { initialize() };
+        if status != 0 {
+            unsafe { FreeLibrary(module); }
+            return Err(format!("NVIDIA driver API initialization failed (status {status})."));
+        }
+        Ok(Self { module, query })
+    }
+
+    fn resolve(&self, id: u32, name: &str) -> Result<*mut std::ffi::c_void, String> {
+        let function = unsafe { (self.query)(id) };
+        if function.is_null() {
+            return Err(format!("NVIDIA driver API function {name} is unavailable."));
+        }
+        Ok(function)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for NvApiLibrary {
+    fn drop(&mut self) {
+        unsafe {
+            let unload_ptr = (self.query)(0xD22B_DD7E);
+            if !unload_ptr.is_null() {
+                let unload: NvApiStatusFn = std::mem::transmute(unload_ptr);
+                let _ = unload();
+            }
+            if !self.module.is_null() {
+                let _ = FreeLibrary(self.module);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+#[derive(Clone)]
+struct NvidiaDvcPreviousValue {
+    display_index: u32,
+    level: u32,
+}
+
+#[cfg(windows)]
+struct NvidiaDvcApplySummary {
+    supported_display_count: usize,
+    unsupported_display_count: usize,
+    previous_values: Vec<NvidiaDvcPreviousValue>,
+}
+
+#[cfg(windows)]
+struct NvidiaDvcDisplay {
+    display_index: u32,
+    handle: *mut std::ffi::c_void,
+    current_level: u32,
+    target_level: u32,
+}
+
+#[cfg(windows)]
+const NVAPI_END_ENUMERATION: i32 = -7;
+#[cfg(windows)]
+const NVAPI_NOT_SUPPORTED: i32 = -104;
+
+#[cfg(windows)]
+fn dvc_info_version() -> u32 {
+    (std::mem::size_of::<NvDisplayDvcInfo>() as u32) | (1 << 16)
+}
+
+#[cfg(windows)]
+fn rollback_dvc_with_handles(
+    set_dvc: NvApiSetDvcLevelFn,
+    get_dvc: NvApiGetDvcInfoFn,
+    changes: &[(u32, *mut std::ffi::c_void, u32)],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    for (display_index, handle, previous_level) in changes.iter().rev() {
+        let set_status = unsafe { set_dvc(*handle, 0, *previous_level) };
+        if set_status != 0 {
+            failures.push(format!("display {} set status {}", display_index + 1, set_status));
+            continue;
+        }
+        let mut info = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
+        let get_status = unsafe { get_dvc(*handle, 0, &mut info) };
+        if get_status != 0 || info.current_level != *previous_level {
+            failures.push(format!("display {} readback status {}", display_index + 1, get_status));
+        }
+    }
+    failures
+}
+
+#[cfg(windows)]
+fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
+    let api = NvApiLibrary::load()?;
+    let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
+    let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
+    let set_ptr = api.resolve(0x1724_09B4, "Digital Vibrance write")?;
+    let enum_display: NvApiEnumDisplayHandleFn = unsafe { std::mem::transmute(enum_ptr) };
+    let get_dvc: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(get_ptr) };
+    let set_dvc: NvApiSetDvcLevelFn = unsafe { std::mem::transmute(set_ptr) };
+
+    let mut displays = Vec::new();
+    let mut unsupported_display_count = 0usize;
+    for display_index in 0..64u32 {
+        let mut handle = std::ptr::null_mut();
+        let enum_status = unsafe { enum_display(display_index, &mut handle) };
+        if enum_status == NVAPI_END_ENUMERATION {
+            break;
+        }
+        if enum_status != 0 || handle.is_null() {
+            return Err(format!("Could not enumerate NVIDIA display {} (NVAPI status {enum_status}).", display_index + 1));
+        }
+        let mut info = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
+        let get_status = unsafe { get_dvc(handle, 0, &mut info) };
+        if get_status == NVAPI_NOT_SUPPORTED {
+            unsupported_display_count += 1;
+            continue;
+        }
+        if get_status != 0 {
+            return Err(format!("Could not read Digital Vibrance on NVIDIA display {} (NVAPI status {get_status}). No display was changed.", display_index + 1));
+        }
+        let target_level = dvc_level_for_percent(info.min_level, info.max_level, 85)?;
+        if info.current_level < info.min_level || info.current_level > info.max_level {
+            return Err(format!("NVIDIA display {} returned an out-of-range Digital Vibrance value. No display was changed.", display_index + 1));
+        }
+        displays.push(NvidiaDvcDisplay { display_index, handle, current_level: info.current_level, target_level });
+    }
+    if displays.is_empty() {
+        return Err("No active NVIDIA display supports Digital Vibrance control. No NVIDIA profile was imported.".into());
+    }
+
+    let mut rollback_targets: Vec<(u32, *mut std::ffi::c_void, u32)> = Vec::with_capacity(displays.len());
+    for display in &displays {
+        rollback_targets.push((display.display_index, display.handle, display.current_level));
+        if display.current_level != display.target_level {
+            let set_status = unsafe { set_dvc(display.handle, 0, display.target_level) };
+            if set_status != 0 {
+                let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
+                let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
+                return Err(format!("Could not set Digital Vibrance to 85% on NVIDIA display {} (NVAPI status {set_status}).{suffix}", display.display_index + 1));
+            }
+        }
+        let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
+        let verify_status = unsafe { get_dvc(display.handle, 0, &mut verify) };
+        if verify_status != 0 || verify.current_level != display.target_level {
+            let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
+            let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
+            return Err(format!("Digital Vibrance 85% readback failed on NVIDIA display {} (NVAPI status {verify_status}).{suffix}", display.display_index + 1));
+        }
+    }
+
+    Ok(NvidiaDvcApplySummary {
+        supported_display_count: displays.len(),
+        unsupported_display_count,
+        previous_values: displays.iter().map(|display| NvidiaDvcPreviousValue { display_index: display.display_index, level: display.current_level }).collect(),
+    })
+}
+
+#[cfg(windows)]
+fn restore_nvidia_digital_vibrance(previous_values: &[NvidiaDvcPreviousValue]) -> Result<(), String> {
+    let api = NvApiLibrary::load()?;
+    let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
+    let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
+    let set_ptr = api.resolve(0x1724_09B4, "Digital Vibrance restore")?;
+    let enum_display: NvApiEnumDisplayHandleFn = unsafe { std::mem::transmute(enum_ptr) };
+    let get_dvc: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(get_ptr) };
+    let set_dvc: NvApiSetDvcLevelFn = unsafe { std::mem::transmute(set_ptr) };
+    let mut failures = Vec::new();
+
+    for previous in previous_values {
+        let mut handle = std::ptr::null_mut();
+        let mut enum_status = NVAPI_END_ENUMERATION;
+        for index in 0..=previous.display_index {
+            enum_status = unsafe { enum_display(index, &mut handle) };
+            if enum_status != 0 { break; }
+        }
+        if enum_status != 0 || handle.is_null() {
+            failures.push(format!("display {} could not be found", previous.display_index + 1));
+            continue;
+        }
+        let set_status = unsafe { set_dvc(handle, 0, previous.level) };
+        let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
+        let get_status = unsafe { get_dvc(handle, 0, &mut verify) };
+        if set_status != 0 || get_status != 0 || verify.current_level != previous.level {
+            failures.push(format!("display {} restore status {set_status}, readback status {get_status}", previous.display_index + 1));
+        }
+    }
+    if failures.is_empty() { Ok(()) } else { Err(failures.join(", ")) }
+}
+
 async fn consume_pro_ticket(args: &ProToolArgs, id: &str) -> Result<(String, String), String> {
     let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { BASE_PROD };
     let client = reqwest::Client::builder()
@@ -131,11 +402,38 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let inspector = inspector_dir.join("nvidiaProfileInspector.exe");
             let preset = inspector_dir.join("OptiGods-Global-utf8.nip");
             verify_nvidia_bundle(&inspector_dir)?;
-            let status = tokio::process::Command::new(&inspector)
+            let dvc = set_nvidia_digital_vibrance_85()?;
+            let status = match tokio::process::Command::new(&inspector)
                 .arg("-silentImport").arg(&preset).current_dir(&inspector_dir).status().await
-                .map_err(|e| format!("Could not launch NVIDIA Profile Inspector: {e}"))?;
-            if !status.success() { return Err(format!("NVIDIA Profile Inspector exited with {status}. No preset success was claimed.")); }
-            Ok::<String, String>("Verified performance preset submitted through Profile Inspector (exit code 0). Twelve mapped global settings were submitted; dynamic display/GPU choices, shader-cache defaults, and VRSS were omitted. The driver settings were not read back.".into())
+            {
+                Ok(status) => status,
+                Err(error) => {
+                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
+                    let note = match rollback {
+                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
+                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                    };
+                    return Err(format!("Could not launch NVIDIA Profile Inspector: {error}.{note}"));
+                }
+            };
+            if !status.success() {
+                let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
+                let note = match rollback {
+                    Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
+                    Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                };
+                return Err(format!("NVIDIA Profile Inspector exited with {status}. No preset success was claimed.{note}"));
+            }
+            let unsupported_note = if dvc.unsupported_display_count > 0 {
+                format!(" {} NVIDIA display(s) do not support Digital Vibrance and were left unchanged.", dvc.unsupported_display_count)
+            } else {
+                String::new()
+            };
+            Ok::<String, String>(format!(
+                "Verified performance preset submitted through Profile Inspector (exit code 0). Twelve mapped global settings were submitted; Digital Vibrance was set to 85% and read back on {} supported NVIDIA display(s).{} The imported 3D settings were not read back.",
+                dvc.supported_display_count,
+                unsupported_note,
+            ))
         }.await;
         if let Ok(message) = &mut result {
             let timestamp = std::time::SystemTime::now()

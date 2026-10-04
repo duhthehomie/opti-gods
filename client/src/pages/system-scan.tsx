@@ -1,3 +1,754 @@
+import { apiUrl } from "@/lib/api-base";
+import { AppLayout } from "@/components/layout/app-layout";
+import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
+import { useLiveStats } from "@/hooks/use-live-stats";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
+import type { NativeHardwareScan } from "@/lib/tauri-bridge";
+import {
+  Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
+  Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
+  AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
+  Download, Upload, X, MonitorCheck, Radio,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { playFeedbackSound, useToast } from "@/hooks/use-toast";
+import { playOptimizationActionSound } from "@/lib/action-sound";
+import { useProStatus } from "@/lib/pro-status";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import {
+  queueTweakBatch,
+  readNativeTweakRun,
+  subscribeNativeTweakRun,
+  type NativeTweakRunState,
+} from "@/lib/native-tweak-runner";
+import { uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
+// ── Persistent key for HW Monitor scan data ──────────────────────────────────
+const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
+const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
+
+function loadHwMonitor(): HwMonitorData | null {
+  try { const r = localStorage.getItem(HW_MONITOR_KEY); return r ? JSON.parse(r) as HwMonitorData : null; } catch { return null; }
+}
+
+function loadNativeScan(): import("@/lib/tauri-bridge").NativeHardwareScan | null {
+  try { const r = localStorage.getItem(NATIVE_SCAN_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
+}
+
+function saveNativeScan(data: import("@/lib/tauri-bridge").NativeHardwareScan) {
+  try { localStorage.setItem(NATIVE_SCAN_KEY, JSON.stringify(data)); } catch {}
+}
+
+// ── HW Monitor import data shape ─────────────────────────────────────────────
+interface HwMonitorData {
+  gpu_temp_c?: number | null;
+  gpu_load_pct?: number | null;
+  gpu_fan_pct?: number | null;
+  gpu_name?: string;
+  gpu_vram_used_mb?: number;
+  gpu_vram_total_mb?: number;
+  cpu_temp_c?: number | null;
+  cpu_load_pct?: number | null;
+  cpu_name?: string;
+  cpu_cores?: number;
+  cpu_threads?: number;
+  cpu_mhz?: number;
+  ram_total_gb?: number;
+  ram_free_gb?: number;
+  ram_used_pct?: number;
+  ram_mhz?: number | null;
+  disks?: Array<{ drive: string; free_gb: number; size_gb: number; used_pct: number }>;
+  fans?: Array<{ name: string; speed_pct?: number | null; speed_rpm?: number | null }>;
+  fan_count?: number;
+  timestamp?: string;
+  cpu_temp_note?: string;
+  system_model?: string | null;
+}
+
+// ── Animated number (counts up when value first appears) ─────────────────────
+function AnimatedNum({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const [displayed, setDisplayed] = useState(0);
+  useEffect(() => {
+    const end = value;
+    const duration = 700;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayed(Math.round(end * eased));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [value]);
+  return <>{displayed}{suffix}</>;
+}
+
+// ── Stat card ────────────────────────────────────────────────────────────────
+function Stat({
+  icon: Icon, label, value, sub, highlight, accent,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string; value: string; sub?: string;
+  highlight?: boolean; accent?: "red" | "amber" | "green" | "blue";
+}) {
+  const colors = {
+    red:   "border-red-500/20 bg-red-500/[0.03] text-red-400",
+    amber: "border-amber-500/20 bg-amber-500/[0.03] text-amber-400",
+    green: "border-green-500/20 bg-green-500/[0.03] text-green-400",
+    blue:  "border-blue-500/20 bg-blue-500/[0.03] text-blue-400",
+  };
+  const chosen = accent ? colors[accent] : (highlight ? colors.red : "border-white/5");
+  return (
+    <div
+      data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}
+      className={cn("p-4 rounded-xl border bg-zinc-950/40", chosen)}
+    >
+      <div className={cn("flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider mb-2",
+        accent ? colors[accent].split(" ")[2] : (highlight ? "text-red-400" : "text-zinc-500")
+      )}>
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </div>
+      <p className="text-white font-mono text-sm font-semibold truncate">{value}</p>
+      {sub && <p className="text-zinc-500 text-[11px] mt-0.5 truncate">{sub}</p>}
+    </div>
+  );
+}
+
+// ── Missing-data row ─────────────────────────────────────────────────────────
+function MissingRow({ label, gain }: { label: string; gain: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2 border-b border-white/5 last:border-0">
+      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] text-zinc-300 font-medium">{label}</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5">{gain}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Fan display helper ────────────────────────────────────────────────────────
+// countOverride: from HW Monitor JSON import — used when it detects more fans
+// than the native WMI scan (WMI Win32_Fan misses fans on many AMD systems).
+function fanLabel(scan: NativeHardwareScan, countOverride?: number | null): { label: string; sub?: string } {
+  const native  = scan.fan_count ?? 0;
+  const count   = (countOverride != null && countOverride > native) ? countOverride : native;
+  if (count > 0) {
+    const chassis = (scan.chassis || "").toLowerCase();
+    const isLaptop = chassis === "laptop" || chassis === "notebook";
+    return {
+      label: `${count} detected fan source${count === 1 ? "" : "s"}`,
+      sub: isLaptop ? "GPU + laptop firmware detection" : "GPU + motherboard firmware detection",
+    };
+  }
+  const chassis = (scan.chassis || "").toLowerCase();
+  if (chassis === "laptop" || chassis === "notebook") {
+    return { label: "Stock (Laptop)", sub: "Integrated heat-pipe" };
+  }
+  return { label: "Air Cooled", sub: "Fan count not exposed via WMI" };
+}
+
+// ── Temp badge ───────────────────────────────────────────────────────────────
+function tempAccent(c: number): "green" | "amber" | "red" {
+  if (c < 60) return "green";
+  if (c < 80) return "amber";
+  return "red";
+}
+
+// ── Not-detected CTA (web / no scan) ─────────────────────────────────────────
+function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: boolean }) {
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+
+  const gpuKnown = hw.gpuName && hw.gpuName !== "Unknown GPU" && hw.gpuName !== "Detecting...";
+  const cpuKnown = hw.cpuCores > 0;
+  const ramKnown = hw.ramGB > 0;
+
+  const missing: { label: string; gain: string }[] = [];
+  if (!gpuKnown)
+    missing.push({ label: "GPU not detected", gain: "Exact model, VRAM, and vendor — needed to select NVIDIA/AMD-specific tweaks" });
+  if (!cpuKnown)
+    missing.push({ label: "CPU not detected", gain: "Core/thread count and brand for scheduler + priority tweaks" });
+  if (!ramKnown)
+    missing.push({ label: "RAM amount unknown", gain: "Exact GB and MHz — used to set pagefile size and memory compression" });
+  missing.push({ label: "Motherboard unknown", gain: "Needed for chipset-specific network and PCIe tweaks" });
+  missing.push({ label: "Fan count / cooling unknown", gain: "Shows real fan count and live CPU temperature" });
+  missing.push({ label: "Anti-cheat scan not run", gain: "Detects Vanguard / EAC / BattlEye — hides incompatible tweaks automatically" });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
+      {/* CTA hero */}
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
+            <ScanLine className="w-6 h-6 text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-bold text-white mb-1">
+              System not fully detected
+            </h2>
+            <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+              Opti Gods detected your hardware partially via browser APIs. Run the
+              native deep scan to get exact specs, live CPU temperature, fan count,
+              anti-cheat detection and personalised tweak matching.
+            </p>
+            <Button
+              data-testid="button-instant-scan"
+              onClick={onScan}
+              disabled={scanning}
+              className="bg-red-600 hover:bg-red-500 text-white font-bold gap-2 h-10"
+            >
+              {scanning ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Scanning…</>
+              ) : (
+                <><Zap className="w-4 h-4" /> Instant Scan</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* What we do know */}
+      {(gpuKnown || cpuKnown || ramKnown) && (
+        <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
+            Partially detected
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {gpuKnown && (
+              <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName} highlight />
+            )}
+            {cpuKnown && (
+              <Stat icon={Cpu} label="CPU" value={hw.cpuLabel}
+                sub={`${hw.cpuCores} threads detected`} highlight />
+            )}
+            {ramKnown && (
+              <Stat icon={MemoryStick} label="RAM"
+                value={hw.ramLabel}
+                sub="Approx — browser-limited" />
+            )}
+            <Stat icon={HardDrive} label="OS"
+              value={os.os || "Detecting…"}
+              sub={os.build ? `Build ${os.build}` : undefined} />
+          </div>
+        </div>
+      )}
+
+      {/* What's missing */}
+      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">
+          What a full scan unlocks
+        </p>
+        <p className="text-[11px] text-zinc-600 mb-3">
+          Data that requires native OS access — not available in browser mode
+        </p>
+        {missing.map((m, i) => (
+          <MissingRow key={i} label={m.label} gain={m.gain} />
+        ))}
+      </div>
+
+      {/* Opti Gods benefit pill row */}
+      <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] p-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/70 mb-3">
+          What Opti Gods gives you after scan
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {[
+            "Exact GPU tweak set", "CPU scheduler tuning", "RAM speed tweaks",
+            "Live CPU temp", "Fan count", "Anti-cheat safe mode",
+            "Motherboard NIC tweaks", "Chassis-aware preset",
+          ].map(b => (
+            <span key={b} className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full bg-red-500/8 border border-red-500/15 text-red-300">
+              <CheckCircle2 className="w-2.5 h-2.5 text-red-400" />
+              {b}
+            </span>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Full native scan results ──────────────────────────────────────────────────
+function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
+  scan: NativeHardwareScan;
+  onRescan: () => void;
+  rescanning: boolean;
+  hwMonitor?: HwMonitorData | null;
+}) {
+  const os = useOsDetection();
+  // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
+  const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
+  // Use HW Monitor ram_mhz if native scan didn't capture it
+  const ramMhz = scan.ram_mhz || (hwMonitor?.ram_mhz ?? null);
+  const isLaptop = (scan.chassis || "").toLowerCase() === "laptop";
+
+  return (
+    <div className="space-y-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+        <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
+          sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
+        <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
+        <Stat icon={MemoryStick} label="RAM"
+          value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
+          sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight />
+        <Stat icon={HardDrive} label="OS" value={os.os || "Detecting…"}
+          sub={os.build ? `Build ${os.build}` : undefined} />
+        <Stat icon={Sparkles} label="Form Factor"
+          value={isLaptop ? "Laptop" : "Desktop"}
+          sub={scan.chassis || undefined} />
+
+        {/* Cooling — real fan count when WMI exposes it */}
+        <Stat icon={Wind} label="Cooling" value={fan.label} sub={fan.sub} />
+
+        {/* CPU Temperature — live from MSAcpi_ThermalZoneTemperature */}
+        {scan.cpu_temp_c != null && (
+          <Stat
+            icon={Thermometer}
+            label="CPU Temp"
+            value={`${Math.round(scan.cpu_temp_c)}°C`}
+            sub={
+              scan.cpu_temp_c < 60 ? "Cool — normal idle"
+              : scan.cpu_temp_c < 80 ? "Warm — under load"
+              : "Hot — check cooling"
+            }
+            accent={tempAccent(scan.cpu_temp_c)}
+          />
+        )}
+
+        {scan.motherboard && (
+          <Stat icon={Monitor} label="Motherboard" value={scan.motherboard} />
+        )}
+        {scan.refresh_hz && (
+          <Stat icon={Monitor} label="Refresh Rate" value={`${scan.refresh_hz} Hz`} />
+        )}
+        {(scan.network_ssid || scan.nic_vendor) && (
+          <Stat
+            icon={Wifi}
+            label="Network"
+            value={scan.network_ssid || scan.nic_vendor || "Connected"}
+            sub={scan.network_band ? `${scan.network_band} Wi-Fi` : (scan.network_ssid ? "Connected Wi-Fi" : undefined)}
+          />
+        )}
+      </div>
+
+      {/* Anti-cheat */}
+      {scan.anticheats && scan.anticheats.length > 0 && (
+        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/[0.04] p-4">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 mb-2">
+            Anti-Cheat Detected
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {scan.anticheats.map(ac => (
+              <span key={ac}
+                className="text-[11px] px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 font-mono">
+                {ac}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* What temp data covers */}
+      {scan.cpu_temp_c == null && (
+        <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center gap-3">
+          <Thermometer className="w-4 h-4 text-zinc-600 shrink-0" />
+          <p className="text-[11px] text-zinc-500">
+            CPU temperature not available — MSAcpi_ThermalZoneTemperature not exposed by this system's ACPI firmware.
+            Use HWiNFO64 or HWMONITOR for sensor-level temps.
+          </p>
+        </div>
+      )}
+
+      {/* Re-scan button */}
+      <div className="flex justify-end">
+        <button
+          data-testid="button-rescan"
+          onClick={onRescan}
+          disabled={rescanning}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800/60 border border-white/8 hover:bg-zinc-700/60 hover:border-white/15 transition-colors text-zinc-300 text-[11px] font-semibold disabled:opacity-50"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", rescanning && "animate-spin")} />
+          {rescanning ? "Scanning…" : "Re-scan hardware"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Smart Recs Breakdown Panel ────────────────────────────────────────────────
+const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
+
+function SmartRecsBreakdown() {
+  const hw = useHardwareInfo();
+  const os = useOsDetection();
+  const recs = computeSmartRecs(hw, os);
+  const { tweaks } = useOptimizationStore();
+  const { toast } = useToast();
+  const isPro = useProStatus();
+  const native = isNative();
+  const [applied, setApplied] = useState(false);
+  const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
+  const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
+  const [nativeAppliedStateError, setNativeAppliedStateError] = useState(false);
+  const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
+
+  const total = recs.ids.size;
+
+  const safeIds = getEligibleSmartRecommendationIds(
+    recs.ids,
+    id => getTweakCompatibility(id).ok,
+  );
+  const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
+  const latestRunIsTerminal = native
+    && Boolean(lastNativeRun)
+    && lastNativeRun!.items.length > 0
+    && ["completed", "failed", "stopped"].includes(lastNativeRun!.status);
+  const failedRunIds = latestRunIsTerminal
+    ? Array.from(new Set(
+      lastNativeRun!.items
+        .filter(item => item.status === "failed")
+        .map(item => item.id)
+        .filter(id => safeIds.includes(id)),
+    ))
+    : [];
+  const overallFailedRunCount = latestRunIsTerminal
+    ? lastNativeRun!.items.filter(item => item.status === "failed").length
+    : 0;
+  const nativeAppliedStateUsable = !native || (nativeAppliedStateReady && !nativeAppliedStateError);
+  const latestRunAppliedIds = new Set(
+    lastNativeRun?.items.filter(item => item.status === "applied").map(item => item.id) ?? [],
+  );
+  const latestRunSkippedIds = new Set(
+    lastNativeRun?.items.filter(item => item.status === "skipped" && safeIds.includes(item.id)).map(item => item.id) ?? [],
+  );
+  const missingSafeIds = native
+    ? nativeAppliedStateUsable
+      ? safeIds.filter(id => !confirmedAppliedState[id] && !latestRunAppliedIds.has(id) && !latestRunSkippedIds.has(id))
+      : []
+    : safeIds.filter(id => !tweaks[id]);
+  const alreadyOnCount = native
+    ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
+    : safeIds.filter(id => tweaks[id]).length;
+  const actionIds = Array.from(new Set([...missingSafeIds, ...failedRunIds]));
+
+  useEffect(() => {
+    if (!native) return;
+    let mounted = true;
+    const refreshAppliedState = () => {
+      void getAppliedTweakState()
+        .then(state => {
+          if (!mounted) return;
+          setConfirmedAppliedState(state);
+          setNativeAppliedStateError(false);
+          setNativeAppliedStateReady(true);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setNativeAppliedStateError(true);
+          setNativeAppliedStateReady(true);
+        });
+    };
+    const syncRun = (state: NativeTweakRunState | null) => {
+      if (!mounted) return;
+      setLastNativeRun(state);
+      if (state && ["completed", "failed", "stopped"].includes(state.status)) refreshAppliedState();
+    };
+    refreshAppliedState();
+    const unsubscribe = subscribeNativeTweakRun(syncRun);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [native]);
+
+  function handleApplyAndRetry() {
+    try {
+      if (!isNative()) throw new Error("Open Opti Gods for Windows to apply or retry tweaks in the app.");
+      if (!nativeAppliedStateReady || nativeAppliedStateError) {
+        throw new Error("Windows applied tweaks could not be verified. Refresh the scan before applying recommendations.");
+      }
+      if (actionIds.length === 0) return;
+      if (isPro) playOptimizationActionSound();
+      queueTweakBatch(actionIds, { forceReapplyIds: failedRunIds });
+      setApplied(true);
+      window.location.assign("/applied-tweaks?run=1");
+    } catch (error) {
+      toast({ title: "Could not apply or retry recommendations", description: error instanceof Error ? error.message : "The action failed.", variant: "destructive" });
+    }
+  }
+
+  if (!recs.ready || total === 0) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-red-400" />
+          <span className="text-sm font-bold text-white">Smart Recommendations</span>
+          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded border", recs.profileColor.replace("text-", "text-").replace("400", "300"),
+            "bg-zinc-900 border-white/10")}>{recs.profile}</span>
+        </div>
+        <span className="text-[10px] font-bold text-zinc-500">{total} tweaks selected for your rig</span>
+      </div>
+
+      {/* Status + action buttons */}
+      <div className="flex flex-col gap-2">
+        {/* Apply / applied button */}
+        <button
+          data-testid="button-apply-smart-recs"
+          onClick={handleApplyAndRetry}
+          disabled={actionIds.length === 0 || applied || (native && (!nativeAppliedStateReady || nativeAppliedStateError))}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
+            actionIds.length === 0
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+              : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
+          )}
+        >
+          {native && !nativeAppliedStateReady
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking applied state…</>
+            : native && nativeAppliedStateError
+              ? <><AlertTriangle className="w-4 h-4" /> Applied state unavailable</>
+              : actionIds.length === 0
+                ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} tweaks {native ? "confirmed applied" : "selected"}{native && latestRunSkippedIds.size > 0 ? ` · ${latestRunSkippedIds.size} skipped` : ""}</>
+            : applied
+              ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
+              : <>
+                  <Zap className="w-4 h-4" />
+                  <span>
+                    {missingSafeIds.length > 0
+                      ? `Apply ${missingSafeIds.length} missing tweaks`
+                      : `Retry ${failedRunIds.length} failed tweaks`}
+                    {missingSafeIds.length > 0 && failedRunIds.length > 0
+                      ? ` · Retry ${failedRunIds.length} failed`
+                      : ""}
+                  </span>
+                </>}
+        </button>
+        {overallFailedRunCount > failedRunIds.length && (
+          <p className="text-center text-[10px] text-zinc-500">
+            {failedRunIds.length} of {overallFailedRunCount} failed items belong to this AI recommendation set. Review Applied Tweaks for the complete run.
+          </p>
+        )}
+
+      </div>
+      {latestRunIsTerminal && (
+        <div className={cn(
+          "rounded-xl border px-3 py-2 text-[11px]",
+          native && (!nativeAppliedStateReady || nativeAppliedStateError) || missingSafeIds.length > 0 || latestRunSkippedIds.size > 0
+            ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-200"
+            : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-200",
+        )}>
+          {native && !nativeAppliedStateReady
+            ? "Checking applied tweaks on this PC."
+            : native && nativeAppliedStateError
+              ? "Could not verify applied tweaks, so the missing count is unavailable."
+              : missingSafeIds.length > 0
+                ? `${missingSafeIds.length} recommendations remain unapplied.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed in the last run and can be retried above.` : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`
+                : `${alreadyOnCount} recommended tweaks are confirmed applied.${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`}
+        </div>
+      )}
+
+      {/* Expert tweaks callout */}
+      {expertIds.length > 0 && (
+        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[11px] font-bold text-amber-300">{expertIds.length} expert-level tweaks not auto-applied</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">
+              These tweaks (e.g. DisableDefender, VBS/HVCI off) carry real risk and are opt-in only. Enable them individually in their respective tabs — they are included in the total count of {total}.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Why these tweaks */}
+      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Why these tweaks were selected</p>
+        <div className="flex flex-wrap gap-1.5">
+          {recs.reasons.map((r, i) => (
+            <span key={i} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-zinc-800/60 border border-white/5 text-zinc-400">
+              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+              {r}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">AI-selected tweaks and what each changes</p>
+          <span className="text-[10px] font-bold text-zinc-500">{recs.ids.size} tweaks · {recs.profile}</span>
+        </div>
+        <p className="mt-1 text-[10px] text-zinc-600">Each description explains the specific Windows change for this recommendation.</p>
+        <div className="mt-2 max-h-96 space-y-1 overflow-y-auto pr-1">
+          {Array.from(recs.ids)
+            .sort((a, b) => (TWEAK_REGISTRY.find(t => t.id === a)?.title || a).localeCompare(TWEAK_REGISTRY.find(t => t.id === b)?.title || b))
+            .map(id => {
+              const meta = TWEAK_REGISTRY.find(tweak => tweak.id === id);
+              return (
+                <div key={id} className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg border border-white/[.04] bg-white/[.015] px-2.5 py-2">
+                  <p className="min-w-[12rem] flex-1 text-[10px] font-bold text-zinc-200">{meta?.title || id}</p>
+                  <p className="min-w-[16rem] flex-[2] text-[10px] leading-relaxed text-zinc-500">{meta?.plainEnglish || meta?.description || "Included in the detected hardware recommendation profile."}</p>
+                  {meta?.safety === "expert" && <span className="text-[8px] font-black uppercase tracking-wider text-amber-400">Manual only</span>}
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── HW Monitor Panel ─────────────────────────────────────────────────────────
+export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
+  const [hw, setHw] = useState<HwMonitorData | null>(() => loadHwMonitor());
+  const [dragging, setDragging] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  // Seed parent on first render if we already have cached data
+  useEffect(() => {
+    const cached = loadHwMonitor();
+    if (cached) onData?.(cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const parseJson = (text: string) => {
+    setParseError(null);
+    try {
+      const data = JSON.parse(text.replace(/^\uFEFF/, "")) as HwMonitorData;
+      if (!data.timestamp && !data.cpu_name && !data.gpu_name) throw new Error("Not a valid HW Monitor file");
+      try { localStorage.setItem(HW_MONITOR_KEY, JSON.stringify(data)); } catch {}
+      setHw(data);
+      onData?.(data);
+    } catch {
+      setParseError("Invalid file — drop the OptiGods-HW-Monitor.json produced by the BAT script.");
+    }
+  };
+
+  const parseFile = (file: File) => {
+    setParseError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => parseJson(e.target?.result as string);
+    reader.readAsText(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    // In Tauri v2 the OS file-drop is intercepted before DOM events fire.
+    // The useEffect below handles native drops; this branch covers web mode.
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith(".json")) parseFile(file);
+    else setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
+  };
+
+  // In Tauri v2, OS-level drag-drop doesn't fire DOM events — Tauri delivers
+  // a `tauri://drag-drop` event with the file path(s) instead.
+  useEffect(() => {
+    if (!isNative()) return;
+    let unlisten: (() => Promise<void>) | null = null;
+    onFileDrop(async (paths) => {
+      setDragging(false);
+      const jsonPath = paths.find(p => p.toLowerCase().endsWith(".json"));
+      if (!jsonPath) {
+        setParseError("Drop a .json file (OptiGods-HW-Monitor.json).");
+        return;
+      }
+      try {
+        const text = await readTauriTextFile(jsonPath);
+        parseJson(text);
+      } catch (e: unknown) {
+        setParseError(`Could not read file: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Generated entirely client-side — no server fetch, works in the .exe
+  // (apiUrl resolves to optigods.com in Tauri which would return HTML).
+  const downloadBat = () => {
+    // PS1 embedded in the BAT via self-extraction. No admin rights needed.
+    // NOTE: avoid ${...} in the PS1 string — JS template literal would eat it.
+    // PS1 uses ($var + '...') concatenation wherever ${} would normally appear.
+    const ps1Lines = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      ``,
+      `Write-Host ""`,
+      `Write-Host "  ================================================" -ForegroundColor Red`,
+      `Write-Host "    OPTI GODS by leaq  --  Hardware Monitor" -ForegroundColor White`,
+      `Write-Host "  ================================================" -ForegroundColor Red`,
+      `Write-Host ""`,
+      `Write-Host "  Collecting sensor data..." -ForegroundColor DarkGray`,
+      `Write-Host ""`,
+      ``,
+      `$result = [ordered]@{}`,
+      ``,
+      `# GPU via nvidia-smi`,
+      `$smiExe = $null`,
+      `$smiCmd = Get-Command "nvidia-smi.exe" -EA SilentlyContinue`,
+      `if ($smiCmd) { $smiExe = $smiCmd.Source }`,
+      `else {`,
+      `    @("$env:SystemRoot\\System32\\nvidia-smi.exe",`,
+      `      "C:\\Windows\\System32\\nvidia-smi.exe",`,
+      `      "$env:ProgramFiles\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe") | ForEach-Object {`,
+      `        if (!$smiExe -and (Test-Path $_)) { $smiExe = $_ }`,
+      `    }`,
+      `}`,
+      `if ($smiExe) {`,
+      `    $raw = (& $smiExe --query-gpu=temperature.gpu --format=csv,noheader 2>$null).Trim()`,
+      `    if ($raw -match '^\\d+$') { $result.gpu_temp_c = [int]$raw }`,
+      `    $raw = (& $smiExe --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>$null).Trim()`,
+      `    if ($raw -match '^\\d+$') { $result.gpu_load_pct = [int]$raw }`,
+      `    $raw = (& $smiExe --query-gpu=name --format=csv,noheader 2>$null).Trim()`,
+      `    if ($raw) { $result.gpu_name = $raw }`,
+      `    $mu = (& $smiExe --query-gpu=memory.used  --format=csv,noheader,nounits 2>$null).Trim()`,
+      `    $mt = (& $smiExe --query-gpu=memory.total --format=csv,noheader,nounits 2>$null).Trim()`,
+      `    if ($mu -match '^\\d+$' -and $mt -match '^\\d+$') {`,
+      `        $result.gpu_vram_used_mb  = [int]$mu`,
+      `        $result.gpu_vram_total_mb = [int]$mt`,
+      `    }`,
+      `    $raw = (& $smiExe --query-gpu=fan.speed --format=csv,noheader,nounits 2>$null).Trim()`,
+      `    if ($raw -match '^\\d+$') { $result.gpu_fan_pct = [int]$raw }`,
+      `} else {`,
+      `    $result.gpu_name = "NVIDIA GPU (nvidia-smi.exe not found)"`,
+      `}`,
+      ``,
+      `# CPU Temperature (3 fallbacks)`,
+      `$cpuTemp = $null`,
+      `try {`,
+      `    $zones = Get-WmiObject -Namespace "root\\wmi" -Class MSAcpi_ThermalZoneTemperature -EA SilentlyContinue`,
+      `    if ($zones) {`,
+      `        $temps = $zones | ForEach-Object { [math]::Round($_.CurrentTemperature/10.0-273.15,1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 }`,
+      `        if ($temps) { $cpuTemp = ($temps | Measure-Object -Maximum).Maximum }`,
+      `    }`,
+      `} catch {}`,
+      `if (-not $cpuTemp) {`,
+      `    try {`,
+      `        $s = (Get-Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -SampleInterval 1 -MaxSamples 1 -EA SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 2731 }`,
+      `        if ($s) { $k=($s|Measure-Object -Property CookedValue -Maximum).Maximum; $c=[math]::Round($k/10.0-273.15,1); if($c-gt 5 -and $c-lt 120){$cpuTemp=$c} }`,
+      `    } catch {}`,
+      `}`,
+      `if (-not $cpuTemp) {`,
+      `    try {`,
+      `        $ohm = Get-WmiObject -Namespace "root\\OpenHardwareMonitor" -Class Sensor -EA SilentlyContinue | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "CPU Package|CPU Core|Tdie|CPU CCD" }`,
+      `        if ($ohm) { $v=($ohm|Measure-Object -Property Value -Maximum).Maximum; if($v-gt 5 -and $v-lt 120){$cpuTemp=[math]::Round($v,1)} }`,
       `    } catch {}`,
       `}`,
       `$result.cpu_temp_c = $cpuTemp`,
