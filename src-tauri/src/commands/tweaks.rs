@@ -189,6 +189,11 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let script = r#"
 $tabletInputService = Get-CimInstance -ClassName Win32_Service -Filter "Name='TabletInputService'" -ErrorAction SilentlyContinue
+$tabletInputServicePath = 'HKLM:\SYSTEM\CurrentControlSet\Services\TabletInputService'
+$tabletInputServiceStart = $null
+if (Test-Path -LiteralPath $tabletInputServicePath) {
+  $tabletInputServiceStart = (Get-ItemProperty -LiteralPath $tabletInputServicePath -Name Start -ErrorAction SilentlyContinue).Start
+}
 $checks = [ordered]@{
   DebloatOneDrive = (
     -not (Test-Path -LiteralPath "$env:SystemRoot\System32\OneDriveSetup.exe") -and
@@ -209,10 +214,7 @@ $checks = [ordered]@{
     -not (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue) -or
     (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
   );
-  ServiceTabletInput = (
-    -not $tabletInputService -or
-    $tabletInputService.StartMode -eq "Disabled"
-  );
+  ServiceTabletInput = (-not (Test-Path -LiteralPath $tabletInputServicePath) -or $tabletInputServiceStart -eq 4);
   ProcSvc_RetailDemo = (
     -not (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue) -or
     (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Manual"
@@ -377,10 +379,15 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         Some(value) => value.to_string(),
         None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
-    let server_command = consumed
-        .get("command")
-        .and_then(|v| v.as_str())
-        .map(str::to_owned);
+    // The release server's TabletInput command hid sc.exe failures. Verify it locally.
+    let server_command = if args.id == "ServiceTabletInput" {
+        None
+    } else {
+        consumed
+            .get("command")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned)
+    };
     #[allow(unused_mut)]
     let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {
@@ -576,6 +583,11 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
 /// will ever run are the literals embedded directly in this table.
 fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
     const TABLE: &[(&str, &str, &str)] = &[
+        (
+              "ServiceTabletInput",
+              "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\TabletInputService'; if(Test-Path -LiteralPath $p){ $svc=Get-Service -Name 'TabletInputService' -ErrorAction Stop; if($svc.Status -ne 'Stopped'){ Stop-Service -Name 'TabletInputService' -Force -ErrorAction Stop }; Set-Service -Name 'TabletInputService' -StartupType Disabled -ErrorAction Stop; $start=Get-ItemPropertyValue -LiteralPath $p -Name Start -ErrorAction Stop; if($start -ne 4){throw 'Windows did not verify TabletInputService startup mode Disabled.'} } else { Write-Host 'TabletInputService is not installed; no action required.' }",
+              "$p='HKLM:\\SYSTEM\\CurrentControlSet\\Services\\TabletInputService'; if(Test-Path -LiteralPath $p){ Set-Service -Name 'TabletInputService' -StartupType Manual -ErrorAction Stop; $start=Get-ItemPropertyValue -LiteralPath $p -Name Start -ErrorAction Stop; if($start -ne 3){throw 'Windows did not verify TabletInputService startup mode Manual.'} } else { Write-Host 'TabletInputService is not installed; no action required.' }",
+          ),
         (
             "ClearDnsCache",
             "ipconfig /flushdns | Out-Null",

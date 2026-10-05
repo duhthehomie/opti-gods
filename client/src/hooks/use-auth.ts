@@ -49,7 +49,7 @@ export function useAuth(): AuthState {
   // The UI shows "not authenticated" immediately and updates silently
   // once the real /api/me response arrives. This eliminates any
   // black loading-screen phase in both web and native builds.
-  const { data, isLoading, isFetched } = useQuery<{ user: AuthUser | null }>({
+  const { data, isLoading, isFetched, isFetchedAfterMount } = useQuery<{ user: AuthUser | null }>({
     queryKey: ["/api/me"],
     retry: false,
     staleTime: 30_000,
@@ -58,12 +58,12 @@ export function useAuth(): AuthState {
     placeholderData: { user: null },
     enabled: nativeAuthReady,
   });
-  const user = data?.user ?? null;
+  const user = native && (!nativeAuthReady || !isFetchedAfterMount || isError) ? null : data?.user ?? null;
   // Native navigation can reload the WebView while the desktop token is
   // still being restored from Credential Manager. placeholderData is useful
   // for web rendering, but treating it as a real unauthenticated response
   // briefly shows Welcome before /api/me has actually answered.
-  const nativeAuthLoading = native && (!nativeAuthReady || !isFetched);
+  const nativeAuthLoading = native && (!nativeAuthReady || !isFetchedAfterMount);
   return { user, isLoading: isLoading || nativeAuthLoading, isAuthenticated: !!user };
 }
 

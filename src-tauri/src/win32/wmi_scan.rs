@@ -312,8 +312,18 @@ pub fn scan() -> Result<HardwareScan> {
         network_band,
         anticheats: Vec::new(),
         system_model: computers.first().and_then(|c| {
-            let value = format!("{} {}", c.manufacturer.as_deref().unwrap_or(""), c.model.as_deref().unwrap_or(""));
-            let value = value.trim().to_string();
+            let manufacturer = c.manufacturer.as_deref().unwrap_or("").trim();
+            let model = c.model.as_deref().unwrap_or("").trim();
+            let value = if model.is_empty() {
+                manufacturer.to_string()
+            } else if manufacturer.is_empty()
+                || model.eq_ignore_ascii_case(manufacturer)
+                || model.to_ascii_lowercase().starts_with(&format!("{} ", manufacturer.to_ascii_lowercase()))
+            {
+                model.to_string()
+            } else {
+                format!("{manufacturer} {model}")
+            };
             (!value.is_empty()).then_some(value)
         }),
         os_name: operating_systems.first().and_then(|o| o.caption.clone()),

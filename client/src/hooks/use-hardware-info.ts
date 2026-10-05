@@ -330,6 +330,9 @@ function detectCpuInfo(cpuName: string): {
   return { cpuBrand, isRyzen, isIntelCore, cpuGeneration };
 }
 
+export function normalizeSystemModel(value?: string | null): string {
+  return (value ?? "").trim().replace(/^(\S+)(?:\s+\1)+(?=\s|$)/i, "$1").trim();
+}
 export function useHardwareInfo(): HardwareInfo {
   const [info, setInfo] = useState<HardwareInfo>({
     cpuCores: 0,
@@ -454,7 +457,7 @@ export function useHardwareInfo(): HardwareInfo {
     // Hybrid GPU is a near-certain laptop signal too (Intel iGPU + NVIDIA dGPU).
     const isLaptop = isHybridGpu && hasIntegratedGpu && (isNvidia || isAmdGpu);
 
-    const systemModel = scanned?.SystemModel?.trim() || "";
+    const systemModel = normalizeSystemModel(scanned?.SystemModel);
 
     setInfo({
       cpuCores,

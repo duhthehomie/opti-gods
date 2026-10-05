@@ -73,12 +73,30 @@ if ($os) {
 }
 
 $gpu = $null
+$nvidiaPath = $null
 $nvidia = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
-if ($nvidia) {
-  $line = (& $nvidia.Source --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1)
-  if ($line -match '^\s*(\d+)\s*,\s*(\d+)\s*$') {
-    $out.gpu_load_pct = [double]$matches[1]
-    $out.gpu_temp_c = [double]$matches[2]
+if ($nvidia) { $nvidiaPath = $nvidia.Source }
+if (-not $nvidiaPath) {
+  $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+  $candidates = @(
+    "$env:ProgramFiles\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+    "$env:SystemRoot\System32\nvidia-smi.exe",
+    "$programFilesX86\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+  )
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path -LiteralPath $candidate)) { $nvidiaPath = $candidate; break }
+  }
+}
+if ($nvidiaPath) {
+  $line = (& $nvidiaPath --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1)
+  if ($line -match '^\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?|N/A|Not Supported)\s*$') {
+    $loadText = $matches[1]
+    $temperatureText = $matches[2]
+    $out.gpu_load_pct = [double]$loadText
+    if ($temperatureText -match '^\d+(?:\.\d+)?$') {
+      $temperature = [double]$temperatureText
+      if ($temperature -gt 5 -and $temperature -lt 130) { $out.gpu_temp_c = $temperature }
+    }
   }
 }
 if ($null -eq $out.gpu_temp_c) {

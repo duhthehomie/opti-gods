@@ -1,4 +1,4 @@
 {
-  "version": "5.2.42",
-  "notes": "V5.2.42 — verifies Windows tweak changes, fixes NVIDIA adapter targeting, includes the NVIDIA preset in eligible missing-tweak actions, removes personal identity from bundled assets, and refreshes the Minecraft and Overwatch game covers."
+  "version": "5.2.43",
+  "notes": "V5.2.43 — fixes Tablet Input service verification and duplicate PC labels, improves live NVIDIA temperature discovery, prevents stale account flashes, and smooths desktop tab navigation."
 }

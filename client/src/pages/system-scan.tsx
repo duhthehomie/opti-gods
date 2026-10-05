@@ -1,7 +1,7 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
+import { useHardwareInfo, saveScannedInfo, normalizeSystemModel } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
@@ -1016,7 +1016,7 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/5 bg-zinc-900/60">
               <MonitorCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 shrink-0">My PC</span>
-              <span className="text-white text-xs font-semibold truncate">{hw.system_model}</span>
+              <span className="text-white text-xs font-semibold truncate">{normalizeSystemModel(hw.system_model)}</span>
             </div>
           )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
@@ -1449,7 +1449,7 @@ export default function SystemScanPage() {
 
         {/* My PC — system model banner (shown when scan data includes model) */}
         {(() => {
-          const model = (nativeScan?.system_model || hw.systemModel || "").trim();
+          const model = normalizeSystemModel(nativeScan?.system_model || hw.systemModel);
           if (!model) return null;
           return (
             <motion.div

@@ -222,12 +222,42 @@ function FriendUnlockHandler() {
   return null;
 }
 
+function RouteLoadingFallback() {
+  return (
+    <div role="status" aria-live="polite" className="fixed inset-0 z-[200] flex min-h-screen items-center justify-center bg-[#020202] text-zinc-300">
+      <div className="flex items-center gap-3">
+        <span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-red-500/30 border-t-red-500" />
+        <span className="text-xs font-semibold uppercase tracking-[0.2em]">Loading page…</span>
+      </div>
+    </div>
+  );
+}
+
+const NATIVE_NAV_PRELOADERS: Array<() => Promise<unknown>> = [
+  () => import("@/pages/tweaks"),
+  () => import("@/pages/tools-fixes"),
+  () => import("@/pages/system-scan"),
+  () => import("@/pages/applied-tweaks"),
+  () => import("@/pages/power-plans"),
+  () => import("@/pages/game-profiles"),
+  () => import("@/pages/processes"),
+];
+
 function Router() {
   const HomeComponent = isNative() ? Dashboard : SmartHome;
+  useEffect(() => {
+    if (!isNative()) return;
+    const timer = window.setTimeout(() => {
+      for (const preload of NATIVE_NAV_PRELOADERS) {
+        void preload().catch(error => console.warn("Could not preload a desktop tab.", error));
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
   return (
     <>
       <RouteSeo />
-      <Suspense fallback={null}>
+      <Suspense fallback={<RouteLoadingFallback />}>
         <Switch>
         <Route path="/" component={HomeComponent} />
         <Route path="/dashboard" component={Dashboard} />
