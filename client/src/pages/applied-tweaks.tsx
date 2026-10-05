@@ -210,6 +210,10 @@ async function downloadRunDiagnosticLog(
   const stamp = generatedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const filename = `OptiGods-V5-Tweak-Run-Error-Log-${stamp}.txt`;
   const content = lines.join("\n");
+  if (isNative()) {
+    await saveDiagnosticLog(filename, content);
+    return filename;
+  }
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -219,7 +223,6 @@ async function downloadRunDiagnosticLog(
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
-  if (isNative()) await openDownloadsFolder();
   return filename;
 }
 
