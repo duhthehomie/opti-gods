@@ -15,6 +15,7 @@ import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { playOptimizationActionSound } from "@/lib/action-sound";
+import { NVIDIA_PRESET_ACTION_ID, queueTweakBatch } from "@/lib/native-tweak-runner";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 
@@ -104,6 +105,17 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
 
   const runEnable = async () => {
     if (applying) return;
+    if (id === NVIDIA_PRESET_ACTION_ID) {
+      if (!isNative()) {
+        toast({ title: "Windows app required", description: "Open the Opti Gods Windows app to submit the NVIDIA preset." });
+        return;
+      }
+      if (!window.confirm("Submit the global NVIDIA profile and set standard Digital Vibrance to 85%? Driver values are not safely readable afterward.")) return;
+      queueTweakBatch([id], { source: "nvidia-preset-tweak-row" });
+      onCheckedChange(true);
+      window.location.assign("/applied-tweaks?run=1");
+      return;
+    }
     if (!isNative()) {
       onCheckedChange(true);
       toast({ title: "Tweak selected", description: "It will be included when you run your selected tweaks." });
