@@ -1,4 +1,4 @@
 {
-  "version": "5.2.41",
-  "notes": "V5.2.41 — preserves applied-tweak history separately from live Windows checks, uses Revision Ultra Performance without duplicates, reports NVIDIA preset submissions accurately, and improves FiveM Graphics Studio previews and navigation."
+  "version": "5.2.42",
+  "notes": "V5.2.42 — verifies Windows tweak changes, fixes NVIDIA adapter targeting, includes the NVIDIA preset in eligible missing-tweak actions, removes personal identity from bundled assets, and refreshes the Minecraft and Overwatch game covers."
 }
