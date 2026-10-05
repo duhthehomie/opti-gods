@@ -644,11 +644,17 @@ async function applyTweakBatchInternal(
       }
       osApplied = true;
       const store = useOptimizationStore.getState();
-      store.markApplied([id]);
-      saveUndoToken(id, result.undo_token);
+      if (id === NVIDIA_PRESET_ACTION_ID) {
+        store.setTweak(id, true);
+        saveUndoToken(id, null);
+      } else {
+        store.markApplied([id]);
+        saveUndoToken(id, result.undo_token);
+      }
       appliedIds.push(id);
       emitProgress({
-        id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied", message: result.message,
+        id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied",
+        message: id === NVIDIA_PRESET_ACTION_ID ? `${result.message} Driver values are submitted but not read back.` : result.message,
       });
       // Keep allowance cards and the Applied Tweaks page current during a
       // long run, not only after the final item. The server result callback
