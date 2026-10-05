@@ -32,6 +32,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   });
 }
 
+function getThrownMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error && typeof error === "object") {
+    const details = error as Record<string, unknown>;
+    for (const key of ["message", "error", "reason"]) {
+      const value = details[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return fallback;
+}
+
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -182,7 +195,7 @@ function finishPersistedRun(runId: string, result?: BulkTweakResult, error?: unk
     items: error
       ? state.items.map(item => item.status === "applied" || item.status === "skipped" || item.status === "failed" || item.status === "stopped"
         ? item
-        : { ...item, status: "failed", message: error instanceof Error ? error.message : "The runner stopped unexpectedly." })
+        : { ...item, status: "failed", message: getThrownMessage(error, "The runner stopped unexpectedly.") })
       : state.items,
   });
   void result;
@@ -513,11 +526,7 @@ async function applyTweakBatchInternal(
       }
       sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
     } catch (error) {
-      const detail = error instanceof Error
-        ? error.message
-        : typeof error === "string" && error.trim()
-          ? error.trim()
-          : "Could not create a verified restore point.";
+      const detail = getThrownMessage(error, "Could not create a verified restore point.");
       const message = `Restore point failed: ${detail} Turn on System Protection for drive C: and try again.`;
       supportedIds.forEach((id, index) => emitProgress({
         id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message,
@@ -654,7 +663,7 @@ async function applyTweakBatchInternal(
       appliedIds.push(id);
       emitProgress({
         id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied",
-        message: id === NVIDIA_PRESET_ACTION_ID ? `${result.message} Driver values are submitted but not read back.` : result.message,
+        message: id === NVIDIA_PRESET_ACTION_ID ? `${result.message} NVIDIA 3D profile values are submitted but not read back by the driver.` : result.message,
       });
       // Keep allowance cards and the Applied Tweaks page current during a
       // long run, not only after the final item. The server result callback
@@ -673,7 +682,7 @@ async function applyTweakBatchInternal(
           `OG-NET-003 · Ticket cleanup timed out for ${id}.`,
         ).catch(() => {});
       }
-      const message = error instanceof Error ? error.message : "Windows rejected the change.";
+      const message = getThrownMessage(error, "Windows rejected the change.");
       if (compatibilitySkipMessage) {
         skippedIds.push(id);
         emitProgress({
