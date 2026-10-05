@@ -47,6 +47,7 @@
     "allow-read-live-performance",
     "allow-save-performance-recording",
     "allow-install-fivem-pack",
+    "allow-save-fivem-pack-zip",
     "allow-uninstall-fivem-pack",
     "allow-open-fivem-folder",
     "allow-open-msi-utility",
