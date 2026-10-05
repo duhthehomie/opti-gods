@@ -16,16 +16,15 @@ import { Button } from "@/components/ui/button";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { getRecordedAppliedTweaks, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
+import { isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { createRestorePoint, getNativeAuthToken, importNvidiaPreset, isNative, openMsiUtility } from "@/lib/tauri-bridge";
-import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
+import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID } from "@/lib/native-tweak-runner";
+import { getNativeAuthToken, isNative, openMsiUtility } from "@/lib/tauri-bridge";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
 const ALL_NVIDIA_IDS = ["NvidiaDisableTelemetry","NvidiaPreRenderedFrames","NvidiaOptimizeLatency","NvidiaMaxPerfMode","NvidiaShaderCache","NvidiaDisableOverlay","NvidiaLowLatency","NvidiaThreadedOpt","NvidiaForceVSyncOff","NvidiaPowerMizer","EnableHAGS","EnableMSIMode","NvidiaAnisoFiltering","NvidiaTripleBufferOff","NvidiaReflexEnable","NvidiaGSyncOptimize","NvidiaOpenGLOpt","NvidiaVRAMMax","NvShaderDiskCache","NvTextureFilterPerf","NvFXAADriverOff","NvidiaCUDAPriority","NvidiaShaderCacheUnlimited","NvidiaFrameBufferOpt","NvidiaDisableAnsel","NvidiaDisableContainerLS","NvidiaDisableShadowPlay","NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax","EnableNvidiaMSIPro",
-  "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force"];
+  "NvidiaD3DOptimize","NvidiaInterruptAffinity","NvidiaPCIeGen3Force","NvidiaControlPanelSettings"];
 
 // V2.2 — driver-class tweaks that survive game restarts but are wiped on driver
 // reinstall. The "Reapply driver tweaks" button re-emits ONLY these as a focused
@@ -101,6 +100,13 @@ const PRESETS = [
 ];
 
 const NVIDIA_TWEAKS = [
+  {
+    id: "NvidiaControlPanelSettings",
+    title: "Opti Gods NVIDIA Control Panel Preset",
+    desc: "Pro-only. Requires exactly one dedicated, non-hybrid NVIDIA GPU and NVIDIA Control Panel. Sets standard Digital Vibrance to 85%; the driver does not expose safe value readback, so completion means submitted, not verified.",
+    badge: "RECOMMENDED",
+    impact: "HIGH" as const,
+  },
   {
     id: "NvidiaDisableTelemetry",
     title: "Disable NVIDIA Telemetry Services",
@@ -310,7 +316,6 @@ export default function Nvidia() {
   const smartRecs = computeSmartRecs(hw, os);
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
-  const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id));
   const discreteNvidiaGpus = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated);
   const safeMsiBlockReason = hw.loading || hw.gpuName === "Detecting..."
     ? "Detecting your graphics topology — run the hardware scan first."
@@ -327,7 +332,6 @@ export default function Nvidia() {
   const [proToolBusy, setProToolBusy] = useState<string | null>(null);
   const [controlPanelInstalled, setControlPanelInstalled] = useState<boolean | null>(null);
   const [controlPanelCheckFailed, setControlPanelCheckFailed] = useState(false);
-  const [nvidiaPresetSubmittedAt, setNvidiaPresetSubmittedAt] = useState<number | null>(null);
   useEffect(() => {
     let disposed = false;
     if (!isNative()) {
@@ -342,28 +346,17 @@ export default function Nvidia() {
           setControlPanelCheckFailed(true);
         }
       });
-    void getRecordedAppliedTweaks()
-      .then(history => {
-        const timestamp = history.NvidiaControlPanelSettings;
-        if (!disposed && timestamp > 0) setNvidiaPresetSubmittedAt(timestamp);
-      })
-      .catch(() => {});
     return () => { disposed = true; };
   }, []);
-  const runProTool = async (id: "OpenMsiUtilityPro" | "ImportNvidiaPresetPro", label: string) => {
+  const runProTool = async (label: string) => {
+    const id = "OpenMsiUtilityPro";
     if (!isPro || !isNative() || proToolBusy) return;
-    if (id === "ImportNvidiaPresetPro" && !window.confirm("Create a verified Windows restore point, then import the verified performance preset? This changes the global NVIDIA driver profile.")) return;
     setProToolBusy(id);
     try {
-      if (id === "ImportNvidiaPresetPro" && !sessionStorage.getItem(NATIVE_RESTORE_CREATED_KEY)) {
-        const restorePoint = await createRestorePoint("Before Opti Gods NVIDIA preset");
-        if (!restorePoint?.sequence_number) throw new Error("Windows did not confirm a restore point before the NVIDIA preset.");
-        sessionStorage.setItem(NATIVE_RESTORE_CREATED_KEY, String(restorePoint.sequence_number));
-      }
       const nativeAuth = await getNativeAuthToken();
       const proSession = localStorage.getItem(PRO_SESSION_KEY);
       const deviceId = getPersistentDeviceId();
-      const auth = nativeAuth || (proSession ? `pro:${proSession}` : null) || (deviceId ? `device:${deviceId}` : null);
+      const auth = nativeAuth || (proSession ? "pro:" + proSession : null) || (deviceId ? "device:" + deviceId : null);
       if (!auth) throw new Error("Sign in or redeem Pro in the Windows app before using this tool.");
       const response = await fetch(apiUrl("/api/performance-allowance/native-ticket"), {
         method: "POST", credentials: "include",
@@ -372,24 +365,14 @@ export default function Nvidia() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || typeof body.ticket !== "string") throw new Error(body.error || "The server did not authorize this one-use Pro tool ticket.");
-      const message = id === "OpenMsiUtilityPro"
-        ? await openMsiUtility(body.ticket, auth)
-        : await importNvidiaPreset(body.ticket, auth);
-      if (id === "ImportNvidiaPresetPro") {
-        setNvidiaPresetSubmittedAt(Date.now());
-        void getRecordedAppliedTweaks().then(history => {
-          if (history.NvidiaControlPanelSettings) setNvidiaPresetSubmittedAt(history.NvidiaControlPanelSettings);
-        }).catch(() => {});
-      }
-      toast({
-        title: id === "ImportNvidiaPresetPro" ? "NVIDIA Control Panel Settings" : `${label} complete`,
-        description: message,
-        variant: "success",
-      });
+      const message = await openMsiUtility(body.ticket, auth);
+      toast({ title: label + " complete", description: message, variant: "success" });
     } catch (error) {
-      toast({ title: `${label} failed`, description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      toast({ title: label + " failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally { setProToolBusy(null); }
   };
+  const canApplyNvidiaPreset = isNative() && isPro && hw.scanned && discreteNvidiaGpus.length === 1 && !hw.isHybridGpu && controlPanelInstalled === true;
+  const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id) && (id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset));
   const enableSafeMsi = async () => {
     if (!isPro || !canEnableSafeMsi) return;
     const result = await applyTweakBatch(["EnableNvidiaMSIPro"]);
@@ -403,7 +386,8 @@ export default function Nvidia() {
     }
   };
   const applyBulk = async (ids: string[], label = "NVIDIA recommendations") => {
-    const pending = getPendingRecommendationIds(ids, tweaks, appliedAt);
+    const eligibleIds = ids.filter(id => id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset);
+    const pending = getPendingRecommendationIds(eligibleIds, tweaks, appliedAt);
     if (!pending.length) {
       toast({ title: "No compatible pending tweaks", description: "All recommendations are already confirmed or incompatible with this PC.", variant: "destructive" });
       return;
@@ -512,23 +496,16 @@ export default function Nvidia() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
-              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("OpenMsiUtilityPro", "MSI Utility v3 High mode")} className="bg-red-700 text-xs hover:bg-red-600">
+              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("MSI Utility v3 High mode")} className="bg-red-700 text-xs hover:bg-red-600">
                 {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3 · High mode"}
               </Button>
-              <Button disabled={!isNative() || !!proToolBusy || discreteNvidiaGpus.length !== 1 || controlPanelInstalled !== true} onClick={() => void runProTool("ImportNvidiaPresetPro", "verified performance preset")} variant="outline" className="border-red-400/30 text-xs">
-                {proToolBusy === "ImportNvidiaPresetPro" ? "Importing…" : "Import verified performance preset"}
-              </Button>
-            </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
+                          </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
           {controlPanelInstalled === false && isNative() && <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">NVIDIA Control Panel is not installed. Preset import is disabled on this PC.</p>}
           {controlPanelInstalled === null && isNative() && (controlPanelCheckFailed
             ? <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">Could not verify NVIDIA Control Panel installation. Preset import remains disabled; retry after restarting the app.</p>
             : <p className="mt-3 text-[11px] text-zinc-500">Checking NVIDIA Control Panel installation…</p>)}
-          {controlPanelInstalled && nvidiaPresetSubmittedAt && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-500/[.04] px-3 py-2">
-            <div><p className="text-xs font-bold text-zinc-100">NVIDIA Control Panel Settings</p><p className="text-[10px] text-zinc-400">Preset submitted successfully; the NVIDIA driver does not expose safe readback.</p></div>
-            <span className="text-[9px] font-mono font-bold text-blue-300">SUBMITTED · NOT READ BACK</span>
-          </div>}
-          <p className="mt-3 text-[11px] text-amber-300">
+                    <p className="mt-3 text-[11px] text-amber-300">
             On supported single-NVIDIA topologies, select only the active graphics card, check MSI, choose High, then Apply in MSI Utility v3. Hybrid and multi-GPU systems stay blocked; driver updates reset this setting.
           </p>
         </section>
@@ -725,7 +702,7 @@ export default function Nvidia() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">NVIDIA Registry Tweaks</h2>
             <div className="flex-1 h-px bg-white/5 ml-2" />
             {(() => {
-              const recIds = NVIDIA_TWEAKS.filter(t => t.badge === "RECOMMENDED").map(t => t.id);
+              const recIds = NVIDIA_TWEAKS.filter(t => t.badge === "RECOMMENDED" && (t.id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset)).map(t => t.id);
               const pending = getPendingRecommendationIds(recIds, tweaks, appliedAt);
               const allOn = recIds.length > 0 && pending.length === 0;
               const noScan = hw.gpuName === "Detecting..." || hw.loading;
@@ -745,7 +722,7 @@ export default function Nvidia() {
             })()}
           </div>
           <div className="space-y-5">
-            {NVIDIA_TWEAKS.map((item, i) => (
+            {NVIDIA_TWEAKS.filter(item => item.id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset).map((item, i) => (
               <TweakRow
                 key={item.id}
                 id={item.id}
