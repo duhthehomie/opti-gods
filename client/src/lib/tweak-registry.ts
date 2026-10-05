@@ -649,26 +649,14 @@ export const TWEAK_REGISTRY: TweakMeta[] = [
   { id: "KeyboardDisableStickyKeys",category: "keyboard", safety: "safe", plainEnglish: "Disables Sticky Keys popup that interrupts gameplay on Shift press.", verifiedOn: { win10: true, win11: true }, title: "Disable Sticky Keys Shortcut", description: "Disables the Sticky Keys popup (triggered by pressing Shift 5 times). In games that need rapid Shift (sprint, crouch, slide), this popup can pause or alt-tab your game.", badge: "RECOMMENDED", impact: "HIGH", recommended: true },
   { id: "KeyboardDataQueueSize",    category: "keyboard", safety: "safe", plainEnglish: "Reduces keyboard input buffer from 100 to 20 entries for lower key latency.", verifiedOn: { win10: true, win11: true }, title: "Reduce Keyboard Input Buffer (kbdclass)", description: "Sets KeyboardDataQueueSize=20 in the kbdclass driver (default 100). Smaller buffer means keystrokes are processed with less queuing overhead — lower key-to-action latency.", impact: "MED" },
   { id: "KeyboardHIDPowerSave",     category: "keyboard", safety: "safe", plainEnglish: "Disables USB power management for all HID keyboard devices.", verifiedOn: { win10: true, win11: true }, title: "Disable Keyboard HID Power Management", description: "Sets EnhancedPowerManagementEnabled=0 on every detected keyboard — prevents USB controller from suspending your keyboard port, eliminating first-keypress wake latency.", impact: "MED" },
+  { id: "NvidiaControlPanelSettings", category: "nvidia", safety: "safe", plainEnglish: "Submits the global NVIDIA driver profile and standard Digital Vibrance setting.", verifiedOn: { win10: true, win11: true }, title: "Opti Gods NVIDIA Control Panel Preset", description: "Pro-only. Requires exactly one dedicated, non-hybrid NVIDIA GPU. Sets standard Digital Vibrance to 85%; NVIDIA does not expose safe driver-value readback, so completion means submitted, not verified.", badge: "PRO", impact: "HIGH", recommended: true },
 ];
 
 export const TWEAK_BY_ID: Map<string, TweakMeta> = new Map(
     TWEAK_REGISTRY.map((t) => [t.id, t])
 );
 
-const NVIDIA_PROFILE_ACTION_META: TweakMeta = {
-    id: "NvidiaControlPanelSettings",
-    category: "nvidia",
-    safety: "safe",
-    plainEnglish: "Submits the NVIDIA global driver profile through the Pro-authorized importer.",
-    verifiedOn: { win10: true, win11: true },
-    title: "Opti Gods NVIDIA Preset",
-    description: "A separate, Pro-authorized NVIDIA Profile Inspector action. Driver values are submitted but not read back.",
-    badge: "PRO",
-    impact: "HIGH",
-};
-
 export function getTweakMeta(id: string): TweakMeta | undefined {
-    if (id === NVIDIA_PROFILE_ACTION_META.id) return NVIDIA_PROFILE_ACTION_META;
     return TWEAK_BY_ID.get(id);
 }
 
