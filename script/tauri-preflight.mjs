@@ -7,15 +7,18 @@ const capability = JSON.parse(readFileSync("src-tauri/capabilities/default.json"
 const registeredCommands = new Set(
   Array.from(rustEntrypoint.matchAll(/commands::[\w:]+::(\w+),/g), match => match[1]),
 );
-const allowedCommands = new Map(
-  Array.from(
-    permissionManifest.matchAll(
-      /identifier\s*=\s*"([^"]+)"[\s\S]*?commands\.allow\s*=\s*\["([^"]+)"\]/g,
-    ),
-    match => [match[2], match[1]],
-  ),
-);
-const capabilityPermissions = new Set(capability.permissions);
+const allowedCommands = new Map();
+    for (const [, block] of permissionManifest.matchAll(
+      /\[\[permission\]\]\s*([\s\S]*?)(?=\n\[\[permission\]\]|\n\[permission_set\]|$)/g,
+    )) {
+      const identifier = block.match(/^\s*identifier\s*=\s*"([^"]+)"/m)?.[1];
+      const commandList = block.match(/commands\.allow\s*=\s*\[([\s\S]*?)\]/)?.[1];
+      if (!identifier || !commandList) continue;
+      for (const [, command] of commandList.matchAll(/"([^"]+)"/g)) {
+        allowedCommands.set(command, identifier);
+      }
+    }
+    const capabilityPermissions = new Set(capability.permissions);
 const missingCommandPermissions = Array.from(registeredCommands)
   .filter(command => !allowedCommands.has(command))
   .sort();
