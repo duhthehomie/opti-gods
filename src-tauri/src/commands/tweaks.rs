@@ -292,7 +292,6 @@ pub fn get_recorded_applied_tweaks() -> std::result::Result<BTreeMap<String, u64
 }
 
 #[tauri::command]
-pub async fn apply_tweak#[tauri::command]
 pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     if matches!(args.id.as_str(), "OpenMsiUtilityPro" | "ImportNvidiaPresetPro") {
         return TweakResult {
