@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { isNative, openDownloadsFolder, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
+import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
