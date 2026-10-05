@@ -46,9 +46,10 @@ export async function getAppliedTweakSources(): Promise<AppliedTweakSources> {
  * known live false always wins over an older success record.
  */
 export async function getAppliedTweakState(): Promise<Record<string, boolean>> {
-  const { currentWindows, recordedAt } = await getAppliedTweakSources();
+  const { currentWindows, recordedAt, nvidiaPresetSubmittedAt } = await getAppliedTweakSources();
   return {
     ...Object.fromEntries(Object.keys(recordedAt).map(id => [id, true])),
+    ...(nvidiaPresetSubmittedAt != null && nvidiaPresetSubmittedAt > 0 ? { NvidiaControlPanelSettings: true } : {}),
     ...currentWindows,
   };
 }
