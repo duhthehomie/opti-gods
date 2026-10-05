@@ -358,13 +358,13 @@ const FIVEM_UNIVERSAL: string[] = [
 
 /** FiveM Ryzen CPU affinity tweaks — AMD only */
 const FIVEM_RYZEN_AFFINITY: string[] = [
-  "FiveM3500CoreAffinity", "FiveM3500PerfPlan",
-  "FiveM5600CoreAffinity", "FiveM5600PowerPlan",
+  "FiveM3500CoreAffinity",
+  "FiveM5600CoreAffinity",
 ];
 
 /** FiveM Intel 12th–14th gen hybrid CPU tweaks (P-core affinity + Ultra perf plan) */
 const FIVEM_INTEL_12_14: string[] = [
-  "FiveMIntel14PcoreAffinity", "FiveMIntel14PowerPlan",
+  "FiveMIntel14PcoreAffinity",
 ];
 
 /** FiveM tweaks that require NVIDIA */
@@ -517,8 +517,7 @@ const AMD_IGPU_EXTRA: string[] = [
 /** Intel Arrow Lake / lunar lake CPU extras */
 const INTEL_ARROW_TWEAKS: string[] = [
   "ArrowAPOOptIn", "ArrowThreadDirectorHint", "ArrowEcoreParkPolicy",
-  "ArrowLunarLakePowerPlan", "ArrowITDTelemetryOff",
-  "IntelOldGenPowerOpt",
+  "ArrowITDTelemetryOff",
 ];
 
 /** Intel laptop CPU tweaks */
@@ -572,7 +571,7 @@ const NVIDIA_GTX_EXTRA: string[] = [
 
 const AMD_DGPU_CORE: string[] = [
   "EnableHAGS", "AmdDisableULPS", "AmdDisableChill", "AmdDisablePowerEfficiency",
-  "AmdMaxClockState", "AmdForcePerformancePowerPlan", "AmdOptimizeLatency",
+  "AmdMaxClockState", "AmdOptimizeLatency",
   "AmdDisableTelemetry", "AmdShaderCache",
   "AmdDisableVSR", "AmdDisableCrashDefender", "AmdDisableFreeSyncCompetitive",
   "AmdDisableVariBright", "AmdImageSharpening", "AmdAntiLag",
@@ -587,7 +586,7 @@ const AMD_DGPU_CORE: string[] = [
 const AMD_IGPU_CORE: string[] = [
   "IGpu_DisableULPS", "IGpu_DisableDeepSleep", "IGpu_DisableVariBright",
   "IGpu_ForcePerformancePower", "IGpu_AmdAntiLag", "IGpu_SharedMemoryHint",
-  "IGpu_DisableMPO", "IGpu_AmdTdrLevel", "IGpu_UltimatePerformancePlan",
+  "IGpu_DisableMPO", "IGpu_AmdTdrLevel",
   "IGpu_MaxProcessorState", "IGpu_DisableCoreParking", "IGpu_GameModeOn",
   "IGpu_NetworkThrottling", "IGpu_DisableHAGSForIGpu",
   "IGpu_AmdDisableHDCP", "IGpu_AmdVegaAudioOff",
@@ -596,12 +595,12 @@ const AMD_IGPU_CORE: string[] = [
 const INTEL_IGPU_CORE: string[] = [
   "IGpu_Intel_MaxFreq", "IGpu_Intel_DisableFreqScaling", "IGpu_Intel_TDR",
   "IGpu_Intel_PanelFitter", "IGpu_Intel_QSVOff",
-  "IGpu_ForcePerformancePower", "IGpu_UltimatePerformancePlan",
+  "IGpu_ForcePerformancePower",
   "IGpu_DisableHAGSForIGpu",
 ];
 
 const LAPTOP_CORE: string[] = [
-  "Lap_UltimatePerformance", "Lap_DisableCoreParking", "Lap_DisableThrottleStates",
+  "Lap_DisableCoreParking", "Lap_DisableThrottleStates",
   "Lap_MaxProcessorStateAC", "Lap_USBPowerSave", "Lap_WifiPerfMode",
   "Lap_DisablePowerThrottling", "Lap_DisableHibernate",
   "Lap_DisableTurboOnBattery", "Lap_DisableAdaptiveBrightness",
@@ -643,8 +642,6 @@ const COD_UNIVERSAL: string[] = [
 ];
 /** COD tweaks that only apply on NVIDIA hardware */
 const COD_NVIDIA: string[] = ["Cod1650LowLatency"];
-/** COD tweaks that only apply on AMD CPU builds */
-const COD_AMD_CPU: string[] = ["Cod3500PowerPlan"];
 
 /** Hardware-summary string for prompts/UI. */
 export function summarizeHardware(hw: PresetHardware): string {
@@ -810,7 +807,6 @@ export function buildSafePreset(
   // COD / Warzone game pack — always included
   COD_UNIVERSAL.forEach(id => candidates.add(id));
   if (hw.gpuVendor === "nvidia") COD_NVIDIA.forEach(id => candidates.add(id));
-  if (hw.cpuBrand === "amd") COD_AMD_CPU.forEach(id => candidates.add(id));
   reasons.push("COD/Warzone pack: priority, network, shader cache, Battle.net agent kill, pagefile, TDR delay, MMCSS, QoS, frame pacing, GPU priority, raw input, VRAM shader budget");
 
   // 2. Goal-driven nudges (advisory: tighten or relax)

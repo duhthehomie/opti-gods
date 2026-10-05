@@ -207,13 +207,13 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
      "ProcNUMAAware","ProcAffinityFPS",
     ].forEach(id => ids.add(id));
     if (hw.cpuGeneration >= 5) {
-      reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — Zen 3+ power plan + Precision Boost 2 pinned to 100%`);
+      reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — the Opti Gods/ReviOS plan remains the universal power-plan recommendation`);
     } else if (hw.cpuGeneration >= 3) {
-      ["FiveM3500CoreAffinity","FiveM3500PerfPlan","FiveM5600CoreAffinity","FiveM5600PowerPlan"].forEach(id => ids.add(id));
+      ["FiveM3500CoreAffinity","FiveM5600CoreAffinity"].forEach(id => ids.add(id));
       if (hw.cpuLabel && /3500/i.test(hw.cpuLabel)) {
-        reasons.push(`AMD Ryzen 5 3500 detected — core affinity 0x3F + Boost pinned 100%`);
+        reasons.push(`AMD Ryzen 5 3500 detected — targeted core affinity; the universal ReviOS plan remains selected`);
       } else if (hw.cpuLabel && /5600/i.test(hw.cpuLabel)) {
-        reasons.push(`AMD Ryzen 5600 detected — Zen 3 core affinity + power plan + Boost pinned 100%`);
+        reasons.push(`AMD Ryzen 5600 detected — targeted core affinity; the universal ReviOS plan remains selected`);
       } else {
         reasons.push(`AMD Ryzen ${hw.cpuGeneration}000-series — core + scheduler + Precision Boost 2 pinned 100%`);
       }
@@ -222,8 +222,8 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
     }
   } else if (hw.isIntelCore) {
     if (hw.cpuGeneration >= 12) {
-      ["FiveMAffinityMask","ProcessLassoAffinityGaming","FiveMIntel14PcoreAffinity","FiveMIntel14PowerPlan"].forEach(id => ids.add(id));
-      reasons.push(`Intel ${hw.cpuGeneration}th gen (has E-cores) — P-core affinity for gaming, Ultra Performance plan`);
+      ["FiveMAffinityMask","ProcessLassoAffinityGaming","FiveMIntel14PcoreAffinity"].forEach(id => ids.add(id));
+      reasons.push(`Intel ${hw.cpuGeneration}th gen (has E-cores) — P-core affinity for gaming; the universal ReviOS plan remains selected`);
     } else if (hw.cpuGeneration >= 6 && hw.cpuGeneration < 12) {
       // 6th–11th gen Intel desktop (Skylake / Kaby Lake / Coffee Lake / Comet Lake / Rocket Lake)
       // No E-cores — max all cores, aggressive C-state suppression, full turbo
@@ -295,7 +295,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   if (hw.isAmdGpu) {
     [
       "AmdDisableULPS","AmdDisableChill","AmdDisablePowerEfficiency",
-      "AmdMaxClockState","AmdForcePerformancePowerPlan","AmdOptimizeLatency","AmdAntiLag",
+      "AmdMaxClockState","AmdOptimizeLatency","AmdAntiLag",
       "AmdDisableTelemetry","AmdDisableCrashDefender","AmdShaderCache","AmdDisableVSR",
       "AmdDisableVariBright","AmdSmartAccessMemory","AmdAntiLagPlus","AmdTDRTweak",
       "AmdDisableStartupApps","AmdDisableFreeSyncCompetitive","AmdFluidMotionFrames",
@@ -318,7 +318,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
       "IGpu_DisableULPS","IGpu_DisableDeepSleep","IGpu_DisableVariBright","IGpu_ForcePerformancePower",
       "IGpu_AmdAntiLag","IGpu_SharedMemoryHint","IGpu_DisableMPO","IGpu_AmdTdrLevel",
       "IGpu_DisableTransparency","IGpu_DisableAnimations","IGpu_DisableXboxGameBar",
-      "IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan","IGpu_MaxProcessorState",
+      "IGpu_DisableFullscreenOpt","IGpu_MaxProcessorState",
       "IGpu_DisableCoreParking","IGpu_GameModeOn","IGpu_SetTimerResolution",
       "IGpu_NetworkThrottling","IGpu_DisableSysMain",
       "IGpu_AmdDisableHDCP","IGpu_AmdVegaAudioOff",
@@ -335,7 +335,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
         "IGpu_Intel_MaxFreq","IGpu_Intel_DisableFreqScaling",
         "IGpu_Intel_TDR","IGpu_Intel_PanelFitter","IGpu_Intel_QSVOff",
         "IGpu_ForcePerformancePower","IGpu_DisableTransparency","IGpu_DisableAnimations",
-        "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt","IGpu_UltimatePerformancePlan",
+        "IGpu_DisableXboxGameBar","IGpu_DisableFullscreenOpt",
         "IGpu_MaxProcessorState","IGpu_DisableCoreParking","IGpu_GameModeOn",
         "IGpu_SetTimerResolution","IGpu_NetworkThrottling","IGpu_DisableSysMain",
         "IGpu_DisableMPO",
@@ -386,7 +386,7 @@ export function computeSmartRecs(hw: HardwareInfo, os: OsInfo): SmartRecs {
   // ===== LAPTOP =====
   if (hw.isLaptop) {
     [
-      "Lap_UltimatePerformance","Lap_DisableCoreParking","Lap_DisableThrottleStates",
+      "Lap_DisableCoreParking","Lap_DisableThrottleStates",
       "Lap_MaxProcessorStateAC","Lap_DisableAdaptiveBrightness",
       "Lap_Net_DisableNagle","Lap_Net_DisableThrottle","Lap_Net_DisableAutoTuning",
       "Lap_Net_DisableUSBSelSuspend","Lap_Net_WiFiPerfMode","Lap_Net_OptimizeDNS",

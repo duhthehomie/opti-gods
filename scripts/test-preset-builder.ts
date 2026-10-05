@@ -322,6 +322,22 @@ test("Goal=stability drops aggressive scheduler tweaks", () => {
   assert.ok(!stable.core.includes("DisableDynamicTick"));
 });
 
+const powerPlanIds = [
+  "FiveM3500PerfPlan", "FiveM5600PowerPlan", "FiveMIntel14PowerPlan",
+  "ArrowLunarLakePowerPlan", "IntelOldGenPowerOpt", "AmdForcePerformancePowerPlan",
+  "IGpu_UltimatePerformancePlan", "Lap_UltimatePerformance", "Cod3500PowerPlan",
+];
+const planScenarios = [
+  { gpuVendor: "nvidia" as const, gpuName: "GeForce GTX 1650", cpuBrand: "amd" as const, cpuLabel: "Ryzen 5 3500", cpuCores: 6 },
+  { gpuVendor: "amd" as const, gpuName: "Radeon RX 7600", cpuBrand: "amd" as const, cpuLabel: "Ryzen 5 5600", cpuCores: 12 },
+  { gpuVendor: "intel" as const, gpuName: "Intel UHD Graphics", cpuBrand: "intel" as const, cpuLabel: "Intel Core i7-12700", cpuCores: 20, isLaptop: true },
+];
+for (const hardware of planScenarios) {
+  const preset = buildSafePreset(hardware, "fps");
+  assert.ok(preset.core.includes("SetHighPerformancePlan"), "Full Optimize must keep the Opti Gods/ReviOS plan");
+  for (const id of powerPlanIds) assert.ok(!preset.core.includes(id), id + " must not override the universal ReviOS plan");
+}
+
 console.log(`\n[preset-builder] ${passed} passed, ${failed} failed\n`);
 if (failed > 0) {
   console.error("FAILURES:\n" + failures.join("\n"));
