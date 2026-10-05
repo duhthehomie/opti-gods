@@ -292,6 +292,9 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   hwMonitor?: HwMonitorData | null;
 }) {
   const os = useOsDetection();
+  const liveStats = useLiveStats(16);
+  const cpuTemp = liveStats.cpuTemp ?? scan.cpu_temp_c;
+  const gpuTemp = liveStats.gpuTemp ?? null;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
@@ -316,20 +319,21 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         {/* Cooling — real fan count when WMI exposes it */}
         <Stat icon={Wind} label="Cooling" value={fan.label} sub={fan.sub} />
 
-        {/* CPU Temperature — live from MSAcpi_ThermalZoneTemperature */}
-        {scan.cpu_temp_c != null && (
-          <Stat
-            icon={Thermometer}
-            label="CPU Temp"
-            value={`${Math.round(scan.cpu_temp_c)}°C`}
-            sub={
-              scan.cpu_temp_c < 60 ? "Cool — normal idle"
-              : scan.cpu_temp_c < 80 ? "Warm — under load"
-              : "Hot — check cooling"
-            }
-            accent={tempAccent(scan.cpu_temp_c)}
-          />
-        )}
+        {/* Live CPU and GPU temperatures from native performance monitoring */}
+        <Stat
+          icon={Thermometer}
+          label="CPU Temp"
+          value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
+          sub={cpuTemp == null ? "No live CPU temperature sensor is available" : cpuTemp < 60 ? "Cool — normal idle" : cpuTemp < 80 ? "Warm — under load" : "Hot — check cooling"}
+          accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined}
+        />
+        <Stat
+          icon={Thermometer}
+          label="GPU Temp"
+          value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
+          sub={gpuTemp == null ? "No live GPU temperature sensor is available" : gpuTemp < 60 ? "Cool — normal idle" : gpuTemp < 80 ? "Warm — under load" : "Hot — check cooling"}
+          accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined}
+        />
 
         {scan.motherboard && (
           <Stat icon={Monitor} label="Motherboard" value={scan.motherboard} />
@@ -364,13 +368,12 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         </div>
       )}
 
-      {/* What temp data covers */}
-      {scan.cpu_temp_c == null && (
+      {/* Temperature sensor coverage */}
+      {cpuTemp == null && gpuTemp == null && (
         <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center gap-3">
           <Thermometer className="w-4 h-4 text-zinc-600 shrink-0" />
           <p className="text-[11px] text-zinc-500">
-            CPU temperature not available — MSAcpi_ThermalZoneTemperature not exposed by this system's ACPI firmware.
-            Use HWiNFO64 or HWMONITOR for sensor-level temps.
+            Live CPU and GPU temperatures are unavailable from this PC's current firmware and sensor drivers.
           </p>
         </div>
       )}

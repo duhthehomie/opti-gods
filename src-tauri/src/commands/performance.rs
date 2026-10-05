@@ -82,10 +82,36 @@ if ($nvidia) {
   }
 }
 if ($null -eq $out.gpu_temp_c) {
+  $videoControllers = @(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue)
+  $hasDedicatedGpu = @($videoControllers | Where-Object { $_.Name -match '(?i)NVIDIA|AMD|Radeon' -and $_.Name -notmatch '(?i)Intel' }).Count -gt 0
+  $hasIntelGpu = @($videoControllers | Where-Object { $_.Name -match '(?i)Intel' }).Count -gt 0
   foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
-    $sensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
+    $allGpuSensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
       Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU Core|GPU Hot Spot|GPU Temperature|GPU' -and $_.Name -notmatch 'CPU' })
-    if ($sensors) {
+    if (-not $allGpuSensors.Count) { continue }
+    $dedicatedSensors = @($allGpuSensors | Where-Object {
+      $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
+      $identity -match '(?i)NVIDIA|AMD|Radeon|GPU-(NVIDIA|AMD)' -and $identity -notmatch '(?i)Intel|GPU-Intel'
+    })
+    if (-not $dedicatedSensors.Count -and $hasDedicatedGpu) {
+      # Prefer generic GPU sensors to Intel iGPU data when a discrete adapter is present.
+      $dedicatedSensors = @($allGpuSensors | Where-Object {
+        $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
+        $identity -notmatch '(?i)NVIDIA|AMD|Radeon|Intel|GPU-(NVIDIA|AMD|Intel)'
+      })
+    }
+    $intelSensors = @($allGpuSensors | Where-Object {
+      $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
+      $identity -match '(?i)Intel|GPU-Intel'
+    })
+    if (-not $intelSensors.Count -and $hasIntelGpu -and -not $hasDedicatedGpu) {
+      $intelSensors = @($allGpuSensors | Where-Object {
+        $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
+        $identity -notmatch '(?i)NVIDIA|AMD|Radeon'
+      })
+    }
+    $sensors = if ($dedicatedSensors.Count) { $dedicatedSensors } else { $intelSensors }
+    if ($sensors.Count) {
       $value = ($sensors | Measure-Object -Property Value -Maximum).Maximum
       if ($value -gt 5 -and $value -lt 130) { $out.gpu_temp_c = [double][math]::Round($value, 1); break }
     }
@@ -204,7 +230,7 @@ $out.live = $true
 $out | ConvertTo-Json -Compress
 "#;
 
-        let output = Command::new("powershell.exe")
+        let output = Command::new(crate::commands::windows_powershell_executable())
             .args([
                 "-NoProfile",
                 "-NonInteractive",
