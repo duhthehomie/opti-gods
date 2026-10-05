@@ -5,7 +5,7 @@ interface OptimizationState {
   tweaks: Record<string, boolean>;
   nvidiaPreset: string;
   systemRamGB: number | null;
-  /** Task #39 — per-tweak applied timestamp (ms epoch). Used to render the inline Undo button. */
+  /** Task #39 â per-tweak applied timestamp (ms epoch). Used to render the inline Undo button. */
   appliedAt: Record<string, number>;
   setSystemRamGB: (gb: number) => void;
   toggleTweak: (key: string) => void;
@@ -245,6 +245,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   AmdEnhancedSync: false,
   // NVIDIA Specific
   NvidiaDisableTelemetry: false,
+  NvidiaControlPanelSettings: false,
   NvidiaMaxPerfMode: false,
   NvidiaPreRenderedFrames: false,
   NvidiaShaderCache: false,
@@ -453,7 +454,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   Lap_DisableHAGS: false,
   Lap_USBPowerSave: false,
   Lap_WifiPerfMode: false,
-  // Processes Reduction — services to Manual
+  // Processes Reduction â services to Manual
   ProcSvc_DiagTrack: false,
   ProcSvc_WerSvc: false,
   ProcSvc_DPS: false,
@@ -507,7 +508,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   NvidiaDisableHDMIAudio: false,
   NvidiaRTXVideoOff: false,
   NvidiaGpuBgOptimize: false,
-  // AMD CPU Performance (Zen 2 / Zen 3 — Ryzen 5 3500, 7 3700X, etc.)
+  // AMD CPU Performance (Zen 2 / Zen 3 â Ryzen 5 3500, 7 3700X, etc.)
   AmdCpuCoalescingOff: false,
   AmdCpuPowerPinMax: false,
   AmdCpuCStatePolicy: false,
@@ -531,7 +532,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   su_firefox: false,
   su_edge_startup: false,
   su_obs: false,
-  // V2 NEW (Task #38) — Network / Security / Anti-cheat / Input / RTX 50 / RX 9000 / Zen 5 / Arrow Lake / DPC tool
+  // V2 NEW (Task #38) â Network / Security / Anti-cheat / Input / RTX 50 / RX 9000 / Zen 5 / Arrow Lake / DPC tool
   NetMTUAutotune: false,
   NetTCPAutotuneAggressive: false,
   NetRSSTuning: false,
@@ -624,14 +625,14 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   SpotifyDisableGPU: false,
   SpotifyDisableAutoUpdate: false,
   SpotifyLimitBandwidth: false,
-  // Registry — misc safe tweaks
+  // Registry â misc safe tweaks
   DisableAutoMaintenance: false,
-  // V2.2 Driver Reapply — NVIDIA
+  // V2.2 Driver Reapply â NVIDIA
   NvTextureFilterHighPerf: false,
   NvLowLatencyUltra: false,
   NvThreadedOptOn: false,
   NvPowerMgmtMax: false,
-  // V2.2 Driver Reapply — AMD
+  // V2.2 Driver Reapply â AMD
   AmdTextureFilterPerf: false,
   AmdSurfaceFormatOpt: false,
   AmdTessOverride16x: false,
@@ -639,7 +640,7 @@ export const DEFAULT_TWEAKS: Record<string, boolean> = {
   AmdFRTC60: false,
   AmdFRTC144: false,
   AmdFRTC240: false,
-  // MSI Mode — safe variant (V2.2)
+  // MSI Mode â safe variant (V2.2)
   EnableMSIMode_Safe: false,
   // Remaining registry IDs
   FiveM2060VRAMBudget: false,
@@ -699,7 +700,7 @@ export const useOptimizationStore = create<OptimizationState>()(
         ...current,
         ...(persisted as Partial<OptimizationState>),
         // Deep-merge tweaks so new DEFAULT_TWEAKS keys (added in future versions)
-        // always appear — persisted user choices override, new keys default to false.
+        // always appear â persisted user choices override, new keys default to false.
         tweaks: { ...current.tweaks, ...((persisted as any)?.tweaks ?? {}) },
       }),
     }
