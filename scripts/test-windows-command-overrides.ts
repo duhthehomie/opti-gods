@@ -6,6 +6,7 @@ import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-command
 
 const defender = buildSafeWindowsCommandOverride("CodDefenderExclusion");
 assert.ok(defender);
+assert.match(defender, /Import-Module Defender -ErrorAction Stop/);
 assert.match(defender, /Get-Command -Name/);
 assert.match(defender, /Add-MpPreference.*Get-MpPreference.*Remove-MpPreference/s);
 assert.match(defender, /did not report the exclusion after adding it/);
@@ -15,32 +16,42 @@ assert.match(defender, /throw "Defender exclusions were not fully verified/);
 assert.doesNotMatch(defender, /\[SKIP\].*return/);
 
 const ryzen = buildSafeWindowsCommandOverride("FiveM3500PerfPlan");
-assert.ok(ryzen);
-assert.doesNotMatch(ryzen, /Name = 'PERFBOOSTMODE'/);
-assert.doesNotMatch(ryzen, /Name = 'PERFBOOSTPOL'|Name = 'CPMINCORES'/);
-assert.match(ryzen, /powercfg exit/);
-assert.match(ryzen, /Original power values and active plan were restored/);
-assert.match(ryzen, /restore verification failed/);
-assert.match(ryzen, /powercfg\.exe \/query \$candidate/);
-assert.match(ryzen, /throw "Not for this system: Ryzen 5 3500 power settings unavailable on scheme/);
-assert.match(ryzen, /throw "Ryzen 5 3500 power-plan operation failed/);
-assert.doesNotMatch(ryzen, /\[SKIP\].*return/);
+    assert.ok(ryzen);
+    assert.match(ryzen, /powercfg\.exe /query SCHEME_CURRENT SUB_PROCESSOR/);
+    assert.match(ryzen, /powercfg\.exe /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR/);
+    assert.match(ryzen, /PROCTHROTTLEMIN/);
+    assert.match(ryzen, /PROCTHROTTLEMAX/);
+    assert.match(ryzen, /powercfg exit/);
+    assert.match(ryzen, /Original power values and active plan were restored/);
+    assert.match(ryzen, /restore verification failed/);
+    assert.match(ryzen, /throw "Not for this system: Ryzen 5 3500 power settings unavailable on scheme/);
+    assert.match(ryzen, /throw "Ryzen 5 3500 power-plan operation failed/);
+    assert.doesNotMatch(ryzen, /8c5e7fda|893dee8e|bc5038f7|54533251|PERFBOOSTMODE|PERFBOOSTPOL/);
+    assert.doesNotMatch(ryzen, /\[SKIP\].*return/);
 
-const intel = buildSafeWindowsCommandOverride("IntelOldGenPowerOpt");
-assert.ok(intel);
-assert.doesNotMatch(intel, /Name = 'CPMINCORES'/);
-assert.match(intel, /Name = 'PERFBOOSTPOL'/);
+    const intel = buildSafeWindowsCommandOverride("IntelOldGenPowerOpt");
+    assert.ok(intel);
+    assert.match(intel, /PROCTHROTTLEMIN/);
+    assert.match(intel, /SCHEME_CURRENT/);
+    assert.doesNotMatch(intel, /PERFBOOSTMODE|PERFBOOSTPOL|8c5e7fda|893dee8e|bc5038f7/);
 
-const nvidia = buildSafeWindowsCommandOverride("EnableNvidiaMSIPro");
-assert.ok(nvidia);
-const adapterGuard = nvidia.indexOf("if ($active.Count -ne 1)");
-const firstRegistryWrite = nvidia.indexOf("Set-ItemProperty");
-assert.ok(adapterGuard >= 0 && firstRegistryWrite > adapterGuard);
-assert.match(nvidia, /Not for this system: NVIDIA MSI requires exactly one active display adapter/);
-assert.match(nvidia, /No registry values were changed/);
-assert.equal(buildSafeWindowsCommandOverride("CodDirectXQueue"), undefined);
+    const codPlan = buildSafeWindowsCommandOverride("Cod3500PowerPlan");
+    assert.ok(codPlan);
+    assert.match(codPlan, /SCHEME_CURRENT/);
+    assert.doesNotMatch(codPlan, /8c5e7fda|893dee8e|bc5038f7/);
 
-const searchIndexer = buildSafeWindowsCommandOverride("DisableSearchIndexing");
+    const nvidia = buildSafeWindowsCommandOverride("EnableNvidiaMSIPro");
+    assert.ok(nvidia);
+    const adapterGuard = nvidia.indexOf("if ($nvidia.Count -ne 1)");
+    const firstRegistryWrite = nvidia.indexOf("Set-ItemProperty");
+    assert.ok(adapterGuard >= 0 && firstRegistryWrite > adapterGuard);
+    assert.match(nvidia, /exactly one active PCI NVIDIA display adapter/);
+    assert.match(nvidia, /PCI\\VEN_10DE&/);
+    assert.match(nvidia, /No registry values were changed/);
+    assert.doesNotMatch(nvidia, /if ($active.Count -ne 1)/);
+    assert.equal(buildSafeWindowsCommandOverride("CodDirectXQueue"), undefined);
+
+    const searchIndexer = buildSafeWindowsCommandOverride("DisableSearchIndexing");
 assert.ok(searchIndexer);
 assert.match(searchIndexer, /Set-Service -Name 'WSearch' -StartupType Disabled -ErrorAction Stop/);
 assert.match(searchIndexer, /Stop-Service -Name 'WSearch' -Force -ErrorAction Stop/);

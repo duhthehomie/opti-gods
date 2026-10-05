@@ -35,140 +35,76 @@ Write-Host "[COD] Defender exclusions applied and verified for $($found.Count) d
 }
 
 function buildPowerPlanCommand(id: string): string {
-  const label = id === "IntelOldGenPowerOpt" ? "Intel 4th-8th Gen" : "Ryzen 5 3500";
-  const names = id === "IntelOldGenPowerOpt"
-    ? ["PROCTHROTTLEMIN", "PROCTHROTTLEMAX", "PERFBOOSTMODE", "PERFBOOSTPOL"]
-    // Ryzen 3000 firmware exposes different PERFBOOSTMODE ranges. Keep this
-    // plan to the two processor-throttle values consistently supported by
-    // Windows so an OEM power scheme cannot reject the whole change.
-    : ["PROCTHROTTLEMIN", "PROCTHROTTLEMAX"];
-  const values = id === "IntelOldGenPowerOpt" ? [100, 100, 2, 100] : [100, 100];
-  const settingIds: Record<string, string> = {
-    PROCTHROTTLEMIN: "893dee8e-2bef-41e0-89c6-b55d0929964c",
-    PROCTHROTTLEMAX: "bc5038f7-23e0-4960-96da-33abaf5935ec",
-    PERFBOOSTMODE: "be337238-0d82-4146-a960-4f3749d470c7",
-    PERFBOOSTPOL: "45bcc044-d885-43e2-8605-ee0ec6e96b59",
-    CPMINCORES: "0cc5b647-c1df-4637-891a-dec35c318583",
-  };
-  const definitions = names
-    .map((name, index) => `@{ Name = '${name}'; Guid = '${settingIds[name]}'; Value = ${values[index]} }`)
-    .join(", ");
-
-  return String.raw`$ErrorActionPreference = 'Stop'
-$subgroup = '54533251-82be-4824-96c1-47b60b740d00'
-$settingsRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
-$settings = @(${definitions})
-$activeOutput = & powercfg.exe /getactivescheme 2>&1
-$activeExit = $LASTEXITCODE
-$activeText = [string]::Join(' ', @($activeOutput | ForEach-Object { "$_" }))
-if ($activeExit -ne 0 -or $activeText -notmatch '(?i)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') {
-  throw "${label}: could not identify the active Windows power scheme (exit $activeExit). $activeText"
-}
-$originalScheme = $matches[1]
-$preferredScheme = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
-function Get-MissingPowerSettings([string]$candidate) {
-  $unavailable = @()
-  foreach ($setting in $settings) {
-    $null = & powercfg.exe /query $candidate $subgroup $setting.Guid 2>&1
-    if ($LASTEXITCODE -ne 0) { $unavailable += $setting.Name }
-  }
-  return $unavailable
-}
-$scheme = $preferredScheme
-$missing = @(Get-MissingPowerSettings $scheme)
-if ($missing.Count -gt 0 -and $scheme -ne $originalScheme) {
-  $scheme = $originalScheme
-  $missing = @(Get-MissingPowerSettings $scheme)
-}
-if ($missing.Count -gt 0) {
-  throw "Not for this system: ${label} power settings unavailable on scheme $($scheme): $($missing -join ', '). No power values were changed."
-}
-$originalValues = @{}
-foreach ($setting in $settings) {
-  $path = "$settingsRoot\$scheme\$subgroup\$($setting.Guid)"
-  $hadValue = $false
-  $oldValue = $null
-  if (Test-Path -LiteralPath $path) {
-    $properties = Get-ItemProperty -LiteralPath $path -ErrorAction Stop
-    if ($properties.PSObject.Properties.Name -contains 'ACSettingIndex') {
-      $hadValue = $true
-      $oldValue = [uint32]$properties.ACSettingIndex
+      const label = id === "IntelOldGenPowerOpt" ? "Intel 4th-8th Gen" : "Ryzen 5 3500";
+      return String.raw`$ErrorActionPreference = 'Stop'
+    $settings = @(
+      @{ Name = 'PROCTHROTTLEMIN'; Value = 100 },
+      @{ Name = 'PROCTHROTTLEMAX'; Value = 100 }
+    )
+    $originalValues = @{}
+    foreach ($setting in $settings) {
+      $query = & powercfg.exe /query SCHEME_CURRENT SUB_PROCESSOR $setting.Name 2>&1
+      $queryExit = $LASTEXITCODE
+      $queryText = [string]::Join(' ', @($query | ForEach-Object { "$_" }))
+      if ($queryExit -ne 0 -or $queryText -notmatch '(?i)Current AC Power Setting Index:\s*0x([0-9a-f]+)') {
+        throw "Not for this system: ${label} power settings unavailable on scheme SCHEME_CURRENT ($($setting.Name)); no values were changed. $queryText"
+      }
+      $originalValues[$setting.Name] = [Convert]::ToUInt32($matches[1], 16)
     }
-  }
-  $originalValues[$setting.Guid] = @{ Path = $path; Exists = $hadValue; Value = $oldValue }
-}
-$errors = @()
-foreach ($setting in $settings) {
-  try {
-    $output = & powercfg.exe /setacvalueindex $scheme $subgroup $setting.Guid $setting.Value 2>&1
-    $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0) {
-      $detail = [string]::Join(' ', @($output | ForEach-Object { "$_" })).Trim()
-      $errors += "$($setting.Name) (powercfg exit $($exitCode): $detail)"
-      continue
+    $errors = @()
+    foreach ($setting in $settings) {
+      $output = & powercfg.exe /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR $setting.Name $setting.Value 2>&1
+      $exitCode = $LASTEXITCODE
+      if ($exitCode -ne 0) {
+        $detail = [string]::Join(' ', @($output | ForEach-Object { "$_" })).Trim()
+        $errors += "$($setting.Name) (powercfg exit $exitCode: $detail)"
+        continue
+      }
+      $check = & powercfg.exe /query SCHEME_CURRENT SUB_PROCESSOR $setting.Name 2>&1
+      $checkExit = $LASTEXITCODE
+      $checkText = [string]::Join(' ', @($check | ForEach-Object { "$_" }))
+      if ($checkExit -ne 0 -or $checkText -notmatch '(?i)Current AC Power Setting Index:\s*0x([0-9a-f]+)') {
+        $errors += "$($setting.Name) (read-back failed: $checkText)"
+      } elseif ([Convert]::ToUInt32($matches[1], 16) -ne [uint32]$setting.Value) {
+        $errors += "$($setting.Name) (verification expected $($setting.Value), read $($matches[1]))"
+      }
     }
-    $actual = Get-ItemPropertyValue -LiteralPath $originalValues[$setting.Guid].Path -Name 'ACSettingIndex' -ErrorAction Stop
-    if ([uint32]$actual -ne [uint32]$setting.Value) { $errors += "$($setting.Name) (verification expected $($setting.Value), read $actual)" }
-  } catch { $errors += "$($setting.Name) ($($_.Exception.Message))" }
-}
-if ($errors.Count -eq 0) {
-  $activationOutput = & powercfg.exe /setactive $scheme 2>&1
-  $activationExit = $LASTEXITCODE
-  if ($activationExit -ne 0) {
-    $detail = [string]::Join(' ', @($activationOutput | ForEach-Object { "$_" })).Trim()
-    $errors += "activate plan $scheme (powercfg exit $($activationExit): $detail)"
-  } else {
-    $activeAfterOutput = & powercfg.exe /getactivescheme 2>&1
-    $activeAfterExit = $LASTEXITCODE
-    $activeAfterText = [string]::Join(' ', @($activeAfterOutput | ForEach-Object { "$_" }))
-    if ($activeAfterExit -ne 0 -or $activeAfterText -notmatch "(?i)$([regex]::Escape($scheme))") {
-      $errors += "activate plan $scheme (active plan verification failed: $activeAfterText)"
+    if ($errors.Count -eq 0) {
+      $activation = & powercfg.exe /setactive SCHEME_CURRENT 2>&1
+      $activationExit = $LASTEXITCODE
+      if ($activationExit -ne 0) {
+        $detail = [string]::Join(' ', @($activation | ForEach-Object { "$_" })).Trim()
+        $errors += "activate SCHEME_CURRENT (powercfg exit $activationExit: $detail)"
+      }
     }
-  }
-}
-if ($errors.Count -gt 0) {
-  $rollbackErrors = @()
-  foreach ($setting in $settings) {
-    $snapshot = $originalValues[$setting.Guid]
-    try {
-      if ($snapshot.Exists) {
-        $rollbackOutput = & powercfg.exe /setacvalueindex $scheme $subgroup $setting.Guid $snapshot.Value 2>&1
-        $rollbackExit = $LASTEXITCODE
-        if ($rollbackExit -ne 0) {
-          $detail = [string]::Join(' ', @($rollbackOutput | ForEach-Object { "$_" })).Trim()
-          $rollbackErrors += "$($setting.Name) restore (powercfg exit $($rollbackExit): $detail)"
-        } else {
-          $restored = Get-ItemPropertyValue -LiteralPath $snapshot.Path -Name 'ACSettingIndex' -ErrorAction Stop
-          if ([uint32]$restored -ne [uint32]$snapshot.Value) { $rollbackErrors += "$($setting.Name) restore verification failed (expected $($snapshot.Value), read $restored)" }
+    if ($errors.Count -gt 0) {
+      $rollbackErrors = @()
+      foreach ($setting in $settings) {
+        $previous = $originalValues[$setting.Name]
+        $restore = & powercfg.exe /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR $setting.Name $previous 2>&1
+        $restoreExit = $LASTEXITCODE
+        if ($restoreExit -ne 0) {
+          $detail = [string]::Join(' ', @($restore | ForEach-Object { "$_" })).Trim()
+          $rollbackErrors += "$($setting.Name) restore (powercfg exit $restoreExit: $detail)"
+          continue
         }
-      } elseif (Test-Path -LiteralPath $snapshot.Path) {
-        $afterProperties = Get-ItemProperty -LiteralPath $snapshot.Path -ErrorAction Stop
-        if ($afterProperties.PSObject.Properties.Name -contains 'ACSettingIndex') {
-          Remove-ItemProperty -LiteralPath $snapshot.Path -Name 'ACSettingIndex' -ErrorAction Stop
-          $confirmedProperties = Get-ItemProperty -LiteralPath $snapshot.Path -ErrorAction Stop
-          if ($confirmedProperties.PSObject.Properties.Name -contains 'ACSettingIndex') { $rollbackErrors += "$($setting.Name) restore verification failed (new value remains)" }
+        $restoreCheck = & powercfg.exe /query SCHEME_CURRENT SUB_PROCESSOR $setting.Name 2>&1
+        $restoreCheckExit = $LASTEXITCODE
+        $restoreText = [string]::Join(' ', @($restoreCheck | ForEach-Object { "$_" }))
+        if ($restoreCheckExit -ne 0 -or $restoreText -notmatch '(?i)Current AC Power Setting Index:\s*0x([0-9a-f]+)') {
+          $rollbackErrors += "$($setting.Name) restore verification failed ($restoreText)"
+        } elseif ([Convert]::ToUInt32($matches[1], 16) -ne [uint32]$previous) {
+          $rollbackErrors += "$($setting.Name) restore verification failed (expected $previous, read $($matches[1]))"
         }
       }
-    } catch { $rollbackErrors += "$($setting.Name) restore ($($_.Exception.Message))" }
-  }
-  $restoreOutput = & powercfg.exe /setactive $originalScheme 2>&1
-  $restoreExit = $LASTEXITCODE
-  if ($restoreExit -ne 0) {
-    $detail = [string]::Join(' ', @($restoreOutput | ForEach-Object { "$_" })).Trim()
-    $rollbackErrors += "restore active plan $originalScheme (powercfg exit $($restoreExit): $detail)"
-  } else {
-    $restoredActiveOutput = & powercfg.exe /getactivescheme 2>&1
-    $restoredActiveExit = $LASTEXITCODE
-    $restoredActiveText = [string]::Join(' ', @($restoredActiveOutput | ForEach-Object { "$_" }))
-    if ($restoredActiveExit -ne 0 -or $restoredActiveText -notmatch "(?i)$([regex]::Escape($originalScheme))") {
-      $rollbackErrors += "restore active plan $originalScheme (verification failed: $restoredActiveText)"
+      $restoreActive = & powercfg.exe /setactive SCHEME_CURRENT 2>&1
+      $restoreActiveExit = $LASTEXITCODE
+      if ($restoreActiveExit -ne 0) { $rollbackErrors += "active plan restore (powercfg exit $restoreActiveExit)" }
+      $rollbackMessage = if ($rollbackErrors.Count -gt 0) { " Rollback needs attention: $($rollbackErrors -join '; ')." } else { " Original power values and active plan were restored." }
+      throw "${label} power-plan operation failed: $($errors -join '; ').$rollbackMessage"
     }
-  }
-  $rollbackMessage = if ($rollbackErrors.Count -gt 0) { " Rollback needs attention: $($rollbackErrors -join '; ')." } else { " Original power values and active plan were restored." }
-  throw "${label} power-plan operation failed: $($errors -join '; ').$rollbackMessage"
-}
-Write-Host "[${label}] power-plan settings applied and verified on scheme $scheme." -ForegroundColor Green`;
-}
+    Write-Host "[${label}] processor limits applied to the existing active plan and verified." -ForegroundColor Green`;
+    }
 
 function buildSearchIndexerCommand(): string {
   return String.raw`$ErrorActionPreference = 'Stop'
@@ -250,10 +186,24 @@ try {
 
 export function buildSafeWindowsCommandOverride(id: string): string | undefined {
   if (id === "EnableNvidiaMSIPro") {
-    return String.raw`$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' }); $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' }); if ($nvidia.Count -ne 1) { $names = @($active | ForEach-Object { $_.FriendlyName }) -join ", "; throw "Not for this system: NVIDIA MSI requires exactly one active NVIDIA display adapter; detected $($nvidia.Count) among $($active.Count) active display adapters ($names). No registry values were changed." }; $gpu = $nvidia[0]; $msiPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($gpu.InstanceId)\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"; if (!(Test-Path -LiteralPath $msiPath)) { throw "Windows did not expose an MSI capability path for the detected NVIDIA adapter ($($gpu.FriendlyName)). No registry values were changed." }; $before = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($before -notin @(0,1)) { throw "The detected NVIDIA adapter has an unsupported MSISupported value ($before). No registry values were changed." }; Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop; $after = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the detected NVIDIA adapter." }; Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). NICs, NVMe devices, affinity, and priority were not changed." -ForegroundColor Green`;
-  }
-  if (id === "CodDefenderExclusion") return buildDefenderExclusionCommand();
-  if (id === "IntelOldGenPowerOpt" || id === "FiveM3500PerfPlan") return buildPowerPlanCommand(id);
+        return String.raw`$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' })
+    $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' -and $_.InstanceId -match '(?i)^PCI\\VEN_10DE&' })
+    if ($nvidia.Count -ne 1) {
+      $names = @($active | ForEach-Object { $_.FriendlyName }) -join ', '
+      throw "Not for this system: NVIDIA MSI requires exactly one active PCI NVIDIA display adapter; detected $($nvidia.Count). Active displays: $names. No registry values were changed."
+    }
+    $gpu = $nvidia[0]
+    $msiPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($gpu.InstanceId)\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"
+    if (!(Test-Path -LiteralPath $msiPath)) { throw "Windows did not expose an MSI capability path for the NVIDIA adapter ($($gpu.FriendlyName)). No registry values were changed." }
+    $before = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop
+    if ($before -notin @(0,1)) { throw "The NVIDIA adapter has an unsupported MSISupported value ($before). No registry values were changed." }
+    Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop
+    $after = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop
+    if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the NVIDIA adapter." }
+    Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). Other display adapters were ignored." -ForegroundColor Green`;
+      }
+      if (id === "CodDefenderExclusion") return buildDefenderExclusionCommand();
+  if (id === "IntelOldGenPowerOpt" || id === "FiveM3500PerfPlan" || id === "Cod3500PowerPlan") return buildPowerPlanCommand(id);
   if (id === "DisableSearchIndexing") return buildSearchIndexerCommand();
   return undefined;
 }
