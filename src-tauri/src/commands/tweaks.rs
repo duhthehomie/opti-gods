@@ -188,6 +188,7 @@ pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
         // report as a false failure.
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let script = r#"
+$tabletInputService = Get-CimInstance -ClassName Win32_Service -Filter "Name='TabletInputService'" -ErrorAction SilentlyContinue
 $checks = [ordered]@{
   DebloatOneDrive = (
     -not (Test-Path -LiteralPath "$env:SystemRoot\System32\OneDriveSetup.exe") -and
@@ -209,16 +210,16 @@ $checks = [ordered]@{
     (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
   );
   ServiceTabletInput = (
-    -not (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue) -or
-    (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue).StartType -eq "Disabled"
+    -not $tabletInputService -or
+    $tabletInputService.StartMode -eq "Disabled"
   );
   ProcSvc_RetailDemo = (
     -not (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue) -or
     (Get-Service -Name "RetailDemo" -ErrorAction SilentlyContinue).StartType -eq "Manual"
   );
   ProcSvc_TabletInput = (
-    -not (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue) -or
-    (Get-Service -Name "TabletInputService" -ErrorAction SilentlyContinue).StartType -eq "Manual"
+    -not $tabletInputService -or
+    $tabletInputService.StartMode -eq "Manual"
   );
   FiveM1060DisableHAGS = (Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -ErrorAction SilentlyContinue) -eq 1;
   FiveM1060AnselDisable = (Get-ItemPropertyValue -Path "HKCU:\SOFTWARE\NVIDIA Corporation\Ansel" -Name "AnselEnable" -ErrorAction SilentlyContinue) -eq 0;
@@ -254,7 +255,7 @@ $checks = [ordered]@{
 };
 $checks | ConvertTo-Json -Compress
 "#;
-        if let Ok(output) = Command::new("powershell.exe")
+        if let Ok(output) = Command::new(crate::commands::windows_powershell_executable())
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
@@ -687,7 +688,7 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
         let guarded = format!(
             "$ErrorActionPreference='Stop'; & {{ {snippet} }}; if (-not $?) {{ throw 'Windows reported that the tweak command failed.' }}"
         );
-        let child = Command::new("powershell.exe")
+        let child = Command::new(crate::commands::windows_powershell_executable())
             .args([
                 "-NoProfile",
                 "-NonInteractive",
