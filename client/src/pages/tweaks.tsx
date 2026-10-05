@@ -1,3 +1,4 @@
+import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -16,13 +17,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
-import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID } from "@/lib/native-tweak-runner";
 import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { useToast } from "@/hooks/use-toast";
-import { isNative } from "@/lib/tauri-bridge";
+import { isNative, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
-import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
+import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import {
   readNativeTweakRun,
   subscribeNativeTweakRun,
@@ -309,6 +309,21 @@ export default function TweaksPage() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const native = isNative();
+  const nvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
+  const [nvidiaControlPanelInstalled, setNvidiaControlPanelInstalled] = useState<boolean | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    if (!native || nvidiaGpuCount === 0) {
+      setNvidiaControlPanelInstalled(false);
+      return () => { mounted = false; };
+    }
+    setNvidiaControlPanelInstalled(null);
+    void isNvidiaControlPanelInstalled()
+      .then(installed => { if (mounted) setNvidiaControlPanelInstalled(installed); })
+      .catch(() => { if (mounted) setNvidiaControlPanelInstalled(false); });
+    return () => { mounted = false; };
+  }, [native, nvidiaGpuCount]);
+  const nvidiaPresetEligible = native && isPro && hw.scanned && nvidiaGpuCount === 1 && !hw.isHybridGpu && nvidiaControlPanelInstalled === true;
   const [detectedTweaks, setDetectedTweaks] = useState<Record<string, boolean>>({});
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
   const [nativeDetectionError, setNativeDetectionError] = useState(false);
@@ -373,22 +388,27 @@ export default function TweaksPage() {
   const best15 = best15Ids
     .map(id => TWEAK_REGISTRY.find(tweak => tweak.id === id))
     .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
-  const matchedProIds = Array.from(smartRecs.ids).filter(id => {
-    const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
-    return Boolean(tweak)
-      && tweak?.safety !== "expert"
-      && !MANUAL_ONLY_TWEAK_IDS.has(id)
-      && getTweakCompatibility(id).ok;
+  const matchedProIds = getEligibleSmartRecommendationIds(
+    [...smartRecs.ids, NVIDIA_PRESET_ACTION_ID],
+    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
+  );
+  const missingMatchedIds = getMissingRecommendationIds(matchedProIds, {
+    native,
+    stateReady: !native || (nativeDetectionReady && !nativeDetectionError),
+    appliedState: detectedTweaks,
+    selectedState: tweaks,
+    runStatus: nativeRun?.status,
+    runItems: nativeRun?.items,
   });
-  const missingMatchedIds = (!native || (nativeDetectionReady && !nativeDetectionError))
-    ? matchedProIds.filter(id => !displayedActiveIds.has(id))
-    : [];
 
   const applyMatched = async () => {
-    if (applyingMatched || !missingMatchedIds.length || (native && (!nativeDetectionReady || nativeDetectionError))) return;
+    if (applyingMatched || !missingMatchedIds.length) return;
     setApplyingMatched(true);
     try {
-      const result = await applyTweakBatch(missingMatchedIds);
+      const forceReapplyIds = nativeRun && ["completed", "failed", "stopped"].includes(nativeRun.status)
+        ? nativeRun.items.filter(item => item.status === "failed" && missingMatchedIds.includes(item.id)).map(item => item.id)
+        : [];
+      const result = await applyTweakBatch(missingMatchedIds, undefined, { forceReapplyIds });
       toast({
         title: isNative() ? "Matched tweaks queued" : "Matched tweaks selected",
         description: isNative()

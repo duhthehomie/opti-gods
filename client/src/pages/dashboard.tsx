@@ -1,3 +1,4 @@
+import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
@@ -640,7 +641,10 @@ export default function Dashboard() {
       const missingIds = missingRecommendedIds;
       if (!missingIds.length) return;
       playOptimizationActionSound();
-      queueTweakBatch(missingIds);
+      const failedIds = latestRunIsTerminal && lastNativeRun
+        ? lastNativeRun.items.filter(item => item.status === "failed" && missingIds.includes(item.id)).map(item => item.id)
+        : [];
+      queueTweakBatch(missingIds, { forceReapplyIds: failedIds });
       window.location.assign("/applied-tweaks?run=1");
       return;
     }
@@ -742,15 +746,10 @@ export default function Dashboard() {
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = getEligibleSmartRecommendationIds(
-    smartRecs.ids,
+    [...smartRecs.ids, NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
-  const latestRunSkippedIds = new Set(
-    native && lastNativeRun
-      ? lastNativeRun.items.filter(item => item.status === "skipped" && matchedRecommendedSet.has(item.id)).map(item => item.id)
-      : [],
-  );
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
   const totalTweaks = matchedRecommendedTweaks.length;
   const confirmedIds = native
@@ -798,13 +797,17 @@ export default function Dashboard() {
   const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
   // Keep the score tied to the complete run, but match AI Optimize's missing
   // count to current eligible recommendations and verified native state.
-  const missingRecommendedIds = native
-    ? nativeDetectionReady && !nativeDetectionError
-      ? matchedRecommendedIds.filter(id => !allActiveIdsForDisplay.has(id) && !latestRunSkippedIds.has(id))
-      : []
-    : matchedRecommendedIds.filter(id => !tweaks[id]);
+  const missingRecommendedIds = getMissingRecommendationIds(matchedRecommendedIds, {
+    native,
+    stateReady: !native || (nativeDetectionReady && !nativeDetectionError),
+    appliedState: detectedNativeTweaks,
+    selectedState: tweaks,
+    runStatus: lastNativeRun?.status,
+    runItems: lastNativeRun?.items,
+  });
   const missingRecommendedCount = missingRecommendedIds.length;
-  const recommendedActionLabel = native && (!nativeDetectionReady || nativeDetectionError)
+  const hasFailedRecommendationRetry = latestRunIsTerminal && Boolean(lastNativeRun?.items.some(item => item.status === "failed" && matchedRecommendedSet.has(item.id)));
+  const recommendedActionLabel = native && (!nativeDetectionReady || nativeDetectionError) && !hasFailedRecommendationRetry
     ? (!nativeDetectionReady ? "Checking Windows state…" : "Applied state unavailable")
     : missingRecommendedCount === 0
       ? "Review recommended tweaks"

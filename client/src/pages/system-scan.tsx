@@ -1,3 +1,4 @@
+import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
@@ -422,12 +423,11 @@ function SmartRecsBreakdown() {
   const [nativeAppliedStateError, setNativeAppliedStateError] = useState(false);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
 
-  const total = recs.ids.size;
-
   const safeIds = getEligibleSmartRecommendationIds(
-    recs.ids,
+    [...recs.ids, NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
+  const total = safeIds.length;
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
   const latestRunIsTerminal = native
     && Boolean(lastNativeRun)
@@ -453,11 +453,14 @@ function SmartRecsBreakdown() {
   const latestRunSkippedIds = new Set(
     lastNativeRun?.items.filter(item => item.status === "skipped" && safeIds.includes(item.id)).map(item => item.id) ?? [],
   );
-  const missingSafeIds = native
-    ? nativeAppliedStateUsable
-      ? safeIds.filter(id => !confirmedAppliedState[id] && !latestRunAppliedIds.has(id) && !latestRunSkippedIds.has(id))
-      : []
-    : safeIds.filter(id => !tweaks[id]);
+  const missingSafeIds = getMissingRecommendationIds(safeIds, {
+    native,
+    stateReady: nativeAppliedStateUsable,
+    appliedState: confirmedAppliedState,
+    selectedState: tweaks,
+    runStatus: lastNativeRun?.status,
+    runItems: lastNativeRun?.items,
+  });
   const alreadyOnCount = native
     ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
     : safeIds.filter(id => tweaks[id]).length;
@@ -578,7 +581,7 @@ function SmartRecsBreakdown() {
         )}>
           {native && !nativeAppliedStateReady
             ? "Checking applied tweaks on this PC."
-            : native && nativeAppliedStateError
+            : native && nativeAppliedStateError && failedRunIds.length === 0
               ? "Could not verify applied tweaks, so the missing count is unavailable."
               : missingSafeIds.length > 0
                 ? `${missingSafeIds.length} recommendations remain unapplied.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed in the last run and can be retried above.` : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`

@@ -1,3 +1,4 @@
+import { getMissingRecommendationIds } from "../client/src/lib/missing-recommendations";
 // Lightweight assertion tests for shared/preset-builder.ts.
 //
 // Why not vitest? Adding vitest would change package.json (forbidden in this
@@ -337,6 +338,24 @@ for (const hardware of planScenarios) {
   assert.ok(preset.core.includes("SetHighPerformancePlan"), "Full Optimize must keep the Opti Gods/ReviOS plan");
   for (const id of powerPlanIds) assert.ok(!preset.core.includes(id), id + " must not override the universal ReviOS plan");
 }
+
+const sharedMissingIds = getMissingRecommendationIds(
+  ["detector-false", "known-applied", "run-failed", "run-skipped", "run-applied", "NvidiaControlPanelSettings", "unknown"],
+  {
+    native: true,
+    stateReady: true,
+    appliedState: { "detector-false": false, "known-applied": true },
+    selectedState: {},
+    runStatus: "failed",
+    runItems: [
+      { id: "run-failed", status: "failed" },
+      { id: "run-skipped", status: "skipped" },
+      { id: "run-applied", status: "applied" },
+    ],
+  },
+);
+assert.deepEqual(sharedMissingIds, ["detector-false", "run-failed", "NvidiaControlPanelSettings"]);
+assert.deepEqual(getMissingRecommendationIds(["selected", "unselected"], { native: false, stateReady: true, appliedState: {}, selectedState: { selected: true } }), ["unselected"]);
 
 console.log(`\n[preset-builder] ${passed} passed, ${failed} failed\n`);
 if (failed > 0) {
