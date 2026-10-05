@@ -7,6 +7,7 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use winreg::enums::*;
 use winreg::types::FromRegValue;
 use winreg::RegKey;
@@ -97,6 +98,43 @@ pub fn write_qword(hive: Hive, path: &str, name: &str, value: u64) -> Result<()>
         _ => anyhow::bail!("registry verification failed for {name}: value is not a QWORD"),
     }
     Ok(())
+}
+
+pub fn read_qword_values(hive: Hive, path: &str) -> Result<BTreeMap<String, u64>> {
+    let key = match hive.hkey().open_subkey_with_flags(path, KEY_READ) {
+        Ok(key) => key,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("open_subkey {path} for applied history"))
+        }
+    };
+    let mut values = BTreeMap::new();
+    for entry in key.enum_values() {
+        let (name, raw) = entry.with_context(|| format!("enumerate values in {path}"))?;
+        if raw.vtype == REG_QWORD {
+            let timestamp = u64::from_reg_value(&raw)
+                .with_context(|| format!("decode applied-history timestamp {name}"))?;
+            if timestamp > 0 {
+                values.insert(name, timestamp);
+            }
+        }
+    }
+    Ok(values)
+}
+
+pub fn delete_value(hive: Hive, path: &str, name: &str) -> Result<()> {
+    let key = match hive.hkey().open_subkey_with_flags(path, KEY_SET_VALUE) {
+        Ok(key) => key,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("open_subkey {path} for deletion"))
+        }
+    };
+    match key.delete_value(name) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("delete_value {name}")),
+    }
 }
 
 pub fn read_value(hive: Hive, path: &str, name: &str) -> Result<RegValue> {

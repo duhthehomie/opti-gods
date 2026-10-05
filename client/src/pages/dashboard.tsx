@@ -463,8 +463,22 @@ export default function Dashboard() {
   const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
   const [selectedFullOptimizeDebloat, setSelectedFullOptimizeDebloat] = useState<string[]>([]);
   const fullOptimizeNvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
+  const [nvidiaControlPanelInstalled, setNvidiaControlPanelInstalled] = useState<boolean | null>(null);
   const showFullOptimizeNvidiaPreset = native && fullOptimizeNvidiaGpuCount > 0;
   const canApplyFullOptimizeNvidiaPreset = fullOptimizeNvidiaGpuCount === 1 && !hw.isHybridGpu;
+  const nvidiaPresetEligible = native && isPro && hw.scanned && canApplyFullOptimizeNvidiaPreset && nvidiaControlPanelInstalled === true;
+  useEffect(() => {
+    let mounted = true;
+    if (!native || fullOptimizeNvidiaGpuCount === 0) {
+      setNvidiaControlPanelInstalled(false);
+      return () => { mounted = false; };
+    }
+    setNvidiaControlPanelInstalled(null);
+    void isNvidiaControlPanelInstalled()
+      .then(installed => { if (mounted) setNvidiaControlPanelInstalled(installed); })
+      .catch(() => { if (mounted) setNvidiaControlPanelInstalled(false); });
+    return () => { mounted = false; };
+  }, [native, fullOptimizeNvidiaGpuCount]);
   const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
@@ -729,7 +743,7 @@ export default function Dashboard() {
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = getEligibleSmartRecommendationIds(
     smartRecs.ids,
-    id => getTweakCompatibility(id).ok,
+    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const latestRunSkippedIds = new Set(

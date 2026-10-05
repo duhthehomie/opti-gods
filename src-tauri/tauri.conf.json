@@ -57,7 +57,8 @@
       "resources/nvidia-profile-inspector/nvidiaProfileInspector.exe",
       "resources/nvidia-profile-inspector/nvidiaProfileInspector.exe.config",
       "resources/nvidia-profile-inspector/Reference.xml",
-      "resources/nvidia-profile-inspector/OptiGods-Global.nip"
+      "resources/nvidia-profile-inspector/OptiGods-Global.nip",
+      "resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"
     ],
     "externalBin": [],
     "windows": {

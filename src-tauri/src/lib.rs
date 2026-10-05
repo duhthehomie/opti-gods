@@ -59,6 +59,7 @@ pub fn run() {
             commands::tweaks::undo_tweak,
             commands::tweaks::list_tweaks,
             commands::tweaks::detect_applied_tweaks,
+            commands::tweaks::get_recorded_applied_tweaks,
             commands::power::list_power_plans,
             commands::power::set_power_plan,
             commands::hardware::scan_hardware,

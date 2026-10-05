@@ -274,6 +274,25 @@ $checks | ConvertTo-Json -Compress
 }
 
 #[tauri::command]
+pub fn get_recorded_applied_tweaks() -> std::result::Result<BTreeMap<String, u64>, String> {
+    #[cfg(windows)]
+    {
+        crate::win32::registry::read_qword_values(
+            crate::win32::registry::Hive::CurrentUser,
+            r"Software\OptiGods\AppliedTweaks",
+        )
+        .map_err(|error| {
+            format!("Could not read the machine's applied-tweak history: {error:#}")
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(BTreeMap::new())
+    }
+}
+
+#[tauri::command]
+pub async fn apply_tweak#[tauri::command]
 pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
     if matches!(args.id.as_str(), "OpenMsiUtilityPro" | "ImportNvidiaPresetPro") {
         return TweakResult {
@@ -362,6 +381,7 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         .get("command")
         .and_then(|v| v.as_str())
         .map(str::to_owned);
+    #[allow(unused_mut)]
     let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {
             Ok(undo_token) => TweakResult {
@@ -416,6 +436,30 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
             error_stage: Some(NativeErrorStage::Execution),
         }
     };
+    #[cfg(windows)]
+    if result.ok {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0);
+        if timestamp > 0 {
+            if let Err(error) = crate::win32::registry::write_qword(
+                crate::win32::registry::Hive::CurrentUser,
+                r"Software\OptiGods\AppliedTweaks",
+                &result.id,
+                timestamp,
+            ) {
+                eprintln!(
+                    "[applied-history] Could not save tweak history for {}: {error:#}",
+                    result.id
+                );
+                result.message.push_str(
+                    " Windows confirmed the change, but its applied-history marker could not be saved.",
+                );
+            }
+        }
+    }
+
     let mut acknowledged = false;
     // The Windows mutation has already completed at this point. Give the
     // authoritative server result callback enough time to survive a cold
@@ -469,7 +513,7 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
             error_stage: Some(NativeErrorStage::Restore),
         };
     }
-    if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
+    let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.undo)(args.undo_token.as_deref()) {
             Ok(()) => TweakResult {
                 ok: true,
@@ -505,7 +549,24 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
             error_kind: Some(NativeErrorKind::Execution),
             error_stage: Some(NativeErrorStage::Execution),
         }
+    };
+    #[cfg(windows)]
+    if result.ok {
+        if let Err(error) = crate::win32::registry::delete_value(
+            crate::win32::registry::Hive::CurrentUser,
+            r"Software\OptiGods\AppliedTweaks",
+            &result.id,
+        ) {
+            eprintln!(
+                "[applied-history] Could not clear tweak history for {}: {error:#}",
+                result.id
+            );
+            result.message.push_str(
+                " Windows undo succeeded, but its applied-history marker could not be cleared.",
+            );
+        }
     }
+    result
 }
 
 /// Trusted PowerShell fallback map. Intentionally tiny in V2 — the

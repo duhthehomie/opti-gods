@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
 import { DISCORD_INVITE } from "@/lib/brand-links";
-import { isNative } from "@/lib/tauri-bridge";
+import { getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 
 const MOBILE_FEATURES = [
   { icon: Zap, title: `${TOTAL_TWEAKS_LABEL} Optimizations`, desc: "Registry, GPU, network, memory, and game-specific tweaks" },
@@ -455,6 +455,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const native = isNative();
+  const [machineAppliedAt, setMachineAppliedAt] = useState<Record<string, number>>({});
 
   const { tweaks, appliedAt, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
@@ -462,6 +463,19 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const handleApply = () => {
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!native) return;
+    let mounted = true;
+    const refreshAppliedHistory = () => {
+      void getRecordedAppliedTweaks()
+        .then(history => { if (mounted) setMachineAppliedAt(history); })
+        .catch(error => console.warn("Could not read Windows applied-tweak history.", error));
+    };
+    refreshAppliedHistory();
+    const interval = window.setInterval(refreshAppliedHistory, 15_000);
+    return () => { mounted = false; window.clearInterval(interval); };
+  }, [native]);
 
   useEffect(() => {
     const handler = () => setDialogOpen(true);
@@ -472,7 +486,10 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.entries(tweaks).filter(([id, enabled]) => enabled && id in DEFAULT_TWEAKS && !appliedAt[id]).length;
   const hasEnabledTweaks = Object.entries(tweaks).some(([id, enabled]) => enabled && id in DEFAULT_TWEAKS);
-  const appliedCount = Object.keys(appliedAt).length;
+  const appliedCount = new Set([
+    ...Object.keys(appliedAt),
+    ...(native ? Object.keys(machineAppliedAt) : []),
+  ]).size;
 
   const isMobileDashboard = isMobile && location === "/";
 
