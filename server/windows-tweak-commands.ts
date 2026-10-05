@@ -57,7 +57,7 @@ function buildPowerPlanCommand(id: string): string {
       $exitCode = $LASTEXITCODE
       if ($exitCode -ne 0) {
         $detail = [string]::Join(' ', @($output | ForEach-Object { "$_" })).Trim()
-        $errors += "$($setting.Name) (powercfg exit $exitCode: $detail)"
+        $errors += "$($setting.Name) (powercfg exit $($exitCode): $detail)"
         continue
       }
       $check = & powercfg.exe /query SCHEME_CURRENT SUB_PROCESSOR $setting.Name 2>&1
@@ -74,7 +74,7 @@ function buildPowerPlanCommand(id: string): string {
       $activationExit = $LASTEXITCODE
       if ($activationExit -ne 0) {
         $detail = [string]::Join(' ', @($activation | ForEach-Object { "$_" })).Trim()
-        $errors += "activate SCHEME_CURRENT (powercfg exit $activationExit: $detail)"
+        $errors += "activate SCHEME_CURRENT (powercfg exit $($activationExit): $detail)"
       }
     }
     if ($errors.Count -gt 0) {
@@ -85,7 +85,7 @@ function buildPowerPlanCommand(id: string): string {
         $restoreExit = $LASTEXITCODE
         if ($restoreExit -ne 0) {
           $detail = [string]::Join(' ', @($restore | ForEach-Object { "$_" })).Trim()
-          $rollbackErrors += "$($setting.Name) restore (powercfg exit $restoreExit: $detail)"
+          $rollbackErrors += "$($setting.Name) restore (powercfg exit $($restoreExit): $detail)"
           continue
         }
         $restoreCheck = & powercfg.exe /query SCHEME_CURRENT SUB_PROCESSOR $setting.Name 2>&1
