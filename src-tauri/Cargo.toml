@@ -1,6 +1,6 @@
 [package]
 name = "opti-gods"
-version = "5.2.45"
+version = "5.2.46"
 description = "Opti Gods — Windows PC optimizer (Tauri shell)"
 authors = ["leaq"]
 license = "Proprietary"
@@ -63,6 +63,7 @@ keyring = { version = "3", features = ["windows-native"] }
 
 # Windows-only deps
 [target.'cfg(windows)'.dependencies]
+libloading = "0.7"
 winreg = "0.52"
 wmi = "0.14"
 windows-service = "0.7"

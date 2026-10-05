@@ -44,7 +44,7 @@ const ryzen = buildSafeWindowsCommandOverride("FiveM3500PerfPlan");
     const firstRegistryWrite = nvidia.indexOf("Set-ItemProperty");
     assert.ok(adapterGuard >= 0 && firstRegistryWrite > adapterGuard);
     assert.match(nvidia, /exactly one active PCI NVIDIA display adapter/);
-    assert.match(nvidia, /PCI\\\\VEN_10DE&/);
+    assert.ok(nvidia.includes("PCI\\\\VEN_10DE&"), "MSI target must be one physical PCI NVIDIA adapter");
     assert.match(nvidia, /No registry values were changed/);
     assert.doesNotMatch(nvidia, /if ($active.Count -ne 1)/);
     assert.equal(buildSafeWindowsCommandOverride("CodDirectXQueue"), undefined);
