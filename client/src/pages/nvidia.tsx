@@ -19,7 +19,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID, recordNativeToolResult } from "@/lib/native-tweak-runner";
 import { getNativeAuthToken, isNative, openMsiUtility } from "@/lib/tauri-bridge";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
@@ -366,13 +366,19 @@ export default function Nvidia() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok || typeof body.ticket !== "string") throw new Error(body.error || "The server did not authorize this one-use Pro tool ticket.");
       const message = await openMsiUtility(body.ticket, auth);
+      recordNativeToolResult(id, `Manual setup only. ${message}`, true);
       toast({ title: label + " complete", description: message, variant: "success" });
     } catch (error) {
-      toast({ title: label + " failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: label + " failed", description: message, variant: "destructive" });
+      if (recordNativeToolResult(id, message, false)) window.location.assign("/applied-tweaks");
     } finally { setProToolBusy(null); }
   };
   const canApplyNvidiaPreset = isNative() && isPro && hw.scanned && discreteNvidiaGpus.length === 1 && !hw.isHybridGpu && controlPanelInstalled === true;
-  const nvidiaSmartIds = ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id) && (id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset));
+  const nvidiaSmartIds = Array.from(new Set([
+    ...ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id) && id !== NVIDIA_PRESET_ACTION_ID),
+    ...(canApplyNvidiaPreset ? [NVIDIA_PRESET_ACTION_ID] : []),
+  ]));
   const enableSafeMsi = async () => {
     if (!isPro || !canEnableSafeMsi) return;
     const result = await applyTweakBatch(["EnableNvidiaMSIPro"]);
@@ -393,7 +399,12 @@ export default function Nvidia() {
       return;
     }
     if (isNative() && !window.confirm(`Apply ${pending.length} ${label}?`)) return;
-    if (isNative()) { void applyTweakBatch(pending); return; }
+    if (isNative()) {
+      void applyTweakBatch(pending).catch(error => toast({
+        title: "Could not queue NVIDIA recommendations", description: error instanceof Error ? error.message : String(error), variant: "destructive",
+      }));
+      return;
+    }
     const result = await applyTweakBatch(pending);
     toast({
       title: `${result.selectedIds.length} ${label} selected`,
@@ -502,6 +513,11 @@ export default function Nvidia() {
                           </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
           {controlPanelInstalled === false && isNative() && <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">NVIDIA Control Panel is not installed. Preset import is disabled on this PC.</p>}
+          <Button size="sm" variant="outline" className="mt-3 text-xs" onClick={() => {
+            setControlPanelInstalled(null);
+            setControlPanelCheckFailed(false);
+            void isNvidiaControlPanelInstalled().then(setControlPanelInstalled).catch(() => setControlPanelCheckFailed(true));
+          }} disabled={!isNative()} data-testid="button-retry-nvidia-detection">Retry NVIDIA Control Panel detection</Button>
           {controlPanelInstalled === null && isNative() && (controlPanelCheckFailed
             ? <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">Could not verify NVIDIA Control Panel installation. Preset import remains disabled; retry after restarting the app.</p>
             : <p className="mt-3 text-[11px] text-zinc-500">Checking NVIDIA Control Panel installation…</p>)}

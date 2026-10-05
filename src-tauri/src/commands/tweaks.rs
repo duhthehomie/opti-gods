@@ -1,4 +1,5 @@
 // Native tweak execution engine.
+include!("desktop_safe_overrides.rs");
 //
 // This is the framework that V3-onwards will progressively port the 500
 // PowerShell tweaks onto. For V2 ship date we register 20 representative
@@ -194,7 +195,17 @@ $tabletInputServiceStart = $null
 if (Test-Path -LiteralPath $tabletInputServicePath) {
   $tabletInputServiceStart = (Get-ItemProperty -LiteralPath $tabletInputServicePath -Name Start -ErrorAction SilentlyContinue).Start
 }
+$physicalDisplays = @(Get-PnpDevice -PresentOnly -Class Display -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '(?i)^PCI\\VEN_(10DE|1002|8086)&' })
+$nvidiaDisplays = @($physicalDisplays | Where-Object { $_.InstanceId -match '(?i)^PCI\\VEN_10DE&' })
+$nvidiaMsiConfirmed = $false
+if ($physicalDisplays.Count -eq 1 -and $nvidiaDisplays.Count -eq 1) {
+  $interrupt = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($nvidiaDisplays[0].InstanceId)\Device Parameters\Interrupt Management"
+  $supported = (Get-ItemProperty -LiteralPath "$interrupt\MessageSignaledInterruptProperties" -Name MSISupported -ErrorAction SilentlyContinue).MSISupported
+  $priority = (Get-ItemProperty -LiteralPath "$interrupt\Affinity Policy" -Name DevicePriority -ErrorAction SilentlyContinue).DevicePriority
+  $nvidiaMsiConfirmed = ($supported -eq 1 -and $priority -eq 3)
+}
 $checks = [ordered]@{
+  EnableNvidiaMSIPro = $nvidiaMsiConfirmed;
   DebloatOneDrive = (
     -not (Test-Path -LiteralPath "$env:SystemRoot\System32\OneDriveSetup.exe") -and
     -not (Test-Path -LiteralPath "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") -and
@@ -221,7 +232,7 @@ $checks = [ordered]@{
   );
   ProcSvc_TabletInput = (
     -not $tabletInputService -or
-    $tabletInputService.StartMode -eq "Manual"
+    $tabletInputService.StartMode -in @("Manual", "Disabled")
   );
   FiveM1060DisableHAGS = (Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -ErrorAction SilentlyContinue) -eq 1;
   FiveM1060AnselDisable = (Get-ItemPropertyValue -Path "HKCU:\SOFTWARE\NVIDIA Corporation\Ansel" -Name "AnselEnable" -ErrorAction SilentlyContinue) -eq 0;
@@ -380,14 +391,14 @@ pub async fn apply_tweak(args: ApplyArgs) -> TweakResult {
         None => return TweakResult { ok: false, id: args.id, message: "Authorization response omitted result secret.".into(), undo_token: None, requires_reboot: false, via_powershell: false, error_kind: Some(NativeErrorKind::Auth), error_stage: Some(NativeErrorStage::Authorization) },
     };
     // The release server's TabletInput command hid sc.exe failures. Verify it locally.
-    let server_command = if args.id == "ServiceTabletInput" {
+    let server_command = desktop_safe_command(&args.id).map(str::to_owned).or_else(|| if args.id == "ServiceTabletInput" {
         None
     } else {
         consumed
             .get("command")
             .and_then(|v| v.as_str())
             .map(str::to_owned)
-    };
+    });
     #[allow(unused_mut)]
     let mut result = if let Some(tweak) = NATIVE_TWEAKS.iter().find(|(id, _)| *id == args.id) {
         match (tweak.1.apply)() {

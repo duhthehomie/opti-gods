@@ -381,7 +381,7 @@ export default function Dashboard() {
   const hw = useHardwareInfo();
   const smartRecs = computeSmartRecs(hw, osInfo);
   const hasProEntitlement = useProStatus();
-  const isPro = isAuthenticated && hasProEntitlement;
+  const isPro = hasProEntitlement;
   const proStatusLoading = useProStatusLoading();
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
@@ -821,7 +821,7 @@ export default function Dashboard() {
     ? (!nativeDetectionReady ? "Checking Windows state…" : "Applied state unavailable")
     : missingRecommendedCount === 0
       ? "Review recommended tweaks"
-      : `Apply ${missingRecommendedCount} missing tweaks`;
+      : `Apply ${missingRecommendedCount} pending tweaks`;
   const freeUnavailableCount = Math.max(0, matchedRecommendedIds.length - 15);
   const recApplied = native
     ? scoreIds.filter(id => activeIdsForDisplay.has(id)).length

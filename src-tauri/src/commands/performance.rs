@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+include!("nvidia_temperature.rs");
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -147,7 +148,7 @@ if ($null -eq $out.gpu_load_pct) {
 # commonly expose the real package sensor through OpenHardwareMonitor or
 # LibreHardwareMonitor instead.
 $cpuTemp = $null
-$zones = @(Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue)
+$zones = @() # ACPI motherboard thermal zones are not verified CPU package sensors.
 if ($zones) {
   $values = @($zones | ForEach-Object { [math]::Round(([double]$_.CurrentTemperature / 10) - 273.15, 1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 })
   if ($values) { $cpuTemp = ($values | Measure-Object -Maximum).Maximum }
@@ -269,8 +270,10 @@ $out | ConvertTo-Json -Compress
             .rev()
             .find(|line| line.trim_start().starts_with('{'))
             .ok_or_else(|| "Windows returned no live performance payload.".to_string())?;
-        serde_json::from_str(json)
-            .map_err(|error| format!("invalid live performance payload: {error}"))
+        let mut performance: LivePerformance = serde_json::from_str(json)
+            .map_err(|error| format!("invalid live performance payload: {error}"))?;
+        if performance.gpu_temp_c.is_none() { performance.gpu_temp_c = read_nvidia_temperature(); }
+        Ok(performance)
     }
     #[cfg(not(windows))]
     {

@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { isNative, readLivePerformance } from "@/lib/tauri-bridge";
 
+let nativeTelemetryRequest: ReturnType<typeof readLivePerformance> | null = null;
+function readSharedNativeTelemetry() {
+  if (!nativeTelemetryRequest) {
+    nativeTelemetryRequest = readLivePerformance().finally(() => { nativeTelemetryRequest = null; });
+  }
+  return nativeTelemetryRequest;
+}
+
 export interface LiveStats {
   cpuUsage: number;
   gpuUsage: number;
@@ -61,13 +69,16 @@ export function useLiveStats(ramGB: number): LiveStats {
   });
 
   useEffect(() => {
+    let inFlight = false;
+    let cancelled = false;
     const tick = async () => {
-      if (document.hidden) return;
+      if (document.hidden || inFlight || cancelled) return;
+      inFlight = true;
 
       let realData: HwLiveResponse | null = null;
       try {
         if (isNative()) {
-          const native = await readLivePerformance();
+          const native = await readSharedNativeTelemetry();
           if (native?.live) {
             realData = {
               live: true,
@@ -90,6 +101,8 @@ export function useLiveStats(ramGB: number): LiveStats {
       } catch {
         // server unreachable or stale — fall through
       }
+      inFlight = false;
+      if (cancelled) return;
 
       if (realData) {
         const ramTotal = realData.ram_total_gb ?? totalRAM;
@@ -147,7 +160,7 @@ export function useLiveStats(ramGB: number): LiveStats {
 
     const id = setInterval(tick, 2000);
     tick();
-    return () => clearInterval(id);
+    return () => { cancelled = true; clearInterval(id); };
   }, [totalRAM]);
 
   return stats;

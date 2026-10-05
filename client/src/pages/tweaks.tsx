@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -118,6 +119,12 @@ function sectionCount(section: Section): number {
   return section.categories.reduce((sum, c) => sum + tweaksByCategory(c).length, 0);
 }
 
+function sectionRecommendedIds(section: Section, ids: readonly string[]): string[] {
+  return ids.filter(id => section.tweakIds
+    ? section.tweakIds.includes(id)
+    : section.categories.some(category => TWEAK_REGISTRY.some(t => t.id === id && t.category === category)));
+}
+
 const TAB_STORAGE_KEY  = "optigods_tweaks_active_group";
 const SHOW_ALL_KEY     = "optigods_tweaks_show_all";
 const ACTIVE_SECT_KEY  = "optigods_tweaks_active_section";
@@ -149,16 +156,20 @@ function sectionActiveTweaks(section: Section, activeIds: ReadonlySet<string>): 
 
 // ─── Section card (grid tile + compact sidebar variant) ───────────────────────
 function SectionCard({
-  section, active, onClick, activeTweaks = 0, compact = false,
+  section, active, onClick, activeTweaks = 0, compact = false, eligibleIds, activeIds,
 }: {
   section: Section;
   active: boolean;
   onClick: () => void;
   activeTweaks?: number;
   compact?: boolean;
+  eligibleIds?: readonly string[];
+  activeIds?: ReadonlySet<string>;
 }) {
   const Icon  = section.icon;
-  const count = sectionCount(section);
+  const eligible = eligibleIds ? sectionRecommendedIds(section, eligibleIds) : null;
+  const count = eligible ? eligible.length : sectionCount(section);
+  if (eligible && activeIds) activeTweaks = eligible.filter(id => activeIds.has(id)).length;
   const pct   = count > 0 ? Math.min(Math.round((activeTweaks / count) * 100), 100) : 0;
 
   // ── Compact: slim sidebar nav item ──────────────────────────────────────────
@@ -246,7 +257,7 @@ function SectionCard({
           )} />
         </div>
       </div>
-      {activeTweaks > 0 && count > 0 && (
+      {count > 0 && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-wider">{pct}% configured</span>
@@ -256,6 +267,7 @@ function SectionCard({
           </div>
         </div>
       )}
+      {count === 0 && <p className="mt-4 text-[10px] text-zinc-500">Manual tools · no automatic recommendations</p>}
     </button>
   );
 }
@@ -451,6 +463,7 @@ export default function TweaksPage() {
   const gpuChip = !detecting && hw.gpuName ? hw.gpuName : null;
 
   const activeSection = SECTIONS.find(s => s.id === activeSectionId) ?? null;
+  const sectionPendingIds = activeSection ? sectionRecommendedIds(activeSection, missingMatchedIds) : [];
 
   function toggle(id: string) {
     setActiveSectionId(prev => prev === id ? null : id);
@@ -636,7 +649,7 @@ export default function TweaksPage() {
                     : native && nativeDetectionError
                       ? "Applied state unavailable"
                       : missingMatchedIds.length
-                        ? `Apply ${missingMatchedIds.length} missing tweaks`
+                        ? `Apply ${missingMatchedIds.length} pending tweaks`
                         : "All matched tweaks already applied"}
               </button>
             ) : (
@@ -646,7 +659,7 @@ export default function TweaksPage() {
                   data-testid="button-unlock-matched-tweaks"
                   className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_20px_-5px_rgba(220,38,38,0.7)] transition-colors hover:bg-red-500"
                 >
-                  Apply {missingMatchedIds.length} missing tweaks
+                  Apply {missingMatchedIds.length} pending tweaks
                 </button>
               </ProUnlockButton>
             )}
@@ -773,7 +786,8 @@ export default function TweaksPage() {
                       section={s}
                       active={activeSectionId === s.id}
                       onClick={() => toggle(s.id)}
-                      activeTweaks={sectionActiveTweaks(s, displayedActiveIds)}
+                      eligibleIds={matchedProIds}
+                      activeIds={displayedActiveIds}
                       compact
                     />
                   ))}
@@ -802,7 +816,16 @@ export default function TweaksPage() {
                   <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-zinc-950/60">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-white">{activeSection.title}</span>
-                      <span className="text-[10px] text-zinc-600 font-mono">— {sectionCount(activeSection)} tweaks</span>
+                      <span className="text-[10px] text-zinc-600 font-mono">— {sectionRecommendedIds(activeSection, matchedProIds).length} recommended</span>
+                      {isPro && (
+                        <Button size="sm" disabled={!sectionPendingIds.length || (native && (!nativeDetectionReady || nativeDetectionError))}
+                          onClick={() => void applyTweakBatch(sectionPendingIds, undefined, {
+                            forceReapplyIds: nativeRun?.items.filter(item => item.status === "failed").map(item => item.id),
+                          }).catch(error => toast({ title: "Could not queue recommendations", description: error instanceof Error ? error.message : String(error), variant: "destructive" }))}
+                          data-testid="button-apply-section-recommendations" className="ml-2 bg-red-600 text-[10px]">
+                          {sectionPendingIds.length ? `Apply ${sectionPendingIds.length} recommended` : "Recommendations confirmed"}
+                        </Button>
+                      )}
                       {(() => {
                         const on = sectionActiveTweaks(activeSection, displayedActiveIds);
                         return on > 0 ? (
@@ -848,7 +871,8 @@ export default function TweaksPage() {
                     section={s}
                     active={false}
                     onClick={() => toggle(s.id)}
-                    activeTweaks={sectionActiveTweaks(s, displayedActiveIds)}
+                    eligibleIds={matchedProIds}
+                    activeIds={displayedActiveIds}
                   />
                 ))}
               </div>

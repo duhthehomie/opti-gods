@@ -292,9 +292,9 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   hwMonitor?: HwMonitorData | null;
 }) {
   const os = useOsDetection();
-  const liveStats = useLiveStats(16);
-  const cpuTemp = liveStats.cpuTemp ?? scan.cpu_temp_c;
-  const gpuTemp = liveStats.gpuTemp ?? null;
+  const liveStats = useLiveStats(scan.ram_gb || 16);
+  const cpuTemp = liveStats.isStale ? null : liveStats.cpuTemp;
+  const gpuTemp = liveStats.isStale ? null : liveStats.gpuTemp;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
@@ -304,9 +304,19 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   return (
     <div className="space-y-4">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-        <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
-          sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
-        <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
+        <div className="space-y-2">
+          <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
+            sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
+          <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
+            sub={gpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No GPU temperature sensor returned a live reading") : "Live GPU temperature · updates automatically"}
+            accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} />
+        </div>
+        <div className="space-y-2">
+          <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
+          <Stat icon={Thermometer} label="CPU Temp" value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
+            sub={cpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No CPU package sensor returned a live reading") : "Live CPU temperature · updates automatically"}
+            accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} />
+        </div>
         <Stat icon={MemoryStick} label="RAM"
           value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
           sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight />
@@ -319,21 +329,6 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         {/* Cooling — real fan count when WMI exposes it */}
         <Stat icon={Wind} label="Cooling" value={fan.label} sub={fan.sub} />
 
-        {/* Live CPU and GPU temperatures from native performance monitoring */}
-        <Stat
-          icon={Thermometer}
-          label="CPU Temp"
-          value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
-          sub={cpuTemp == null ? "No live CPU temperature sensor is available" : cpuTemp < 60 ? "Cool — normal idle" : cpuTemp < 80 ? "Warm — under load" : "Hot — check cooling"}
-          accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined}
-        />
-        <Stat
-          icon={Thermometer}
-          label="GPU Temp"
-          value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
-          sub={gpuTemp == null ? "No live GPU temperature sensor is available" : gpuTemp < 60 ? "Cool — normal idle" : gpuTemp < 80 ? "Warm — under load" : "Hot — check cooling"}
-          accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined}
-        />
 
         {scan.motherboard && (
           <Stat icon={Monitor} label="Motherboard" value={scan.motherboard} />

@@ -369,8 +369,6 @@ pub async fn open_msi_utility(app: tauri::AppHandle, args: ProToolArgs) -> Resul
             let path = app.path().resource_dir().map_err(|e| format!("Resource directory unavailable: {e}"))?
                 .join("resources").join("msi-utility").join("MSI_util_v3.exe");
             verify_sha256(&path, MSI_UTILITY_SHA256)?;
-            let resource_dir = path.parent().and_then(|p| p.parent()).ok_or_else(|| "Bundled resource directory unavailable.".to_string())?;
-            verify_nvidia_bundle(&resource_dir.join("nvidia-profile-inspector"))?;
             std::process::Command::new(&path).spawn().map_err(|e| format!("Could not launch MSI Utility v3: {e}"))?;
             Ok::<String, String>("MSI Utility v3 launched. Select only the active NVIDIA display adapter, check MSI, choose High, then press Apply. Windows resets this after a driver update.".into())
         })();
@@ -529,19 +527,22 @@ pub fn is_nvidia_control_panel_installed() -> Result<bool, String> {
     {
         let script = r#"
 $ErrorActionPreference = 'Stop'
-$candidates = @(
-  (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
-  (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$candidates = @()
+foreach ($root in @($env:ProgramFiles, [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'))) {
+  if ($root) {
+    $candidate = Join-Path $root 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'
+    if (Test-Path -LiteralPath $candidate) { $candidates += $candidate }
+  }
+}
 $exe = $candidates | Select-Object -First 1
 if (-not $exe) {
-  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
+  $package = @(Get-AppxPackage -Name '*NVIDIAControlPanel*' -ErrorAction SilentlyContinue; Get-AppxPackage -AllUsers -Name '*NVIDIAControlPanel*' -ErrorAction SilentlyContinue) | Select-Object -First 1
   if ($package) {
     $candidate = Join-Path $package.InstallLocation 'nvcplui.exe'
     if (Test-Path -LiteralPath $candidate) { $exe = $candidate }
   }
 }
-if ($exe) { 'true' } else { 'false' }
+if ($exe -or $package) { 'true' } else { 'false' }
 "#;
         let output = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])

@@ -16,6 +16,7 @@ import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import { NVIDIA_PRESET_ACTION_ID, queueTweakBatch } from "@/lib/native-tweak-runner";
+import { useAppliedTweakState } from "@/hooks/use-applied-tweak-state";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 
@@ -81,6 +82,10 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   // the install script (see script-dialog `markApplied`). Click "Undo" to
   // download a single-tweak reversal PS1 (Pro-gated, server-generated).
   const appliedAt = useOptimizationStore((s) => s.appliedAt[id]);
+  const currentState = useAppliedTweakState();
+  const appliedOnSystem = isNative()
+    ? currentState.data?.[id] ?? Boolean(appliedAt)
+    : false;
   const clearApplied = useOptimizationStore((s) => s.clearApplied);
   const markApplied = useOptimizationStore((s) => s.markApplied);
   const setTweakStore = useOptimizationStore((s) => s.setTweak);
@@ -336,6 +341,8 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
   return (
     <>
       <motion.div
+        data-applied-on-system={appliedOnSystem || undefined}
+        style={appliedOnSystem ? { boxShadow: "0 0 20px rgba(239,68,68,0.18)", borderColor: "rgba(239,68,68,0.5)", backgroundColor: "rgba(239,68,68,0.07)" } : undefined}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, delay: delay * 0.04 }}

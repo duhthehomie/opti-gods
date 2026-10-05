@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { buildSafePreset, MANUAL_ONLY_TWEAK_IDS } from "../shared/preset-builder";
 import { NATIVE_TWEAK_ID_SET } from "../shared/native-tweak-ids";
 import { TWEAK_REGISTRY } from "../client/src/lib/tweak-registry";
@@ -6,7 +7,7 @@ import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-command
 
 const defender = buildSafeWindowsCommandOverride("CodDefenderExclusion");
 assert.ok(defender);
-assert.match(defender, /Import-Module Defender -ErrorAction Stop/);
+assert.match(defender, /requiredCmdlets.*Add-MpPreference.*Get-MpPreference.*Remove-MpPreference/);
 assert.match(defender, /Get-Command -Name/);
 assert.match(defender, /Add-MpPreference.*Get-MpPreference.*Remove-MpPreference/s);
 assert.match(defender, /did not report the exclusion after adding it/);
@@ -17,16 +18,13 @@ assert.doesNotMatch(defender, /\[SKIP\].*return/);
 
 const ryzen = buildSafeWindowsCommandOverride("FiveM3500PerfPlan");
     assert.ok(ryzen);
-    assert.match(ryzen, /powercfg\.exe /query SCHEME_CURRENT SUB_PROCESSOR/);
-    assert.match(ryzen, /powercfg\.exe /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR/);
-    assert.match(ryzen, /PROCTHROTTLEMIN/);
-    assert.match(ryzen, /PROCTHROTTLEMAX/);
-    assert.match(ryzen, /powercfg exit/);
-    assert.match(ryzen, /Original power values and active plan were restored/);
-    assert.match(ryzen, /restore verification failed/);
-    assert.match(ryzen, /throw "Not for this system: Ryzen 5 3500 power settings unavailable on scheme/);
-    assert.match(ryzen, /throw "Ryzen 5 3500 power-plan operation failed/);
-    assert.doesNotMatch(ryzen, /8c5e7fda|893dee8e|bc5038f7|54533251|PERFBOOSTMODE|PERFBOOSTPOL/);
+    // The 3500 action now creates/selects the verified custom Opti Gods plan,
+    // rather than silently swapping the user back to a stock plan.
+    assert.equal(ryzen, buildSafeWindowsCommandOverride("SetHighPerformancePlan"));
+    assert.match(ryzen, /Opti Gods|OptiGods/);
+    assert.match(ryzen, /\/setactive \$plan/);
+    assert.match(ryzen, /\/getactivescheme/);
+    assert.match(ryzen, /did not verify the Opti Gods Power Plan as active/);
     assert.doesNotMatch(ryzen, /\[SKIP\].*return/);
 
     const intel = buildSafeWindowsCommandOverride("IntelOldGenPowerOpt");
@@ -46,7 +44,7 @@ const ryzen = buildSafeWindowsCommandOverride("FiveM3500PerfPlan");
     const firstRegistryWrite = nvidia.indexOf("Set-ItemProperty");
     assert.ok(adapterGuard >= 0 && firstRegistryWrite > adapterGuard);
     assert.match(nvidia, /exactly one active PCI NVIDIA display adapter/);
-    assert.match(nvidia, /PCI\\VEN_10DE&/);
+    assert.match(nvidia, /PCI\\\\VEN_10DE&/);
     assert.match(nvidia, /No registry values were changed/);
     assert.doesNotMatch(nvidia, /if ($active.Count -ne 1)/);
     assert.equal(buildSafeWindowsCommandOverride("CodDirectXQueue"), undefined);
@@ -108,4 +106,18 @@ for (const id of hagsIds) {
   assert.ok(!hagsPreset.expert.includes(id), `${id} must not be auto-applied as an expert tweak`);
 }
 
-console.log("Windows command override checks passed.");
+const nativeSafe = readFileSync(new URL("../src-tauri/src/commands/desktop_safe_overrides.rs", import.meta.url), "utf8");
+assert.match(nativeSafe, /Get-PnpDevice -PresentOnly -Class Display/);
+assert.match(nativeSafe, /physical.Count -ne 1/);
+assert.match(nativeSafe, /MSISupported -Value 1/);
+assert.match(nativeSafe, /DevicePriority -Value 3/);
+assert.match(nativeSafe, /existing Disabled setting was preserved/);
+assert.match(nativeSafe, /Disk Cleanup is already open/);
+assert.doesNotMatch(nativeSafe, /sagerun|Temporary Internet Files/);
+assert.match(nativeSafe, /server-cache','server-cache-priv/);
+assert.doesNotMatch(nativeSafe, /Remove-Item.*DigitalEntitlements|Remove-Item.*Social Club|FiveM\.app\\cache\\\*/);
+assert.match(nativeSafe, /cached logins were not deleted/);
+for (const id of ["WinTitusDiskCleanup", "FiveMCacheClear", "FiveMFixProductId", "OpenMsiUtilityPro"]) {
+  assert.ok(MANUAL_ONLY_TWEAK_IDS.has(id), `${id} must stay out of automatic batches`);
+}
+console.log("Windows command source-guard checks passed.");

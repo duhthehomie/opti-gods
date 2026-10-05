@@ -13,6 +13,7 @@ import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 import { useToast } from "@/hooks/use-toast";
+import { useAppliedTweakState } from "@/hooks/use-applied-tweak-state";
 
 type Impact = "HIGH" | "MED" | "LOW";
 
@@ -38,8 +39,10 @@ interface SectionProps {
 }
 
 function Section({ heading, icon: Icon, tweaks, tweakState, appliedAt, onSet, onEnable, accentColor = "red" }: SectionProps) {
+  useAppliedTweakState();
   const recommended = tweaks.filter(t => t.recommended).map(t => t.id);
-  const allOn = recommended.length > 0 && recommended.every(id => isNative() ? Boolean(appliedAt[id]) : tweakState[id]);
+  const pending = getPendingRecommendationIds(recommended, tweakState, appliedAt);
+  const allOn = recommended.length > 0 && pending.length === 0;
 
   const colorMap = {
     red:     { label: "text-red-500",    btn: "text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/40" },
@@ -57,11 +60,11 @@ function Section({ heading, icon: Icon, tweaks, tweakState, appliedAt, onSet, on
           {heading}
         </h2>
         {recommended.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => onEnable(recommended)} disabled={allOn}
+          <Button variant="ghost" size="sm" onClick={() => onEnable(pending)} disabled={allOn}
             data-testid={`button-enable-recommended-${heading.replace(/\s+/g, "-").toLowerCase()}`}
             className={cn("text-[10px] font-bold uppercase tracking-wider border px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed", c.btn)}>
             <CheckCircle2 className="w-3 h-3 mr-1" />
-             {allOn ? "Recommended CONFIRMED" : `${isNative() ? "Apply" : "Select"} Recommended (${recommended.length})`}
+             {allOn ? "Recommended CONFIRMED" : `${isNative() ? "Apply" : "Select"} Recommended (${pending.length})`}
           </Button>
         )}
       </div>
@@ -172,6 +175,12 @@ export default function CpuPage() {
         </motion.div>
 
         <PageGuide pageName="CPU Tweaks" />
+        <Button data-testid="button-apply-all-cpu-recommendations" className="bg-red-600 hover:bg-red-500"
+          onClick={() => enableRecommended(
+            [...SCHEDULER_TWEAKS, ...POWER_TWEAKS, ...GAME_IFEO_TWEAKS, ...intelTweaks].filter(t => t.recommended !== false).map(t => t.id)
+          )}>
+          Apply all compatible CPU recommendations
+        </Button>
 
         {/* Impact legend */}
         <div className="flex items-center gap-4 px-1 mb-2">

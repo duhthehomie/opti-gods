@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
+import { useAppliedTweakState } from "@/hooks/use-applied-tweak-state";
 import { useIsEmbedded } from "@/lib/embedded-context";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
@@ -445,6 +446,7 @@ function FloatingAiButton() {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  useAppliedTweakState(true);
   const embedded = useIsEmbedded();
   if (embedded) return <>{children}</>;
   return <AppLayoutInner>{children}</AppLayoutInner>;

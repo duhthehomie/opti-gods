@@ -1,4 +1,4 @@
 {
-  "version": "5.2.44",
-  "notes": "V5.2.44 — reconciles missing-action counts and queues across Dashboard, Tweaks and AI Optimize, includes the NVIDIA preset, separates recorded success from Windows detection, adds Unselect all, fixes logout/privacy, and keeps the Opti Gods power plan active. Includes the prior Tablet Input, temperature, identity, PC-label and navigation fixes."
+  "version": "5.2.45",
+  "notes": "V5.2.45 — consistent pending recommendation queues, eligible NVIDIA preset, per-section configured meters, red applied-state glow, global CPU recommendations, live temperature layout and NVIDIA thermal fallback, Tablet Input conflict/readback fix, single-physical-GPU MSI verification, independent MSI Utility integrity with visible error logs, byte-stable preset resources, manual single-window Disk Cleanup, and authentication-preserving FiveM resource cleanup. Preserves bounded logout, alias privacy, HP labeling, navigation and the custom Opti Gods power plan. Windows runtime verification remains required."
 }

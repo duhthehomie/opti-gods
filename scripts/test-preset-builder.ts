@@ -354,7 +354,7 @@ const sharedMissingIds = getMissingRecommendationIds(
     ],
   },
 );
-assert.deepEqual(sharedMissingIds, ["detector-false", "run-failed", "NvidiaControlPanelSettings"]);
+assert.deepEqual(sharedMissingIds, ["detector-false", "run-failed", "run-skipped", "NvidiaControlPanelSettings", "unknown"]);
 assert.deepEqual(getMissingRecommendationIds(["selected", "unselected"], { native: false, stateReady: true, appliedState: {}, selectedState: { selected: true } }), ["unselected"]);
 
 console.log(`\n[preset-builder] ${passed} passed, ${failed} failed\n`);

@@ -146,6 +146,20 @@ export function readNativeTweakRun(): NativeTweakRunState | null {
   return readRunStateSafely();
 }
 
+/** A utility launch is not an applied Windows tweak. Retain failures for export. */
+export function recordNativeToolResult(id: string, message: string, success: boolean): boolean {
+  if (hasNativeTweakRunInFlight()) return false;
+  const timestamp = Date.now();
+  const state: NativeTweakRunState = {
+    runId: `tool-${timestamp}`, ids: [id], startedAt: timestamp, finishedAt: timestamp,
+    status: success ? "completed" : "failed",
+    items: [{ id, index: 0, total: 1, status: success ? "skipped" : "failed", message }],
+  };
+  localStorage.setItem(NATIVE_RUN_STATE_KEY, JSON.stringify(state));
+  window.dispatchEvent(new Event(NATIVE_RUN_EVENT));
+  return true;
+}
+
 export function subscribeNativeTweakRun(listener: (state: NativeTweakRunState | null) => void): () => void {
   const handler = () => listener(readRunStateSafely());
   window.addEventListener(NATIVE_RUN_EVENT, handler);
@@ -189,7 +203,7 @@ function finishPersistedRun(runId: string, result?: BulkTweakResult, error?: unk
   const stopped = Boolean(state.stopRequested || stopRequested);
   writeRunState({
     ...state,
-    status: error ? "failed" : stopped ? "stopped" : "completed",
+    status: error || result?.failures.length ? "failed" : stopped ? "stopped" : "completed",
     finishedAt: Date.now(),
     stopRequested: stopped,
     items: error

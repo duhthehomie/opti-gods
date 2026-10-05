@@ -19,6 +19,8 @@ interface OptimizationState {
 }
 
 export const DEFAULT_TWEAKS: Record<string, boolean> = {
+  EnableNvidiaMSIPro: false,
+  OpenMsiUtilityPro: false,
   // Registry - CPU Scheduling
   Win32PrioritySeparation: false,
   DisableHungAppDetection: false,

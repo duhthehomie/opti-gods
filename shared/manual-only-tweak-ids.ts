@@ -3,6 +3,10 @@
  * bulk-apply action. They remain available for an informed manual choice.
  */
 export const MANUAL_ONLY_TWEAK_IDS: ReadonlySet<string> = new Set([
+  "WinTitusDiskCleanup",
+  "FiveMCacheClear",
+  "FiveMFixProductId",
+  "OpenMsiUtilityPro",
   "DisableSearchIndexing",
   "CodDisableHAGS",
   "FiveM1060DisableHAGS",
