@@ -14,7 +14,7 @@ export function UserChip() {
   const logout = useLogout();
 
   if (!user) return null;
-  const display = user.globalName || user.username;
+  const display = user.username;
   const initial = (display || "?").charAt(0).toUpperCase();
 
   return (

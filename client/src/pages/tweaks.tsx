@@ -369,9 +369,9 @@ export default function TweaksPage() {
   const liveRunActive = native
     && Boolean(nativeRun)
     && ["running", "stopping"].includes(nativeRun!.status);
-  if (liveRunActive) {
+   if (nativeRun) {
     nativeRun!.items
-      .filter(item => item.status === "applied" && registryIds.has(item.id))
+       .filter(item => item.status === "applied" && registryIds.has(item.id) && detectedTweaks[item.id] !== false)
       .forEach(item => displayedActiveIds.add(item.id));
   }
   const enabledCount = displayedActiveIds.size;
@@ -389,7 +389,7 @@ export default function TweaksPage() {
     .map(id => TWEAK_REGISTRY.find(tweak => tweak.id === id))
     .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
   const matchedProIds = getEligibleSmartRecommendationIds(
-    [...smartRecs.ids, NVIDIA_PRESET_ACTION_ID],
+    [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const missingMatchedIds = getMissingRecommendationIds(matchedProIds, {
@@ -569,6 +569,18 @@ export default function TweaksPage() {
               <Zap className="h-3 w-3" />
               Apply selected{selectedIds.length ? ` (${selectedIds.length})` : ""}
             </button>
+             <button
+               type="button"
+               data-testid="button-unselect-all"
+               disabled={!selectedIds.length}
+               onClick={() => {
+                 const store = useOptimizationStore.getState();
+                 store.setAllTweaks(Object.fromEntries(Object.keys(store.tweaks).map(id => [id, false])));
+               }}
+               className="rounded-md border border-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-300 hover:bg-white/5 disabled:opacity-40"
+             >
+               Unselect all
+             </button>
             {!detecting && (
               <button
                 data-testid="button-toggle-show-all"

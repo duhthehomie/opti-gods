@@ -27,12 +27,28 @@ export function getEligibleSmartRecommendationIds(
 ): string[] {
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   return Array.from(ids).filter(id => {
+    if (id === "NvidiaControlPanelSettings") return isCompatible(id);
     const tweak = TWEAK_REGISTRY.find(candidate => candidate.id === id);
     return registryIds.has(id)
       && tweak?.safety !== "expert"
       && !MANUAL_ONLY_TWEAK_IDS.has(id)
       && isCompatible(id);
   });
+}
+
+/** The label and the execution queue must be derived from this same array. */
+export function getPendingRecommendationIds(
+  eligibleIds: readonly string[],
+  appliedIds: ReadonlySet<string>,
+  failedIds: readonly string[] = [],
+  additionalActionIds: readonly string[] = [],
+): string[] {
+  const eligible = new Set(eligibleIds);
+  const failed = new Set(failedIds.filter(id => eligible.has(id)));
+  return Array.from(new Set([
+    ...eligibleIds.filter(id => !appliedIds.has(id) || failed.has(id)),
+    ...additionalActionIds,
+  ]));
 }
 
 // Tweak IDs that are primarily about reducing latency/input delay (not raw FPS)

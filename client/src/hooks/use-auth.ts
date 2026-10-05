@@ -49,7 +49,7 @@ export function useAuth(): AuthState {
   // The UI shows "not authenticated" immediately and updates silently
   // once the real /api/me response arrives. This eliminates any
   // black loading-screen phase in both web and native builds.
-  const { data, isLoading, isFetched, isFetchedAfterMount } = useQuery<{ user: AuthUser | null }>({
+  const { data, isLoading, isFetched, isFetchedAfterMount, isError } = useQuery<{ user: AuthUser | null }>({
     queryKey: ["/api/me"],
     retry: false,
     staleTime: 30_000,
@@ -73,8 +73,14 @@ export function useLogout() {
       // Cover the native WebView's document reload so the partially painted
       // sidebar logo cannot flash during logout.
       beginAuthTransition();
+      await queryClient.cancelQueries({ queryKey: ["/api/me"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/pro/status"] });
       // 1. Tell the server to destroy the session cookie.
-      await apiRequest("POST", "/api/logout").catch(() => {});
+      // Offline/expired server sessions must not block clearing this device.
+      await Promise.race([
+        apiRequest("POST", "/api/logout").catch(() => {}),
+        new Promise<void>(resolve => window.setTimeout(resolve, 3000)),
+      ]);
       // 2. In native mode, also clear the OS keyring and localStorage token
       //    so the cached-session handler doesn't restore the old session.
       try {
@@ -101,7 +107,7 @@ export function useLogout() {
         grantedAt: null,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
-      window.location.href = "/";
+      window.location.replace("/");
     },
   });
 }

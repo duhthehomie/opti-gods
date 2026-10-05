@@ -341,21 +341,22 @@ export default function AppliedTweaksPage() {
       const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
       let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds]));
       let skippedSet = new Set(initialSkippedIds);
-      let executable = recoverable
-        .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok)
-        .slice(0, FREE_NATIVE_TWEAK_LIMIT);
+       let executable = recoverable
+         .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
       try {
         const response = await fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() });
-        if (response.ok && (await response.json() as { pro?: boolean }).pro === false) {
+         if (!response.ok) throw new Error("Could not verify Pro access. No partial run was started; your full queue is retained.");
+         const entitlement = await response.json() as { pro?: boolean };
+         if (typeof entitlement.pro !== "boolean") throw new Error("The entitlement response was incomplete. Your full queue is retained.");
+         if (entitlement.pro === false) {
           executable = executable
             .filter(id => NATIVE_TWEAK_ID_SET.has(id) && !skippedSet.has(id))
             .slice(0, FREE_NATIVE_TWEAK_LIMIT);
         } else if (response.ok) {
           executable = recoverable.filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
         }
-      } catch {
-        // Keep the queue if status is temporarily unavailable; the server
-        // remains the final authority and reports any rejected item.
+       } catch (error) {
+         throw error instanceof Error ? error : new Error("Could not verify access. Your full queue is retained; try again.");
       }
       if (!executable.length) {
         if (!initialSkippedIds.length) {

@@ -7,7 +7,14 @@ import { cn } from "@/lib/utils";
 
 function isOptiGodsPowerPlan(plan: NativePowerPlan) {
   const normalizedName = plan.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return normalizedName.includes("revisionultraperformance");
+  return normalizedName.includes("revisionultraperformance") || normalizedName.includes("optigodspowerplan");
+}
+
+function normalizedPlanName(plan: NativePowerPlan): string {
+  const key = plan.name.trim().replace(/\s+/g, " ").toLowerCase();
+  if (plan.guid.toLowerCase() === "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" || key === "high performance") return "High Performance";
+  if (plan.guid.toLowerCase() === "a1841308-3541-4fab-bc81-f71556f20b4a" || key === "power saver") return "Power Saver";
+  return plan.name;
 }
 
 export default function PowerPlansPage() {
@@ -15,7 +22,7 @@ export default function PowerPlansPage() {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const { toast } = useToast();
-  const refresh = () => { setLoading(true); listPowerPlans().then(setPlans).catch(e => toast({ title: "Power plan read failed", description: e instanceof Error ? e.message : "Windows did not return plan data.", variant: "destructive" })).finally(() => setLoading(false)); };
+  const refresh = () => { setLoading(true); listPowerPlans().then(plans => setPlans(plans.map(plan => ({ ...plan, name: normalizedPlanName(plan) })))).catch(e => toast({ title: "Power plan read failed", description: e instanceof Error ? e.message : "Windows did not return plan data.", variant: "destructive" })).finally(() => setLoading(false)); };
   useEffect(refresh, []);
   const choose = async (guid: string) => {
     setSwitching(guid);

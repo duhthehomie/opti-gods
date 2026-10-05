@@ -338,7 +338,7 @@ async function applyTweakBatchInternal(
     ]));
     // If entitlement status is temporarily unavailable, fail closed to the
     // free-device ceiling rather than letting a stale queue run oversized.
-    let queuedIds = compatibleIds.slice(0, FREE_NATIVE_TWEAK_LIMIT);
+    let queuedIds = compatibleIds;
     try {
       const allowanceResponse = await fetchWithTimeout(
         apiUrl("/api/performance-allowance"),
@@ -348,6 +348,7 @@ async function applyTweakBatchInternal(
       );
       if (allowanceResponse.ok) {
         const allowance = await allowanceResponse.json() as { pro?: boolean };
+        if (typeof allowance.pro !== "boolean") throw new Error("Access check was incomplete. No partial batch was queued.");
         if (allowance.pro === false) {
           // Keep the hardware filter in force for the free path too. The
           // previous code replaced compatibleIds with every native ID, which
@@ -356,10 +357,11 @@ async function applyTweakBatchInternal(
         } else {
           queuedIds = compatibleIds;
         }
+      } else {
+        throw new Error("Access check failed. No partial batch was queued; try again.");
       }
-    } catch {
-      // The Applied Tweaks runner will report the actual server result if the
-      // allowance check could not be read before navigation.
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("Access check failed. No partial batch was queued; try again.");
     }
     if (!queuedIds.length) {
       if (!compatibleIds.length && unsupportedIds.length) {

@@ -356,7 +356,7 @@ export function AppSidebar() {
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-white leading-tight truncate">
-                  {user.globalName || user.username}
+                  {user.username}
                 </p>
                 <p className="text-[9px] text-zinc-500 leading-tight truncate">@{user.username}</p>
               </div>

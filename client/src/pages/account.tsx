@@ -12,7 +12,7 @@ export default function AccountPage() {
   const logout = useLogout();
   const { data: versionData } = useVersionInfo();
 
-  const display = user?.globalName || user?.username;
+  const display = user?.username;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-6 w-full">

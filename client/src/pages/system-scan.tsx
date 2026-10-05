@@ -3,7 +3,7 @@ import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo, normalizeSystemModel } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { computeSmartRecs, getEligibleSmartRecommendationIds, getPendingRecommendationIds } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
@@ -427,7 +427,7 @@ function SmartRecsBreakdown() {
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
 
   const safeIds = getEligibleSmartRecommendationIds(
-    [...recs.ids, NVIDIA_PRESET_ACTION_ID],
+    [...Array.from(recs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const total = safeIds.length;

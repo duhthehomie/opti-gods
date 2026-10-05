@@ -12,25 +12,25 @@ export interface MissingRecommendationOptions {
   runItems?: readonly RecommendationRunItem[];
 }
 
-const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "stopped"]);
 
-/** One definition of missing/retryable recommendations for every UI surface. */
-export function getMissingRecommendationIds(eligibleIds: Iterable<string>, options: MissingRecommendationOptions): string[] {
+/** Unconfirmed compatible actions are pending, never silently treated as applied. */
+export function getMissingRecommendationIds(
+  eligibleIds: Iterable<string>,
+  options: MissingRecommendationOptions,
+): string[] {
   const ids = Array.from(new Set(eligibleIds));
   if (!options.native) return ids.filter(id => options.selectedState[id] !== true);
   const terminalRun = options.runStatus !== undefined && TERMINAL_RUN_STATUSES.has(options.runStatus);
-  const statusById = new Map<string, string>();
-  for (const item of options.runItems ?? []) statusById.set(item.id, item.status);
+  const statusById = new Map((options.runItems ?? []).map(item => [item.id, item.status]));
   return ids.filter(id => {
-    const runStatus = statusById.get(id);
-    if (runStatus === "skipped") return false;
-    if (options.appliedState[id] === false) return true;
-    if (runStatus === "applied") return false;
-    if (terminalRun && runStatus === "failed") return true;
+    const status = statusById.get(id);
+    if (terminalRun && status === "failed") return true;
     if (!options.stateReady) return false;
-    if (id === NVIDIA_PRESET_ACTION_ID) return options.appliedState[id] !== true;
-    // An absent detector/history entry is unknown, not proof of a missing tweak.
-    return false;
+    if (options.appliedState[id] === false) return true;
+    if (status === "applied" || options.appliedState[id] === true) return false;
+    // A skip in an earlier run is not success. Eligibility is checked again
+    // by the caller and by the native runner before any Windows mutation.
+    return true;
   });
 }

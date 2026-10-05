@@ -48,7 +48,7 @@ export async function getAppliedTweakSources(): Promise<AppliedTweakSources> {
 export async function getAppliedTweakState(): Promise<Record<string, boolean>> {
   const { currentWindows, recordedAt, nvidiaPresetSubmittedAt } = await getAppliedTweakSources();
   return {
-    ...Object.fromEntries(Object.keys(recordedAt).map(id => [id, true])),
+    ...Object.fromEntries(Object.keys(recordedAt).filter(id => recordedAt[id] > 0).map(id => [id, true])),
     ...(nvidiaPresetSubmittedAt != null && nvidiaPresetSubmittedAt > 0 ? { NvidiaControlPanelSettings: true } : {}),
     ...currentWindows,
   };

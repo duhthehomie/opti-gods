@@ -2,7 +2,7 @@ import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
-import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -17,7 +17,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useToast } from "@/hooks/use-toast";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useHardwareInfo, type ScannedSysInfo } from "@/hooks/use-hardware-info";
-import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { computeSmartRecs, getEligibleSmartRecommendationIds, getPendingRecommendationIds } from "@/lib/smart-recommendations";
 import { cn } from "@/lib/utils";
 import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
 import { useAuth, loginWithDiscord } from "@/hooks/use-auth";
@@ -385,6 +385,7 @@ export default function Dashboard() {
   const proStatusLoading = useProStatusLoading();
   const { tweaks, setAllTweaks } = useOptimizationStore();
   const [detectedNativeTweaks, setDetectedNativeTweaks] = useState<Record<string, boolean>>({});
+  const [appliedEvidence, setAppliedEvidence] = useState({ recorded: 0, detected: 0, notConfirmed: 0 });
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
   const [nativeDetectionError, setNativeDetectionError] = useState(false);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
@@ -515,7 +516,17 @@ export default function Dashboard() {
     if (!native) return;
     setRefreshingScore(true);
     try {
-      setDetectedNativeTweaks(await getAppliedTweakState());
+      const sources = await getAppliedTweakSources();
+      const recordedIds = Object.keys(sources.recordedAt).filter(id => sources.recordedAt[id] > 0);
+      setDetectedNativeTweaks({
+        ...Object.fromEntries(recordedIds.map(id => [id, true])),
+        ...sources.currentWindows,
+      });
+      setAppliedEvidence({
+        recorded: recordedIds.length,
+        detected: Object.values(sources.currentWindows).filter(value => value === true).length,
+        notConfirmed: recordedIds.filter(id => sources.currentWindows[id] === false).length,
+      });
       setNativeDetectionError(false);
       setNativeDetectionReady(true);
     } catch {
@@ -539,12 +550,12 @@ export default function Dashboard() {
     const syncRun = (state: NativeTweakRunState | null) => {
       setLastNativeRun(state);
       if (state && ["completed", "failed", "stopped"].includes(state.status)) {
-        void getAppliedTweakState().then(setDetectedNativeTweaks).catch(() => {});
+        void refreshDetectedState();
       }
     };
     syncRun(readNativeTweakRun());
     return subscribeNativeTweakRun(syncRun);
-  }, [native]);
+  }, [native, refreshDetectedState]);
 
   const executeFullOptimize = async () => {
     if (bulkApplying) return;
@@ -746,7 +757,7 @@ export default function Dashboard() {
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = getEligibleSmartRecommendationIds(
-    [...smartRecs.ids, NVIDIA_PRESET_ACTION_ID],
+    [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
@@ -768,6 +779,7 @@ export default function Dashboard() {
       .filter(item => item.status === "applied" && registryIds.has(item.id))
       .forEach(item => confirmedIds.add(item.id));
   }
+  if (native && (detectedNativeTweaks[NVIDIA_PRESET_ACTION_ID] || lastNativeRun?.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "applied" && detectedNativeTweaks[item.id] !== false))) confirmedIds.add(NVIDIA_PRESET_ACTION_ID);
   // Native totals combine read-only Windows detection with successful app-run
   // history; browser toggle intent alone is never treated as an applied change.
   const allActiveIdsForDisplay = native
@@ -789,9 +801,7 @@ export default function Dashboard() {
     : [];
   // A full native run is much larger than a retry or quick preset. Preserve its
   // exact set for the score; the missing-action count uses current eligible recs.
-  const scoreIds = latestLargeRunIds.length >= 100
-    ? latestLargeRunIds
-    : matchedRecommendedIds.length > 0 ? matchedRecommendedIds : achievableIds;
+   const scoreIds = matchedRecommendedIds;
   const compatibleAppliedCount = matchedRecommendedIds.filter(id => activeIdsForDisplay.has(id)).length;
   const compatibleSelectedCount = matchedRecommendedIds.filter(id => tweaks[id]).length;
   const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
@@ -846,7 +856,7 @@ export default function Dashboard() {
       )}
     >
       <Zap className="w-4 h-4 mr-1.5" />
-      {displayScore === 0 ? "Get Started" : "Boost My Score"}
+       {displayScore === 0 ? "Get Started" : "Boost My Score"}{native && nativeDetectionReady ? ` (${missingRecommendedCount} missing)` : ""}
     </Button>
   );
 
@@ -1239,6 +1249,14 @@ export default function Dashboard() {
                     </span>
                   </span>
                 </p>
+                {native && nativeDetectionReady && (
+                  <p data-testid="text-applied-evidence" className="mb-3 text-[10px] text-zinc-400">
+                    {appliedEvidence.recorded} recorded successful applications · {appliedEvidence.detected} detected by Windows now
+                    {appliedEvidence.notConfirmed > 0
+                      ? ` · ${appliedEvidence.notConfirmed} previously applied changes are not confirmed by the current scan. This does not prove they never applied.`
+                      : " · Windows detection covers only supported readbacks, not every tweak."}
+                  </p>
+                )}
                 <div className="flex items-center gap-3">
                   <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden max-w-xs flex-1">
                     <div

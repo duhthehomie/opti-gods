@@ -898,25 +898,191 @@ mod native_impls {
         Ok(())
     }
 
-    pub fn apply_high_performance_plan() -> anyhow::Result<Option<String>> {
-        const ULTIMATE_TEMPLATE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
-        const HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-        let prior = active_power_guid()?;
+    fn powercfg_command() -> Command {
+        use std::os::windows::process::CommandExt;
+        let mut command = Command::new("powercfg");
+        command.creation_flags(0x0800_0000);
+        command
+    }
 
-        if activate_power_guid(ULTIMATE_TEMPLATE).is_err() {
-            let duplicate = Command::new("powercfg")
-                .args(["/duplicatescheme", ULTIMATE_TEMPLATE])
-                .output()?;
-            let duplicate_guid = duplicate
-                .status
-                .success()
-                .then(|| guid_from_powercfg(&String::from_utf8_lossy(&duplicate.stdout)))
-                .flatten();
-            if let Some(guid) = duplicate_guid {
-                activate_power_guid(&guid)?;
-            } else {
-                activate_power_guid(HIGH_PERFORMANCE)?;
+    const REVISION_POWER_GUID: &str = "6a93ec26-284d-4943-9fc4-c9616def55c6";
+    const ULTIMATE_TEMPLATE_GUID: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+    const PROCESSOR_SUBGROUP_GUID: &str = "54533251-82be-4824-96c1-47b60b740d00";
+
+    const REVISION_AC_SETTINGS: &[(&str, u32)] = &[
+        ("465e1f50-b610-473a-ab58-00d1077dc418", 2), // performance increase policy
+        ("40fbefc7-2e9d-4d25-a185-0cfd8574bac6", 1), // performance decrease policy
+        ("06cadf0e-64ed-448a-8927-ce7bf90eb35d", 10), // increase threshold
+        ("12a0ab44-fe28-4fa9-b3bd-4b64f44960a6", 8), // decrease threshold
+        ("0cc5b647-c1df-4637-891a-dec35c318583", 100), // minimum active cores
+        ("0cc5b647-c1df-4637-891a-dec35c318584", 100), // minimum active cores, efficiency class 1
+    ];
+
+    const REVISION_USB_SUBGROUP_GUID: &str = "2a737441-1930-4402-8d77-b2bebba308a3";
+    const REVISION_USB3_LINK_SETTING_GUID: &str = "d4e98f31-5ffe-4ce1-be31-1b38b384c009";
+
+    fn run_powercfg(args: &[&str]) -> anyhow::Result<String> {
+        let output = powercfg_command().args(args).output()?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "powercfg {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    fn find_revision_power_guid(listing: &str) -> Option<String> {
+        listing.lines().find_map(|line| {
+            let normalized_name: String = line
+                .to_ascii_lowercase()
+                .chars()
+                .filter(|character| character.is_ascii_alphanumeric())
+                .collect();
+            normalized_name
+                .contains("revisionultraperformance")
+                .then(|| guid_from_powercfg(line))
+                .flatten()
+                .or_else(|| {
+                    normalized_name
+                        .contains("optigodspowerplan")
+                        .then(|| guid_from_powercfg(line))
+                        .flatten()
+                })
+        })
+    }
+
+    fn ensure_revision_power_plan() -> anyhow::Result<String> {
+        let listing = run_powercfg(&["/list"])?;
+        if listing
+            .to_ascii_lowercase()
+            .contains(&REVISION_POWER_GUID.to_ascii_lowercase())
+        {
+            return Ok(REVISION_POWER_GUID.to_string());
+        }
+        if let Some(existing_guid) = find_revision_power_guid(&listing) {
+            return Ok(existing_guid);
+        }
+
+        // Supplying Revision's fixed GUID makes this operation idempotent.
+        // Never remove and recreate the scheme during an optimize run.
+        let duplicate = powercfg_command()
+            .args(["/duplicatescheme", ULTIMATE_TEMPLATE_GUID, REVISION_POWER_GUID])
+            .output()?;
+        let after_duplicate = run_powercfg(&["/list"])?;
+        if !after_duplicate
+            .to_ascii_lowercase()
+            .contains(&REVISION_POWER_GUID.to_ascii_lowercase())
+        {
+            anyhow::bail!(
+                "Windows could not create the Revision - Ultra Performance plan: {}",
+                String::from_utf8_lossy(&duplicate.stderr).trim()
+            );
+        }
+        Ok(REVISION_POWER_GUID.to_string())
+    }
+
+    fn verify_revision_power_setting(
+        plan_guid: &str,
+        subgroup_guid: &str,
+        setting_guid: &str,
+        expected: u32,
+    ) -> bool {
+        let path = format!(
+            r"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\{plan_guid}\{subgroup_guid}\{setting_guid}"
+        );
+        matches!(
+            crate::win32::registry::read_value(
+                crate::win32::registry::Hive::LocalMachine,
+                &path,
+                "ACSettingIndex"
+            ),
+            Ok(crate::win32::registry::RegValue::Dword(actual)) if actual == expected
+        )
+    }
+
+    fn set_revision_power_setting(
+        plan_guid: &str,
+        subgroup_guid: &str,
+        setting_guid: &str,
+        value: u32,
+    ) -> anyhow::Result<()> {
+        let value_text = value.to_string();
+        run_powercfg(&[
+            "/setacvalueindex",
+            plan_guid,
+            subgroup_guid,
+            setting_guid,
+            &value_text,
+        ])?;
+        if !verify_revision_power_setting(plan_guid, subgroup_guid, setting_guid, value) {
+            anyhow::bail!("Windows did not verify Revision power setting {setting_guid}");
+        }
+        Ok(())
+    }
+
+    pub(super) fn revision_power_plan_is_active_and_verified() -> bool {
+        let plan_guid = match active_power_guid() {
+            Ok(guid) => guid,
+            Err(_) => return false,
+        };
+        if !plan_guid.eq_ignore_ascii_case(REVISION_POWER_GUID) {
+            let listing = match run_powercfg(&["/list"]) {
+                Ok(listing) => listing,
+                Err(_) => return false,
+            };
+            if !find_revision_power_guid(&listing)
+                .is_some_and(|revision_guid| revision_guid.eq_ignore_ascii_case(&plan_guid))
+            {
+                return false;
             }
+        }
+        REVISION_AC_SETTINGS
+            .iter()
+            .all(|(setting_guid, expected)| {
+                verify_revision_power_setting(
+                    &plan_guid,
+                    PROCESSOR_SUBGROUP_GUID,
+                    setting_guid,
+                    *expected,
+                )
+            })
+            && verify_revision_power_setting(
+                &plan_guid,
+                REVISION_USB_SUBGROUP_GUID,
+                REVISION_USB3_LINK_SETTING_GUID,
+                0,
+            )
+    }
+
+    pub fn apply_high_performance_plan() -> anyhow::Result<Option<String>> {
+        let prior = active_power_guid()?;
+        let plan_guid = ensure_revision_power_plan()?;
+        run_powercfg(&[
+            "/changename",
+            &plan_guid,
+            "Opti Gods Power Plan",
+            "Opti Gods gaming plan with verified performance settings.",
+        ])?;
+
+        for (setting_guid, value) in REVISION_AC_SETTINGS {
+            set_revision_power_setting(
+                &plan_guid,
+                PROCESSOR_SUBGROUP_GUID,
+                setting_guid,
+                *value,
+            )?;
+        }
+        set_revision_power_setting(
+            &plan_guid,
+            REVISION_USB_SUBGROUP_GUID,
+            REVISION_USB3_LINK_SETTING_GUID,
+            0,
+        )?;
+        activate_power_guid(&plan_guid)?;
+        if !revision_power_plan_is_active_and_verified() {
+            anyhow::bail!("Windows did not verify the active Opti Gods Power Plan");
         }
         Ok(Some(prior))
     }

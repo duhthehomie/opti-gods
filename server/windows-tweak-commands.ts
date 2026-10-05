@@ -184,7 +184,41 @@ try {
 }`;
 }
 
+function buildOptiGods3500PlanCommand(): string {
+  return String.raw`$ErrorActionPreference = 'Stop'
+$plan = '6a93ec26-284d-4943-9fc4-c9616def55c6'
+$template = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+$listing = & powercfg.exe /list 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Windows could not list power plans: $listing" }
+if ([string]$listing -notmatch [regex]::Escape($plan)) {
+  $existingPlan = @($listing | Where-Object { $_ -match '(?i)(Revision - Ultra Performance|Opti Gods Power Plan)' } | Select-Object -First 1)
+  if ($existingPlan.Count -gt 0) {
+    $match = [regex]::Match([string]$existingPlan[0], '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}')
+    if (-not $match.Success) { throw "Windows listed an Opti Gods power plan without a readable identifier: $($existingPlan[0])" }
+    $plan = $match.Value
+  } else {
+    $created = & powercfg.exe /duplicatescheme $template $plan 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Windows could not create the Opti Gods Power Plan: $created" }
+  }
+}
+$listing = & powercfg.exe /list 2>&1
+if ($LASTEXITCODE -ne 0 -or [string]$listing -notmatch [regex]::Escape($plan)) {
+  throw "Windows did not verify that the Opti Gods Power Plan is available."
+}
+$renamed = & powercfg.exe /changename $plan 'Opti Gods Power Plan' 'Opti Gods gaming plan; Ryzen Precision Boost manages CPU frequency.' 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Windows could not label the Opti Gods Power Plan: $renamed" }
+$activated = & powercfg.exe /setactive $plan 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Windows could not activate the Opti Gods Power Plan: $activated" }
+$active = & powercfg.exe /getactivescheme 2>&1
+if ($LASTEXITCODE -ne 0 -or [string]$active -notmatch [regex]::Escape($plan)) {
+  throw "Windows did not verify the Opti Gods Power Plan as active: $active"
+}
+Write-Host "[Ryzen 5 3500] Opti Gods Power Plan active and verified. CPU boost remains under AMD Precision Boost control." -ForegroundColor Green`;
+}
+
+
 export function buildSafeWindowsCommandOverride(id: string): string | undefined {
+  if (["SetHighPerformancePlan", "FiveM3500PerfPlan", "FiveM5600PowerPlan", "FiveMIntel14PowerPlan"].includes(id)) return buildOptiGods3500PlanCommand();
   if (id === "EnableNvidiaMSIPro") {
         return String.raw`$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' })
     $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' -and $_.InstanceId -match '(?i)^PCI\\VEN_10DE&' })

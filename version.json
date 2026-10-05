@@ -1,4 +1,4 @@
 {
-  "version": "5.2.43",
-  "notes": "V5.2.43 — fixes Tablet Input service verification and duplicate PC labels, improves live NVIDIA temperature discovery, prevents stale account flashes, and smooths desktop tab navigation."
+  "version": "5.2.44",
+  "notes": "V5.2.44 — reconciles missing-action counts and queues across Dashboard, Tweaks and AI Optimize, includes the NVIDIA preset, separates recorded success from Windows detection, adds Unselect all, fixes logout/privacy, and keeps the Opti Gods power plan active. Includes the prior Tablet Input, temperature, identity, PC-label and navigation fixes."
 }
