@@ -1,3 +1,25 @@
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
+import { useLocation } from "wouter";
+import { AppLayout } from "@/components/layout/app-layout";
+import { EmbeddedProvider } from "@/lib/embedded-context";
+import {
+  ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
+  Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
+  Swords, Blocks, Target, Eye, Music, X, Zap, Shield, Mouse, Keyboard,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
+import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
+import { useOsDetection } from "@/hooks/use-os-detection";
+import { useOptimizationStore } from "@/store/use-optimization-store";
+import { useAuth } from "@/hooks/use-auth";
+import { useProStatus } from "@/lib/pro-status";
+import { ProUnlockButton } from "@/components/pro-gate";
+import { BEST_15_IDS_KEY } from "@/lib/queryClient";
+import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { useToast } from "@/hooks/use-toast";
+import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
