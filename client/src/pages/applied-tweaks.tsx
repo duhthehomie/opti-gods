@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
+import { countTweakRunItemsWithStatus, type TweakRunTab } from "@/lib/tweak-run-outcome";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { useOptimizationStore } from "@/store/use-optimization-store";
@@ -14,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import {
   applyTweakBatch,
+  NVIDIA_PRESET_ACTION_ID,
   clearQueuedTweakBatch,
   hasNativeTweakRunInFlight,
   readNativeTweakRun,
@@ -243,7 +245,7 @@ export default function AppliedTweaksPage() {
   const [running, setRunning] = useState(false);
   const [runFinished, setRunFinished] = useState(false);
   const [runHadFailures, setRunHadFailures] = useState(false);
-  const [runTab, setRunTab] = useState<"all" | "failed" | "skipped">("all");
+  const [runTab, setRunTab] = useState<TweakRunTab>("all");
   const [runState, setRunState] = useState<NativeTweakRunState | null>(() => readNativeTweakRun());
   const [reapplying, setReapplying] = useState<string | null>(null);
   const [allowance, setAllowance] = useState<{ pro: boolean; used: number; remaining: number | null; limit: number | null } | null>(null);
@@ -333,56 +335,104 @@ export default function AppliedTweaksPage() {
         : [];
     if (!recoverable.length && !queuedSkippedIds.length) return;
     startedRef.current = true;
+    let clearQueueAfterRun = false;
     const startRun = async () => {
-      // Recommendation buttons on individual tabs can queue script-only IDs.
-      // Free users must never send those IDs to the instant-apply ticket API.
-      // Fail closed if entitlement lookup is unavailable. A stale local queue
-      // must never turn a free run into an oversized native execution.
       const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
-      let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds]));
+      const nativeUnsupportedIds = recoverable.filter(id =>
+        !NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID,
+      );
+      let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds, ...nativeUnsupportedIds]));
+      const initialSkippedMessages: Record<string, string> = { ...(queuedOptions.initialSkippedMessages ?? {}) };
+      for (const id of hardwareSkippedIds) {
+        if (!initialSkippedMessages[id]) {
+          initialSkippedMessages[id] = getTweakCompatibility(id).reason
+            || "This tweak does not match the detected hardware; no change was made.";
+        }
+      }
+      for (const id of nativeUnsupportedIds) {
+        if (!initialSkippedMessages[id]) {
+          initialSkippedMessages[id] = "This tweak is script-only and cannot be applied by the Windows instant runner.";
+        }
+      }
       let skippedSet = new Set(initialSkippedIds);
-       let executable = recoverable
-         .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
+      let executable = recoverable
+        .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
+      const updatePlannedRun = () => {
+        const runTotal = executable.length + initialSkippedIds.length;
+        const skipProgress = initialSkippedIds.map((id, index) => ({
+          id,
+          index: executable.length + index,
+          total: runTotal,
+          status: "skipped" as const,
+          message: initialSkippedMessages[id]
+            || getTweakCompatibility(id).reason
+            || "This tweak was excluded by the hardware compatibility check.",
+        }));
+        setRunning(true);
+        setRunFinished(false);
+        setRunHadFailures(false);
+        setRunItems([
+          ...executable.map((id, index) => ({ id, index, total: runTotal, status: "queued" as const })),
+          ...skipProgress,
+        ]);
+      };
+      if (!executable.length && initialSkippedIds.length) {
+        updatePlannedRun();
+        const result = await applyTweakBatch([], progress => {
+          setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
+        }, { initialSkippedIds, initialSkippedMessages });
+        clearQueueAfterRun = true;
+        return result;
+      }
       try {
         const response = await fetch(apiUrl("/api/performance-allowance"), { headers: getNativeAuthHeaders() });
          if (!response.ok) throw new Error("Could not verify Pro access. No partial run was started; your full queue is retained.");
          const entitlement = await response.json() as { pro?: boolean };
          if (typeof entitlement.pro !== "boolean") throw new Error("The entitlement response was incomplete. Your full queue is retained.");
          if (entitlement.pro === false) {
-          executable = executable
-            .filter(id => NATIVE_TWEAK_ID_SET.has(id) && !skippedSet.has(id))
+          const allowanceCandidates = executable;
+          executable = allowanceCandidates
+            .filter(id => NATIVE_TWEAK_ID_SET.has(id))
             .slice(0, FREE_NATIVE_TWEAK_LIMIT);
+          const allowed = new Set(executable);
+          const limitedIds = allowanceCandidates.filter(id => !allowed.has(id));
+          initialSkippedIds = Array.from(new Set([...initialSkippedIds, ...limitedIds]));
+          for (const id of limitedIds) {
+            initialSkippedMessages[id] = NATIVE_TWEAK_ID_SET.has(id)
+              ? `The free instant-apply limit is ${FREE_NATIVE_TWEAK_LIMIT}; this tweak was not run.`
+              : id === NVIDIA_PRESET_ACTION_ID
+                ? "The NVIDIA profile preset requires Pro and was not imported."
+                : "This is a script-only tweak and cannot be instant-applied on the free plan.";
+          }
+          skippedSet = new Set(initialSkippedIds);
         } else if (response.ok) {
           executable = recoverable.filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
         }
        } catch (error) {
          throw error instanceof Error ? error : new Error("Could not verify access. Your full queue is retained; try again.");
       }
+      updatePlannedRun();
       if (!executable.length) {
         if (!initialSkippedIds.length) {
           clearQueuedTweakBatch();
+          clearQueueAfterRun = true;
           return;
         }
+        const result = await applyTweakBatch([], progress => {
+          setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
+        }, { initialSkippedIds, initialSkippedMessages });
+        clearQueueAfterRun = true;
+        return result;
       }
-      const runTotal = executable.length + initialSkippedIds.length;
-      const skipProgress = initialSkippedIds.map((id, index) => ({
-        id,
-        index: executable.length + index,
-        total: runTotal,
-        status: "skipped" as const,
-        message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
-      }));
-      setRunning(true);
-      setRunItems([
-        ...executable.map((id, index) => ({ id, index, total: runTotal, status: "queued" as const })),
-        ...skipProgress,
-      ]);
-      return applyTweakBatch(executable, progress => {
+      const result = await applyTweakBatch(executable, progress => {
         setRunItems(items => items.map(item => item.id === progress.id ? progress : item));
-       }, {
-         forceReapplyIds: executable.filter(id => queuedOptions.forceReapplyIds?.includes(id)),
-          initialSkippedIds,
-       });
+      }, {
+        forceReapplyIds: executable.filter(id => queuedOptions.forceReapplyIds?.includes(id)),
+        initialSkippedIds,
+        initialSkippedMessages,
+      });
+      clearQueueAfterRun = true;
+      return result;
     };
     void startRun().then(result => {
       if (!result) return;
@@ -399,7 +449,7 @@ export default function AppliedTweaksPage() {
       setRunFinished(true);
     }).finally(() => {
       setRunning(false);
-       clearQueuedTweakBatch();
+       if (clearQueueAfterRun) clearQueuedTweakBatch();
       void refreshAppliedState();
       refreshAllowance();
     });
@@ -495,7 +545,7 @@ export default function AppliedTweaksPage() {
     const rank = (item: TweakRunProgress) => item.status === "applied" ? 0 : item.status === "skipped" ? 1 : 2;
     return rank(a) - rank(b) || a.index - b.index;
   });
-  const skippedRunCount = runItems.filter(item => item.status === "skipped").length;
+  const skippedRunCount = countTweakRunItemsWithStatus(runItems, "skipped");
   // Keep provenance separate: a local timestamp is a session record, not proof
   // that Windows currently has the value. Native detection is the only source
   // that can produce a "confirmed" label.

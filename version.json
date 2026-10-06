@@ -1,4 +1,4 @@
 {
-  "version": "5.2.46",
-  "notes": "V5.2.46 — fixes the Windows build by declaring the NVIDIA temperature fallback's Windows-only libloading dependency. Also includes consistent pending recommendation queues, eligible NVIDIA preset, per-section configured meters, red applied-state glow, global CPU recommendations, live temperature layout, Tablet Input conflict/readback fix, single-physical-GPU MSI verification, independent MSI Utility integrity with visible error logs, byte-stable preset resources, manual single-window Disk Cleanup, and authentication-preserving FiveM resource cleanup. Preserves bounded logout, alias privacy, HP labeling, navigation and the custom Opti Gods power plan. Windows runtime verification remains required."
+  "version": "5.2.47",
+  "notes": "V5.2.47 — fixes NVIDIA preset eligibility and Full Optimize queueing, makes skipped Windows run items and reasons visible, and updates the Opti Gods power-plan fallback and command routing."
 }

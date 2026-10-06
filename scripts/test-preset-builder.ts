@@ -19,6 +19,12 @@ import {
 } from "../shared/preset-builder";
 import { getOptimalSystemResponsiveness } from "../client/src/lib/hardware-optimization";
 import { computeSmartRecs } from "../client/src/lib/smart-recommendations";
+import {
+  canRunNvidiaPreset,
+  getFullOptimizeNvidiaPresetDecision,
+  getNvidiaRecommendationIds,
+} from "../client/src/lib/nvidia-preset-eligibility";
+import { getCompatibilitySkipMessage, getTweakRunItemsForTab } from "../client/src/lib/tweak-run-outcome";
 
 let passed = 0;
 let failed = 0;
@@ -107,6 +113,43 @@ test("SystemResponsiveness recommendation stays at 10 across hardware profiles",
       isAmdGpu: false,
     } as Parameters<typeof getOptimalSystemResponsiveness>[0]),
     10,
+  );
+});
+
+test("eligible Pro users receive the NVIDIA preset recommendation", () => {
+  const presetId = "NvidiaControlPanelSettings";
+  const eligible = canRunNvidiaPreset({
+    native: true,
+    pro: true,
+    hardwareScanned: true,
+    dedicatedNvidiaGpuCount: 1,
+  });
+  assert.deepEqual(getNvidiaRecommendationIds([presetId], eligible, presetId), [presetId]);
+  assert.equal(getFullOptimizeNvidiaPresetDecision({
+    native: true,
+    pro: true,
+    hardwareScanned: true,
+    dedicatedNvidiaGpuCount: 1,
+  }).status, "queue");
+});
+
+test("Full Optimize records unsupported NVIDIA presets and skipped run items", () => {
+  const decision = getFullOptimizeNvidiaPresetDecision({
+    native: true,
+    pro: true,
+    hardwareScanned: false,
+    dedicatedNvidiaGpuCount: 0,
+  });
+  assert.equal(decision.status, "skip");
+  if (decision.status === "skip") assert.match(decision.reason, /Run a hardware scan/);
+  const error = "OG-HTTP-400 · Not for this system: Defender command unavailable.";
+  assert.equal(getCompatibilitySkipMessage(undefined, error), error);
+  assert.deepEqual(
+    getTweakRunItemsForTab([
+      { id: "unsupported", status: "skipped" },
+      { id: "failed", status: "failed" },
+    ], "skipped").map(item => item.id),
+    ["unsupported"],
   );
 });
 

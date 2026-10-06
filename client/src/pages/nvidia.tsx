@@ -18,6 +18,7 @@ import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
+import { canRunNvidiaPreset, getNvidiaRecommendationIds } from "@/lib/nvidia-preset-eligibility";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
 import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID, recordNativeToolResult } from "@/lib/native-tweak-runner";
 import { getNativeAuthToken, isNative, openMsiUtility } from "@/lib/tauri-bridge";
@@ -374,11 +375,17 @@ export default function Nvidia() {
       if (recordNativeToolResult(id, message, false)) window.location.assign("/applied-tweaks");
     } finally { setProToolBusy(null); }
   };
-  const canApplyNvidiaPreset = isNative() && isPro && hw.scanned && discreteNvidiaGpus.length === 1 && !hw.isHybridGpu && controlPanelInstalled === true;
-  const nvidiaSmartIds = Array.from(new Set([
-    ...ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id) && id !== NVIDIA_PRESET_ACTION_ID),
-    ...(canApplyNvidiaPreset ? [NVIDIA_PRESET_ACTION_ID] : []),
-  ]));
+  const canApplyNvidiaPreset = canRunNvidiaPreset({
+    native: isNative(),
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: discreteNvidiaGpus.length,
+  });
+  const nvidiaSmartIds = getNvidiaRecommendationIds(
+    ALL_NVIDIA_IDS.filter(id => smartRecs.ids.has(id)),
+    canApplyNvidiaPreset,
+    NVIDIA_PRESET_ACTION_ID,
+  );
   const enableSafeMsi = async () => {
     if (!isPro || !canEnableSafeMsi) return;
     const result = await applyTweakBatch(["EnableNvidiaMSIPro"]);

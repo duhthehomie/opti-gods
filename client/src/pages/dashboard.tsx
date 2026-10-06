@@ -1,7 +1,8 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { createRestorePoint, isNative, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
+import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
+import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -465,52 +466,21 @@ export default function Dashboard() {
   const [selectedFullOptimizeGames, setSelectedFullOptimizeGames] = useState<string[]>([]);
   const [selectedFullOptimizeDebloat, setSelectedFullOptimizeDebloat] = useState<string[]>([]);
   const fullOptimizeNvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
-  const [nvidiaControlPanelInstalled, setNvidiaControlPanelInstalled] = useState<boolean | null>(null);
   const showFullOptimizeNvidiaPreset = native && fullOptimizeNvidiaGpuCount > 0;
-  const canApplyFullOptimizeNvidiaPreset = fullOptimizeNvidiaGpuCount === 1 && !hw.isHybridGpu;
-  const nvidiaPresetEligible = native && isPro && hw.scanned && canApplyFullOptimizeNvidiaPreset && nvidiaControlPanelInstalled === true;
-  useEffect(() => {
-    let mounted = true;
-    if (!native || fullOptimizeNvidiaGpuCount === 0) {
-      setNvidiaControlPanelInstalled(false);
-      return () => { mounted = false; };
-    }
-    setNvidiaControlPanelInstalled(null);
-    void isNvidiaControlPanelInstalled()
-      .then(installed => { if (mounted) setNvidiaControlPanelInstalled(installed); })
-      .catch(() => { if (mounted) setNvidiaControlPanelInstalled(false); });
-    return () => { mounted = false; };
-  }, [native, fullOptimizeNvidiaGpuCount]);
+  const nvidiaPresetEligible = canRunNvidiaPreset({
+    native,
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: fullOptimizeNvidiaGpuCount,
+  });
+  const fullOptimizeNvidiaPresetDecision = getFullOptimizeNvidiaPresetDecision({
+    native,
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: fullOptimizeNvidiaGpuCount,
+  });
   const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
-
-  const checkFullOptimizeNvidiaPreset = async () => {
-    if (!native || !showFullOptimizeNvidiaPreset) return false;
-    if (!canApplyFullOptimizeNvidiaPreset) {
-      toast({
-        title: "Opti Gods NVIDIA Preset skipped",
-        description: "The preset supports one dedicated NVIDIA GPU on a non-hybrid setup. No NVIDIA profile was submitted.",
-      });
-      return false;
-    }
-    try {
-      if (!await isNvidiaControlPanelInstalled()) {
-        toast({
-          title: "Opti Gods NVIDIA Preset skipped",
-          description: "NVIDIA Control Panel is not installed. No NVIDIA profile was submitted.",
-        });
-        return false;
-      }
-      return true;
-    } catch (error) {
-      toast({
-        title: "Could not check NVIDIA Control Panel",
-        description: error instanceof Error ? error.message : String(error),
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
 
   const refreshDetectedState = useCallback(async () => {
     if (!native) return;
@@ -569,14 +539,33 @@ export default function Dashboard() {
       return;
     }
     setBulkApplying(true);
-    let nvidiaPresetShouldQueue = false;
+    const nvidiaPresetShouldQueue = fullOptimizeNvidiaPresetDecision.status === "queue";
+    const nvidiaPresetSkipMessage = fullOptimizeNvidiaPresetDecision.status === "skip"
+      ? fullOptimizeNvidiaPresetDecision.reason
+      : null;
     try {
-      nvidiaPresetShouldQueue = await checkFullOptimizeNvidiaPreset();
-      const body = await authorizeHardwarePreset(selectedFullOptimizeGames);
+      let body: Awaited<ReturnType<typeof authorizeHardwarePreset>>;
+      try {
+        body = await authorizeHardwarePreset(selectedFullOptimizeGames);
+      } catch (error) {
+        if (native && !hw.scanned && nvidiaPresetSkipMessage) {
+          queueTweakBatch([], {
+            initialSkippedMessages: { [NVIDIA_PRESET_ACTION_ID]: nvidiaPresetSkipMessage },
+          }, [NVIDIA_PRESET_ACTION_ID]);
+          window.location.assign("/applied-tweaks?run=1");
+          toast({
+            title: "Hardware scan required",
+            description: "The NVIDIA preset was recorded as skipped. Run a hardware scan before applying the rest of Full Optimize.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
       const ids = Array.isArray(body.authorizedIds) ? body.authorizedIds.filter((id): id is string => typeof id === "string") : [];
       const unknownIds = ids.filter(id => !TWEAK_REGISTRY.some(tweak => tweak.id === id));
       const recognizedIds = ids.filter(id => !unknownIds.includes(id));
-      if (recognizedIds.length === 0 && !nvidiaPresetShouldQueue) {
+      if (recognizedIds.length === 0 && !nvidiaPresetShouldQueue && !nvidiaPresetSkipMessage) {
         throw new Error("The server returned no tweaks recognized by this app. Refresh the Windows app and run the hardware scan again.");
       }
       const compatibleIds = recognizedIds.filter(id =>
@@ -586,6 +575,13 @@ export default function Dashboard() {
         !MANUAL_ONLY_TWEAK_IDS.has(id) && !getTweakCompatibility(id).ok,
       );
       const manualOnlyIds = recognizedIds.filter(id => MANUAL_ONLY_TWEAK_IDS.has(id));
+      const initialSkippedIds = Array.from(new Set([...unknownIds, ...blockedIds, ...manualOnlyIds]));
+      const initialSkippedMessages: Record<string, string> = {};
+      for (const id of unknownIds) initialSkippedMessages[id] = "This preset entry is not recognized by this app version, so it was not run.";
+      for (const id of blockedIds) {
+        initialSkippedMessages[id] = getTweakCompatibility(id).reason || "This tweak does not match the detected hardware; no change was made.";
+      }
+      for (const id of manualOnlyIds) initialSkippedMessages[id] = "This setting is manual-only and is not applied by Full Optimize.";
       if (unknownIds.length > 0) {
         toast({
           title: "Skipped outdated preset entries",
@@ -593,7 +589,9 @@ export default function Dashboard() {
           variant: "destructive",
         });
       }
-      if (compatibleIds.length === 0 && !nvidiaPresetShouldQueue) {
+      if (compatibleIds.length === 0
+        && !nvidiaPresetShouldQueue
+        && !(native && (initialSkippedIds.length > 0 || nvidiaPresetSkipMessage))) {
         toast({
           title: "No compatible tweaks to run",
           description: manualOnlyIds.length
@@ -606,8 +604,14 @@ export default function Dashboard() {
       if (native) {
         const nativeState = await getAppliedTweakState();
         const pendingIds = compatibleIds.filter(id => !nativeState[id]);
-        if (nvidiaPresetShouldQueue) pendingIds.push(NVIDIA_PRESET_ACTION_ID);
-        if (pendingIds.length === 0) {
+        const runSkippedIds = [...initialSkippedIds];
+        const runSkippedMessages = { ...initialSkippedMessages };
+        if (nvidiaPresetShouldQueue && !nativeState[NVIDIA_PRESET_ACTION_ID]) pendingIds.push(NVIDIA_PRESET_ACTION_ID);
+        if (nvidiaPresetSkipMessage) {
+          runSkippedIds.push(NVIDIA_PRESET_ACTION_ID);
+          runSkippedMessages[NVIDIA_PRESET_ACTION_ID] = nvidiaPresetSkipMessage;
+        }
+        if (pendingIds.length === 0 && runSkippedIds.length === 0) {
           toast({
             title: "Full Optimize is already applied",
             description: `Every compatible preset tweak is already recorded as applied or detected on this PC.${blockedIds.length ? ` ${blockedIds.length} hardware-mismatched tweak${blockedIds.length === 1 ? "" : "s"} were left out.` : ""}${manualOnlyIds.length ? ` ${manualOnlyIds.length} manual-only setting${manualOnlyIds.length === 1 ? " was" : "s were"} left for you to choose.` : ""}`,
@@ -615,7 +619,7 @@ export default function Dashboard() {
           });
           return;
         }
-        queueTweakBatch(pendingIds);
+        queueTweakBatch(pendingIds, { initialSkippedMessages: runSkippedMessages }, runSkippedIds);
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {
@@ -972,8 +976,8 @@ export default function Dashboard() {
                 <div className="rounded-xl border border-green-500/20 bg-green-500/[.06] p-3 text-xs">
                   <span className="block font-bold text-green-100">Opti Gods NVIDIA Preset · separate Pro action</span>
                   <span className="mt-1 block leading-relaxed text-zinc-400">
-                    Included automatically for one dedicated, non-hybrid NVIDIA GPU when Control Panel is installed.
-                    {!canApplyFullOptimizeNvidiaPreset && " This GPU setup is not supported, so the profile will be skipped."}
+                    Included automatically for Pro users with one dedicated NVIDIA GPU; hybrid systems do not need Control Panel installed.
+                    {!nvidiaPresetEligible && " Run a hardware scan and confirm exactly one dedicated NVIDIA GPU before Full Optimize."}
                   </span>
                 </div>
               )}

@@ -925,8 +925,6 @@ mod native_impls {
         ("40fbefc7-2e9d-4d25-a185-0cfd8574bac6", 1), // performance decrease policy
         ("06cadf0e-64ed-448a-8927-ce7bf90eb35d", 10), // increase threshold
         ("12a0ab44-fe28-4fa9-b3bd-4b64f44960a6", 8), // decrease threshold
-        ("0cc5b647-c1df-4637-891a-dec35c318583", 100), // minimum active cores
-        ("0cc5b647-c1df-4637-891a-dec35c318584", 100), // minimum active cores, efficiency class 1
     ];
 
     const REVISION_USB_SUBGROUP_GUID: &str = "2a737441-1930-4402-8d77-b2bebba308a3";
@@ -976,7 +974,7 @@ mod native_impls {
             return Ok(existing_guid);
         }
 
-        // Supplying Revision's fixed GUID makes this operation idempotent.
+        // Supplying the Opti Gods fixed GUID makes this operation idempotent.
         // Never remove and recreate the scheme during an optimize run.
         let duplicate = powercfg_command()
             .args(["/duplicatescheme", ULTIMATE_TEMPLATE_GUID, REVISION_POWER_GUID])
@@ -987,7 +985,7 @@ mod native_impls {
             .contains(&REVISION_POWER_GUID.to_ascii_lowercase())
         {
             anyhow::bail!(
-                "Windows could not create the Revision - Ultra Performance plan: {}",
+                "Windows could not create the Opti Gods Power Plan: {}",
                 String::from_utf8_lossy(&duplicate.stderr).trim()
             );
         }

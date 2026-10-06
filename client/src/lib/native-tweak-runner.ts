@@ -4,12 +4,14 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
+import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
 export const NATIVE_RUN_FORCE_KEY = "optigods-native-run-force";
 export const NATIVE_RUN_SKIPPED_KEY = "optigods-native-run-skipped";
+export const NATIVE_RUN_SKIP_MESSAGES_KEY = "optigods-native-run-skip-messages";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
@@ -111,6 +113,8 @@ export type TweakBatchOptions = {
   forceReapplyIds?: readonly string[];
   /** IDs excluded by the pre-navigation hardware compatibility check. */
   initialSkippedIds?: readonly string[];
+  /** User-facing reasons for items deliberately recorded as skipped. */
+  initialSkippedMessages?: Readonly<Record<string, string>>;
   /** Optional UI source label for analytics and run history. */
   source?: string;
 };
@@ -166,7 +170,11 @@ export function subscribeNativeTweakRun(listener: (state: NativeTweakRunState | 
   return () => window.removeEventListener(NATIVE_RUN_EVENT, handler);
 }
 
-function beginPersistedRun(ids: string[], skippedIds: readonly string[] = []): string {
+function beginPersistedRun(
+  ids: string[],
+  skippedIds: readonly string[] = [],
+  skippedMessages: Readonly<Record<string, string>> = {},
+): string {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const skipped = new Set(skippedIds);
   stopRequested = false;
@@ -179,7 +187,7 @@ function beginPersistedRun(ids: string[], skippedIds: readonly string[] = []): s
       total: ids.length,
       status: skipped.has(id) ? "skipped" : "queued",
       ...(skipped.has(id) ? {
-        message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
+        message: skippedMessages[id] || getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
       } : {}),
     })),
     status: "running",
@@ -231,6 +239,7 @@ export function queueTweakBatch(
   localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
   localStorage.setItem(NATIVE_RUN_FORCE_KEY, JSON.stringify(Array.from(new Set(options.forceReapplyIds ?? []))));
   localStorage.setItem(NATIVE_RUN_SKIPPED_KEY, JSON.stringify(Array.from(new Set(skippedIds))));
+  localStorage.setItem(NATIVE_RUN_SKIP_MESSAGES_KEY, JSON.stringify(options.initialSkippedMessages ?? {}));
 }
 
 export function readQueuedTweakBatch(): string[] {
@@ -254,10 +263,15 @@ export function readQueuedTweakBatchSkippedIds(): string[] {
 export function readQueuedTweakBatchOptions(): TweakBatchOptions {
   try {
     const value = JSON.parse(localStorage.getItem(NATIVE_RUN_FORCE_KEY) || "[]");
+    const rawMessages = JSON.parse(localStorage.getItem(NATIVE_RUN_SKIP_MESSAGES_KEY) || "{}");
     return {
       forceReapplyIds: Array.isArray(value)
         ? value.filter((id): id is string => typeof id === "string")
         : [],
+      initialSkippedMessages: rawMessages && typeof rawMessages === "object" && !Array.isArray(rawMessages)
+        ? Object.fromEntries(Object.entries(rawMessages).filter((entry): entry is [string, string] =>
+          typeof entry[0] === "string" && typeof entry[1] === "string"))
+        : {},
     };
   } catch {
     return {};
@@ -268,6 +282,7 @@ export function clearQueuedTweakBatch() {
   localStorage.removeItem(NATIVE_RUN_QUEUE_KEY);
   localStorage.removeItem(NATIVE_RUN_FORCE_KEY);
   localStorage.removeItem(NATIVE_RUN_SKIPPED_KEY);
+  localStorage.removeItem(NATIVE_RUN_SKIP_MESSAGES_KEY);
 }
 
 function saveUndoToken(id: string, token: string | null) {
@@ -301,7 +316,7 @@ export async function applyTweakBatch(
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {
     if (activeRunPromise) return activeRunPromise;
-    const runId = beginPersistedRun(batchIds, initialSkippedIds);
+    const runId = beginPersistedRun(batchIds, initialSkippedIds, options.initialSkippedMessages);
     const runOptions = initialSkippedIds.length ? { ...options, initialSkippedIds } : options;
     const promise = applyTweakBatchInternal(uniqueIds, onProgress, runOptions, runId)
       .then(result => {
@@ -412,7 +427,7 @@ async function applyTweakBatchInternal(
     index: progressIndexById.get(id) ?? index,
     total: batchTotal,
     status: "skipped",
-    message: getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
+    message: options.initialSkippedMessages?.[id] || getTweakCompatibility(id).reason || "This tweak was excluded by the hardware compatibility check.",
   }));
 
   // Browser mode is selection/script mode, not native execution mode. Do not
@@ -671,6 +686,7 @@ async function applyTweakBatchInternal(
       const store = useOptimizationStore.getState();
       if (id === NVIDIA_PRESET_ACTION_ID) {
         store.setTweak(id, true);
+        store.markApplied([id]);
         saveUndoToken(id, null);
       } else {
         store.markApplied([id]);
@@ -699,10 +715,12 @@ async function applyTweakBatchInternal(
         ).catch(() => {});
       }
       const message = getThrownMessage(error, "Windows rejected the change.");
-      if (compatibilitySkipMessage) {
+      const classifiedSkipMessage = compatibilitySkipMessage
+        || getCompatibilitySkipMessage(undefined, message);
+      if (classifiedSkipMessage) {
         skippedIds.push(id);
         emitProgress({
-          id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "skipped", message: compatibilitySkipMessage,
+          id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "skipped", message: classifiedSkipMessage,
         });
         continue;
       }

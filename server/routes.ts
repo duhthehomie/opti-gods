@@ -181,36 +181,34 @@ $template = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
 $listing = powercfg /list
 if ($LASTEXITCODE -ne 0) { throw 'Windows could not list power plans.' }
 if ($listing -notmatch [regex]::Escape($plan)) {
-  $revisionLine = $listing -split "\`r?\`n" | Where-Object { $_ -match 'Revision - Ultra Performance' } | Select-Object -First 1
+  $revisionLine = $listing -split "\`r?\`n" | Where-Object { $_ -match '(?i)(Revision - Ultra Performance|Opti Gods Power Plan)' } | Select-Object -First 1
   if ($revisionLine) {
     $match = [regex]::Match($revisionLine, '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}')
     if ($match.Success) { $plan = $match.Value }
   } else {
     powercfg /duplicatescheme $template '6a93ec26-284d-4943-9fc4-c9616def55c6' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Windows could not create the Revision - Ultra Performance plan.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Windows could not create the Opti Gods Power Plan.' }
   }
 }
 $listing = powercfg /list
-if ($listing -notmatch [regex]::Escape($plan)) { throw 'The Revision - Ultra Performance plan is not available.' }
-powercfg /changename $plan 'Revision - Ultra Performance' "Ultimate Performance with Revision's gaming settings."
-if ($LASTEXITCODE -ne 0) { throw 'Windows could not name the Revision power plan.' }
+if ($listing -notmatch [regex]::Escape($plan)) { throw 'The Opti Gods Power Plan is not available.' }
+powercfg /changename $plan 'Opti Gods Power Plan' 'Opti Gods gaming settings.'
+if ($LASTEXITCODE -ne 0) { throw 'Windows could not name the Opti Gods Power Plan.' }
 $settings = @(
   @('54533251-82be-4824-96c1-47b60b740d00','465e1f50-b610-473a-ab58-00d1077dc418','2'),
   @('54533251-82be-4824-96c1-47b60b740d00','40fbefc7-2e9d-4d25-a185-0cfd8574bac6','1'),
   @('54533251-82be-4824-96c1-47b60b740d00','06cadf0e-64ed-448a-8927-ce7bf90eb35d','10'),
   @('54533251-82be-4824-96c1-47b60b740d00','12a0ab44-fe28-4fa9-b3bd-4b64f44960a6','8'),
-  @('54533251-82be-4824-96c1-47b60b740d00','0cc5b647-c1df-4637-891a-dec35c318583','100'),
-  @('54533251-82be-4824-96c1-47b60b740d00','0cc5b647-c1df-4637-891a-dec35c318584','100'),
   @('2a737441-1930-4402-8d77-b2bebba308a3','d4e98f31-5ffe-4ce1-be31-1b38b384c009','0')
 )
 foreach ($setting in $settings) {
   powercfg /setacvalueindex $plan $setting[0] $setting[1] $setting[2]
-  if ($LASTEXITCODE -ne 0) { throw "Windows rejected Revision power setting $($setting[1])." }
+  if ($LASTEXITCODE -ne 0) { throw "Windows rejected Opti Gods power setting $($setting[1])." }
 }
 powercfg /setactive $plan
-if ($LASTEXITCODE -ne 0) { throw 'Windows could not activate the Revision - Ultra Performance plan.' }
+if ($LASTEXITCODE -ne 0) { throw 'Windows could not activate the Opti Gods Power Plan.' }
 $active = powercfg /getactivescheme
-if ($active -notmatch [regex]::Escape($plan)) { throw 'Windows did not verify the active Revision power plan.' }
+if ($active -notmatch [regex]::Escape($plan)) { throw 'Windows did not verify the active Opti Gods Power Plan.' }
 `,
   DisableUSBSuspend: `powercfg -setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0`,
   DisableCoreParking: `$cpPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583'; Set-ItemProperty -Path $cpPath -Name 'ValueMax' -Value 0 -Type DWord; Set-ItemProperty -Path $cpPath -Name 'Attributes' -Value 1 -Type DWord; powercfg -setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 0cc5b647-c1df-4637-891a-dec35c318583 100; Write-Host "[OK] CPU Core Parking disabled — all cores will remain active" -ForegroundColor Green`,
@@ -915,7 +913,7 @@ TWEAK_COMMANDS.game_silenthilltownfall = `$ErrorActionPreference='SilentlyContin
 // Replace legacy literals with the guarded implementations before any caller
 // can use the command map. The runtime normalizer also returns these same
 // implementations so pack generation and native tickets stay aligned.
-for (const id of ["EnableNvidiaMSIPro", "CodDefenderExclusion", "IntelOldGenPowerOpt", "FiveM3500PerfPlan", "DisableSearchIndexing"]) {
+for (const id of ["SetHighPerformancePlan", "EnableNvidiaMSIPro", "CodDefenderExclusion", "IntelOldGenPowerOpt", "FiveM3500PerfPlan", "DisableSearchIndexing"]) {
   const safeCommand = buildSafeWindowsCommandOverride(id);
   if (safeCommand) TWEAK_COMMANDS[id] = safeCommand;
 }
