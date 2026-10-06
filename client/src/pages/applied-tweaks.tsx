@@ -5,6 +5,14 @@ import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
 import { countTweakRunItemsWithStatus, type TweakRunTab } from "@/lib/tweak-run-outcome";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
+import {
+  isNativeTweakRunStuck,
+  isScriptOnlyTweakId,
+  recordScriptTweakProgress,
+  recordScriptTweakResult,
+  recoverStuckNativeTweakRun,
+  runScriptOnlyTweak,
+} from "@/lib/native-tweak-runner";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakMeta } from "@/lib/tweak-registry";
@@ -242,6 +250,9 @@ export default function AppliedTweaksPage() {
   const [ledgerView, setLedgerView] = useState<LedgerView>(initialLedgerView);
   const [batchUndoing, setBatchUndoing] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
+  const [scriptRunningId, setScriptRunningId] = useState<string | null>(null);
+  const [recoveringStuckRun, setRecoveringStuckRun] = useState(false);
+  const [runClock, setRunClock] = useState(Date.now());
   const [running, setRunning] = useState(false);
   const [runFinished, setRunFinished] = useState(false);
   const [runHadFailures, setRunHadFailures] = useState(false);
@@ -261,6 +272,29 @@ export default function AppliedTweaksPage() {
     setNativeState(sources.currentWindows);
     setRecordedAt(sources.recordedAt);
     setNvidiaPresetSubmittedAt(sources.nvidiaPresetSubmittedAt);
+  };
+  const refreshState = async () => {
+    setLoading(true);
+    try {
+      const recovery = await recoverStuckNativeTweakRun();
+      if (recovery.recovered) {
+        toast({
+          title: "Stuck run recovered",
+          description: "The saved run is ready to retry. Check the results, then use Retry Stuck.",
+        });
+      } else if (readNativeTweakRun()?.status === "running" || readNativeTweakRun()?.status === "stopping") {
+        toast({ title: "Windows run is still active", description: recovery.reason });
+      }
+      await refreshAppliedState();
+    } catch (error) {
+      toast({
+        title: "Could not refresh applied state",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { void refreshAppliedState().finally(() => setLoading(false)); }, []);
   useEffect(() => {
@@ -308,6 +342,11 @@ export default function AppliedTweaksPage() {
     syncRun(readNativeTweakRun());
     return subscribeNativeTweakRun(syncRun);
   }, []);
+  useEffect(() => {
+    if (runState?.status !== "running" && runState?.status !== "stopping") return;
+    const timer = window.setInterval(() => setRunClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [runState?.status, runState?.lastProgressAt]);
   const refreshAllowance = () => {
     if (!isNative()) return;
     void fetch(apiUrl("/api/performance-allowance"), { cache: "no-store", headers: getNativeAuthHeaders() })
@@ -326,13 +365,11 @@ export default function AppliedTweaksPage() {
     const queued = readQueuedTweakBatch();
     const queuedOptions = readQueuedTweakBatchOptions();
     const queuedSkippedIds = readQueuedTweakBatchSkippedIds();
-    const recoverable = queued.length
-      ? queued
-      : persisted && (persisted.status === "running" || persisted.status === "stopping")
-        ? persisted.items
-          .filter(item => item.status === "queued" || item.status === "running")
-          .map(item => item.id)
-        : [];
+    const persistedRunActive = persisted && (persisted.status === "running" || persisted.status === "stopping");
+    // Never replay a saved queue over a run that may still be executing in
+    // Rust. Refresh State / Retry Stuck now handles orphaned persisted runs.
+    if (persistedRunActive) return;
+    const recoverable = queued;
     if (!recoverable.length && !queuedSkippedIds.length) return;
     startedRef.current = true;
     let clearQueueAfterRun = false;
@@ -454,13 +491,22 @@ export default function AppliedTweaksPage() {
       refreshAllowance();
     });
   }, [toast]);
-   const runActive = (running || runState?.status === "stopping") && hasNativeTweakRunInFlight();
+   const runActive = Boolean(scriptRunningId)
+     || ((running || runState?.status === "stopping") && hasNativeTweakRunInFlight());
+   const runIsStuck = isNativeTweakRunStuck(runState, runClock);
   const queuedIds = Array.from(new Set(
      runItems
-      .filter(item => item.status === "queued" || item.status === "stopped")
+       .filter(item => item.status === "queued")
        .map(item => item.id)
        .filter(id => getTweakCompatibility(id).ok),
    ));
+   const retryStuckIds = Array.from(new Set(
+     runItems
+       .filter(item => item.status === "queued" || item.status === "running" || item.status === "stopped")
+       .map(item => item.id)
+       .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID) && getTweakCompatibility(id).ok),
+   ));
+   const retryStuckAvailable = runIsStuck || runItems.some(item => item.status === "stopped");
   const failedIds = Array.from(new Set(
     runItems
       .filter(item => item.status === "failed")
@@ -483,7 +529,7 @@ export default function AppliedTweaksPage() {
     if (stopNativeTweakRun()) {
       toast({
         title: "Stopping tweak run",
-        description: "The current Windows action will finish safely. Applied tweaks will remain in place until you choose Undo.",
+        description: "The current Windows action will stop safely. Already-applied tweaks remain in place until you choose Undo.",
       });
     }
   };
@@ -515,6 +561,64 @@ export default function AppliedTweaksPage() {
   };
   const rerunQueued = () => rerunIds(queuedIds, "Queued tweaks reapplied");
   const rerunFailed = () => rerunIds(retryableFailedIds, "Failed tweaks reapplied", true);
+  const retryStuck = async () => {
+    if (recoveringStuckRun) return;
+    setRecoveringStuckRun(true);
+    try {
+      const current = readNativeTweakRun();
+      if (current?.status === "running" || current?.status === "stopping") {
+        const recovered = await recoverStuckNativeTweakRun(true);
+        if (!recovered.recovered) {
+          toast({ title: "Could not retry yet", description: recovered.reason, variant: "destructive" });
+          return;
+        }
+      }
+      const latest = readNativeTweakRun();
+      const ids = Array.from(new Set(
+        (latest?.items ?? [])
+          .filter(item => item.status === "stopped" || item.status === "queued" || item.status === "running")
+          .map(item => item.id)
+          .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID) && getTweakCompatibility(id).ok),
+      ));
+      if (!ids.length) {
+        toast({ title: "No compatible stuck tweaks to retry", description: "Review the Skipped tab for items that need a different fix." });
+        return;
+      }
+      await rerunIds(ids, "Stuck tweaks retried", true);
+    } finally {
+      setRecoveringStuckRun(false);
+    }
+  };
+  const runScript = async (id: string) => {
+    if (scriptRunningId || runActive || batchUndoing) return;
+    if (!allowance?.pro) {
+      toast({ title: "Pro required", description: "Running a PowerShell tweak in the app requires Pro. This does not use the free instant-apply allowance." });
+      return;
+    }
+    setScriptRunningId(id);
+    setRunTab("all");
+    recordScriptTweakProgress(id, "Preparing the trusted PowerShell script…");
+    try {
+      const message = await runScriptOnlyTweak(id, progress => {
+        recordScriptTweakProgress(id, progress);
+      });
+      recordScriptTweakResult(id, "applied", message);
+      await refreshAppliedState();
+      toast({ title: "Script completed", description: `${message} The tweak was marked applied only after Windows confirmed success.`, variant: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PowerShell did not confirm success.";
+      const skipped = message.startsWith("Skipped:");
+      recordScriptTweakResult(id, skipped ? "skipped" : "failed", message);
+      toast({
+        title: skipped ? "Script skipped" : "Script did not complete",
+        description: message,
+        variant: skipped ? "default" : "destructive",
+      });
+    } finally {
+      setScriptRunningId(null);
+      await refreshAppliedState().catch(() => {});
+    }
+  };
   const reapply = async (id: string) => {
     if (runActive || reapplying || !isNative()) return;
     setReapplying(id);
@@ -646,7 +750,7 @@ export default function AppliedTweaksPage() {
          {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
         {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
-        <button onClick={() => { setLoading(true); void refreshAppliedState().catch(error => toast({ title: "Could not refresh applied state", description: error instanceof Error ? error.message : String(error), variant: "destructive" })).finally(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
+        <button onClick={() => void refreshState()} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
       </div>
     </header>
      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -672,12 +776,13 @@ export default function AppliedTweaksPage() {
       </div>}
      {runItems.length > 0 && <section className="overflow-hidden rounded-2xl border border-red-500/25 bg-black/30">
        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
-         <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">Windows results</p><h2 className="mt-1 text-base font-bold text-white">{runState?.status === "stopping" ? "Stopping after the current tweak…" : running ? "Applying selected tweaks…" : runFinished ? (runState?.status === "stopped" ? "Tweak run stopped" : "Tweak run complete") : "Ready to apply"}</h2></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-red-400">Windows results</p><h2 className="mt-1 text-base font-bold text-white">{scriptRunningId ? "Running trusted PowerShell script…" : runState?.status === "stopping" ? "Stopping Windows action…" : running ? "Applying selected tweaks…" : runFinished ? (runState?.status === "stopped" ? "Tweak run stopped" : "Tweak run complete") : "Ready to apply"}</h2></div>
          <div className="flex items-center gap-3 text-xs font-bold text-zinc-300">
-             {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop tweaks"}</button>}
-             {(ids.length > 0 || runItems.length > 0) && <button onClick={() => void undoAll()} disabled={runActive || batchUndoing} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Undo2 className="h-3 w-3" />{batchUndoing ? "Undoing…" : "Undo all tweaks"}</button>}
-            {queuedIds.length > 0 && <button onClick={() => void rerunQueued()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun queued</button>}
-            {retryableFailedIds.length > 0 && <button onClick={() => void rerunFailed()} disabled={runActive} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun compatible failed ({retryableFailedIds.length}){retryableFailedIds.length !== failedIds.length ? ` · ${failedIds.length - retryableFailedIds.length} skipped` : ""}</button>}
+              {(running || runState?.status === "stopping") && <button onClick={stopRun} disabled={!runActive || runState?.status === "stopping"} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"><Square className="h-3 w-3 fill-current" />{runState?.status === "stopping" ? "Stopping…" : "Stop tweaks"}</button>}
+              {retryStuckAvailable && <button onClick={() => void retryStuck()} disabled={recoveringStuckRun || retryStuckIds.length === 0} className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500/35 bg-orange-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-orange-200 hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />{recoveringStuckRun ? "Recovering…" : `Retry stuck (${retryStuckIds.length})`}</button>}
+              {(ids.length > 0 || runItems.length > 0) && <button onClick={() => void undoAll()} disabled={runActive || Boolean(scriptRunningId) || batchUndoing} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Undo2 className="h-3 w-3" />{batchUndoing ? "Undoing…" : "Undo all tweaks"}</button>}
+             {queuedIds.length > 0 && <button onClick={() => void rerunQueued()} disabled={runActive || Boolean(scriptRunningId)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun queued</button>}
+             {retryableFailedIds.length > 0 && <button onClick={() => void rerunFailed()} disabled={runActive || Boolean(scriptRunningId)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-600/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-3 w-3" />Rerun compatible failed ({retryableFailedIds.length}){retryableFailedIds.length !== failedIds.length ? ` · ${failedIds.length - retryableFailedIds.length} skipped` : ""}</button>}
            {running && <Loader2 className="h-4 w-4 animate-spin text-red-400" />} {runItems.filter(item => item.status === "applied").length} / {runItems.length} confirmed
          </div>
          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "skipped" || item.status === "failed" || item.status === "stopped").length / runItems.length) * 100)}%` }} /></div>
@@ -688,10 +793,16 @@ export default function AppliedTweaksPage() {
           <button onClick={() => setRunTab("skipped")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "skipped" ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-200")}>Skipped ({skippedRunCount})</button>
        </div>
          <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
-            {orderedRunItems.filter(item => runTab === "all" || item.status === runTab).map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
+             {orderedRunItems.filter(item => runTab === "all" || item.status === runTab).map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
             {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "skipped" ? <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{(item.status === "failed" || item.status === "skipped") && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
-           <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
+            <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
+            {isScriptOnlyTweakId(item.id) && compatibility.ok && (item.status === "skipped" || item.status === "failed") && <button
+              onClick={() => void runScript(item.id)}
+              disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || runActive || batchUndoing}
+              title={!allowance?.pro ? "Pro is required; this action does not use free instant-apply credits." : "Run the trusted PowerShell script for this tweak."}
+              className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >{scriptRunningId === item.id ? "Running…" : "Run Script"}</button>}
         </div>; })}
       </div>
     </section>}

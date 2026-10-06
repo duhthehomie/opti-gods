@@ -1451,6 +1451,35 @@ function buildRestoreLastWorkingScript(): string {
   ].join("\r\n");
 }
 
+function buildSingleTweakPowerShell(id: string): string | null {
+  const command = normalizeWindowsPowerShellCommand(id, TWEAK_COMMANDS[id]);
+  if (!command) return null;
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "$ProgressPreference = 'SilentlyContinue'",
+    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    "$__ogStartingErrorCount = $global:Error.Count",
+    "$script:__ogSkipped = $false",
+    `Write-Output '[Opti Gods] Running ${id}…'`,
+    "try {",
+    `  & { ${command} } 6>&1 | ForEach-Object {`,
+    "    $line = [string]$_",
+    "    if ($line -match '(?i)\\[SKIP(?:PED)?\\]') { $script:__ogSkipped = $true }",
+    "    Write-Output $line",
+    "  }",
+    "  if ($script:__ogSkipped) { Write-Output '__OG_RESULT:SKIPPED'; exit 2 }",
+    "  if ($global:LASTEXITCODE -is [int] -and $global:LASTEXITCODE -ne 0) { throw ('Command exited with code ' + $global:LASTEXITCODE) }",
+    "  if ($global:Error.Count -gt $__ogStartingErrorCount) { throw 'PowerShell reported an error while applying this tweak.' }",
+    "  Write-Output '__OG_RESULT:APPLIED'",
+    "  exit 0",
+    "} catch {",
+    "  [Console]::Error.WriteLine('[ERROR] ' + $_.Exception.Message)",
+    "  Write-Output '__OG_RESULT:FAILED'",
+    "  exit 1",
+    "}",
+  ].join("\n");
+}
+
 function buildScript(enabledTweaks: string[], nvidiaPreset?: string): string {
   // Keep legacy/stale clients from generating a script that can disable
   // NVIDIA App overlay, ShadowPlay, or clip capture. The dashboard also omits
@@ -3120,6 +3149,22 @@ Write-Output $json
   });
 
   // POST version for direct download with tweaks body
+  app.post('/api/script/native-tweak', rateLimit(20, 60_000), async (req, res) => {
+    const id = req.body?.id;
+    if (!trustedTweakId(id)) {
+      return res.status(400).json({ message: "That tweak does not have a trusted Windows script." });
+    }
+    if (NATIVE_EXECUTABLE_ALLOWLIST.has(id) || PRO_ONLY_TWEAK_IDS.has(id)) {
+      return res.status(400).json({ message: "This action must use its dedicated native Windows flow." });
+    }
+    const script = buildSingleTweakPowerShell(id);
+    if (!script) {
+      return res.status(400).json({ message: "No single-tweak PowerShell script is available for this action." });
+    }
+    if (!(await authorizeGeneratedScript(req, res, [id]))) return;
+    return res.json({ script });
+  });
+
   app.post('/api/script/download', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};
     const nvidiaPreset: string = req.body?.nvidiaPreset || "Balanced";

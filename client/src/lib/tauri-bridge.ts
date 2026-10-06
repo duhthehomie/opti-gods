@@ -159,6 +159,33 @@ export async function importNvidiaPreset(ticket: string, nativeAuth: string): Pr
   return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth } });
 }
 
+export async function runTrustedScriptTweak(
+  id: string,
+  nativeAuth: string | null,
+  proSession: string | null,
+  deviceId: string | null,
+): Promise<string> {
+  if (!isNative()) throw new Error("Script-only tweaks can run only in the Windows app.");
+  return invoke<string>("run_script_tweak", {
+    args: {
+      id,
+      native_auth: nativeAuth,
+      pro_session: proSession,
+      device_id: deviceId,
+    },
+  });
+}
+
+export async function resetNvidiaPresetImportCancel(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("reset_nvidia_preset_import_cancel");
+}
+
+export async function cancelNvidiaPresetImport(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("cancel_nvidia_preset_import");
+}
+
 export async function isNvidiaControlPanelInstalled(): Promise<boolean> {
   if (!isNative()) return false;
   return invoke<boolean>("is_nvidia_control_panel_installed");
@@ -489,6 +516,12 @@ async function tauriListen<T>(
       });
     } catch { /* noop */ }
   };
+}
+
+export async function listenScriptTweakProgress(
+  handler: (payload: { id: string; message: string; stream?: string }) => void,
+): Promise<() => Promise<void>> {
+  return tauriListen("optigods:script-tweak-progress", handler);
 }
 
 interface UpdateProgressPayload {

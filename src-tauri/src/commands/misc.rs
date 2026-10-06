@@ -1,21 +1,31 @@
 // Miscellaneous utility commands for the Opti Gods desktop shell.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Manager};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter, Manager};
 
 const MSI_UTILITY_SHA256: &str = "695800afad96f858a3f291b7df21c16649528f13d39b63fb7c233e5676c8df6f";
 const PROFILE_INSPECTOR_SHA256: &str = "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e";
 const PROFILE_REFERENCE_SHA256: &str = "0ea7b055aee5c543047243d2dd7abdd1b8c6d96f5d2b7bb5fe17be8130e005ef";
 const PROFILE_CONFIG_SHA256: &str = "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa";
-const PROFILE_PRESET_SHA256: &str = "4fe7c497ef1d49bc22ff8797897b3e16928baf7723105c095b371ab59e4b0dfc";
+const PROFILE_PRESET_SHA256: &str = "7a0014d61cb55ef83aaecff5f575305ae5a79782d609a2828d5a2974cd8a10ff";
 const BASE_PROD: &str = "https://optigods.com";
 const MSI_TWEAK_ID: &str = "OpenMsiUtilityPro";
 const PRESET_TWEAK_ID: &str = "ImportNvidiaPresetPro";
+static NVIDIA_PRESET_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Deserialize)]
 pub struct ProToolArgs {
     pub ticket: String,
     pub native_auth: String,
+}
+
+#[derive(Deserialize)]
+pub struct ScriptTweakArgs {
+    pub id: String,
+    pub native_auth: Option<String>,
+    pub pro_session: Option<String>,
+    pub device_id: Option<String>,
 }
 
 fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<(), String> {
@@ -386,6 +396,16 @@ pub async fn open_msi_utility(app: tauri::AppHandle, args: ProToolArgs) -> Resul
 }
 
 #[tauri::command]
+pub fn reset_nvidia_preset_import_cancel() {
+    NVIDIA_PRESET_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
+}
+
+#[tauri::command]
+pub fn cancel_nvidia_preset_import() {
+    NVIDIA_PRESET_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
+}
+
+#[tauri::command]
 pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> Result<String, String> {
     #[cfg(windows)]
     {
@@ -401,10 +421,14 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let preset = inspector_dir.join("OptiGods-Global-utf8.nip");
             verify_nvidia_bundle(&inspector_dir)?;
             let dvc = set_nvidia_digital_vibrance_85()?;
-            let status = match tokio::process::Command::new(&inspector)
-                .arg("-silentImport").arg(&preset).current_dir(&inspector_dir).status().await
+            let mut child = match tokio::process::Command::new(&inspector)
+                .arg("-silentImport")
+                .arg(&preset)
+                .current_dir(&inspector_dir)
+                .kill_on_drop(true)
+                .spawn()
             {
-                Ok(status) => status,
+                Ok(child) => child,
                 Err(error) => {
                     let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
                     let note = match rollback {
@@ -413,6 +437,44 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                     };
                     return Err(format!("Could not launch NVIDIA Profile Inspector: {error}.{note}"));
                 }
+            };
+            let started = tokio::time::Instant::now();
+            let status = loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => break status,
+                    Ok(None) => {}
+                    Err(error) => {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
+                        let note = match rollback {
+                            Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
+                            Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                        };
+                        return Err(format!("Could not check NVIDIA Profile Inspector: {error}.{note}"));
+                    }
+                }
+                if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
+                    let note = match rollback {
+                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
+                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                    };
+                    return Err(format!("NVIDIA preset import was stopped by the user.{note}"));
+                }
+                if started.elapsed() >= std::time::Duration::from_secs(45) {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
+                    let note = match rollback {
+                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
+                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                    };
+                    return Err(format!("NVIDIA Profile Inspector did not finish within 45 seconds; the import was stopped.{note}"));
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             };
             if !status.success() {
                 let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
@@ -460,6 +522,208 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
     {
         let _ = (app, args);
         Err("NVIDIA Profile Inspector is available only in the Windows Pro app.".into())
+    }
+}
+
+#[cfg(windows)]
+async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, String> {
+    if args.id.is_empty()
+        || args.id.len() > 64
+        || !args.id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err("Invalid script-only tweak ID.".into());
+    }
+    let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { BASE_PROD };
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|error| format!("Trusted script client failed: {error}"))?;
+    let mut request = client.post(format!("{base}/api/script/native-tweak"));
+    for (name, value) in [
+        ("X-Native-Auth", args.native_auth.as_deref()),
+        ("X-Pro-Session", args.pro_session.as_deref()),
+        ("X-Device-ID", args.device_id.as_deref()),
+    ] {
+        if let Some(value) = value.filter(|value| !value.is_empty() && value.len() <= 8192) {
+            request = request.header(name, value);
+        }
+    }
+    let response = request
+        .json(&serde_json::json!({ "id": args.id.as_str() }))
+        .send()
+        .await
+        .map_err(|_| "Opti Gods could not retrieve the trusted PowerShell script.".to_string())?;
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        let message = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|value| value.get("message").or_else(|| value.get("error"))?.as_str().map(str::to_owned))
+            .unwrap_or_else(|| format!("Script request was rejected (HTTP {status})."));
+        return Err(message);
+    }
+    let value: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|_| "The trusted script response was not valid JSON.".to_string())?;
+    let script = value.get("script").and_then(|script| script.as_str())
+        .ok_or_else(|| "The server did not provide a trusted PowerShell script.".to_string())?;
+    if script.len() > 1_000_000
+        || !script.contains("__OG_RESULT:APPLIED")
+        || !script.contains("__OG_RESULT:SKIPPED")
+    {
+        return Err("The server returned an incomplete or oversized PowerShell script.".into());
+    }
+    Ok(script.to_string())
+}
+
+#[cfg(windows)]
+async fn read_script_output<R>(
+    stream: R,
+    app: AppHandle,
+    id: String,
+    channel: &'static str,
+) -> Vec<String>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncBufReadExt;
+    let mut reader = tokio::io::BufReader::new(stream);
+    let mut bytes = Vec::new();
+    let mut lines = Vec::new();
+    loop {
+        bytes.clear();
+        match reader.read_until(b'\n', &mut bytes).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                let line = String::from_utf8_lossy(&bytes).trim().to_string();
+                if line.is_empty() {
+                    continue;
+                }
+                let visible: String = line.chars().take(400).collect();
+                let _ = app.emit(
+                    "optigods:script-tweak-progress",
+                    serde_json::json!({ "id": id.as_str(), "message": visible, "stream": channel }),
+                );
+                if lines.len() == 100 {
+                    lines.remove(0);
+                }
+                lines.push(line);
+            }
+        }
+    }
+    lines
+}
+
+#[tauri::command]
+pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use std::io::Write;
+        use std::os::windows::process::CommandExt;
+        use std::process::Stdio;
+        use tokio::process::Command;
+
+        let script = fetch_trusted_tweak_script(&args).await?;
+        crate::commands::restore::require_verified_checkpoint()?;
+
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!(
+            "OptiGods-Script-{}-{nonce}.ps1",
+            std::process::id(),
+        ));
+        let mut bytes = b"\xEF\xBB\xBF".to_vec();
+        bytes.extend_from_slice(script.as_bytes());
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| format!("Could not prepare the trusted script: {error}"))?;
+        if let Err(error) = file.write_all(&bytes) {
+            let _ = std::fs::remove_file(&path);
+            return Err(format!("Could not write the trusted script: {error}"));
+        }
+        drop(file);
+
+        let mut child = match Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(0x0800_0000)
+            .kill_on_drop(true)
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) => {
+                let _ = std::fs::remove_file(&path);
+                return Err(format!("Could not start the Windows script runner: {error}"));
+            }
+        };
+        let stdout = child.stdout.take().ok_or_else(|| "PowerShell output was unavailable.".to_string())?;
+        let stderr = child.stderr.take().ok_or_else(|| "PowerShell error output was unavailable.".to_string())?;
+        let stdout_task = tauri::async_runtime::spawn(read_script_output(
+            stdout, app.clone(), args.id.clone(), "stdout",
+        ));
+        let stderr_task = tauri::async_runtime::spawn(read_script_output(
+            stderr, app.clone(), args.id.clone(), "stderr",
+        ));
+
+        let wait_result = tokio::time::timeout(std::time::Duration::from_secs(180), child.wait()).await;
+        let status = match wait_result {
+            Ok(Ok(status)) => Some(status),
+            Ok(Err(error)) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                let _ = std::fs::remove_file(&path);
+                let _ = stdout_task.await;
+                let _ = stderr_task.await;
+                return Err(format!("Could not read the PowerShell result: {error}"));
+            }
+            Err(_) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                None
+            }
+        };
+        let stdout_lines = stdout_task.await.unwrap_or_default();
+        let stderr_lines = stderr_task.await.unwrap_or_default();
+        let _ = std::fs::remove_file(&path);
+
+        if stdout_lines.iter().any(|line| line.contains("__OG_RESULT:SKIPPED")) {
+            return Err("Skipped: Windows reported that this tweak does not apply to this PC. No success was recorded.".into());
+        }
+        let applied_marker = stdout_lines.iter().any(|line| line.contains("__OG_RESULT:APPLIED"));
+        if status.as_ref().map(|value| value.success()).unwrap_or(false) && applied_marker {
+            return Ok(format!(
+                "PowerShell completed successfully. Restart Windows for the change to take effect."
+            ));
+        }
+        let details = stderr_lines.iter().chain(stdout_lines.iter())
+            .filter(|line| !line.contains("__OG_RESULT:"))
+            .rev()
+            .take(3)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if status.is_none() {
+            return Err(format!("The script exceeded the 3-minute limit and was stopped. No success was recorded. {details}"));
+        }
+        Err(if details.is_empty() {
+            "PowerShell did not report a confirmed success. The tweak was not marked applied.".into()
+        } else {
+            format!("PowerShell did not confirm success: {details}")
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("Script-only tweaks can run only in the Opti Gods Windows app.".into())
     }
 }
 

@@ -16,12 +16,13 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
+import { canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID } from "@/lib/native-tweak-runner";
 import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { useToast } from "@/hooks/use-toast";
-import { isNative, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
+import { isNative } from "@/lib/tauri-bridge";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import {
@@ -322,20 +323,12 @@ export default function TweaksPage() {
   const { toast } = useToast();
   const native = isNative();
   const nvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
-  const [nvidiaControlPanelInstalled, setNvidiaControlPanelInstalled] = useState<boolean | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    if (!native || nvidiaGpuCount === 0) {
-      setNvidiaControlPanelInstalled(false);
-      return () => { mounted = false; };
-    }
-    setNvidiaControlPanelInstalled(null);
-    void isNvidiaControlPanelInstalled()
-      .then(installed => { if (mounted) setNvidiaControlPanelInstalled(installed); })
-      .catch(() => { if (mounted) setNvidiaControlPanelInstalled(false); });
-    return () => { mounted = false; };
-  }, [native, nvidiaGpuCount]);
-  const nvidiaPresetEligible = native && isPro && hw.scanned && nvidiaGpuCount === 1 && !hw.isHybridGpu && nvidiaControlPanelInstalled === true;
+  const nvidiaPresetEligible = canRunNvidiaPreset({
+    native,
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: nvidiaGpuCount,
+  });
   const [detectedTweaks, setDetectedTweaks] = useState<Record<string, boolean>>({});
   const [nativeDetectionReady, setNativeDetectionReady] = useState(!native);
   const [nativeDetectionError, setNativeDetectionError] = useState(false);

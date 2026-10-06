@@ -1,5 +1,5 @@
 import { apiUrl } from "@/lib/api-base";
-import { applyTweak, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, getRecordedAppliedTweaks, importNvidiaPreset, isNative } from "@/lib/tauri-bridge";
+import { applyTweak, cancelNvidiaPresetImport, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, getRecordedAppliedTweaks, importNvidiaPreset, isNative, listenScriptTweakProgress, resetNvidiaPresetImportCancel, runTrustedScriptTweak } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
@@ -15,6 +15,7 @@ export const NATIVE_RUN_SKIP_MESSAGES_KEY = "optigods-native-run-skip-messages";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
+const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
@@ -104,6 +105,7 @@ export type NativeTweakRunState = {
   items: TweakRunProgress[];
   status: "running" | "stopping" | "completed" | "stopped" | "failed";
   startedAt: number;
+  lastProgressAt?: number;
   finishedAt?: number;
   stopRequested?: boolean;
 };
@@ -142,12 +144,119 @@ function readRunStateSafely(): NativeTweakRunState | null {
 }
 
 function writeRunState(state: NativeTweakRunState) {
-  try { localStorage.setItem(NATIVE_RUN_STATE_KEY, JSON.stringify(state)); } catch { /* best effort */ }
+  try { localStorage.setItem(NATIVE_RUN_STATE_KEY, JSON.stringify({ ...state, lastProgressAt: Date.now() })); } catch { /* best effort */ }
   dispatchRunState();
 }
 
 export function readNativeTweakRun(): NativeTweakRunState | null {
   return readRunStateSafely();
+}
+
+export function recordScriptTweakProgress(id: string, message: string): void {
+  const state = readRunStateSafely();
+  if (!state || !state.items.some(item => item.id === id)) return;
+  writeRunState({
+    ...state,
+    items: state.items.map(item => item.id === id
+      ? { ...item, status: "running", message }
+      : item),
+  });
+}
+
+export function recordScriptTweakResult(
+  id: string,
+  status: "applied" | "skipped" | "failed",
+  message: string,
+): void {
+  const state = readRunStateSafely();
+  if (!state || !state.items.some(item => item.id === id)) return;
+  const items = state.items.map(item => item.id === id ? { ...item, status, message } : item);
+  writeRunState({
+    ...state,
+    items,
+    status: state.status === "completed" && status === "failed" ? "failed" : state.status,
+    finishedAt: state.status === "completed" && status === "failed" ? Date.now() : state.finishedAt,
+  });
+}
+
+export function isScriptOnlyTweakId(id: string): boolean {
+  return !NATIVE_TWEAK_ID_SET.has(id) && !SCRIPT_ONLY_EXCLUDED_IDS.has(id);
+}
+
+export async function runScriptOnlyTweak(
+  id: string,
+  onProgress?: (message: string) => void,
+): Promise<string> {
+  if (!isNative()) throw new Error("Script-only tweaks can run only in the Opti Gods Windows app.");
+  if (!isScriptOnlyTweakId(id)) throw new Error("This action does not use the script-only runner.");
+  const nativeAuth = await getNativeAuthToken();
+  const proSession = localStorage.getItem(PRO_SESSION_KEY);
+  const deviceId = getPersistentDeviceId();
+  if (!nativeAuth && !proSession) {
+    throw new Error("Sign in to your Pro account in the Windows app before running this script.");
+  }
+  const unlisten = await listenScriptTweakProgress(payload => {
+    if (payload.id === id) onProgress?.(payload.message);
+  });
+  try {
+    const message = await runTrustedScriptTweak(id, nativeAuth, proSession, deviceId);
+    useOptimizationStore.getState().markApplied([id]);
+    return message;
+  } finally {
+    await unlisten();
+  }
+}
+
+export function isNativeTweakRunStuck(state: NativeTweakRunState | null, now = Date.now()): boolean {
+  if (!state || (state.status !== "running" && state.status !== "stopping")) return false;
+  const lastProgress = state.lastProgressAt ?? state.startedAt;
+  if (state.status === "stopping" || state.stopRequested) return now - lastProgress >= 8_000;
+  const current = state.items.find(item => item.status === "running");
+  const threshold = current?.id === NVIDIA_PRESET_ACTION_ID ? 30_000 : 120_000;
+  if (!hasNativeTweakRunInFlight() && !current) return true;
+  return now - lastProgress >= threshold;
+}
+
+export async function recoverStuckNativeTweakRun(
+  force = false,
+): Promise<{ recovered: boolean; reason?: string }> {
+  const state = readRunStateSafely();
+  if (!state || (state.status !== "running" && state.status !== "stopping")) {
+    return { recovered: false, reason: "There is no stuck Windows run to recover." };
+  }
+  if (!force && !isNativeTweakRunStuck(state)) {
+    return { recovered: false, reason: "The Windows run is still making progress." };
+  }
+  const orphanedNvidiaImport = !hasNativeTweakRunInFlight()
+    && state.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "running");
+  stopNativeTweakRun();
+  if (orphanedNvidiaImport) {
+    await cancelNvidiaPresetImport().catch(() => {});
+    await new Promise(resolve => window.setTimeout(resolve, 250));
+  }
+  const deadline = Date.now() + 8_000;
+  while (hasNativeTweakRunInFlight() && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 100));
+  }
+  if (hasNativeTweakRunInFlight()) {
+    return { recovered: false, reason: "Windows is still stopping the current action. Refresh State again in a few seconds." };
+  }
+  const latest = readRunStateSafely();
+  if (!latest) return { recovered: false, reason: "The saved Windows run state could not be read." };
+  const items = latest.items.map(item =>
+    item.status === "running" || item.status === "queued"
+      ? { ...item, status: "stopped" as const, message: "Recovered from a stuck run. Retry this tweak to try again." }
+      : item,
+  );
+  writeRunState({
+    ...latest,
+    items,
+    status: "stopped",
+    stopRequested: true,
+    finishedAt: Date.now(),
+  });
+  clearQueuedTweakBatch();
+  return { recovered: true };
 }
 
 /** A utility launch is not an applied Windows tweak. Retain failures for export. */
@@ -228,6 +337,11 @@ export function stopNativeTweakRun(): boolean {
   if (!state || (state.status !== "running" && state.status !== "stopping")) return false;
   stopRequested = true;
   writeRunState({ ...state, status: "stopping", stopRequested: true });
+  if (state.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "running")) {
+    void cancelNvidiaPresetImport().catch(error => {
+      console.error("[native-runner] Could not cancel NVIDIA Profile Inspector:", error);
+    });
+  }
   return true;
 }
 
@@ -316,6 +430,9 @@ export async function applyTweakBatch(
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {
     if (activeRunPromise) return activeRunPromise;
+    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID)) {
+      await resetNvidiaPresetImportCancel();
+    }
     const runId = beginPersistedRun(batchIds, initialSkippedIds, options.initialSkippedMessages);
     const runOptions = initialSkippedIds.length ? { ...options, initialSkippedIds } : options;
     const promise = applyTweakBatchInternal(uniqueIds, onProgress, runOptions, runId)
@@ -715,6 +832,14 @@ async function applyTweakBatchInternal(
         ).catch(() => {});
       }
       const message = getThrownMessage(error, "Windows rejected the change.");
+      if (stopRequested) {
+        stoppedIds.push(id);
+        emitProgress({
+          id, index: progressIndexById.get(id) ?? index, total: batchTotal,
+          status: "stopped", message: "Stopped by user before Windows confirmed this tweak.",
+        });
+        break;
+      }
       const classifiedSkipMessage = compatibilitySkipMessage
         || getCompatibilitySkipMessage(undefined, message);
       if (classifiedSkipMessage) {

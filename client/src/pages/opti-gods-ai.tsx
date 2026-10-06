@@ -12,7 +12,17 @@ import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useAuth } from "@/hooks/use-auth";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
+import {
+  NVIDIA_PRESET_ACTION_ID,
+  readNativeTweakRun,
+  subscribeNativeTweakRun,
+} from "@/lib/native-tweak-runner";
 import { isNative } from "@/lib/tauri-bridge";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
+import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { useLiveStats } from "@/hooks/use-live-stats";
 
@@ -60,9 +70,9 @@ type SafePresetResponse = {
   reasons: string[];
 };
 
-// V2.2 — translates the local useHardwareInfo / useOsDetection signal into
-// the PresetHardware shape `/api/ai/preset` expects. Server is the single
-// source of truth for what tweaks land in `core` vs `expert`.
+// Translate the local hardware signal into the preset API shape. The shared
+// Smart Recommendations helper remains canonical for core IDs across pages;
+// the server supplies profile metadata, safety blocks, and expert opt-ins.
 function hardwareToPresetPayload(hw: ReturnType<typeof useHardwareInfo>, os: ReturnType<typeof useOsDetection>) {
   const gpuVendor: "nvidia" | "amd" | "intel" | "unknown" =
     hw.isNvidia ? "nvidia" : hw.isAmdGpu || hw.isAmdApu ? "amd" : hw.isIntel ? "intel" : "unknown";
@@ -86,14 +96,51 @@ function SavePresetCard() {
   const { isAuthenticated } = useAuth();
   const hasProEntitlement = useProStatus();
   const isPro = isAuthenticated && hasProEntitlement;
+  const native = isNative();
   const hw = useHardwareInfo();
   const os = useOsDetection();
+  const smartRecs = computeSmartRecs(hw, os);
   const [saved, setSaved] = useState(false);
   const [preset, setPreset] = useState<SafePresetResponse | null>(null);
   const [loadingPreset, setLoadingPreset] = useState(false);
   const [optInIds, setOptInIds] = useState<Set<string>>(new Set());
+  const [appliedState, setAppliedState] = useState<Record<string, boolean>>({});
+  const [appliedStateReady, setAppliedStateReady] = useState(!native);
+  const [appliedStateError, setAppliedStateError] = useState(false);
+  const [lastNativeRun, setLastNativeRun] = useState(() => readNativeTweakRun());
 
   const isReady = !hw.loading && !os.loading;
+  const refreshAppliedState = useCallback(async () => {
+    const state = await getAppliedTweakState();
+    setAppliedState(state);
+    setAppliedStateReady(true);
+    setAppliedStateError(false);
+  }, []);
+
+  useEffect(() => {
+    if (!native) return;
+    let active = true;
+    setAppliedStateReady(false);
+    setAppliedStateError(false);
+    void refreshAppliedState().catch(() => {
+      if (!active) return;
+      setAppliedStateReady(true);
+      setAppliedStateError(true);
+    });
+    const unsubscribe = subscribeNativeTweakRun(state => {
+      if (!active) return;
+      setLastNativeRun(state);
+      if (state?.status === "completed" || state?.status === "failed" || state?.status === "stopped") {
+        void refreshAppliedState().catch(() => {
+          if (active) setAppliedStateError(true);
+        });
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [native, refreshAppliedState]);
 
   // Fetch the server-resolved preset whenever hardware becomes available.
   useEffect(() => {
@@ -118,7 +165,40 @@ function SavePresetCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, hw.scanned, hw.gpuName, hw.cpuLabel, os.isWindows11, optInIds]);
 
-  const tweakCount = preset ? preset.core.length + preset.expert.filter(id => optInIds.has(id)).length : 0;
+  const nvidiaPresetEligible = canRunNvidiaPreset({
+    native,
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
+  });
+  const expertPresetIds = preset ? preset.expert.filter(id => optInIds.has(id)) : [];
+  const eligibleExpertIds = expertPresetIds.filter(id => getTweakCompatibility(id).ok);
+  const eligiblePresetIds = getEligibleSmartRecommendationIds(
+    [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
+    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
+  );
+  const presetActionIds = preset
+    ? Array.from(new Set([...eligiblePresetIds, ...eligibleExpertIds]))
+    : [];
+  const missingPresetIds = getMissingRecommendationIds(preset ? eligiblePresetIds : [], {
+    native,
+    stateReady: !native || (appliedStateReady && !appliedStateError),
+    appliedState,
+    selectedState: tweaks,
+    runStatus: lastNativeRun?.status,
+    runItems: lastNativeRun?.items,
+  });
+  const missingExpertIds = getMissingRecommendationIds(eligibleExpertIds, {
+    native,
+    stateReady: !native || (appliedStateReady && !appliedStateError),
+    appliedState,
+    selectedState: tweaks,
+    runStatus: lastNativeRun?.status,
+    runItems: lastNativeRun?.items,
+  });
+  const idsToApply = Array.from(new Set([...missingPresetIds, ...missingExpertIds]));
+  const tweakCount = missingPresetIds.length;
+  const appliedStateAvailable = !native || (appliedStateReady && !appliedStateError);
 
   // If hardware not scanned, show scan prompt
   if (!hw.scanned && isReady) {
@@ -145,11 +225,11 @@ function SavePresetCard() {
   }
 
   const save = async () => {
-    if (!preset || !isPro) return;
+    if (!preset || !isPro || !appliedStateAvailable) return;
     const presetTweaks: Record<string, boolean> = {};
-    preset.core.forEach(k => { presetTweaks[k] = true; });
+    eligiblePresetIds.forEach(k => { presetTweaks[k] = true; });
     // Only expert tweaks the user explicitly opted in to (red section toggles).
-    preset.expert.forEach(k => { if (optInIds.has(k)) presetTweaks[k] = true; });
+    eligibleExpertIds.forEach(k => { presetTweaks[k] = true; });
     try {
       await fetch(apiUrl("/api/presets"), {
         method: "POST",
@@ -159,7 +239,8 @@ function SavePresetCard() {
           config: { tweaks: presetTweaks },
         }),
       });
-      const result = await applyTweakBatch(Object.keys(presetTweaks));
+      const result = await applyTweakBatch(idsToApply);
+      if (native) await refreshAppliedState().catch(() => {});
       setSaved(true);
       toast({
         title: "Smart Preset saved!",
@@ -205,7 +286,7 @@ function SavePresetCard() {
         </span>
       </div>
       <p className="text-[11px] text-zinc-400 leading-relaxed">
-        {preset.core.length} hardware-matched tweaks for <span className="text-zinc-300">{preset.hardwareSummary}</span>. Every tweak is GPU/CPU/OS-compatible — no AMD tweaks on NVIDIA, no Win11-only tweaks on Win10.
+        {eligiblePresetIds.length} hardware-matched recommendations for <span className="text-zinc-300">{preset.hardwareSummary}</span>. This core set matches Dashboard and Tweaks; expert changes remain opt-in.
       </p>
 
       {preset.blocked.length > 0 && (
@@ -272,7 +353,7 @@ function SavePresetCard() {
         <button
           data-testid="button-save-preset"
           onClick={save}
-          disabled={saved}
+          disabled={saved || !appliedStateAvailable}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
             saved
@@ -281,7 +362,15 @@ function SavePresetCard() {
           )}
         >
           <Download className="w-3.5 h-3.5" />
-          {saved ? "Saved to Dashboard ✓" : `Apply ${tweakCount} Hardware-Matched Tweaks`}
+          {saved
+            ? "Saved to Dashboard ✓"
+            : native && !appliedStateReady
+              ? "Checking applied state…"
+              : native && appliedStateError
+                ? "Applied state unavailable"
+                : tweakCount || missingExpertIds.length
+                  ? `Apply ${tweakCount} Missing Tweaks${missingExpertIds.length ? ` + ${missingExpertIds.length} Expert` : ""}`
+                  : `Save preset · all ${presetActionIds.length} tweaks applied`}
         </button>
       ) : (
         <ProUnlockButton>
@@ -291,7 +380,7 @@ function SavePresetCard() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-500/40 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            Unlock Pro to Apply {tweakCount} Tweaks
+            Unlock Pro to Apply {tweakCount} Missing Tweaks{missingExpertIds.length ? ` + ${missingExpertIds.length} Expert` : ""}
           </button>
         </ProUnlockButton>
       )}
