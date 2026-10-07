@@ -402,6 +402,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 
 // ── Smart Recs Breakdown Panel ────────────────────────────────────────────────
 const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
+const NVIDIA_PRESET_REVERIFY_KEY = "optigods-nvidia-preset-reverify-v5.2.48";
 
 function SmartRecsBreakdown() {
   const hw = useHardwareInfo();
@@ -426,6 +427,10 @@ function SmartRecsBreakdown() {
     return () => { mounted = false; };
   }, [native, nvidiaGpuCount]);
   const nvidiaPresetEligible = native && isPro && hw.scanned && nvidiaGpuCount === 1 && !hw.isHybridGpu && nvidiaControlPanelInstalled === true;
+  const [nvidiaPresetReverifyQueued, setNvidiaPresetReverifyQueued] = useState(() => {
+    try { return localStorage.getItem(NVIDIA_PRESET_REVERIFY_KEY) === "queued"; } catch { return false; }
+  });
+  const nvidiaPresetReverifyPending = nvidiaPresetEligible && !nvidiaPresetReverifyQueued;
   const [applied, setApplied] = useState(false);
   const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
   const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
@@ -473,7 +478,11 @@ function SmartRecsBreakdown() {
   const alreadyOnCount = native
     ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
     : safeIds.filter(id => tweaks[id]).length;
-  const actionIds = Array.from(new Set([...missingSafeIds, ...failedRunIds]));
+  const actionIds = Array.from(new Set([
+    ...missingSafeIds,
+    ...failedRunIds,
+    ...(nvidiaPresetReverifyPending ? [NVIDIA_PRESET_ACTION_ID] : []),
+  ]));
 
   useEffect(() => {
     if (!native) return;
@@ -513,7 +522,16 @@ function SmartRecsBreakdown() {
       }
       if (actionIds.length === 0) return;
       if (isPro) playOptimizationActionSound();
-      queueTweakBatch(actionIds, { forceReapplyIds: failedRunIds });
+      queueTweakBatch(actionIds, {
+        forceReapplyIds: Array.from(new Set([
+          ...failedRunIds,
+          ...(nvidiaPresetReverifyPending ? [NVIDIA_PRESET_ACTION_ID] : []),
+        ])),
+      });
+      if (nvidiaPresetReverifyPending) {
+        try { localStorage.setItem(NVIDIA_PRESET_REVERIFY_KEY, "queued"); } catch { /* queue remains available in this session */ }
+        setNvidiaPresetReverifyQueued(true);
+      }
       setApplied(true);
       window.location.assign("/applied-tweaks?run=1");
     } catch (error) {
@@ -564,15 +582,16 @@ function SmartRecsBreakdown() {
                   <span>
                     {missingSafeIds.length > 0
                       ? `Apply ${missingSafeIds.length} missing tweaks`
-                      : `Retry ${failedRunIds.length} failed tweaks`}
+                      : nvidiaPresetReverifyPending ? "Reapply NVIDIA preset for verification" : `Retry ${failedRunIds.length} failed tweaks`}
                     {missingSafeIds.length > 0 && failedRunIds.length > 0
                       ? ` · Retry ${failedRunIds.length} failed`
                       : ""}
+                    {missingSafeIds.length > 0 && nvidiaPresetReverifyPending ? " · Reverify NVIDIA preset" : ""}
                   </span>
                 </>}
         </button>
         {native && nvidiaPresetSubmissionRecorded && (
-          <p data-testid="note-nvidia-profile-submitted" className="text-center text-[10px] text-zinc-500">NVIDIA profile submission is recorded; driver values are not read back.</p>
+          <p data-testid="note-nvidia-profile-submitted" className="text-center text-[10px] text-zinc-500">v5.2.48 requeues this preset once; a successful run requires profile and Digital Vibrance driver readback.</p>
         )}
         {overallFailedRunCount > failedRunIds.length && (
           <p className="text-center text-[10px] text-zinc-500">
@@ -594,7 +613,7 @@ function SmartRecsBreakdown() {
               ? "Could not verify applied tweaks, so the missing count is unavailable."
               : missingSafeIds.length > 0
                 ? `${missingSafeIds.length} recommendations remain unapplied.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed in the last run and can be retried above.` : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`
-                : `${alreadyOnCount} recommended actions are recorded complete.${nvidiaPresetSubmissionRecorded ? " The NVIDIA profile was submitted; driver values are not read back." : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`}
+                : `${alreadyOnCount} recommended actions are recorded complete.${nvidiaPresetSubmissionRecorded ? " v5.2.48 requeues the NVIDIA preset once and records success only after driver readback." : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`}
         </div>
       )}
 
