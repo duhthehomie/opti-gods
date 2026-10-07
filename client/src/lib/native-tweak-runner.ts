@@ -812,7 +812,7 @@ async function applyTweakBatchInternal(
       appliedIds.push(id);
       emitProgress({
         id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied",
-        message: id === NVIDIA_PRESET_ACTION_ID ? `${result.message} NVIDIA 3D profile values are submitted but not read back by the driver.` : result.message,
+        message: result.message,
       });
       // Keep allowance cards and the Applied Tweaks page current during a
       // long run, not only after the final item. The server result callback
