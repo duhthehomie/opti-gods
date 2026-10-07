@@ -1,4 +1,4 @@
 {
   "version": "5.2.48",
-  "notes": "V5.2.48 — verifies NVIDIA global profile values against a driver export, fixes Run Script visibility for script-only tweaks, moves live hardware polling off the UI runtime, labels imported temperature readings as snapshots, and corrects installed-version and Discord account display."
+  "notes": "V5.2.48 — requeues the NVIDIA preset once for testing and records success only after all 12 global 3D settings and supported-display Digital Vibrance are verified; fixes Run Script visibility for script-only tweaks, moves live hardware polling off the UI runtime, labels imported temperature readings as snapshots, and corrects installed-version and Discord account display."
 }
