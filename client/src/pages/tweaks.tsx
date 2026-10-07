@@ -1,13 +1,13 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
 import {
   ChevronDown, Settings2, Gamepad2, Crosshair, MonitorPlay, Flame, Monitor, Laptop,
   Cpu, MessageCircle, Power, MemoryStick, Trash2, Server, Wrench, Loader2,
-  Swords, Blocks, Target, Eye, Music, X, Zap, Shield, Mouse, Keyboard,
+  Swords, Blocks, Target, Eye, Music, X, Zap, Shield, Mouse, Keyboard, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TWEAK_REGISTRY, TOTAL_TWEAK_COUNT, tweaksByCategory, type TweakCategory } from "@/lib/tweak-registry";
@@ -15,7 +15,7 @@ import { useHardwareInfo, type HardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useAuth } from "@/hooks/use-auth";
-import { useProStatus } from "@/lib/pro-status";
+import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
 import { canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
@@ -276,9 +276,11 @@ function SectionCard({
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TweaksPage() {
   const [location] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const hasProEntitlement = useProStatus();
+  const proStatusLoading = useProStatusLoading();
   const isPro = isAuthenticated && hasProEntitlement;
+  const accessReady = !authLoading && !proStatusLoading;
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as TabId) || "all"; } catch { return "all"; }
   });
@@ -380,19 +382,44 @@ export default function TweaksPage() {
       .forEach(item => displayedActiveIds.add(item.id));
   }
   const enabledCount = displayedActiveIds.size;
-  const showBest15 = new URLSearchParams(window.location.search).get("best15") === "1";
-  const best15Ids = (() => {
-    if (!showBest15) return [] as string[];
+  const showBest15 = !isPro || new URLSearchParams(window.location.search).get("best15") === "1";
+  const serverBest15Ids = (() => {
     try {
       const value = JSON.parse(localStorage.getItem(BEST_15_IDS_KEY) || "[]");
-      return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string").slice(0, 15) : [];
+      if (!Array.isArray(value)) return [] as string[];
+      const knownIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
+      return Array.from(new Set(value.filter((id): id is string => typeof id === "string" && knownIds.has(id)))).slice(0, 15);
     } catch {
       return [] as string[];
     }
   })();
+  const fallbackBest15Ids = !isPro
+    ? getEligibleSmartRecommendationIds(
+        Array.from(smartRecs.ids),
+        id => getTweakCompatibility(id).ok,
+      ).filter(id => TWEAK_REGISTRY.some(tweak => tweak.id === id)).slice(0, 15)
+    : [];
+  const best15Ids = serverBest15Ids.length > 0 ? serverBest15Ids : fallbackBest15Ids;
+  const best15IdSignature = best15Ids.join("|");
+  const best15IdSet = useMemo(
+    () => new Set(best15IdSignature ? best15IdSignature.split("|") : []),
+    [best15IdSignature],
+  );
+  const best15ServerAuthorized = serverBest15Ids.length > 0;
   const best15 = best15Ids
     .map(id => TWEAK_REGISTRY.find(tweak => tweak.id === id))
     .filter((tweak): tweak is NonNullable<typeof tweak> => Boolean(tweak));
+  useEffect(() => {
+    if (isPro || !accessReady) return;
+    const store = useOptimizationStore.getState();
+    const selected = Object.entries(store.tweaks).filter(([, enabled]) => enabled).map(([id]) => id);
+    const allowed = best15IdSet.size > 0 ? best15IdSet : new Set(selected.slice(0, 15));
+    if (selected.some(id => !allowed.has(id))) {
+      store.setAllTweaks(Object.fromEntries(
+        Object.keys(store.tweaks).map(id => [id, allowed.has(id) && Boolean(store.tweaks[id])]),
+      ));
+    }
+  }, [isPro, accessReady, best15IdSet]);
   const matchedProIds = getEligibleSmartRecommendationIds(
     [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
@@ -445,7 +472,8 @@ export default function TweaksPage() {
     }
   }, [location]);
 
-  const filteredSections = applyHardwareFilter(SECTIONS, hw, showAll);
+  const canShowAll = isPro && showAll;
+  const filteredSections = applyHardwareFilter(SECTIONS, hw, canShowAll);
   const visibleSections  = activeTab === "all"
     ? filteredSections
     : filteredSections.filter(s => s.group === activeTab);
@@ -474,12 +502,26 @@ export default function TweaksPage() {
     }, 50);
   }
 
-  const selectedIds = Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id);
+  const selectedIds = Object.entries(tweaks)
+    .filter(([, enabled]) => enabled)
+    .map(([id]) => id)
+    .filter(id => isPro || best15IdSet.size === 0 || best15IdSet.has(id))
+    .slice(0, isPro ? TWEAK_REGISTRY.length : 15);
   const runSelected = async () => {
     setConfirmApply(false);
     if (!selectedIds.length) return;
+    if (!isPro && !best15ServerAuthorized) {
+      toast({
+        title: "Load your server-authorized Best 15",
+        description: "Run System Scan, then use the Best 15 chooser on the dashboard before applying free tweaks.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
-      const result = await applyTweakBatch(selectedIds);
+      const safeIds = isPro ? selectedIds : selectedIds.filter(id => best15IdSet.has(id)).slice(0, 15);
+      if (!safeIds.length) return;
+      const result = await applyTweakBatch(safeIds);
       // Native mode navigates to the live runner. Browser mode still reports
       // selection/compatibility clearly and never claims an OS change.
       if (result.failures.length || result.skippedIds.length) {
@@ -533,7 +575,7 @@ export default function TweaksPage() {
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wide">
                 V5
               </span>
-              {gpuChip && !showAll && (
+              {gpuChip && !canShowAll && (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-white/8 uppercase tracking-wide">
                   <MonitorPlay className="w-3 h-3" />
                   {gpuChip}
@@ -559,16 +601,18 @@ export default function TweaksPage() {
               )}
             </div>
             <p className="text-sm text-zinc-500 mt-1">
-              {activeTab === "all"
-                ? `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} matched to your hardware.`
-                : `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} in the ${TABS.find(t => t.id === activeTab)?.label} category.`}
+              {isPro
+                ? activeTab === "all"
+                  ? `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} matched to your hardware.`
+                  : `${visibleSections.length} section${visibleSections.length !== 1 ? "s" : ""} in the ${TABS.find(t => t.id === activeTab)?.label} category.`
+                : `Showing up to ${Math.min(best15.length, 15)} hardware-matched tweaks. Full Tweaks is locked on Free.`}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
               type="button"
               data-testid="button-apply-selected"
-              disabled={!selectedIds.length}
+              disabled={!selectedIds.length || (!isPro && !best15ServerAuthorized)}
               onClick={() => setConfirmApply(true)}
               className="flex items-center gap-1.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -587,21 +631,34 @@ export default function TweaksPage() {
              >
                Unselect all
              </button>
-            {!detecting && (
+             {isPro && !detecting && (
               <button
                 data-testid="button-toggle-show-all"
                 onClick={() => setShowAll(v => !v)}
                 className={cn(
                   "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-md border transition-colors",
-                  showAll
+                   canShowAll
                     ? "border-zinc-500/40 text-zinc-300 bg-zinc-800/60 hover:bg-zinc-700/60"
                     : "border-white/10 text-zinc-500 hover:text-zinc-200 hover:border-white/20 bg-transparent"
                 )}
               >
                 <Eye className="w-3 h-3" />
-                {showAll ? "Matched only" : `Show all${hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : ""}`}
+                 {canShowAll ? "Matched only" : `Show all${hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : ""}`}
               </button>
             )}
+             {!isPro && (
+               <ProUnlockButton>
+                 <button
+                   type="button"
+                   data-testid="button-full-tweaks-locked"
+                   title="Full Tweaks requires Pro."
+                   className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-300 transition-colors hover:bg-amber-500/10"
+                 >
+                   <Lock className="h-3 w-3" />
+                   Full Tweaks · Pro
+                 </button>
+               </ProUnlockButton>
+             )}
           </div>
         </header>
 
@@ -614,7 +671,7 @@ export default function TweaksPage() {
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-red-400" />
                 <h2 className="text-sm font-black uppercase tracking-wider text-white">
-                  {matchedProIds.length} tweaks match this PC
+                  {isPro ? matchedProIds.length : Math.min(best15.length, 15)} tweaks match this PC
                 </h2>
               </div>
               <p className="mt-1 text-xs text-zinc-400">
@@ -624,7 +681,9 @@ export default function TweaksPage() {
                     : native && nativeDetectionError
                       ? "Could not verify applied tweaks, so the missing count is unavailable."
                       : `${missingMatchedIds.length} compatible tweaks are still missing. Already-applied Windows changes are excluded.`
-                  : `${Math.max(0, matchedProIds.length - 15)} additional matched tweaks are unavailable on Free. Unlock Pro to use the full hardware-matched set.`}
+                  : best15ServerAuthorized
+                    ? "Free access is limited to the 15 server-authorized picks below. Full Tweaks requires Pro."
+                    : "Only a 15-tweak hardware-matched preview is shown. Load a server-authorized Best 15 from the dashboard to apply free changes. Full Tweaks requires Pro."}
               </p>
             </div>
             {isPro ? (
@@ -652,7 +711,7 @@ export default function TweaksPage() {
                   data-testid="button-unlock-matched-tweaks"
                   className="shrink-0 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_20px_-5px_rgba(220,38,38,0.7)] transition-colors hover:bg-red-500"
                 >
-                  Apply {missingMatchedIds.length} pending tweaks
+                  Unlock full hardware-matched set
                 </button>
               </ProUnlockButton>
             )}
@@ -671,7 +730,11 @@ export default function TweaksPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-zinc-400">
-                  These are the server-validated recommendations for this PC. Open any one to review its toggle—nothing is applied until you enable it.
+                  {isPro
+                    ? "These are the hardware-matched recommendations for this PC. Open any one to review its toggle."
+                    : best15ServerAuthorized
+                      ? "These are the 15 server-authorized picks for this PC. Select only from this list; Windows changes still require server authorization."
+                      : "This is a hardware-matched preview. To apply Free tweaks, load the server-authorized Best 15 from the dashboard after scanning."}
                 </p>
               </div>
             </div>
@@ -681,8 +744,21 @@ export default function TweaksPage() {
                   <button
                     key={tweak.id}
                     type="button"
-                    onClick={() => openRecommendedTweak(tweak.id, tweak.category)}
-                    className="group flex items-center gap-3 rounded-lg border border-white/8 bg-black/35 px-3 py-2.5 text-left transition-colors hover:border-red-500/40 hover:bg-red-500/10"
+                    aria-pressed={!isPro ? Boolean(tweaks[tweak.id]) : undefined}
+                    onClick={() => {
+                      if (isPro) {
+                        openRecommendedTweak(tweak.id, tweak.category);
+                        return;
+                      }
+                      const store = useOptimizationStore.getState();
+                      store.setTweak(tweak.id, !Boolean(store.tweaks[tweak.id]));
+                    }}
+                    className={cn(
+                      "group flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                      !isPro && tweaks[tweak.id]
+                        ? "border-red-500/45 bg-red-500/10"
+                        : "border-white/8 bg-black/35 hover:border-red-500/40 hover:bg-red-500/10",
+                    )}
                   >
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-[10px] font-black text-red-300 border border-red-500/25">
                       {index + 1}
@@ -695,7 +771,13 @@ export default function TweaksPage() {
                         {tweak.category}
                       </span>
                     </span>
-                    <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-zinc-600 group-hover:text-red-400" />
+                    {isPro ? (
+                      <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-zinc-600 group-hover:text-red-400" />
+                    ) : (
+                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-zinc-500">
+                        {tweaks[tweak.id] ? "Selected" : "Select"}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -707,6 +789,8 @@ export default function TweaksPage() {
           </section>
         )}
 
+        {isPro && (
+          <>
         {/* Category Tab Bar */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 border-b border-white/5 scrollbar-none" style={{ scrollbarWidth: "none" }}>
           {TABS.map(tab => {
@@ -733,7 +817,7 @@ export default function TweaksPage() {
                 )}>
                   {count}
                 </span>
-                {isFiltered && !showAll && (
+                {isFiltered && !canShowAll && (
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" title="Some tabs hidden by hardware filter" />
                 )}
               </button>
@@ -742,7 +826,7 @@ export default function TweaksPage() {
         </div>
 
         {/* Hidden tabs notice */}
-        {!showAll && !detecting && hiddenCount > 0 && (
+        {!canShowAll && !detecting && hiddenCount > 0 && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/50 border border-white/5 text-[11px] text-zinc-500">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
             {hiddenCount} tab{hiddenCount !== 1 ? "s" : ""} hidden — not relevant to your detected hardware ({hw.gpuName}).
@@ -871,6 +955,8 @@ export default function TweaksPage() {
               </div>
             )}
         </>
+          </>
+        )}
       </div>
       {confirmApply && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="apply-selected-title">

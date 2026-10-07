@@ -95,11 +95,12 @@ function AnimatedNum({ value, suffix = "" }: { value: number; suffix?: string })
 
 // ── Stat card ────────────────────────────────────────────────────────────────
 function Stat({
-  icon: Icon, label, value, sub, highlight, accent,
+  icon: Icon, label, value, sub, highlight, accent, compact,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string; value: string; sub?: string;
   highlight?: boolean; accent?: "red" | "amber" | "green" | "blue";
+  compact?: boolean;
 }) {
   const colors = {
     red:   "border-red-500/20 bg-red-500/[0.03] text-red-400",
@@ -111,7 +112,7 @@ function Stat({
   return (
     <div
       data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}
-      className={cn("p-4 rounded-xl border bg-zinc-950/40", chosen)}
+      className={cn(compact ? "p-2.5" : "p-4", "rounded-xl border bg-zinc-950/40", chosen)}
     >
       <div className={cn("flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider mb-2",
         accent ? colors[accent].split(" ")[2] : (highlight ? "text-red-400" : "text-zinc-500")
@@ -119,8 +120,8 @@ function Stat({
         <Icon className="w-3.5 h-3.5" />
         {label}
       </div>
-      <p className="text-white font-mono text-sm font-semibold truncate">{value}</p>
-      {sub && <p className="text-zinc-500 text-[11px] mt-0.5 truncate">{sub}</p>}
+      <p className={cn("text-white font-mono font-semibold truncate", compact ? "text-[13px]" : "text-sm")}>{value}</p>
+      {sub && <p className={cn("text-zinc-500 mt-0.5 truncate", compact ? "text-[10px]" : "text-[11px]")}>{sub}</p>}
     </div>
   );
 }
@@ -293,13 +294,23 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 }) {
   const os = useOsDetection();
   const liveStats = useLiveStats(scan.ram_gb || 16);
-  const cpuTemp = liveStats.cpuTempSource === "imported" ? liveStats.cpuTemp : liveStats.isStale ? null : liveStats.cpuTemp;
-  const gpuTemp = liveStats.gpuTempSource === "imported" ? liveStats.gpuTemp : liveStats.isStale ? null : liveStats.gpuTemp;
+  const cpuTemp = liveStats.cpuTemp;
+  const gpuTemp = liveStats.gpuTemp;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
   const ramMhz = scan.ram_mhz || (hwMonitor?.ram_mhz ?? null);
   const isLaptop = (scan.chassis || "").toLowerCase() === "laptop";
+  const cpuTempDescription = cpuTemp == null
+    ? liveStats.isStale ? "Last CPU reading is unavailable" : "No CPU package sensor returned a live reading"
+    : liveStats.cpuTempSource === "imported"
+      ? "Saved HW Monitor reading"
+      : liveStats.isStale ? "Last live reading · stale" : "Live CPU temperature · updates automatically";
+  const gpuTempDescription = gpuTemp == null
+    ? liveStats.isStale ? "Last GPU reading is unavailable" : "No GPU temperature sensor returned a live reading"
+    : liveStats.gpuTempSource === "imported"
+      ? "Saved HW Monitor reading"
+      : liveStats.isStale ? "Last live reading · stale" : "Live GPU temperature · updates automatically";
 
   return (
     <div className="space-y-4">
@@ -308,18 +319,18 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
           <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
             sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
           <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
-            sub={gpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No GPU temperature sensor returned a live reading") : liveStats.gpuTempSource === "imported" ? "Imported monitor snapshot · not live" : "Live GPU temperature · updates automatically"}
+            sub={gpuTempDescription}
             accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} />
         </div>
         <div className="space-y-2">
           <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
           <Stat icon={Thermometer} label="CPU Temp" value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
-            sub={cpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No CPU package sensor returned a live reading") : liveStats.cpuTempSource === "imported" ? "Imported monitor snapshot · not live" : "Live CPU temperature · updates automatically"}
+            sub={cpuTempDescription}
             accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} />
         </div>
         <Stat icon={MemoryStick} label="RAM"
           value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
-          sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight />
+          sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight compact />
         <Stat icon={HardDrive} label="OS" value={os.os || "Detecting…"}
           sub={os.build ? `Build ${os.build}` : undefined} />
         <Stat icon={Sparkles} label="Form Factor"
@@ -368,7 +379,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center gap-3">
           <Thermometer className="w-4 h-4 text-zinc-600 shrink-0" />
           <p className="text-[11px] text-zinc-500">
-            No live readings are exposed by this PC's current firmware or sensor drivers. Imported monitor readings are shown as saved snapshots.
+            Live CPU and GPU temperatures are unavailable from this PC's current firmware and sensor drivers.
           </p>
         </div>
       )}
