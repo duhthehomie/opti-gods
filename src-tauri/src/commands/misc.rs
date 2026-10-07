@@ -82,12 +82,19 @@ fn parse_global_nip_settings(xml: &str) -> Result<std::collections::HashMap<u32,
                 return Err(format!("NVIDIA export contains duplicate global setting ID {id}."));
             }
         }
-        if settings.is_empty() {
-            return Err("NVIDIA export contained an empty global driver profile.".into());
-        }
         return Ok(settings);
     }
     Err("NVIDIA export did not contain the global driver profile.".into())
+}
+
+fn global_profile_backup_xml(xml: &str) -> Option<String> {
+    for chunk in xml.split("<Profile>").skip(1) {
+        let profile = chunk.split("</Profile>").next()?;
+        if nip_tag_value(profile, "ProfileName") == Some("_GLOBAL_DRIVER_PROFILE") {
+            return Some(format!("<?xml version=\"1.0\" encoding=\"utf-8\"?><ArrayOfProfile><Profile>{profile}</Profile></ArrayOfProfile>"));
+        }
+    }
+    None
 }
 
 fn verify_global_nip_settings(expected_xml: &str, exported_xml: &str) -> Result<usize, String> {
@@ -104,6 +111,11 @@ fn verify_global_nip_settings(expected_xml: &str, exported_xml: &str) -> Result<
             None => mismatches.push(format!("{id} was missing")),
         }
     }
+    let mut unexpected_ids: Vec<u32> = exported.keys().copied().filter(|id| !expected.contains_key(id)).collect();
+    unexpected_ids.sort_unstable();
+    if !unexpected_ids.is_empty() {
+        mismatches.push(format!("unexpected customized global setting IDs: {}", unexpected_ids.iter().take(8).map(u32::to_string).collect::<Vec<_>>().join(", ")));
+    }
     if !mismatches.is_empty() {
         return Err(format!("global-profile readback mismatch: {}", mismatches.into_iter().take(4).collect::<Vec<_>>().join("; ")));
     }
@@ -112,7 +124,7 @@ fn verify_global_nip_settings(expected_xml: &str, exported_xml: &str) -> Result<
 
 #[cfg(test)]
 mod nvidia_profile_readback_tests {
-    use super::verify_global_nip_settings;
+    use super::{global_profile_backup_xml, verify_global_nip_settings};
 
     const EXPECTED: &str = r#"<ArrayOfProfile><Profile><ProfileName>_GLOBAL_DRIVER_PROFILE</ProfileName><Settings><ProfileSetting><SettingID>1</SettingID><SettingValue>10</SettingValue></ProfileSetting><ProfileSetting><SettingID>2</SettingID><SettingValue>0</SettingValue></ProfileSetting></Settings></Profile></ArrayOfProfile>"#;
 
@@ -123,14 +135,33 @@ mod nvidia_profile_readback_tests {
     }
 
     #[test]
+    fn rejects_unlisted_global_customizations_after_driver_default_reset() {
+        let exported = r#"<ArrayOfProfile><Profile><ProfileName>_GLOBAL_DRIVER_PROFILE</ProfileName><Settings><ProfileSetting><SettingID>1</SettingID><SettingValue>10</SettingValue></ProfileSetting><ProfileSetting><SettingID>2</SettingID><SettingValue>0</SettingValue></ProfileSetting><ProfileSetting><SettingID>3</SettingID><SettingValue>99</SettingValue></ProfileSetting></Settings></Profile></ArrayOfProfile>"#;
+        assert!(verify_global_nip_settings(EXPECTED, exported).unwrap_err().contains("unexpected customized global setting IDs: 3"));
+    }
+
+    #[test]
     fn rejects_values_that_did_not_persist() {
         let exported = r#"<ArrayOfProfile><Profile><ProfileName>_GLOBAL_DRIVER_PROFILE</ProfileName><Settings><ProfileSetting><SettingID>1</SettingID><SettingValue>10</SettingValue></ProfileSetting><ProfileSetting><SettingID>2</SettingID><SettingValue>1</SettingValue></ProfileSetting></Settings></Profile></ArrayOfProfile>"#;
         assert!(verify_global_nip_settings(EXPECTED, exported).unwrap_err().contains("2 was 1, expected 0"));
+    }
+
+    #[test]
+    fn rollback_snapshot_excludes_application_profiles() {
+        let source = format!("{EXPECTED}<Profile><ProfileName>GameProfile</ProfileName></Profile>");
+        let backup = global_profile_backup_xml(&source).unwrap();
+        assert!(!backup.contains("GameProfile"));
+        assert_eq!(verify_global_nip_settings(EXPECTED, &backup).unwrap(), 2);
     }
 }
 
 #[cfg(windows)]
 async fn export_customized_nvidia_profile(inspector_dir: &std::path::Path) -> Result<String, String> {
+    export_customized_nvidia_profile_with_cancel(inspector_dir, true).await
+}
+
+#[cfg(windows)]
+async fn export_customized_nvidia_profile_with_cancel(inspector_dir: &std::path::Path, allow_cancel: bool) -> Result<String, String> {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
@@ -160,7 +191,7 @@ async fn export_customized_nvidia_profile(inspector_dir: &std::path::Path) -> Re
                     return Err(format!("Could not check NVIDIA profile readback: {error}"));
                 }
             }
-            if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+            if allow_cancel && NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 let _ = child.kill().await;
                 let _ = child.wait().await;
                 return Err("NVIDIA profile readback was cancelled.".into());
@@ -192,6 +223,60 @@ async fn export_customized_nvidia_profile(inspector_dir: &std::path::Path) -> Re
     result
 }
 
+#[cfg(windows)]
+async fn restore_nvidia_global_profile_backup(inspector_dir: &std::path::Path, backup_xml: &str) -> Result<(), String> {
+    reset_global_nvidia_profile_to_driver_defaults()?;
+    let Some(global_backup) = global_profile_backup_xml(backup_xml) else {
+        let exported = export_customized_nvidia_profile_with_cancel(inspector_dir, false).await?;
+        if let Some(global) = global_profile_backup_xml(&exported) {
+            if !parse_global_nip_settings(&global)?.is_empty() {
+                return Err("Global NVIDIA rollback left unexpected customized settings.".into());
+            }
+        }
+        return Ok(());
+    };
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let backup_path = std::env::temp_dir().join(format!("OptiGods-Nvidia-Rollback-{}-{nonce}.nip", std::process::id()));
+    std::fs::write(&backup_path, &global_backup).map_err(|error| format!("Could not stage the saved NVIDIA profile for rollback: {error}"))?;
+    let result = async {
+        let executable = inspector_dir.join("nvidiaProfileInspector.exe");
+        let mut child = tokio::process::Command::new(&executable)
+            .arg("-silentImport")
+            .arg(&backup_path)
+            .current_dir(inspector_dir)
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|error| format!("Could not start NVIDIA profile rollback: {error}"))?;
+        let started = std::time::Instant::now();
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {}
+                Err(error) => {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    return Err(format!("Could not check NVIDIA profile rollback: {error}"));
+                }
+            }
+            if started.elapsed() >= std::time::Duration::from_secs(60) {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                return Err("NVIDIA profile rollback exceeded 60 seconds.".into());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        };
+        if !status.success() { return Err(format!("NVIDIA profile rollback import exited with {status}.")); }
+        let exported = export_customized_nvidia_profile_with_cancel(inspector_dir, false).await?;
+        verify_global_nip_settings(&global_backup, &exported)?;
+        Ok(())
+    }.await;
+    let _ = std::fs::remove_file(&backup_path);
+    result
+}
+
 fn dvc_level_for_percent(min_level: u32, max_level: u32, percent: u32) -> Result<u32, String> {
     if min_level > max_level || percent > 100 || min_level == max_level {
         return Err("NVIDIA display reported an invalid Digital Vibrance range.".into());
@@ -206,17 +291,17 @@ mod digital_vibrance_tests {
     use super::dvc_level_for_percent;
 
     #[test]
-    fn maps_85_percent_to_the_reported_driver_range() {
-        assert_eq!(dvc_level_for_percent(0, 100, 85).unwrap(), 85);
-        assert_eq!(dvc_level_for_percent(0, 60, 85).unwrap(), 51);
-        assert_eq!(dvc_level_for_percent(0, 63, 85).unwrap(), 54);
-        assert_eq!(dvc_level_for_percent(10, 110, 85).unwrap(), 95);
+    fn maps_80_percent_to_the_reported_driver_range() {
+        assert_eq!(dvc_level_for_percent(0, 100, 80).unwrap(), 80);
+        assert_eq!(dvc_level_for_percent(0, 60, 80).unwrap(), 48);
+        assert_eq!(dvc_level_for_percent(0, 63, 80).unwrap(), 50);
+        assert_eq!(dvc_level_for_percent(10, 110, 80).unwrap(), 90);
     }
 
     #[test]
     fn rejects_invalid_driver_ranges() {
-        assert!(dvc_level_for_percent(10, 10, 85).is_err());
-        assert!(dvc_level_for_percent(20, 10, 85).is_err());
+        assert!(dvc_level_for_percent(10, 10, 80).is_err());
+        assert!(dvc_level_for_percent(20, 10, 80).is_err());
         assert!(dvc_level_for_percent(0, 100, 101).is_err());
     }
 }
@@ -231,6 +316,14 @@ type NvApiEnumDisplayHandleFn = unsafe extern "C" fn(u32, *mut *mut std::ffi::c_
 type NvApiGetDvcInfoFn = unsafe extern "C" fn(*mut std::ffi::c_void, u32, *mut NvDisplayDvcInfo) -> i32;
 #[cfg(windows)]
 type NvApiSetDvcLevelFn = unsafe extern "C" fn(*mut std::ffi::c_void, u32, u32) -> i32;
+#[cfg(windows)]
+type NvApiDrsCreateSessionFn = unsafe extern "C" fn(*mut *mut std::ffi::c_void) -> i32;
+#[cfg(windows)]
+type NvApiDrsSessionFn = unsafe extern "C" fn(*mut std::ffi::c_void) -> i32;
+#[cfg(windows)]
+type NvApiDrsGetBaseProfileFn = unsafe extern "C" fn(*mut std::ffi::c_void, *mut *mut std::ffi::c_void) -> i32;
+#[cfg(windows)]
+type NvApiDrsProfileFn = unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> i32;
 
 #[cfg(windows)]
 #[repr(C)]
@@ -262,7 +355,7 @@ impl NvApiLibrary {
         let wide_name: Vec<u16> = dll_name.encode_utf16().chain(std::iter::once(0)).collect();
         let module = unsafe { LoadLibraryExW(wide_name.as_ptr(), std::ptr::null_mut(), 0x0000_0800) };
         if module.is_null() {
-            return Err("NVIDIA driver API is unavailable. Verify the NVIDIA driver and Control Panel are installed.".into());
+            return Err("NVIDIA driver API is unavailable. Verify that the NVIDIA display driver is installed.".into());
         }
         let export = unsafe { GetProcAddress(module, b"nvapi_QueryInterface\0".as_ptr()) };
         if export.is_null() {
@@ -306,6 +399,50 @@ impl Drop for NvApiLibrary {
                 let _ = FreeLibrary(self.module);
             }
         }
+    }
+}
+
+#[cfg(windows)]
+fn reset_global_nvidia_profile_to_driver_defaults() -> Result<(), String> {
+    let api = NvApiLibrary::load()?;
+    let create_ptr = api.resolve(0x0694_D52E, "DRS session creation")?;
+    let destroy_ptr = api.resolve(0xDAD9_CFF8, "DRS session cleanup")?;
+    let load_ptr = api.resolve(0x375D_BD6B, "DRS settings load")?;
+    let get_base_ptr = api.resolve(0xDA84_66A0, "global NVIDIA profile lookup")?;
+    let restore_ptr = api.resolve(0xFA5F_6134, "global NVIDIA profile reset")?;
+    let save_ptr = api.resolve(0xFCBC_7E14, "DRS settings save")?;
+    let create_session: NvApiDrsCreateSessionFn = unsafe { std::mem::transmute(create_ptr) };
+    let destroy_session: NvApiDrsSessionFn = unsafe { std::mem::transmute(destroy_ptr) };
+    let load_settings: NvApiDrsSessionFn = unsafe { std::mem::transmute(load_ptr) };
+    let get_base_profile: NvApiDrsGetBaseProfileFn = unsafe { std::mem::transmute(get_base_ptr) };
+    let restore_profile: NvApiDrsProfileFn = unsafe { std::mem::transmute(restore_ptr) };
+    let save_settings: NvApiDrsSessionFn = unsafe { std::mem::transmute(save_ptr) };
+
+    let mut session = std::ptr::null_mut();
+    let create_status = unsafe { create_session(&mut session) };
+    if create_status != 0 || session.is_null() {
+        if !session.is_null() { let _ = unsafe { destroy_session(session) }; }
+        return Err(format!("Could not create an NVIDIA DRS session (NVAPI status {create_status})."));
+    }
+    let result = (|| {
+        let load_status = unsafe { load_settings(session) };
+        if load_status != 0 { return Err(format!("Could not load NVIDIA driver profiles (NVAPI status {load_status}).")); }
+        let mut profile = std::ptr::null_mut();
+        let profile_status = unsafe { get_base_profile(session, &mut profile) };
+        if profile_status != 0 || profile.is_null() {
+            return Err(format!("Could not locate the NVIDIA global driver profile (NVAPI status {profile_status})."));
+        }
+        let reset_status = unsafe { restore_profile(session, profile) };
+        if reset_status != 0 { return Err(format!("Could not reset unlisted NVIDIA global settings to driver defaults (NVAPI status {reset_status}).")); }
+        let save_status = unsafe { save_settings(session) };
+        if save_status != 0 { return Err(format!("Could not save NVIDIA global driver defaults (NVAPI status {save_status}).")); }
+        Ok(())
+    })();
+    let destroy_status = unsafe { destroy_session(session) };
+    match result {
+        Err(error) => Err(error),
+        Ok(()) if destroy_status == 0 => Ok(()),
+        Ok(()) => Err(format!("NVIDIA DRS session cleanup failed (NVAPI status {destroy_status}).")),
     }
 }
 
@@ -365,7 +502,7 @@ fn rollback_dvc_with_handles(
 }
 
 #[cfg(windows)]
-fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
+fn set_nvidia_digital_vibrance_80() -> Result<NvidiaDvcApplySummary, String> {
     let api = NvApiLibrary::load()?;
     let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
     let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
@@ -394,7 +531,7 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
         if get_status != 0 {
             return Err(format!("Could not read Digital Vibrance on NVIDIA display {} (NVAPI status {get_status}). No display was changed.", display_index + 1));
         }
-        let target_level = dvc_level_for_percent(info.min_level, info.max_level, 85)?;
+        let target_level = dvc_level_for_percent(info.min_level, info.max_level, 80)?;
         if info.current_level < info.min_level || info.current_level > info.max_level {
             return Err(format!("NVIDIA display {} returned an out-of-range Digital Vibrance value. No display was changed.", display_index + 1));
         }
@@ -413,16 +550,16 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
             if set_status != 0 {
                 let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
                 let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
-                return Err(format!("Could not set Digital Vibrance to 85% on NVIDIA display {} (NVAPI status {set_status}).{suffix}", display.display_index + 1));
+                return Err(format!("Could not set Digital Vibrance to 80% on NVIDIA display {} (NVAPI status {set_status}).{suffix}", display.display_index + 1));
             }
         }
         let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
         let verify_status = unsafe { get_dvc(display.handle, 0, &mut verify) };
-        let verified_target = dvc_level_for_percent(verify.min_level, verify.max_level, 85).ok();
+        let verified_target = dvc_level_for_percent(verify.min_level, verify.max_level, 80).ok();
         if verify_status != 0 || verify.current_level != display.target_level || verified_target != Some(display.target_level) {
             let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
             let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
-            return Err(format!("Digital Vibrance 85% readback failed on NVIDIA display {} (reported level {} in range {}-{}, NVAPI status {verify_status}).{suffix}", display.display_index + 1, verify.current_level, verify.min_level, verify.max_level));
+            return Err(format!("Digital Vibrance 80% readback failed on NVIDIA display {} (reported level {} in range {}-{}, NVAPI status {verify_status}).{suffix}", display.display_index + 1, verify.current_level, verify.min_level, verify.max_level));
         }
         verified_levels.push((display.display_index, verify.current_level, verify.min_level, verify.max_level));
     }
@@ -571,93 +708,81 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let inspector = inspector_dir.join("nvidiaProfileInspector.exe");
             let preset = inspector_dir.join("OptiGods-Global-utf8.nip");
             verify_nvidia_bundle(&inspector_dir)?;
-            let dvc = set_nvidia_digital_vibrance_85()?;
-            let mut child = match tokio::process::Command::new(&inspector)
-                .arg("-silentImport")
-                .arg(&preset)
-                .current_dir(&inspector_dir)
-                .kill_on_drop(true)
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(error) => {
-                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                    let note = match rollback {
-                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
-                    };
-                    return Err(format!("Could not launch NVIDIA Profile Inspector: {error}.{note}"));
-                }
-            };
-            let started = tokio::time::Instant::now();
-            let status = loop {
-                match child.try_wait() {
-                    Ok(Some(status)) => break status,
-                    Ok(None) => {}
-                    Err(error) => {
+            let expected = std::fs::read_to_string(&preset)
+                .map_err(|error| format!("Could not read the verified NVIDIA preset: {error}"))?;
+            let expected_count = parse_global_nip_settings(&expected)?.len();
+            if expected_count != 12 {
+                return Err(format!("The verified NVIDIA preset contains {expected_count} global settings; expected 12."));
+            }
+            let original_profile = export_customized_nvidia_profile(&inspector_dir).await?;
+            let dvc = set_nvidia_digital_vibrance_80()?;
+            let mut reset_attempted = false;
+            let profile_result: Result<usize, String> = async {
+                reset_attempted = true;
+                reset_global_nvidia_profile_to_driver_defaults()?;
+                let mut child = tokio::process::Command::new(&inspector)
+                    .arg("-silentImport")
+                    .arg(&preset)
+                    .current_dir(&inspector_dir)
+                    .kill_on_drop(true)
+                    .spawn()
+                    .map_err(|error| format!("Could not launch NVIDIA Profile Inspector: {error}"))?;
+                let started = tokio::time::Instant::now();
+                let status = loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => break status,
+                        Ok(None) => {}
+                        Err(error) => {
+                            let _ = child.kill().await;
+                            let _ = child.wait().await;
+                            return Err(format!("Could not check NVIDIA Profile Inspector: {error}"));
+                        }
+                    }
+                    if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                         let _ = child.kill().await;
                         let _ = child.wait().await;
-                        let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                        let note = match rollback {
-                            Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                            Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
-                        };
-                        return Err(format!("Could not check NVIDIA Profile Inspector: {error}.{note}"));
+                        return Err("NVIDIA preset import was stopped by the user.".into());
                     }
-                }
-                if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                    let note = match rollback {
-                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
-                    };
-                    return Err(format!("NVIDIA preset import was stopped by the user.{note}"));
-                }
-                if started.elapsed() >= std::time::Duration::from_secs(45) {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                    let note = match rollback {
-                        Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
-                    };
-                    return Err(format!("NVIDIA Profile Inspector did not finish within 45 seconds; the import was stopped.{note}"));
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            };
-            if !status.success() {
-                let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                let note = match rollback {
-                    Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                    Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                    if started.elapsed() >= std::time::Duration::from_secs(45) {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        return Err("NVIDIA Profile Inspector did not finish within 45 seconds; the import was stopped.".into());
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 };
-                return Err(format!("NVIDIA Profile Inspector exited with {status}. No preset success was claimed.{note}"));
-            }
-            let profile_verification = async {
-                let expected = std::fs::read_to_string(&preset)
-                    .map_err(|error| format!("Could not read the verified NVIDIA preset: {error}"))?;
+                if !status.success() {
+                    return Err(format!("NVIDIA Profile Inspector exited with {status}."));
+                }
                 let exported = export_customized_nvidia_profile(&inspector_dir).await?;
                 verify_global_nip_settings(&expected, &exported)
             }.await;
-            let verified_setting_count = match profile_verification {
+            let verified_setting_count = match profile_result {
                 Ok(count) if count == 12 => count,
                 Ok(count) => {
-                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                    let note = match rollback {
+                    let profile_note = if reset_attempted {
+                        match restore_nvidia_global_profile_backup(&inspector_dir, &original_profile).await {
+                            Ok(()) => " Original global NVIDIA settings were restored.".to_string(),
+                            Err(error) => format!(" WARNING: NVIDIA profile rollback was incomplete: {error}."),
+                        }
+                    } else { String::new() };
+                    let dvc_note = match restore_nvidia_digital_vibrance(&dvc.previous_values) {
                         Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
-                        Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
+                        Err(error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {error}."),
                     };
-                    return Err(format!("Expected 12 NVIDIA global settings, but verified {count}.{note}"));
+                    return Err(format!("Expected 12 NVIDIA global settings, but verified {count}; no preset success was recorded.{profile_note}{dvc_note}"));
                 }
                 Err(error) => {
-                    let rollback = restore_nvidia_digital_vibrance(&dvc.previous_values);
-                    let note = match rollback {
+                    let profile_note = if reset_attempted {
+                        match restore_nvidia_global_profile_backup(&inspector_dir, &original_profile).await {
+                            Ok(()) => " Original global NVIDIA settings were restored.".to_string(),
+                            Err(rollback_error) => format!(" WARNING: NVIDIA profile rollback was incomplete: {rollback_error}."),
+                        }
+                    } else { String::new() };
+                    let dvc_note = match restore_nvidia_digital_vibrance(&dvc.previous_values) {
                         Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
                         Err(rollback_error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {rollback_error}."),
                     };
-                    return Err(format!("Profile Inspector exited successfully, but the global 3D settings could not be verified: {error}. No preset success was recorded; the NVIDIA profile may have been partially changed.{note}"));
+                    return Err(format!("{error} No preset success was recorded.{profile_note}{dvc_note}"));
                 }
             };
             let unsupported_note = if dvc.unsupported_display_count > 0 {
@@ -669,9 +794,11 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 .map(|(index, level, min, max)| format!("display {} raw level {} (range {}-{})", index + 1, level, min, max))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let monitor_label = if dvc.supported_display_count == 1 { "monitor" } else { "monitors" };
             Ok::<String, String>(format!(
-                "Verified performance preset: {verified_setting_count}/12 global 3D settings matched the NVIDIA driver export; Digital Vibrance 85% readback via NVAPI on {} supported NVIDIA display(s) [{}].{} PhysX processor selection is a separate control and was not changed by this profile.",
+                "Verified performance preset: {verified_setting_count}/12 global 3D settings matched the NVIDIA driver export; Digital Vibrance at 80% was read back on {} supported NVIDIA {} [{}].{} Unlisted global settings were reset to NVIDIA defaults; OpenGL GPU selection and Fixed Refresh were left at driver defaults. PhysX processor selection is a separate control and was not changed by this profile.",
                 dvc.supported_display_count,
+                monitor_label,
                 dvc_readback,
                 unsupported_note,
             ))

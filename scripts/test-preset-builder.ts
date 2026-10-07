@@ -22,9 +22,10 @@ import { computeSmartRecs } from "../client/src/lib/smart-recommendations";
 import {
   canRunNvidiaPreset,
   getFullOptimizeNvidiaPresetDecision,
+  shouldQueueNvidiaPresetReapplyOnce,
   getNvidiaRecommendationIds,
 } from "../client/src/lib/nvidia-preset-eligibility";
-import { getCompatibilitySkipMessage, getTweakRunItemsForTab } from "../client/src/lib/tweak-run-outcome";
+import { getCompatibilitySkipMessage, getTweakRunItemsForTab, getCompatibleScriptRetryIds } from "../client/src/lib/tweak-run-outcome";
 
 let passed = 0;
 let failed = 0;
@@ -132,6 +133,30 @@ test("eligible Pro users receive the NVIDIA preset recommendation", () => {
     dedicatedNvidiaGpuCount: 1,
   }).status, "queue");
 });
+test("hybrid NVIDIA systems do not require Control Panel detection", () => {
+  const hybridWithoutControlPanel = {
+    native: true,
+    pro: true,
+    hardwareScanned: true,
+    dedicatedNvidiaGpuCount: 1,
+    isHybridGpu: true,
+    controlPanelInstalled: false,
+  };
+  assert.equal(canRunNvidiaPreset(hybridWithoutControlPanel), true);
+});
+
+test("Full Optimize queues the NVIDIA preset reapply once per release", () => {
+  const eligible = {
+    native: true,
+    pro: true,
+    hardwareScanned: true,
+    dedicatedNvidiaGpuCount: 1,
+  };
+  assert.equal(shouldQueueNvidiaPresetReapplyOnce(eligible, false), true);
+  assert.equal(shouldQueueNvidiaPresetReapplyOnce(eligible, true), false);
+  assert.equal(shouldQueueNvidiaPresetReapplyOnce({ ...eligible, pro: false }, false), false);
+});
+
 
 test("Full Optimize records unsupported NVIDIA presets and skipped run items", () => {
   const decision = getFullOptimizeNvidiaPresetDecision({
@@ -151,6 +176,17 @@ test("Full Optimize records unsupported NVIDIA presets and skipped run items", (
     ], "skipped").map(item => item.id),
     ["unsupported"],
   );
+});
+
+test("bulk scripts select only unique compatible script-backed failures and skips", () => {
+  const items = [
+    { id: "script", status: "skipped" }, { id: "script", status: "failed" },
+    { id: "failedScript", status: "failed" }, { id: "blockedScript", status: "failed" },
+    { id: "native", status: "failed" }, { id: "appliedScript", status: "applied" },
+    { id: "queuedScript", status: "queued" }, { id: "unknown", status: "skipped" },
+  ];
+  const scripts = new Set(["script", "failedScript", "blockedScript", "appliedScript", "queuedScript"]);
+  assert.deepEqual(getCompatibleScriptRetryIds(items, id => scripts.has(id), id => id !== "blockedScript"), ["script", "failedScript"]);
 });
 
 test("Smart Recommendations do not re-add conflicting MMCSS writers", () => {

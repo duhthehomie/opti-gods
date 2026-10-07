@@ -17,6 +17,12 @@ export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean
     && input.dedicatedNvidiaGpuCount === 1;
 }
 
+export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.49";
+
+export function shouldQueueNvidiaPresetReapplyOnce(input: NvidiaPresetEligibilityInput, alreadyQueued: boolean): boolean {
+  return !alreadyQueued && canRunNvidiaPreset(input);
+}
+
 export type FullOptimizeNvidiaPresetDecision =
   | { status: "omit" }
   | { status: "queue" }

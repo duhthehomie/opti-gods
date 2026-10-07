@@ -2,7 +2,7 @@ import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
-import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision } from "@/lib/nvidia-preset-eligibility";
+import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -479,6 +479,16 @@ export default function Dashboard() {
     hardwareScanned: hw.scanned,
     dedicatedNvidiaGpuCount: fullOptimizeNvidiaGpuCount,
   });
+  const [nvidiaPresetRequeueRecorded, setNvidiaPresetRequeueRecorded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "queued"; } catch { return false; }
+  });
+  const nvidiaPresetOneTimeRequeue = shouldQueueNvidiaPresetReapplyOnce({
+    native,
+    pro: isPro,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: fullOptimizeNvidiaGpuCount,
+  }, nvidiaPresetRequeueRecorded);
   const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
@@ -606,7 +616,10 @@ export default function Dashboard() {
         const pendingIds = compatibleIds.filter(id => !nativeState[id]);
         const runSkippedIds = [...initialSkippedIds];
         const runSkippedMessages = { ...initialSkippedMessages };
-        if (nvidiaPresetShouldQueue && !nativeState[NVIDIA_PRESET_ACTION_ID]) pendingIds.push(NVIDIA_PRESET_ACTION_ID);
+        const queueNvidiaPresetReapplyNow = nvidiaPresetShouldQueue && nvidiaPresetOneTimeRequeue;
+        if (nvidiaPresetShouldQueue && (!nativeState[NVIDIA_PRESET_ACTION_ID] || queueNvidiaPresetReapplyNow)) {
+          pendingIds.push(NVIDIA_PRESET_ACTION_ID);
+        }
         if (nvidiaPresetSkipMessage) {
           runSkippedIds.push(NVIDIA_PRESET_ACTION_ID);
           runSkippedMessages[NVIDIA_PRESET_ACTION_ID] = nvidiaPresetSkipMessage;
@@ -619,7 +632,14 @@ export default function Dashboard() {
           });
           return;
         }
-        queueTweakBatch(pendingIds, { initialSkippedMessages: runSkippedMessages }, runSkippedIds);
+        queueTweakBatch(pendingIds, {
+          initialSkippedMessages: runSkippedMessages,
+          forceReapplyIds: queueNvidiaPresetReapplyNow ? [NVIDIA_PRESET_ACTION_ID] : [],
+        }, runSkippedIds);
+        if (queueNvidiaPresetReapplyNow) {
+          try { localStorage.setItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY, "queued"); } catch { /* retain the in-memory guard for this session */ }
+          setNvidiaPresetRequeueRecorded(true);
+        }
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {
@@ -761,8 +781,8 @@ export default function Dashboard() {
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = getEligibleSmartRecommendationIds(
-    [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
-    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
+    Array.from(smartRecs.ids).filter(id => id !== NVIDIA_PRESET_ACTION_ID),
+    id => getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
@@ -783,7 +803,6 @@ export default function Dashboard() {
       .filter(item => item.status === "applied" && registryIds.has(item.id))
       .forEach(item => confirmedIds.add(item.id));
   }
-  if (native && (detectedNativeTweaks[NVIDIA_PRESET_ACTION_ID] || lastNativeRun?.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "applied" && detectedNativeTweaks[item.id] !== false))) confirmedIds.add(NVIDIA_PRESET_ACTION_ID);
   // Native totals combine read-only Windows detection with successful app-run
   // history; browser toggle intent alone is never treated as an applied change.
   const allActiveIdsForDisplay = native
@@ -976,7 +995,7 @@ export default function Dashboard() {
                 <div className="rounded-xl border border-green-500/20 bg-green-500/[.06] p-3 text-xs">
                   <span className="block font-bold text-green-100">Opti Gods NVIDIA Preset · separate Pro action</span>
                   <span className="mt-1 block leading-relaxed text-zinc-400">
-                    Included automatically for Pro users with one dedicated NVIDIA GPU; hybrid systems do not need Control Panel installed.
+                    Included once through Full Optimize for eligible Pro users with one dedicated NVIDIA GPU. Hybrid systems are supported; NVIDIA Control Panel is not required.
                     {!nvidiaPresetEligible && " Run a hardware scan and confirm exactly one dedicated NVIDIA GPU before Full Optimize."}
                   </span>
                 </div>

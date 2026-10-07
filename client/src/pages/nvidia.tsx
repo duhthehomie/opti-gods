@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { canRunNvidiaPreset, getNvidiaRecommendationIds } from "@/lib/nvidia-preset-eligibility";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
@@ -104,7 +103,7 @@ const NVIDIA_TWEAKS = [
   {
     id: "NvidiaControlPanelSettings",
     title: "Opti Gods NVIDIA Control Panel Preset",
-    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 85% on supported NVIDIA displays.",
+    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 80% on supported NVIDIA displays.",
     badge: "RECOMMENDED",
     impact: "HIGH" as const,
   },
@@ -331,24 +330,6 @@ export default function Nvidia() {
             : "";
   const canEnableSafeMsi = safeMsiBlockReason === "";
   const [proToolBusy, setProToolBusy] = useState<string | null>(null);
-  const [controlPanelInstalled, setControlPanelInstalled] = useState<boolean | null>(null);
-  const [controlPanelCheckFailed, setControlPanelCheckFailed] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    if (!isNative()) {
-      setControlPanelInstalled(false);
-      return () => { disposed = true; };
-    }
-    void isNvidiaControlPanelInstalled()
-      .then(installed => { if (!disposed) setControlPanelInstalled(installed); })
-      .catch(() => {
-        if (!disposed) {
-          setControlPanelInstalled(null);
-          setControlPanelCheckFailed(true);
-        }
-      });
-    return () => { disposed = true; };
-  }, []);
   const runProTool = async (label: string) => {
     const id = "OpenMsiUtilityPro";
     if (!isPro || !isNative() || proToolBusy) return;
@@ -509,8 +490,7 @@ export default function Nvidia() {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">
             These tools are server-authorized one-use actions and run only the verified files bundled with the Windows app.
-            The verified performance preset contains 12 authoritative global settings; dynamic display/GPU choices,
-            shader-cache defaults, and VRSS are intentionally omitted. Profile Inspector exit status is reported without claiming driver readback.
+            The verified performance preset resets unlisted global settings to NVIDIA defaults, imports 12 curated settings, and verifies the driver export. Digital Vibrance is set to 80% and read back on supported displays; dynamic GPU selection stays at the driver default.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
@@ -519,16 +499,7 @@ export default function Nvidia() {
               </Button>
                           </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
-          {controlPanelInstalled === false && isNative() && <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">NVIDIA Control Panel is not installed. Preset import is disabled on this PC.</p>}
-          <Button size="sm" variant="outline" className="mt-3 text-xs" onClick={() => {
-            setControlPanelInstalled(null);
-            setControlPanelCheckFailed(false);
-            void isNvidiaControlPanelInstalled().then(setControlPanelInstalled).catch(() => setControlPanelCheckFailed(true));
-          }} disabled={!isNative()} data-testid="button-retry-nvidia-detection">Retry NVIDIA Control Panel detection</Button>
-          {controlPanelInstalled === null && isNative() && (controlPanelCheckFailed
-            ? <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[.04] px-3 py-2 text-[11px] text-amber-200">Could not verify NVIDIA Control Panel installation. Preset import remains disabled; retry after restarting the app.</p>
-            : <p className="mt-3 text-[11px] text-zinc-500">Checking NVIDIA Control Panel installation…</p>)}
-                    <p className="mt-3 text-[11px] text-amber-300">
+          <p className="mt-3 text-[11px] text-amber-300">
             On supported single-NVIDIA topologies, select only the active graphics card, check MSI, choose High, then Apply in MSI Utility v3. Hybrid and multi-GPU systems stay blocked; driver updates reset this setting.
           </p>
         </section>

@@ -9,7 +9,7 @@ import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { useLiveStats } from "@/hooks/use-live-stats";
-import { scanHardware, isNative, onFileDrop, readTauriTextFile, isNvidiaControlPanelInstalled } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -27,7 +27,6 @@ import { useProStatus } from "@/lib/pro-status";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import {
   queueTweakBatch,
-  NVIDIA_PRESET_ACTION_ID,
   readNativeTweakRun,
   subscribeNativeTweakRun,
   type NativeTweakRunState,
@@ -402,7 +401,6 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 
 // ── Smart Recs Breakdown Panel ────────────────────────────────────────────────
 const _expertIdSet = new Set(TWEAK_REGISTRY.filter(t => t.safety === "expert").map(t => t.id));
-const NVIDIA_PRESET_REVERIFY_KEY = "optigods-nvidia-preset-reverify-v5.2.48";
 
 function SmartRecsBreakdown() {
   const hw = useHardwareInfo();
@@ -412,25 +410,6 @@ function SmartRecsBreakdown() {
   const { toast } = useToast();
   const isPro = useProStatus();
   const native = isNative();
-  const nvidiaGpuCount = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length;
-  const [nvidiaControlPanelInstalled, setNvidiaControlPanelInstalled] = useState<boolean | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    if (!native || nvidiaGpuCount === 0) {
-      setNvidiaControlPanelInstalled(false);
-      return () => { mounted = false; };
-    }
-    setNvidiaControlPanelInstalled(null);
-    void isNvidiaControlPanelInstalled()
-      .then(installed => { if (mounted) setNvidiaControlPanelInstalled(installed); })
-      .catch(() => { if (mounted) setNvidiaControlPanelInstalled(false); });
-    return () => { mounted = false; };
-  }, [native, nvidiaGpuCount]);
-  const nvidiaPresetEligible = native && isPro && hw.scanned && nvidiaGpuCount === 1 && !hw.isHybridGpu && nvidiaControlPanelInstalled === true;
-  const [nvidiaPresetReverifyQueued, setNvidiaPresetReverifyQueued] = useState(() => {
-    try { return localStorage.getItem(NVIDIA_PRESET_REVERIFY_KEY) === "queued"; } catch { return false; }
-  });
-  const nvidiaPresetReverifyPending = nvidiaPresetEligible && !nvidiaPresetReverifyQueued;
   const [applied, setApplied] = useState(false);
   const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
   const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
@@ -438,8 +417,8 @@ function SmartRecsBreakdown() {
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
 
   const safeIds = getEligibleSmartRecommendationIds(
-    [...Array.from(recs.ids), NVIDIA_PRESET_ACTION_ID],
-    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
+    recs.ids,
+    id => getTweakCompatibility(id).ok,
   );
   const total = safeIds.length;
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
@@ -462,8 +441,6 @@ function SmartRecsBreakdown() {
   const latestRunAppliedIds = new Set(
     lastNativeRun?.items.filter(item => item.status === "applied").map(item => item.id) ?? [],
   );
-  const nvidiaPresetSubmissionRecorded = native
-    && (confirmedAppliedState[NVIDIA_PRESET_ACTION_ID] || latestRunAppliedIds.has(NVIDIA_PRESET_ACTION_ID));
   const latestRunSkippedIds = new Set(
     lastNativeRun?.items.filter(item => item.status === "skipped" && safeIds.includes(item.id)).map(item => item.id) ?? [],
   );
@@ -481,7 +458,6 @@ function SmartRecsBreakdown() {
   const actionIds = Array.from(new Set([
     ...missingSafeIds,
     ...failedRunIds,
-    ...(nvidiaPresetReverifyPending ? [NVIDIA_PRESET_ACTION_ID] : []),
   ]));
 
   useEffect(() => {
@@ -522,16 +498,7 @@ function SmartRecsBreakdown() {
       }
       if (actionIds.length === 0) return;
       if (isPro) playOptimizationActionSound();
-      queueTweakBatch(actionIds, {
-        forceReapplyIds: Array.from(new Set([
-          ...failedRunIds,
-          ...(nvidiaPresetReverifyPending ? [NVIDIA_PRESET_ACTION_ID] : []),
-        ])),
-      });
-      if (nvidiaPresetReverifyPending) {
-        try { localStorage.setItem(NVIDIA_PRESET_REVERIFY_KEY, "queued"); } catch { /* queue remains available in this session */ }
-        setNvidiaPresetReverifyQueued(true);
-      }
+      queueTweakBatch(actionIds, { forceReapplyIds: failedRunIds });
       setApplied(true);
       window.location.assign("/applied-tweaks?run=1");
     } catch (error) {
@@ -574,7 +541,7 @@ function SmartRecsBreakdown() {
             : native && nativeAppliedStateError
               ? <><AlertTriangle className="w-4 h-4" /> Applied state unavailable</>
               : actionIds.length === 0
-                ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} {native && nvidiaPresetSubmissionRecorded ? "actions recorded" : native ? "tweaks confirmed applied" : "selected"}{native && latestRunSkippedIds.size > 0 ? ` · ${latestRunSkippedIds.size} skipped` : ""}</>
+                ? <><CheckCircle2 className="w-4 h-4" /> {alreadyOnCount} {native ? "tweaks confirmed applied" : "selected"}{native && latestRunSkippedIds.size > 0 ? ` · ${latestRunSkippedIds.size} skipped` : ""}</>
             : applied
               ? <><CheckCircle2 className="w-4 h-4" /> Applied!</>
               : <>
@@ -582,17 +549,13 @@ function SmartRecsBreakdown() {
                   <span>
                     {missingSafeIds.length > 0
                       ? `Apply ${missingSafeIds.length} missing tweaks`
-                      : nvidiaPresetReverifyPending ? "Reapply NVIDIA preset for verification" : `Retry ${failedRunIds.length} failed tweaks`}
+                      : `Retry ${failedRunIds.length} failed tweaks`}
                     {missingSafeIds.length > 0 && failedRunIds.length > 0
                       ? ` · Retry ${failedRunIds.length} failed`
                       : ""}
-                    {missingSafeIds.length > 0 && nvidiaPresetReverifyPending ? " · Reverify NVIDIA preset" : ""}
                   </span>
                 </>}
         </button>
-        {native && nvidiaPresetSubmissionRecorded && (
-          <p data-testid="note-nvidia-profile-submitted" className="text-center text-[10px] text-zinc-500">v5.2.48 requeues this preset once; a successful run requires profile and Digital Vibrance driver readback.</p>
-        )}
         {overallFailedRunCount > failedRunIds.length && (
           <p className="text-center text-[10px] text-zinc-500">
             {failedRunIds.length} of {overallFailedRunCount} failed items belong to this AI recommendation set. Review Applied Tweaks for the complete run.
@@ -613,7 +576,7 @@ function SmartRecsBreakdown() {
               ? "Could not verify applied tweaks, so the missing count is unavailable."
               : missingSafeIds.length > 0
                 ? `${missingSafeIds.length} recommendations remain unapplied.${failedRunIds.length > 0 ? ` ${failedRunIds.length} failed in the last run and can be retried above.` : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`
-                : `${alreadyOnCount} recommended actions are recorded complete.${nvidiaPresetSubmissionRecorded ? " v5.2.48 requeues the NVIDIA preset once and records success only after driver readback." : ""}${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`}
+                : `${alreadyOnCount} recommended tweaks are confirmed applied.${latestRunSkippedIds.size > 0 ? ` ${latestRunSkippedIds.size} incompatible tweaks were skipped without changes.` : ""}`}
         </div>
       )}
 

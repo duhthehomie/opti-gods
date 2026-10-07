@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
-import { countTweakRunItemsWithStatus, type TweakRunTab } from "@/lib/tweak-run-outcome";
+import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, type TweakRunTab } from "@/lib/tweak-run-outcome";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import {
   isNativeTweakRunStuck,
@@ -251,6 +251,9 @@ export default function AppliedTweaksPage() {
   const [batchUndoing, setBatchUndoing] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
   const [scriptRunningId, setScriptRunningId] = useState<string | null>(null);
+  const [scriptBatchRunning, setScriptBatchRunning] = useState(false);
+  const [scriptBatchProgress, setScriptBatchProgress] = useState(0);
+  const [scriptBatchTotal, setScriptBatchTotal] = useState(0);
   const [recoveringStuckRun, setRecoveringStuckRun] = useState(false);
   const [runClock, setRunClock] = useState(Date.now());
   const [running, setRunning] = useState(false);
@@ -519,6 +522,11 @@ export default function AppliedTweaksPage() {
       window.setTimeout(() => runResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
     }
   };
+  const compatibleScriptRetryIds = getCompatibleScriptRetryIds(
+    runItems,
+    id => Boolean(getTweakMeta(id)) && isScriptOnlyTweakId(id),
+    id => getTweakCompatibility(id).ok,
+  );
   const retryableFailedIds = Array.from(new Set(
     failedIds.filter(id => {
       const item = runItems.find(candidate => candidate.id === id);
@@ -534,7 +542,7 @@ export default function AppliedTweaksPage() {
     }
   };
   const rerunIds = async (idsToRun: string[], title: string, forceReapply = false) => {
-    if (runActive || !idsToRun.length) return;
+    if (runActive || scriptBatchRunning || scriptRunningId || !idsToRun.length) return;
     setRunTab("all");
     setRunFinished(false);
     setRunHadFailures(false);
@@ -562,7 +570,7 @@ export default function AppliedTweaksPage() {
   const rerunQueued = () => rerunIds(queuedIds, "Queued tweaks reapplied");
   const rerunFailed = () => rerunIds(retryableFailedIds, "Failed tweaks reapplied", true);
   const retryStuck = async () => {
-    if (recoveringStuckRun) return;
+    if (recoveringStuckRun || scriptBatchRunning || scriptRunningId) return;
     setRecoveringStuckRun(true);
     try {
       const current = readNativeTweakRun();
@@ -589,11 +597,20 @@ export default function AppliedTweaksPage() {
       setRecoveringStuckRun(false);
     }
   };
-  const runScript = async (id: string) => {
-    if (scriptRunningId || runActive || batchUndoing) return;
+  const runScript = async (id: string, options: { fromBulk?: boolean; silent?: boolean } = {}): Promise<boolean> => {
+    if ((!options.fromBulk && (scriptRunningId || scriptBatchRunning)) || runActive || batchUndoing) return false;
+    if (!isNative()) {
+      if (!options.silent) toast({ title: "Windows app required", description: "Open Opti Gods for Windows to run trusted scripts in the app." });
+      return false;
+    }
     if (!allowance?.pro) {
-      toast({ title: "Pro required", description: "Running a PowerShell tweak in the app requires Pro. This does not use the free instant-apply allowance." });
-      return;
+      if (!options.silent) toast({ title: "Pro required", description: "Running a PowerShell tweak in the app requires Pro. This does not use the free instant-apply allowance." });
+      return false;
+    }
+    const compatibility = getTweakCompatibility(id);
+    if (!getTweakMeta(id) || !isScriptOnlyTweakId(id) || !compatibility.ok) {
+      recordScriptTweakResult(id, "skipped", `Skipped: ${compatibility.reason || "No compatible trusted script is available."}`);
+      return false;
     }
     setScriptRunningId(id);
     setRunTab("all");
@@ -604,23 +621,60 @@ export default function AppliedTweaksPage() {
       });
       recordScriptTweakResult(id, "applied", message);
       await refreshAppliedState();
-      toast({ title: "Script completed", description: `${message} The tweak was marked applied only after Windows confirmed success.`, variant: "success" });
+      if (!options.silent) toast({ title: "Script completed", description: `${message} The tweak was marked applied only after Windows confirmed success.`, variant: "success" });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "PowerShell did not confirm success.";
       const skipped = message.startsWith("Skipped:");
       recordScriptTweakResult(id, skipped ? "skipped" : "failed", message);
-      toast({
+      if (!options.silent) toast({
         title: skipped ? "Script skipped" : "Script did not complete",
         description: message,
         variant: skipped ? "default" : "destructive",
       });
+      return false;
     } finally {
       setScriptRunningId(null);
       await refreshAppliedState().catch(() => {});
     }
   };
+  const runCompatibleScripts = async () => {
+    const ids = [...compatibleScriptRetryIds];
+    if (!isNative() || !allowance?.pro) {
+      toast({
+        title: !isNative() ? "Windows app required" : "Pro required",
+        description: !isNative()
+          ? "Open Opti Gods for Windows to run trusted scripts in the app."
+          : "Running trusted PowerShell scripts requires Pro and does not use free instant-apply credits.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (scriptBatchRunning || scriptRunningId || runActive || batchUndoing || ids.length === 0) return;
+    if (!window.confirm(`Run ${ids.length} hardware-compatible script-backed tweaks that were skipped or failed?`)) return;
+    setScriptBatchRunning(true);
+    setScriptBatchTotal(ids.length);
+    setScriptBatchProgress(0);
+    let confirmed = 0;
+    let notConfirmed = 0;
+    try {
+      for (let index = 0; index < ids.length; index++) {
+        if (await runScript(ids[index], { fromBulk: true, silent: true })) confirmed++;
+        else notConfirmed++;
+        setScriptBatchProgress(index + 1);
+      }
+      toast({
+        title: "Compatible script run complete",
+        description: `${confirmed} confirmed by Windows${notConfirmed ? `; ${notConfirmed} were not confirmed and remain in the results` : "."}`,
+        variant: notConfirmed ? "destructive" : "success",
+      });
+    } finally {
+      setScriptBatchRunning(false);
+      setScriptBatchProgress(0);
+    }
+  };
   const reapply = async (id: string) => {
-    if (runActive || reapplying || !isNative()) return;
+    if (runActive || reapplying || scriptBatchRunning || scriptRunningId || !isNative()) return;
     setReapplying(id);
     setRunTab("all");
     setRunFinished(false);
@@ -661,6 +715,7 @@ export default function AppliedTweaksPage() {
     .map(([id]) => id)
     .sort((a, b) => (getTweakMeta(a)?.title || a).localeCompare(getTweakMeta(b)?.title || b));
   const undo = async (id: string, quiet = false): Promise<UndoOutcome> => {
+    if (scriptBatchRunning || scriptRunningId) return "unavailable";
     setUndoing(id);
     try {
       if (!isNative()) {
@@ -709,7 +764,7 @@ export default function AppliedTweaksPage() {
     finally { setUndoing(null); }
   };
   const undoSelected = async (requestedIds = Array.from(selected)) => {
-    if (!requestedIds.length || batchUndoing) return;
+    if (!requestedIds.length || batchUndoing || scriptBatchRunning || scriptRunningId) return;
     setBatchUndoing(true);
     let nativeUndone = 0;
     let scripts = 0;
@@ -787,10 +842,17 @@ export default function AppliedTweaksPage() {
          </div>
          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900"><div className="h-full bg-gradient-to-r from-red-600 to-emerald-500 transition-all duration-300" style={{ width: `${Math.round((runItems.filter(item => item.status === "applied" || item.status === "skipped" || item.status === "failed" || item.status === "stopped").length / runItems.length) * 100)}%` }} /></div>
       </div>
-       <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+       <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-3 py-2">
          <button onClick={() => setRunTab("all")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "all" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>All ({runItems.length})</button>
           <button onClick={() => setRunTab("failed")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "failed" ? "bg-red-500/15 text-red-300" : "text-zinc-500 hover:text-zinc-200")}>Failed ({runItems.filter(item => item.status === "failed").length})</button>
           <button onClick={() => setRunTab("skipped")} className={cn("rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", runTab === "skipped" ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-200")}>Skipped ({skippedRunCount})</button>
+          {(scriptBatchRunning || compatibleScriptRetryIds.length > 0) && <button
+            data-testid="button-run-compatible-scripts"
+            onClick={() => void runCompatibleScripts()}
+            disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || scriptBatchRunning || runActive || batchUndoing}
+            title={!isNative() ? "Open the Windows app to run trusted scripts." : !allowance?.pro ? "Pro is required; this does not use free instant-apply credits." : "Runs only hardware-compatible script-backed skipped or failed tweaks."}
+            className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >{scriptBatchRunning ? `Running scripts ${scriptBatchProgress}/${scriptBatchTotal}` : `Run compatible scripts (${compatibleScriptRetryIds.length})`}</button>}
        </div>
          <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
              {orderedRunItems.filter(item => runTab === "all" || item.status === runTab).map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
@@ -800,7 +862,7 @@ export default function AppliedTweaksPage() {
             {isScriptOnlyTweakId(item.id) && compatibility.ok && (item.status === "skipped" || item.status === "failed") && <button
               data-testid={"button-run-script-" + item.id}
               onClick={() => void runScript(item.id)}
-              disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || runActive || batchUndoing}
+              disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || scriptBatchRunning || runActive || batchUndoing}
               title={!allowance?.pro ? "Pro is required; this action does not use free instant-apply credits." : "Run the trusted PowerShell script for this tweak."}
               className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
             >{scriptRunningId === item.id ? "Running…" : "Run Script"}</button>}

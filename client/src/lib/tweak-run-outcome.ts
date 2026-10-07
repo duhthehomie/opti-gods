@@ -1,5 +1,16 @@
 export type TweakRunTab = "all" | "failed" | "skipped";
 
+export function getCompatibleScriptRetryIds(
+  items: readonly { id: string; status: string }[],
+  hasTrustedScript: (id: string) => boolean,
+  isCompatible: (id: string) => boolean,
+): string[] {
+  return Array.from(new Set(items
+    .filter(item => (item.status === "skipped" || item.status === "failed")
+      && hasTrustedScript(item.id) && isCompatible(item.id))
+    .map(item => item.id)));
+}
+
 export function getCompatibilitySkipMessage(
   errorKind: string | null | undefined,
   message: string | null | undefined,
