@@ -60,6 +60,9 @@
     "allow-save-diagnostic-log",
     "allow-repair-nvidia-control-panel",
     "allow-repair-privacy-spool",
-    "allow-read-v5-diagnostic-log"
+    "allow-read-v5-diagnostic-log",
+    "allow-cancel-nvidia-preset-import",
+    "allow-reset-nvidia-preset-import-cancel",
+    "allow-run-script-tweak"
   ]
 }
