@@ -1,4 +1,4 @@
 {
-  "version": "5.2.49",
-  "notes": "V5.2.49 — resets unlisted global NVIDIA settings to driver defaults, verifies 12 curated settings and Digital Vibrance at 80% on supported displays, and queues the Pro preset once through Full Optimize; adds bulk retry for hardware-compatible script-backed skipped or failed tweaks."
+  "version": "5.2.50",
+  "notes": "V5.2.50 — resets unlisted global NVIDIA settings to driver defaults, verifies 12 curated settings and Digital Vibrance at 85% on supported displays, and queues the Pro preset once through Full Optimize; adds bulk retry for hardware-compatible script-backed skipped or failed tweaks."
 }

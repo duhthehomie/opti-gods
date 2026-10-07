@@ -291,17 +291,17 @@ mod digital_vibrance_tests {
     use super::dvc_level_for_percent;
 
     #[test]
-    fn maps_80_percent_to_the_reported_driver_range() {
-        assert_eq!(dvc_level_for_percent(0, 100, 80).unwrap(), 80);
-        assert_eq!(dvc_level_for_percent(0, 60, 80).unwrap(), 48);
-        assert_eq!(dvc_level_for_percent(0, 63, 80).unwrap(), 50);
-        assert_eq!(dvc_level_for_percent(10, 110, 80).unwrap(), 90);
+    fn maps_85_percent_to_the_reported_driver_range() {
+        assert_eq!(dvc_level_for_percent(0, 100, 85).unwrap(), 85);
+        assert_eq!(dvc_level_for_percent(0, 60, 85).unwrap(), 51);
+        assert_eq!(dvc_level_for_percent(0, 63, 85).unwrap(), 54);
+        assert_eq!(dvc_level_for_percent(10, 110, 85).unwrap(), 95);
     }
 
     #[test]
     fn rejects_invalid_driver_ranges() {
-        assert!(dvc_level_for_percent(10, 10, 80).is_err());
-        assert!(dvc_level_for_percent(20, 10, 80).is_err());
+        assert!(dvc_level_for_percent(10, 10, 85).is_err());
+        assert!(dvc_level_for_percent(20, 10, 85).is_err());
         assert!(dvc_level_for_percent(0, 100, 101).is_err());
     }
 }
@@ -502,7 +502,7 @@ fn rollback_dvc_with_handles(
 }
 
 #[cfg(windows)]
-fn set_nvidia_digital_vibrance_80() -> Result<NvidiaDvcApplySummary, String> {
+fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
     let api = NvApiLibrary::load()?;
     let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
     let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
@@ -531,7 +531,7 @@ fn set_nvidia_digital_vibrance_80() -> Result<NvidiaDvcApplySummary, String> {
         if get_status != 0 {
             return Err(format!("Could not read Digital Vibrance on NVIDIA display {} (NVAPI status {get_status}). No display was changed.", display_index + 1));
         }
-        let target_level = dvc_level_for_percent(info.min_level, info.max_level, 80)?;
+        let target_level = dvc_level_for_percent(info.min_level, info.max_level, 85)?;
         if info.current_level < info.min_level || info.current_level > info.max_level {
             return Err(format!("NVIDIA display {} returned an out-of-range Digital Vibrance value. No display was changed.", display_index + 1));
         }
@@ -550,16 +550,16 @@ fn set_nvidia_digital_vibrance_80() -> Result<NvidiaDvcApplySummary, String> {
             if set_status != 0 {
                 let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
                 let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
-                return Err(format!("Could not set Digital Vibrance to 80% on NVIDIA display {} (NVAPI status {set_status}).{suffix}", display.display_index + 1));
+                return Err(format!("Could not set Digital Vibrance to 85% on NVIDIA display {} (NVAPI status {set_status}).{suffix}", display.display_index + 1));
             }
         }
         let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
         let verify_status = unsafe { get_dvc(display.handle, 0, &mut verify) };
-        let verified_target = dvc_level_for_percent(verify.min_level, verify.max_level, 80).ok();
+        let verified_target = dvc_level_for_percent(verify.min_level, verify.max_level, 85).ok();
         if verify_status != 0 || verify.current_level != display.target_level || verified_target != Some(display.target_level) {
             let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
             let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
-            return Err(format!("Digital Vibrance 80% readback failed on NVIDIA display {} (reported level {} in range {}-{}, NVAPI status {verify_status}).{suffix}", display.display_index + 1, verify.current_level, verify.min_level, verify.max_level));
+            return Err(format!("Digital Vibrance 85% readback failed on NVIDIA display {} (reported level {} in range {}-{}, NVAPI status {verify_status}).{suffix}", display.display_index + 1, verify.current_level, verify.min_level, verify.max_level));
         }
         verified_levels.push((display.display_index, verify.current_level, verify.min_level, verify.max_level));
     }
@@ -715,7 +715,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 return Err(format!("The verified NVIDIA preset contains {expected_count} global settings; expected 12."));
             }
             let original_profile = export_customized_nvidia_profile(&inspector_dir).await?;
-            let dvc = set_nvidia_digital_vibrance_80()?;
+            let dvc = set_nvidia_digital_vibrance_85()?;
             let mut reset_attempted = false;
             let profile_result: Result<usize, String> = async {
                 reset_attempted = true;
@@ -796,7 +796,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 .join(", ");
             let monitor_label = if dvc.supported_display_count == 1 { "monitor" } else { "monitors" };
             Ok::<String, String>(format!(
-                "Verified performance preset: {verified_setting_count}/12 global 3D settings matched the NVIDIA driver export; Digital Vibrance at 80% was read back on {} supported NVIDIA {} [{}].{} Unlisted global settings were reset to NVIDIA defaults; OpenGL GPU selection and Fixed Refresh were left at driver defaults. PhysX processor selection is a separate control and was not changed by this profile.",
+                "Verified performance preset: {verified_setting_count}/12 global 3D settings matched the NVIDIA driver export; Digital Vibrance at 85% was read back on {} supported NVIDIA {} [{}].{} Unlisted global settings were reset to NVIDIA defaults; OpenGL GPU selection and Fixed Refresh were left at driver defaults. PhysX processor selection is a separate control and was not changed by this profile.",
                 dvc.supported_display_count,
                 monitor_label,
                 dvc_readback,

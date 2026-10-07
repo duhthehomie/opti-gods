@@ -103,7 +103,7 @@ const NVIDIA_TWEAKS = [
   {
     id: "NvidiaControlPanelSettings",
     title: "Opti Gods NVIDIA Control Panel Preset",
-    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 80% on supported NVIDIA displays.",
+    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 85% on supported NVIDIA displays.",
     badge: "RECOMMENDED",
     impact: "HIGH" as const,
   },
@@ -490,7 +490,7 @@ export default function Nvidia() {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">
             These tools are server-authorized one-use actions and run only the verified files bundled with the Windows app.
-            The verified performance preset resets unlisted global settings to NVIDIA defaults, imports 12 curated settings, and verifies the driver export. Digital Vibrance is set to 80% and read back on supported displays; dynamic GPU selection stays at the driver default.
+            The verified performance preset resets unlisted global settings to NVIDIA defaults, imports 12 curated settings, and verifies the driver export. Digital Vibrance is set to 85% and read back on supported displays; dynamic GPU selection stays at the driver default.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
