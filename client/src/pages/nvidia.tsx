@@ -104,7 +104,7 @@ const NVIDIA_TWEAKS = [
   {
     id: "NvidiaControlPanelSettings",
     title: "Opti Gods NVIDIA Control Panel Preset",
-    desc: "Pro-only. Requires exactly one dedicated, non-hybrid NVIDIA GPU and NVIDIA Control Panel. Sets standard Digital Vibrance to 85%; the driver does not expose safe value readback, so completion means submitted, not verified.",
+    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 85% on supported NVIDIA displays.",
     badge: "RECOMMENDED",
     impact: "HIGH" as const,
   },
