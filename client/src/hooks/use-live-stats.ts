@@ -17,6 +17,8 @@ export interface LiveStats {
   ramPct: number;
   cpuTemp: number | null;
   gpuTemp: number | null;
+  cpuTempSource: "live" | "imported" | null;
+  gpuTempSource: "live" | "imported" | null;
   cpuHistory: number[];
   gpuHistory: number[];
   isLive: boolean;
@@ -33,6 +35,21 @@ interface HwLiveResponse {
   ram_used_pct?: number;
   cpu_temp_c?: number | null;
   gpu_temp_c?: number | null;
+}
+
+function readImportedSensorTemps(): { cpuTemp: number | null; gpuTemp: number | null } {
+  try {
+    const raw = localStorage.getItem("optigods-hwmonitor-data");
+    if (!raw) return { cpuTemp: null, gpuTemp: null };
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const read = (value: unknown): number | null => {
+      const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+      return Number.isFinite(number) && number > 5 && number < 130 ? number : null;
+    };
+    return { cpuTemp: read(data.cpu_temp_c), gpuTemp: read(data.gpu_temp_c) };
+  } catch {
+    return { cpuTemp: null, gpuTemp: null };
+  }
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -62,6 +79,8 @@ export function useLiveStats(ramGB: number): LiveStats {
     ramPct:     0,
     cpuTemp:    null,
     gpuTemp:    null,
+    cpuTempSource: null,
+    gpuTempSource: null,
     cpuHistory: cpuHistRef.current,
     gpuHistory: gpuHistRef.current,
     isLive:     false,
@@ -117,14 +136,19 @@ export function useLiveStats(ramGB: number): LiveStats {
         cpuHistRef.current.shift(); cpuHistRef.current.push(cpu);
         gpuHistRef.current.shift(); gpuHistRef.current.push(gpu);
 
+        const importedTemps = readImportedSensorTemps();
+        const cpuTemp = realData.cpu_temp_c ?? importedTemps.cpuTemp;
+        const gpuTemp = realData.gpu_temp_c ?? importedTemps.gpuTemp;
         const snap: LiveStats = {
           cpuUsage:   Math.round(cpu),
           gpuUsage:   Math.round(gpu),
           ramUsedGB:  Math.round(ramUsed * 10) / 10,
           ramTotalGB: ramTotal,
           ramPct:     Math.round(ramPct),
-          cpuTemp:    realData.cpu_temp_c ?? null,
-          gpuTemp:    realData.gpu_temp_c ?? null,
+          cpuTemp,
+          gpuTemp,
+          cpuTempSource: realData.cpu_temp_c != null ? "live" : importedTemps.cpuTemp != null ? "imported" : null,
+          gpuTempSource: realData.gpu_temp_c != null ? "live" : importedTemps.gpuTemp != null ? "imported" : null,
           cpuHistory: [...cpuHistRef.current],
           gpuHistory: [...gpuHistRef.current],
           isLive:     true,
@@ -135,22 +159,32 @@ export function useLiveStats(ramGB: number): LiveStats {
         return;
       }
 
-      // No fresh data — if we have a previous snapshot, show it frozen (isStale)
+      const importedTemps = readImportedSensorTemps();
       if (lastRealRef.current) {
-        setStats({ ...lastRealRef.current, isLive: true, isStale: true });
+        const previous = lastRealRef.current;
+        setStats({
+          ...previous,
+          cpuTemp: importedTemps.cpuTemp ?? previous.cpuTemp,
+          gpuTemp: importedTemps.gpuTemp ?? previous.gpuTemp,
+          cpuTempSource: importedTemps.cpuTemp != null ? "imported" : previous.cpuTempSource,
+          gpuTempSource: importedTemps.gpuTemp != null ? "imported" : previous.gpuTempSource,
+          isLive: true,
+          isStale: true,
+        });
         return;
       }
 
-      // Never invent system telemetry. Keep the last real reading frozen, or
-      // show an explicit zero/unknown state until a monitor is available.
+      // Never invent system telemetry. Imported temperatures are snapshots, not live readings.
       setStats({
         cpuUsage: 0,
         gpuUsage: 0,
         ramUsedGB: 0,
         ramTotalGB: totalRAM,
         ramPct: 0,
-        cpuTemp:    null,
-        gpuTemp:    null,
+        cpuTemp: importedTemps.cpuTemp,
+        gpuTemp: importedTemps.gpuTemp,
+        cpuTempSource: importedTemps.cpuTemp != null ? "imported" : null,
+        gpuTempSource: importedTemps.gpuTemp != null ? "imported" : null,
         cpuHistory: Array(30).fill(0),
         gpuHistory: Array(30).fill(0),
         isLive:     false,
@@ -158,7 +192,7 @@ export function useLiveStats(ramGB: number): LiveStats {
       });
     };
 
-    const id = setInterval(tick, 2000);
+    const id = setInterval(tick, 5000);
     tick();
     return () => { cancelled = true; clearInterval(id); };
   }, [totalRAM]);

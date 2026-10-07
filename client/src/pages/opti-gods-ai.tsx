@@ -898,13 +898,13 @@ export default function OptiGodsAI() {
 
         <div className="mx-4 mt-3 grid grid-cols-2 gap-2 shrink-0">
           {[
-            { label: "CPU Temp", value: live.cpuTemp, icon: Cpu },
-            { label: "GPU Temp", value: live.gpuTemp, icon: Thermometer },
-          ].map(({ label, value, icon: Icon }) => (
+            { label: "CPU Temp", value: live.cpuTemp, source: live.cpuTempSource, icon: Cpu },
+            { label: "GPU Temp", value: live.gpuTemp, source: live.gpuTempSource, icon: Thermometer },
+          ].map(({ label, value, source, icon: Icon }) => (
             <div key={label} className="rounded-xl border border-white/8 bg-zinc-900/50 px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-500"><Icon className="h-3 w-3" />{label}</span>
-                <span className={cn("text-[9px] font-bold", live.isLive ? "text-emerald-400" : "text-zinc-600")}>{live.isStale ? "STALE" : live.isLive ? "LIVE" : "NO SENSOR"}</span>
+                <span className={cn("text-[9px] font-bold", source === "imported" ? "text-amber-400" : source === "live" && !live.isStale ? "text-emerald-400" : "text-zinc-600")}>{source === "imported" ? "SAVED" : live.isStale && source === "live" ? "STALE" : source === "live" ? "LIVE" : "NO SENSOR"}</span>
               </div>
               <p className={cn("mt-1 font-mono text-lg font-black", value == null ? "text-zinc-600" : value < 60 ? "text-emerald-400" : value < 80 ? "text-amber-400" : "text-red-400")}>
                 {value == null ? "—" : `${Math.round(value)}°C`}

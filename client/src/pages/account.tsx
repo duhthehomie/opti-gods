@@ -3,8 +3,27 @@ import { SiDiscord } from "react-icons/si";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
 import { useVersionInfo } from "@/hooks/use-auth";
+import { APP_VERSION } from "@/generated/version";
+import { Link } from "wouter";
 import { isNative } from "@/lib/tauri-bridge";
 import { Button } from "@/components/ui/button";
+
+function isNewerVersion(candidate: string, current: string): boolean {
+  const parse = (value: string): number[] | null => {
+    const parts = value.replace(/^v/i, "").split(".");
+    if (parts.length < 2 || parts.some(part => part.length === 0 || Array.from(part).some(ch => ch < "0" || ch > "9"))) return null;
+    return parts.map(Number);
+  };
+  const next = parse(candidate);
+  const installed = parse(current);
+  if (!next || !installed) return false;
+  for (let i = 0; i < Math.max(next.length, installed.length); i++) {
+    const a = next[i] ?? 0;
+    const b = installed[i] ?? 0;
+    if (a !== b) return a > b;
+  }
+  return false;
+}
 
 export default function AccountPage() {
   const { user, isAuthenticated } = useAuth();
@@ -67,7 +86,8 @@ export default function AccountPage() {
             </div>
             <div>
               <p className="text-sm font-bold text-white">Guest / Code session</p>
-              <p className="text-xs text-zinc-500">Not linked to a Discord account</p>
+              <p className="text-xs text-zinc-500">Browser sign-in is separate from the Windows app.</p>
+              <Link href="/welcome?returnTo=%2Faccount" className="mt-2 inline-flex rounded-md border border-[#5865F2]/30 bg-[#5865F2]/10 px-2.5 py-1.5 text-[10px] font-bold text-[#9ca8ff] hover:bg-[#5865F2]/20" data-testid="button-account-discord-login">Sign in with Discord in this app</Link>
             </div>
           </div>
         )}
@@ -104,8 +124,8 @@ export default function AccountPage() {
               <div>
                 <p className="text-sm font-bold text-white">App version</p>
                 <p data-testid="text-account-version" className="text-xs text-zinc-500 font-mono">
-                  {versionData?.currentVersion ? `v${versionData.currentVersion}` : "v2.2"}
-                  {versionData?.latestVersion && versionData.latestVersion !== versionData.currentVersion && (
+                  {`v${APP_VERSION}`}
+                  {versionData?.latestVersion && isNewerVersion(versionData.latestVersion, APP_VERSION) && (
                     <span className="ml-2 text-amber-400">→ v{versionData.latestVersion} available</span>
                   )}
                 </p>

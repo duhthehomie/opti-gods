@@ -293,8 +293,8 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 }) {
   const os = useOsDetection();
   const liveStats = useLiveStats(scan.ram_gb || 16);
-  const cpuTemp = liveStats.isStale ? null : liveStats.cpuTemp;
-  const gpuTemp = liveStats.isStale ? null : liveStats.gpuTemp;
+  const cpuTemp = liveStats.cpuTempSource === "imported" ? liveStats.cpuTemp : liveStats.isStale ? null : liveStats.cpuTemp;
+  const gpuTemp = liveStats.gpuTempSource === "imported" ? liveStats.gpuTemp : liveStats.isStale ? null : liveStats.gpuTemp;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
@@ -308,13 +308,13 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
           <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
             sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
           <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
-            sub={gpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No GPU temperature sensor returned a live reading") : "Live GPU temperature · updates automatically"}
+            sub={gpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No GPU temperature sensor returned a live reading") : liveStats.gpuTempSource === "imported" ? "Imported monitor snapshot · not live" : "Live GPU temperature · updates automatically"}
             accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} />
         </div>
         <div className="space-y-2">
           <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
           <Stat icon={Thermometer} label="CPU Temp" value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
-            sub={cpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No CPU package sensor returned a live reading") : "Live CPU temperature · updates automatically"}
+            sub={cpuTemp == null ? (liveStats.isStale ? "Live reading is stale" : "No CPU package sensor returned a live reading") : liveStats.cpuTempSource === "imported" ? "Imported monitor snapshot · not live" : "Live CPU temperature · updates automatically"}
             accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} />
         </div>
         <Stat icon={MemoryStick} label="RAM"
@@ -368,7 +368,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center gap-3">
           <Thermometer className="w-4 h-4 text-zinc-600 shrink-0" />
           <p className="text-[11px] text-zinc-500">
-            Live CPU and GPU temperatures are unavailable from this PC's current firmware and sensor drivers.
+            No live readings are exposed by this PC's current firmware or sensor drivers. Imported monitor readings are shown as saved snapshots.
           </p>
         </div>
       )}

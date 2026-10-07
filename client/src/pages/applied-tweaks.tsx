@@ -57,7 +57,7 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
 
 function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
   const savedScanResult = getTweakCompatibility(item.id);
-  const runtimeLooksIncompatible = item.status === "skipped"
+  const runtimeLooksIncompatible = (item.status === "skipped" && !isScriptOnlyTweakId(item.id))
     || (item.status === "failed"
       && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|multi[- ]gpu|ambiguous display|did not expose|unavailable/i.test(item.message || ""));
   return runtimeLooksIncompatible
@@ -798,6 +798,7 @@ export default function AppliedTweaksPage() {
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{(item.status === "failed" || item.status === "skipped") && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
             <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
             {isScriptOnlyTweakId(item.id) && compatibility.ok && (item.status === "skipped" || item.status === "failed") && <button
+              data-testid={"button-run-script-" + item.id}
               onClick={() => void runScript(item.id)}
               disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || runActive || batchUndoing}
               title={!allowance?.pro ? "Pro is required; this action does not use free instant-apply credits." : "Run the trusted PowerShell script for this tweak."}

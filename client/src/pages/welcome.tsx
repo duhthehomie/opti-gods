@@ -13,6 +13,11 @@ import { beginAuthTransition, clearAuthTransition } from "@/lib/auth-transition"
 
 export const GUEST_MODE_KEY = "og_guest_mode";
 
+function getPostLoginPath(): string {
+  const requested = new URLSearchParams(window.location.search).get("returnTo");
+  return requested && requested.startsWith("/") && !requested.startsWith("//") ? requested : "/tweaks";
+}
+
 type View = "main" | "code";
 
 export default function Welcome() {
@@ -48,7 +53,7 @@ export default function Welcome() {
           const data = await res.json() as { isAuthenticated?: boolean };
           if (data?.isAuthenticated) {
             clearInterval(interval);
-            window.location.href = "/tweaks";
+            window.location.href = getPostLoginPath();
           }
         }
       } catch {
@@ -118,7 +123,7 @@ export default function Welcome() {
           queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] }),
         ]);
         showLoginSuccess("Discord");
-        navigate("/tweaks");
+        navigate(getPostLoginPath());
       } catch (err: unknown) {
         clearAuthTransition();
         const msg = showLoginError(err);

@@ -33,7 +33,10 @@ pub struct HardwareScan {
 pub async fn scan_hardware() -> Result<HardwareScan, String> {
     #[cfg(windows)]
     {
-        crate::win32::wmi_scan::scan().map_err(|e| format!("WMI scan failed: {e:#}"))
+        let result = tokio::task::spawn_blocking(crate::win32::wmi_scan::scan)
+            .await
+            .map_err(|error| format!("WMI scan worker failed: {error}"))?;
+        result.map_err(|error| format!("WMI scan failed: {error:#}"))
     }
     #[cfg(not(windows))]
     {

@@ -56,7 +56,13 @@ pub struct PerformanceRecordingArgs {
 }
 
 #[tauri::command]
-pub fn read_live_performance() -> Result<LivePerformance, String> {
+pub async fn read_live_performance() -> Result<LivePerformance, String> {
+    tokio::task::spawn_blocking(collect_live_performance_blocking)
+        .await
+        .map_err(|error| format!("live performance worker failed: {error}"))?
+}
+
+fn collect_live_performance_blocking() -> Result<LivePerformance, String> {
     #[cfg(windows)]
     {
         let script = r#"
