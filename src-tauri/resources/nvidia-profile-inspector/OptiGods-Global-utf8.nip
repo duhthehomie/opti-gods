@@ -76,6 +76,18 @@
         <SettingValue>2</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Preferred refresh rate</SettingNameInfo>
+        <SettingID>6600001</SettingID>
+        <SettingValue>1</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Monitor Technology - Fixed Refresh</SettingNameInfo>
+        <SettingID>279476687</SettingID>
+        <SettingValue>4</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
     </Settings>
   </Profile>
 </ArrayOfProfile>

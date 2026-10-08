@@ -103,7 +103,7 @@ const NVIDIA_TWEAKS = [
   {
     id: "NvidiaControlPanelSettings",
     title: "Opti Gods NVIDIA Control Panel Preset",
-    desc: "Pro-only. Imports the bundled NVIDIA profile, verifies all 12 global 3D settings against a driver export, and reads back Digital Vibrance 85% on supported NVIDIA displays.",
+    desc: "Pro-only. Verifies all 15 global settings, including Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU selection. Reads Digital Vibrance back at 85% on every active NVIDIA monitor.",
     badge: "RECOMMENDED",
     impact: "HIGH" as const,
   },
@@ -490,7 +490,7 @@ export default function Nvidia() {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">
             These tools are server-authorized one-use actions and run only the verified files bundled with the Windows app.
-            The verified performance preset resets unlisted global settings to NVIDIA defaults, imports 12 curated settings, and verifies the driver export. Digital Vibrance is set to 85% and read back on supported displays; dynamic GPU selection stays at the driver default.
+            The complete preset resets unlisted global settings to NVIDIA defaults and verifies 15 settings, including Highest available refresh rate, Fixed Refresh, and explicit selection of the active NVIDIA GPU. Digital Vibrance is set to 85% on every active NVIDIA-controlled monitor; success shows the verified monitor count. Unsupported outputs or ambiguous GPU selection report an error instead of partial success.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>

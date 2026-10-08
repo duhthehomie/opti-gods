@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
-import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, type TweakRunTab } from "@/lib/tweak-run-outcome";
+import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, getVerifiedNvidiaVibranceMessage, type TweakRunTab } from "@/lib/tweak-run-outcome";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import {
   isNativeTweakRunStuck,
@@ -337,7 +337,7 @@ export default function AppliedTweaksPage() {
                  ? "The run was stopped. Restart your PC before testing the changes that were applied."
                  : skippedCount > 0
                  ? `Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones.${appliedCount > 0 ? " Restart your PC before testing the changes." : ""}`
-                : "Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.",
+                : `${getVerifiedNvidiaVibranceMessage(state.items) ? `${getVerifiedNvidiaVibranceMessage(state.items)}. ` : ""}Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.`,
              variant: failedCount > 0 ? "destructive" : userStoppedRun ? "default" : "success",
          });
        }
@@ -822,6 +822,7 @@ export default function AppliedTweaksPage() {
         {runHadFailures || skippedRunCount > 0 ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
         <div>
           <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : skippedRunCount > 0 ? "Run finished; incompatible items were skipped" : "Run finished successfully"}</p>
+          {getVerifiedNvidiaVibranceMessage(runItems) && <p className="mt-1 font-semibold text-emerald-300" data-testid="nvidia-vibrance-success">{getVerifiedNvidiaVibranceMessage(runItems)}</p>}
           <p className="mt-0.5 text-xs opacity-80">
             {runItems.filter(item => item.status === "applied").length} of {runItems.length} tweaks marked applied.
             {skippedRunCount > 0 ? ` ${skippedRunCount} unsupported item${skippedRunCount === 1 ? " was" : "s were"} skipped without changing Windows.` : ""}
@@ -881,7 +882,7 @@ export default function AppliedTweaksPage() {
        <div className="space-y-2">
          {nvidiaPresetSubmittedAt && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10"><CheckCircle2 className="h-4 w-4 text-blue-300" /></div>
-           <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">Opti Gods NVIDIA Preset</p><p className="text-[11px] text-zinc-400">Submission history is shown separately. A successful v5.2.48 run verifies all 12 global 3D settings against the driver export and reads Digital Vibrance back on supported displays; check the latest run for its result.</p><p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p></div>
+           <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">Opti Gods NVIDIA Preset</p><p className="text-[11px] text-zinc-400">Submission history is shown separately. The complete preset verifies 15 global settings, including Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU selection. Digital Vibrance is read back at 85% on every active NVIDIA monitor; check the latest run for its verified count.</p><p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p></div>
            <span className="text-[10px] font-mono text-blue-300">SUBMITTED · NOT READ BACK</span>
          </div>}
          {ids.length > 0 && <div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>}

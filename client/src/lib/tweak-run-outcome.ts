@@ -1,5 +1,13 @@
 export type TweakRunTab = "all" | "failed" | "skipped";
 
+export function getVerifiedNvidiaVibranceMessage(
+  items: readonly { id: string; status: string; message?: string }[],
+): string | null {
+  const item = items.find(item => item.id === "NvidiaControlPanelSettings" && item.status === "applied");
+  const match = item?.message?.match(/^Digital Vibrance applied \(to ([1-9]\d*) monitors?\) at 85%/);
+  return match?.[0] ?? null;
+}
+
 export function getCompatibleScriptRetryIds(
   items: readonly { id: string; status: string }[],
   hasTrustedScript: (id: string) => boolean,

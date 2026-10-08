@@ -25,7 +25,7 @@ import {
   shouldQueueNvidiaPresetReapplyOnce,
   getNvidiaRecommendationIds,
 } from "../client/src/lib/nvidia-preset-eligibility";
-import { getCompatibilitySkipMessage, getTweakRunItemsForTab, getCompatibleScriptRetryIds } from "../client/src/lib/tweak-run-outcome";
+import { getCompatibilitySkipMessage, getTweakRunItemsForTab, getCompatibleScriptRetryIds, getVerifiedNvidiaVibranceMessage } from "../client/src/lib/tweak-run-outcome";
 
 let passed = 0;
 let failed = 0;
@@ -187,6 +187,13 @@ test("bulk scripts select only unique compatible script-backed failures and skip
   ];
   const scripts = new Set(["script", "failedScript", "blockedScript", "appliedScript", "queuedScript"]);
   assert.deepEqual(getCompatibleScriptRetryIds(items, id => scripts.has(id), id => id !== "blockedScript"), ["script", "failedScript"]);
+});
+
+test("green NVIDIA success text requires confirmed apply and shows the verified monitor count", () => {
+  const message = "Digital Vibrance applied (to 2 monitors) at 85%. Verified 15/15 settings.";
+  assert.equal(getVerifiedNvidiaVibranceMessage([{ id: "NvidiaControlPanelSettings", status: "applied", message }]), "Digital Vibrance applied (to 2 monitors) at 85%");
+  assert.equal(getVerifiedNvidiaVibranceMessage([{ id: "NvidiaControlPanelSettings", status: "failed", message }]), null);
+  assert.equal(getVerifiedNvidiaVibranceMessage([{ id: "NvidiaControlPanelSettings", status: "applied", message: "Submission succeeded; values unverified." }]), null);
 });
 
 test("Smart Recommendations do not re-add conflicting MMCSS writers", () => {

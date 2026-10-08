@@ -4,11 +4,14 @@ use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[path = "nvidia_display.rs"]
+mod nvidia_display;
+
 const MSI_UTILITY_SHA256: &str = "695800afad96f858a3f291b7df21c16649528f13d39b63fb7c233e5676c8df6f";
 const PROFILE_INSPECTOR_SHA256: &str = "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e";
 const PROFILE_REFERENCE_SHA256: &str = "0ea7b055aee5c543047243d2dd7abdd1b8c6d96f5d2b7bb5fe17be8130e005ef";
 const PROFILE_CONFIG_SHA256: &str = "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa";
-const PROFILE_PRESET_SHA256: &str = "7a0014d61cb55ef83aaecff5f575305ae5a79782d609a2828d5a2974cd8a10ff";
+const PROFILE_PRESET_SHA256: &str = "6b4992926dc2ee0182816ba758ce52a836b55f38857dbe04cc3afc61da480cbc";
 const BASE_PROD: &str = "https://optigods.com";
 const MSI_TWEAK_ID: &str = "OpenMsiUtilityPro";
 const PRESET_TWEAK_ID: &str = "ImportNvidiaPresetPro";
@@ -64,7 +67,48 @@ fn nip_numeric_value(raw: &str) -> Result<u64, String> {
     }
 }
 
-fn parse_global_nip_settings(xml: &str) -> Result<std::collections::HashMap<u32, u64>, String> {
+#[derive(Debug, PartialEq, Eq)]
+enum NipValue {
+    Numeric(u64),
+    Text { kind: String, value: String },
+}
+
+impl std::fmt::Display for NipValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Numeric(value) => write!(f, "{value}"),
+            Self::Text { kind, value } => write!(f, "{kind}({value})"),
+        }
+    }
+}
+
+fn xml_escape(value: &str) -> String {
+    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+        .replace('"', "&quot;").replace('\'', "&apos;")
+}
+
+fn xml_unescape(value: &str) -> String {
+    value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+        .replace("&apos;", "'").replace("&amp;", "&")
+}
+
+fn preset_with_explicit_gpu(xml: &str, value: &str) -> Result<String, String> {
+    if parse_global_nip_settings(xml)?.len() != 14 || value.trim().is_empty()
+        || value.eq_ignore_ascii_case("autoselect") {
+        return Err("Explicit NVIDIA GPU selection was not resolved; no settings were changed.".into());
+    }
+    let setting = format!(
+        "<ProfileSetting><SettingNameInfo>OpenGL rendering GPU</SettingNameInfo><SettingID>550564838</SettingID><SettingValue>{}</SettingValue><ValueType>String</ValueType></ProfileSetting></Settings>",
+        xml_escape(value),
+    );
+    let expanded = xml.replacen("</Settings>", &setting, 1);
+    if parse_global_nip_settings(&expanded)?.len() != 15 {
+        return Err("The complete NVIDIA preset must contain 15 settings.".into());
+    }
+    Ok(expanded)
+}
+
+fn parse_global_nip_settings(xml: &str) -> Result<std::collections::HashMap<u32, NipValue>, String> {
     for profile_chunk in xml.split("<Profile>").skip(1) {
         let profile = profile_chunk.split("</Profile>").next().unwrap_or(profile_chunk);
         if nip_tag_value(profile, "ProfileName") != Some("_GLOBAL_DRIVER_PROFILE") {
@@ -77,7 +121,12 @@ fn parse_global_nip_settings(xml: &str) -> Result<std::collections::HashMap<u32,
                 continue;
             };
             let id = id_text.parse::<u32>().map_err(|error| format!("invalid NVIDIA setting ID {id_text}: {error}"))?;
-            let value = nip_numeric_value(value_text)?;
+            let kind = nip_tag_value(setting, "ValueType").unwrap_or("Dword");
+            let value = if matches!(kind, "String" | "AnsiString" | "Binary") {
+                NipValue::Text { kind: kind.into(), value: xml_unescape(value_text) }
+            } else {
+                NipValue::Numeric(nip_numeric_value(value_text)?)
+            };
             if settings.insert(id, value).is_some() {
                 return Err(format!("NVIDIA export contains duplicate global setting ID {id}."));
             }
@@ -104,9 +153,9 @@ fn verify_global_nip_settings(expected_xml: &str, exported_xml: &str) -> Result<
     ids.sort_unstable();
     let mut mismatches = Vec::new();
     for id in ids {
-        let expected_value = expected[&id];
+        let expected_value = &expected[&id];
         match exported.get(&id) {
-            Some(actual_value) if *actual_value == expected_value => {}
+            Some(actual_value) if actual_value == expected_value => {}
             Some(actual_value) => mismatches.push(format!("{id} was {actual_value}, expected {expected_value}")),
             None => mismatches.push(format!("{id} was missing")),
         }
@@ -124,7 +173,7 @@ fn verify_global_nip_settings(expected_xml: &str, exported_xml: &str) -> Result<
 
 #[cfg(test)]
 mod nvidia_profile_readback_tests {
-    use super::{global_profile_backup_xml, verify_global_nip_settings};
+    use super::{global_profile_backup_xml, verify_global_nip_settings, preset_with_explicit_gpu, parse_global_nip_settings, NipValue};
 
     const EXPECTED: &str = r#"<ArrayOfProfile><Profile><ProfileName>_GLOBAL_DRIVER_PROFILE</ProfileName><Settings><ProfileSetting><SettingID>1</SettingID><SettingValue>10</SettingValue></ProfileSetting><ProfileSetting><SettingID>2</SettingID><SettingValue>0</SettingValue></ProfileSetting></Settings></Profile></ArrayOfProfile>"#;
 
@@ -152,6 +201,26 @@ mod nvidia_profile_readback_tests {
         let backup = global_profile_backup_xml(&source).unwrap();
         assert!(!backup.contains("GameProfile"));
         assert_eq!(verify_global_nip_settings(EXPECTED, &backup).unwrap(), 2);
+    }
+
+    #[test]
+    fn complete_preset_includes_refresh_fixed_refresh_and_explicit_gpu() {
+        let static_xml = include_str!("../../resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip");
+        let complete = preset_with_explicit_gpu(static_xml, "driver-GPU<&>value").unwrap();
+        let settings = parse_global_nip_settings(&complete).unwrap();
+        assert_eq!(settings.len(), 15);
+        assert_eq!(settings[&0x0064b541], NipValue::Numeric(1));
+        assert_eq!(settings[&0x10a879cf], NipValue::Numeric(4));
+        assert_eq!(settings[&0x20d0f3e6], NipValue::Text { kind: "String".into(), value: "driver-GPU<&>value".into() });
+        assert_eq!(verify_global_nip_settings(&complete, &complete).unwrap(), 15);
+        assert!(preset_with_explicit_gpu(static_xml, "autoselect").is_err());
+    }
+
+    #[test]
+    fn verifies_gpu_string_and_rejects_different_affinity() {
+        let expected = "<Profile><ProfileName>_GLOBAL_DRIVER_PROFILE</ProfileName><Settings><ProfileSetting><SettingID>550564838</SettingID><SettingValue>driver-GPU-A</SettingValue><ValueType>String</ValueType></ProfileSetting></Settings></Profile>";
+        assert_eq!(verify_global_nip_settings(expected, expected).unwrap(), 1);
+        assert!(verify_global_nip_settings(expected, &expected.replace("driver-GPU-A", "autoselect")).is_err());
     }
 }
 
@@ -450,6 +519,8 @@ fn reset_global_nvidia_profile_to_driver_defaults() -> Result<(), String> {
 #[derive(Clone)]
 struct NvidiaDvcPreviousValue {
     display_index: u32,
+    display_id: u32,
+    output_id: u32,
     level: u32,
 }
 
@@ -464,6 +535,8 @@ struct NvidiaDvcApplySummary {
 #[cfg(windows)]
 struct NvidiaDvcDisplay {
     display_index: u32,
+    display_id: u32,
+    output_id: u32,
     handle: *mut std::ffi::c_void,
     current_level: u32,
     target_level: u32,
@@ -483,17 +556,17 @@ fn dvc_info_version() -> u32 {
 fn rollback_dvc_with_handles(
     set_dvc: NvApiSetDvcLevelFn,
     get_dvc: NvApiGetDvcInfoFn,
-    changes: &[(u32, *mut std::ffi::c_void, u32)],
+    changes: &[(u32, *mut std::ffi::c_void, u32, u32)],
 ) -> Vec<String> {
     let mut failures = Vec::new();
-    for (display_index, handle, previous_level) in changes.iter().rev() {
-        let set_status = unsafe { set_dvc(*handle, 0, *previous_level) };
+    for (display_index, handle, output_id, previous_level) in changes.iter().rev() {
+        let set_status = unsafe { set_dvc(*handle, *output_id, *previous_level) };
         if set_status != 0 {
             failures.push(format!("display {} set status {}", display_index + 1, set_status));
             continue;
         }
         let mut info = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
-        let get_status = unsafe { get_dvc(*handle, 0, &mut info) };
+        let get_status = unsafe { get_dvc(*handle, *output_id, &mut info) };
         if get_status != 0 || info.current_level != *previous_level {
             failures.push(format!("display {} readback status {}", display_index + 1, get_status));
         }
@@ -502,31 +575,26 @@ fn rollback_dvc_with_handles(
 }
 
 #[cfg(windows)]
-fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
+fn set_nvidia_digital_vibrance_85(expected_display_ids: &[u32]) -> Result<NvidiaDvcApplySummary, String> {
     let api = NvApiLibrary::load()?;
-    let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
     let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
     let set_ptr = api.resolve(0x1724_09B4, "Digital Vibrance write")?;
-    let enum_display: NvApiEnumDisplayHandleFn = unsafe { std::mem::transmute(enum_ptr) };
     let get_dvc: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(get_ptr) };
     let set_dvc: NvApiSetDvcLevelFn = unsafe { std::mem::transmute(set_ptr) };
 
     let mut displays = Vec::new();
-    let mut unsupported_display_count = 0usize;
-    for display_index in 0..64u32 {
-        let mut handle = std::ptr::null_mut();
-        let enum_status = unsafe { enum_display(display_index, &mut handle) };
-        if enum_status == NVAPI_END_ENUMERATION {
-            break;
-        }
-        if enum_status != 0 || handle.is_null() {
-            return Err(format!("Could not enumerate NVIDIA display {} (NVAPI status {enum_status}).", display_index + 1));
-        }
+    let targets = nvidia_display::runtime::active_targets(&api)?;
+    let actual_ids: std::collections::HashSet<u32> = targets.iter().map(|t| t.display_id).collect();
+    let expected_ids: std::collections::HashSet<u32> = expected_display_ids.iter().copied().collect();
+    if actual_ids != expected_ids { return Err("Active NVIDIA monitors changed during preset preparation. No display was changed; retry after the display topology is stable.".into()); }
+    for (index, target) in targets.iter().enumerate() {
+        let display_index = index as u32;
+        let handle = target.handle as *mut std::ffi::c_void;
+        let output_id = target.output_id;
         let mut info = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
-        let get_status = unsafe { get_dvc(handle, 0, &mut info) };
+        let get_status = unsafe { get_dvc(handle, output_id, &mut info) };
         if get_status == NVAPI_NOT_SUPPORTED {
-            unsupported_display_count += 1;
-            continue;
+            return Err(format!("Active NVIDIA monitor {} does not support Digital Vibrance control. No monitors were changed; success requires every active NVIDIA monitor.", target.display_id));
         }
         if get_status != 0 {
             return Err(format!("Could not read Digital Vibrance on NVIDIA display {} (NVAPI status {get_status}). No display was changed.", display_index + 1));
@@ -535,18 +603,18 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
         if info.current_level < info.min_level || info.current_level > info.max_level {
             return Err(format!("NVIDIA display {} returned an out-of-range Digital Vibrance value. No display was changed.", display_index + 1));
         }
-        displays.push(NvidiaDvcDisplay { display_index, handle, current_level: info.current_level, target_level });
+        displays.push(NvidiaDvcDisplay { display_index, display_id: target.display_id, output_id, handle, current_level: info.current_level, target_level });
     }
     if displays.is_empty() {
         return Err("No active NVIDIA display supports Digital Vibrance control. No NVIDIA profile was imported.".into());
     }
 
-    let mut rollback_targets: Vec<(u32, *mut std::ffi::c_void, u32)> = Vec::with_capacity(displays.len());
+    let mut rollback_targets: Vec<(u32, *mut std::ffi::c_void, u32, u32)> = Vec::with_capacity(displays.len());
     let mut verified_levels = Vec::with_capacity(displays.len());
     for display in &displays {
-        rollback_targets.push((display.display_index, display.handle, display.current_level));
+        rollback_targets.push((display.display_index, display.handle, display.output_id, display.current_level));
         if display.current_level != display.target_level {
-            let set_status = unsafe { set_dvc(display.handle, 0, display.target_level) };
+            let set_status = unsafe { set_dvc(display.handle, display.output_id, display.target_level) };
             if set_status != 0 {
                 let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
                 let suffix = if rollback.is_empty() { " Previous values were restored.".to_string() } else { format!(" Rollback was incomplete: {}.", rollback.join(", ")) };
@@ -554,7 +622,7 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
             }
         }
         let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
-        let verify_status = unsafe { get_dvc(display.handle, 0, &mut verify) };
+        let verify_status = unsafe { get_dvc(display.handle, display.output_id, &mut verify) };
         let verified_target = dvc_level_for_percent(verify.min_level, verify.max_level, 85).ok();
         if verify_status != 0 || verify.current_level != display.target_level || verified_target != Some(display.target_level) {
             let rollback = rollback_dvc_with_handles(set_dvc, get_dvc, &rollback_targets);
@@ -566,8 +634,8 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
 
     Ok(NvidiaDvcApplySummary {
         supported_display_count: displays.len(),
-        unsupported_display_count,
-        previous_values: displays.iter().map(|display| NvidiaDvcPreviousValue { display_index: display.display_index, level: display.current_level }).collect(),
+        unsupported_display_count: 0,
+        previous_values: displays.iter().map(|display| NvidiaDvcPreviousValue { display_index: display.display_index, display_id: display.display_id, output_id: display.output_id, level: display.current_level }).collect(),
         verified_levels,
     })
 }
@@ -575,28 +643,22 @@ fn set_nvidia_digital_vibrance_85() -> Result<NvidiaDvcApplySummary, String> {
 #[cfg(windows)]
 fn restore_nvidia_digital_vibrance(previous_values: &[NvidiaDvcPreviousValue]) -> Result<(), String> {
     let api = NvApiLibrary::load()?;
-    let enum_ptr = api.resolve(0x9ABD_D40D, "display enumeration")?;
     let get_ptr = api.resolve(0x4085_DE45, "Digital Vibrance read")?;
     let set_ptr = api.resolve(0x1724_09B4, "Digital Vibrance restore")?;
-    let enum_display: NvApiEnumDisplayHandleFn = unsafe { std::mem::transmute(enum_ptr) };
     let get_dvc: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(get_ptr) };
     let set_dvc: NvApiSetDvcLevelFn = unsafe { std::mem::transmute(set_ptr) };
     let mut failures = Vec::new();
 
+    let targets = nvidia_display::runtime::active_targets(&api)?;
     for previous in previous_values {
-        let mut handle = std::ptr::null_mut();
-        let mut enum_status = NVAPI_END_ENUMERATION;
-        for index in 0..=previous.display_index {
-            enum_status = unsafe { enum_display(index, &mut handle) };
-            if enum_status != 0 { break; }
-        }
-        if enum_status != 0 || handle.is_null() {
+        let Some(target) = targets.iter().find(|t| t.display_id == previous.display_id && t.output_id == previous.output_id) else {
             failures.push(format!("display {} could not be found", previous.display_index + 1));
             continue;
-        }
-        let set_status = unsafe { set_dvc(handle, 0, previous.level) };
+        };
+        let handle = target.handle as *mut std::ffi::c_void;
+        let set_status = unsafe { set_dvc(handle, previous.output_id, previous.level) };
         let mut verify = NvDisplayDvcInfo { version: dvc_info_version(), current_level: 0, min_level: 0, max_level: 0 };
-        let get_status = unsafe { get_dvc(handle, 0, &mut verify) };
+        let get_status = unsafe { get_dvc(handle, previous.output_id, &mut verify) };
         if set_status != 0 || get_status != 0 || verify.current_level != previous.level {
             failures.push(format!("display {} restore status {set_status}, readback status {get_status}", previous.display_index + 1));
         }
@@ -697,9 +759,6 @@ pub fn cancel_nvidia_preset_import() {
 pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> Result<String, String> {
     #[cfg(windows)]
     {
-        if !is_nvidia_control_panel_installed()? {
-            return Err("NVIDIA Control Panel is not installed. Reinstall it from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.".into());
-        }
         let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
         let mut result = async {
             crate::commands::restore::require_verified_checkpoint()?;
@@ -708,21 +767,29 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let inspector = inspector_dir.join("nvidiaProfileInspector.exe");
             let preset = inspector_dir.join("OptiGods-Global-utf8.nip");
             verify_nvidia_bundle(&inspector_dir)?;
-            let expected = std::fs::read_to_string(&preset)
+            let static_expected = std::fs::read_to_string(&preset)
                 .map_err(|error| format!("Could not read the verified NVIDIA preset: {error}"))?;
-            let expected_count = parse_global_nip_settings(&expected)?.len();
-            if expected_count != 12 {
-                return Err(format!("The verified NVIDIA preset contains {expected_count} global settings; expected 12."));
-            }
+            let (gpu_name, gpu_value, active_display_ids) = {
+                let api = NvApiLibrary::load()?;
+                let targets = nvidia_display::runtime::active_targets(&api)?;
+                let (name, value) = nvidia_display::runtime::explicit_gpu_value(&api, &targets)?;
+                (name, value, targets.iter().map(|t| t.display_id).collect::<Vec<_>>())
+            };
+            let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
+            let runtime_path = inspector_dir.join(format!("OptiGods-runtime-{}.nip", std::process::id()));
+            std::fs::write(&runtime_path, &expected).map_err(|error| format!("Could not prepare the complete NVIDIA preset: {error}"))?;
+            struct RuntimePreset(std::path::PathBuf);
+            impl Drop for RuntimePreset { fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); } }
+            let runtime_preset = RuntimePreset(runtime_path);
             let original_profile = export_customized_nvidia_profile(&inspector_dir).await?;
-            let dvc = set_nvidia_digital_vibrance_85()?;
+            let dvc = set_nvidia_digital_vibrance_85(&active_display_ids)?;
             let mut reset_attempted = false;
             let profile_result: Result<usize, String> = async {
                 reset_attempted = true;
                 reset_global_nvidia_profile_to_driver_defaults()?;
                 let mut child = tokio::process::Command::new(&inspector)
                     .arg("-silentImport")
-                    .arg(&preset)
+                    .arg(&runtime_preset.0)
                     .current_dir(&inspector_dir)
                     .kill_on_drop(true)
                     .spawn()
@@ -757,7 +824,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 verify_global_nip_settings(&expected, &exported)
             }.await;
             let verified_setting_count = match profile_result {
-                Ok(count) if count == 12 => count,
+                Ok(count) if count == 15 => count,
                 Ok(count) => {
                     let profile_note = if reset_attempted {
                         match restore_nvidia_global_profile_backup(&inspector_dir, &original_profile).await {
@@ -794,13 +861,9 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 .map(|(index, level, min, max)| format!("display {} raw level {} (range {}-{})", index + 1, level, min, max))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let monitor_label = if dvc.supported_display_count == 1 { "monitor" } else { "monitors" };
+            let vibrance_message = nvidia_display::vibrance_success(dvc.supported_display_count);
             Ok::<String, String>(format!(
-                "Verified performance preset: {verified_setting_count}/12 global 3D settings matched the NVIDIA driver export; Digital Vibrance at 85% was read back on {} supported NVIDIA {} [{}].{} Unlisted global settings were reset to NVIDIA defaults; OpenGL GPU selection and Fixed Refresh were left at driver defaults. PhysX processor selection is a separate control and was not changed by this profile.",
-                dvc.supported_display_count,
-                monitor_label,
-                dvc_readback,
-                unsupported_note,
+                "{vibrance_message}. Verified {verified_setting_count}/15 global settings: Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU {gpu_name}, plus the original 12 settings. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults. PhysX processor selection is a separate control and was not changed by this profile.",
             ))
         }.await;
         if let Ok(message) = &mut result {
