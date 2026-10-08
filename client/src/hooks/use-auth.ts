@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getNativeSessionHeaders } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api-base";
 import { discordCachedToken, isNative } from "@/lib/tauri-bridge";
 import { NATIVE_TOKEN_KEY } from "@/lib/queryClient";
 import { clearProStatus } from "@/lib/pro-status";
@@ -26,6 +27,7 @@ export function useAuth(): AuthState {
   // a fast 401 would make an already signed-in desktop user fall through to
   // Welcome while navigating between authenticated pages.
   const [nativeAuthReady, setNativeAuthReady] = useState(() => !native);
+  const [restoredUser, setRestoredUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     if (!native) return;
@@ -34,6 +36,12 @@ export function useAuth(): AuthState {
       .then((session) => {
         if (session?.native_token) {
           try { localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token); } catch { /* ignore */ }
+          if (active) setRestoredUser({
+            discordId: session.user_id,
+            username: session.username,
+            globalName: null,
+            avatarUrl: null,
+          });
         }
       })
       .catch(() => {
@@ -49,21 +57,38 @@ export function useAuth(): AuthState {
   // The UI shows "not authenticated" immediately and updates silently
   // once the real /api/me response arrives. This eliminates any
   // black loading-screen phase in both web and native builds.
-  const { data, isLoading, isFetched, isFetchedAfterMount, isError } = useQuery<{ user: AuthUser | null }>({
+  const { data, isLoading, isFetched, isFetchedAfterMount, isError } = useQuery<{ user: AuthUser | null; sessionRejected?: boolean }>({
     queryKey: ["/api/me"],
     retry: false,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
-    placeholderData: { user: null },
+    ...(native ? {
+      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+        // Native identity comes from the desktop bearer token, not an old web cookie.
+        const token = getNativeSessionHeaders()["X-Native-Auth"];
+        const response = await fetch(apiUrl("/api/me"), {
+          credentials: "omit", headers: token ? { "X-Native-Auth": token } : {}, signal,
+        });
+        if (response.status === 401) return { user: null, sessionRejected: true };
+        if (!response.ok) throw new Error(`Account refresh failed (HTTP ${response.status}).`);
+        const profile = await response.json() as { user: AuthUser | null };
+        if (!profile || !Object.prototype.hasOwnProperty.call(profile, "user")) {
+          throw new Error("Account refresh returned an invalid profile response.");
+        }
+        // /api/me uses HTTP 200 + user:null for an authoritatively signed-out session.
+        return profile.user === null ? { user: null, sessionRejected: true } : profile;
+      },
+    } : { placeholderData: { user: null } }),
     enabled: nativeAuthReady,
   });
-  const user = native && (!nativeAuthReady || !isFetchedAfterMount || isError) ? null : data?.user ?? null;
+  const user = data?.sessionRejected ? null : data?.user ?? (native ? restoredUser : null);
   // Native navigation can reload the WebView while the desktop token is
   // still being restored from Credential Manager. placeholderData is useful
   // for web rendering, but treating it as a real unauthenticated response
   // briefly shows Welcome before /api/me has actually answered.
-  const nativeAuthLoading = native && (!nativeAuthReady || !isFetchedAfterMount);
+  const nativeAuthLoading = native && !user && !data?.sessionRejected
+    && (!nativeAuthReady || (!isFetched && !isError));
   return { user, isLoading: isLoading || nativeAuthLoading, isAuthenticated: !!user };
 }
 

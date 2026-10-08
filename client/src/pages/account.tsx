@@ -26,7 +26,7 @@ function isNewerVersion(candidate: string, current: string): boolean {
 }
 
 export default function AccountPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const isPro = useProStatus();
   const logout = useLogout();
   const { data: versionData } = useVersionInfo();
@@ -52,7 +52,12 @@ export default function AccountPage() {
 
       <div className="space-y-4">
         {/* Discord profile card */}
-        {isAuthenticated && user ? (
+        {authLoading && !user ? (
+          <div className="rounded-xl border border-white/8 bg-zinc-900/50 p-5" role="status">
+            <p className="text-sm font-bold text-white">Restoring your Discord profile…</p>
+            <p className="mt-1 text-xs text-zinc-500">Checking the saved Windows session.</p>
+          </div>
+        ) : isAuthenticated && user ? (
           <div className="rounded-xl border border-white/8 bg-zinc-900/50 p-5">
             <div className="flex items-center gap-4">
               {user.avatarUrl ? (

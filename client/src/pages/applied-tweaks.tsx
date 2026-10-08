@@ -4,6 +4,7 @@ import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwa
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { apiUrl } from "@/lib/api-base";
 import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, getVerifiedNvidiaVibranceMessage, type TweakRunTab } from "@/lib/tweak-run-outcome";
+import { getNativeErrorMessage } from "@/lib/native-error";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import {
   isNativeTweakRunStuck,
@@ -251,6 +252,7 @@ export default function AppliedTweaksPage() {
   const [batchUndoing, setBatchUndoing] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
   const [scriptRunningId, setScriptRunningId] = useState<string | null>(null);
+  const scriptRunningRef = useRef<string | null>(null);
   const [scriptBatchRunning, setScriptBatchRunning] = useState(false);
   const [scriptBatchProgress, setScriptBatchProgress] = useState(0);
   const [scriptBatchTotal, setScriptBatchTotal] = useState(0);
@@ -598,7 +600,7 @@ export default function AppliedTweaksPage() {
     }
   };
   const runScript = async (id: string, options: { fromBulk?: boolean; silent?: boolean } = {}): Promise<boolean> => {
-    if ((!options.fromBulk && (scriptRunningId || scriptBatchRunning)) || runActive || batchUndoing) return false;
+    if (scriptRunningRef.current || (!options.fromBulk && (scriptRunningId || scriptBatchRunning)) || runActive || batchUndoing) return false;
     if (!isNative()) {
       if (!options.silent) toast({ title: "Windows app required", description: "Open Opti Gods for Windows to run trusted scripts in the app." });
       return false;
@@ -612,6 +614,7 @@ export default function AppliedTweaksPage() {
       recordScriptTweakResult(id, "skipped", `Skipped: ${compatibility.reason || "No compatible trusted script is available."}`);
       return false;
     }
+    scriptRunningRef.current = id;
     setScriptRunningId(id);
     setRunTab("all");
     recordScriptTweakProgress(id, "Preparing the trusted PowerShell script…");
@@ -624,7 +627,7 @@ export default function AppliedTweaksPage() {
       if (!options.silent) toast({ title: "Script completed", description: `${message} The tweak was marked applied only after Windows confirmed success.`, variant: "success" });
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "PowerShell did not confirm success.";
+      const message = getNativeErrorMessage(error, "PowerShell did not return a result. Export this log for diagnosis.");
       const skipped = message.startsWith("Skipped:");
       recordScriptTweakResult(id, skipped ? "skipped" : "failed", message);
       if (!options.silent) toast({
@@ -634,6 +637,7 @@ export default function AppliedTweaksPage() {
       });
       return false;
     } finally {
+      scriptRunningRef.current = null;
       setScriptRunningId(null);
       await refreshAppliedState().catch(() => {});
     }
@@ -866,7 +870,7 @@ export default function AppliedTweaksPage() {
               disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || scriptBatchRunning || runActive || batchUndoing}
               title={!allowance?.pro ? "Pro is required; this action does not use free instant-apply credits." : "Run the trusted PowerShell script for this tweak."}
               className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >{scriptRunningId === item.id ? "Running…" : "Run Script"}</button>}
+            >{scriptRunningId === item.id ? "Running…" : scriptRunningId ? "Waiting for active tweak" : "Run Script"}</button>}
         </div>; })}
       </div>
     </section>}

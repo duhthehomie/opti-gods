@@ -404,7 +404,7 @@ struct NvDisplayDvcInfo {
 }
 
 #[cfg(windows)]
-struct NvApiLibrary {
+pub(super) struct NvApiLibrary {
     module: *mut std::ffi::c_void,
     query: NvApiQueryInterfaceFn,
 }
@@ -419,7 +419,7 @@ extern "system" {
 
 #[cfg(windows)]
 impl NvApiLibrary {
-    fn load() -> Result<Self, String> {
+    pub(super) fn load() -> Result<Self, String> {
         let dll_name = if cfg!(target_pointer_width = "64") { "nvapi64.dll" } else { "nvapi.dll" };
         let wide_name: Vec<u16> = dll_name.encode_utf16().chain(std::iter::once(0)).collect();
         let module = unsafe { LoadLibraryExW(wide_name.as_ptr(), std::ptr::null_mut(), 0x0000_0800) };
@@ -446,7 +446,7 @@ impl NvApiLibrary {
         Ok(Self { module, query })
     }
 
-    fn resolve(&self, id: u32, name: &str) -> Result<*mut std::ffi::c_void, String> {
+    pub(super) fn resolve(&self, id: u32, name: &str) -> Result<*mut std::ffi::c_void, String> {
         let function = unsafe { (self.query)(id) };
         if function.is_null() {
             return Err(format!("NVIDIA driver API function {name} is unavailable."));
@@ -836,7 +836,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                         Ok(()) => " Previous Digital Vibrance values were restored.".to_string(),
                         Err(error) => format!(" WARNING: Digital Vibrance rollback was incomplete: {error}."),
                     };
-                    return Err(format!("Expected 12 NVIDIA global settings, but verified {count}; no preset success was recorded.{profile_note}{dvc_note}"));
+                    return Err(format!("Expected 15 NVIDIA global settings, but verified {count}; no preset success was recorded.{profile_note}{dvc_note}"));
                 }
                 Err(error) => {
                     let profile_note = if reset_attempted {
@@ -910,6 +910,36 @@ async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, St
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|error| format!("Trusted script client failed: {error}"))?;
+    // Bundled scripts remove a delivery dependency, never Pro authorization.
+    let mut entitlement = client.get(format!("{base}/api/performance-allowance"));
+    for (name, value) in [
+        ("X-Native-Auth", args.native_auth.as_deref()),
+        ("X-Pro-Session", args.pro_session.as_deref()),
+        ("X-Device-ID", args.device_id.as_deref()),
+    ] {
+        if let Some(value) = value.filter(|value| !value.is_empty() && value.len() <= 8192) {
+            entitlement = entitlement.header(name, value);
+        }
+    }
+    let authorized = entitlement.send().await
+        .map_err(|_| "Pro authorization could not be verified. No script was run.".to_string())?;
+    if !authorized.status().is_success() {
+        return Err(format!("Pro authorization failed (HTTP {}). No script was run.", authorized.status()));
+    }
+    let authorization: serde_json::Value = authorized.json().await
+        .map_err(|_| "Pro authorization returned an invalid response. No script was run.".to_string())?;
+    if authorization.get("pro").and_then(|value| value.as_bool()) != Some(true) {
+        return Err("An active Pro entitlement is required to run this script.".into());
+    }
+    let bundled: std::collections::HashMap<String, String> =
+        serde_json::from_str(include_str!("../../resources/native-tweak-scripts.json"))
+            .map_err(|_| "The signed installer contains an invalid script bundle.".to_string())?;
+    if let Some(script) = bundled.get(&args.id) {
+        if script.len() <= 1_000_000 && script.contains("__OG_RESULT:APPLIED") && script.contains("__OG_RESULT:SKIPPED") {
+            return Ok(script.clone());
+        }
+        return Err("The bundled script did not pass integrity checks. No script was run.".into());
+    }
     let mut request = client.post(format!("{base}/api/script/native-tweak"));
     for (name, value) in [
         ("X-Native-Auth", args.native_auth.as_deref()),
@@ -933,6 +963,9 @@ async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, St
             .and_then(|value| value.get("message").or_else(|| value.get("error"))?.as_str().map(str::to_owned))
             .unwrap_or_else(|| format!("Script request was rejected (HTTP {status})."));
         return Err(message);
+    }
+    if body.trim_start().starts_with('<') {
+        return Err("The live website returned HTML instead of a trusted script. This action is not included in this installer's reviewed script bundle; no script was run.".into());
     }
     let value: serde_json::Value = serde_json::from_str(&body)
         .map_err(|_| "The trusted script response was not valid JSON.".to_string())?;

@@ -5,6 +5,7 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
+import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -157,6 +158,10 @@ export function recordScriptTweakProgress(id: string, message: string): void {
   if (!state || !state.items.some(item => item.id === id)) return;
   writeRunState({
     ...state,
+    status: "running",
+    finishedAt: undefined,
+    error: undefined,
+    stopRequested: false,
     items: state.items.map(item => item.id === id
       ? { ...item, status: "running", message }
       : item),
@@ -174,8 +179,9 @@ export function recordScriptTweakResult(
   writeRunState({
     ...state,
     items,
-    status: state.status === "completed" && status === "failed" ? "failed" : state.status,
-    finishedAt: state.status === "completed" && status === "failed" ? Date.now() : state.finishedAt,
+    status: items.some(item => item.status === "running" || item.status === "queued")
+      ? "running" : items.some(item => item.status === "failed") ? "failed" : "completed",
+    finishedAt: items.some(item => item.status === "running" || item.status === "queued") ? undefined : Date.now(),
   });
 }
 
@@ -802,6 +808,9 @@ async function applyTweakBatchInternal(
       osApplied = true;
       const store = useOptimizationStore.getState();
       if (id === NVIDIA_PRESET_ACTION_ID) {
+        if (result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied")) {
+          try { localStorage.setItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY, "verified"); } catch { /* retry safely if storage is unavailable */ }
+        }
         store.setTweak(id, true);
         store.markApplied([id]);
         saveUndoToken(id, null);

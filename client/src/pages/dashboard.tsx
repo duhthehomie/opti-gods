@@ -481,7 +481,7 @@ export default function Dashboard() {
   });
   const [nvidiaPresetRequeueRecorded, setNvidiaPresetRequeueRecorded] = useState(() => {
     if (typeof window === "undefined") return false;
-    try { return localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "queued"; } catch { return false; }
+    try { return localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "verified"; } catch { return false; }
   });
   const nvidiaPresetOneTimeRequeue = shouldQueueNvidiaPresetReapplyOnce({
     native,
@@ -636,10 +636,7 @@ export default function Dashboard() {
           initialSkippedMessages: runSkippedMessages,
           forceReapplyIds: queueNvidiaPresetReapplyNow ? [NVIDIA_PRESET_ACTION_ID] : [],
         }, runSkippedIds);
-        if (queueNvidiaPresetReapplyNow) {
-          try { localStorage.setItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY, "queued"); } catch { /* retain the in-memory guard for this session */ }
-          setNvidiaPresetRequeueRecorded(true);
-        }
+        // Queuing is not success. Only verified native completion consumes this release's requeue.
         window.location.assign("/applied-tweaks?run=1");
         return;
       } else {

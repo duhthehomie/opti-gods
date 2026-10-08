@@ -111,15 +111,16 @@ function Stat({
   return (
     <div
       data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}
-      className={cn(compact ? "p-2.5" : "p-4", "rounded-xl border bg-zinc-950/40", chosen)}
+      className={cn(compact ? "self-start p-2.5" : "p-4", "min-w-0 rounded-xl border bg-zinc-950/40", chosen)}
     >
-      <div className={cn("flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider mb-2",
+      <div className={cn("flex items-center gap-2 uppercase font-bold tracking-wider",
+        compact ? "mb-1 text-[9px]" : "mb-2 text-[10px]",
         accent ? colors[accent].split(" ")[2] : (highlight ? "text-red-400" : "text-zinc-500")
       )}>
-        <Icon className="w-3.5 h-3.5" />
+        <Icon className={compact ? "h-3 w-3" : "w-3.5 h-3.5"} />
         {label}
       </div>
-      <p className={cn("text-white font-mono font-semibold truncate", compact ? "text-[13px]" : "text-sm")}>{value}</p>
+      <p className={cn("text-white font-mono font-semibold truncate", compact ? "text-xs" : "text-sm")}>{value}</p>
       {sub && <p className={cn("text-zinc-500 mt-0.5 truncate", compact ? "text-[10px]" : "text-[11px]")}>{sub}</p>}
     </div>
   );
@@ -295,6 +296,8 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   const liveStats = useLiveStats(scan.ram_gb || 16);
   const cpuTemp = liveStats.cpuTemp;
   const gpuTemp = liveStats.gpuTemp;
+  // The existing WMI scan's cpu_temp_c is an ACPI board-zone reading, not a CPU package sensor.
+  const boardTemp = liveStats.boardTemp ?? scan.cpu_temp_c ?? null;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
@@ -323,8 +326,10 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         </div>
         <div className="space-y-2">
           <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
-          <Stat icon={Thermometer} label="CPU Temp" value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
-            sub={cpuTempDescription}
+          <Stat icon={Thermometer} label={cpuTemp == null && boardTemp != null ? "Board / ACPI Temp" : "CPU Temp"}
+            value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : boardTemp != null ? `${Math.round(boardTemp)}°C` : "Sensor not exposed"}
+            sub={cpuTemp == null && boardTemp != null
+              ? `${liveStats.boardTemp != null ? "Live" : "Scan"} board sensor · not CPU package` : cpuTempDescription}
             accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} />
         </div>
         <Stat icon={MemoryStick} label="RAM"

@@ -253,6 +253,7 @@ export interface NativeLivePerformance {
   ram_used_pct?: number | null;
   cpu_temp_c?: number | null;
   gpu_temp_c?: number | null;
+  board_temp_c?: number | null;
   running_processes_count?: number | null;
   visible_apps_count?: number | null;
   fivem_running?: boolean;

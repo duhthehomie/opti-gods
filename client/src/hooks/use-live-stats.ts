@@ -17,6 +17,7 @@ export interface LiveStats {
   ramPct: number;
   cpuTemp: number | null;
   gpuTemp: number | null;
+  boardTemp?: number | null;
   cpuTempSource: "live" | "imported" | null;
   gpuTempSource: "live" | "imported" | null;
   cpuHistory: number[];
@@ -35,6 +36,7 @@ interface HwLiveResponse {
   ram_used_pct?: number;
   cpu_temp_c?: number | null;
   gpu_temp_c?: number | null;
+  board_temp_c?: number | null;
 }
 
 function readImportedSensorTemps(): { cpuTemp: number | null; gpuTemp: number | null } {
@@ -108,6 +110,7 @@ export function useLiveStats(ramGB: number): LiveStats {
               ram_used_pct: native.ram_used_pct ?? undefined,
               cpu_temp_c: native.cpu_temp_c ?? undefined,
               gpu_temp_c: native.gpu_temp_c ?? undefined,
+              board_temp_c: native.board_temp_c ?? undefined,
             };
           }
         } else {
@@ -147,6 +150,7 @@ export function useLiveStats(ramGB: number): LiveStats {
           ramPct:     Math.round(ramPct),
           cpuTemp,
           gpuTemp,
+          boardTemp: realData.board_temp_c ?? null,
           cpuTempSource: realData.cpu_temp_c != null ? "live" : importedTemps.cpuTemp != null ? "imported" : null,
           gpuTempSource: realData.gpu_temp_c != null ? "live" : importedTemps.gpuTemp != null ? "imported" : null,
           cpuHistory: [...cpuHistRef.current],

@@ -21,6 +21,7 @@ pub struct LivePerformance {
     pub ram_used_pct: Option<f32>,
     pub cpu_temp_c: Option<f32>,
     pub gpu_temp_c: Option<f32>,
+    pub board_temp_c: Option<f32>,
     /// Task Manager-style total process count. Individual process names are
     /// intentionally not exported by the performance recorder.
     pub running_processes_count: Option<u32>,
@@ -68,7 +69,7 @@ fn collect_live_performance_blocking() -> Result<LivePerformance, String> {
         let script = r#"
 $ErrorActionPreference = 'SilentlyContinue'
 $out = [ordered]@{ live = $false }
-$cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 0.25 -MaxSamples 1).CounterSamples[0].CookedValue
+$cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue).CounterSamples[0].CookedValue
 if ($null -ne $cpu) { $out.cpu_load_pct = [math]::Round([double]$cpu, 1) }
 $os = Get-CimInstance Win32_OperatingSystem
 if ($os) {
@@ -154,10 +155,10 @@ if ($null -eq $out.gpu_load_pct) {
 # commonly expose the real package sensor through OpenHardwareMonitor or
 # LibreHardwareMonitor instead.
 $cpuTemp = $null
-$zones = @() # ACPI motherboard thermal zones are not verified CPU package sensors.
+$zones = @(Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue)
 if ($zones) {
   $values = @($zones | ForEach-Object { [math]::Round(([double]$_.CurrentTemperature / 10) - 273.15, 1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 })
-  if ($values) { $cpuTemp = ($values | Measure-Object -Maximum).Maximum }
+  if ($values) { $out.board_temp_c = ($values | Measure-Object -Maximum).Maximum }
 }
 if ($null -eq $cpuTemp) {
   foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
@@ -255,7 +256,14 @@ $out.live = $true
 $out | ConvertTo-Json -Compress
 "#;
 
-        let output = Command::new(crate::commands::windows_powershell_executable())
+        // Query NVAPI independently so a Windows counter/WMI failure cannot hide a valid GPU sensor.
+        let nvidia_temperature = read_nvidia_temperature();
+        let temperature_sample = || LivePerformance {
+            live: nvidia_temperature.is_some(),
+            gpu_temp_c: nvidia_temperature,
+            ..LivePerformance::default()
+        };
+        let output = match Command::new(crate::commands::windows_powershell_executable())
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -265,20 +273,30 @@ $out | ConvertTo-Json -Compress
                 script,
             ])
             .creation_flags(0x0800_0000)
-            .output()
-            .map_err(|error| format!("live performance command failed: {error}"))?;
+            .output() {
+                Ok(output) => output,
+                Err(_) if nvidia_temperature.is_some() => return Ok(temperature_sample()),
+                Err(error) => return Err(format!("live performance command failed: {error}")),
+            };
         if !output.status.success() {
+            if nvidia_temperature.is_some() { return Ok(temperature_sample()); }
             return Err("Windows did not return live performance data.".into());
         }
         let text = String::from_utf8_lossy(&output.stdout);
-        let json = text
+        let json = match text
             .lines()
             .rev()
-            .find(|line| line.trim_start().starts_with('{'))
-            .ok_or_else(|| "Windows returned no live performance payload.".to_string())?;
-        let mut performance: LivePerformance = serde_json::from_str(json)
-            .map_err(|error| format!("invalid live performance payload: {error}"))?;
-        if performance.gpu_temp_c.is_none() { performance.gpu_temp_c = read_nvidia_temperature(); }
+            .find(|line| line.trim_start().starts_with('{')) {
+                Some(json) => json,
+                None if nvidia_temperature.is_some() => return Ok(temperature_sample()),
+                None => return Err("Windows returned no live performance payload.".into()),
+            };
+        let mut performance: LivePerformance = match serde_json::from_str(json) {
+            Ok(performance) => performance,
+            Err(_) if nvidia_temperature.is_some() => return Ok(temperature_sample()),
+            Err(error) => return Err(format!("invalid live performance payload: {error}")),
+        };
+        if performance.gpu_temp_c.is_none() { performance.gpu_temp_c = nvidia_temperature; }
         Ok(performance)
     }
     #[cfg(not(windows))]
