@@ -1028,6 +1028,8 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
         use tokio::process::Command;
 
         let script = fetch_trusted_tweak_script(&args).await?;
+        crate::win32::restore::ensure_session_checkpoint("OptiGods — Before Script Tweaks")
+            .map_err(|error| format!("A verified restore point is required before this script: {error:#}"))?;
         crate::commands::restore::require_verified_checkpoint()?;
 
         let nonce = std::time::SystemTime::now()
@@ -1051,7 +1053,7 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
         }
         drop(file);
 
-        let mut child = match Command::new("powershell.exe")
+        let mut child = match Command::new(crate::commands::windows_powershell_executable())
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
             .arg(&path)
             .stdout(Stdio::piped())
@@ -1097,13 +1099,34 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
         let _ = std::fs::remove_file(&path);
 
         if stdout_lines.iter().any(|line| line.contains("__OG_RESULT:SKIPPED")) {
-            return Err("Skipped: Windows reported that this tweak does not apply to this PC. No success was recorded.".into());
+            let reason = stdout_lines.iter()
+                .find(|line| line.contains("[SKIP]"))
+                .map(String::as_str)
+                .unwrap_or("Windows reported that this tweak does not apply to this PC.");
+            return Err(format!("Skipped: {reason} No success was recorded."));
         }
         let applied_marker = stdout_lines.iter().any(|line| line.contains("__OG_RESULT:APPLIED"));
         if status.as_ref().map(|value| value.success()).unwrap_or(false) && applied_marker {
-            return Ok(format!(
-                "PowerShell completed successfully. Restart Windows for the change to take effect."
-            ));
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0);
+            crate::win32::registry::write_qword(
+                crate::win32::registry::Hive::CurrentUser,
+                r"Software\OptiGods\AppliedTweaks",
+                &args.id,
+                timestamp,
+            ).map_err(|error| format!("Windows confirmed the change, but saving its applied history failed: {error:#}. Recheck this tweak before retrying."))?;
+            let detail = stdout_lines.iter().rev()
+                .find(|line| !line.contains("__OG_RESULT:") && !line.starts_with("[Opti Gods]"))
+                .map(String::as_str)
+                .unwrap_or("The trusted script completed successfully.");
+            let next_step = match args.id.as_str() {
+                "EnableNvidiaMSIPro" => "Restart Windows for the interrupt changes to take effect.",
+                "FiveM1650VRAMBudget" => "Restart the game to reload its configuration; this check does not verify in-game consumption.",
+                _ => "The verified settings take effect immediately.",
+            };
+            return Ok(format!("{detail} {next_step}"));
         }
         let details = stderr_lines.iter().chain(stdout_lines.iter())
             .filter(|line| !line.contains("__OG_RESULT:"))

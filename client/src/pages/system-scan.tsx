@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { getPendingNvidiaPresetIds, canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo, normalizeSystemModel } from "@/hooks/use-hardware-info";
@@ -9,7 +10,7 @@ import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { useLiveStats } from "@/hooks/use-live-stats";
-import { scanHardware, isNative, onFileDrop, readTauriTextFile } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile, prepareCpuMonitoring } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -111,17 +112,23 @@ function Stat({
   return (
     <div
       data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}
-      className={cn(compact ? "self-start p-2.5" : "p-4", "min-w-0 rounded-xl border bg-zinc-950/40", chosen)}
+      className={cn(
+        compact ? "flex min-h-[64px] min-w-0 flex-col justify-between p-2" : "p-2",
+        "min-w-0 rounded-lg border bg-zinc-950/40",
+        chosen,
+      )}
     >
       <div className={cn("flex items-center gap-2 uppercase font-bold tracking-wider",
-        compact ? "mb-1 text-[9px]" : "mb-2 text-[10px]",
+        "mb-1 text-[10px]",
         accent ? colors[accent].split(" ")[2] : (highlight ? "text-red-400" : "text-zinc-500")
       )}>
-        <Icon className={compact ? "h-3 w-3" : "w-3.5 h-3.5"} />
+        <Icon className={compact ? "h-3.5 w-3.5 shrink-0" : "w-3.5 h-3.5"} />
         {label}
       </div>
-      <p className={cn("text-white font-mono font-semibold truncate", compact ? "text-xs" : "text-sm")}>{value}</p>
-      {sub && <p className={cn("text-zinc-500 mt-0.5 truncate", compact ? "text-[10px]" : "text-[11px]")}>{sub}</p>}
+      <div className="min-w-0">
+        <p className={cn("text-white font-mono font-semibold leading-tight [overflow-wrap:anywhere]", compact ? "text-[12px]" : "text-[13px]")}>{value}</p>
+        {sub && <p className={cn("text-zinc-500 mt-0.5 leading-tight [overflow-wrap:anywhere]", compact ? "text-[9px]" : "text-[10px]")}>{sub}</p>}
+      </div>
     </div>
   );
 }
@@ -191,19 +198,19 @@ function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: 
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
+      className="space-y-2"
     >
       {/* CTA hero */}
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
-            <ScanLine className="w-6 h-6 text-amber-400" />
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0">
+            <ScanLine className="w-4 h-4 text-amber-400" />
           </div>
           <div className="flex-1">
             <h2 className="text-base font-bold text-white mb-1">
               System not fully detected
             </h2>
-            <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+            <p className="text-xs text-zinc-400 leading-snug mb-2">
               Opti Gods detected your hardware partially via browser APIs. Run the
               native deep scan to get exact specs, live CPU temperature, fan count,
               anti-cheat detection and personalised tweak matching.
@@ -226,11 +233,11 @@ function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: 
 
       {/* What we do know */}
       {(gpuKnown || cpuKnown || ramKnown) && (
-        <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
+          <div className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
             Partially detected
           </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
             {gpuKnown && (
               <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName} highlight />
             )}
@@ -251,11 +258,11 @@ function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: 
       )}
 
       {/* What's missing */}
-      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-4">
+      <div className="rounded-lg border border-white/5 bg-zinc-950/40 p-3">
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">
           What a full scan unlocks
         </p>
-        <p className="text-[11px] text-zinc-600 mb-3">
+        <p className="text-[10px] text-zinc-600 mb-2">
           Data that requires native OS access — not available in browser mode
         </p>
         {missing.map((m, i) => (
@@ -264,8 +271,8 @@ function NotDetectedPanel({ onScan, scanning }: { onScan: () => void; scanning: 
       </div>
 
       {/* Opti Gods benefit pill row */}
-      <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] p-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/70 mb-3">
+      <div className="rounded-lg border border-red-500/15 bg-red-500/[0.03] p-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/70 mb-2">
           What Opti Gods gives you after scan
         </p>
         <div className="flex flex-wrap gap-2">
@@ -315,56 +322,52 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
       : liveStats.isStale ? "Last live reading · stale" : "Live GPU temperature · updates automatically";
 
   return (
-    <div className="space-y-4">
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-        <div className="space-y-2">
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 auto-rows-fr gap-px">
           <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
-            sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight />
+            sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight compact />
           <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
             sub={gpuTempDescription}
-            accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} />
-        </div>
-        <div className="space-y-2">
-          <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight />
-          <Stat icon={Thermometer} label={cpuTemp == null && boardTemp != null ? "Board / ACPI Temp" : "CPU Temp"}
-            value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : boardTemp != null ? `${Math.round(boardTemp)}°C` : "Sensor not exposed"}
-            sub={cpuTemp == null && boardTemp != null
-              ? `${liveStats.boardTemp != null ? "Live" : "Scan"} board sensor · not CPU package` : cpuTempDescription}
-            accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} />
-        </div>
+            accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} compact />
+          <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight compact />
+          <Stat icon={Thermometer} label="CPU Temp"
+            value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
+            sub={cpuTemp != null ? cpuTempDescription : "No CPU package reading"}
+            accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} compact />
+            <Stat icon={Thermometer} label="Firmware Temp"
+              value={boardTemp != null ? `${Math.round(boardTemp)}°C` : "Unavailable"}
+              sub={boardTemp == null ? "No ACPI board sensor · not CPU" : liveStats.boardTemp != null
+                ? liveStats.isStale ? "Last ACPI board reading · stale" : "Live ACPI board sensor · not CPU"
+                : "Scanned ACPI board sensor · not CPU"}
+              accent={boardTemp != null ? tempAccent(boardTemp) : undefined} compact />
         <Stat icon={MemoryStick} label="RAM"
           value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
           sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight compact />
         <Stat icon={HardDrive} label="OS" value={os.os || "Detecting…"}
-          sub={os.build ? `Build ${os.build}` : undefined} />
+          sub={os.build ? `Build ${os.build}` : undefined} compact />
         <Stat icon={Sparkles} label="Form Factor"
           value={isLaptop ? "Laptop" : "Desktop"}
-          sub={scan.chassis || undefined} />
+          sub={scan.chassis || undefined} compact />
 
         {/* Cooling — real fan count when WMI exposes it */}
-        <Stat icon={Wind} label="Cooling" value={fan.label} sub={fan.sub} />
+        <Stat icon={Wind} label="Cooling" value={fan.label} sub={fan.sub} compact />
 
 
-        {scan.motherboard && (
-          <Stat icon={Monitor} label="Motherboard" value={scan.motherboard} />
-        )}
-        {scan.refresh_hz && (
-          <Stat icon={Monitor} label="Refresh Rate" value={`${scan.refresh_hz} Hz`} />
-        )}
-        {(scan.network_ssid || scan.nic_vendor) && (
+          <Stat icon={Monitor} label="Motherboard" value={scan.motherboard || "Unavailable"} compact />
+          <Stat icon={Monitor} label="Refresh Rate" value={scan.refresh_hz ? `${scan.refresh_hz} Hz` : "Unavailable"} compact />
           <Stat
             icon={Wifi}
             label="Network"
-            value={scan.network_ssid || scan.nic_vendor || "Connected"}
+            value={scan.network_ssid || scan.nic_vendor || "Unavailable"}
             sub={scan.network_band ? `${scan.network_band} Wi-Fi` : (scan.network_ssid ? "Connected Wi-Fi" : undefined)}
+            compact
           />
-        )}
       </div>
 
       {/* Anti-cheat */}
       {scan.anticheats && scan.anticheats.length > 0 && (
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/[0.04] p-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 mb-2">
+        <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/[0.04] p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 mb-1.5">
             Anti-Cheat Detected
           </div>
           <div className="flex flex-wrap gap-2">
@@ -394,7 +397,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
           data-testid="button-rescan"
           onClick={onRescan}
           disabled={rescanning}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800/60 border border-white/8 hover:bg-zinc-700/60 hover:border-white/15 transition-colors text-zinc-300 text-[11px] font-semibold disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-white/8 hover:bg-zinc-700/60 hover:border-white/15 transition-colors text-zinc-300 text-[11px] font-semibold disabled:opacity-50"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", rescanning && "animate-spin")} />
           {rescanning ? "Scanning…" : "Re-scan hardware"}
@@ -421,9 +424,17 @@ function SmartRecsBreakdown() {
   const [nativeAppliedStateError, setNativeAppliedStateError] = useState(false);
   const [lastNativeRun, setLastNativeRun] = useState<NativeTweakRunState | null>(() => native ? readNativeTweakRun() : null);
 
+  const pendingNvidiaIds = getPendingNvidiaPresetIds({
+    native, pro: isPro, hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
+  });
+  const presetEligible = canRunNvidiaPreset({
+    native, pro: isPro, hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
+  });
   const safeIds = getEligibleSmartRecommendationIds(
-    recs.ids,
-    id => getTweakCompatibility(id).ok,
+    [...recs.ids, ...(presetEligible ? ["NvidiaControlPanelSettings"] : [])],
+    id => id === "NvidiaControlPanelSettings" ? presetEligible : getTweakCompatibility(id).ok,
   );
   const total = safeIds.length;
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
@@ -456,6 +467,7 @@ function SmartRecsBreakdown() {
     selectedState: tweaks,
     runStatus: lastNativeRun?.status,
     runItems: lastNativeRun?.items,
+    forcePendingIds: pendingNvidiaIds,
   });
   const alreadyOnCount = native
     ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
@@ -515,7 +527,7 @@ function SmartRecsBreakdown() {
 
   return (
     <>
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
       {/* Header row */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
@@ -535,7 +547,7 @@ function SmartRecsBreakdown() {
           onClick={handleApplyAndRetry}
           disabled={actionIds.length === 0 || applied || (native && (!nativeAppliedStateReady || nativeAppliedStateError))}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-bold text-sm transition-all",
+          "w-full flex items-center justify-center gap-2 py-2 rounded-lg border font-bold text-sm transition-all",
             actionIds.length === 0
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
               : "bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-200 active:scale-[0.98]"
@@ -570,7 +582,7 @@ function SmartRecsBreakdown() {
       </div>
       {latestRunIsTerminal && (
         <div className={cn(
-          "rounded-xl border px-3 py-2 text-[11px]",
+          "rounded-lg border px-2.5 py-1.5 text-[11px]",
           native && (!nativeAppliedStateReady || nativeAppliedStateError) || missingSafeIds.length > 0 || latestRunSkippedIds.size > 0
             ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-200"
             : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-200",
@@ -587,7 +599,7 @@ function SmartRecsBreakdown() {
 
       {/* Expert tweaks callout */}
       {expertIds.length > 0 && (
-        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 flex items-start gap-2.5">
+        <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-2.5 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-[11px] font-bold text-amber-300">{expertIds.length} expert-level tweaks not auto-applied</p>
@@ -599,7 +611,7 @@ function SmartRecsBreakdown() {
       )}
 
       {/* Why these tweaks */}
-      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+      <div className="rounded-lg border border-white/5 bg-zinc-950/40 p-2.5">
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Why these tweaks were selected</p>
         <div className="flex flex-wrap gap-1.5">
           {recs.reasons.map((r, i) => (
@@ -610,21 +622,21 @@ function SmartRecsBreakdown() {
           ))}
         </div>
       </div>
-      <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3">
+      <div className="rounded-lg border border-white/5 bg-zinc-950/40 p-2.5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">AI-selected tweaks and what each changes</p>
           <span className="text-[10px] font-bold text-zinc-500">{recs.ids.size} tweaks · {recs.profile}</span>
         </div>
         <p className="mt-1 text-[10px] text-zinc-600">Each description explains the specific Windows change for this recommendation.</p>
-        <div className="mt-2 max-h-96 space-y-1 overflow-y-auto pr-1">
+        <div className="mt-1.5 max-h-96 space-y-1 overflow-y-auto pr-1">
           {Array.from(recs.ids)
             .sort((a, b) => (TWEAK_REGISTRY.find(t => t.id === a)?.title || a).localeCompare(TWEAK_REGISTRY.find(t => t.id === b)?.title || b))
             .map(id => {
               const meta = TWEAK_REGISTRY.find(tweak => tweak.id === id);
               return (
-                <div key={id} className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg border border-white/[.04] bg-white/[.015] px-2.5 py-2">
-                  <p className="min-w-[12rem] flex-1 text-[10px] font-bold text-zinc-200">{meta?.title || id}</p>
-                  <p className="min-w-[16rem] flex-[2] text-[10px] leading-relaxed text-zinc-500">{meta?.plainEnglish || meta?.description || "Included in the detected hardware recommendation profile."}</p>
+                <div key={id} className="flex flex-wrap items-start gap-x-2 gap-y-0.5 rounded-md border border-white/[.04] bg-white/[.015] px-2 py-1.5">
+                  <p className="min-w-[10rem] flex-1 text-[10px] font-bold text-zinc-200">{meta?.title || id}</p>
+                  <p className="min-w-[12rem] flex-[2] text-[10px] leading-snug text-zinc-500">{meta?.plainEnglish || meta?.description || "Included in the detected hardware recommendation profile."}</p>
                   {meta?.safety === "expert" && <span className="text-[8px] font-black uppercase tracking-wider text-amber-400">Manual only</span>}
                 </div>
               );
@@ -956,8 +968,8 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-      className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+      className="rounded-lg border border-white/5 bg-zinc-900/60 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5">
         <div className="flex items-center gap-2">
           <Thermometer className="w-4 h-4 text-red-400" />
           <span className="text-sm font-bold text-white">Live Hardware Monitor</span>
@@ -988,7 +1000,7 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
           className={cn(
-            "m-3 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 py-8 cursor-pointer transition-all",
+            "m-2 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1.5 py-4 cursor-pointer transition-all",
             dragging ? "border-red-500/60 bg-red-500/5" : "border-white/10 hover:border-white/20 hover:bg-white/[0.02]"
           )}>
           <input ref={fileRef} type="file" accept=".json" className="hidden"
@@ -1001,29 +1013,29 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
           {parseError && <p className="text-[10px] text-red-400">{parseError}</p>}
         </div>
       ) : (
-        <div className="p-3 space-y-3">
+        <div className="p-2.5 space-y-2">
           {hw.timestamp && (
             <p className="text-[10px] text-zinc-600">Snapshot: {hw.timestamp}</p>
           )}
           {hw.system_model && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/5 bg-zinc-900/60">
+            <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/5 bg-zinc-900/60">
               <MonitorCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 shrink-0">My PC</span>
-              <span className="text-white text-xs font-semibold truncate">{normalizeSystemModel(hw.system_model)}</span>
+              <span className="min-w-0 text-white text-xs font-semibold [overflow-wrap:anywhere]">{normalizeSystemModel(hw.system_model)}</span>
             </div>
           )}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-px auto-rows-fr">
             {hw.gpu_name && (
-              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+              <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3" /> GPU</p>
-                <p className="text-white font-mono text-xs font-semibold truncate">{hw.gpu_name}</p>
+                <p className="text-white font-mono text-xs font-semibold leading-tight [overflow-wrap:anywhere]">{hw.gpu_name}</p>
                 {hw.gpu_vram_total_mb && <p className="text-zinc-500 text-[10px]">{Math.round(hw.gpu_vram_total_mb / 1024)} GB VRAM</p>}
               </div>
             )}
             {hw.gpu_temp_c != null && (
-              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+              <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Thermometer className="w-3 h-3" /> GPU Temp</p>
-                <p className={cn("font-mono text-lg font-black", tempColor(hw.gpu_temp_c))}>
+                <p className={cn("font-mono text-base font-black", tempColor(hw.gpu_temp_c))}>
                   <AnimatedNum value={hw.gpu_temp_c} suffix="°C" />
                 </p>
                 {hw.gpu_load_pct != null && (
@@ -1032,17 +1044,17 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
               </div>
             )}
             {hw.gpu_fan_pct != null && (
-              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+              <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Wind className="w-3 h-3" /> GPU Fan</p>
-                <p className="font-mono text-lg font-black text-white">
+                <p className="font-mono text-base font-black text-white">
                   <AnimatedNum value={hw.gpu_fan_pct} suffix="%" />
                 </p>
               </div>
             )}
             {hw.cpu_temp_c != null ? (
-              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+              <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
-                <p className={cn("font-mono text-lg font-black", tempColor(hw.cpu_temp_c))}>
+                <p className={cn("font-mono text-base font-black", tempColor(hw.cpu_temp_c))}>
                   <AnimatedNum value={hw.cpu_temp_c} suffix="°C" />
                 </p>
                 {hw.cpu_load_pct != null && (
@@ -1050,16 +1062,16 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
                 )}
               </div>
             ) : (
-              <div className="p-3 rounded-lg border border-amber-500/10 bg-amber-500/[0.03]">
+              <div className="min-w-0 p-2.5 rounded-lg border border-amber-500/10 bg-amber-500/[0.03]">
                 <p className="text-[10px] uppercase tracking-wider text-amber-500/70 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU Temp</p>
                 <p className="text-amber-400 font-mono text-xs font-bold">N/A</p>
                 <p className="text-[9px] text-zinc-600 mt-0.5">AMD Ryzen desktop — ACPI not exposed. Use HWiNFO64.</p>
               </div>
             )}
             {hw.ram_used_pct != null && (
-              <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+              <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
-                <p className={cn("font-mono text-lg font-black", usedColor(hw.ram_used_pct))}>
+                <p className={cn("font-mono text-base font-black", usedColor(hw.ram_used_pct))}>
                   <AnimatedNum value={hw.ram_used_pct} suffix="%" />
                 </p>
                 {hw.ram_total_gb && hw.ram_free_gb != null && (
@@ -1072,16 +1084,16 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
           </div>
           {hw.fans && hw.fans.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">
                 Fans detected: {hw.fan_count ?? hw.fans.length}
               </p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-px auto-rows-fr">
                 {hw.fans.map((f, i) => (
-                  <div key={i} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                  <div key={i} className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                     <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1">
                       <Wind className="w-3 h-3" /> Fan {i + 1}
                     </p>
-                    <p className="text-white font-mono text-xs font-semibold truncate">{f.name}</p>
+                    <p className="text-white font-mono text-xs font-semibold leading-tight [overflow-wrap:anywhere]">{f.name}</p>
                     {f.speed_rpm != null && f.speed_rpm > 0 ? (
                       <p className="text-zinc-500 text-[10px]">
                         <AnimatedNum value={f.speed_rpm} /> RPM
@@ -1099,9 +1111,9 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
             </div>
           )}
           {hw.disks && hw.disks.length > 0 && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
               {hw.disks.map(d => (
-                <div key={d.drive} className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+                <div key={d.drive} className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
                   <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><HardDrive className="w-3 h-3" /> {d.drive}</p>
                   <p className={cn("font-mono text-base font-black", usedColor(d.used_pct))}>{d.used_pct}%</p>
                   <p className="text-zinc-500 text-[10px]">{d.free_gb} GB free / {d.size_gb} GB</p>
@@ -1126,6 +1138,18 @@ export function LiveMonitorPanel() {
   const hw = useHardwareInfo();
   const stats = useLiveStats(hw.ramGB);
   const { toast } = useToast();
+  const [sensorSetupBusy, setSensorSetupBusy] = useState(false);
+  const enableCpuSensors = async () => {
+    if (sensorSetupBusy || !isNative()) return;
+    if (!window.confirm("Enable CPU temperature sensors?\n\nThis downloads and opens the official, signed PawnIO driver installer. It adds a Windows kernel driver for hardware access. Choose the official signed edition, not unrestricted. Do not disable Windows security if installation is blocked.\n\nContinue?")) return;
+    setSensorSetupBusy(true);
+    try {
+      const message = await prepareCpuMonitoring();
+      toast({ title: "CPU sensor setup", description: message });
+    } catch (error) {
+      toast({ title: "CPU sensor setup did not complete", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+    } finally { setSensorSetupBusy(false); }
+  };
 
   const downloadLiveBat = () => {
     const postUrl = apiUrl('/api/hw-live');
@@ -1252,8 +1276,8 @@ export function LiveMonitorPanel() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-      className="rounded-xl border border-white/5 bg-zinc-900/60 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+      className="rounded-lg border border-white/5 bg-zinc-900/60 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5">
         <div className="flex items-center gap-2">
           <Radio className={cn("w-4 h-4", stats.isLive && !stats.isStale ? "text-emerald-400" : stats.isStale ? "text-amber-400" : "text-zinc-600")} />
           <span className="text-sm font-bold text-white">Live Monitor</span>
@@ -1279,28 +1303,43 @@ export function LiveMonitorPanel() {
         </button>
       </div>
 
+      {isNative() && stats.cpuTemp == null && (
+        <div className="flex flex-wrap items-center justify-between gap-1 border-t border-white/5 px-2.5 py-1.5 text-[10px] text-zinc-400">
+          <span>{stats.cpuSensorStatus === "driver_required"
+            ? "CPU sensor access needs the signed PawnIO driver."
+            : stats.cpuSensorStatus === "sensor_unavailable"
+              ? "CPU sensor unavailable. Security settings or hardware may limit access."
+              : "CPU sensors starting or unavailable."}</span>
+          <button onClick={() => void enableCpuSensors()} disabled={sensorSetupBusy}
+            className="rounded border border-red-500/30 px-2 py-1 font-bold text-red-300 disabled:opacity-50">
+            {sensorSetupBusy ? "Setup open…" : "Set up CPU sensors"}
+          </button>
+        </div>
+      )}
       {stats.isLive ? (
-        <div className="p-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+        <div className="p-2 grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
+          <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</p>
-            <p className="font-mono text-lg font-black text-white">{stats.cpuUsage}%</p>
+            <p className="font-mono text-base font-black text-white">{stats.cpuUsage}%</p>
             {stats.cpuTemp != null && (
-              <p className={cn("text-[10px]", tempColor(stats.cpuTemp))}>{stats.cpuTemp}°C</p>
+              <p title={stats.cpuSensorName || "CPU temperature sensor"} className={cn("text-[10px]", tempColor(stats.cpuTemp))}>{stats.cpuTemp}°C · CPU sensor</p>
             )}
+            {stats.cpuTemp == null && <p className="text-[10px] text-zinc-500">Temperature unavailable</p>}
           </div>
-          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+          <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3" /> GPU</p>
-            <p className="font-mono text-lg font-black text-white">{stats.gpuUsage}%</p>
+            <p className="font-mono text-base font-black text-white">{stats.gpuUsage}%</p>
             {stats.gpuTemp != null && (
               <p className={cn("text-[10px]", tempColor(stats.gpuTemp))}>{stats.gpuTemp}°C</p>
             )}
+            {stats.gpuTemp == null && <p className="text-[10px] text-zinc-500">Temperature unavailable</p>}
           </div>
-          <div className="p-3 rounded-lg border border-white/5 bg-zinc-950/40">
+          <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
-            <p className="font-mono text-lg font-black text-white">{stats.ramPct}%</p>
+            <p className="font-mono text-base font-black text-white">{stats.ramPct}%</p>
             <p className="text-zinc-500 text-[10px]">{stats.ramUsedGB} / {stats.ramTotalGB} GB</p>
           </div>
-          <div className={cn("p-3 rounded-lg border", stats.isStale ? "border-amber-500/10 bg-amber-500/[0.03]" : "border-emerald-500/10 bg-emerald-500/[0.03]")}>
+          <div className={cn("min-w-0 p-2.5 rounded-lg border", stats.isStale ? "border-amber-500/10 bg-amber-500/[0.03]" : "border-emerald-500/10 bg-emerald-500/[0.03]")}>
             <p className={cn("text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1", stats.isStale ? "text-amber-500/70" : "text-emerald-500/70")}><Activity className="w-3 h-3" /> Status</p>
             {stats.isStale ? (
               <>
@@ -1310,22 +1349,22 @@ export function LiveMonitorPanel() {
             ) : (
               <>
                 <p className="text-emerald-400 font-mono text-xs font-bold">Streaming</p>
-                <p className="text-zinc-600 text-[10px]">Updates every 2s</p>
+                <p className="text-zinc-600 text-[10px]">Refresh requested every 2s</p>
               </>
             )}
           </div>
         </div>
       ) : (
-        <div className="p-4 flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-zinc-800/60 border border-white/5 shrink-0">
+        <div className="p-3 flex items-start gap-2">
+          <div className="p-1.5 rounded-lg bg-zinc-800/60 border border-white/5 shrink-0">
             <Download className="w-4 h-4 text-zinc-500" />
           </div>
           <div>
-            <p className="text-sm text-zinc-300 font-medium mb-0.5">Real-time CPU / GPU / RAM stats</p>
-            <p className="text-[11px] text-zinc-500 leading-relaxed">
+            <p className="text-xs text-zinc-300 font-medium mb-0.5">Real-time CPU / GPU / RAM stats</p>
+            <p className="text-[10px] text-zinc-500 leading-snug">
               Download the BAT above and run it while gaming. Press Q or Esc to stop and save the captured samples as a JSON log on your Desktop.
             </p>
-            <p className="text-[10px] text-zinc-600 mt-1.5">
+            <p className="text-[9px] text-zinc-600 mt-1">
               Uses <span className="font-mono text-zinc-500">nvidia-smi</span> for GPU · WMI for CPU/RAM · ACPI/OHM for CPU temp
             </p>
           </div>
@@ -1407,14 +1446,14 @@ export default function SystemScanPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="w-full min-w-0 space-y-2">
         {/* Header */}
         <header>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-              <Activity className="w-5 h-5 text-red-400" />
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20">
+              <Activity className="w-4 h-4 text-red-400" />
             </div>
-            <h1 className="text-2xl font-display font-bold text-white">System Scan</h1>
+            <h1 className="text-xl font-display font-bold text-white">System Scan</h1>
             {native && (
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
                 Native — Deep Scan
@@ -1425,7 +1464,7 @@ export default function SystemScanPage() {
                 data-testid="button-instant-scan-header"
                 onClick={runScan}
                 disabled={scanning}
-                className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-colors"
+                className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-colors"
               >
                 {scanning
                   ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning…</>
@@ -1433,9 +1472,9 @@ export default function SystemScanPage() {
               </button>
             )}
           </div>
-          <p className="text-sm text-zinc-500">
+          <p className="text-xs text-zinc-500">
             {native
-              ? "Direct WMI hardware scan — exact specs, fan count, live CPU temperature, and anti-cheat detection."
+              ? "Hardware scan and live monitoring — real sensor temperatures when available."
               : "Browser-level hardware detection. Run a native scan for full accuracy including temps and fan count."}
           </p>
         </header>
@@ -1449,14 +1488,14 @@ export default function SystemScanPage() {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               data-testid="banner-my-pc"
-              className="flex items-center gap-4 px-5 py-3.5 rounded-2xl border border-white/8 bg-zinc-900/70"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-white/8 bg-zinc-900/70"
             >
-              <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-white/8 shrink-0">
-                <MonitorCheck className="w-5 h-5 text-red-400" />
+              <div className="p-1.5 rounded-lg bg-zinc-800/80 border border-white/8 shrink-0">
+                <MonitorCheck className="w-4 h-4 text-red-400" />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-0.5">My PC</p>
-                <p className="text-white font-semibold text-sm truncate" data-testid="text-system-model">{model}</p>
+                <p className="text-white font-semibold text-xs [overflow-wrap:anywhere]" data-testid="text-system-model">{model}</p>
               </div>
             </motion.div>
           );
@@ -1464,7 +1503,7 @@ export default function SystemScanPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-16 text-zinc-500">
+          <div className="flex items-center justify-center py-8 text-zinc-500">
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
             {native ? "Running deep hardware scan…" : "Scanning hardware…"}
           </div>
@@ -1485,8 +1524,8 @@ export default function SystemScanPage() {
 
         {/* Native error */}
         {!loading && native && scanError && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4 text-sm text-red-400 flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="rounded-lg border border-red-500/20 bg-red-500/[0.04] p-2.5 text-xs text-red-400 flex items-center justify-between gap-3">
               <span>Scan failed: {scanError}</span>
               <button
                 onClick={runScan}
@@ -1498,7 +1537,7 @@ export default function SystemScanPage() {
               </button>
             </div>
             {/* Fallback browser stats */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
               <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName || "Unknown"} />
               <Stat icon={Cpu} label="CPU" value={hw.cpuLabel || "Unknown"} />
               <Stat icon={MemoryStick} label="RAM" value={hw.ramGB ? `${hw.ramGB} GB` : "Browser-limited"} />
@@ -1515,8 +1554,8 @@ export default function SystemScanPage() {
 
         {/* Web — partial/full browser detection */}
         {!loading && !native && !notDetected && (
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
               <Stat icon={MonitorPlay} label="GPU" value={hw.gpuName || "Unknown"}
                 sub={[hw.isNvidia && "NVIDIA", hw.isAmd && "AMD", hw.isIntel && "Intel"].filter(Boolean).join(" · ") || undefined} />
               <Stat icon={Cpu} label="CPU" value={hw.cpuLabel || "Unknown"}
@@ -1537,8 +1576,8 @@ export default function SystemScanPage() {
 
             {/* Unlock deeper scan hint — hide once HW Monitor data is loaded */}
             {!hwMonitorData && (
-              <div className="rounded-xl border border-white/5 bg-zinc-950/30 px-4 py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+              <div className="rounded-lg border border-white/5 bg-zinc-950/30 px-3 py-2 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
                   <Wind className="w-4 h-4 text-zinc-600 shrink-0" />
                   <p className="text-[11px] text-zinc-500">
                     Fan count and CPU temperature require the native app — or run the HW Monitor BAT below.

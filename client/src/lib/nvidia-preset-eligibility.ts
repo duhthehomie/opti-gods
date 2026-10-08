@@ -17,7 +17,18 @@ export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean
     && input.dedicatedNvidiaGpuCount === 1;
 }
 
-export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.52";
+export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.53";
+
+export function isCurrentNvidiaPresetVerified(): boolean {
+  try { return typeof localStorage !== "undefined" && localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "verified"; }
+  catch { return false; }
+}
+
+/** Display/queue intent only. Scanning never runs or reverifies the preset. */
+export function getPendingNvidiaPresetIds(input: NvidiaPresetEligibilityInput): string[] {
+  return canRunNvidiaPreset(input) && !isCurrentNvidiaPresetVerified()
+    ? ["NvidiaControlPanelSettings"] : [];
+}
 
 export function shouldQueueNvidiaPresetReapplyOnce(input: NvidiaPresetEligibilityInput, alreadyQueued: boolean): boolean {
   return !alreadyQueued && canRunNvidiaPreset(input);

@@ -17,9 +17,9 @@ import { ProUnlockButton } from "@/components/pro-gate";
 import { useProStatus } from "@/lib/pro-status";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { computeSmartRecs } from "@/lib/smart-recommendations";
-import { canRunNvidiaPreset, getNvidiaRecommendationIds } from "@/lib/nvidia-preset-eligibility";
+import { canRunNvidiaPreset, getNvidiaRecommendationIds, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { getOptimalSystemResponsiveness, getSystemResponsivenessExplanation } from "@/lib/hardware-optimization";
-import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID, recordNativeToolResult } from "@/lib/native-tweak-runner";
+import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID, recordNativeToolResult, runScriptOnlyTweak } from "@/lib/native-tweak-runner";
 import { getNativeAuthToken, isNative, openMsiUtility } from "@/lib/tauri-bridge";
 import { getPendingRecommendationIds } from "@/lib/recommendation-controls";
 
@@ -369,19 +369,21 @@ export default function Nvidia() {
   );
   const enableSafeMsi = async () => {
     if (!isPro || !canEnableSafeMsi) return;
-    const result = await applyTweakBatch(["EnableNvidiaMSIPro"]);
-    if (!isNative()) {
-      toast({
-        title: "NVIDIA MSI Mode selected",
-        description: result.selectedIds.length
-          ? "Open the Windows app or run the generated script to apply it. Windows changes are not confirmed in the browser."
-          : "No compatible NVIDIA MSI action was selected.",
-      });
-    }
+    if (proToolBusy) return;
+    setProToolBusy("OpenMsiUtilityPro");
+    try {
+      const message = await runScriptOnlyTweak("EnableNvidiaMSIPro");
+      toast({ title: "NVIDIA MSI · High verified", description: message, variant: "success" });
+    } catch (error) {
+      toast({ title: "NVIDIA MSI was not confirmed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+    } finally { setProToolBusy(null); }
   };
   const applyBulk = async (ids: string[], label = "NVIDIA recommendations") => {
     const eligibleIds = ids.filter(id => id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset);
-    const pending = getPendingRecommendationIds(eligibleIds, tweaks, appliedAt);
+    const pending = Array.from(new Set([
+      ...getPendingRecommendationIds(eligibleIds, tweaks, appliedAt),
+      ...(eligibleIds.includes(NVIDIA_PRESET_ACTION_ID) && !isCurrentNvidiaPresetVerified() ? [NVIDIA_PRESET_ACTION_ID] : []),
+    ]));
     if (!pending.length) {
       toast({ title: "No compatible pending tweaks", description: "All recommendations are already confirmed or incompatible with this PC.", variant: "destructive" });
       return;
@@ -447,18 +449,18 @@ export default function Nvidia() {
               </div>
               <p className="mt-2 text-xs leading-relaxed text-zinc-400">
                 Safely enable Message Signaled Interrupts for exactly one live NVIDIA display adapter.
-                The server-side action verifies the Windows MSI capability and writes only MSISupported=1.
+                Runs the authorized script directly, checks MSI capability, and verifies MSI enabled with High priority. Other adapters are untouched.
               </p>
             </div>
             {isPro ? (
               <Button
                 data-testid="button-pro-enable-safe-msi"
                 onClick={() => void enableSafeMsi()}
-                disabled={!canEnableSafeMsi}
+                disabled={!canEnableSafeMsi || !!proToolBusy}
                 title={safeMsiBlockReason || "Enable safe MSI mode"}
                 className="shrink-0 bg-red-600 text-xs font-bold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Enable Verified NVIDIA MSI
+                {proToolBusy ? "Applying & verifying…" : "Enable NVIDIA MSI · High"}
               </Button>
             ) : (
               <ProUnlockButton>
@@ -494,13 +496,11 @@ export default function Nvidia() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
-              <Button disabled={!isNative() || !!proToolBusy || !canEnableSafeMsi} onClick={() => void runProTool("MSI Utility v3 High mode")} className="bg-red-700 text-xs hover:bg-red-600">
-                {proToolBusy === "OpenMsiUtilityPro" ? "Launching…" : "Open MSI Utility v3 · High mode"}
-              </Button>
+              <p className="text-xs text-zinc-400">Use the verified MSI · High action above. Run the NVIDIA performance preset from Full Optimize or Applied Tweaks.</p>
                           </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
           <p className="mt-3 text-[11px] text-amber-300">
-            On supported single-NVIDIA topologies, select only the active graphics card, check MSI, choose High, then Apply in MSI Utility v3. Hybrid and multi-GPU systems stay blocked; driver updates reset this setting.
+            Each run obtains fresh authorization; the feature is reusable. Exactly one active PCI NVIDIA adapter is required. Other display adapters are ignored. Driver updates can reset MSI and priority.
           </p>
         </section>
 

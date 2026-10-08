@@ -10,6 +10,7 @@ export interface MissingRecommendationOptions {
   selectedState: Readonly<Record<string, boolean>>;
   runStatus?: string;
   runItems?: readonly RecommendationRunItem[];
+  forcePendingIds?: readonly string[];
 }
 
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "stopped"]);
@@ -24,6 +25,7 @@ export function getMissingRecommendationIds(
   const terminalRun = options.runStatus !== undefined && TERMINAL_RUN_STATUSES.has(options.runStatus);
   const statusById = new Map((options.runItems ?? []).map(item => [item.id, item.status]));
   return ids.filter(id => {
+    if (options.forcePendingIds?.includes(id)) return true;
     const status = statusById.get(id);
     if (terminalRun && status === "failed") return true;
     if (!options.stateReady) return false;

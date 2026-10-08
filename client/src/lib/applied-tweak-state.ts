@@ -1,5 +1,6 @@
 import { detectAppliedTweaks, getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
+import { isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 
 export interface AppliedTweakSources {
   currentWindows: Record<string, boolean>;
@@ -49,7 +50,7 @@ export async function getAppliedTweakState(): Promise<Record<string, boolean>> {
   const { currentWindows, recordedAt, nvidiaPresetSubmittedAt } = await getAppliedTweakSources();
   return {
     ...Object.fromEntries(Object.keys(recordedAt).filter(id => recordedAt[id] > 0).map(id => [id, true])),
-    ...(nvidiaPresetSubmittedAt != null && nvidiaPresetSubmittedAt > 0 ? { NvidiaControlPanelSettings: true } : {}),
     ...currentWindows,
+    NvidiaControlPanelSettings: isCurrentNvidiaPresetVerified(),
   };
 }

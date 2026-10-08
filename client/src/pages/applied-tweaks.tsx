@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
+import { isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { apiUrl } from "@/lib/api-base";
 import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, getVerifiedNvidiaVibranceMessage, type TweakRunTab } from "@/lib/tweak-run-outcome";
 import { getNativeErrorMessage } from "@/lib/native-error";
@@ -714,6 +715,12 @@ export default function AppliedTweaksPage() {
   const nativeIds = Object.keys(nativeState).filter(id => nativeState[id]);
   const recordedIds = Object.keys(recordedAt).filter(id => !nativeState[id]);
   const ids = Array.from(new Set([...nativeIds, ...recordedIds]));
+  // Keep conflicting records visible for recovery, but do not count them or
+  // unverified NVIDIA submissions as successfully applied.
+  const appliedCount = new Set([
+    ...ids.filter(id => id !== "NvidiaControlPanelSettings" && nativeState[id] !== false),
+    ...(isCurrentNvidiaPresetVerified() ? ["NvidiaControlPanelSettings"] : []),
+  ]).size;
   const selectedTweakIds = Object.entries(tweaks)
     .filter(([id, enabled]) => enabled && Boolean(getTweakMeta(id)) && !ids.includes(id))
     .map(([id]) => id)
@@ -814,7 +821,7 @@ export default function AppliedTweaksPage() {
     </header>
      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
        <button type="button" data-testid="button-ledger-selected" aria-pressed={ledgerView === "selected"} onClick={() => selectLedgerView("selected")} className={cn("rounded-xl border bg-black/20 p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "selected" ? "border-red-500/40" : "border-white/10")}><p className="text-[10px] uppercase tracking-widest text-zinc-500">Selected</p><p className="mt-1 text-2xl font-mono font-bold text-white">{selectedTweakIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Enabled, not yet applied · open list</p></button>
-        <button type="button" data-testid="button-ledger-applied" aria-pressed={ledgerView === "applied"} onClick={() => selectLedgerView("applied")} className={cn("rounded-xl border bg-emerald-500/[.04] p-4 text-left transition-colors hover:border-emerald-500/40", ledgerView === "applied" ? "border-emerald-500/40" : "border-emerald-500/20")}><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{ids.length + (nvidiaPresetSubmittedAt ? 1 : 0)}</p><p className="mt-1 text-[10px] text-zinc-600">Live checks and recorded results · open list</p></button>
+        <button type="button" data-testid="button-ledger-applied" aria-pressed={ledgerView === "applied"} onClick={() => selectLedgerView("applied")} className={cn("rounded-xl border bg-emerald-500/[.04] p-4 text-left transition-colors hover:border-emerald-500/40", ledgerView === "applied" ? "border-emerald-500/40" : "border-emerald-500/20")}><p className="text-[10px] uppercase tracking-widest text-emerald-300">Applied</p><p className="mt-1 text-2xl font-mono font-bold text-white">{appliedCount}</p><p className="mt-1 text-[10px] text-zinc-600">Confirmed and non-conflicting success records · submissions excluded</p></button>
        <button type="button" data-testid="button-ledger-failed" aria-pressed={ledgerView === "failed"} onClick={() => selectLedgerView("failed")} className={cn("rounded-xl border bg-red-500/[.04] p-4 text-left transition-colors hover:border-red-500/40", ledgerView === "failed" ? "border-red-500/40" : "border-red-500/20")}><p className="text-[10px] uppercase tracking-widest text-red-300">Failed</p><p className="mt-1 text-2xl font-mono font-bold text-white">{failedIds.length}</p><p className="mt-1 text-[10px] text-zinc-600">Latest run errors · open list</p></button>
        <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-[10px] uppercase tracking-widest text-zinc-500">Safety</p><p className="mt-1 flex items-center gap-1.5 text-sm font-bold text-emerald-400"><ShieldCheck className="h-4 w-4" /> Direct undo only</p></div>
     </div>
@@ -887,7 +894,8 @@ export default function AppliedTweaksPage() {
          {nvidiaPresetSubmittedAt && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10"><CheckCircle2 className="h-4 w-4 text-blue-300" /></div>
            <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">Opti Gods NVIDIA Preset</p><p className="text-[11px] text-zinc-400">Submission history is shown separately. The complete preset verifies 15 global settings, including Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU selection. Digital Vibrance is read back at 85% on every active NVIDIA monitor; check the latest run for its verified count.</p><p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p></div>
-           <span className="text-[10px] font-mono text-blue-300">SUBMITTED · NOT READ BACK</span>
+           <span className="text-[10px] font-mono text-blue-300">{isCurrentNvidiaPresetVerified() ? "VERIFIED THIS REVISION" : "OLD SUBMISSION · NOT CURRENT VERIFICATION"}</span>
+           <button data-testid="button-run-verify-nvidia-preset" disabled={!isNative() || !allowance?.pro || runActive || Boolean(scriptRunningId) || scriptBatchRunning} onClick={() => void rerunIds(["NvidiaControlPanelSettings"], "NVIDIA preset verification finished", true)} className="rounded-lg border border-red-500/40 bg-red-600/15 px-3 py-2 text-xs font-bold text-red-200 disabled:opacity-40">Run &amp; verify preset</button>
          </div>}
          {ids.length > 0 && <div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>}
          {ids.map(id => {

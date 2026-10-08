@@ -5,7 +5,7 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
-import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY } from "@/lib/nvidia-preset-eligibility";
+import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -578,6 +578,9 @@ async function applyTweakBatchInternal(
     ]);
     const appliedAt = useOptimizationStore.getState().appliedAt;
     const forcedIds = new Set(options.forceReapplyIds ?? []);
+    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID) && !isCurrentNvidiaPresetVerified()) {
+      forcedIds.add(NVIDIA_PRESET_ACTION_ID);
+    }
     alreadyConfirmedIds = compatibleIds.filter(id =>
       !forcedIds.has(id) && (
         detected[id] === true ||

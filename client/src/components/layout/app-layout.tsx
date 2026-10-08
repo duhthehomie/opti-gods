@@ -18,7 +18,8 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
 import { DISCORD_INVITE } from "@/lib/brand-links";
-import { getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
+import { isNative } from "@/lib/tauri-bridge";
+import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 
 const MOBILE_FEATURES = [
   { icon: Zap, title: `${TOTAL_TWEAKS_LABEL} Optimizations`, desc: "Registry, GPU, network, memory, and game-specific tweaks" },
@@ -457,7 +458,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const native = isNative();
-  const [machineAppliedAt, setMachineAppliedAt] = useState<Record<string, number>>({});
+  const [nativeAppliedState, setNativeAppliedState] = useState<Record<string, boolean> | null>(null);
 
   const { tweaks, appliedAt, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
@@ -470,14 +471,14 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
     if (!native) return;
     let mounted = true;
     const refreshAppliedHistory = () => {
-      void getRecordedAppliedTweaks()
-        .then(history => { if (mounted) setMachineAppliedAt(history); })
+      void getAppliedTweakState()
+        .then(state => { if (mounted) setNativeAppliedState(state); })
         .catch(error => console.warn("Could not read Windows applied-tweak history.", error));
     };
     refreshAppliedHistory();
     const interval = window.setInterval(refreshAppliedHistory, 15_000);
     return () => { mounted = false; window.clearInterval(interval); };
-  }, [native]);
+  }, [native, appliedAt]);
 
   useEffect(() => {
     const handler = () => setDialogOpen(true);
@@ -488,10 +489,9 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.entries(tweaks).filter(([id, enabled]) => enabled && id in DEFAULT_TWEAKS && !appliedAt[id]).length;
   const hasEnabledTweaks = Object.entries(tweaks).some(([id, enabled]) => enabled && id in DEFAULT_TWEAKS);
-  const appliedCount = new Set([
-    ...Object.keys(appliedAt),
-    ...(native ? Object.keys(machineAppliedAt) : []),
-  ]).size;
+  const appliedCount = native
+    ? nativeAppliedState == null ? "—" : Object.values(nativeAppliedState).filter(Boolean).length
+    : Object.keys(appliedAt).length;
 
   const isMobileDashboard = isMobile && location === "/";
 
@@ -543,7 +543,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
                 <p className="mt-0.5 text-[11px] text-zinc-500">
                   {osLabel} <span className="text-zinc-700">·</span>{" "}
                   {enabledCount > 0 ? (
-                    <span className="text-red-300 font-semibold">{appliedCount} applied · {Math.max(enabledCount - appliedCount, 0)} queued</span>
+                    <span className="text-red-300 font-semibold">{appliedCount} applied · {enabledCount} selected</span>
                   ) : (
                     <span className="text-zinc-600">ready to scan your rig</span>
                   )}

@@ -2,7 +2,7 @@ import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
-import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce } from "@/lib/nvidia-preset-eligibility";
+import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -488,7 +488,7 @@ export default function Dashboard() {
     pro: isPro,
     hardwareScanned: hw.scanned,
     dedicatedNvidiaGpuCount: fullOptimizeNvidiaGpuCount,
-  }, nvidiaPresetRequeueRecorded);
+  }, isCurrentNvidiaPresetVerified());
   const [refreshingScore, setRefreshingScore] = useState(false);
   const [confirmQuickBoost, setConfirmQuickBoost] = useState<typeof QUICK_BOOST_PRESETS[number] | null>(null);
 
@@ -778,8 +778,8 @@ export default function Dashboard() {
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
   const matchedRecommendedIds = getEligibleSmartRecommendationIds(
-    Array.from(smartRecs.ids).filter(id => id !== NVIDIA_PRESET_ACTION_ID),
-    id => getTweakCompatibility(id).ok,
+    [...Array.from(smartRecs.ids).filter(id => id !== NVIDIA_PRESET_ACTION_ID), ...(nvidiaPresetEligible ? [NVIDIA_PRESET_ACTION_ID] : [])],
+    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   );
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
@@ -792,15 +792,17 @@ export default function Dashboard() {
     && ["running", "stopping"].includes(lastNativeRun!.status);
   if (liveRunActive) {
     lastNativeRun!.items
-      .filter(item => item.status === "applied" && registryIds.has(item.id))
+      .filter(item => item.status === "applied" && registryIds.has(item.id) && detectedNativeTweaks[item.id] !== false)
       .forEach(item => confirmedIds.add(item.id));
   }
   if (native && lastNativeRun) {
     lastNativeRun.items
-      .filter(item => item.status === "applied" && registryIds.has(item.id))
+      .filter(item => item.status === "applied" && registryIds.has(item.id) && detectedNativeTweaks[item.id] !== false)
       .forEach(item => confirmedIds.add(item.id));
   }
   // Native totals combine read-only Windows detection with successful app-run
+  if (nvidiaPresetEligible && isCurrentNvidiaPresetVerified()) confirmedIds.add(NVIDIA_PRESET_ACTION_ID);
+  else confirmedIds.delete(NVIDIA_PRESET_ACTION_ID);
   // history; browser toggle intent alone is never treated as an applied change.
   const allActiveIdsForDisplay = native
     ? confirmedIds
@@ -834,6 +836,7 @@ export default function Dashboard() {
     selectedState: tweaks,
     runStatus: lastNativeRun?.status,
     runItems: lastNativeRun?.items,
+    forcePendingIds: nvidiaPresetOneTimeRequeue ? [NVIDIA_PRESET_ACTION_ID] : [],
   });
   const missingRecommendedCount = missingRecommendedIds.length;
   const hasFailedRecommendationRetry = latestRunIsTerminal && Boolean(lastNativeRun?.items.some(item => item.status === "failed" && matchedRecommendedSet.has(item.id)));
@@ -964,6 +967,12 @@ export default function Dashboard() {
                 </ProUnlockButton>
               )}
 
+              {isPro && <Button
+                data-testid="button-open-full-optimize"
+                onClick={() => setConfirmFullOptimize(true)}
+                disabled={bulkApplying || proStatusLoading || (native && (!nativeDetectionReady || nativeDetectionError))}
+                className="bg-red-700 hover:bg-red-600 text-white font-bold"
+              ><Rocket className="w-4 h-4 mr-2" />Full Optimize</Button>}
               <Button
                 data-testid="button-restore-point"
                 variant="outline"

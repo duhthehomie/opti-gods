@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 include!("nvidia_temperature.rs");
+include!("cpu_sensors.rs");
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -22,6 +23,8 @@ pub struct LivePerformance {
     pub cpu_temp_c: Option<f32>,
     pub gpu_temp_c: Option<f32>,
     pub board_temp_c: Option<f32>,
+    pub cpu_sensor_status: Option<String>,
+    pub cpu_sensor_name: Option<String>,
     /// Task Manager-style total process count. Individual process names are
     /// intentionally not exported by the performance recorder.
     pub running_processes_count: Option<u32>,
@@ -57,13 +60,13 @@ pub struct PerformanceRecordingArgs {
 }
 
 #[tauri::command]
-pub async fn read_live_performance() -> Result<LivePerformance, String> {
-    tokio::task::spawn_blocking(collect_live_performance_blocking)
+pub async fn read_live_performance(app: AppHandle) -> Result<LivePerformance, String> {
+    tokio::task::spawn_blocking(move || collect_live_performance_blocking(app))
         .await
         .map_err(|error| format!("live performance worker failed: {error}"))?
 }
 
-fn collect_live_performance_blocking() -> Result<LivePerformance, String> {
+fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, String> {
     #[cfg(windows)]
     {
         let script = r#"
@@ -144,7 +147,7 @@ if ($null -eq $out.gpu_temp_c) {
   }
 }
 if ($null -eq $out.gpu_load_pct) {
-  $samples = (Get-Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 0.25 -MaxSamples 1).CounterSamples
+  $samples = (Get-Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 1 -MaxSamples 1).CounterSamples
   if ($samples) {
     $sum = ($samples | Measure-Object -Property CookedValue -Sum).Sum
     if ($null -ne $sum) { $out.gpu_load_pct = [math]::Min(100, [math]::Round([double]$sum, 1)) }
@@ -256,12 +259,21 @@ $out.live = $true
 $out | ConvertTo-Json -Compress
 "#;
 
+        // Start the continuous reader before slow WMI calls. Never reopen the
+        // hardware library for every UI poll.
+        let _ = read_bundled_sensors(&app);
         // Query NVAPI independently so a Windows counter/WMI failure cannot hide a valid GPU sensor.
-        let nvidia_temperature = read_nvidia_temperature();
-        let temperature_sample = || LivePerformance {
-            live: nvidia_temperature.is_some(),
-            gpu_temp_c: nvidia_temperature,
-            ..LivePerformance::default()
+        let temperature_sample = || {
+            let sensors = read_bundled_sensors(&app);
+            let gpu = read_nvidia_temperature().or(sensors.gpu_temp_c);
+            LivePerformance {
+                live: gpu.is_some() || sensors.cpu_temp_c.is_some(),
+                gpu_temp_c: gpu,
+                cpu_temp_c: sensors.cpu_temp_c,
+                cpu_sensor_status: Some(sensors.status),
+                cpu_sensor_name: sensors.cpu_sensor_name,
+                ..LivePerformance::default()
+            }
         };
         let output = match Command::new(crate::commands::windows_powershell_executable())
             .args([
@@ -275,12 +287,10 @@ $out | ConvertTo-Json -Compress
             .creation_flags(0x0800_0000)
             .output() {
                 Ok(output) => output,
-                Err(_) if nvidia_temperature.is_some() => return Ok(temperature_sample()),
-                Err(error) => return Err(format!("live performance command failed: {error}")),
+                Err(_) => return Ok(temperature_sample()),
             };
         if !output.status.success() {
-            if nvidia_temperature.is_some() { return Ok(temperature_sample()); }
-            return Err("Windows did not return live performance data.".into());
+            return Ok(temperature_sample());
         }
         let text = String::from_utf8_lossy(&output.stdout);
         let json = match text
@@ -288,19 +298,29 @@ $out | ConvertTo-Json -Compress
             .rev()
             .find(|line| line.trim_start().starts_with('{')) {
                 Some(json) => json,
-                None if nvidia_temperature.is_some() => return Ok(temperature_sample()),
-                None => return Err("Windows returned no live performance payload.".into()),
+                None => return Ok(temperature_sample()),
             };
         let mut performance: LivePerformance = match serde_json::from_str(json) {
             Ok(performance) => performance,
-            Err(_) if nvidia_temperature.is_some() => return Ok(temperature_sample()),
-            Err(error) => return Err(format!("invalid live performance payload: {error}")),
+            Err(_) => return Ok(temperature_sample()),
         };
-        if performance.gpu_temp_c.is_none() { performance.gpu_temp_c = nvidia_temperature; }
+        // Sample again after WMI/counters: do not present a pre-query sample as
+        // current after a slow Windows provider. Prefer direct driver readback.
+        let sensors = read_bundled_sensors(&app);
+        if sensors.cpu_temp_c.is_some() { performance.cpu_temp_c = sensors.cpu_temp_c; }
+        performance.cpu_sensor_status = Some(sensors.status);
+        performance.cpu_sensor_name = sensors.cpu_sensor_name;
+        if let Some(current) = read_nvidia_temperature() {
+            performance.gpu_temp_c = Some(current);
+        } else if performance.gpu_temp_c.is_none() {
+            performance.gpu_temp_c = sensors.gpu_temp_c;
+        }
+        performance.live |= performance.cpu_temp_c.is_some() || performance.gpu_temp_c.is_some();
         Ok(performance)
     }
     #[cfg(not(windows))]
     {
+        let _ = app;
         Err("Live performance telemetry is Windows-only.".into())
     }
 }

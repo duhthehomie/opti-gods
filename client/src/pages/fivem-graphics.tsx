@@ -527,9 +527,9 @@ const PACK_THEMES: Array<{
   settings: Partial<PackOpts>;
 }> = [
   {
-    key: "fps_god", label: "FPS GOD", desc: "Black sky, no clouds, frozen noon — absolute max FPS",
+    key: "fps_god", label: "FPS GOD", desc: "Deep blue sky, no clouds — low-overhead visual preset",
     icon: Zap, color: "emerald",
-    settings: { skyColorKey: "black_sky", skyBrightness: 60, cloudThickness: 0, jetStreams: 0, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 12, disableRain: true, disableSnow: true, keepProps: true },
+    settings: { skyColorKey: "deep_blue", skyBrightness: 60, cloudThickness: 0, jetStreams: 0, aerialClouds: false, lightRays: false, atmosphereHaze: false, freezeTime: true, freezeHour: 12, disableRain: true, disableSnow: true, keepProps: true },
   },
   {
     key: "blue_sky", label: "Clear Blue", desc: "leaq's daily — vivid blue, zero clouds, frozen noon",
@@ -1501,7 +1501,7 @@ export default function FivemGraphics() {
                 { key: "deep_blue",   brightness: 30, hour: 5,  label: "Pre-Dawn",         lightRays: false, lightRayIntensity: 0  },
                 { key: "rose",        brightness: 80, hour: 18, label: "Sunset Clouds",    lightRays: true,  lightRayIntensity: 35 },
               ] as Array<{ key: SkyColorKey; brightness: number; hour: number; label: string; lightRays: boolean; lightRayIntensity: number }>).map(({ key, brightness, hour, label, lightRays: lr, lightRayIntensity: lri }) => (
-                <div key={label} className="relative rounded-xl overflow-hidden border border-white/8 hover:border-white/25 transition-all cursor-default group">
+                <button type="button" key={label} data-testid={`button-gallery-${key}`} onClick={() => { setPackName(label); applyTheme({ skyColorKey: key, skyBrightness: brightness, freezeHour: hour, freezeMinute: 0, freezeTime: true, cloudThickness: 0, jetStreams: 0, disableRain: true, disableSnow: true, aerialClouds: false, aerialDensity: 0, lightRays: lr, lightRayIntensity: lri, sunIntensity: 60, atmosphereHaze: false, keepProps: true }); }} className="relative rounded-xl overflow-hidden border border-white/8 hover:border-white/25 transition-all cursor-pointer group text-left">
                   <SkyPreview
                     skyColorKey={key} skyBrightness={brightness}
                     cloudThickness={0} jetStreams={0}
@@ -1512,9 +1512,9 @@ export default function FivemGraphics() {
                     sunIntensity={60} atmosphereHaze={false}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none flex items-end p-3">
-                    <span className="text-[10px] font-bold text-white/95 uppercase tracking-wider">{label}</span>
+                    <span className="text-[10px] font-bold text-white/95 uppercase tracking-wider">{label} · Open builder</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -1631,59 +1631,8 @@ export default function FivemGraphics() {
               {/* Left: Controls */}
               <div className="space-y-4">
 
-                {/* AI Pack Generator */}
-                <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/20 to-black p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
-                      <Wand2 className="w-4 h-4 text-red-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-white">AI Pack Generator</p>
-                      <p className="text-[10px] text-zinc-500">Describe the vibe — AI or built-in local rules pre-fill your sliders.</p>
-                    </div>
-                  </div>
-                  <textarea
-                    ref={aiInputRef} value={aiPrompt}
-                    onChange={e => setAiPrompt(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiGenerate(); }}}
-                    placeholder="e.g. &quot;golden sunrise with light rays&quot; or &quot;moody pink night sky&quot;"
-                    data-testid="input-ai-pack-prompt"
-                    rows={2}
-                    className="w-full bg-black/40 border border-white/10 focus:border-red-500/40 rounded-xl px-4 py-3 text-white text-sm outline-none transition-colors resize-none placeholder:text-zinc-600"
-                  />
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleAiGenerate}
-                      disabled={aiLoading || !aiPrompt.trim()}
-                      data-testid="button-ai-generate-pack"
-                      className={cn(
-                        "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all",
-                        aiLoading || !aiPrompt.trim()
-                          ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                          : "bg-red-600 hover:bg-red-500 text-white"
-                      )}
-                    >
-                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizonal className="w-4 h-4" />}
-                      {aiLoading ? "Generating..." : "Generate Pack"}
-                    </button>
-                    <p className="text-[10px] text-zinc-600">Enter to submit</p>
-                  </div>
-                  <AnimatePresence>
-                    {aiSuccess && (
-                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-emerald-300">{aiSuccess}</p>
-                      </motion.div>
-                    )}
-                    {aiError && (
-                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-red-300">{aiError}</p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4">
+                  <p className="text-xs text-zinc-400">Use the presets and explicit controls below. AI generation is unavailable until every returned setting can be validated against supported pack output.</p>
                 </div>
 
                 {/* Quick visual options */}

@@ -1,8 +1,15 @@
 function buildDefenderExclusionCommand(): string {
   return String.raw`$ErrorActionPreference = 'Stop'
+# Use the inbox Defender module explicitly; a NoProfile host may not have
+# auto-loaded its commands. Never reinstall or enable a disabled antivirus.
+$defenderModule = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1'
+if (Test-Path -LiteralPath $defenderModule) {
+  try { Import-Module -Name $defenderModule -ErrorAction Stop }
+  catch { Write-Output "[SKIP] Microsoft Defender module could not load: $($_.Exception.Message). No exclusion was changed."; return }
+}
 $requiredCmdlets = @('Add-MpPreference','Get-MpPreference','Remove-MpPreference')
-$missingCmdlets = @($requiredCmdlets | Where-Object { -not (Get-Command -Name $_ -ErrorAction SilentlyContinue) })
-if ($missingCmdlets.Count -gt 0) { throw "Not for this system: Microsoft Defender command(s) unavailable: $($missingCmdlets -join ', '). No exclusion was changed." }
+$missingCmdlets = @($requiredCmdlets | Where-Object { -not (Get-Command -Name $_ -ErrorAction Ignore) })
+if ($missingCmdlets.Count -gt 0) { Write-Output "[SKIP] Microsoft Defender is unavailable or removed on this Windows installation: $($missingCmdlets -join ', '). No exclusion was changed. Install/restore Defender separately only if you intend to use it."; return }
 $candidatePaths = @('C:\Program Files\Call of Duty','C:\Program Files (x86)\Call of Duty','C:\Program Files\Battle.net Apps\Call of Duty','C:\Program Files (x86)\Steam\steamapps\common\Call of Duty Modern Warfare 2','D:\Call of Duty','D:\SteamLibrary\steamapps\common\Call of Duty Modern Warfare 2','E:\Call of Duty','E:\SteamLibrary\steamapps\common\Call of Duty Modern Warfare 2')
 $found = @($candidatePaths | Where-Object { Test-Path -LiteralPath $_ })
 if (-not $found.Count) { throw "Not for this system: Call of Duty installation folder was not found on the available drives. No exclusion was changed." }
@@ -218,6 +225,21 @@ Write-Host "[Ryzen 5 3500] Opti Gods Power Plan active and verified. CPU boost r
 
 
 export function buildSafeWindowsCommandOverride(id: string): string | undefined {
+  if (id === "FiveM1650VRAMBudget") return String.raw`$ErrorActionPreference = 'Stop'
+$dir = "$env:USERPROFILE\Documents\Rockstar Games\GTA V"
+New-Item -Path $dir -ItemType Directory -Force | Out-Null
+$path = Join-Path $dir 'commandline.txt'
+$before = if (Test-Path -LiteralPath $path) { [string](Get-Content -LiteralPath $path -Raw -ErrorAction Stop) } else { '' }
+$updated = [regex]::Replace($before, '(?i)(?<!\S)-availablevidmem\s+\S+', '').Trim()
+$updated = [regex]::Replace($updated, '(?i)(?<!\S)-percentvidmem\s+\S+', '').Trim()
+$updated = ($updated + ' -availablevidmem 4096 -percentvidmem 100').Trim()
+Set-Content -LiteralPath $path -Value $updated -Encoding ASCII -ErrorAction Stop
+$actual = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+if ($actual -notmatch '(?i)(?<!\S)-availablevidmem\s+4096(?:\s|$)' -or $actual -notmatch '(?i)(?<!\S)-percentvidmem\s+100(?:\s|$)') {
+  Set-Content -LiteralPath $path -Value $before -Encoding ASCII -ErrorAction Stop
+  throw 'The VRAM command-line values failed readback; the previous contents were restored.'
+}
+Write-Output '[VRAM] commandline.txt values written and read back: availablevidmem=4096, percentvidmem=100. Game consumption is not verified by this file check.'`;
   if (["SetHighPerformancePlan", "FiveM3500PerfPlan", "FiveM5600PowerPlan", "FiveMIntel14PowerPlan"].includes(id)) return buildOptiGods3500PlanCommand();
   if (id === "EnableNvidiaMSIPro") {
         return String.raw`$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' })
@@ -231,10 +253,30 @@ export function buildSafeWindowsCommandOverride(id: string): string | undefined 
     if (!(Test-Path -LiteralPath $msiPath)) { throw "Windows did not expose an MSI capability path for the NVIDIA adapter ($($gpu.FriendlyName)). No registry values were changed." }
     $before = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop
     if ($before -notin @(0,1)) { throw "The NVIDIA adapter has an unsupported MSISupported value ($before). No registry values were changed." }
-    Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop
+    $priorityPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($gpu.InstanceId)\Device Parameters\Interrupt Management\Affinity Policy"
+    $oldPriority = Get-ItemPropertyValue -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Ignore
+    try {
+      Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop
+      New-Item -Path $priorityPath -Force -ErrorAction Stop | Out-Null
+      New-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -Value 3 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+      if ((Get-ItemPropertyValue -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Stop) -ne 3) {
+        throw 'Windows did not verify High priority for the NVIDIA adapter.'
+      }
     $after = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop
     if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the NVIDIA adapter." }
-    Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). Other display adapters were ignored." -ForegroundColor Green`;
+    } catch {
+      $originalError = $_.Exception.Message
+      try {
+        Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value $before -Type DWord -Force -ErrorAction Stop
+        if ($null -ne $oldPriority) {
+          Set-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -Value $oldPriority -Type DWord -Force -ErrorAction Stop
+        } else {
+          Remove-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Ignore
+        }
+      } catch { throw "NVIDIA MSI failed: $originalError. Rollback also failed: $($_.Exception.Message)" }
+      throw "NVIDIA MSI failed and previous values were restored: $originalError"
+    }
+    Write-Host "[NVIDIA MSI] Verified MSI enabled and High priority only on $($gpu.FriendlyName). Other display adapters were ignored." -ForegroundColor Green`;
       }
       if (id === "CodDefenderExclusion") return buildDefenderExclusionCommand();
   if (id === "IntelOldGenPowerOpt" || id === "FiveM3500PerfPlan" || id === "Cod3500PowerPlan") return buildPowerPlanCommand(id);

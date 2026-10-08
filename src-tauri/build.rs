@@ -1,6 +1,10 @@
 fn main() {
     println!("cargo:rerun-if-changed=app.manifest");
     println!("cargo:rerun-if-changed=resources/native-tweak-scripts.json");
+    println!("cargo:rerun-if-changed=sensor-reader/Program.cs");
+    println!("cargo:rerun-if-changed=sensor-reader/OptiGods.Sensors.csproj");
+    #[cfg(windows)]
+    publish_sensor_reader();
     #[cfg(windows)]
     validate_bundled_scripts();
 
@@ -8,6 +12,24 @@ fn main() {
     let attributes = tauri_build::Attributes::new().windows_attributes(windows);
 
     tauri_build::try_build(attributes).expect("failed to run tauri-build");
+}
+
+#[cfg(windows)]
+fn publish_sensor_reader() {
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("missing Cargo manifest directory");
+    let base = std::path::Path::new(&manifest);
+    let output = base.join("resources/cpu-sensors");
+    std::fs::create_dir_all(&output).expect("cannot prepare sensor resources");
+    let status = std::process::Command::new("dotnet")
+        .args(["publish", "--configuration", "Release", "--output"])
+        .arg(&output).arg(base.join("sensor-reader/OptiGods.Sensors.csproj"))
+        .status().expect("The Windows build requires the .NET 8 SDK to publish the sensor reader");
+    assert!(status.success(), "sensor reader publish failed; refusing an incomplete installer");
+    let command = r#"$ErrorActionPreference='Stop'; (Get-FileHash -LiteralPath (Join-Path $env:OPTI_SENSOR_DIR 'OptiGods.Sensors.exe') -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath (Join-Path $env:OPTI_SENSOR_DIR 'helper.sha256') -Encoding ASCII"#;
+    let status = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", command])
+        .env("OPTI_SENSOR_DIR", output).status().expect("cannot hash sensor reader");
+    assert!(status.success(), "sensor reader integrity manifest generation failed");
 }
 
 #[cfg(windows)]

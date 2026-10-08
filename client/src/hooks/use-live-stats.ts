@@ -10,6 +10,8 @@ function readSharedNativeTelemetry() {
 }
 
 export interface LiveStats {
+  cpuSensorStatus?: string;
+  cpuSensorName?: string;
   cpuUsage: number;
   gpuUsage: number;
   ramUsedGB: number;
@@ -27,6 +29,8 @@ export interface LiveStats {
 }
 
 interface HwLiveResponse {
+  cpu_sensor_status?: string;
+  cpu_sensor_name?: string;
   live: boolean;
   ts?: number;
   cpu_load_pct?: number;
@@ -100,9 +104,9 @@ export function useLiveStats(ramGB: number): LiveStats {
       try {
         if (isNative()) {
           const native = await readSharedNativeTelemetry();
-          if (native?.live) {
+          if (native && (native.live || native.cpu_sensor_status)) {
             realData = {
-              live: true,
+              live: native.live,
               cpu_load_pct: native.cpu_load_pct ?? undefined,
               gpu_load_pct: native.gpu_load_pct ?? undefined,
               ram_total_gb: native.ram_total_gb ?? undefined,
@@ -111,6 +115,8 @@ export function useLiveStats(ramGB: number): LiveStats {
               cpu_temp_c: native.cpu_temp_c ?? undefined,
               gpu_temp_c: native.gpu_temp_c ?? undefined,
               board_temp_c: native.board_temp_c ?? undefined,
+              cpu_sensor_status: native.cpu_sensor_status ?? undefined,
+              cpu_sensor_name: native.cpu_sensor_name ?? undefined,
             };
           }
         } else {
@@ -139,10 +145,12 @@ export function useLiveStats(ramGB: number): LiveStats {
         cpuHistRef.current.shift(); cpuHistRef.current.push(cpu);
         gpuHistRef.current.shift(); gpuHistRef.current.push(gpu);
 
-        const importedTemps = readImportedSensorTemps();
+        const importedTemps = isNative() ? { cpuTemp: null, gpuTemp: null } : readImportedSensorTemps();
         const cpuTemp = realData.cpu_temp_c ?? importedTemps.cpuTemp;
         const gpuTemp = realData.gpu_temp_c ?? importedTemps.gpuTemp;
         const snap: LiveStats = {
+          cpuSensorStatus: realData.cpu_sensor_status,
+          cpuSensorName: realData.cpu_sensor_name,
           cpuUsage:   Math.round(cpu),
           gpuUsage:   Math.round(gpu),
           ramUsedGB:  Math.round(ramUsed * 10) / 10,
@@ -155,7 +163,7 @@ export function useLiveStats(ramGB: number): LiveStats {
           gpuTempSource: realData.gpu_temp_c != null ? "live" : importedTemps.gpuTemp != null ? "imported" : null,
           cpuHistory: [...cpuHistRef.current],
           gpuHistory: [...gpuHistRef.current],
-          isLive:     true,
+          isLive:     realData.live,
           isStale:    false,
         };
         lastRealRef.current = snap;
@@ -163,7 +171,7 @@ export function useLiveStats(ramGB: number): LiveStats {
         return;
       }
 
-      const importedTemps = readImportedSensorTemps();
+      const importedTemps = isNative() ? { cpuTemp: null, gpuTemp: null } : readImportedSensorTemps();
       if (lastRealRef.current) {
         const previous = lastRealRef.current;
         setStats({
@@ -196,7 +204,7 @@ export function useLiveStats(ramGB: number): LiveStats {
       });
     };
 
-    const id = setInterval(tick, 5000);
+    const id = setInterval(tick, 2000);
     tick();
     return () => { cancelled = true; clearInterval(id); };
   }, [totalRAM]);

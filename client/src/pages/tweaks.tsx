@@ -16,7 +16,7 @@ import { useOsDetection } from "@/hooks/use-os-detection";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useProStatus, useProStatusLoading } from "@/lib/pro-status";
-import { canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
+import { canRunNvidiaPreset, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { applyTweakBatch, NVIDIA_PRESET_ACTION_ID } from "@/lib/native-tweak-runner";
@@ -169,8 +169,10 @@ function SectionCard({
 }) {
   const Icon  = section.icon;
   const eligible = eligibleIds ? sectionRecommendedIds(section, eligibleIds) : null;
-  const count = eligible ? eligible.length : sectionCount(section);
+  const profileIncluded = section.id === "nvidia" && eligibleIds?.includes(NVIDIA_PRESET_ACTION_ID) && !eligible?.includes(NVIDIA_PRESET_ACTION_ID);
+  const count = (eligible ? eligible.length : sectionCount(section)) + (profileIncluded ? 1 : 0);
   if (eligible && activeIds) activeTweaks = eligible.filter(id => activeIds.has(id)).length;
+  if (profileIncluded && activeIds?.has(NVIDIA_PRESET_ACTION_ID)) activeTweaks++;
   const pct   = count > 0 ? Math.min(Math.round((activeTweaks / count) * 100), 100) : 0;
 
   // ── Compact: slim sidebar nav item ──────────────────────────────────────────
@@ -373,6 +375,8 @@ export default function TweaksPage() {
       ? Object.keys(detectedTweaks).filter(id => detectedTweaks[id] && registryIds.has(id))
       : Object.entries(tweaks).filter(([, enabled]) => enabled).map(([id]) => id),
   );
+  if (nvidiaPresetEligible && isCurrentNvidiaPresetVerified()) displayedActiveIds.add(NVIDIA_PRESET_ACTION_ID);
+  else displayedActiveIds.delete(NVIDIA_PRESET_ACTION_ID);
   const liveRunActive = native
     && Boolean(nativeRun)
     && ["running", "stopping"].includes(nativeRun!.status);
@@ -431,6 +435,7 @@ export default function TweaksPage() {
     selectedState: tweaks,
     runStatus: nativeRun?.status,
     runItems: nativeRun?.items,
+    forcePendingIds: native && nvidiaPresetEligible && !isCurrentNvidiaPresetVerified() ? [NVIDIA_PRESET_ACTION_ID] : [],
   });
 
   const applyMatched = async () => {

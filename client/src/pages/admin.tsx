@@ -6218,7 +6218,7 @@ export default function Admin() {
                     </p>
                     <p className="text-[10px] text-zinc-500 mt-0.5">
                       These sessions have no matching code in the database. They may be from deleted codes or old data —
-                      anyone holding them currently has free Pro access.
+                      they need review. An orphan row alone is not evidence of authorized Pro access.
                     </p>
                   </div>
                   <button
@@ -6241,7 +6241,8 @@ export default function Admin() {
                 <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white/5">
                   <Users className="w-4 h-4 text-zinc-500 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-white">{sessions.length} active Pro session{sessions.length !== 1 ? "s" : ""}</p>
+                    <p className="text-xs font-bold text-white">{sessions.filter(s => s.sessionKind === "pro").length} Pro session tokens · {sessions.filter(s => s.sessionKind === "account" && s.isPro).length} Pro account rows · {sessions.filter(s => s.sessionKind === "account" && !s.isPro).length} Free accounts</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Free Discord accounts are included here. Tokens are not unique paying members.</p>
                   </div>
                   <button
                     data-testid="button-sweep-orphans-quiet"

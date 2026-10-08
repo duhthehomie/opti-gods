@@ -1,4 +1,4 @@
 {
-  "version": "5.2.52",
-  "notes": "V5.2.52 — keeps the NVIDIA preset pending in Full Optimize until verified; bundles the four reported Pro script actions with live authorization and Windows PowerShell parse checks; preserves native error details and individual retry status; restores cached Discord identity without stale browser cookies; compacts the RAM card and strengthens NVIDIA temperature fallback while labeling ACPI readings as board temperatures."
+  "version": "5.2.53",
+  "notes": "V5.2.53 — NVIDIA preset missing/reapply verification, genuine CPU/GPU sensor monitoring with optional signed-driver setup, compact System Scan, and reviewed native tweak fixes."
 }

@@ -245,6 +245,8 @@ export async function scanHardware(): Promise<NativeHardwareScan | null> {
 }
 
 export interface NativeLivePerformance {
+  cpu_sensor_status?: string | null;
+  cpu_sensor_name?: string | null;
   live: boolean;
   cpu_load_pct?: number | null;
   gpu_load_pct?: number | null;
@@ -270,6 +272,11 @@ export interface NativeLivePerformance {
 export async function readLivePerformance(): Promise<NativeLivePerformance | null> {
   if (!isNative()) return null;
   return invoke<NativeLivePerformance>("read_live_performance");
+}
+
+export async function prepareCpuMonitoring(): Promise<string> {
+  if (!isNative()) throw new Error("CPU sensor setup requires the Windows app.");
+  return invoke<string>("prepare_cpu_monitoring");
 }
 
 export async function savePerformanceRecording(filename: string, content: string): Promise<string> {
