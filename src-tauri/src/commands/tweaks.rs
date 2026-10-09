@@ -284,6 +284,9 @@ $checks | ConvertTo-Json -Compress
                 }
             }
         }
+        if let Some(current) = crate::commands::misc::nvidia_preset_is_current() {
+            detected.insert("NvidiaControlPanelSettings".into(), current);
+        }
         detected
     }
     #[cfg(not(windows))]

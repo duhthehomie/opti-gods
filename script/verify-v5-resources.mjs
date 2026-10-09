@@ -10,9 +10,11 @@ if (!permissions.includes('identifier = "allow-open-msi-utility"') ||
 }
 const miscSource = readFileSync(resolve(root, "src-tauri/src/commands/misc.rs"), "utf8");
 if (!miscSource.includes('.join("resources").join("msi-utility")') ||
-    !miscSource.includes('.join("resources").join("nvidia-profile-inspector")') ||
-    !miscSource.includes('.current_dir(&inspector_dir)')) {
+    !miscSource.includes('.join("resources").join("nvidia-profile-inspector")')) {
   throw new Error("Tauri array-resource runtime paths are missing");
+}
+if (!miscSource.includes("nvidia_profile::apply(&settings") || !miscSource.includes("nvidia_profile::verify(&settings")) {
+  throw new Error("Direct NVIDIA transaction and final readback are missing");
 }
 const files = {
   "src-tauri/resources/msi-utility/MSI_util_v3.exe": "695800afad96f858a3f291b7df21c16649528f13d39b63fb7c233e5676c8df6f",

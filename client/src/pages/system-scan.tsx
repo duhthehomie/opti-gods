@@ -305,7 +305,6 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   const [sensorSetupBusy, setSensorSetupBusy] = useState(false);
   const enableCpuSensors = async () => {
     if (sensorSetupBusy || !isNative()) return;
-    if (!window.confirm("CPU temperature access requires the official signed PawnIO hardware driver. This opens its installer and changes your Windows installation. Do not disable Windows security or use the unrestricted edition. Continue?")) return;
     setSensorSetupBusy(true);
     try {
       toast({ title: "CPU sensor setup", description: await prepareCpuMonitoring() });
@@ -379,10 +378,10 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 
       {isNative() && cpuTemp == null && (
         <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
-          <span>CPU temperature unavailable. Set up signed sensor access.</span>
+          <span>Read CPU enables the official signed sensor driver in the app if needed.</span>
           <button data-testid="button-setup-cpu-sensors" onClick={() => void enableCpuSensors()} disabled={sensorSetupBusy}
             className="rounded border border-red-500/30 px-2 py-1 font-bold text-red-300 disabled:opacity-50">
-            {sensorSetupBusy ? "Setup open…" : "Set up CPU sensors"}
+            {sensorSetupBusy ? "Reading CPU…" : "Read CPU"}
           </button>
         </div>
       )}
@@ -1163,7 +1162,6 @@ export function LiveMonitorPanel() {
   const [sensorSetupBusy, setSensorSetupBusy] = useState(false);
   const enableCpuSensors = async () => {
     if (sensorSetupBusy || !isNative()) return;
-    if (!window.confirm("Enable CPU temperature sensors?\n\nThis downloads and opens the official, signed PawnIO driver installer. It adds a Windows kernel driver for hardware access. Choose the official signed edition, not unrestricted. Do not disable Windows security if installation is blocked.\n\nContinue?")) return;
     setSensorSetupBusy(true);
     try {
       const message = await prepareCpuMonitoring();
@@ -1328,13 +1326,13 @@ export function LiveMonitorPanel() {
       {isNative() && stats.cpuTemp == null && (
         <div className="flex flex-wrap items-center justify-between gap-1 border-t border-white/5 px-2.5 py-1.5 text-[10px] text-zinc-400">
           <span>{stats.cpuSensorStatus === "driver_required"
-            ? "CPU sensor access needs the signed PawnIO driver."
+            ? "Read CPU enables the official signed sensor driver in the app."
             : stats.cpuSensorStatus === "sensor_unavailable"
               ? "CPU sensor unavailable. Security settings or hardware may limit access."
               : "CPU sensors starting or unavailable."}</span>
           <button onClick={() => void enableCpuSensors()} disabled={sensorSetupBusy}
             className="rounded border border-red-500/30 px-2 py-1 font-bold text-red-300 disabled:opacity-50">
-            {sensorSetupBusy ? "Setup open…" : "Set up CPU sensors"}
+            {sensorSetupBusy ? "Reading CPU…" : "Read CPU"}
           </button>
         </div>
       )}

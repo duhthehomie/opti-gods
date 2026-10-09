@@ -607,6 +607,52 @@ fn rollback_dvc_with_handles(
 }
 
 #[cfg(windows)]
+static NVIDIA_PRESET_IMPORT_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
+fn nvidia_driver_fingerprint(api: &NvApiLibrary) -> Result<String, String> {
+    type GetDriver = unsafe extern "C" fn(*mut u32, *mut i8) -> i32;
+    let pointer = api.resolve(0x2926_AAAD, "NVIDIA driver version")?;
+    let get_driver: GetDriver = unsafe { std::mem::transmute(pointer) };
+    let mut version = 0;
+    let mut branch = [0i8; 64];
+    let status = unsafe { get_driver(&mut version, branch.as_mut_ptr()) };
+    if status != 0 { return Err(format!("NVIDIA driver version read failed ({status}).")); }
+    let branch = branch.iter().take_while(|c| **c != 0).map(|c| *c as u8).collect::<Vec<_>>();
+    Ok(format!("{version}:{}", String::from_utf8_lossy(&branch)))
+}
+
+/// Read-only: driver changes or clean-install resets invalidate old receipts.
+#[cfg(windows)]
+pub(crate) fn nvidia_preset_is_current() -> Option<bool> {
+    if NVIDIA_PRESET_IMPORT_BUSY.load(std::sync::atomic::Ordering::SeqCst) { return None; }
+    let check = (|| -> Result<(), String> {
+        let api = NvApiLibrary::load()?;
+        let fingerprint = nvidia_driver_fingerprint(&api)?;
+        use crate::win32::registry::{read_value, Hive, RegValue};
+        match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
+            Ok(RegValue::Sz(saved)) if saved == fingerprint => {}
+            _ => return Err("NVIDIA driver changed or has no verified receipt.".into()),
+        }
+        let targets = nvidia_display::runtime::active_targets(&api)?;
+        if targets.is_empty() { return Err("No active NVIDIA display.".into()); }
+        let (_, gpu_value) = nvidia_display::runtime::explicit_gpu_value(&api, &targets)?;
+        let expected = preset_with_explicit_gpu(include_str!("../../resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"), &gpu_value)?;
+        nvidia_profile::verify(&parse_global_nip_settings(&expected)?)?;
+        let get: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(api.resolve(0x0E45_002D, "Digital Vibrance readback")?) };
+        for target in targets {
+            let mut info = dvc_info(0);
+            let status = unsafe { get(target.handle as *mut std::ffi::c_void, target.output_id, &mut info) };
+            if status != 0 || info.current_level != dvc_level_for_percent(info.min_level, info.default_level, info.max_level, 85)? {
+                return Err("An NVIDIA monitor no longer has verified 85% vibrance.".into());
+            }
+        }
+        Ok(())
+    })();
+    Some(check.is_ok())
+}
+
+#[cfg(windows)]
 fn set_nvidia_digital_vibrance_85(expected_display_ids: &[u32]) -> Result<NvidiaDvcApplySummary, String> {
     let api = NvApiLibrary::load()?;
     let get_ptr = api.resolve(0x0E45_002D, "extended Digital Vibrance read")?;
@@ -818,6 +864,12 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
         let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
         let worker_phase = phase.clone();
         let mut result = tokio::task::spawn_blocking(move || {
+            NVIDIA_PRESET_IMPORT_BUSY.store(true, std::sync::atomic::Ordering::SeqCst);
+            struct PresetBusyGuard;
+            impl Drop for PresetBusyGuard {
+                fn drop(&mut self) { NVIDIA_PRESET_IMPORT_BUSY.store(false, std::sync::atomic::Ordering::SeqCst); }
+            }
+            let _busy = PresetBusyGuard;
             let report = |message: &str| {
                 *worker_phase.lock().unwrap_or_else(|error| error.into_inner()) = message.to_string();
             };
@@ -881,6 +933,11 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 .collect::<Vec<_>>()
                 .join(", ");
             let vibrance_message = nvidia_display::vibrance_success(dvc.supported_display_count);
+            let fingerprint = nvidia_driver_fingerprint(&NvApiLibrary::load()?)?;
+            crate::win32::registry::write_sz(
+                crate::win32::registry::Hive::CurrentUser, r"Software\OptiGods",
+                "NvidiaPresetDriver", &fingerprint,
+            ).map_err(|error| format!("Could not save verified NVIDIA driver receipt: {error}"))?;
             Ok::<String, String>(format!(
                 "{vibrance_message}. Verified {verified_setting_count}/15 global settings: Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU {gpu_name}, plus the original 12 settings. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults. PhysX processor selection is a separate control and was not changed by this profile.",
             ))

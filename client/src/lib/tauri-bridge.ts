@@ -209,6 +209,12 @@ export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
   if (!isNative()) return {};
   if (!appliedDetectionRequest) {
     appliedDetectionRequest = invoke<Record<string, boolean>>("detect_applied_tweaks")
+      .then(result => {
+        if (result.NvidiaControlPanelSettings === false) {
+          try { localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.57"); } catch {}
+        }
+        return result;
+      })
       .finally(() => { appliedDetectionRequest = null; });
   }
   return appliedDetectionRequest;

@@ -17,7 +17,7 @@ export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean
     && input.dedicatedNvidiaGpuCount === 1;
 }
 
-export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.56";
+export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.57";
 
 export function isCurrentNvidiaPresetVerified(): boolean {
   try { return typeof localStorage !== "undefined" && localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "verified"; }

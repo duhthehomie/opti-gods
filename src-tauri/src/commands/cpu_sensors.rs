@@ -85,7 +85,8 @@ fn verify_sensor_file(path: &std::path::Path, expected: &str) -> Result<(), Stri
 pub async fn prepare_cpu_monitoring(app: tauri::AppHandle) -> Result<String, String> {
     #[cfg(windows)]
     {
-        // Fetch from the official distributor only after the user confirms.
+        // The Read CPU button explicitly discloses signed-driver setup.
+        // A user click is required; background sampling never installs it.
         // Do not redistribute the kernel-driver binary inside our installer.
         let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60))
             .build().map_err(|e| e.to_string())?;
@@ -115,9 +116,9 @@ pub async fn prepare_cpu_monitoring(app: tauri::AppHandle) -> Result<String, Str
         drop(file);
         tokio::task::spawn_blocking(move || {
             verify_sensor_file(&path, "1f519a22e47187f70a1379a48ca604981c4fcf694f4e65b734aaa74a9fba3032")?;
-            // Verify Windows trust too. This launches the visible OFFICIAL setup,
-            // never silent installation or the unrestricted unsigned edition.
-            let command = r#"$s=Get-AuthenticodeSignature -LiteralPath $env:OPTI_SENSOR_SETUP; if($s.Status -ne 'Valid'){throw 'The official sensor-driver installer signature is not trusted by Windows.'}; $p=Start-Process -FilePath $env:OPTI_SENSOR_SETUP -PassThru -Wait; if($p.ExitCode -notin @(0,3010)){throw "Sensor setup was cancelled or failed (exit $($p.ExitCode))."}"#;
+            // Use the pinned installer's documented -install -silent flags,
+            // after Windows trust verification. Never use -unrestricted.
+            let command = r#"$s=Get-AuthenticodeSignature -LiteralPath $env:OPTI_SENSOR_SETUP; if($s.Status -ne 'Valid'){throw 'The official sensor-driver installer signature is not trusted by Windows.'}; $p=Start-Process -FilePath $env:OPTI_SENSOR_SETUP -ArgumentList @('-install','-silent') -PassThru -Wait; if($p.ExitCode -notin @(0,3010)){throw "CPU sensor activation failed (exit $($p.ExitCode))."}"#;
             let output = Command::new(crate::commands::windows_powershell_executable())
                 .args(["-NoProfile", "-NonInteractive", "-Command", command])
                 .env("OPTI_SENSOR_SETUP", &path)
@@ -128,7 +129,7 @@ pub async fn prepare_cpu_monitoring(app: tauri::AppHandle) -> Result<String, Str
                 return Err(format!("CPU sensor setup did not complete: {}", String::from_utf8_lossy(&output.stderr)));
             }
             SENSOR_RESTART_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-            Ok("Sensor setup completed. CPU monitoring will retry automatically; restart Windows only if the installer requests it.".into())
+            Ok("Signed CPU sensor access enabled. Live CPU readings will retry automatically; Windows may require a restart before the driver can read this CPU.".into())
         }).await.map_err(|e| e.to_string())?
     }
     #[cfg(not(windows))]
