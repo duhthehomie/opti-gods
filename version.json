@@ -1,4 +1,4 @@
 {
-  "version": "5.2.54",
-  "notes": "V5.2.54 — fixes the CPU sensor setup permission that blocked installer builds; retains NVIDIA preset missing/reapply verification, genuine sensor monitoring, compact System Scan, and reviewed native tweak fixes."
+  "version": "5.2.55",
+  "notes": "V5.2.55 — generates the sensor helper integrity hash directly in Rust and isolates Windows PowerShell validation from inherited module paths; retains the CPU setup permission fix and all previous monitoring and NVIDIA preset improvements."
 }

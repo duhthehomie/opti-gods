@@ -25,11 +25,25 @@ fn publish_sensor_reader() {
         .arg(&output).arg(base.join("sensor-reader/OptiGods.Sensors.csproj"))
         .status().expect("The Windows build requires the .NET 8 SDK to publish the sensor reader");
     assert!(status.success(), "sensor reader publish failed; refusing an incomplete installer");
-    let command = r#"$ErrorActionPreference='Stop'; (Get-FileHash -LiteralPath (Join-Path $env:OPTI_SENSOR_DIR 'OptiGods.Sensors.exe') -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath (Join-Path $env:OPTI_SENSOR_DIR 'helper.sha256') -Encoding ASCII"#;
-    let status = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", command])
-        .env("OPTI_SENSOR_DIR", output).status().expect("cannot hash sensor reader");
-    assert!(status.success(), "sensor reader integrity manifest generation failed");
+    write_sensor_hash(&output).expect("sensor reader integrity manifest generation failed");
+}
+
+#[cfg(windows)]
+fn write_sensor_hash(output: &std::path::Path) -> std::io::Result<()> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut executable = std::fs::File::open(output.join("OptiGods.Sensors.exe"))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 65_536];
+    loop {
+        let count = executable.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    std::fs::write(output.join("helper.sha256"), format!("{:x}\n", digest.finalize()))
 }
 
 #[cfg(windows)]
@@ -57,6 +71,9 @@ Write-Output 'All four reviewed bundled scripts parsed successfully in Windows P
     let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("missing Cargo manifest directory");
     let output = std::process::Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", validation])
+        // PowerShell 7's inherited module path can hide Windows PowerShell's
+        // built-in commands. Let Windows PowerShell initialize its own path.
+        .env_remove("PSModulePath")
         .env("OPTI_BUNDLE_PATH", std::path::Path::new(&manifest).join("resources/native-tweak-scripts.json"))
         .output().expect("Windows PowerShell script validation could not start");
     assert!(output.status.success(), "Bundled scripts failed Windows PowerShell validation: {}",
