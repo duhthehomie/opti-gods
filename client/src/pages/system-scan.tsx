@@ -300,11 +300,21 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   hwMonitor?: HwMonitorData | null;
 }) {
   const os = useOsDetection();
-  const liveStats = useLiveStats(scan.ram_gb || 16);
+  const liveStats = useLiveStats(scan.ram_gb || 16, true);
+  const { toast } = useToast();
+  const [sensorSetupBusy, setSensorSetupBusy] = useState(false);
+  const enableCpuSensors = async () => {
+    if (sensorSetupBusy || !isNative()) return;
+    if (!window.confirm("CPU temperature access requires the official signed PawnIO hardware driver. This opens its installer and changes your Windows installation. Do not disable Windows security or use the unrestricted edition. Continue?")) return;
+    setSensorSetupBusy(true);
+    try {
+      toast({ title: "CPU sensor setup", description: await prepareCpuMonitoring() });
+    } catch (error) {
+      toast({ title: "CPU sensor setup did not complete", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+    } finally { setSensorSetupBusy(false); }
+  };
   const cpuTemp = liveStats.cpuTemp;
   const gpuTemp = liveStats.gpuTemp;
-  // The existing WMI scan's cpu_temp_c is an ACPI board-zone reading, not a CPU package sensor.
-  const boardTemp = liveStats.boardTemp ?? scan.cpu_temp_c ?? null;
   // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
   const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
@@ -326,20 +336,17 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 auto-rows-fr gap-px">
           <Stat icon={MonitorPlay} label="GPU" value={scan.gpu || "Unknown"}
             sub={scan.vram_mb ? `${Math.round(scan.vram_mb / 1024)} GB VRAM` : undefined} highlight compact />
-          <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : "Unavailable"}
+          <Stat icon={Thermometer} label="GPU Temp" value={gpuTemp != null ? `${gpuTemp.toFixed(1)}°C` : "Unavailable"}
             sub={gpuTempDescription}
             accent={gpuTemp != null ? tempAccent(gpuTemp) : undefined} compact />
           <Stat icon={Cpu} label="CPU" value={scan.cpu || "Unknown"} highlight compact />
           <Stat icon={Thermometer} label="CPU Temp"
-            value={cpuTemp != null ? `${Math.round(cpuTemp)}°C` : "Unavailable"}
-            sub={cpuTemp != null ? cpuTempDescription : "No CPU package reading"}
+            value={cpuTemp != null ? `${cpuTemp.toFixed(1)}°C` : "Unavailable"}
+            sub={cpuTemp != null ? cpuTempDescription : liveStats.cpuSensorStatus === "driver_required"
+              ? "Signed CPU sensor driver required"
+              : liveStats.cpuSensorStatus === "sensor_unavailable" ? "CPU sensor access blocked or unsupported"
+              : liveStats.cpuSensorStatus || "CPU sensors starting"}
             accent={cpuTemp != null ? tempAccent(cpuTemp) : undefined} compact />
-            <Stat icon={Thermometer} label="Firmware Temp"
-              value={boardTemp != null ? `${Math.round(boardTemp)}°C` : "Unavailable"}
-              sub={boardTemp == null ? "No ACPI board sensor · not CPU" : liveStats.boardTemp != null
-                ? liveStats.isStale ? "Last ACPI board reading · stale" : "Live ACPI board sensor · not CPU"
-                : "Scanned ACPI board sensor · not CPU"}
-              accent={boardTemp != null ? tempAccent(boardTemp) : undefined} compact />
         <Stat icon={MemoryStick} label="RAM"
           value={scan.ram_gb ? `${scan.ram_gb} GB` : "Unknown"}
           sub={ramMhz ? `${ramMhz} MHz` : undefined} highlight compact />
@@ -354,7 +361,13 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 
 
           <Stat icon={Monitor} label="Motherboard" value={scan.motherboard || "Unavailable"} compact />
-          <Stat icon={Monitor} label="Refresh Rate" value={scan.refresh_hz ? `${scan.refresh_hz} Hz` : "Unavailable"} compact />
+          {scan.monitors && scan.monitors.length > 0 && (
+            <Stat icon={Monitor} label="Monitors" value={`${scan.monitors.length} monitor${scan.monitors.length === 1 ? "" : "s"}`}
+              sub={scan.monitors.map(monitor => `${monitor.name}${monitor.max_hz ? ` · max ${monitor.max_hz} Hz` : ""}`).join(" / ")} compact />
+          )}
+          {scan.refresh_hz != null && scan.refresh_hz > 1 && (
+            <Stat icon={Monitor} label="Max Refresh Rate" value={`${scan.refresh_hz} Hz`} compact />
+          )}
           <Stat
             icon={Wifi}
             label="Network"
@@ -364,6 +377,15 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
           />
       </div>
 
+      {isNative() && cpuTemp == null && (
+        <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
+          <span>CPU temperature unavailable. Set up signed sensor access.</span>
+          <button data-testid="button-setup-cpu-sensors" onClick={() => void enableCpuSensors()} disabled={sensorSetupBusy}
+            className="rounded border border-red-500/30 px-2 py-1 font-bold text-red-300 disabled:opacity-50">
+            {sensorSetupBusy ? "Setup open…" : "Set up CPU sensors"}
+          </button>
+        </div>
+      )}
       {/* Anti-cheat */}
       {scan.anticheats && scan.anticheats.length > 0 && (
         <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/[0.04] p-3">

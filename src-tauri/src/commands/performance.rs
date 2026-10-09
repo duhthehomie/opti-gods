@@ -60,8 +60,25 @@ pub struct PerformanceRecordingArgs {
 }
 
 #[tauri::command]
-pub async fn read_live_performance(app: AppHandle) -> Result<LivePerformance, String> {
-    tokio::task::spawn_blocking(move || collect_live_performance_blocking(app))
+pub async fn read_live_performance(app: AppHandle, temperatures_only: Option<bool>) -> Result<LivePerformance, String> {
+    tokio::task::spawn_blocking(move || {
+        #[cfg(windows)]
+        if temperatures_only.unwrap_or(false) {
+            let sensors = read_bundled_sensors(&app);
+            let gpu = sensors.gpu_temp_c.or_else(read_nvidia_temperature);
+            return Ok(LivePerformance {
+                live: sensors.cpu_temp_c.is_some() || gpu.is_some(),
+                cpu_temp_c: sensors.cpu_temp_c,
+                gpu_temp_c: gpu,
+                cpu_sensor_status: Some(sensors.status),
+                cpu_sensor_name: sensors.cpu_sensor_name,
+                ..LivePerformance::default()
+            });
+        }
+        #[cfg(not(windows))]
+        let _ = temperatures_only;
+        collect_live_performance_blocking(app)
+    })
         .await
         .map_err(|error| format!("live performance worker failed: {error}"))?
 }

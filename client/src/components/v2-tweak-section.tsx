@@ -4,6 +4,7 @@ import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useConfirmedTweaks } from "@/hooks/use-confirmed-tweaks";
 import { applyTweakBatch, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { isNative } from "@/lib/tauri-bridge";
@@ -39,6 +40,7 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
   const tweaks = useOptimizationStore(s => s.tweaks);
   const appliedAt = useOptimizationStore(s => s.appliedAt);
   const setTweak = useOptimizationStore(s => s.setTweak);
+  const { confirmed, ready } = useConfirmedTweaks();
   const a = ACCENTS[accent];
   const [applying, setApplying] = useState(false);
   const [confirmNative, setConfirmNative] = useState(false);
@@ -53,12 +55,12 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
     .filter((t): t is NonNullable<typeof t> => Boolean(t));
   if (items.length === 0) return null;
 
-  const recIds = items.filter(t => t.recommended).map(t => t.id);
-  const recPending = recIds.filter(id => !(isNative() ? appliedAt[id] : tweaks[id]));
+  const recIds = Array.from(new Set(items.filter(t => t.recommended && getTweakCompatibility(t.id).ok).map(t => t.id)));
+  const recPending = recIds.filter(id => !(isNative() ? confirmed[id] : tweaks[id]));
   const allRecOn = recIds.length > 0 && recPending.length === 0;
 
   const runRecommended = async () => {
-    if (applying) return;
+    if (applying || !ready) return;
     setApplying(true);
     const compatible = recPending.filter(id => getTweakCompatibility(id).ok);
     if (compatible.length === 0) {
@@ -97,12 +99,12 @@ export function V2TweakSection({ heading, ids, accent = "red", description, test
             variant="ghost"
             size="sm"
             onClick={() => isNative() ? setConfirmNative(true) : void runRecommended()}
-            disabled={allRecOn || applying}
+            disabled={!ready || allRecOn || applying}
             data-testid={`button-enable-recommended-v2-${testIdSuffix}`}
             className={`text-[10px] font-bold uppercase tracking-wider ${a.text} ${a.hover} ${a.bg} border ${a.border} px-2.5 py-1 h-auto rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             <CheckCircle2 className="w-3 h-3 mr-1" />
-            {applying ? "Applying…" : allRecOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recPending.length})`}
+            {!ready ? "Checking Windows state…" : applying ? "Applying…" : allRecOn ? (isNative() ? "Recommended CONFIRMED" : "Recommended SELECTED") : `${isNative() ? "Apply" : "Select"} Recommended (${recPending.length})`}
           </Button>
         )}
       </div>

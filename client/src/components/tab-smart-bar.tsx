@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useConfirmedTweaks } from "@/hooks/use-confirmed-tweaks";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, CheckCircle2, Info, ChevronDown, ChevronUp, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,9 @@ export function TabSmartBar({
   impactLabel,
   applyLabel,
 }: TabSmartBarProps) {
-  const { tweaks, appliedAt } = useOptimizationStore();
+  const { tweaks } = useOptimizationStore();
+  const { confirmed, ready } = useConfirmedTweaks();
+  const eligibleRecommendedIds = Array.from(new Set(recommendedIds)).filter(id => tweakIds.includes(id) && getTweakCompatibility(id).ok);
   const { toast } = useToast();
   const [showTips, setShowTips] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -47,10 +50,10 @@ export function TabSmartBar({
   const active = tweakIds.filter(id => tweaks[id]).length;
   const total = tweakIds.length;
   const confirmedRecommended = isNative()
-    ? recommendedIds.filter(id => Boolean(appliedAt[id]))
-    : recommendedIds.filter(id => Boolean(tweaks[id]));
-  const recNotApplied = recommendedIds.filter(id => !confirmedRecommended.includes(id));
-  const allRecOn = recommendedIds.length > 0 && recNotApplied.length === 0;
+    ? eligibleRecommendedIds.filter(id => Boolean(confirmed[id]))
+    : eligibleRecommendedIds.filter(id => Boolean(tweaks[id]));
+  const recNotApplied = eligibleRecommendedIds.filter(id => !confirmedRecommended.includes(id));
+  const allRecOn = ready && eligibleRecommendedIds.length > 0 && recNotApplied.length === 0;
   const pct = total > 0 ? Math.round((active / total) * 100) : 0;
 
   const impactClass =
@@ -59,7 +62,7 @@ export function TabSmartBar({
     "text-zinc-500 bg-zinc-800 border-zinc-700";
 
   async function runRecommended() {
-    if (applying) return;
+    if (applying || !ready) return;
     setApplying(true);
     try {
       const compatible = recNotApplied.filter(id => getTweakCompatibility(id).ok);
@@ -136,16 +139,16 @@ export function TabSmartBar({
         </div>
 
         {/* Apply recommended button */}
-        {recommendedIds.length > 0 && !allRecOn && (
+        {eligibleRecommendedIds.length > 0 && !allRecOn && (
           <Button
             data-testid={`button-apply-recommended-${label.replace(/\s+/g, "-").toLowerCase()}`}
             size="sm"
             onClick={() => void handleApplyRecommended()}
-            disabled={applying}
+            disabled={applying || !ready}
             className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-400 hover:text-red-300 h-7 px-2.5 gap-1"
           >
             <Zap className="w-3 h-3" />
-            {applying ? "Applying…" : isNative() ? (applyLabel ?? `Apply ${recNotApplied.length} Recommended`) : `Select ${recNotApplied.length} Recommended`}
+            {!ready ? "Checking Windows state…" : applying ? "Applying…" : isNative() ? `Apply ${recNotApplied.length} Recommended` : `Select ${recNotApplied.length} Recommended`}
           </Button>
         )}
         {allRecOn && (

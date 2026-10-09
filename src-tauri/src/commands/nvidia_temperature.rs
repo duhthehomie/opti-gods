@@ -10,7 +10,9 @@ fn read_nvidia_temperature() -> Option<f32> {
     #[repr(C)]
     struct Thermal { version: u32, count: u32, sensors: [Sensor; 3] }
     // Reuse the System32-only loader and balanced NVAPI initialize/unload.
-    let api = super::misc::NvApiLibrary::load().ok()?;
+    // A preset operation owns the driver session. Telemetry must not block it
+    // or unload NVAPI underneath it; the sensor helper is an independent fallback.
+    let api = super::misc::NvApiLibrary::try_load()?;
     let enumerate: unsafe extern "C" fn(*mut *mut c_void, *mut u32) -> i32 =
         unsafe { std::mem::transmute(api.resolve(0xE5AC921F, "GPU thermal enumeration").ok()?) };
     let thermal: unsafe extern "C" fn(*mut c_void, u32, *mut Thermal) -> i32 =

@@ -9,6 +9,9 @@ struct CpuSensorSample {
 }
 
 #[cfg(windows)]
+static SENSOR_RESTART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
 fn read_bundled_sensors(app: &tauri::AppHandle) -> CpuSensorSample {
     use std::io::{BufRead, BufReader};
     use std::sync::{Arc, Mutex, OnceLock};
@@ -22,6 +25,14 @@ fn read_bundled_sensors(app: &tauri::AppHandle) -> CpuSensorSample {
     let mut reader = READER.get_or_init(|| Mutex::new(Reader {
         child: None, latest: Arc::new(Mutex::new(None)), attempted: None,
     })).lock().unwrap_or_else(|e| e.into_inner());
+    if SENSOR_RESTART_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if let Some(mut child) = reader.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        reader.latest = Arc::new(Mutex::new(None));
+        reader.attempted = None;
+    }
     let running = reader.child.as_mut().map(|c| matches!(c.try_wait(), Ok(None))).unwrap_or(false);
     if !running && reader.attempted.map(|t| t.elapsed() > Duration::from_secs(10)).unwrap_or(true) {
         reader.attempted = Some(Instant::now());
@@ -116,7 +127,8 @@ pub async fn prepare_cpu_monitoring(app: tauri::AppHandle) -> Result<String, Str
             if !output.status.success() {
                 return Err(format!("CPU sensor setup did not complete: {}", String::from_utf8_lossy(&output.stderr)));
             }
-            Ok("Sensor setup completed. Restart Opti Gods to reopen the hardware reader; restart Windows if the installer requests it.".into())
+            SENSOR_RESTART_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok("Sensor setup completed. CPU monitoring will retry automatically; restart Windows only if the installer requests it.".into())
         }).await.map_err(|e| e.to_string())?
     }
     #[cfg(not(windows))]

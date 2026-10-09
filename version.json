@@ -1,4 +1,4 @@
 {
-  "version": "5.2.55",
-  "notes": "V5.2.55 — generates the sensor helper integrity hash directly in Rust and isolates Windows PowerShell validation from inherited module paths; retains the CPU setup permission fix and all previous monitoring and NVIDIA preset improvements."
+  "version": "5.2.56",
+  "notes": "V5.2.56 — fixes blocking Windows state detection during scan/navigation; keeps navigation and splash transitions free of the full-screen loading overlay; corrects compatible recommendation counts against confirmed Windows state; shows connected monitor names/count and maximum supported refresh at the current resolution, hiding unavailable refresh data; fixes NVIDIA MSI High when DevicePriority is absent; makes per-row script retries one-item runs; verifies all 15 global NVIDIA settings through direct driver transactions and applies neutral-aware 85% Digital Vibrance; adds explicit CPU sensor setup and genuine live CPU/GPU temperatures."
 }

@@ -2,7 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { isNative, readLivePerformance } from "@/lib/tauri-bridge";
 
 let nativeTelemetryRequest: ReturnType<typeof readLivePerformance> | null = null;
-function readSharedNativeTelemetry() {
+let nativeTemperatureRequest: ReturnType<typeof readLivePerformance> | null = null;
+function readSharedNativeTelemetry(temperaturesOnly: boolean) {
+  if (temperaturesOnly) {
+    if (!nativeTemperatureRequest) {
+      nativeTemperatureRequest = readLivePerformance(true).finally(() => { nativeTemperatureRequest = null; });
+    }
+    return nativeTemperatureRequest;
+  }
   if (!nativeTelemetryRequest) {
     nativeTelemetryRequest = readLivePerformance().finally(() => { nativeTelemetryRequest = null; });
   }
@@ -66,7 +73,7 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-export function useLiveStats(ramGB: number): LiveStats {
+export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats {
   const totalRAM = ramGB > 0 ? ramGB : 16;
 
   const cpuRef = useRef(0);
@@ -103,7 +110,7 @@ export function useLiveStats(ramGB: number): LiveStats {
       let realData: HwLiveResponse | null = null;
       try {
         if (isNative()) {
-          const native = await readSharedNativeTelemetry();
+          const native = await readSharedNativeTelemetry(temperaturesOnly);
           if (native && (native.live || native.cpu_sensor_status)) {
             realData = {
               live: native.live,
@@ -176,11 +183,11 @@ export function useLiveStats(ramGB: number): LiveStats {
         const previous = lastRealRef.current;
         setStats({
           ...previous,
-          cpuTemp: importedTemps.cpuTemp ?? previous.cpuTemp,
-          gpuTemp: importedTemps.gpuTemp ?? previous.gpuTemp,
+          cpuTemp: isNative() ? null : importedTemps.cpuTemp ?? previous.cpuTemp,
+          gpuTemp: isNative() ? null : importedTemps.gpuTemp ?? previous.gpuTemp,
           cpuTempSource: importedTemps.cpuTemp != null ? "imported" : previous.cpuTempSource,
           gpuTempSource: importedTemps.gpuTemp != null ? "imported" : previous.gpuTempSource,
-          isLive: true,
+          isLive: false,
           isStale: true,
         });
         return;
@@ -204,10 +211,10 @@ export function useLiveStats(ramGB: number): LiveStats {
       });
     };
 
-    const id = setInterval(tick, 2000);
+    const id = setInterval(tick, temperaturesOnly ? 1000 : 2000);
     tick();
     return () => { cancelled = true; clearInterval(id); };
-  }, [totalRAM]);
+  }, [totalRAM, temperaturesOnly]);
 
   return stats;
 }

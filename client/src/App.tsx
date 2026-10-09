@@ -1,3 +1,4 @@
+import { AppLayout } from "@/components/layout/app-layout";
 import { Switch, Route, useLocation } from "wouter";
 import { getNativeAuthHeaders, queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -224,12 +225,12 @@ function FriendUnlockHandler() {
 
 function RouteLoadingFallback() {
   return (
-    <div role="status" aria-live="polite" className="fixed inset-0 z-[200] flex min-h-screen items-center justify-center bg-[#020202] text-zinc-300">
+    <AppLayout><div role="status" aria-live="polite" aria-busy="true" className="flex min-h-[40vh] items-center justify-center text-zinc-300">
       <div className="flex items-center gap-3">
         <span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-red-500/30 border-t-red-500" />
-        <span className="text-xs font-semibold uppercase tracking-[0.2em]">Loading page…</span>
+        <span className="sr-only">Opening section</span>
       </div>
-    </div>
+    </div></AppLayout>
   );
 }
 
@@ -247,12 +248,17 @@ function Router() {
   const HomeComponent = isNative() ? Dashboard : SmartHome;
   useEffect(() => {
     if (!isNative()) return;
-    const timer = window.setTimeout(() => {
-      for (const preload of NATIVE_NAV_PRELOADERS) {
-        void preload().catch(error => console.warn("Could not preload a desktop tab.", error));
-      }
-    }, 250);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    let index = 0;
+    let timer: number;
+    const next = () => {
+      if (cancelled || index >= NATIVE_NAV_PRELOADERS.length) return;
+      void NATIVE_NAV_PRELOADERS[index++]().catch(error => console.warn("Could not preload a desktop tab.", error)).finally(() => {
+        if (!cancelled) timer = window.setTimeout(next, 200);
+      });
+    };
+    timer = window.setTimeout(next, 3500);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, []);
   return (
     <>

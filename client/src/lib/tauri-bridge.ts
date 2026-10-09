@@ -36,6 +36,7 @@ export interface NativeHardwareScan {
   fan_count: number | null;
   cpu_temp_c: number | null;
   refresh_hz: number | null;
+  monitors?: { name: string; current_hz: number | null; max_hz: number | null }[];
   nic_vendor: string | null;
   network_ssid: string | null;
   network_band: string | null;
@@ -203,9 +204,14 @@ export async function undoTweak(
   });
 }
 
+let appliedDetectionRequest: Promise<Record<string, boolean>> | null = null;
 export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
   if (!isNative()) return {};
-  return invoke<Record<string, boolean>>("detect_applied_tweaks");
+  if (!appliedDetectionRequest) {
+    appliedDetectionRequest = invoke<Record<string, boolean>>("detect_applied_tweaks")
+      .finally(() => { appliedDetectionRequest = null; });
+  }
+  return appliedDetectionRequest;
 }
 
 export async function getRecordedAppliedTweaks(): Promise<Record<string, number>> {
@@ -269,9 +275,9 @@ export interface NativeLivePerformance {
   visible_app_names_text?: string | null;
 }
 
-export async function readLivePerformance(): Promise<NativeLivePerformance | null> {
+export async function readLivePerformance(temperaturesOnly = false): Promise<NativeLivePerformance | null> {
   if (!isNative()) return null;
-  return invoke<NativeLivePerformance>("read_live_performance");
+  return invoke<NativeLivePerformance>("read_live_performance", { temperaturesOnly });
 }
 
 export async function prepareCpuMonitoring(): Promise<string> {

@@ -254,7 +254,14 @@ Write-Output '[VRAM] commandline.txt values written and read back: availablevidm
     $before = Get-ItemPropertyValue -LiteralPath $msiPath -Name 'MSISupported' -ErrorAction Stop
     if ($before -notin @(0,1)) { throw "The NVIDIA adapter has an unsupported MSISupported value ($before). No registry values were changed." }
     $priorityPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($gpu.InstanceId)\Device Parameters\Interrupt Management\Affinity Policy"
-    $oldPriority = Get-ItemPropertyValue -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Ignore
+    $oldPriority = $null
+    if (Test-Path -LiteralPath $priorityPath) {
+      $priorityKey = Get-Item -LiteralPath $priorityPath -ErrorAction Stop
+      if ($priorityKey.GetValueNames() -contains 'DevicePriority') {
+        if ($priorityKey.GetValueKind('DevicePriority') -ne [Microsoft.Win32.RegistryValueKind]::DWord) { throw 'Existing NVIDIA DevicePriority is not a DWORD. No registry values were changed.' }
+        $oldPriority = $priorityKey.GetValue('DevicePriority')
+      }
+    }
     try {
       Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop
       New-Item -Path $priorityPath -Force -ErrorAction Stop | Out-Null
@@ -270,8 +277,9 @@ Write-Output '[VRAM] commandline.txt values written and read back: availablevidm
         Set-ItemProperty -LiteralPath $msiPath -Name 'MSISupported' -Value $before -Type DWord -Force -ErrorAction Stop
         if ($null -ne $oldPriority) {
           Set-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -Value $oldPriority -Type DWord -Force -ErrorAction Stop
-        } else {
-          Remove-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Ignore
+        } elseif (Test-Path -LiteralPath $priorityPath) {
+          $priorityKey = Get-Item -LiteralPath $priorityPath -ErrorAction Stop
+          if ($priorityKey.GetValueNames() -contains 'DevicePriority') { Remove-ItemProperty -LiteralPath $priorityPath -Name 'DevicePriority' -ErrorAction Stop }
         }
       } catch { throw "NVIDIA MSI failed: $originalError. Rollback also failed: $($_.Exception.Message)" }
       throw "NVIDIA MSI failed and previous values were restored: $originalError"

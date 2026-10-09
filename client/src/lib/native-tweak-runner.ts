@@ -5,7 +5,7 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
-import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
+import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -17,6 +17,7 @@ export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
 const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
+export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro"]);
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
@@ -578,7 +579,9 @@ async function applyTweakBatchInternal(
     ]);
     const appliedAt = useOptimizationStore.getState().appliedAt;
     const forcedIds = new Set(options.forceReapplyIds ?? []);
-    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID) && !isCurrentNvidiaPresetVerified()) {
+    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID)) {
+      // A selected preset run must execute and read back the driver. Old history
+      // (including an earlier vibrance-only run) is not proof of these settings.
       forcedIds.add(NVIDIA_PRESET_ACTION_ID);
     }
     alreadyConfirmedIds = compatibleIds.filter(id =>
@@ -773,6 +776,16 @@ async function applyTweakBatchInternal(
     emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running" });
     let compatibilitySkipMessage: string | null = null;
     try {
+      if (REVIEWED_NATIVE_SCRIPT_IDS.has(id)) {
+        const message = await runScriptOnlyTweak(id, message => emitProgress({
+          id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running", message,
+        }));
+        osApplied = true;
+        appliedIds.push(id);
+        emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "applied", message });
+        window.dispatchEvent(new Event("optigods:allowance-changed"));
+        continue;
+      }
       const authorization = nextAuthorizationId === id && nextAuthorization
         ? await nextAuthorization
         : await authorize(id);
@@ -784,7 +797,7 @@ async function applyTweakBatchInternal(
       }
       ticket = authorizationBody.ticket;
       const nextId = supportedIds[index + 1];
-      if (nextId && !stopRequested) {
+      if (nextId && !REVIEWED_NATIVE_SCRIPT_IDS.has(nextId) && !stopRequested) {
         nextAuthorization = authorize(nextId);
         nextAuthorizationId = nextId;
       }
@@ -794,7 +807,15 @@ async function applyTweakBatchInternal(
       if (id === NVIDIA_PRESET_ACTION_ID && !credential) {
         throw new Error("Windows device authorization is unavailable.");
       }
-      const result = id === NVIDIA_PRESET_ACTION_ID
+      const unlistenPreset = id === NVIDIA_PRESET_ACTION_ID
+        ? await listenScriptTweakProgress(payload => {
+          if (payload.id === id) emitProgress({
+            id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running", message: payload.message,
+          });
+        }) : null;
+      let result;
+      try {
+        result = id === NVIDIA_PRESET_ACTION_ID
         ? {
           ok: true,
           message: await importNvidiaPreset(ticket!, credential!),
@@ -802,11 +823,18 @@ async function applyTweakBatchInternal(
           undo_token: null,
         }
         : await applyTweak(id, ticket, credential);
+      } finally {
+        await unlistenPreset?.();
+      }
       if (!result.ok) {
         if (result.error_kind === "compatibility") {
           compatibilitySkipMessage = result.message || "This tweak is not compatible with this PC.";
         }
         throw new Error(result.message || "Windows rejected the change.");
+      }
+      if (id === NVIDIA_PRESET_ACTION_ID &&
+          !(result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied"))) {
+        throw new Error("NVIDIA returned no complete 15/15 global-profile and Digital Vibrance verification. No preset success was recorded.");
       }
       osApplied = true;
       const store = useOptimizationStore.getState();

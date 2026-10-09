@@ -9,6 +9,7 @@ import { getNativeErrorMessage } from "@/lib/native-error";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import {
   isNativeTweakRunStuck,
+  REVIEWED_NATIVE_SCRIPT_IDS,
   isScriptOnlyTweakId,
   recordScriptTweakProgress,
   recordScriptTweakResult,
@@ -382,7 +383,7 @@ export default function AppliedTweaksPage() {
     const startRun = async () => {
       const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
       const nativeUnsupportedIds = recoverable.filter(id =>
-        !NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID,
+        !NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID && !REVIEWED_NATIVE_SCRIPT_IDS.has(id),
       );
       let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds, ...nativeUnsupportedIds]));
       const initialSkippedMessages: Record<string, string> = { ...(queuedOptions.initialSkippedMessages ?? {}) };
@@ -873,7 +874,7 @@ export default function AppliedTweaksPage() {
             <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
             {isScriptOnlyTweakId(item.id) && compatibility.ok && (item.status === "skipped" || item.status === "failed") && <button
               data-testid={"button-run-script-" + item.id}
-              onClick={() => void runScript(item.id)}
+              onClick={() => void rerunIds([item.id], "Single script result", true)}
               disabled={!isNative() || !allowance?.pro || Boolean(scriptRunningId) || scriptBatchRunning || runActive || batchUndoing}
               title={!allowance?.pro ? "Pro is required; this action does not use free instant-apply credits." : "Run the trusted PowerShell script for this tweak."}
               className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"

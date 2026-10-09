@@ -122,7 +122,12 @@ pub fn list_tweaks() -> Vec<TweakDescriptor> {
 /// Read-only detection for the registry-backed tweaks handled by the native engine.
 /// The renderer supplies no paths or commands.
 #[tauri::command]
-pub fn detect_applied_tweaks() -> BTreeMap<String, bool> {
+pub async fn detect_applied_tweaks() -> Result<BTreeMap<String, bool>, String> {
+    tokio::task::spawn_blocking(detect_applied_tweaks_blocking)
+        .await.map_err(|error| format!("Windows state detection worker failed: {error}"))
+}
+
+fn detect_applied_tweaks_blocking() -> BTreeMap<String, bool> {
     #[cfg(windows)]
     {
         use crate::win32::registry::{read_value, Hive, RegValue};
@@ -288,7 +293,12 @@ $checks | ConvertTo-Json -Compress
 }
 
 #[tauri::command]
-pub fn get_recorded_applied_tweaks() -> std::result::Result<BTreeMap<String, u64>, String> {
+pub async fn get_recorded_applied_tweaks() -> std::result::Result<BTreeMap<String, u64>, String> {
+    tokio::task::spawn_blocking(get_recorded_applied_tweaks_blocking)
+        .await.map_err(|error| format!("Windows tweak history worker failed: {error}"))?
+}
+
+fn get_recorded_applied_tweaks_blocking() -> std::result::Result<BTreeMap<String, u64>, String> {
     #[cfg(windows)]
     {
         crate::win32::registry::read_qword_values(

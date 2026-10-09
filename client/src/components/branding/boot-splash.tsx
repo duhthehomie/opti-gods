@@ -11,15 +11,15 @@ export function BootSplash() {
     return "show";
   });
   const [videoFailed, setVideoFailed] = useState(false);
+  const [usingFirstPaint] = useState(() => typeof document !== "undefined" && Boolean(document.getElementById("og-first-paint-splash")));
 
   useEffect(() => {
     const firstPaintSplash = document.getElementById("og-first-paint-splash");
-    if (firstPaintSplash) {
-      firstPaintSplash.style.opacity = "0";
-      const handoff = window.setTimeout(() => firstPaintSplash.remove(), FADE_MS);
-      return () => window.clearTimeout(handoff);
-    }
-  }, []);
+    if (!firstPaintSplash) return;
+    // Keep one already-playing video; do not restart it behind another overlay.
+    if (phase === "fade") firstPaintSplash.style.opacity = "0";
+    if (phase === "hidden") firstPaintSplash.remove();
+  }, [phase]);
 
   useEffect(() => {
     if (phase === "hidden") return;
@@ -31,7 +31,7 @@ export function BootSplash() {
     return () => window.clearTimeout(t);
   }, [phase]);
 
-  if (phase === "hidden") return null;
+  if (phase === "hidden" || usingFirstPaint) return null;
 
   return (
     <div
