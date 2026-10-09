@@ -1,4 +1,4 @@
 {
-  "version": "5.2.53",
-  "notes": "V5.2.53 — NVIDIA preset missing/reapply verification, genuine CPU/GPU sensor monitoring with optional signed-driver setup, compact System Scan, and reviewed native tweak fixes."
+  "version": "5.2.54",
+  "notes": "V5.2.54 — fixes the CPU sensor setup permission that blocked installer builds; retains NVIDIA preset missing/reapply verification, genuine sensor monitoring, compact System Scan, and reviewed native tweak fixes."
 }

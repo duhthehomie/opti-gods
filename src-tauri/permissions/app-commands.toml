@@ -124,6 +124,11 @@ description = "Read live Windows performance counters for the dashboard."
 commands.allow = ["read_live_performance"]
 
 [[permission]]
+identifier = "allow-prepare-cpu-monitoring"
+description = "Open verified official CPU sensor driver setup after explicit user confirmation."
+commands.allow = ["prepare_cpu_monitoring"]
+
+[[permission]]
 identifier = "allow-save-performance-recording"
 description = "Save a local admin performance recording in Downloads."
 commands.allow = ["save_performance_recording"]
@@ -257,6 +262,7 @@ permissions = [
   "allow-run-fix",
   "allow-run-restore-categories",
   "allow-read-live-performance",
+  "allow-prepare-cpu-monitoring",
   "allow-install-fivem-pack",
   "allow-save-fivem-pack-zip",
   "allow-uninstall-fivem-pack",
