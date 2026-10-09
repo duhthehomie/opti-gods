@@ -353,13 +353,10 @@ fn dvc_level_for_percent(min_level: i32, default_level: i32, max_level: i32, per
     if min_level >= max_level || default_level < min_level || default_level > max_level || percent > 100 {
         return Err("NVIDIA display reported an invalid Digital Vibrance range.".into());
     }
-    // Control Panel 50% is neutral, NOT the legacy enhancement minimum.
-    let neutral = i64::from(default_level);
-    let level = if percent >= 50 {
-        neutral + ((i64::from(max_level) - neutral) * i64::from(percent - 50) + 25) / 50
-    } else {
-        neutral - ((neutral - i64::from(min_level)) * i64::from(50 - percent) + 25) / 50
-    };
+    // Control Panel percent is normalized over the reported full range.
+    // defaultLevel is a driver default, not necessarily the 50% midpoint.
+    let level = i64::from(min_level)
+        + ((i64::from(max_level) - i64::from(min_level)) * i64::from(percent) + 50) / 100;
     Ok(level as i32)
 }
 
@@ -370,7 +367,7 @@ mod digital_vibrance_tests {
     #[test]
     fn maps_85_percent_to_the_reported_driver_range() {
         assert_eq!(dvc_level_for_percent(0, 50, 100, 85).unwrap(), 85);
-        assert_eq!(dvc_level_for_percent(0, 0, 63, 85).unwrap(), 44);
+        assert_eq!(dvc_level_for_percent(0, 0, 63, 85).unwrap(), 54);
         assert_eq!(dvc_level_for_percent(-100, 0, 100, 85).unwrap(), 70);
         assert_eq!(dvc_level_for_percent(-63, 0, 63, 50).unwrap(), 0);
         assert_eq!(dvc_level_for_percent(-63, 0, 63, 0).unwrap(), -63);
@@ -607,6 +604,39 @@ fn rollback_dvc_with_handles(
 }
 
 #[cfg(windows)]
+fn apply_verified_nvidia_cpl_controls(gpu_name: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new(crate::commands::windows_powershell_executable())
+        .args(["-NoProfile", "-NonInteractive", "-Sta", "-Command", include_str!("nvidia-cpl-settings.ps1")])
+        .env("OPTI_GPU_NAME", gpu_name)
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .creation_flags(0x0800_0000).spawn()
+        .map_err(|error| format!("NVIDIA Control Panel verification could not start: {error}"))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(40);
+    loop {
+        match child.try_wait().map_err(|error| error.to_string())? {
+            Some(_) => break,
+            None => {
+                if NVIDIA_PRESET_IMPORT_CANCELLED.load(std::sync::atomic::Ordering::SeqCst)
+                    || std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("NVIDIA Control Panel verification was stopped or exceeded its deadline. No complete preset success was recorded.".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+    }
+    let output = child.wait_with_output().map_err(|error| error.to_string())?;
+    if !output.status.success()
+        || !String::from_utf8_lossy(&output.stdout).contains("PhysX GPU and preview Performance verified.") {
+        return Err(format!("NVIDIA Control Panel settings were not verified: {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 static NVIDIA_PRESET_IMPORT_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(windows)]
@@ -631,14 +661,18 @@ pub(crate) fn nvidia_preset_is_current() -> Option<bool> {
         let fingerprint = nvidia_driver_fingerprint(&api)?;
         use crate::win32::registry::{read_value, Hive, RegValue};
         match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
-            Ok(RegValue::Sz(saved)) if saved == fingerprint => {}
+            Ok(RegValue::Sz(saved)) if saved == format!("global-cpl-v2:{fingerprint}") => {}
             _ => return Err("NVIDIA driver changed or has no verified receipt.".into()),
         }
         let targets = nvidia_display::runtime::active_targets(&api)?;
         if targets.is_empty() { return Err("No active NVIDIA display.".into()); }
         let (_, gpu_value) = nvidia_display::runtime::explicit_gpu_value(&api, &targets)?;
         let expected = preset_with_explicit_gpu(include_str!("../../resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"), &gpu_value)?;
+        // Session::open acquires NVAPI_SESSION_LOCK. Do not retain an API
+        // guard while entering a separate DRS session (non-reentrant mutex).
+        drop(api);
         nvidia_profile::verify(&parse_global_nip_settings(&expected)?)?;
+        let api = NvApiLibrary::load()?;
         let get: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(api.resolve(0x0E45_002D, "Digital Vibrance readback")?) };
         for target in targets {
             let mut info = dvc_info(0);
@@ -891,6 +925,19 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
             let settings = parse_global_nip_settings(&expected)?;
             let original_profile = nvidia_profile::apply(&settings, &report)?;
+            report("Verifying PhysX GPU selection and the preview Performance slider in NVIDIA Control Panel");
+            if let Err(error) = apply_verified_nvidia_cpl_controls(&gpu_name) {
+                let rollback = nvidia_profile::restore(&original_profile)
+                    .map(|_| "The previous global 3D profile was restored.".to_string())
+                    .unwrap_or_else(|failure| format!("Global-profile rollback needs attention: {failure}"));
+                return Err(format!("{error} {rollback} PhysX/preview controls may need review in NVIDIA Control Panel. No complete preset success was recorded."));
+            }
+            // The simple preview preference can rewrite global values.
+            // Restore the full explicit preset and reread persisted values.
+            if let Err(error) = nvidia_profile::apply(&settings, &report) {
+                let _ = nvidia_profile::restore(&original_profile);
+                return Err(format!("The full 3D preset could not be restored after Control Panel configuration: {error}. No complete preset success was recorded."));
+            }
             report("Applying and verifying Digital Vibrance");
             let dvc_result = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped before changing Digital Vibrance.".to_string())
@@ -909,7 +956,10 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             report("Final readback of all 15 persisted global settings");
             let final_check = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped by the user.".to_string())
-            } else { nvidia_profile::verify(&settings) };
+            } else {
+                apply_verified_nvidia_cpl_controls(&gpu_name)
+                    .and_then(|_| nvidia_profile::verify(&settings))
+            };
             if let Err(error) = final_check {
                 report("Restoring the original profile and Digital Vibrance");
                 let profile_note = match nvidia_profile::restore(&original_profile) {
@@ -936,10 +986,10 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let fingerprint = nvidia_driver_fingerprint(&NvApiLibrary::load()?)?;
             crate::win32::registry::write_sz(
                 crate::win32::registry::Hive::CurrentUser, r"Software\OptiGods",
-                "NvidiaPresetDriver", &fingerprint,
+                "NvidiaPresetDriver", &format!("global-cpl-v2:{fingerprint}"),
             ).map_err(|error| format!("Could not save verified NVIDIA driver receipt: {error}"))?;
             Ok::<String, String>(format!(
-                "{vibrance_message}. Verified {verified_setting_count}/15 global settings: Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU {gpu_name}, plus the original 12 settings. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults. PhysX processor selection is a separate control and was not changed by this profile.",
+                "{vibrance_message}. Verified {verified_setting_count}/15 current global settings: Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU {gpu_name}, plus the original 12 settings. PhysX GPU and preview Performance verified, with advanced 3D settings retained. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults.",
             ))
         }).await.map_err(|error| format!("NVIDIA preset worker failed: {error}")).and_then(|result| result);
         if let Ok(message) = &mut result {

@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
@@ -515,16 +516,21 @@ export default function TweaksPage() {
   const runSelected = async () => {
     setConfirmApply(false);
     if (!selectedIds.length) return;
-    if (!isPro && !best15ServerAuthorized) {
-      toast({
-        title: "Load your server-authorized Best 15",
-        description: "Run System Scan, then use the Best 15 chooser on the dashboard before applying free tweaks.",
-        variant: "destructive",
-      });
-      return;
-    }
     try {
-      const safeIds = isPro ? selectedIds : selectedIds.filter(id => best15IdSet.has(id)).slice(0, 15);
+      let allowedIds = best15Ids;
+      let requestedIds = selectedIds;
+      if (!isPro && !best15ServerAuthorized && native) {
+        const approval = await authorizeHardwarePreset();
+        allowedIds = approval.authorizedIds.filter(id =>
+          id !== NVIDIA_PRESET_ACTION_ID && getTweakCompatibility(id).ok,
+        ).slice(0, 15);
+        localStorage.setItem(BEST_15_IDS_KEY, JSON.stringify(allowedIds));
+        if (selectedIds.length === best15Ids.length && best15Ids.every(id => selectedIds.includes(id))) {
+          requestedIds = allowedIds;
+        }
+      }
+      const allowed = new Set(allowedIds);
+      const safeIds = isPro ? selectedIds : requestedIds.filter(id => allowed.has(id)).slice(0, 15);
       if (!safeIds.length) return;
       const result = await applyTweakBatch(safeIds);
       // Native mode navigates to the live runner. Browser mode still reports
@@ -617,7 +623,7 @@ export default function TweaksPage() {
             <button
               type="button"
               data-testid="button-apply-selected"
-              disabled={!selectedIds.length || (!isPro && !best15ServerAuthorized)}
+              disabled={!selectedIds.length || !accessReady}
               onClick={() => setConfirmApply(true)}
               className="flex items-center gap-1.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
             >

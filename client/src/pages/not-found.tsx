@@ -1,3 +1,4 @@
+import { APP_VERSION } from "@/generated/version";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Home } from "lucide-react";
@@ -56,7 +57,7 @@ export default function NotFound() {
           </Button>
         </div>
 
-        <p className="text-[10px] text-zinc-700 font-mono">OPTI GODS — V4</p>
+        <p className="text-[10px] text-zinc-700 font-mono">OPTI GODS — v{APP_VERSION}</p>
       </div>
     </div>
   );

@@ -365,7 +365,8 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
               sub={scan.monitors.map(monitor => `${monitor.name}${monitor.max_hz ? ` · max ${monitor.max_hz} Hz` : ""}`).join(" / ")} compact />
           )}
           {scan.refresh_hz != null && scan.refresh_hz > 1 && (
-            <Stat icon={Monitor} label="Max Refresh Rate" value={`${scan.refresh_hz} Hz`} compact />
+            <Stat icon={Monitor} label="Max Refresh Rate" value={`${scan.refresh_hz} Hz`}
+              sub={scan.monitors?.filter(m => (m.max_hz ?? m.current_hz) === scan.refresh_hz).map(m => m.name).join(" · ") || "Connected monitor"} compact />
           )}
           <Stat
             icon={Wifi}

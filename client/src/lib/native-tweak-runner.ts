@@ -357,6 +357,19 @@ export function queueTweakBatch(
   options: TweakBatchOptions = {},
   skippedIds: readonly string[] = [],
 ) {
+  const previous = readRunStateSafely();
+  // A queued-only orphan never entered a Windows action. A new explicit
+  // selection may safely replace it; do not replay an old Pro preset for guests.
+  if (previous && !hasNativeTweakRunInFlight()
+      && ["running", "stopping"].includes(previous.status)
+      && previous.items.every(item => item.status !== "running")) {
+    writeRunState({
+      ...previous, status: "stopped", finishedAt: Date.now(),
+      items: previous.items.map(item => item.status === "queued"
+        ? { ...item, status: "stopped", message: "Replaced by your new selection before Windows execution." }
+        : item),
+    });
+  }
   localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
   localStorage.setItem(NATIVE_RUN_FORCE_KEY, JSON.stringify(Array.from(new Set(options.forceReapplyIds ?? []))));
   localStorage.setItem(NATIVE_RUN_SKIPPED_KEY, JSON.stringify(Array.from(new Set(skippedIds))));
@@ -574,10 +587,15 @@ async function applyTweakBatchInternal(
   let windowsDetectedIds: string[] = [];
   if (native) {
     const [detected, machineHistory] = await Promise.all([
-      detectAppliedTweaks().catch(() => ({} as Record<string, boolean>)),
-      getRecordedAppliedTweaks().catch(() => ({} as Record<string, number>)),
+      withTimeout(detectAppliedTweaks(), 15_000, "Windows detection timed out; checking verified run receipts.").catch(() => ({} as Record<string, boolean>)),
+      withTimeout(getRecordedAppliedTweaks(), 15_000, "Windows receipt lookup timed out.").catch(() => ({} as Record<string, number>)),
     ]);
     const appliedAt = useOptimizationStore.getState().appliedAt;
+    if (stopRequested) {
+      const stoppedIds = compatibleIds;
+      stoppedIds.forEach((id, index) => emitProgress({ id, index, total: batchTotal, status: "stopped", message: "Stopped before authorizing Windows changes." }));
+      return { appliedIds: [], selectedIds: batchIds, unsupportedIds, skippedIds, failures: [], stoppedIds };
+    }
     const forcedIds = new Set(options.forceReapplyIds ?? []);
     if (batchIds.includes(NVIDIA_PRESET_ACTION_ID)) {
       // A selected preset run must execute and read back the driver. Old history
@@ -625,11 +643,16 @@ async function applyTweakBatchInternal(
   // may already occupy allowance slots, and Best 15 must report each ticket
   // result (rather than silently omitting IDs).
   const entitledIds = native
-    ? pendingIds
+    ? allowance.pro ? pendingIds : pendingIds.filter(id => NATIVE_TWEAK_ID_SET.has(id))
     : allowance.pro
       ? pendingIds
       : pendingIds.slice(0, Math.max(0, allowance.remaining ?? 0));
   const supportedIds = entitledIds;
+  for (const id of pendingIds.filter(id => !entitledIds.includes(id))) {
+    skippedIds.push(id);
+    emitProgress({ id, index: progressIndexById.get(id) ?? 0, total: batchTotal, status: "skipped",
+      message: "Pro-only action excluded from the Free Best 15 run. No Windows change or free credit was recorded." });
+  }
   const reconcileConfirmedIds = async () => {
     if (allowance.pro || !windowsDetectedIds.length) return;
     for (const id of windowsDetectedIds) {
@@ -872,6 +895,10 @@ async function applyTweakBatchInternal(
         ).catch(() => {});
       }
       const message = getThrownMessage(error, "Windows rejected the change.");
+      if (id === "CodDefenderExclusion" && message.startsWith("Skipped:")
+          && /Defender.*(unavailable|removed|could not load)/i.test(message)) {
+        try { localStorage.setItem("optigods-defender-capability", "unavailable"); } catch {}
+      }
       if (stopRequested) {
         stoppedIds.push(id);
         emitProgress({
@@ -880,7 +907,7 @@ async function applyTweakBatchInternal(
         });
         break;
       }
-      const classifiedSkipMessage = compatibilitySkipMessage
+      const classifiedSkipMessage = (message.startsWith("Skipped:") ? message : null) || compatibilitySkipMessage
         || getCompatibilitySkipMessage(undefined, message);
       if (classifiedSkipMessage) {
         skippedIds.push(id);

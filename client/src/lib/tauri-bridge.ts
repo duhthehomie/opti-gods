@@ -211,9 +211,13 @@ export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
     appliedDetectionRequest = invoke<Record<string, boolean>>("detect_applied_tweaks")
       .then(result => {
         if (result.NvidiaControlPanelSettings === false) {
-          try { localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.57"); } catch {}
+          try { localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.58"); } catch {}
         }
-        return result;
+        if (typeof result.__DefenderAvailable === "boolean") {
+          try { localStorage.setItem("optigods-defender-capability", result.__DefenderAvailable ? "available" : "unavailable"); } catch {}
+        }
+        const { __DefenderAvailable: _capability, ...tweaks } = result;
+        return tweaks;
       })
       .finally(() => { appliedDetectionRequest = null; });
   }

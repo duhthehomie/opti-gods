@@ -102,7 +102,7 @@ impl Session {
             load: unsafe { std::mem::transmute(api.resolve(0x375dbd6b, "DRS load")?) },
             save: unsafe { std::mem::transmute(api.resolve(0xfcbc7e14, "DRS save")?) },
             destroy: unsafe { std::mem::transmute(api.resolve(0xdad9cff8, "DRS destroy")?) },
-            lookup: unsafe { std::mem::transmute(api.resolve(0xda8466a0, "DRS base global profile")?) },
+            lookup: unsafe { std::mem::transmute(api.resolve(0x617bff9f, "DRS current global profile")?) },
             reset: unsafe { std::mem::transmute(api.resolve(0xfa5f6134, "DRS global reset")?) },
             set: unsafe { std::mem::transmute(api.resolve(0x577dd202, "DRS setting write")?) },
             get: unsafe { std::mem::transmute(api.resolve(0x73bf8338, "DRS setting read")?) },

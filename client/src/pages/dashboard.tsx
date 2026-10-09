@@ -1001,7 +1001,7 @@ export default function Dashboard() {
                 <div className="rounded-xl border border-green-500/20 bg-green-500/[.06] p-3 text-xs">
                   <span className="block font-bold text-green-100">Opti Gods NVIDIA Preset · separate Pro action</span>
                   <span className="mt-1 block leading-relaxed text-zinc-400">
-                    Included once through Full Optimize for eligible Pro users with one dedicated NVIDIA GPU. Hybrid systems are supported; NVIDIA Control Panel is not required.
+                    Included once through Full Optimize for eligible Pro users with one dedicated NVIDIA GPU. NVIDIA Control Panel is used to verify PhysX GPU selection and the remembered Performance slider; advanced 3D settings stay enabled.
                     {!nvidiaPresetEligible && " Run a hardware scan and confirm exactly one dedicated NVIDIA GPU before Full Optimize."}
                   </span>
                 </div>

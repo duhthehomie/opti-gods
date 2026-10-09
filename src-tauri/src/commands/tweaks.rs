@@ -203,13 +203,22 @@ if (Test-Path -LiteralPath $tabletInputServicePath) {
 $physicalDisplays = @(Get-PnpDevice -PresentOnly -Class Display -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '(?i)^PCI\\VEN_(10DE|1002|8086)&' })
 $nvidiaDisplays = @($physicalDisplays | Where-Object { $_.InstanceId -match '(?i)^PCI\\VEN_10DE&' })
 $nvidiaMsiConfirmed = $false
-if ($physicalDisplays.Count -eq 1 -and $nvidiaDisplays.Count -eq 1) {
+if ($nvidiaDisplays.Count -eq 1) {
   $interrupt = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($nvidiaDisplays[0].InstanceId)\Device Parameters\Interrupt Management"
   $supported = (Get-ItemProperty -LiteralPath "$interrupt\MessageSignaledInterruptProperties" -Name MSISupported -ErrorAction SilentlyContinue).MSISupported
   $priority = (Get-ItemProperty -LiteralPath "$interrupt\Affinity Policy" -Name DevicePriority -ErrorAction SilentlyContinue).DevicePriority
   $nvidiaMsiConfirmed = ($supported -eq 1 -and $priority -eq 3)
 }
+Import-Module Defender -ErrorAction SilentlyContinue
+$defenderAvailable = $false
+try {
+  if (Get-Command Get-MpPreference -ErrorAction SilentlyContinue) {
+    $null = Get-MpPreference -ErrorAction Stop
+    $defenderAvailable = $true
+  }
+} catch {}
 $checks = [ordered]@{
+  __DefenderAvailable = $defenderAvailable;
   EnableNvidiaMSIPro = $nvidiaMsiConfirmed;
   DebloatOneDrive = (
     -not (Test-Path -LiteralPath "$env:SystemRoot\System32\OneDriveSetup.exe") -and
@@ -273,15 +282,27 @@ $checks = [ordered]@{
 };
 $checks | ConvertTo-Json -Compress
 "#;
-        if let Ok(output) = Command::new(crate::commands::windows_powershell_executable())
+        if let Ok(mut child) = Command::new(crate::commands::windows_powershell_executable())
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
             .creation_flags(CREATE_NO_WINDOW)
-            .output()
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
         {
-            if output.status.success() {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+            while matches!(child.try_wait(), Ok(None)) {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+            if let Ok(output) = child.wait_with_output() {
+              if output.status.success() {
                 if let Ok(extra) = serde_json::from_slice::<BTreeMap<String, bool>>(&output.stdout) {
                     detected.extend(extra);
                 }
+              }
             }
         }
         if let Some(current) = crate::commands::misc::nvidia_preset_is_current() {

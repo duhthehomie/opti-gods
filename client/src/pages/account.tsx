@@ -1,11 +1,17 @@
+import { useState } from "react";
+import { GUEST_MODE_KEY } from "@/pages/welcome";
+import { apiUrl } from "@/lib/api-base";
+import { NATIVE_TOKEN_KEY, queryClient } from "@/lib/queryClient";
+import { beginAuthTransition, clearAuthTransition } from "@/lib/auth-transition";
+import { useToast } from "@/hooks/use-toast";
 import { LogOut, Shield, User, Cpu, Crown, ArrowLeft } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
-import { useAuth, useLogout } from "@/hooks/use-auth";
+import { useAuth, useLogout, loginWithDiscord } from "@/hooks/use-auth";
 import { useProStatus } from "@/lib/pro-status";
 import { useVersionInfo } from "@/hooks/use-auth";
 import { APP_VERSION } from "@/generated/version";
 import { Link } from "wouter";
-import { isNative } from "@/lib/tauri-bridge";
+import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { Button } from "@/components/ui/button";
 
 function isNewerVersion(candidate: string, current: string): boolean {
@@ -31,6 +37,29 @@ export default function AccountPage() {
   const logout = useLogout();
   const { data: versionData } = useVersionInfo();
 
+  const { toast } = useToast();
+  const [signingIn, setSigningIn] = useState(false);
+  const signIn = async () => {
+    if (signingIn) return;
+    if (!isNative()) { loginWithDiscord("/account"); return; }
+    setSigningIn(true);
+    beginAuthTransition();
+    try {
+      try { localStorage.removeItem(GUEST_MODE_KEY); } catch {}
+      const response = await fetch(apiUrl("/api/auth/discord/config"));
+      if (!response.ok) throw new Error("Discord sign-in configuration could not be loaded.");
+      const config = await response.json() as { clientId?: string };
+      if (!config.clientId) throw new Error("Discord sign-in is not configured.");
+      const session = await discordLogin(config.clientId);
+      localStorage.setItem(NATIVE_TOKEN_KEY, session.native_token);
+      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/pro/status"] });
+      window.location.assign("/account");
+    } catch (error) {
+      clearAuthTransition();
+      toast({ title: "Discord sign-in did not complete", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+    } finally { setSigningIn(false); }
+  };
   const display = user?.username;
 
   return (
@@ -92,7 +121,7 @@ export default function AccountPage() {
             <div>
               <p className="text-sm font-bold text-white">Guest / Code session</p>
               <p className="text-xs text-zinc-500">Browser sign-in is separate from the Windows app.</p>
-              <Link href="/welcome?returnTo=%2Faccount" className="mt-2 inline-flex rounded-md border border-[#5865F2]/30 bg-[#5865F2]/10 px-2.5 py-1.5 text-[10px] font-bold text-[#9ca8ff] hover:bg-[#5865F2]/20" data-testid="button-account-discord-login">Sign in with Discord in this app</Link>
+              <button type="button" disabled={signingIn} onClick={() => void signIn()} className="mt-2 inline-flex rounded-md border border-[#5865F2]/30 bg-[#5865F2]/10 px-2.5 py-1.5 text-[10px] font-bold text-[#9ca8ff] hover:bg-[#5865F2]/20" data-testid="button-account-discord-login">{signingIn ? "Waiting for Discord…" : "Sign in with Discord in this app"}</button>
             </div>
           </div>
         )}

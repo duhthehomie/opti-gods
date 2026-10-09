@@ -52,6 +52,13 @@ export function getHardwareAwareTweakTitle(id: string, title: string): string {
 }
 
 export function getTweakCompatibility(id: string): { ok: boolean; reason?: string } {
+  if (id === "CodDefenderExclusion" && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    try {
+      if (localStorage.getItem("optigods-defender-capability") === "unavailable") {
+        return { ok: false, reason: "Microsoft Defender is unavailable on this Windows installation. No exclusion is needed or claimed; restoring Defender is a separate choice." };
+      }
+    } catch {}
+  }
   const hardware = hardwareFromScan();
   if (hardware) return isHardwareCompatible(id, hardware);
   const needsScan = id === "EnableHAGS"

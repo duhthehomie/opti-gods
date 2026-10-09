@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -15,6 +16,11 @@ if (!miscSource.includes('.join("resources").join("msi-utility")') ||
 }
 if (!miscSource.includes("nvidia_profile::apply(&settings") || !miscSource.includes("nvidia_profile::verify(&settings")) {
   throw new Error("Direct NVIDIA transaction and final readback are missing");
+}
+const cplScript = resolve(root, "src-tauri/src/commands/nvidia-cpl-settings.ps1");
+if (!existsSync(cplScript)) throw new Error("NVIDIA Control Panel verification source is missing");
+if (process.platform === "win32") {
+  execFileSync(resolve(process.env.SystemRoot || "C:/Windows", "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", "$tokens=$null; $errors=$null; $null=[System.Management.Automation.Language.Parser]::ParseFile($env:OPTI_CPL_SCRIPT,[ref]$tokens,[ref]$errors); if($errors.Count){throw ($errors.Message -join '; ')}"], {env: {...process.env, OPTI_CPL_SCRIPT: cplScript}, stdio: "inherit", timeout: 15000});
 }
 const files = {
   "src-tauri/resources/msi-utility/MSI_util_v3.exe": "695800afad96f858a3f291b7df21c16649528f13d39b63fb7c233e5676c8df6f",

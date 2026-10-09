@@ -7,8 +7,8 @@ export interface NvidiaPresetEligibilityInput {
 
 /**
  * Profile import is supported on one active NVIDIA card, including Optimus/
- * hybrid laptops. Control Panel is not a requirement because the bundled
- * The native driver API applies and verifies the global preset directly.
+ * hybrid laptops. The native driver API verifies the current global preset;
+ * NVIDIA Control Panel is needed for the separate PhysX/preview controls.
  */
 export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean {
   return input.native
@@ -17,7 +17,7 @@ export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean
     && input.dedicatedNvidiaGpuCount === 1;
 }
 
-export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.57";
+export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.58";
 
 export function isCurrentNvidiaPresetVerified(): boolean {
   try { return typeof localStorage !== "undefined" && localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "verified"; }
