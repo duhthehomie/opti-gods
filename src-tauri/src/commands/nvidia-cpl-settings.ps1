@@ -1,6 +1,59 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName Accessibility
+# Windows PowerShell's managed UIA client does not expose the legacy pattern
+# class. Use the supported MSAA COM API for legacy controls, without mouse
+# clicks, key presses, or a dependency on that missing managed type.
+if (-not ('OptiGods.CplMsaa' -as [type])) {
+  Add-Type -ReferencedAssemblies ([Accessibility.IAccessible].Assembly.Location) -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using Accessibility;
+namespace OptiGods {
+  public sealed class CplMsaaInfo {
+    public string Name, Value;
+    public int Role, State, Left, Top, Width, Height;
+  }
+  public sealed class CplMsaaControl {
+    private readonly IAccessible accessible;
+    private readonly object child;
+    public CplMsaaControl(IAccessible a, object c) { accessible = a; child = c; }
+    public CplMsaaInfo Current {
+      get {
+        int left, top, width, height;
+        accessible.accLocation(out left, out top, out width, out height, child);
+        string value = null;
+        try { value = accessible.get_accValue(child); } catch (COMException) {}
+        return new CplMsaaInfo {
+          Name = accessible.get_accName(child), Value = value,
+          Role = Convert.ToInt32(accessible.get_accRole(child)),
+          State = Convert.ToInt32(accessible.get_accState(child)),
+          Left = left, Top = top, Width = width, Height = height
+        };
+      }
+    }
+    public void Select(int flags) { accessible.accSelect(flags, child); }
+    public void DoDefaultAction() { accessible.accDoDefaultAction(child); }
+  }
+  public static class CplMsaa {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point { public int X, Y; }
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromPoint(Point point,
+      [MarshalAs(UnmanagedType.Interface)] out IAccessible accessible,
+      [MarshalAs(UnmanagedType.Struct)] out object child);
+    public static CplMsaaControl FromPoint(int x, int y) {
+      IAccessible accessible;
+      object child;
+      int hr = AccessibleObjectFromPoint(new Point { X = x, Y = y }, out accessible, out child);
+      if (hr < 0 || accessible == null) return null;
+      return new CplMsaaControl(accessible, child);
+    }
+  }
+}
+'@
+}
 $gpu = $env:OPTI_GPU_NAME
 if ([string]::IsNullOrWhiteSpace($gpu)) { throw 'No explicit NVIDIA GPU was supplied.' }
 $gpu = ($gpu.Trim() -replace '\s+', ' ')
@@ -9,12 +62,37 @@ $scope = [System.Windows.Automation.TreeScope]::Descendants
 $all = [System.Windows.Automation.Condition]::TrueCondition
 $root = $null
 
+function Normalize-Name($name) {
+  (($name -replace '&', '' -replace '[\u200E\u200F]', '' -replace '\s+', ' ').Trim())
+}
+function Get-Legacy($element) {
+  # Resolve only the accessible child at this element's bounds. Reject an
+  # overlay, parent, or unrelated element rather than acting on guessed UI.
+  try {
+    $bounds = $element.Current.BoundingRectangle
+    if ($bounds.IsEmpty -or $bounds.Width -le 0 -or $bounds.Height -le 0) { return $null }
+    $x = [int][Math]::Floor($bounds.Left + $bounds.Width / 2)
+    $y = [int][Math]::Floor($bounds.Top + $bounds.Height / 2)
+    $legacy = [OptiGods.CplMsaa]::FromPoint($x, $y)
+    if (-not $legacy) { return $null }
+    $info = $legacy.Current
+    if (($info.State -band 0x8000) -ne 0 -or $info.Width -le 0 -or $info.Height -le 0) { return $null }
+    if ($x -lt $info.Left -or $x -ge ($info.Left + $info.Width) -or $y -lt $info.Top -or $y -ge ($info.Top + $info.Height)) { return $null }
+    $name = Normalize-Name $element.Current.Name
+    if ($name) {
+      if ($name -ne (Normalize-Name $info.Name)) { return $null }
+    } elseif ($info.Left -lt ($bounds.Left - 2) -or $info.Top -lt ($bounds.Top - 2) -or ($info.Left + $info.Width) -gt ($bounds.Right + 2) -or ($info.Top + $info.Height) -gt ($bounds.Bottom + 2)) {
+      return $null
+    }
+    return $legacy
+  } catch { return $null }
+}
 function Elements($type) {
   @($script:root.FindAll($scope, $all) | Where-Object {
     if ($_.Current.IsOffscreen) { return $false }
     if ($_.Current.ControlType -eq $type) { return $true }
-    $legacy = $null
-    if (-not $_.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)) { return $false }
+    $legacy = Get-Legacy $_
+    if (-not $legacy) { return $false }
     $roles = @{ Button=43; RadioButton=45; ComboBox=46; Slider=51; ListItem=34 }
     $role = $roles[$type.ProgrammaticName.Split('.')[-1]]
     $null -ne $role -and $legacy.Current.Role -eq $role
@@ -29,11 +107,11 @@ function Named($type, $names) {
     if ($process) { $script:root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
     $found = @{}
     foreach ($element in $script:root.FindAll($scope, $all)) {
-      $legacy = $null
-      $hasLegacy = $element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)
+      $legacy = Get-Legacy $element
+      $hasLegacy = $null -ne $legacy
       $rawName = $element.Current.Name
       if ([string]::IsNullOrWhiteSpace($rawName) -and $hasLegacy) { $rawName = $legacy.Current.Name }
-      $name = ($rawName -replace '&', '' -replace '[\u200E\u200F]', '' -replace '\s+', ' ').Trim()
+      $name = Normalize-Name $rawName
       if ($names -notcontains $name) { continue }
       $candidate = $element
       if ($type -eq [System.Windows.Automation.ControlType]::TreeItem) {
@@ -67,7 +145,7 @@ function Select-Element($element) {
     $pattern.Select()
   } elseif ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
     $pattern.Invoke()
-  } elseif ($element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
+  } elseif ($null -ne ($pattern = Get-Legacy $element)) {
     if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem -or $pattern.Current.Role -eq 36) {
       $pattern.Select(3)
     }
@@ -89,7 +167,8 @@ function Selected-Name($combo) {
     $selection = $pattern.Current.GetSelection()
     if ($selection.Count -eq 1) { return $selection[0].Current.Name }
   }
-  if ($combo.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
+  $pattern = Get-Legacy $combo
+  if ($pattern) {
     if (-not [string]::IsNullOrWhiteSpace($pattern.Current.Value)) { return $pattern.Current.Value }
   }
   throw 'PhysX processor selection cannot be read back.'
@@ -157,7 +236,7 @@ if ((Selected-Name $combo) -ne $gpu) {
   $expansion = $null
   if ($combo.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expansion)) {
     $expansion.Expand()
-  } elseif ($combo.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$expansion)) {
+  } elseif ($null -ne ($expansion = Get-Legacy $combo)) {
     $expansion.DoDefaultAction()
   } else { throw 'PhysX dropdown cannot be opened safely.' }
   Start-Sleep -Milliseconds 200

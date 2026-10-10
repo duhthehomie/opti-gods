@@ -38,6 +38,20 @@ if (missingCommandPermissions.length || missingCapabilityPermissions.length) {
 }
 console.log(`[tauri-preflight] ACL covers all ${registeredCommands.size} registered commands.`);
 
+if (process.platform === "win32") {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === "psmodulepath") delete env[key];
+  }
+  const cpl = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "script/verify-nvidia-cpl.ps1"], {
+    encoding: "utf8", env, timeout: 30000, maxBuffer: 2 * 1024 * 1024,
+  });
+  if (cpl.stdout) process.stdout.write(cpl.stdout);
+  if (cpl.stderr) process.stderr.write(cpl.stderr);
+  if (cpl.error) console.error(cpl.error.message);
+  if (cpl.status !== 0) process.exit(cpl.status || 1);
+}
+
 const resources = spawnSync(process.execPath, ["script/verify-v5-resources.mjs"], {
   encoding: "utf8",
   maxBuffer: 10 * 1024 * 1024,

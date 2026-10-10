@@ -1,4 +1,4 @@
 {
-  "version": "5.2.59",
-  "notes": "V5.2.59 — waits for NVIDIA Control Panel navigation and supports legacy accessibility; preflights controls before changing profiles; verifies rollback values rather than customization counts; includes reviewed NVIDIA MSI High in compatible Max/Full Optimize and pending recommendations; prioritizes continuous GPU sensors and shows live sample time."
+  "version": "5.2.60",
+  "notes": "V5.2.60 — replaces unsupported managed NVIDIA legacy accessibility calls with Windows MSAA COM support; checks helper compilation in Windows PowerShell before building; preserves strict preset verification, compatible Max NVIDIA MSI High, and working live CPU/GPU temperatures."
 }
