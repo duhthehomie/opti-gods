@@ -328,7 +328,8 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
     ? liveStats.isStale ? "Last GPU reading is unavailable" : "No GPU temperature sensor returned a live reading"
     : liveStats.gpuTempSource === "imported"
       ? "Saved HW Monitor reading"
-      : liveStats.isStale ? "Last live reading · stale" : "Live GPU temperature · updates automatically";
+      : liveStats.isStale ? "Last live reading · stale"
+        : `Live GPU sensor${liveStats.sampledAt ? ` · sampled ${new Date(liveStats.sampledAt).toLocaleTimeString()}` : ""}`;
 
   return (
     <div className="space-y-2">

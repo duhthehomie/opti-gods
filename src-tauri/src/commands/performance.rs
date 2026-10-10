@@ -65,7 +65,7 @@ pub async fn read_live_performance(app: AppHandle, temperatures_only: Option<boo
         #[cfg(windows)]
         if temperatures_only.unwrap_or(false) {
             let sensors = read_bundled_sensors(&app);
-            let gpu = read_nvidia_temperature().or(sensors.gpu_temp_c);
+            let gpu = sensors.gpu_temp_c.or_else(read_nvidia_temperature);
             return Ok(LivePerformance {
                 live: sensors.cpu_temp_c.is_some() || gpu.is_some(),
                 cpu_temp_c: sensors.cpu_temp_c,
@@ -282,7 +282,7 @@ $out | ConvertTo-Json -Compress
         // Query NVAPI independently so a Windows counter/WMI failure cannot hide a valid GPU sensor.
         let temperature_sample = || {
             let sensors = read_bundled_sensors(&app);
-            let gpu = read_nvidia_temperature().or(sensors.gpu_temp_c);
+            let gpu = sensors.gpu_temp_c.or_else(read_nvidia_temperature);
             LivePerformance {
                 live: gpu.is_some() || sensors.cpu_temp_c.is_some(),
                 gpu_temp_c: gpu,
@@ -322,15 +322,18 @@ $out | ConvertTo-Json -Compress
             Err(_) => return Ok(temperature_sample()),
         };
         // Sample again after WMI/counters: do not present a pre-query sample as
-        // current after a slow Windows provider. Prefer direct driver readback.
+        // current after a slow Windows provider. Prefer the continuously updated
+        // reader; direct driver calls are a fresh fallback, never a WMI snapshot.
         let sensors = read_bundled_sensors(&app);
         if sensors.cpu_temp_c.is_some() { performance.cpu_temp_c = sensors.cpu_temp_c; }
         performance.cpu_sensor_status = Some(sensors.status);
         performance.cpu_sensor_name = sensors.cpu_sensor_name;
-        if let Some(current) = read_nvidia_temperature() {
+        if let Some(current) = sensors.gpu_temp_c.or_else(read_nvidia_temperature) {
             performance.gpu_temp_c = Some(current);
-        } else if performance.gpu_temp_c.is_none() {
-            performance.gpu_temp_c = sensors.gpu_temp_c;
+        } else {
+            // WMI providers can expose a cached value. Do not retain one when
+            // neither the continuous reader nor a fresh driver query succeeds.
+            performance.gpu_temp_c = None;
         }
         performance.live |= performance.cpu_temp_c.is_some() || performance.gpu_temp_c.is_some();
         Ok(performance)

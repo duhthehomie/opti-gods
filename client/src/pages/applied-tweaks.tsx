@@ -60,6 +60,10 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
 
 function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
   const savedScanResult = getTweakCompatibility(item.id);
+  if (item.id === NVIDIA_PRESET_ACTION_ID && savedScanResult.ok
+      && /Control Panel.*(control|navigation|accessible|verification)|automation/i.test(item.message || "")) {
+    return savedScanResult;
+  }
   const runtimeLooksIncompatible = (item.status === "skipped" && !isScriptOnlyTweakId(item.id))
     || (item.status === "failed"
       && /not for this system|not compatible|not supported|not detected|requires exactly|hybrid|multi[- ]gpu|ambiguous display|did not expose|unavailable/i.test(item.message || ""));

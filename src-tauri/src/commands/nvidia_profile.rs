@@ -179,10 +179,10 @@ impl Session {
         self.reload()?;
         self.write(backup, false)?;
         self.verify(backup)?;
-        let restored = self.customized()?;
-        if restored.len() != backup.len() {
-            return Err("NVIDIA rollback did not restore the exact original customized profile.".into());
-        }
+        // NVIDIA can canonicalize an explicit default-valued override into a
+        // predefined value. verify() checks every original typed value and
+        // rejects unexpected overrides; enumeration cardinality is not proof
+        // that any value was lost.
         Ok(())
     }
 }

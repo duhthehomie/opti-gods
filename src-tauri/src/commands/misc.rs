@@ -605,11 +605,17 @@ fn rollback_dvc_with_handles(
 
 #[cfg(windows)]
 fn apply_verified_nvidia_cpl_controls(gpu_name: &str) -> Result<(), String> {
+    verify_nvidia_cpl_controls(gpu_name, false)
+}
+
+#[cfg(windows)]
+fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let mut child = Command::new(crate::commands::windows_powershell_executable())
         .args(["-NoProfile", "-NonInteractive", "-Sta", "-Command", include_str!("nvidia-cpl-settings.ps1")])
         .env("OPTI_GPU_NAME", gpu_name)
+        .env("OPTI_CPL_PREFLIGHT", if preflight { "1" } else { "0" })
         .stdout(Stdio::piped()).stderr(Stdio::piped())
         .creation_flags(0x0800_0000).spawn()
         .map_err(|error| format!("NVIDIA Control Panel verification could not start: {error}"))?;
@@ -629,8 +635,10 @@ fn apply_verified_nvidia_cpl_controls(gpu_name: &str) -> Result<(), String> {
         }
     }
     let output = child.wait_with_output().map_err(|error| error.to_string())?;
+    let marker = if preflight { "NVIDIA Control Panel navigation verified." }
+        else { "PhysX GPU and preview Performance verified." };
     if !output.status.success()
-        || !String::from_utf8_lossy(&output.stdout).contains("PhysX GPU and preview Performance verified.") {
+        || !String::from_utf8_lossy(&output.stdout).contains(marker) {
         return Err(format!("NVIDIA Control Panel settings were not verified: {}", String::from_utf8_lossy(&output.stderr).trim()));
     }
     Ok(())
@@ -924,6 +932,8 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             };
             let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
             let settings = parse_global_nip_settings(&expected)?;
+            report("Checking NVIDIA Control Panel accessibility before changing the global profile");
+            verify_nvidia_cpl_controls(&gpu_name, true)?;
             let original_profile = nvidia_profile::apply(&settings, &report)?;
             report("Verifying PhysX GPU selection and the preview Performance slider in NVIDIA Control Panel");
             if let Err(error) = apply_verified_nvidia_cpl_controls(&gpu_name) {

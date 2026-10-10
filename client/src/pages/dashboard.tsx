@@ -581,10 +581,19 @@ export default function Dashboard() {
       const compatibleIds = recognizedIds.filter(id =>
         !MANUAL_ONLY_TWEAK_IDS.has(id) && getTweakCompatibility(id).ok,
       );
+      // Max/Full Optimize explicitly includes the reviewed NVIDIA-only action.
+      // Do not relax the generic MSI core-preset exclusion or Pro permissions.
+      if (native && body.pro && nvidiaPresetEligible
+          && getTweakCompatibility("EnableNvidiaMSIPro").ok
+          && !compatibleIds.includes("EnableNvidiaMSIPro")) {
+        compatibleIds.push("EnableNvidiaMSIPro");
+      }
       const blockedIds = recognizedIds.filter(id =>
         !MANUAL_ONLY_TWEAK_IDS.has(id) && !getTweakCompatibility(id).ok,
       );
-      const manualOnlyIds = recognizedIds.filter(id => MANUAL_ONLY_TWEAK_IDS.has(id));
+      const manualOnlyIds = recognizedIds.filter(id => MANUAL_ONLY_TWEAK_IDS.has(id)
+        && !(id === "EnableNvidiaMSIPro" && native && body.pro && nvidiaPresetEligible
+          && getTweakCompatibility(id).ok));
       const initialSkippedIds = Array.from(new Set([...unknownIds, ...blockedIds, ...manualOnlyIds]));
       const initialSkippedMessages: Record<string, string> = {};
       for (const id of unknownIds) initialSkippedMessages[id] = "This preset entry is not recognized by this app version, so it was not run.";
@@ -777,10 +786,10 @@ export default function Dashboard() {
   // plus the runner's confirmed-success ledger. The detector covers only a
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
-  const matchedRecommendedIds = getEligibleSmartRecommendationIds(
+  const matchedRecommendedIds = Array.from(new Set([...getEligibleSmartRecommendationIds(
     [...Array.from(smartRecs.ids).filter(id => id !== NVIDIA_PRESET_ACTION_ID), ...(nvidiaPresetEligible ? [NVIDIA_PRESET_ACTION_ID] : [])],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
-  );
+  ), ...(nvidiaPresetEligible && getTweakCompatibility("EnableNvidiaMSIPro").ok ? ["EnableNvidiaMSIPro"] : [])]));
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
   const totalTweaks = matchedRecommendedTweaks.length;

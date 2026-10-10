@@ -17,6 +17,7 @@ function readSharedNativeTelemetry(temperaturesOnly: boolean) {
 }
 
 export interface LiveStats {
+  sampledAt?: number;
   cpuSensorStatus?: string;
   cpuSensorName?: string;
   cpuUsage: number;
@@ -156,6 +157,7 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
         const cpuTemp = realData.cpu_temp_c ?? importedTemps.cpuTemp;
         const gpuTemp = realData.gpu_temp_c ?? importedTemps.gpuTemp;
         const snap: LiveStats = {
+          sampledAt: Date.now(),
           cpuSensorStatus: realData.cpu_sensor_status,
           cpuSensorName: realData.cpu_sensor_name,
           cpuUsage:   Math.round(cpu),

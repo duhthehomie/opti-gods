@@ -11,20 +11,67 @@ $root = $null
 
 function Elements($type) {
   @($script:root.FindAll($scope, $all) | Where-Object {
-    $_.Current.ControlType -eq $type -and -not $_.Current.IsOffscreen
+    if ($_.Current.IsOffscreen) { return $false }
+    if ($_.Current.ControlType -eq $type) { return $true }
+    $legacy = $null
+    if (-not $_.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)) { return $false }
+    $roles = @{ Button=43; RadioButton=45; ComboBox=46; Slider=51; ListItem=34 }
+    $role = $roles[$type.ProgrammaticName.Split('.')[-1]]
+    $null -ne $role -and $legacy.Current.Role -eq $role
   })
 }
 function Named($type, $names) {
-  $items = @(Elements $type | Where-Object { $names -contains $_.Current.Name })
-  if ($items.Count -ne 1) { throw "NVIDIA Control Panel control is unavailable or ambiguous: $($names -join ' / ')." }
-  $items[0]
+  $until = [DateTime]::UtcNow.AddSeconds(8)
+  do {
+    # The initial MainWindowHandle can be the splash/loading window. Reacquire
+    # the actual window while its navigation provider finishes initializing.
+    $process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    if ($process) { $script:root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
+    $found = @{}
+    foreach ($element in $script:root.FindAll($scope, $all)) {
+      $legacy = $null
+      $hasLegacy = $element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)
+      $rawName = $element.Current.Name
+      if ([string]::IsNullOrWhiteSpace($rawName) -and $hasLegacy) { $rawName = $legacy.Current.Name }
+      $name = ($rawName -replace '&', '' -replace '[\u200E\u200F]', '' -replace '\s+', ' ').Trim()
+      if ($names -notcontains $name) { continue }
+      $candidate = $element
+      if ($type -eq [System.Windows.Automation.ControlType]::TreeItem) {
+        # Some driver versions expose tree leaves through MSAA rather than
+        # UIA TreeItem. Only accept actual outline items, never page headings.
+        $tree = $candidate.Current.ControlType -eq $type
+        if (-not $tree -and $hasLegacy) {
+          $tree = $legacy.Current.Role -eq 36
+        }
+        if (-not $tree) { continue }
+      } elseif ($candidate.Current.ControlType -ne $type) {
+        $roles = @{ Button=43; RadioButton=45; ComboBox=46; Slider=51; ListItem=34 }
+        $role = $roles[$type.ProgrammaticName.Split('.')[-1]]
+        if (-not $hasLegacy -or $null -eq $role -or $legacy.Current.Role -ne $role) { continue }
+      }
+      $found[($candidate.GetRuntimeId() -join ',')] = $candidate
+    }
+    $items = @($found.Values)
+    if ($items.Count -eq 1) { return $items[0] }
+    if ($items.Count -gt 1) { throw "NVIDIA control is ambiguous: $($names -join ' / ')." }
+    Start-Sleep -Milliseconds 150
+  } while ([DateTime]::UtcNow -lt $until)
+  $available = @($script:root.FindAll($scope, $all) | ForEach-Object { $_.Current.Name } | Where-Object { $_ } | Select-Object -Unique -First 25) -join ' | '
+  throw "NVIDIA control did not become accessible: $($names -join ' / '). Window: $($script:root.Current.Name). Available controls: $available"
 }
 function Select-Element($element) {
+  $scroll = $null
+  if ($element.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scroll)) { $scroll.ScrollIntoView() }
   $pattern = $null
   if ($element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) {
     $pattern.Select()
   } elseif ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
     $pattern.Invoke()
+  } elseif ($element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
+    if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem -or $pattern.Current.Role -eq 36) {
+      $pattern.Select(3)
+    }
+    $pattern.DoDefaultAction()
   } else { throw "NVIDIA control cannot be selected safely: $($element.Current.Name)." }
   Start-Sleep -Milliseconds 250
 }
@@ -32,14 +79,20 @@ function Apply-Changes {
   $buttons = @(Elements ([System.Windows.Automation.ControlType]::Button) | Where-Object { $_.Current.Name -eq 'Apply' })
   if ($buttons.Count -ne 1) { throw 'NVIDIA Apply button is unavailable or ambiguous.' }
   if ($buttons.Count -eq 1 -and $buttons[0].Current.IsEnabled) {
-    $buttons[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Select-Element $buttons[0]
     Start-Sleep -Milliseconds 500
   }
 }
 function Selected-Name($combo) {
-  $selection = $combo.GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
-  if ($selection.Count -ne 1) { throw 'PhysX processor selection cannot be read back.' }
-  $selection[0].Current.Name
+  $pattern = $null
+  if ($combo.TryGetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern, [ref]$pattern)) {
+    $selection = $pattern.Current.GetSelection()
+    if ($selection.Count -eq 1) { return $selection[0].Current.Name }
+  }
+  if ($combo.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
+    if (-not [string]::IsNullOrWhiteSpace($pattern.Current.Value)) { return $pattern.Current.Value }
+  }
+  throw 'PhysX processor selection cannot be read back.'
 }
 
 $process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
@@ -63,6 +116,22 @@ do {
 } while (-not $root -and [DateTime]::UtcNow -lt $deadline)
 if (-not $root) { throw 'NVIDIA Control Panel did not expose an accessible desktop window.' }
 
+$previewPage = Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview')
+$physxNames = @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')
+$physxPage = Named ([System.Windows.Automation.ControlType]::TreeItem) $physxNames
+if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
+  Select-Element $previewPage
+  $null = Named ([System.Windows.Automation.ControlType]::RadioButton) @('Use the advanced 3D image settings')
+  $preflightSliders = @(Elements ([System.Windows.Automation.ControlType]::Slider))
+  if ($preflightSliders.Count -ne 1) { throw 'Preview slider is not safely accessible; the global profile has not been changed.' }
+  $null = $preflightSliders[0].GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+  Select-Element $physxPage
+  $preflightCombos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
+  if ($preflightCombos.Count -ne 1) { throw 'PhysX dropdown is not safely accessible; the global profile has not been changed.' }
+  $null = Selected-Name $preflightCombos[0]
+  Write-Output 'NVIDIA Control Panel navigation verified.'
+  return
+}
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
 $preferences = @(Elements ([System.Windows.Automation.ControlType]::RadioButton) | Where-Object { $_.Current.Name -like 'Use my preference emphasizing*' })
 if ($preferences.Count -ne 1) { throw 'The preview preference control is unavailable or ambiguous.' }
@@ -85,7 +154,12 @@ $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
 if ($combos.Count -ne 1) { throw 'The PhysX processor dropdown cannot be identified safely.' }
 $combo = $combos[0]
 if ((Selected-Name $combo) -ne $gpu) {
-  $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+  $expansion = $null
+  if ($combo.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expansion)) {
+    $expansion.Expand()
+  } elseif ($combo.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$expansion)) {
+    $expansion.DoDefaultAction()
+  } else { throw 'PhysX dropdown cannot be opened safely.' }
   Start-Sleep -Milliseconds 200
   $desktop = [System.Windows.Automation.AutomationElement]::RootElement
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)

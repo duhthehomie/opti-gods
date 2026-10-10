@@ -1,4 +1,4 @@
 {
-  "version": "5.2.58",
-  "notes": "V5.2.58 — removes nested NVAPI detection deadlock; fixes current-global-profile targeting and normalized vibrance; verifies PhysX/preview controls; repairs orphaned queues, Free Best 15, monitor labels and Account Discord sign-in."
+  "version": "5.2.59",
+  "notes": "V5.2.59 — waits for NVIDIA Control Panel navigation and supports legacy accessibility; preflights controls before changing profiles; verifies rollback values rather than customization counts; includes reviewed NVIDIA MSI High in compatible Max/Full Optimize and pending recommendations; prioritizes continuous GPU sensors and shows live sample time."
 }

@@ -425,10 +425,10 @@ export default function TweaksPage() {
       ));
     }
   }, [isPro, accessReady, best15IdSet]);
-  const matchedProIds = getEligibleSmartRecommendationIds(
+  const matchedProIds = Array.from(new Set([...getEligibleSmartRecommendationIds(
     [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
-  );
+  ), ...(nvidiaPresetEligible && getTweakCompatibility("EnableNvidiaMSIPro").ok ? ["EnableNvidiaMSIPro"] : [])]));
   const missingMatchedIds = getMissingRecommendationIds(matchedProIds, {
     native,
     stateReady: !native || (nativeDetectionReady && !nativeDetectionError),
