@@ -9,7 +9,6 @@ import { getNativeErrorMessage } from "@/lib/native-error";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import {
   isNativeTweakRunStuck,
-  REVIEWED_NATIVE_SCRIPT_IDS,
   isScriptOnlyTweakId,
   recordScriptTweakProgress,
   recordScriptTweakResult,
@@ -387,7 +386,8 @@ export default function AppliedTweaksPage() {
     const startRun = async () => {
       const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
       const nativeUnsupportedIds = recoverable.filter(id =>
-        !NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID && !REVIEWED_NATIVE_SCRIPT_IDS.has(id),
+        (!getTweakMeta(id) && id !== NVIDIA_PRESET_ACTION_ID)
+        || (!NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID && !isScriptOnlyTweakId(id)),
       );
       let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds, ...nativeUnsupportedIds]));
       const initialSkippedMessages: Record<string, string> = { ...(queuedOptions.initialSkippedMessages ?? {}) };
@@ -399,7 +399,7 @@ export default function AppliedTweaksPage() {
       }
       for (const id of nativeUnsupportedIds) {
         if (!initialSkippedMessages[id]) {
-          initialSkippedMessages[id] = "This tweak is script-only and cannot be applied by the Windows instant runner.";
+          initialSkippedMessages[id] = "No recognized trusted batch action is available for this tweak; no Windows change was made.";
         }
       }
       let skippedSet = new Set(initialSkippedIds);
@@ -515,7 +515,7 @@ export default function AppliedTweaksPage() {
      runItems
        .filter(item => item.status === "queued" || item.status === "running" || item.status === "stopped")
        .map(item => item.id)
-       .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID) && getTweakCompatibility(id).ok),
+       .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID || isScriptOnlyTweakId(id)) && getTweakCompatibility(id).ok),
    ));
    const retryStuckAvailable = runIsStuck || runItems.some(item => item.status === "stopped");
   const failedIds = Array.from(new Set(
@@ -594,7 +594,7 @@ export default function AppliedTweaksPage() {
         (latest?.items ?? [])
           .filter(item => item.status === "stopped" || item.status === "queued" || item.status === "running")
           .map(item => item.id)
-          .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID) && getTweakCompatibility(id).ok),
+          .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID || isScriptOnlyTweakId(id)) && getTweakCompatibility(id).ok),
       ));
       if (!ids.length) {
         toast({ title: "No compatible stuck tweaks to retry", description: "Review the Skipped tab for items that need a different fix." });

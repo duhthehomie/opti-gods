@@ -19,7 +19,7 @@
       <ProfileSetting>
         <SettingNameInfo>OpenGL - GDI Compatibility</SettingNameInfo>
         <SettingID>544392611</SettingID>
-        <SettingValue>2</SettingValue>
+        <SettingValue>0</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
@@ -67,7 +67,7 @@
       <ProfileSetting>
         <SettingNameInfo>Vertical Sync</SettingNameInfo>
         <SettingID>11041231</SettingID>
-        <SettingValue>1620202130</SettingValue>
+        <SettingValue>138504007</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>

@@ -23,6 +23,9 @@ if (-not ('OptiGods.CplMsaa' -as [type]) -or -not ('OptiGods.CplMsaaControl' -as
 }
 if (-not [OptiGods.CplMsaa].GetMethod('FromPoint')) { throw 'MSAA lookup entry point is missing.' }
 if (-not ('OptiGods.CplInput' -as [type])) { throw 'Exact-navigation input helper failed to compile.' }
+if (-not ('OptiGods.CplTrackbar' -as [type]) -or -not [OptiGods.CplTrackbar].GetMethod('Read') -or -not [OptiGods.CplTrackbar].GetMethod('SetMinimum')) {
+  throw 'Native NVIDIA trackbar helper failed to compile/load.'
+}
 $expectedInputSize = if ([IntPtr]::Size -eq 8) { 40 } else { 28 }
 if ([OptiGods.CplInput]::InputSize -ne $expectedInputSize) { throw 'Win32 input structure layout is incorrect.' }
 Write-Output '[nvidia-cpl] Windows PowerShell syntax, WindowsBase Point/Rect geometry, and MSAA/input helper compilation passed; no settings were changed.'
@@ -198,4 +201,124 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax, WindowsBase Point/Rect geo
   Close-OwnedControlPanel
   if ($script:testCloses -ne 1) { throw 'The newly opened Control Panel was not closed on successful verification.' }
   Write-Output '[nvidia-cpl] Sidebar hyperlink/legacy/Static matching, heading/offscreen/disabled/overlay rejection, live-bounds hit testing, and owned-window cleanup mocks passed.'
+}
+& {
+  foreach ($name in @('Normalize-Name', 'Test-ExpectedPhysxGpu', 'Get-PreviewState', 'Set-PreviewPerformance', 'Assert-AdvancedPreview')) {
+    $definitions = @($ast.FindAll({
+      param($node)
+      $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+    }, $true))
+    if ($definitions.Count -ne 1) { throw "Missing production function: $name" }
+    . ([ScriptBlock]::Create($definitions[0].Extent.Text))
+  }
+  function Expect-PreviewFailure($action, $message) {
+    $failed = $false
+    try { & $action } catch {
+      if ($_.Exception.Message -notlike "*$message*") { throw }
+      $failed = $true
+    }
+    if (-not $failed) { throw "Expected preview failure: $message" }
+  }
+  $script:previewWrites = 0
+  $script:nativeRejected = $false
+  $script:nativePersist = $true
+  $script:previewValue = 2
+  function Read-NativePreviewSlider($slider) {
+    if ($script:nativeRejected) { throw 'not a verified native NVIDIA trackbar' }
+    [pscustomobject]@{ Minimum = 0; Maximum = 2; Value = $script:previewValue }
+  }
+  function Set-NativePreviewPerformance($slider) {
+    $script:previewWrites++
+    if ($script:nativePersist) { $script:previewValue = 0 }
+  }
+  $slider = [pscustomobject]@{
+    Current = [pscustomobject]@{ IsEnabled = $false }
+    Range = $null
+  }
+  $slider | Add-Member -MemberType ScriptMethod -Name TryGetCurrentPattern -Value {
+    param($pattern, $value)
+    if ($null -ne $this.Range) { $value.Value = $this.Range; return $true }
+    return $false
+  }
+  # Reproduce the real failing state: disabled slider, no RangeValue pattern.
+  $state = Get-PreviewState $slider
+  if ($state.Value -ne 2 -or $script:previewWrites -ne 0) { throw 'Preflight changed the disabled preview slider.' }
+  Expect-PreviewFailure { Set-PreviewPerformance $slider } 'still disabled'
+  if ($script:previewWrites -ne 0) { throw 'A disabled preview slider was written.' }
+  $slider.Current.IsEnabled = $true
+  Set-PreviewPerformance $slider
+  if ($script:previewValue -ne 0 -or $script:previewWrites -ne 1) { throw 'Patternless native preview slider was not set to Performance.' }
+  $script:previewValue = 2
+  $script:nativePersist = $false
+  Expect-PreviewFailure { Set-PreviewPerformance $slider } 'did not read back'
+  $script:nativeRejected = $true
+  Expect-PreviewFailure { Get-PreviewState $slider } 'not a verified native'
+  $range = [pscustomobject]@{ Current = [pscustomobject]@{ Minimum = 0; Maximum = 2; Value = 2; IsReadOnly = $false } }
+  $range | Add-Member -MemberType ScriptMethod -Name SetValue -Value { param($value) $this.Current.Value = $value }
+  $slider.Range = $range
+  Set-PreviewPerformance $slider
+  if ($range.Current.Value -ne 0) { throw 'RangeValue preview path did not set Performance.' }
+  $range.Current.IsReadOnly = $true
+  Expect-PreviewFailure { Set-PreviewPerformance $slider } 'read-only'
+  $range.Current.IsReadOnly = $false
+  $range.Current.Value = 3
+  Expect-PreviewFailure { Get-PreviewState $slider } 'range/readback is invalid'
+  $script:advancedSelected = $false
+  $script:advancedLegacy = $false
+  $script:advancedLegacyState = 0
+  $advanced = [pscustomobject]@{}
+  $advanced | Add-Member -MemberType ScriptMethod -Name TryGetCurrentPattern -Value {
+    param($pattern, $value)
+    if ($script:advancedLegacy) { return $false }
+    $value.Value = [pscustomobject]@{ Current = [pscustomobject]@{ IsSelected = $script:advancedSelected } }
+    return $true
+  }
+  function Named($type, $names) { $advanced }
+  function Get-Legacy($element) { [pscustomobject]@{ Current = [pscustomobject]@{ State = $script:advancedLegacyState } } }
+  Expect-PreviewFailure { Assert-AdvancedPreview } 'did not remain selected'
+  $script:advancedSelected = $true
+  Assert-AdvancedPreview
+  $script:advancedLegacy = $true
+  Expect-PreviewFailure { Assert-AdvancedPreview } 'did not remain selected'
+  $script:advancedLegacyState = 0x10
+  Assert-AdvancedPreview
+  $persisted = @($ast.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-PersistedCplSettings'
+  }, $true))
+  if ($persisted.Count -ne 1) { throw 'Persisted Control Panel readback function is missing.' }
+  . ([ScriptBlock]::Create($persisted[0].Extent.Text))
+  $gpu = 'NVIDIA Fixture GPU'
+  if (-not (Test-ExpectedPhysxGpu 'Fixture GPU') -or -not (Test-ExpectedPhysxGpu 'NVIDIA Fixture GPU')) {
+    throw 'Exact PhysX model matching failed with an optional vendor prefix.'
+  }
+  if ((Test-ExpectedPhysxGpu 'Auto-select') -or (Test-ExpectedPhysxGpu 'CPU') -or (Test-ExpectedPhysxGpu 'NVIDIA Different GPU')) {
+    throw 'A nonmatching PhysX processor was accepted.'
+  }
+  $script:testProcessor = $gpu
+  $script:testSavedPosition = 0
+  $script:testPages = @()
+  function Named($type, $names) {
+    if ($type -eq [System.Windows.Automation.ControlType]::RadioButton) { return $advanced }
+    [pscustomobject]@{ Name = $names[0] }
+  }
+  function Select-Element($element) {
+    if ($element.Name -notin @('Adjust image settings with preview', 'Configure Surround, PhysX')) { throw 'Final readback tried to change a setting.' }
+    $script:testPages += $element.Name
+  }
+  function Get-PreviewSlider { [pscustomobject]@{} }
+  function Get-PreviewState($slider) { [pscustomobject]@{ Minimum = 0; Value = $script:testSavedPosition } }
+  function Elements($type) { [pscustomobject]@{} }
+  function Selected-Name($combo) { $script:testProcessor }
+  function Apply-Changes { throw 'Final readback tried to Apply changes.' }
+  function Set-PreviewPerformance($slider) { throw 'Final readback tried to set the slider.' }
+  Assert-PersistedCplSettings
+  if ($script:testPages.Count -ne 2) { throw 'Final readback did not revisit both preview and PhysX pages.' }
+  $script:testSavedPosition = 2
+  Expect-PreviewFailure { Assert-PersistedCplSettings } 'Performance slider did not survive'
+  $script:testSavedPosition = 0
+  $script:testProcessor = 'Auto-select'
+  Expect-PreviewFailure { Assert-PersistedCplSettings } 'PhysX GPU selection did not survive'
+  Write-Output '[nvidia-cpl] Disabled/patternless read-only preflight, enabled trackbar/RangeValue writes, unsupported/read-only/failed-readback rejection, and advanced-mode UIA/MSAA verification mocks passed.'
+  Write-Output '[nvidia-cpl] Persisted preview/PhysX readback changes no settings and rejects Quality/Auto-select.'
 }

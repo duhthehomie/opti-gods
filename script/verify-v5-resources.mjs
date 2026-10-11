@@ -27,7 +27,8 @@ const files = {
   "src-tauri/resources/nvidia-profile-inspector/nvidiaProfileInspector.exe": "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e",
   "src-tauri/resources/nvidia-profile-inspector/Reference.xml": "0ea7b055aee5c543047243d2dd7abdd1b8c6d96f5d2b7bb5fe17be8130e005ef",
   "src-tauri/resources/nvidia-profile-inspector/nvidiaProfileInspector.exe.config": "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa",
-  "src-tauri/resources/nvidia-profile-inspector/OptiGods-Global.nip": "495a88042d441c91c1aaa7ce79c69ef2e18e27aaaf02c49da7fed39917289f85",
+  "src-tauri/resources/nvidia-profile-inspector/OptiGods-Global.nip": "3cf4bc8ad521a637e909f7e33aaf696a919cbb7590523e745ba47cb18cf87eb3",
+  "src-tauri/resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip": "4fb0dee44642bf9fe23e147096d876974c22c30e556bb8309d35f80fbbb172bb",
 };
 for (const [relative, expected] of Object.entries(files)) {
   const path = resolve(root, relative);
@@ -41,10 +42,31 @@ if (!(nipBytes[0] === 0xff && nipBytes[1] === 0xfe)) throw new Error("NVIDIA pre
 const nip = nipBytes.subarray(2).toString("utf16le");
 if (!nip.includes("<ArrayOfProfile>") || !nip.includes("<ProfileName>GLOBAL DRIVER PROFILE</ProfileName>")) throw new Error("NVIDIA preset shape is invalid");
 const mappings = [
-  ["0x10835002", "0x00000000"], ["0x0098C1AC", "0x00000000"], ["0x2072C5A3", "0x00000002"],
+  ["0x10835002", "0x00000000"], ["0x0098C1AC", "0x00000000"], ["0x2072C5A3", "0x00000000"],
   ["0x1057EB71", "0x00000001"], ["0x00E73211", "0x00000001"], ["0x0019BB68", "0x00000000"],
-  ["0x00CE2691", "0x00000014"], ["0x002ECAF2", "0x00000000"], ["0x20C1221E", "0x00000000"],
-  ["0x20FDD1F9", "0x00000000"], ["0x00A879CF", "0x60925292"], ["0x20D690F8", "0x00000002"],
+  ["0x00CE2691", "0x00000014"], ["0x002ECAF2", "0x00000001"], ["0x20C1221E", "0x00000000"],
+  ["0x20FDD1F9", "0x00000000"], ["0x00A879CF", "0x08416747"], ["0x20D690F8", "0x00000002"],
+  ["0x0064B541", "0x00000001"], ["0x10A879CF", "0x00000004"],
 ];
-for (const [id, value] of mappings) if (!nip.includes(`<SettingID>${id}</SettingID>`) || !nip.includes(`<SettingValue>${value}</SettingValue>`)) throw new Error(`Missing NVIDIA mapping ${id}=${value}`);
-console.log("v5 resource hashes and preset shape verified.");
+const utf8 = readFileSync(resolve(root, "src-tauri/resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"), "utf8");
+function settings(xml) {
+  const result = new Map();
+  for (const match of xml.matchAll(/<ProfileSetting>([\s\S]*?)<\/ProfileSetting>/g)) {
+    const id = Number(match[1].match(/<SettingID>(.*?)<\/SettingID>/)?.[1]);
+    const value = Number(match[1].match(/<SettingValue>(.*?)<\/SettingValue>/)?.[1]);
+    if (!Number.isInteger(id) || !Number.isInteger(value) || result.has(id)) throw new Error("Invalid or duplicate NVIDIA setting");
+    result.set(id, value);
+  }
+  return result;
+}
+for (const xml of [nip, utf8]) {
+  const actual = settings(xml);
+  if (actual.size !== mappings.length) throw new Error("NVIDIA preset setting count differs from approved mappings");
+  for (const [id, value] of mappings) {
+    if (actual.get(Number(id)) !== Number(value)) throw new Error(`Wrong NVIDIA mapping ${id}=${value}`);
+  }
+}
+if (!miscSource.includes(files["src-tauri/resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"])) {
+  throw new Error("Native preset integrity hash is not aligned with the bundle");
+}
+console.log("v5 resource hashes and both approved NVIDIA preset copies verified.");

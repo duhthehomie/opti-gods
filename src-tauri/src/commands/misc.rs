@@ -14,7 +14,7 @@ const MSI_UTILITY_SHA256: &str = "695800afad96f858a3f291b7df21c16649528f13d39b63
 const PROFILE_INSPECTOR_SHA256: &str = "1ebd8129b3c564bf226291fb3344819fd59668066f0c5e03334a69a04a62859e";
 const PROFILE_REFERENCE_SHA256: &str = "0ea7b055aee5c543047243d2dd7abdd1b8c6d96f5d2b7bb5fe17be8130e005ef";
 const PROFILE_CONFIG_SHA256: &str = "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa";
-const PROFILE_PRESET_SHA256: &str = "6b4992926dc2ee0182816ba758ce52a836b55f38857dbe04cc3afc61da480cbc";
+const PROFILE_PRESET_SHA256: &str = "4fb0dee44642bf9fe23e147096d876974c22c30e556bb8309d35f80fbbb172bb";
 const BASE_PROD: &str = "https://optigods.com";
 const MSI_TWEAK_ID: &str = "OpenMsiUtilityPro";
 const PRESET_TWEAK_ID: &str = "ImportNvidiaPresetPro";
@@ -605,17 +605,18 @@ fn rollback_dvc_with_handles(
 
 #[cfg(windows)]
 fn apply_verified_nvidia_cpl_controls(gpu_name: &str) -> Result<(), String> {
-    verify_nvidia_cpl_controls(gpu_name, false)
+    verify_nvidia_cpl_controls(gpu_name, false, false)
 }
 
 #[cfg(windows)]
-fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool) -> Result<(), String> {
+fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let mut child = Command::new(crate::commands::windows_powershell_executable())
         .args(["-NoProfile", "-NonInteractive", "-Sta", "-Command", include_str!("nvidia-cpl-settings.ps1")])
         .env("OPTI_GPU_NAME", gpu_name)
         .env("OPTI_CPL_PREFLIGHT", if preflight { "1" } else { "0" })
+        .env("OPTI_CPL_VERIFY_ONLY", if verify_only { "1" } else { "0" })
         .stdout(Stdio::piped()).stderr(Stdio::piped())
         .creation_flags(0x0800_0000).spawn()
         .map_err(|error| format!("NVIDIA Control Panel verification could not start: {error}"))?;
@@ -933,7 +934,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
             let settings = parse_global_nip_settings(&expected)?;
             report("Checking NVIDIA Control Panel accessibility before changing the global profile");
-            verify_nvidia_cpl_controls(&gpu_name, true)?;
+            verify_nvidia_cpl_controls(&gpu_name, true, false)?;
             let original_profile = nvidia_profile::apply(&settings, &report)?;
             report("Verifying PhysX GPU selection and the preview Performance slider in NVIDIA Control Panel");
             if let Err(error) = apply_verified_nvidia_cpl_controls(&gpu_name) {
@@ -967,7 +968,9 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let final_check = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped by the user.".to_string())
             } else {
-                apply_verified_nvidia_cpl_controls(&gpu_name)
+                // Final readback must not toggle the simple preference again:
+                // that could overwrite the explicit global 3D profile.
+                verify_nvidia_cpl_controls(&gpu_name, false, true)
                     .and_then(|_| nvidia_profile::verify(&settings))
             };
             if let Err(error) = final_check {

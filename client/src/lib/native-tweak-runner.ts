@@ -491,7 +491,7 @@ async function applyTweakBatchInternal(
   const initialSkippedIds = Array.from(new Set(options.initialSkippedIds ?? []))
     .filter(id => !uniqueIds.includes(id));
   const initialSkippedSet = new Set(initialSkippedIds);
-  const batchIds = Array.from(new Set([...uniqueIds, ...initialSkippedIds]));
+  const batchIds = orderTweakBatch([...uniqueIds, ...initialSkippedIds]);
   const batchTotal = batchIds.length;
   const progressIndexById = new Map(batchIds.map((id, index) => [id, index]));
   const emitProgress = (progress: TweakRunProgress) => {
@@ -656,7 +656,7 @@ async function applyTweakBatchInternal(
     : allowance.pro
       ? pendingIds
       : pendingIds.slice(0, Math.max(0, allowance.remaining ?? 0));
-  const supportedIds = entitledIds;
+  const supportedIds = orderTweakBatch(entitledIds);
   for (const id of pendingIds.filter(id => !entitledIds.includes(id))) {
     skippedIds.push(id);
     emitProgress({ id, index: progressIndexById.get(id) ?? 0, total: batchTotal, status: "skipped",
@@ -808,7 +808,11 @@ async function applyTweakBatchInternal(
     emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running" });
     let compatibilitySkipMessage: string | null = null;
     try {
-      if (REVIEWED_NATIVE_SCRIPT_IDS.has(id)) {
+      // Pro's full selection includes hundreds of script-backed actions,
+      // not just the small bundled offline subset. Use the same authenticated
+      // trusted runner as individual script retries before the final preset.
+      // Native code still enforces script identity, integrity and Pro access.
+      if (isScriptOnlyTweakId(id)) {
         const message = await runScriptOnlyTweak(id, message => emitProgress({
           id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running", message,
         }));
@@ -829,7 +833,7 @@ async function applyTweakBatchInternal(
       }
       ticket = authorizationBody.ticket;
       const nextId = supportedIds[index + 1];
-      if (nextId && !REVIEWED_NATIVE_SCRIPT_IDS.has(nextId) && !stopRequested) {
+      if (nextId && !isScriptOnlyTweakId(nextId) && !stopRequested) {
         nextAuthorization = authorize(nextId);
         nextAuthorizationId = nextId;
       }

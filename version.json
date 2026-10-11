@@ -1,4 +1,4 @@
 {
-  "version": "5.2.64",
-  "notes": "V5.2.64 — explicitly loads WindowsBase for NVIDIA geometry types and checks both Point and Rect before navigation mocks; fixes the Windows PowerShell build-check failure while preserving guarded Static-sidebar navigation, strict preset readback, NVIDIA-last queues, missing-only retries, live temperatures, and compatible Max NVIDIA MSI High."
+  "version": "5.2.65",
+  "notes": "V5.2.65 — applies V-Sync Off and OpenGL GDI Prefer performance with both preset copies and integrity checks aligned. Includes compatible Pro script-backed tweaks before NVIDIA in serial Apply All, preserving confirmed history and missing-only retries. Fixes disabled/patternless preview sliders, selects preference before Performance then retains verified advanced 3D mode, and verifies saved PhysX GPU without rewriting settings during final readback. Retains the complete 15-setting global profile, 85% Vibrance, live temperatures and compatible NVIDIA MSI High."
 }

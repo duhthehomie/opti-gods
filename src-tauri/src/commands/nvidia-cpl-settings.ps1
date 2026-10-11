@@ -122,6 +122,66 @@ namespace OptiGods {
     }
     public static int InputSize { get { return Marshal.SizeOf(typeof(Input)); } }
   }
+  public sealed class CplSliderState {
+    public int Minimum, Maximum, Value;
+  }
+  public static class CplTrackbar {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int capacity);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr window, int index);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wparam,
+      IntPtr lparam, uint flags, uint timeout, out UIntPtr result);
+    private static void Validate(IntPtr window, IntPtr slider) {
+      uint owner, sliderOwner;
+      GetWindowThreadProcessId(window, out owner);
+      GetWindowThreadProcessId(slider, out sliderOwner);
+      var name = new System.Text.StringBuilder(128);
+      GetClassName(slider, name, name.Capacity);
+      if (window == IntPtr.Zero || slider == IntPtr.Zero || owner == 0 ||
+          sliderOwner != owner || GetAncestor(slider, 2) != window ||
+          !String.Equals(name.ToString(), "msctls_trackbar32", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Preview slider is not a verified native NVIDIA trackbar.");
+    }
+    private static int Message(IntPtr window, uint message, IntPtr wparam, IntPtr lparam) {
+      UIntPtr result;
+      if (SendMessageTimeout(window, message, wparam, lparam, 3, 2000, out result) == IntPtr.Zero)
+        throw new InvalidOperationException("NVIDIA preview slider did not respond within two seconds.");
+      return unchecked((int)result.ToUInt64());
+    }
+    public static CplSliderState Read(IntPtr window, IntPtr slider) {
+      Validate(window, slider);
+      var state = new CplSliderState {
+        Minimum = Message(slider, 0x0401, IntPtr.Zero, IntPtr.Zero),
+        Maximum = Message(slider, 0x0402, IntPtr.Zero, IntPtr.Zero),
+        Value = Message(slider, 0x0400, IntPtr.Zero, IntPtr.Zero)
+      };
+      if (state.Minimum >= state.Maximum || state.Value < state.Minimum || state.Value > state.Maximum)
+        throw new InvalidOperationException("NVIDIA preview slider range/readback is invalid.");
+      return state;
+    }
+    public static void SetMinimum(IntPtr window, IntPtr slider) {
+      var state = Read(window, slider);
+      if (!IsWindowEnabled(slider)) throw new InvalidOperationException("Select Use my preference emphasizing before setting the preview slider.");
+      if (state.Minimum < 0 || state.Maximum > 65535)
+        throw new InvalidOperationException("NVIDIA preview slider range cannot be notified safely.");
+      IntPtr parent = GetParent(slider);
+      if (parent == IntPtr.Zero || GetAncestor(parent, 2) != window)
+        throw new InvalidOperationException("NVIDIA preview slider parent identity changed.");
+      Message(slider, 0x0405, new IntPtr(1), new IntPtr(state.Minimum)); // TBM_SETPOS, redraw
+      uint scroll = (GetWindowLong(slider, -16) & 2) != 0 ? 0x0115u : 0x0114u;
+      // Notify the owning page just as a drag does; moving the thumb alone
+      // would not prove that NVIDIA's saved setting changed.
+      foreach (int code in new[] { 5, 4, 8 })
+        Message(parent, scroll, new IntPtr((state.Minimum << 16) | code), slider);
+      if (Read(window, slider).Value != state.Minimum)
+        throw new InvalidOperationException("NVIDIA preview slider did not reach Performance.");
+    }
+  }
 }
 '@
 }
@@ -302,6 +362,67 @@ function Selected-Name($combo) {
   }
   throw 'PhysX processor selection cannot be read back.'
 }
+function Test-ExpectedPhysxGpu($name) {
+  # Control Panel may omit NVIDIA's vendor prefix, but the full model must
+  # still match. Never accept Auto-select, CPU, or a different GPU model.
+  $actual = (Normalize-Name $name) -replace '^NVIDIA\s+', ''
+  $expected = (Normalize-Name $gpu) -replace '^NVIDIA\s+', ''
+  -not [string]::IsNullOrWhiteSpace($actual) -and $actual -eq $expected
+}
+function Get-PreviewSlider {
+  $sliders = @(Elements ([System.Windows.Automation.ControlType]::Slider))
+  if ($sliders.Count -ne 1) { throw 'The preview Performance slider is unavailable or ambiguous.' }
+  $sliders[0]
+}
+function Read-NativePreviewSlider($slider) {
+  [OptiGods.CplTrackbar]::Read([IntPtr]$script:root.Current.NativeWindowHandle, [IntPtr]$slider.Current.NativeWindowHandle)
+}
+function Set-NativePreviewPerformance($slider) {
+  [OptiGods.CplTrackbar]::SetMinimum([IntPtr]$script:root.Current.NativeWindowHandle, [IntPtr]$slider.Current.NativeWindowHandle)
+}
+function Get-PreviewState($slider) {
+  $range = $null
+  if ($slider.TryGetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern, [ref]$range)) {
+    $state = $range.Current
+    if ($state.Minimum -ge $state.Maximum -or $state.Value -lt $state.Minimum -or $state.Value -gt $state.Maximum) { throw 'Preview slider range/readback is invalid.' }
+    return $state
+  }
+  # Native NVIDIA trackbars can lack RangeValue entirely, including while
+  # greyed out. Read their real range/position without altering radio modes.
+  Read-NativePreviewSlider $slider
+}
+function Set-PreviewPerformance($slider) {
+  if (-not $slider.Current.IsEnabled) { throw 'The preview slider is still disabled after selecting Use my preference emphasizing.' }
+  $range = $null
+  if ($slider.TryGetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern, [ref]$range)) {
+    if ($range.Current.IsReadOnly) { throw 'The enabled preview slider is read-only.' }
+    $range.SetValue($range.Current.Minimum)
+  } else {
+    Set-NativePreviewPerformance $slider
+  }
+  $state = Get-PreviewState $slider
+  if ($state.Value -ne $state.Minimum) { throw 'Preview Performance slider did not read back at its minimum.' }
+}
+function Assert-AdvancedPreview {
+  $advanced = Named ([System.Windows.Automation.ControlType]::RadioButton) @('Use the advanced 3D image settings')
+  $selection = $null
+  if ($advanced.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$selection)) {
+    if ($selection.Current.IsSelected) { return }
+  } else {
+    $legacy = Get-Legacy $advanced
+    if ($legacy -and ($legacy.Current.State -band 0x10) -ne 0) { return }
+  }
+  throw 'Use the advanced 3D image settings did not remain selected; no complete preset success was recorded.'
+}
+function Assert-PersistedCplSettings {
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
+  Assert-AdvancedPreview
+  $state = Get-PreviewState (Get-PreviewSlider)
+  if ($state.Value -ne $state.Minimum) { throw 'The remembered Performance slider did not survive page reload.' }
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration'))
+  $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
+  if ($combos.Count -ne 1 -or -not (Test-ExpectedPhysxGpu (Selected-Name $combos[0]))) { throw 'PhysX GPU selection did not survive page reload.' }
+}
 
 function Get-NvidiaStoreTarget($package) {
   if ($package.Name -ne 'NVIDIACorp.NVIDIAControlPanel' -or $package.PackageFamilyName -notmatch '^NVIDIACorp\.NVIDIAControlPanel_[A-Za-z0-9]+$') {
@@ -387,9 +508,7 @@ $physxPage = Named ([System.Windows.Automation.ControlType]::TreeItem) $physxNam
 if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
   Select-Element $previewPage
   $null = Named ([System.Windows.Automation.ControlType]::RadioButton) @('Use the advanced 3D image settings')
-  $preflightSliders = @(Elements ([System.Windows.Automation.ControlType]::Slider))
-  if ($preflightSliders.Count -ne 1) { throw 'Preview slider is not safely accessible; the global profile has not been changed.' }
-  $null = $preflightSliders[0].GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+  $null = Get-PreviewState (Get-PreviewSlider)
   Select-Element $physxPage
   $preflightCombos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
   if ($preflightCombos.Count -ne 1) { throw 'PhysX dropdown is not safely accessible; the global profile has not been changed.' }
@@ -398,28 +517,32 @@ if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
   Close-OwnedControlPanel
   return
 }
+if ($env:OPTI_CPL_VERIFY_ONLY -eq '1') {
+  Assert-PersistedCplSettings
+  Write-Output 'PhysX GPU and preview Performance verified.'
+  Close-OwnedControlPanel
+  return
+}
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
 $preferences = @(Elements ([System.Windows.Automation.ControlType]::RadioButton) | Where-Object { $_.Current.Name -like 'Use my preference emphasizing*' })
 if ($preferences.Count -ne 1) { throw 'The preview preference control is unavailable or ambiguous.' }
 $preference = $preferences[0]
 Select-Element $preference
-$sliders = @(Elements ([System.Windows.Automation.ControlType]::Slider))
-if ($sliders.Count -ne 1) { throw 'The preview Performance slider cannot be identified safely.' }
-$range = $sliders[0].GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
-$range.SetValue($range.Current.Minimum)
+Set-PreviewPerformance (Get-PreviewSlider)
 Apply-Changes
 # Retain the explicit Manage 3D preset, rather than letting the simple preview
 # preference override it. The remembered slider stays at Performance.
 Select-Element (Named ([System.Windows.Automation.ControlType]::RadioButton) @('Use the advanced 3D image settings'))
 Apply-Changes
-$range = $sliders[0].GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
-if ($range.Current.Value -ne $range.Current.Minimum) { throw 'Preview Performance slider did not persist. No full-preset success was recorded.' }
+Assert-AdvancedPreview
+$state = Get-PreviewState (Get-PreviewSlider)
+if ($state.Value -ne $state.Minimum) { throw 'Preview Performance slider did not persist. No full-preset success was recorded.' }
 
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration'))
 $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
 if ($combos.Count -ne 1) { throw 'The PhysX processor dropdown cannot be identified safely.' }
 $combo = $combos[0]
-if ((Selected-Name $combo) -ne $gpu) {
+if (-not (Test-ExpectedPhysxGpu (Selected-Name $combo))) {
   $expansion = $null
   if ($combo.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expansion)) {
     $expansion.Expand()
@@ -429,19 +552,12 @@ if ((Selected-Name $combo) -ne $gpu) {
   Start-Sleep -Milliseconds 200
   $desktop = [System.Windows.Automation.AutomationElement]::RootElement
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
-  $items = @($desktop.FindAll($scope, $condition) | Where-Object { $_.Current.Name -eq $gpu -and -not $_.Current.IsOffscreen })
+  $items = @($desktop.FindAll($scope, $condition) | Where-Object { (Test-ExpectedPhysxGpu $_.Current.Name) -and -not $_.Current.IsOffscreen })
   if ($items.Count -ne 1) { throw 'The exact PhysX GPU is unavailable or ambiguous. Auto-select was not accepted as success.' }
   Select-Element $items[0]
   Apply-Changes
 }
-if ((Selected-Name $combo) -ne $gpu) { throw 'PhysX processor did not read back as the exact NVIDIA GPU.' }
-Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
-$sliders = @(Elements ([System.Windows.Automation.ControlType]::Slider))
-if ($sliders.Count -ne 1) { throw 'The persisted preview slider is unavailable.' }
-$range = $sliders[0].GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
-if ($range.Current.Value -ne $range.Current.Minimum) { throw 'The remembered Performance slider did not survive page reload.' }
-Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration'))
-$combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
-if ($combos.Count -ne 1 -or (Selected-Name $combos[0]) -ne $gpu) { throw 'PhysX GPU selection did not survive page reload.' }
+if (-not (Test-ExpectedPhysxGpu (Selected-Name $combo))) { throw 'PhysX processor did not read back as the exact NVIDIA GPU.' }
+Assert-PersistedCplSettings
 Write-Output 'PhysX GPU and preview Performance verified.'
 Close-OwnedControlPanel
