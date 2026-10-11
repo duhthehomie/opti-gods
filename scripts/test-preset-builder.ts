@@ -454,3 +454,6 @@ if (failed > 0) {
   console.error("FAILURES:\n" + failures.join("\n"));
   process.exit(1);
 }
+
+// Test the actual page filters before each Windows release.
+import "./test-native-batch-filter";

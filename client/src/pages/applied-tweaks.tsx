@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { playOptimizationActionSound } from "@/lib/action-sound";
 import {
   applyTweakBatch,
-  NVIDIA_PRESET_ACTION_ID,
+  isNvidiaAction,
   clearQueuedTweakBatch,
   hasNativeTweakRunInFlight,
   readNativeTweakRun,
@@ -59,7 +59,7 @@ function summarizeFailures(failures: { id: string; message: string }[], appliedC
 
 function getRunCompatibility(item: Pick<TweakRunProgress, "id" | "status" | "message">): { ok: boolean; reason?: string } {
   const savedScanResult = getTweakCompatibility(item.id);
-  if (item.id === NVIDIA_PRESET_ACTION_ID && savedScanResult.ok
+  if (isNvidiaAction(item.id) && savedScanResult.ok
       && /Control Panel.*(control|navigation|accessible|verification)|automation/i.test(item.message || "")) {
     return savedScanResult;
   }
@@ -384,10 +384,10 @@ export default function AppliedTweaksPage() {
     startedRef.current = true;
     let clearQueueAfterRun = false;
     const startRun = async () => {
-      const hardwareSkippedIds = recoverable.filter(id => !getTweakCompatibility(id).ok);
+      const hardwareSkippedIds = recoverable.filter(id => !isNvidiaAction(id) && !getTweakCompatibility(id).ok);
       const nativeUnsupportedIds = recoverable.filter(id =>
-        (!getTweakMeta(id) && id !== NVIDIA_PRESET_ACTION_ID)
-        || (!NATIVE_TWEAK_ID_SET.has(id) && id !== NVIDIA_PRESET_ACTION_ID && !isScriptOnlyTweakId(id)),
+        (!getTweakMeta(id) && !isNvidiaAction(id))
+        || (!NATIVE_TWEAK_ID_SET.has(id) && !isNvidiaAction(id) && !isScriptOnlyTweakId(id)),
       );
       let initialSkippedIds = Array.from(new Set([...queuedSkippedIds, ...hardwareSkippedIds, ...nativeUnsupportedIds]));
       const initialSkippedMessages: Record<string, string> = { ...(queuedOptions.initialSkippedMessages ?? {}) };
@@ -404,7 +404,7 @@ export default function AppliedTweaksPage() {
       }
       let skippedSet = new Set(initialSkippedIds);
       let executable = recoverable
-        .filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
+        .filter(id => !skippedSet.has(id) && (isNvidiaAction(id) || getTweakCompatibility(id).ok));
       const updatePlannedRun = () => {
         const runTotal = executable.length + initialSkippedIds.length;
         const skipProgress = initialSkippedIds.map((id, index) => ({
@@ -448,13 +448,13 @@ export default function AppliedTweaksPage() {
           for (const id of limitedIds) {
             initialSkippedMessages[id] = NATIVE_TWEAK_ID_SET.has(id)
               ? `The free instant-apply limit is ${FREE_NATIVE_TWEAK_LIMIT}; this tweak was not run.`
-              : id === NVIDIA_PRESET_ACTION_ID
+              : isNvidiaAction(id)
                 ? "The NVIDIA profile preset requires Pro and was not imported."
                 : "This is a script-only tweak and cannot be instant-applied on the free plan.";
           }
           skippedSet = new Set(initialSkippedIds);
         } else if (response.ok) {
-          executable = recoverable.filter(id => !skippedSet.has(id) && getTweakCompatibility(id).ok);
+          executable = recoverable.filter(id => !skippedSet.has(id) && (isNvidiaAction(id) || getTweakCompatibility(id).ok));
         }
        } catch (error) {
          throw error instanceof Error ? error : new Error("Could not verify access. Your full queue is retained; try again.");
@@ -509,13 +509,13 @@ export default function AppliedTweaksPage() {
      runItems
        .filter(item => item.status === "queued")
        .map(item => item.id)
-       .filter(id => getTweakCompatibility(id).ok),
+       .filter(id => isNvidiaAction(id) || getTweakCompatibility(id).ok),
    ));
    const retryStuckIds = Array.from(new Set(
      runItems
        .filter(item => item.status === "queued" || item.status === "running" || item.status === "stopped")
        .map(item => item.id)
-       .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID || isScriptOnlyTweakId(id)) && getTweakCompatibility(id).ok),
+       .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || isNvidiaAction(id) || isScriptOnlyTweakId(id)) && (isNvidiaAction(id) || getTweakCompatibility(id).ok)),
    ));
    const retryStuckAvailable = runIsStuck || runItems.some(item => item.status === "stopped");
   const failedIds = Array.from(new Set(
@@ -594,7 +594,7 @@ export default function AppliedTweaksPage() {
         (latest?.items ?? [])
           .filter(item => item.status === "stopped" || item.status === "queued" || item.status === "running")
           .map(item => item.id)
-          .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || id === NVIDIA_PRESET_ACTION_ID || isScriptOnlyTweakId(id)) && getTweakCompatibility(id).ok),
+          .filter(id => (NATIVE_TWEAK_ID_SET.has(id) || isNvidiaAction(id) || isScriptOnlyTweakId(id)) && (isNvidiaAction(id) || getTweakCompatibility(id).ok)),
       ));
       if (!ids.length) {
         toast({ title: "No compatible stuck tweaks to retry", description: "Review the Skipped tab for items that need a different fix." });
