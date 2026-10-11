@@ -1,4 +1,4 @@
 {
-  "version": "5.2.69",
-  "notes": "V5.2.69 — preserves the working 15-setting NVIDIA preset and 85% vibrance. Fixes the preview/PhysX PowerShell launcher command-line limit and adds bounded asynchronous execution. Corrects expected read probes, idempotent startup cleanup, registry readback, unavailable services, TCP configuration, and no-restart LSO changes. Live Pro verification retries short network interruptions without bypassing authorization. Unsupported legacy hardware actions are skipped, never marked applied. Includes Windows outcome and NVIDIA launcher build checks. Requires republishing the updated website script endpoint."
+  "version": "5.2.70",
+  "notes": "V5.2.70 — corrects Windows PowerShell stdin decoding and fixture pipe closure that blocked the previous installer build. Tests large UTF-8 scripts both with and without a BOM. Retains all V5.2.69 batch fixes, live Pro verification, and bounded preview/PhysX execution. Preserves the working 15-setting NVIDIA preset and 85% vibrance."
 }
