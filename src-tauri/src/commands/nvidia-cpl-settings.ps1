@@ -174,26 +174,75 @@ function Selected-Name($combo) {
   throw 'PhysX processor selection cannot be read back.'
 }
 
-$process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $process) {
-  $paths = @("$env:ProgramFiles\NVIDIA Corporation\Control Panel Client\nvcplui.exe")
-  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($package) { $paths += (Join-Path $package.InstallLocation 'nvcplui.exe') }
-  $path = $paths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-  if (-not $path) { throw 'NVIDIA Control Panel is required to verify PhysX and the preview slider. No full-preset success was recorded.' }
+function Get-NvidiaStoreTarget($package) {
+  if ($package.Name -ne 'NVIDIACorp.NVIDIAControlPanel' -or $package.PackageFamilyName -notmatch '^NVIDIACorp\.NVIDIAControlPanel_[A-Za-z0-9]+$') {
+    throw 'NVIDIA Control Panel package identity is invalid.'
+  }
+  $manifest = Get-AppxPackageManifest -Package $package.PackageFullName -ErrorAction Stop
+  $apps = @($manifest.Package.Applications.Application | Where-Object {
+    $_.Executable -match '(^|[\\/])nvcplui\.exe$'
+  })
+  if ($apps.Count -ne 1 -or $apps[0].Id -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
+    throw 'The registered NVIDIA Control Panel application is unavailable or ambiguous.'
+  }
+  $location = [IO.Path]::GetFullPath($package.InstallLocation).TrimEnd('\') + '\'
+  $executable = [IO.Path]::GetFullPath((Join-Path $location $apps[0].Executable))
+  if (-not $executable.StartsWith($location, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'NVIDIA Control Panel executable is outside its registered package.'
+  }
+  [pscustomobject]@{
+    Executable = $executable
+    AppId = "$($package.PackageFamilyName)!$($apps[0].Id)"
+  }
+}
+function Assert-NvidiaPublisher($path) {
+  if (-not (Test-Path -LiteralPath $path)) { throw 'The registered NVIDIA Control Panel executable is missing.' }
   $signature = Get-AuthenticodeSignature -LiteralPath $path
   if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'NVIDIA') {
     throw 'NVIDIA Control Panel executable did not pass publisher trust verification.'
   }
-  Start-Process -FilePath $path | Out-Null
 }
-$deadline = [DateTime]::UtcNow.AddSeconds(10)
+function Start-NvidiaControlPanel {
+  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($package) {
+    $target = Get-NvidiaStoreTarget $package
+    Assert-NvidiaPublisher $target.Executable
+    # Store/DCH apps must be activated through their registered identity.
+    # Direct CreateProcess on the protected WindowsApps EXE can be denied,
+    # especially from the elevated optimizer. Explorer delegates to the shell.
+    $script:launchMode = "registered Store app $($target.AppId)"
+    try {
+      Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList @("shell:AppsFolder\$($target.AppId)") -ErrorAction Stop | Out-Null
+    } catch {
+      throw "Windows could not activate NVIDIA Control Panel through its registered Store entry: $($_.Exception.Message). Open NVIDIA Control Panel from Start, then retry. No preset success was recorded."
+    }
+    return
+  }
+  $path = Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'
+  if (-not (Test-Path -LiteralPath $path)) {
+    throw 'NVIDIA Control Panel is required to verify PhysX and the preview slider. Open it from Start, then retry. No full-preset success was recorded.'
+  }
+  Assert-NvidiaPublisher $path
+  $script:launchMode = 'signed desktop executable'
+  try {
+    Start-Process -FilePath $path -WorkingDirectory (Split-Path -Parent $path) -ErrorAction Stop | Out-Null
+  } catch {
+    throw "Windows could not launch the desktop NVIDIA Control Panel: $($_.Exception.Message). Open NVIDIA Control Panel from Start, then retry. No preset success was recorded."
+  }
+}
+
+$launchMode = 'already-open Control Panel'
+$process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $process) {
+  Start-NvidiaControlPanel
+}
+$deadline = [DateTime]::UtcNow.AddSeconds(15)
 do {
   $process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
   if ($process) { $root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
   if (-not $root) { Start-Sleep -Milliseconds 100 }
 } while (-not $root -and [DateTime]::UtcNow -lt $deadline)
-if (-not $root) { throw 'NVIDIA Control Panel did not expose an accessible desktop window.' }
+if (-not $root) { throw "NVIDIA Control Panel did not expose an accessible desktop window within 15 seconds (launch: $launchMode). Open NVIDIA Control Panel from Start, then retry. No preset success was recorded." }
 
 $previewPage = Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview')
 $physxNames = @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')
