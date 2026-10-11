@@ -1,4 +1,7 @@
 $ErrorActionPreference = 'Stop'
+# Point and Rect live in WindowsBase. PowerShell does not reliably load that
+# dependency merely because UIAutomationClient/UIAutomationTypes are loaded.
+Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName Accessibility

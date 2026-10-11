@@ -1,4 +1,4 @@
 {
-  "version": "5.2.63",
-  "notes": "V5.2.63 — supports NVIDIA drivers exposing navigation as patternless Static panes through exact named sidebar matching, live-bounds hit testing, and process-scoped input; rejects covered, disabled, offscreen, and unrelated controls; preserves strict page/profile readback, NVIDIA-last queues, missing-only retries, live temperatures, and compatible Max NVIDIA MSI High."
+  "version": "5.2.64",
+  "notes": "V5.2.64 — explicitly loads WindowsBase for NVIDIA geometry types and checks both Point and Rect before navigation mocks; fixes the Windows PowerShell build-check failure while preserving guarded Static-sidebar navigation, strict preset readback, NVIDIA-last queues, missing-only retries, live temperatures, and compatible Max NVIDIA MSI High."
 }

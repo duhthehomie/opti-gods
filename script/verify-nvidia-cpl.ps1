@@ -13,6 +13,11 @@ $marker = '$gpu = $env:OPTI_GPU_NAME'
 $offset = $source.IndexOf($marker, [StringComparison]::Ordinal)
 if ($offset -lt 0) { throw 'NVIDIA script initialization boundary is missing.' }
 & ([ScriptBlock]::Create($source.Substring(0, $offset)))
+# Exercise the same WPF geometry types used by live UIA hit testing and the
+# fixtures, before any navigation mocks. Loading UIA alone is not sufficient.
+$geometryBounds = [System.Windows.Rect]::new(100, 200, 300, 20)
+$geometryPoint = [System.Windows.Point]::new(250, 210)
+if (-not $geometryBounds.Contains($geometryPoint)) { throw 'WindowsBase geometry initialization failed.' }
 if (-not ('OptiGods.CplMsaa' -as [type]) -or -not ('OptiGods.CplMsaaControl' -as [type])) {
   throw 'NVIDIA MSAA helper failed to compile/load in Windows PowerShell.'
 }
@@ -20,7 +25,7 @@ if (-not [OptiGods.CplMsaa].GetMethod('FromPoint')) { throw 'MSAA lookup entry p
 if (-not ('OptiGods.CplInput' -as [type])) { throw 'Exact-navigation input helper failed to compile.' }
 $expectedInputSize = if ([IntPtr]::Size -eq 8) { 40 } else { 28 }
 if ([OptiGods.CplInput]::InputSize -ne $expectedInputSize) { throw 'Win32 input structure layout is incorrect.' }
-Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation passed; no settings were changed.'
+Write-Output '[nvidia-cpl] Windows PowerShell syntax, WindowsBase Point/Rect geometry, and MSAA/input helper compilation passed; no settings were changed.'
 & {
   # Run the production launch functions with mocked Windows services. No app
   # activation, process creation, registry edits, or driver writes are allowed.
