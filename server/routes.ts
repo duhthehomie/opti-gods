@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import type { Server } from "http";
+import { createNativeScriptHandler } from "./native-script-delivery";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -3149,21 +3150,13 @@ Write-Output $json
   });
 
   // POST version for direct download with tweaks body
-  app.post('/api/script/native-tweak', rateLimit(20, 60_000), async (req, res) => {
-    const id = req.body?.id;
-    if (!trustedTweakId(id)) {
-      return res.status(400).json({ message: "That tweak does not have a trusted Windows script." });
-    }
-    if (NATIVE_EXECUTABLE_ALLOWLIST.has(id) || PRO_ONLY_TWEAK_IDS.has(id)) {
-      return res.status(400).json({ message: "This action must use its dedicated native Windows flow." });
-    }
-    const script = buildSingleTweakPowerShell(id);
-    if (!script) {
-      return res.status(400).json({ message: "No single-tweak PowerShell script is available for this action." });
-    }
-    if (!(await authorizeGeneratedScript(req, res, [id]))) return;
-    return res.json({ script });
-  });
+  app.post("/api/script/native-tweak", rateLimit(600, 60_000), createNativeScriptHandler({
+    trustedId: trustedTweakId,
+    dedicatedIds: new Set([...NATIVE_EXECUTABLE_ALLOWLIST, ...PRO_ONLY_TWEAK_IDS]),
+    protectedIds: NVIDIA_CAPTURE_PROTECTED_IDS,
+    authorize: authorizeGeneratedScript,
+    command: id => normalizeWindowsPowerShellCommand(id, TWEAK_COMMANDS[id]),
+  }));
 
   app.post('/api/script/download', async (req, res) => {
     const tweaks: Record<string, boolean> = req.body?.tweaks || {};

@@ -502,9 +502,13 @@ do {
 } while (-not $root -and [DateTime]::UtcNow -lt $deadline)
 if (-not $root) { throw "NVIDIA Control Panel did not expose an accessible desktop window within 15 seconds (launch: $launchMode). Open NVIDIA Control Panel from Start, then retry. No preset success was recorded." }
 
-$previewPage = Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview')
+$step = $env:OPTI_CPL_STEP
+if ($step -and $step -notin @('preview', 'physx')) { throw 'Unknown NVIDIA Control Panel step.' }
+$previewPage = $null
+if ($step -ne 'physx') { $previewPage = Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview') }
 $physxNames = @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')
-$physxPage = Named ([System.Windows.Automation.ControlType]::TreeItem) $physxNames
+$physxPage = $null
+if ($step -ne 'preview') { $physxPage = Named ([System.Windows.Automation.ControlType]::TreeItem) $physxNames }
 if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
   Select-Element $previewPage
   $null = Named ([System.Windows.Automation.ControlType]::RadioButton) @('Use the advanced 3D image settings')
@@ -518,11 +522,29 @@ if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
   return
 }
 if ($env:OPTI_CPL_VERIFY_ONLY -eq '1') {
+  if ($step -eq 'preview') {
+    Select-Element $previewPage
+    Assert-AdvancedPreview
+    $state = Get-PreviewState (Get-PreviewSlider)
+    if ($state.Value -ne $state.Minimum) { throw 'The remembered preview Performance slider is not at Performance.' }
+    Write-Output 'Preview Performance and advanced 3D mode verified.'
+    Close-OwnedControlPanel
+    return
+  }
+  if ($step -eq 'physx') {
+    Select-Element $physxPage
+    $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
+    if ($combos.Count -ne 1 -or -not (Test-ExpectedPhysxGpu (Selected-Name $combos[0]))) { throw 'PhysX GPU selection is not the exact NVIDIA GPU.' }
+    Write-Output 'PhysX GPU selection verified.'
+    Close-OwnedControlPanel
+    return
+  }
   Assert-PersistedCplSettings
   Write-Output 'PhysX GPU and preview Performance verified.'
   Close-OwnedControlPanel
   return
 }
+if ($step -ne 'physx') {
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
 $preferences = @(Elements ([System.Windows.Automation.ControlType]::RadioButton) | Where-Object { $_.Current.Name -like 'Use my preference emphasizing*' })
 if ($preferences.Count -ne 1) { throw 'The preview preference control is unavailable or ambiguous.' }
@@ -537,6 +559,17 @@ Apply-Changes
 Assert-AdvancedPreview
 $state = Get-PreviewState (Get-PreviewSlider)
 if ($state.Value -ne $state.Minimum) { throw 'Preview Performance slider did not persist. No full-preset success was recorded.' }
+if ($step -eq 'preview') {
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Manage 3D settings'))
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
+  Assert-AdvancedPreview
+  $state = Get-PreviewState (Get-PreviewSlider)
+  if ($state.Value -ne $state.Minimum) { throw 'The remembered preview Performance slider did not survive page reload.' }
+  Write-Output 'Preview Performance and advanced 3D mode verified.'
+  Close-OwnedControlPanel
+  return
+}
+}
 
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration'))
 $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
@@ -547,17 +580,34 @@ if (-not (Test-ExpectedPhysxGpu (Selected-Name $combo))) {
   if ($combo.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expansion)) {
     $expansion.Expand()
   } elseif ($null -ne ($expansion = Get-Legacy $combo)) {
-    $expansion.DoDefaultAction()
+    try { $expansion.DoDefaultAction() } catch {
+      # Some MSAA providers expose Value but no default action. Focused
+      # Alt+Down is the standard combo expansion, never a guessed coordinate.
+      $combo.SetFocus()
+      $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+      if (($focused.GetRuntimeId() -join ',') -ne ($combo.GetRuntimeId() -join ',')) { throw 'PhysX dropdown did not receive focus; no keyboard input was sent.' }
+      Add-Type -AssemblyName System.Windows.Forms
+      [System.Windows.Forms.SendKeys]::SendWait('%{DOWN}')
+    }
   } else { throw 'PhysX dropdown cannot be opened safely.' }
   Start-Sleep -Milliseconds 200
   $desktop = [System.Windows.Automation.AutomationElement]::RootElement
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
-  $items = @($desktop.FindAll($scope, $condition) | Where-Object { (Test-ExpectedPhysxGpu $_.Current.Name) -and -not $_.Current.IsOffscreen })
+  $items = @($desktop.FindAll($scope, $condition) | Where-Object { (Test-ExpectedPhysxGpu $_.Current.Name) -and -not $_.Current.IsOffscreen -and $_.Current.ProcessId -eq $process.Id })
   if ($items.Count -ne 1) { throw 'The exact PhysX GPU is unavailable or ambiguous. Auto-select was not accepted as success.' }
   Select-Element $items[0]
   Apply-Changes
 }
 if (-not (Test-ExpectedPhysxGpu (Selected-Name $combo))) { throw 'PhysX processor did not read back as the exact NVIDIA GPU.' }
+if ($step -eq 'physx') {
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Manage 3D settings'))
+  Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) $physxNames)
+  $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
+  if ($combos.Count -ne 1 -or -not (Test-ExpectedPhysxGpu (Selected-Name $combos[0]))) { throw 'PhysX GPU selection did not survive page reload.' }
+  Write-Output 'PhysX GPU selection verified.'
+  Close-OwnedControlPanel
+  return
+}
 Assert-PersistedCplSettings
 Write-Output 'PhysX GPU and preview Performance verified.'
 Close-OwnedControlPanel

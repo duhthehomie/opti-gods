@@ -24,6 +24,7 @@ static NVIDIA_PRESET_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 pub struct ProToolArgs {
     pub ticket: String,
     pub native_auth: String,
+    pub control_step: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -610,6 +611,11 @@ fn apply_verified_nvidia_cpl_controls(gpu_name: &str) -> Result<(), String> {
 
 #[cfg(windows)]
 fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool) -> Result<(), String> {
+    run_nvidia_cpl_controls(gpu_name, preflight, verify_only, None)
+}
+
+#[cfg(windows)]
+fn run_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool, step: Option<&str>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let mut child = Command::new(crate::commands::windows_powershell_executable())
@@ -617,6 +623,7 @@ fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool
         .env("OPTI_GPU_NAME", gpu_name)
         .env("OPTI_CPL_PREFLIGHT", if preflight { "1" } else { "0" })
         .env("OPTI_CPL_VERIFY_ONLY", if verify_only { "1" } else { "0" })
+        .env("OPTI_CPL_STEP", step.unwrap_or(""))
         .stdout(Stdio::piped()).stderr(Stdio::piped())
         .creation_flags(0x0800_0000).spawn()
         .map_err(|error| format!("NVIDIA Control Panel verification could not start: {error}"))?;
@@ -636,7 +643,9 @@ fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool
         }
     }
     let output = child.wait_with_output().map_err(|error| error.to_string())?;
-    let marker = if preflight { "NVIDIA Control Panel navigation verified." }
+    let marker = if step == Some("preview") { "Preview Performance and advanced 3D mode verified." }
+        else if step == Some("physx") { "PhysX GPU selection verified." }
+        else if preflight { "NVIDIA Control Panel navigation verified." }
         else { "PhysX GPU and preview Performance verified." };
     if !output.status.success()
         || !String::from_utf8_lossy(&output.stdout).contains(marker) {
@@ -647,6 +656,19 @@ fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool
 
 #[cfg(windows)]
 static NVIDIA_PRESET_IMPORT_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
+struct NvidiaMutationGuard;
+#[cfg(windows)]
+impl Drop for NvidiaMutationGuard {
+    fn drop(&mut self) { NVIDIA_PRESET_IMPORT_BUSY.store(false, Ordering::SeqCst); }
+}
+#[cfg(windows)]
+fn acquire_nvidia_mutation() -> Result<NvidiaMutationGuard, String> {
+    NVIDIA_PRESET_IMPORT_BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .map_err(|_| "Another NVIDIA action is still running; retry after it finishes.".to_string())?;
+    Ok(NvidiaMutationGuard)
+}
 
 #[cfg(windows)]
 fn nvidia_driver_fingerprint(api: &NvApiLibrary) -> Result<String, String> {
@@ -670,7 +692,7 @@ pub(crate) fn nvidia_preset_is_current() -> Option<bool> {
         let fingerprint = nvidia_driver_fingerprint(&api)?;
         use crate::win32::registry::{read_value, Hive, RegValue};
         match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
-            Ok(RegValue::Sz(saved)) if saved == format!("global-cpl-v2:{fingerprint}") => {}
+            Ok(RegValue::Sz(saved)) if saved == format!("global-profile-v3:{fingerprint}") => {}
             _ => return Err("NVIDIA driver changed or has no verified receipt.".into()),
         }
         let targets = nvidia_display::runtime::active_targets(&api)?;
@@ -880,6 +902,9 @@ pub fn cancel_nvidia_preset_import() {
 
 #[tauri::command]
 pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> Result<String, String> {
+    if let Some(step) = args.control_step.clone() {
+        return apply_nvidia_control_step(app, args, step).await;
+    }
     #[cfg(windows)]
     {
         use tauri::Emitter;
@@ -907,12 +932,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
         let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
         let worker_phase = phase.clone();
         let mut result = tokio::task::spawn_blocking(move || {
-            NVIDIA_PRESET_IMPORT_BUSY.store(true, std::sync::atomic::Ordering::SeqCst);
-            struct PresetBusyGuard;
-            impl Drop for PresetBusyGuard {
-                fn drop(&mut self) { NVIDIA_PRESET_IMPORT_BUSY.store(false, std::sync::atomic::Ordering::SeqCst); }
-            }
-            let _busy = PresetBusyGuard;
+            let _busy = acquire_nvidia_mutation()?;
             let report = |message: &str| {
                 *worker_phase.lock().unwrap_or_else(|error| error.into_inner()) = message.to_string();
             };
@@ -933,22 +953,9 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             };
             let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
             let settings = parse_global_nip_settings(&expected)?;
-            report("Checking NVIDIA Control Panel accessibility before changing the global profile");
-            verify_nvidia_cpl_controls(&gpu_name, true, false)?;
             let original_profile = nvidia_profile::apply(&settings, &report)?;
-            report("Verifying PhysX GPU selection and the preview Performance slider in NVIDIA Control Panel");
-            if let Err(error) = apply_verified_nvidia_cpl_controls(&gpu_name) {
-                let rollback = nvidia_profile::restore(&original_profile)
-                    .map(|_| "The previous global 3D profile was restored.".to_string())
-                    .unwrap_or_else(|failure| format!("Global-profile rollback needs attention: {failure}"));
-                return Err(format!("{error} {rollback} PhysX/preview controls may need review in NVIDIA Control Panel. No complete preset success was recorded."));
-            }
-            // The simple preview preference can rewrite global values.
-            // Restore the full explicit preset and reread persisted values.
-            if let Err(error) = nvidia_profile::apply(&settings, &report) {
-                let _ = nvidia_profile::restore(&original_profile);
-                return Err(format!("The full 3D preset could not be restored after Control Panel configuration: {error}. No complete preset success was recorded."));
-            }
+            // PhysX/preview are independent actions. Their accessibility is
+            // never a prerequisite for applying the driver profile or Vibrance.
             report("Applying and verifying Digital Vibrance");
             let dvc_result = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped before changing Digital Vibrance.".to_string())
@@ -968,10 +975,7 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let final_check = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped by the user.".to_string())
             } else {
-                // Final readback must not toggle the simple preference again:
-                // that could overwrite the explicit global 3D profile.
-                verify_nvidia_cpl_controls(&gpu_name, false, true)
-                    .and_then(|_| nvidia_profile::verify(&settings))
+                nvidia_profile::verify(&settings)
             };
             if let Err(error) = final_check {
                 report("Restoring the original profile and Digital Vibrance");
@@ -999,10 +1003,10 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             let fingerprint = nvidia_driver_fingerprint(&NvApiLibrary::load()?)?;
             crate::win32::registry::write_sz(
                 crate::win32::registry::Hive::CurrentUser, r"Software\OptiGods",
-                "NvidiaPresetDriver", &format!("global-cpl-v2:{fingerprint}"),
+                "NvidiaPresetDriver", &format!("global-profile-v3:{fingerprint}"),
             ).map_err(|error| format!("Could not save verified NVIDIA driver receipt: {error}"))?;
             Ok::<String, String>(format!(
-                "{vibrance_message}. Verified {verified_setting_count}/15 current global settings: Highest available refresh rate, Fixed Refresh, and explicit OpenGL GPU {gpu_name}, plus the original 12 settings. PhysX GPU and preview Performance verified, with advanced 3D settings retained. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults.",
+                "{vibrance_message}. Verified {verified_setting_count}/15 current global settings: Highest available refresh rate, Fixed Refresh, explicit OpenGL GPU {gpu_name}, V-Sync Off and OpenGL GDI Prefer performance, plus the remaining approved settings. PhysX and preview are separate actions and were not changed by this driver preset. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults.",
             ))
         }).await.map_err(|error| format!("NVIDIA preset worker failed: {error}")).and_then(|result| result);
         if let Ok(message) = &mut result {
@@ -1033,6 +1037,73 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
     {
         let _ = (app, args);
         Err("NVIDIA Profile Inspector is available only in the Windows Pro app.".into())
+    }
+}
+
+/// Uses the existing native-only Pro ticket scope, but records each UI result
+/// independently. Preview saves can rewrite DRS: always restore the snapshot
+/// afterward, even when UI verification fails. Never undo the driver preset.
+async fn apply_nvidia_control_step(app: tauri::AppHandle, args: ProToolArgs, step: String) -> Result<String, String> {
+    if step != "preview" && step != "physx" {
+        return Err("Unknown NVIDIA Control Panel step; no settings were changed.".into());
+    }
+    #[cfg(windows)]
+    {
+        use tauri::Emitter;
+        let (base, secret) = consume_pro_ticket(&args, PRESET_TWEAK_ID).await?;
+        let id = if step == "preview" { "NvidiaPreviewPerformance" } else { "NvidiaPhysxGpu" };
+        let _ = app.emit("optigods:script-tweak-progress", serde_json::json!({
+            "id": id, "message": format!("Applying and verifying separate NVIDIA {step} controls"), "stream": "stdout"
+        }));
+        let result = tokio::task::spawn_blocking(move || {
+            let _busy = acquire_nvidia_mutation()?;
+            if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+                return Err("NVIDIA UI step was stopped before changing settings.".into());
+            }
+            crate::commands::restore::require_verified_checkpoint()?;
+            let api = NvApiLibrary::load()?;
+            let targets = nvidia_display::runtime::active_targets(&api)?;
+            let (gpu, _) = nvidia_display::runtime::explicit_gpu_value(&api, &targets)?;
+            let fingerprint = nvidia_driver_fingerprint(&api)?;
+            // Snapshot/restore open their own non-reentrant NVAPI session.
+            drop(api);
+            let backup = if step == "preview" { Some(nvidia_profile::snapshot()?) } else { None };
+            let applied = run_nvidia_cpl_controls(&gpu, false, false, Some(&step));
+            if let Some(backup) = backup {
+                nvidia_profile::restore(&backup).map_err(|error| format!(
+                    "NVIDIA preview finished with {:?}, but restoring the preserved Manage 3D settings failed: {error}. No preview success was recorded.",
+                    applied.as_ref().err()
+                ))?;
+            }
+            applied?;
+            if step == "preview" {
+                // Restoring DRS must not silently undo the remembered preview
+                // controls. Recheck them without changing the driver profile.
+                run_nvidia_cpl_controls(&gpu, false, true, Some("preview"))?;
+            }
+            let current = nvidia_driver_fingerprint(&NvApiLibrary::load()?)?;
+            if current != fingerprint { return Err("NVIDIA driver changed during UI verification; no UI success was recorded.".into()); }
+            let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64).unwrap_or(0);
+            crate::win32::registry::write_qword(crate::win32::registry::Hive::CurrentUser,
+                r"Software\OptiGods\AppliedTweaks", id, timestamp)
+                .map_err(|error| format!("The separate NVIDIA UI step verified, but its history could not be saved: {error}"))?;
+            Ok::<String, String>(if step == "preview" {
+                "Preview Performance and advanced 3D mode verified. Previous Manage 3D settings preserved.".into()
+            } else {
+                format!("PhysX GPU selection verified: {gpu}. Manage 3D and Digital Vibrance were not changed.")
+            })
+        }).await.map_err(|error| format!("NVIDIA UI worker failed: {error}")).and_then(|result| result);
+        match &result {
+            Ok(message) => finalize_pro_ticket(&base, &args, &secret, PRESET_TWEAK_ID, true, message).await,
+            Err(error) => finalize_pro_ticket(&base, &args, &secret, PRESET_TWEAK_ID, false, error).await,
+        }
+        result
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, args);
+        Err("NVIDIA UI steps are available only in the Windows Pro app.".into())
     }
 }
 

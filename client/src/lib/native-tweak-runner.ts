@@ -5,7 +5,7 @@ import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
-import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY } from "@/lib/nvidia-preset-eligibility";
+import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY, NVIDIA_UI_RELEASE_KEY_PREFIX } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
@@ -16,7 +16,11 @@ export const NATIVE_RUN_SKIP_MESSAGES_KEY = "optigods-native-run-skip-messages";
 export const NATIVE_RUN_STATE_KEY = "optigods-native-run-state";
 export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
-const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
+export const NVIDIA_UI_ACTION_IDS = ["NvidiaPreviewPerformance", "NvidiaPhysxGpu"] as const;
+export function isNvidiaAction(id: string): boolean {
+  return id === NVIDIA_PRESET_ACTION_ID || NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id);
+}
+const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, ...NVIDIA_UI_ACTION_IDS, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
 export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro"]);
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
@@ -26,13 +30,14 @@ const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
 export function orderTweakBatch(ids: readonly string[]): string[] {
   const unique = Array.from(new Set(ids));
   return [
-    ...unique.filter(id => id !== NVIDIA_PRESET_ACTION_ID),
+    ...unique.filter(id => !isNvidiaAction(id)),
+    ...unique.filter(id => NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id)),
     ...unique.filter(id => id === NVIDIA_PRESET_ACTION_ID),
   ];
 }
 
 function isRunActionCompatible(id: string, native: boolean) {
-  if (native && id === NVIDIA_PRESET_ACTION_ID) return true;
+  if (native && isNvidiaAction(id)) return true;
   return getTweakCompatibility(id).ok;
 }
 
@@ -244,7 +249,7 @@ export async function recoverStuckNativeTweakRun(
     return { recovered: false, reason: "The Windows run is still making progress." };
   }
   const orphanedNvidiaImport = !hasNativeTweakRunInFlight()
-    && state.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "running");
+    && state.items.some(item => isNvidiaAction(item.id) && item.status === "running");
   stopNativeTweakRun();
   if (orphanedNvidiaImport) {
     await cancelNvidiaPresetImport().catch(() => {});
@@ -353,7 +358,7 @@ export function stopNativeTweakRun(): boolean {
   if (!state || (state.status !== "running" && state.status !== "stopping")) return false;
   stopRequested = true;
   writeRunState({ ...state, status: "stopping", stopRequested: true });
-  if (state.items.some(item => item.id === NVIDIA_PRESET_ACTION_ID && item.status === "running")) {
+  if (state.items.some(item => isNvidiaAction(item.id) && item.status === "running")) {
     void cancelNvidiaPresetImport().catch(error => {
       console.error("[native-runner] Could not cancel NVIDIA Profile Inspector:", error);
     });
@@ -459,7 +464,7 @@ export async function applyTweakBatch(
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {
     if (activeRunPromise) return activeRunPromise;
-    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID)) {
+    if (batchIds.some(isNvidiaAction)) {
       await resetNvidiaPresetImportCancel();
     }
     const runId = beginPersistedRun(batchIds, initialSkippedIds, options.initialSkippedMessages);
@@ -606,7 +611,7 @@ async function applyTweakBatchInternal(
       return { appliedIds: [], selectedIds: batchIds, unsupportedIds, skippedIds, failures: [], stoppedIds };
     }
     const forcedIds = new Set(options.forceReapplyIds ?? []);
-    if (batchIds.includes(NVIDIA_PRESET_ACTION_ID)) {
+    if (batchIds.some(isNvidiaAction)) {
       // A selected preset run must execute and read back the driver. Old history
       // (including an earlier vibrance-only run) is not proof of these settings.
       forcedIds.add(NVIDIA_PRESET_ACTION_ID);
@@ -617,6 +622,14 @@ async function applyTweakBatchInternal(
         (detected[id] !== false && (id in appliedAt || (machineHistory[id] ?? 0) > 0))
       ),
     );
+    // UI history from an older driver/release must not hide a pending retry.
+    for (const id of compatibleIds.filter(id => NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id))) {
+      try {
+        if (localStorage.getItem(NVIDIA_UI_RELEASE_KEY_PREFIX + id) !== "verified") {
+          alreadyConfirmedIds = alreadyConfirmedIds.filter(confirmed => confirmed !== id);
+        }
+      } catch { alreadyConfirmedIds = alreadyConfirmedIds.filter(confirmed => confirmed !== id); }
+    }
     windowsDetectedIds = compatibleIds.filter(id =>
       !forcedIds.has(id) && Boolean(detected[id]),
     );
@@ -744,7 +757,7 @@ async function applyTweakBatchInternal(
   // ticket ahead so the network round-trip is hidden behind PowerShell/native
   // execution, while keeping actual system writes strictly serial.
   const authorize = (actionId: string) => {
-    const tweakId = actionId === NVIDIA_PRESET_ACTION_ID ? NVIDIA_PRESET_TICKET_ID : actionId;
+    const tweakId = isNvidiaAction(actionId) ? NVIDIA_PRESET_TICKET_ID : actionId;
     return fetchWithTimeout(
       apiUrl("/api/performance-allowance/native-ticket"),
       {
@@ -840,10 +853,10 @@ async function applyTweakBatchInternal(
       // Rust enforces the real 90-second process deadline and kills timed-out
       // PowerShell before returning. Do not add a renderer-only timeout here:
       // it could report failure while Windows continued mutating in the background.
-      if (id === NVIDIA_PRESET_ACTION_ID && !credential) {
+      if (isNvidiaAction(id) && !credential) {
         throw new Error("Windows device authorization is unavailable.");
       }
-      const unlistenPreset = id === NVIDIA_PRESET_ACTION_ID
+      const unlistenPreset = isNvidiaAction(id)
         ? await listenScriptTweakProgress(payload => {
           if (payload.id === id) emitProgress({
             id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "running", message: payload.message,
@@ -851,10 +864,11 @@ async function applyTweakBatchInternal(
         }) : null;
       let result;
       try {
-        result = id === NVIDIA_PRESET_ACTION_ID
+        result = isNvidiaAction(id)
         ? {
           ok: true,
-          message: await importNvidiaPreset(ticket!, credential!),
+          message: await importNvidiaPreset(ticket!, credential!,
+            id === "NvidiaPreviewPerformance" ? "preview" : id === "NvidiaPhysxGpu" ? "physx" : undefined),
           error_kind: undefined,
           undo_token: null,
         }
@@ -872,7 +886,16 @@ async function applyTweakBatchInternal(
           !(result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied"))) {
         throw new Error("NVIDIA returned no complete 15/15 global-profile and Digital Vibrance verification. No preset success was recorded.");
       }
+      if (id === "NvidiaPreviewPerformance" && !result.message?.startsWith("Preview Performance and advanced 3D mode verified.")) {
+        throw new Error("Preview verification was missing. No preview success was recorded.");
+      }
+      if (id === "NvidiaPhysxGpu" && !result.message?.startsWith("PhysX GPU selection verified:")) {
+        throw new Error("PhysX GPU verification was missing. No PhysX success was recorded.");
+      }
       osApplied = true;
+      if (NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id)) {
+        try { localStorage.setItem(NVIDIA_UI_RELEASE_KEY_PREFIX + id, "verified"); } catch { /* keep it retryable */ }
+      }
       const store = useOptimizationStore.getState();
       if (id === NVIDIA_PRESET_ACTION_ID) {
         if (result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied")) {

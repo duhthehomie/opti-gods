@@ -156,8 +156,8 @@ export async function openMsiUtility(ticket: string, nativeAuth: string): Promis
   return invoke<string>("open_msi_utility", { args: { ticket, native_auth: nativeAuth } });
 }
 
-export async function importNvidiaPreset(ticket: string, nativeAuth: string): Promise<string> {
-  return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth } });
+export async function importNvidiaPreset(ticket: string, nativeAuth: string, controlStep?: "preview" | "physx"): Promise<string> {
+  return invoke<string>("import_nvidia_preset", { args: { ticket, native_auth: nativeAuth, control_step: controlStep ?? null } });
 }
 
 export async function runTrustedScriptTweak(
@@ -211,7 +211,11 @@ export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
     appliedDetectionRequest = invoke<Record<string, boolean>>("detect_applied_tweaks")
       .then(result => {
         if (result.NvidiaControlPanelSettings === false) {
-          try { localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.58"); } catch {}
+          try {
+            localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.66");
+            localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPreviewPerformance");
+            localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPhysxGpu");
+          } catch {}
         }
         if (typeof result.__DefenderAvailable === "boolean") {
           try { localStorage.setItem("optigods-defender-capability", result.__DefenderAvailable ? "available" : "unavailable"); } catch {}

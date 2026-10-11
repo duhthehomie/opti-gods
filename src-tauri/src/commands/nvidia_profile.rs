@@ -224,6 +224,10 @@ pub(super) fn apply(expected: &HashMap<u32, NipValue>, report: &impl Fn(&str)) -
     Ok(backup)
 }
 
+pub(super) fn snapshot() -> Result<Vec<Setting>, String> {
+    Session::open()?.customized()
+}
+
 pub(super) fn restore(backup: &[Setting]) -> Result<(), String> {
     Session::open()?.restore(backup)
 }

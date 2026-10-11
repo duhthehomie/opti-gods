@@ -17,7 +17,9 @@ export function canRunNvidiaPreset(input: NvidiaPresetEligibilityInput): boolean
     && input.dedicatedNvidiaGpuCount === 1;
 }
 
-export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.65";
+export const NVIDIA_PRESET_REQUEUE_RELEASE_KEY = "optigods-nvidia-preset-requeue-v5.2.66";
+export const NVIDIA_UI_RELEASE_KEY_PREFIX = "optigods-nvidia-ui-v5.2.66-";
+export const NVIDIA_UI_IDS = ["NvidiaPreviewPerformance", "NvidiaPhysxGpu"] as const;
 
 export function isCurrentNvidiaPresetVerified(): boolean {
   try { return typeof localStorage !== "undefined" && localStorage.getItem(NVIDIA_PRESET_REQUEUE_RELEASE_KEY) === "verified"; }
@@ -26,8 +28,12 @@ export function isCurrentNvidiaPresetVerified(): boolean {
 
 /** Display/queue intent only. Scanning never runs or reverifies the preset. */
 export function getPendingNvidiaPresetIds(input: NvidiaPresetEligibilityInput): string[] {
-  return canRunNvidiaPreset(input) && !isCurrentNvidiaPresetVerified()
-    ? ["NvidiaControlPanelSettings"] : [];
+  if (!canRunNvidiaPreset(input)) return [];
+  const pendingUi = NVIDIA_UI_IDS.filter(id => {
+    try { return localStorage.getItem(NVIDIA_UI_RELEASE_KEY_PREFIX + id) !== "verified"; }
+    catch { return true; }
+  });
+  return [...pendingUi, ...(!isCurrentNvidiaPresetVerified() ? ["NvidiaControlPanelSettings"] : [])];
 }
 
 export function shouldQueueNvidiaPresetReapplyOnce(input: NvidiaPresetEligibilityInput, alreadyQueued: boolean): boolean {
@@ -68,7 +74,7 @@ export function getNvidiaRecommendationIds(
   presetId = "NvidiaControlPanelSettings",
 ): string[] {
   return Array.from(new Set([
-    ...recommendedIds.filter(id => id !== presetId),
-    ...(presetEligible ? [presetId] : []),
+    ...recommendedIds.filter(id => id !== presetId && !NVIDIA_UI_IDS.some(uiId => uiId === id)),
+    ...(presetEligible ? [...NVIDIA_UI_IDS, presetId] : []),
   ]));
 }

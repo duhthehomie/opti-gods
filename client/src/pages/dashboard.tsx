@@ -627,7 +627,7 @@ export default function Dashboard() {
         const runSkippedMessages = { ...initialSkippedMessages };
         const queueNvidiaPresetReapplyNow = nvidiaPresetShouldQueue && nvidiaPresetOneTimeRequeue;
         if (nvidiaPresetShouldQueue && (!nativeState[NVIDIA_PRESET_ACTION_ID] || queueNvidiaPresetReapplyNow)) {
-          pendingIds.push(NVIDIA_PRESET_ACTION_ID);
+          pendingIds.push("NvidiaPreviewPerformance", "NvidiaPhysxGpu", NVIDIA_PRESET_ACTION_ID);
         }
         if (nvidiaPresetSkipMessage) {
           runSkippedIds.push(NVIDIA_PRESET_ACTION_ID);
