@@ -21,6 +21,7 @@ import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_ID
 import { getLatestGhRelease, bustGhCache } from "./github-release";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
 import { buildSafeWindowsCommandOverride } from "./windows-tweak-commands";
+import { buildNativeBatchCommandFix } from "./native-batch-command-fixes";
 import { buildLocalGraphicsPack } from "./graphics-pack-local";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
@@ -939,6 +940,8 @@ for (const id of Object.keys(TWEAK_COMMANDS)) {
  * runner so older Windows builds do not fail at parse time.
  */
 function normalizeWindowsPowerShellCommand(id: string, command: string): string {
+  const batchFix = buildNativeBatchCommandFix(id, command);
+  if (batchFix) return batchFix;
   const safeOverride = buildSafeWindowsCommandOverride(id);
   if (safeOverride) return safeOverride;
   if (id === "CodDefenderExclusion") {

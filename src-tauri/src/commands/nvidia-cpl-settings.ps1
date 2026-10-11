@@ -482,6 +482,18 @@ function Start-NvidiaControlPanel {
 }
 
 $launchMode = 'already-open Control Panel'
+$step = $env:OPTI_CPL_STEP
+if ($step -and $step -notin @('preview', 'physx', 'open')) { throw 'Unknown NVIDIA Control Panel step.' }
+if ($step -eq 'open') {
+  # Preserve the repair action's service recovery, without applying settings.
+  foreach ($name in @('NVDisplay.ContainerLocalSystem','NVDisplay.ContainerLS','NvContainerLocalSystem')) {
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($service) {
+      if ($service.StartType -eq 'Disabled') { Set-Service -InputObject $service -StartupType Automatic -ErrorAction SilentlyContinue }
+      if ($service.Status -ne 'Running') { Start-Service -InputObject $service -ErrorAction SilentlyContinue }
+    }
+  }
+}
 $existingPanelIds = @(Get-Process -Name nvcplui -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
 function Close-OwnedControlPanel {
   # Never close a panel that the user already had open, or hide a failed run.
@@ -501,9 +513,12 @@ do {
   if (-not $root) { Start-Sleep -Milliseconds 100 }
 } while (-not $root -and [DateTime]::UtcNow -lt $deadline)
 if (-not $root) { throw "NVIDIA Control Panel did not expose an accessible desktop window within 15 seconds (launch: $launchMode). Open NVIDIA Control Panel from Start, then retry. No preset success was recorded." }
-
-$step = $env:OPTI_CPL_STEP
-if ($step -and $step -notin @('preview', 'physx')) { throw 'Unknown NVIDIA Control Panel step.' }
+if ($step -eq 'open') {
+  # A launcher exit or a background process is not proof of an open panel.
+  # Leave the verified window open for the user; do not navigate or apply.
+  Write-Output 'NVIDIA Control Panel window verified.'
+  return
+}
 $previewPage = $null
 if ($step -ne 'physx') { $previewPage = Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview') }
 $physxNames = @('Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')

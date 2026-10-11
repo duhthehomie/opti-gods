@@ -1,4 +1,5 @@
 import type { RequestHandler, Request, Response } from "express";
+import { NATIVE_SCRIPT_RUNTIME, NATIVE_STARTUP_CLEANUP_RUNTIME } from "./native-script-runtime";
 
 export function buildSingleTweakPowerShell(id: string, command: string | undefined): string | null {
   if (!/^[A-Za-z0-9_]{2,64}$/.test(id) || !command?.trim()) return null;
@@ -6,18 +7,22 @@ export function buildSingleTweakPowerShell(id: string, command: string | undefin
     "$ErrorActionPreference = 'Stop'",
     "$ProgressPreference = 'SilentlyContinue'",
     "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
-    "$__ogStartingErrorCount = $global:Error.Count",
+    "$__ogStartingErrors = @($global:Error)",
     "$script:__ogSkipped = $false",
+    NATIVE_SCRIPT_RUNTIME,
+    ...(id.startsWith("su_") ? [NATIVE_STARTUP_CLEANUP_RUNTIME] : []),
     `Write-Output '[Opti Gods] Running ${id}…'`,
     "try {",
-    `  & { ${command} } 6>&1 | ForEach-Object {`,
+    `  $__ogSource = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(command, "utf8").toString("base64")}'))`,
+    "  & ([ScriptBlock]::Create((Convert-OptiReadProbes $__ogSource))) 6>&1 | ForEach-Object {",
     "    $line = [string]$_",
     "    if ($line -match '(?i)\\[SKIP(?:PED)?\\]') { $script:__ogSkipped = $true }",
     "    Write-Output $line",
     "  }",
-    "  if ($script:__ogSkipped) { Write-Output '__OG_RESULT:SKIPPED'; exit 2 }",
     "  if ($global:LASTEXITCODE -is [int] -and $global:LASTEXITCODE -ne 0) { throw ('Command exited with code ' + $global:LASTEXITCODE) }",
-    "  if ($global:Error.Count -gt $__ogStartingErrorCount) { throw 'PowerShell reported an error while applying this tweak.' }",
+    "  $__ogUnexpectedErrors = @($global:Error | Where-Object { $__ogStartingErrors -notcontains $_ })",
+    "  if ($__ogUnexpectedErrors.Count) { throw ('PowerShell write/command failed: ' + $__ogUnexpectedErrors[0].Exception.Message) }",
+    "  if ($script:__ogSkipped) { Write-Output '__OG_RESULT:SKIPPED'; exit 2 }",
     "  Write-Output '__OG_RESULT:APPLIED'",
     "  exit 0",
     "} catch {",

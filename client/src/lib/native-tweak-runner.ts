@@ -7,6 +7,7 @@ import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
 import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
 import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY, NVIDIA_UI_RELEASE_KEY_PREFIX } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
+import { NVIDIA_CAPTURE_PROTECTED_IDS } from "@shared/preset-builder";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -37,6 +38,7 @@ export function orderTweakBatch(ids: readonly string[]): string[] {
 }
 
 function isRunActionCompatible(id: string, native: boolean) {
+  if (NVIDIA_CAPTURE_PROTECTED_IDS.has(id)) return false;
   if (native && isNvidiaAction(id)) return true;
   return getTweakCompatibility(id).ok;
 }
@@ -954,6 +956,7 @@ async function applyTweakBatchInternal(
       }
       failures.push({ id, message });
       emitProgress({ id, index: progressIndexById.get(id) ?? index, total: batchTotal, status: "failed", message });
+      if (message.includes("OG-NET-RECOVERY")) stopRequested = true;
     }
   }
 

@@ -1,4 +1,42 @@
 $ErrorActionPreference = 'Stop'
+& {
+  # Exercise the exact native bootstrap in Windows PowerShell with synthetic
+  # UTF-8 source larger than CreateProcess's command-line limit. No settings.
+  $native = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\src-tauri\src\commands\nvidia_cpl_process.rs'))
+  $match = [regex]::Match($native, 'pub const BOOTSTRAP: &str = "([^"]+)";')
+  if (-not $match.Success -or $match.Groups[1].Value.Length -ge 512) { throw 'Missing short reviewed stdin bootstrap.' }
+  $bootstrap = $match.Groups[1].Value
+  $payload = '#' + ('x' * 40000) + "`n" + '[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Write-Output ("stdin fixture " + [char]0x2713 + [char]0x00E9)'
+  $process = [Diagnostics.Process]::new()
+  $process.StartInfo.FileName = Join-Path $PSHOME 'powershell.exe'
+  $process.StartInfo.Arguments = '-NoProfile -NonInteractive -Sta -Command "' + $bootstrap + '"'
+  $process.StartInfo.UseShellExecute = $false
+  $process.StartInfo.CreateNoWindow = $true
+  $process.StartInfo.RedirectStandardInput = $true
+  $process.StartInfo.RedirectStandardOutput = $true
+  $process.StartInfo.RedirectStandardError = $true
+  $process.StartInfo.StandardOutputEncoding = [Text.Encoding]::UTF8
+  $process.StartInfo.StandardErrorEncoding = [Text.Encoding]::UTF8
+  $process.StartInfo.EnvironmentVariables.Remove('PSModulePath')
+  try {
+    $null = $process.Start()
+    $stdout = $process.StandardOutput.ReadToEndAsync()
+    $stderr = $process.StandardError.ReadToEndAsync()
+    $bytes = [Text.Encoding]::UTF8.GetBytes($payload)
+    $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $process.StandardInput.Close()
+    if (-not $process.WaitForExit(10000)) { throw 'Windows PowerShell stdin fixture exceeded its deadline.' }
+    if (-not $stdout.Wait(5000) -or -not $stderr.Wait(5000)) { throw 'Windows PowerShell output did not reach EOF.' }
+    $expected = 'stdin fixture ' + [char]0x2713 + [char]0x00E9
+    if ($process.ExitCode -ne 0 -or $stdout.Result.Trim() -ne $expected) {
+      throw "Large stdin/UTF-8 bootstrap did not execute exactly once: $($stderr.Result)"
+    }
+  } finally {
+    if ($process.Id -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+    $process.Dispose()
+  }
+  Write-Output '[nvidia-cpl] Large-source Windows PowerShell stdin transport and Unicode readback passed.'
+}
 $source = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\src-tauri\src\commands\nvidia-cpl-settings.ps1'))
 $tokens = $null
 $errors = $null

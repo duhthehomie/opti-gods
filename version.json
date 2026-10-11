@@ -1,4 +1,4 @@
 {
-  "version": "5.2.68",
-  "notes": "V5.2.66 — verifies all 15 NVIDIA Manage 3D settings and 85% Digital Vibrance independently of separate PhysX and preview actions. Adds independent results and retries; preserves Manage 3D around preview changes. Retains serial Pro script execution before NVIDIA. Requires republishing the corrected authenticated website script endpoint. Updates recommendation regression tests for the separate NVIDIA actions. Fixes Applied Tweaks preflight and retry routing for dedicated NVIDIA preview and PhysX actions."
+  "version": "5.2.69",
+  "notes": "V5.2.69 — preserves the working 15-setting NVIDIA preset and 85% vibrance. Fixes the preview/PhysX PowerShell launcher command-line limit and adds bounded asynchronous execution. Corrects expected read probes, idempotent startup cleanup, registry readback, unavailable services, TCP configuration, and no-restart LSO changes. Live Pro verification retries short network interruptions without bypassing authorization. Unsupported legacy hardware actions are skipped, never marked applied. Includes Windows outcome and NVIDIA launcher build checks. Requires republishing the updated website script endpoint."
 }

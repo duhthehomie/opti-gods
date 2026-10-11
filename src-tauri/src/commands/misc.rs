@@ -7,6 +7,9 @@ use tauri::{AppHandle, Emitter, Manager};
 #[path = "nvidia_display.rs"]
 mod nvidia_display;
 #[cfg(windows)]
+#[path = "script_tweak_diagnostics.rs"]
+mod script_tweak_diagnostics;
+#[cfg(windows)]
 #[path = "nvidia_profile.rs"]
 mod nvidia_profile;
 
@@ -617,33 +620,19 @@ fn verify_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool
 #[cfg(windows)]
 fn run_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool, step: Option<&str>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
-    let mut child = Command::new(crate::commands::windows_powershell_executable())
-        .args(["-NoProfile", "-NonInteractive", "-Sta", "-Command", include_str!("nvidia-cpl-settings.ps1")])
+    use std::process::Command;
+    let mut command = Command::new(crate::commands::windows_powershell_executable());
+    command.args(["-NoProfile", "-NonInteractive", "-Sta", "-Command", nvidia_cpl_process::BOOTSTRAP])
+        .env_remove("PSModulePath")
         .env("OPTI_GPU_NAME", gpu_name)
         .env("OPTI_CPL_PREFLIGHT", if preflight { "1" } else { "0" })
         .env("OPTI_CPL_VERIFY_ONLY", if verify_only { "1" } else { "0" })
         .env("OPTI_CPL_STEP", step.unwrap_or(""))
-        .stdout(Stdio::piped()).stderr(Stdio::piped())
-        .creation_flags(0x0800_0000).spawn()
-        .map_err(|error| format!("NVIDIA Control Panel verification could not start: {error}"))?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(40);
-    loop {
-        match child.try_wait().map_err(|error| error.to_string())? {
-            Some(_) => break,
-            None => {
-                if NVIDIA_PRESET_IMPORT_CANCELLED.load(std::sync::atomic::Ordering::SeqCst)
-                    || std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err("NVIDIA Control Panel verification was stopped or exceeded its deadline. No complete preset success was recorded.".into());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-        }
-    }
-    let output = child.wait_with_output().map_err(|error| error.to_string())?;
-    let marker = if step == Some("preview") { "Preview Performance and advanced 3D mode verified." }
+        .creation_flags(0x0800_0000);
+    let output = nvidia_cpl_process::run(&mut command, include_str!("nvidia-cpl-settings.ps1"),
+        &NVIDIA_PRESET_IMPORT_CANCELLED, std::time::Duration::from_secs(40))?;
+    let marker = if step == Some("open") { "NVIDIA Control Panel window verified." }
+        else if step == Some("preview") { "Preview Performance and advanced 3D mode verified." }
         else if step == Some("physx") { "PhysX GPU selection verified." }
         else if preflight { "NVIDIA Control Panel navigation verified." }
         else { "PhysX GPU and preview Performance verified." };
@@ -653,6 +642,10 @@ fn run_nvidia_cpl_controls(gpu_name: &str, preflight: bool, verify_only: bool, s
     }
     Ok(())
 }
+
+#[cfg(windows)]
+#[path = "nvidia_cpl_process.rs"]
+mod nvidia_cpl_process;
 
 #[cfg(windows)]
 static NVIDIA_PRESET_IMPORT_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -1108,7 +1101,7 @@ async fn apply_nvidia_control_step(app: tauri::AppHandle, args: ProToolArgs, ste
 }
 
 #[cfg(windows)]
-async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, String> {
+async fn fetch_trusted_tweak_script(app: &AppHandle, args: &ScriptTweakArgs) -> Result<String, String> {
     if args.id.is_empty()
         || args.id.len() > 64
         || !args.id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
@@ -1116,11 +1109,8 @@ async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, St
         return Err("Invalid script-only tweak ID.".into());
     }
     let base = if cfg!(debug_assertions) { "http://127.0.0.1:5000" } else { BASE_PROD };
-    let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|error| format!("Trusted script client failed: {error}"))?;
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let client = CLIENT.get_or_init(reqwest::Client::new);
     // Bundled scripts remove a delivery dependency, never Pro authorization.
     let mut entitlement = client.get(format!("{base}/api/performance-allowance"));
     for (name, value) in [
@@ -1132,8 +1122,31 @@ async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, St
             entitlement = entitlement.header(name, value);
         }
     }
-    let authorized = entitlement.send().await
-        .map_err(|_| "Pro authorization could not be verified. No script was run.".to_string())?;
+    // Network-adapter configuration can temporarily drop the connection.
+    // Recheck LIVE entitlement before executing anything; never cache Pro.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
+    let authorized = loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("OG-NET-RECOVERY · Live Pro verification could not reconnect within 45 seconds. No script was run; reconnect before retrying.".into());
+        }
+        let request = entitlement.try_clone()
+            .ok_or_else(|| "Could not prepare live Pro verification.".to_string())?
+            .timeout(remaining.min(std::time::Duration::from_secs(8)));
+        match request.send().await {
+            Ok(response) if !response.status().is_server_error() && response.status().as_u16() != 429 => break response,
+            Ok(_) | Err(_) => {
+                let _ = app.emit("optigods:script-tweak-progress", serde_json::json!({
+                    "id": args.id.as_str(),
+                    "message": "Reconnecting to verify Pro after a network interruption. No script has run.",
+                    "stream": "status",
+                }));
+                tokio::time::sleep(std::time::Duration::from_secs(2).min(
+                    deadline.saturating_duration_since(tokio::time::Instant::now()),
+                )).await;
+            }
+        }
+    };
     if !authorized.status().is_success() {
         return Err(format!("Pro authorization failed (HTTP {}). No script was run.", authorized.status()));
     }
@@ -1162,6 +1175,7 @@ async fn fetch_trusted_tweak_script(args: &ScriptTweakArgs) -> Result<String, St
         }
     }
     let response = request
+        .timeout(std::time::Duration::from_secs(30))
         .json(&serde_json::json!({ "id": args.id.as_str() }))
         .send()
         .await
@@ -1238,7 +1252,11 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
         use std::process::Stdio;
         use tokio::process::Command;
 
-        let script = fetch_trusted_tweak_script(&args).await?;
+        if !crate::win32::elevation::is_elevated()
+            .map_err(|error| format!("Could not verify Windows elevation: {error:#}"))? {
+            return Err("OG-ELEVATION · Windows did not grant elevation to this app. Open the installed Opti Gods app normally and approve its Windows consent prompt. No script was run.".into());
+        }
+        let script = fetch_trusted_tweak_script(&app, &args).await?;
         crate::win32::restore::ensure_session_checkpoint("OptiGods — Before Script Tweaks")
             .map_err(|error| format!("A verified restore point is required before this script: {error:#}"))?;
         crate::commands::restore::require_verified_checkpoint()?;
@@ -1265,6 +1283,7 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
         drop(file);
 
         let mut child = match Command::new(crate::commands::windows_powershell_executable())
+            .env_remove("PSModulePath")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
             .arg(&path)
             .stdout(Stdio::piped())
@@ -1335,20 +1354,15 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
             let next_step = match args.id.as_str() {
                 "EnableNvidiaMSIPro" => "Restart Windows for the interrupt changes to take effect.",
                 "FiveM1650VRAMBudget" => "Restart the game to reload its configuration; this check does not verify in-game consumption.",
-                _ => "The verified settings take effect immediately.",
+                "FiveMDisableLSO" | "NetDisableLargeSendOffload" | "DisablePowerThrottlingAdv" =>
+                    "Restart Windows after this batch to activate the configuration.",
+                _ => "The Windows script completed. Restart Windows or the affected app if required by this tweak.",
             };
             return Ok(format!("{detail} {next_step}"));
         }
-        let details = stderr_lines.iter().chain(stdout_lines.iter())
-            .filter(|line| !line.contains("__OG_RESULT:"))
-            .rev()
-            .take(3)
-            .cloned()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join(" ");
+        let details = script_tweak_diagnostics::failure_details(
+            &stderr_lines, &stdout_lines, status.as_ref().and_then(|value| value.code()),
+        );
         if status.is_none() {
             return Err(format!("The script exceeded the 3-minute limit and was stopped. No success was recorded. {details}"));
         }
@@ -1471,75 +1485,15 @@ if ($exe -or $package) { 'true' } else { 'false' }
 }
 
 #[tauri::command]
-pub fn repair_nvidia_control_panel() -> Result<String, String> {
+pub async fn repair_nvidia_control_panel() -> Result<String, String> {
     #[cfg(windows)]
     {
-        let script = r#"
-$ErrorActionPreference = 'Stop'
-$serviceNames = @('NVDisplay.ContainerLocalSystem','NVDisplay.ContainerLS','NvContainerLocalSystem')
-foreach ($name in $serviceNames) {
-  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-  if ($service) {
-    if ($service.StartType -eq 'Disabled') { Set-Service -InputObject $service -StartupType Automatic -ErrorAction SilentlyContinue }
-    if ($service.Status -ne 'Running') { Start-Service -InputObject $service -ErrorAction SilentlyContinue }
-  }
-}
-$candidates = @(
-  (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
-  (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client\nvcplui.exe')
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
-$exe = $candidates | Select-Object -First 1
-if (-not $exe) {
-  $package = Get-AppxPackage -Name 'NVIDIACorp.NVIDIAControlPanel' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($package) {
-    $candidate = Join-Path $package.InstallLocation 'nvcplui.exe'
-    if (Test-Path -LiteralPath $candidate) { $exe = $candidate }
-  }
-}
-if (-not $exe) { throw 'NVIDIA Control Panel executable was not found. Reinstall NVIDIA Control Panel from the Microsoft Store or reinstall the NVIDIA driver with Control Panel selected.' }
-$existing = Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($existing) {
-  Write-Output 'NVIDIA Control Panel is already running.'
-  return
-}
-$process = Start-Process -FilePath $exe -PassThru -ErrorAction Stop
-$deadline = (Get-Date).AddSeconds(5)
-while ((Get-Date) -lt $deadline) {
-  $running = Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($running) {
-    Write-Output "NVIDIA Control Panel started from $exe"
-    return
-  }
-  $process.Refresh()
-  if ($process.HasExited) {
-    if ($process.ExitCode -eq 0) {
-      Write-Output "NVIDIA Control Panel launch submitted from $exe; the launcher exited cleanly."
-      return
-    }
-    throw "NVIDIA Control Panel launcher exited with code $($process.ExitCode). Reinstall the NVIDIA driver/Control Panel package."
-  }
-  Start-Sleep -Milliseconds 250
-}
-$process.Refresh()
-if (-not $process.HasExited) {
-  Write-Output "NVIDIA Control Panel started from $exe"
-  return
-}
-throw 'NVIDIA Control Panel was not observed after launch. Reinstall the NVIDIA driver/Control Panel package.'
-"#;
-        let output = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
-            .output()
-            .map_err(|error| format!("Could not run the NVIDIA Control Panel repair: {error}"))?;
-        if !output.status.success() {
-            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(if detail.is_empty() {
-                "NVIDIA Control Panel repair failed.".to_string()
-            } else {
-                detail
-            });
-        }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        tauri::async_runtime::spawn_blocking(|| {
+            let _guard = acquire_nvidia_mutation()?;
+            NVIDIA_PRESET_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
+            run_nvidia_cpl_controls("", false, false, Some("open"))?;
+            Ok("NVIDIA Control Panel window verified.".to_string())
+        }).await.map_err(|error| format!("NVIDIA Control Panel repair worker failed: {error}"))?
     }
     #[cfg(not(windows))]
     {
