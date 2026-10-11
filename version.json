@@ -1,4 +1,4 @@
 {
-  "version": "5.2.62",
-  "notes": "V5.2.62 — runs compatible Pro tweaks before the NVIDIA Control Panel preset in all batch queues; preserves missing-preset retries without reapplying confirmed tweaks; recognizes actionable NVIDIA sidebar hyperlinks as well as tree items; adds detailed accessibility diagnostics and closes only newly opened panels after successful verification; preserves live temperatures, Max NVIDIA MSI High, and strict full-preset readback."
+  "version": "5.2.63",
+  "notes": "V5.2.63 — supports NVIDIA drivers exposing navigation as patternless Static panes through exact named sidebar matching, live-bounds hit testing, and process-scoped input; rejects covered, disabled, offscreen, and unrelated controls; preserves strict page/profile readback, NVIDIA-last queues, missing-only retries, live temperatures, and compatible Max NVIDIA MSI High."
 }

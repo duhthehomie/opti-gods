@@ -17,6 +17,9 @@ if (-not ('OptiGods.CplMsaa' -as [type]) -or -not ('OptiGods.CplMsaaControl' -as
   throw 'NVIDIA MSAA helper failed to compile/load in Windows PowerShell.'
 }
 if (-not [OptiGods.CplMsaa].GetMethod('FromPoint')) { throw 'MSAA lookup entry point is missing.' }
+if (-not ('OptiGods.CplInput' -as [type])) { throw 'Exact-navigation input helper failed to compile.' }
+$expectedInputSize = if ([IntPtr]::Size -eq 8) { 40 } else { 28 }
+if ([OptiGods.CplInput]::InputSize -ne $expectedInputSize) { throw 'Win32 input structure layout is incorrect.' }
 Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation passed; no settings were changed.'
 & {
   # Run the production launch functions with mocked Windows services. No app
@@ -93,7 +96,7 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation
   Write-Output '[nvidia-cpl] Launch routing, signature rejection, package containment/ambiguity, access denial, desktop fallback, and missing-app mocks passed.'
 }
 & {
-  foreach ($name in @('Normalize-Name', 'Get-ControlParent', 'Test-NavigationControl', 'Close-OwnedControlPanel')) {
+  foreach ($name in @('Normalize-Name', 'Get-ControlParent', 'Test-NavigationScope', 'Test-StaticNavigation', 'Test-NavigationControl', 'Select-StaticNavigation', 'Close-OwnedControlPanel')) {
     $definitions = @($ast.FindAll({
       param($node)
       $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -104,14 +107,20 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation
   function Get-ControlParent($element) { $element.Parent }
   function New-TestControl($type, $name, $actionable, $parent) {
     $control = [pscustomobject]@{
-      Current = [pscustomobject]@{ ControlType = $type; Name = $name; ClassName = '' }
+      Current = [pscustomobject]@{
+        ControlType = $type; Name = $name; ClassName = ''
+        IsOffscreen = $false; IsEnabled = $true; NativeWindowHandle = 0
+        BoundingRectangle = [System.Windows.Rect]::new(100, 200, 300, 20)
+      }
       Parent = $parent
       Actionable = $actionable
+      RuntimeId = @(1, 2, 3)
     }
     $control | Add-Member -MemberType ScriptMethod -Name TryGetCurrentPattern -Value {
       param($pattern, $value)
       return ($this.Actionable -and $pattern.Id -eq [System.Windows.Automation.InvokePattern]::Pattern.Id)
     }
+    $control | Add-Member -MemberType ScriptMethod -Name GetRuntimeId -Value { $this.RuntimeId }
     return $control
   }
   $pane = [System.Windows.Automation.ControlType]::Pane
@@ -136,6 +145,40 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation
   if (Test-NavigationControl (New-TestControl $link $name $false $settings) $legacyLink) {
     throw 'Legacy link outside navigation was accepted.'
   }
+  $static = New-TestControl $pane $name $false $navigation
+  $static.Current.ClassName = 'Static'
+  if (-not (Test-NavigationControl $static $null)) { throw 'The reported patternless Static sidebar entry is still rejected.' }
+  $heading = New-TestControl $pane $name $false $settings
+  $heading.Current.ClassName = 'Static'
+  $heading.RuntimeId = @(4, 5, 6)
+  if (Test-NavigationControl $heading $null) { throw 'Patternless Static page heading was accepted as navigation.' }
+  $static.Current.IsEnabled = $false
+  if (Test-NavigationControl $static $null) { throw 'Disabled Static navigation was accepted.' }
+  $static.Current.IsEnabled = $true
+  $static.Current.IsOffscreen = $true
+  if (Test-NavigationControl $static $null) { throw 'Offscreen Static navigation was accepted.' }
+  $static.Current.IsOffscreen = $false
+  $static.Current.Name = 'Unapproved setting'
+  if (Test-NavigationControl $static $null) { throw 'An unapproved Static entry was accepted.' }
+  $static.Current.Name = $name
+  $script:testHit = $static
+  $script:testClicks = @()
+  function Focus-ControlPanel {}
+  function Get-ControlAtPoint($x, $y) { $script:testHit }
+  function Send-ExactNavigationClick($element, $x, $y) {
+    $script:testClicks += [pscustomobject]@{ X = $x; Y = $y }
+  }
+  Select-StaticNavigation $static
+  if ($script:testClicks.Count -ne 1 -or $script:testClicks[0].X -ne 250 -or $script:testClicks[0].Y -ne 210) {
+    throw 'Navigation did not use the live exact-element bounds.'
+  }
+  $script:testHit = $heading
+  $blocked = $false
+  try { Select-StaticNavigation $static } catch {
+    if ($_.Exception.Message -notlike '*no click was sent*') { throw }
+    $blocked = $true
+  }
+  if (-not $blocked -or $script:testClicks.Count -ne 1) { throw 'Covered/mismatched navigation was clicked.' }
   $script:testCloses = 0
   $process = [pscustomobject]@{ Id = 100 }
   $process | Add-Member -MemberType ScriptMethod -Name CloseMainWindow -Value { $script:testCloses++; return $true }
@@ -149,5 +192,5 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation
   $existingPanelIds = @()
   Close-OwnedControlPanel
   if ($script:testCloses -ne 1) { throw 'The newly opened Control Panel was not closed on successful verification.' }
-  Write-Output '[nvidia-cpl] Sidebar hyperlink/legacy matching, heading rejection, and owned-window cleanup mocks passed.'
+  Write-Output '[nvidia-cpl] Sidebar hyperlink/legacy/Static matching, heading/offscreen/disabled/overlay rejection, live-bounds hit testing, and owned-window cleanup mocks passed.'
 }

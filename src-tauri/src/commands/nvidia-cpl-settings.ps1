@@ -3,8 +3,8 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName Accessibility
 # Windows PowerShell's managed UIA client does not expose the legacy pattern
-# class. Use the supported MSAA COM API for legacy controls, without mouse
-# clicks, key presses, or a dependency on that missing managed type.
+# class. Use supported MSAA COM APIs. Patternless Static navigation has a
+# separate exact-element input fallback; never use hardcoded coordinates.
 if (-not ('OptiGods.CplMsaa' -as [type])) {
   Add-Type -ReferencedAssemblies ([Accessibility.IAccessible].Assembly.Location) -TypeDefinition @'
 using System;
@@ -50,6 +50,74 @@ namespace OptiGods {
       if (hr < 0 || accessible == null) return null;
       return new CplMsaaControl(accessible, child);
     }
+  }
+  public static class CplInput {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput {
+      public int X, Y;
+      public uint Data, Flags, Time;
+      public UIntPtr Extra;
+    }
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputData { [FieldOffset(0)] public MouseInput Mouse; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Input { public uint Type; public InputData Data; }
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint count, Input[] inputs, int size);
+    public static void Focus(IntPtr window) {
+      if (window == IntPtr.Zero) throw new InvalidOperationException("NVIDIA window handle is missing.");
+      if (IsIconic(window)) ShowWindow(window, 9);
+      if (!SetForegroundWindow(window) && GetForegroundWindow() != window)
+        throw new InvalidOperationException("Windows did not allow NVIDIA Control Panel to become foreground.");
+    }
+    public static void Click(IntPtr window, IntPtr expectedControl, int x, int y) {
+      var point = new Point { X = x, Y = y };
+      IntPtr hit = WindowFromPoint(point);
+      uint owner, hitOwner;
+      GetWindowThreadProcessId(window, out owner);
+      GetWindowThreadProcessId(hit, out hitOwner);
+      if (owner == 0 || hitOwner != owner || GetAncestor(hit, 2) != window ||
+          GetForegroundWindow() != window ||
+          (expectedControl != IntPtr.Zero && hit != expectedControl && !IsChild(expectedControl, hit)))
+        throw new InvalidOperationException("NVIDIA navigation target is covered or its window identity changed; no click was sent.");
+      Point previous;
+      bool havePrevious = GetCursorPos(out previous);
+      if (!SetCursorPos(x, y)) throw new InvalidOperationException("Windows refused the verified NVIDIA target position.");
+      try {
+        // Recheck after moving the pointer; do not act on a popup/overlay.
+        Point ready;
+        if (!GetCursorPos(out ready) || ready.X != x || ready.Y != y ||
+            WindowFromPoint(point) != hit || GetForegroundWindow() != window)
+          throw new InvalidOperationException("NVIDIA navigation target changed before input; no click was sent.");
+        var inputs = new[] {
+          new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 2 } } },
+          new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 4 } } }
+        };
+        uint sent = SendInput(2, inputs, Marshal.SizeOf(typeof(Input)));
+        if (sent != 2) {
+          if (sent == 1) SendInput(1, new[] { inputs[1] }, Marshal.SizeOf(typeof(Input)));
+          throw new InvalidOperationException("Windows refused complete NVIDIA navigation input.");
+        }
+        System.Threading.Thread.Sleep(75);
+      } finally {
+        Point current;
+        if (havePrevious && GetCursorPos(out current) && current.X == x && current.Y == y)
+          SetCursorPos(previous.X, previous.Y);
+      }
+    }
+    public static int InputSize { get { return Marshal.SizeOf(typeof(Input)); } }
   }
 }
 '@
@@ -101,19 +169,7 @@ function Elements($type) {
 function Get-ControlParent($element) {
   [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($element)
 }
-function Test-NavigationControl($element, $legacy) {
-  if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem) { return $true }
-  if ($legacy -and $legacy.Current.Role -eq 36) { return $true }
-  # NVIDIA also exposes navigation entries as hyperlinks/buttons instead of
-  # TreeItems. Require a real action and a navigation ancestor: a same-named
-  # page heading must never be mistaken for the sidebar entry.
-  $action = $null
-  $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$action)
-  if (-not $actionable) {
-    $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$action)
-  }
-  if (-not $actionable -and $legacy) { $actionable = $legacy.Current.Role -in @(30, 36, 43) }
-  if (-not $actionable) { return $false }
+function Test-NavigationScope($element) {
   $parent = $element
   for ($depth = 0; $depth -lt 16; $depth++) {
     $parent = Get-ControlParent $parent
@@ -123,6 +179,51 @@ function Test-NavigationControl($element, $legacy) {
     }
   }
   return $false
+}
+function Test-StaticNavigation($element) {
+  $current = $element.Current
+  if ($current.ClassName -ne 'Static' -or $current.ControlType -notin @([System.Windows.Automation.ControlType]::Pane, [System.Windows.Automation.ControlType]::Text)) { return $false }
+  if ($current.IsOffscreen -or -not $current.IsEnabled) { return $false }
+  if ((Normalize-Name $current.Name) -notin @('Adjust image settings with preview', 'Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')) { return $false }
+  $bounds = $current.BoundingRectangle
+  if ($bounds.IsEmpty -or $bounds.Width -le 0 -or $bounds.Height -le 0) { return $false }
+  Test-NavigationScope $element
+}
+function Test-NavigationControl($element, $legacy) {
+  if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem) { return $true }
+  if ($legacy -and $legacy.Current.Role -eq 36) { return $true }
+  $action = $null
+  $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$action)
+  if (-not $actionable) {
+    $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$action)
+  }
+  if (-not $actionable -and $legacy) { $actionable = $legacy.Current.Role -in @(30, 36, 43) }
+  if ($actionable) { return (Test-NavigationScope $element) }
+  Test-StaticNavigation $element
+}
+function Focus-ControlPanel {
+  [OptiGods.CplInput]::Focus([IntPtr]$script:root.Current.NativeWindowHandle)
+}
+function Get-ControlAtPoint($x, $y) {
+  [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x, $y))
+}
+function Send-ExactNavigationClick($element, $x, $y) {
+  [OptiGods.CplInput]::Click([IntPtr]$script:root.Current.NativeWindowHandle, [IntPtr]$element.Current.NativeWindowHandle, $x, $y)
+}
+function Select-StaticNavigation($element) {
+  if (-not (Test-StaticNavigation $element)) { throw 'Patternless NVIDIA control is not an approved visible sidebar entry.' }
+  Focus-ControlPanel
+  Start-Sleep -Milliseconds 100
+  # Re-read after activation, in case restoring/focusing moved the window.
+  if (-not (Test-StaticNavigation $element)) { throw 'NVIDIA sidebar entry changed after window activation; no click was sent.' }
+  $bounds = $element.Current.BoundingRectangle
+  $x = [int][Math]::Floor($bounds.Left + $bounds.Width / 2)
+  $y = [int][Math]::Floor($bounds.Top + $bounds.Height / 2)
+  $hit = Get-ControlAtPoint $x $y
+  if (-not $hit -or ($hit.GetRuntimeId() -join ',') -ne ($element.GetRuntimeId() -join ',')) {
+    throw 'NVIDIA sidebar entry is covered or cannot be hit-tested exactly; no click was sent.'
+  }
+  Send-ExactNavigationClick $element $x $y
 }
 function Named($type, $names) {
   $until = [DateTime]::UtcNow.AddSeconds(8)
@@ -142,7 +243,7 @@ function Named($type, $names) {
       if ($names -notcontains $name) { continue }
       $candidate = $element
       $patterns = @($candidate.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName }) -join ','
-      $matchingControls += "$name [type=$($candidate.Current.ControlType.ProgrammaticName); class=$($candidate.Current.ClassName); patterns=$patterns; legacyRole=$(if ($hasLegacy) { $legacy.Current.Role } else { 'unavailable' })]"
+      $matchingControls += "$name [type=$($candidate.Current.ControlType.ProgrammaticName); class=$($candidate.Current.ClassName); patterns=$patterns; hwnd=$($candidate.Current.NativeWindowHandle); navigationScope=$(Test-NavigationScope $candidate); bounds=$($candidate.Current.BoundingRectangle); legacyRole=$(if ($hasLegacy) { $legacy.Current.Role } else { 'unavailable' })]"
       if ($type -eq [System.Windows.Automation.ControlType]::TreeItem) {
         if (-not (Test-NavigationControl $candidate $legacy)) { continue }
       } elseif ($candidate.Current.ControlType -ne $type) {
@@ -168,6 +269,8 @@ function Select-Element($element) {
     $pattern.Select()
   } elseif ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
     $pattern.Invoke()
+  } elseif (Test-StaticNavigation $element) {
+    Select-StaticNavigation $element
   } elseif ($null -ne ($pattern = Get-Legacy $element)) {
     if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem -or $pattern.Current.Role -eq 36) {
       $pattern.Select(3)
