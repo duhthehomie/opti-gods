@@ -125,13 +125,19 @@ test("eligible Pro users receive the NVIDIA preset recommendation", () => {
     hardwareScanned: true,
     dedicatedNvidiaGpuCount: 1,
   });
-  assert.deepEqual(getNvidiaRecommendationIds([presetId], eligible, presetId), [presetId]);
+  assert.deepEqual(getNvidiaRecommendationIds([presetId], eligible, presetId), ["NvidiaPreviewPerformance", "NvidiaPhysxGpu", presetId]);
   assert.equal(getFullOptimizeNvidiaPresetDecision({
     native: true,
     pro: true,
     hardwareScanned: true,
     dedicatedNvidiaGpuCount: 1,
   }).status, "queue");
+});
+test("separate NVIDIA recommendations remain unique and driver preset stays last", () => {
+  assert.deepEqual(getNvidiaRecommendationIds(["DisableNDU", "NvidiaPhysxGpu", "NvidiaControlPanelSettings", "NvidiaPreviewPerformance", "NvidiaPhysxGpu"], true), ["DisableNDU", "NvidiaPreviewPerformance", "NvidiaPhysxGpu", "NvidiaControlPanelSettings"]);
+});
+test("ineligible users receive none of the separate NVIDIA actions", () => {
+  assert.deepEqual(getNvidiaRecommendationIds(["NvidiaControlPanelSettings", "NvidiaPhysxGpu", "DisableNDU", "NvidiaPreviewPerformance"], false), ["DisableNDU"]);
 });
 test("hybrid NVIDIA systems do not require Control Panel detection", () => {
   const hybridWithoutControlPanel = {
