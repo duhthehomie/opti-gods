@@ -1,4 +1,4 @@
 {
-  "version": "5.2.61",
-  "notes": "V5.2.61 — activates the Store NVIDIA Control Panel through its registered Windows shell entry instead of directly executing the protected WindowsApps file; preserves signed desktop launch and strict preset readback; adds non-destructive launch-routing checks; preserves live CPU/GPU temperatures and compatible Max NVIDIA MSI High."
+  "version": "5.2.62",
+  "notes": "V5.2.62 — runs compatible Pro tweaks before the NVIDIA Control Panel preset in all batch queues; preserves missing-preset retries without reapplying confirmed tweaks; recognizes actionable NVIDIA sidebar hyperlinks as well as tree items; adds detailed accessibility diagnostics and closes only newly opened panels after successful verification; preserves live temperatures, Max NVIDIA MSI High, and strict full-preset readback."
 }

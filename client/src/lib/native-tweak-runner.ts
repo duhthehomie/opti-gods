@@ -22,6 +22,15 @@ const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
 
+/** Preserve selection order, but run the interactive NVIDIA preset last. */
+export function orderTweakBatch(ids: readonly string[]): string[] {
+  const unique = Array.from(new Set(ids));
+  return [
+    ...unique.filter(id => id !== NVIDIA_PRESET_ACTION_ID),
+    ...unique.filter(id => id === NVIDIA_PRESET_ACTION_ID),
+  ];
+}
+
 function isRunActionCompatible(id: string, native: boolean) {
   if (native && id === NVIDIA_PRESET_ACTION_ID) return true;
   return getTweakCompatibility(id).ok;
@@ -370,7 +379,7 @@ export function queueTweakBatch(
         : item),
     });
   }
-  localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(Array.from(new Set(ids))));
+  localStorage.setItem(NATIVE_RUN_QUEUE_KEY, JSON.stringify(orderTweakBatch(ids)));
   localStorage.setItem(NATIVE_RUN_FORCE_KEY, JSON.stringify(Array.from(new Set(options.forceReapplyIds ?? []))));
   localStorage.setItem(NATIVE_RUN_SKIPPED_KEY, JSON.stringify(Array.from(new Set(skippedIds))));
   localStorage.setItem(NATIVE_RUN_SKIP_MESSAGES_KEY, JSON.stringify(options.initialSkippedMessages ?? {}));
@@ -379,7 +388,7 @@ export function queueTweakBatch(
 export function readQueuedTweakBatch(): string[] {
   try {
     const value = JSON.parse(localStorage.getItem(NATIVE_RUN_QUEUE_KEY) || "[]");
-    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+    return Array.isArray(value) ? orderTweakBatch(value.filter((id): id is string => typeof id === "string")) : [];
   } catch {
     return [];
   }
@@ -443,10 +452,10 @@ export async function applyTweakBatch(
   onProgress?: (progress: TweakRunProgress) => void,
   options: TweakBatchOptions = {},
 ): Promise<BulkTweakResult> {
-  const uniqueIds = Array.from(new Set(ids));
+  const uniqueIds = orderTweakBatch(ids);
   const initialSkippedIds = Array.from(new Set(options.initialSkippedIds ?? []))
     .filter(id => !uniqueIds.includes(id));
-  const batchIds = Array.from(new Set([...uniqueIds, ...initialSkippedIds]));
+  const batchIds = orderTweakBatch([...uniqueIds, ...initialSkippedIds]);
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {
     if (activeRunPromise) return activeRunPromise;

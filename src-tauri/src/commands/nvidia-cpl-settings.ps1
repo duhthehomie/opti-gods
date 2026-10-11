@@ -98,6 +98,32 @@ function Elements($type) {
     $null -ne $role -and $legacy.Current.Role -eq $role
   })
 }
+function Get-ControlParent($element) {
+  [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($element)
+}
+function Test-NavigationControl($element, $legacy) {
+  if ($element.Current.ControlType -eq [System.Windows.Automation.ControlType]::TreeItem) { return $true }
+  if ($legacy -and $legacy.Current.Role -eq 36) { return $true }
+  # NVIDIA also exposes navigation entries as hyperlinks/buttons instead of
+  # TreeItems. Require a real action and a navigation ancestor: a same-named
+  # page heading must never be mistaken for the sidebar entry.
+  $action = $null
+  $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$action)
+  if (-not $actionable) {
+    $actionable = $element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$action)
+  }
+  if (-not $actionable -and $legacy) { $actionable = $legacy.Current.Role -in @(30, 36, 43) }
+  if (-not $actionable) { return $false }
+  $parent = $element
+  for ($depth = 0; $depth -lt 16; $depth++) {
+    $parent = Get-ControlParent $parent
+    if (-not $parent) { break }
+    if ($parent.Current.ControlType -eq [System.Windows.Automation.ControlType]::Tree -or $parent.Current.ClassName -eq 'SysTreeView32' -or (Normalize-Name $parent.Current.Name) -in @('Left View', 'Select a Task...')) {
+      return $true
+    }
+  }
+  return $false
+}
 function Named($type, $names) {
   $until = [DateTime]::UtcNow.AddSeconds(8)
   do {
@@ -106,6 +132,7 @@ function Named($type, $names) {
     $process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
     if ($process) { $script:root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
     $found = @{}
+    $matchingControls = @()
     foreach ($element in $script:root.FindAll($scope, $all)) {
       $legacy = Get-Legacy $element
       $hasLegacy = $null -ne $legacy
@@ -114,14 +141,10 @@ function Named($type, $names) {
       $name = Normalize-Name $rawName
       if ($names -notcontains $name) { continue }
       $candidate = $element
+      $patterns = @($candidate.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName }) -join ','
+      $matchingControls += "$name [type=$($candidate.Current.ControlType.ProgrammaticName); class=$($candidate.Current.ClassName); patterns=$patterns; legacyRole=$(if ($hasLegacy) { $legacy.Current.Role } else { 'unavailable' })]"
       if ($type -eq [System.Windows.Automation.ControlType]::TreeItem) {
-        # Some driver versions expose tree leaves through MSAA rather than
-        # UIA TreeItem. Only accept actual outline items, never page headings.
-        $tree = $candidate.Current.ControlType -eq $type
-        if (-not $tree -and $hasLegacy) {
-          $tree = $legacy.Current.Role -eq 36
-        }
-        if (-not $tree) { continue }
+        if (-not (Test-NavigationControl $candidate $legacy)) { continue }
       } elseif ($candidate.Current.ControlType -ne $type) {
         $roles = @{ Button=43; RadioButton=45; ComboBox=46; Slider=51; ListItem=34 }
         $role = $roles[$type.ProgrammaticName.Split('.')[-1]]
@@ -135,7 +158,7 @@ function Named($type, $names) {
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $until)
   $available = @($script:root.FindAll($scope, $all) | ForEach-Object { $_.Current.Name } | Where-Object { $_ } | Select-Object -Unique -First 25) -join ' | '
-  throw "NVIDIA control did not become accessible: $($names -join ' / '). Window: $($script:root.Current.Name). Available controls: $available"
+  throw "NVIDIA control did not become accessible: $($names -join ' / '). Window: $($script:root.Current.Name). Named matches: $($matchingControls -join ' | '). Available controls: $available"
 }
 function Select-Element($element) {
   $scroll = $null
@@ -232,6 +255,14 @@ function Start-NvidiaControlPanel {
 }
 
 $launchMode = 'already-open Control Panel'
+$existingPanelIds = @(Get-Process -Name nvcplui -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+function Close-OwnedControlPanel {
+  # Never close a panel that the user already had open, or hide a failed run.
+  if ($launchMode -eq 'already-open Control Panel') { return }
+  if ($process -and $process.Id -notin $existingPanelIds) {
+    try { $null = $process.CloseMainWindow() } catch { Write-Warning 'Preset verification succeeded, but the opened Control Panel window could not be closed.' }
+  }
+}
 $process = Get-Process -Name nvcplui -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $process) {
   Start-NvidiaControlPanel
@@ -258,6 +289,7 @@ if ($env:OPTI_CPL_PREFLIGHT -eq '1') {
   if ($preflightCombos.Count -ne 1) { throw 'PhysX dropdown is not safely accessible; the global profile has not been changed.' }
   $null = Selected-Name $preflightCombos[0]
   Write-Output 'NVIDIA Control Panel navigation verified.'
+  Close-OwnedControlPanel
   return
 }
 Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Adjust image settings with preview'))
@@ -306,3 +338,4 @@ Select-Element (Named ([System.Windows.Automation.ControlType]::TreeItem) @('Con
 $combos = @(Elements ([System.Windows.Automation.ControlType]::ComboBox))
 if ($combos.Count -ne 1 -or (Selected-Name $combos[0]) -ne $gpu) { throw 'PhysX GPU selection did not survive page reload.' }
 Write-Output 'PhysX GPU and preview Performance verified.'
+Close-OwnedControlPanel

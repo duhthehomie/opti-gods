@@ -92,3 +92,62 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax and MSAA helper compilation
   Expect-Failure { Start-NvidiaControlPanel } 'required to verify'
   Write-Output '[nvidia-cpl] Launch routing, signature rejection, package containment/ambiguity, access denial, desktop fallback, and missing-app mocks passed.'
 }
+& {
+  foreach ($name in @('Normalize-Name', 'Get-ControlParent', 'Test-NavigationControl', 'Close-OwnedControlPanel')) {
+    $definitions = @($ast.FindAll({
+      param($node)
+      $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+    }, $true))
+    if ($definitions.Count -ne 1) { throw "Missing production function: $name" }
+    . ([ScriptBlock]::Create($definitions[0].Extent.Text))
+  }
+  function Get-ControlParent($element) { $element.Parent }
+  function New-TestControl($type, $name, $actionable, $parent) {
+    $control = [pscustomobject]@{
+      Current = [pscustomobject]@{ ControlType = $type; Name = $name; ClassName = '' }
+      Parent = $parent
+      Actionable = $actionable
+    }
+    $control | Add-Member -MemberType ScriptMethod -Name TryGetCurrentPattern -Value {
+      param($pattern, $value)
+      return ($this.Actionable -and $pattern.Id -eq [System.Windows.Automation.InvokePattern]::Pattern.Id)
+    }
+    return $control
+  }
+  $pane = [System.Windows.Automation.ControlType]::Pane
+  $link = [System.Windows.Automation.ControlType]::Hyperlink
+  $text = [System.Windows.Automation.ControlType]::Text
+  $navigation = New-TestControl $pane 'Left View' $false $null
+  $settings = New-TestControl $pane 'Settings:' $false $null
+  $name = 'Adjust image settings with preview'
+  if (-not (Test-NavigationControl (New-TestControl $link $name $true $navigation) $null)) {
+    throw 'Actionable NVIDIA sidebar hyperlink was rejected as a non-TreeItem.'
+  }
+  if (Test-NavigationControl (New-TestControl $link $name $true $settings) $null) {
+    throw 'Same-named page heading/link outside navigation was accepted.'
+  }
+  if (Test-NavigationControl (New-TestControl $text $name $false $navigation) $null) {
+    throw 'Non-actionable sidebar text was accepted.'
+  }
+  $legacyLink = [pscustomobject]@{ Current = [pscustomobject]@{ Role = 30 } }
+  if (-not (Test-NavigationControl (New-TestControl $link $name $false $navigation) $legacyLink)) {
+    throw 'Legacy sidebar link was rejected.'
+  }
+  if (Test-NavigationControl (New-TestControl $link $name $false $settings) $legacyLink) {
+    throw 'Legacy link outside navigation was accepted.'
+  }
+  $script:testCloses = 0
+  $process = [pscustomobject]@{ Id = 100 }
+  $process | Add-Member -MemberType ScriptMethod -Name CloseMainWindow -Value { $script:testCloses++; return $true }
+  $launchMode = 'already-open Control Panel'
+  $existingPanelIds = @()
+  Close-OwnedControlPanel
+  $launchMode = 'registered Store app fixture'
+  $existingPanelIds = @(100)
+  Close-OwnedControlPanel
+  if ($script:testCloses -ne 0) { throw 'A user-owned Control Panel was closed.' }
+  $existingPanelIds = @()
+  Close-OwnedControlPanel
+  if ($script:testCloses -ne 1) { throw 'The newly opened Control Panel was not closed on successful verification.' }
+  Write-Output '[nvidia-cpl] Sidebar hyperlink/legacy matching, heading rejection, and owned-window cleanup mocks passed.'
+}
