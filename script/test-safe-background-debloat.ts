@@ -3,6 +3,8 @@ import { BACKGROUND_SERVICE_NAMES, buildSafeBackgroundDebloat } from "../server/
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
 import { MANUAL_ONLY_TWEAK_IDS } from "../shared/manual-only-tweak-ids";
 const script = buildSafeBackgroundDebloat();
+assert(!/\$[A-Za-z_]\w*:(?=\s|["`]|$)/m.test(script), "Bare variable-colon interpolation produces invalid PowerShell; use $($name):.");
+assert.equal(BACKGROUND_SERVICE_NAMES.length, 18);
 assert.equal(BACKGROUND_SERVICE_NAMES.length, 18);
 assert.equal(buildNativeBatchCommandFix("WinTitusServicesManual", ""), script);
 assert.equal(buildNativeBatchCommandFix("ProcSvc_ApplyAll", ""), script);

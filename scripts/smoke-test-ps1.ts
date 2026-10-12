@@ -105,13 +105,24 @@ const fixtures: Array<[string, string[]]> = [
 ];
 
 let total = 0;
+function rejectBareVariableColon(script: string, name: string) {
+  const invalid = script.match(/\$[A-Za-z_]\w*:(?=\s|["`]|$)/m);
+  if (invalid) throw new Error(`${name}: invalid PowerShell interpolation ${invalid[0]}; delimit the variable before the colon.`);
+}
 for (const [name, ids] of fixtures) {
   const script = buildScript(name, ids);
+  rejectBareVariableColon(script, name);
   const path = join(outDir, `${name}.ps1`);
   writeFileSync(path, "\ufeff" + script, "utf8");
   console.log(`[smoke-test] wrote ${path} (${script.length} chars, ${ids.length} tweaks)`);
   total++;
 }
 
+for (const name of ["windows-repair", "windows-background-undo"]) {
+  const script = readFileSync(join(process.cwd(), "src-tauri", "src", "commands", `${name}.ps1`), "utf8");
+  rejectBareVariableColon(script, name);
+  writeFileSync(join(outDir, `${name}.ps1`), "\ufeff" + script, "utf8");
+  total++;
+}
 console.log(`[smoke-test] OK — ${total} fixture(s) ready in ${outDir}`);
 console.log(`[smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.`);

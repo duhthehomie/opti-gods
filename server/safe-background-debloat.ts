@@ -66,7 +66,7 @@ foreach ($name in $names) {
       if ((Get-Service -Name $name -ErrorAction Stop).Status -ne 'Stopped') { throw "$name did not stop." }
     }
   }
-  Write-Output "[OK] $name: verified optional background service reduction."
+  Write-Output "[OK] $($name): verified optional background service reduction."
 }
 foreach ($setting in $settings) {
   New-Item -Path $setting.Path -Force -ErrorAction Stop | Out-Null
