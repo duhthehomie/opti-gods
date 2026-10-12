@@ -4,6 +4,7 @@ import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
 import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
+import { WindowsProcessCount } from "@/components/windows-process-count";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -895,6 +896,7 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-10">
+        <WindowsProcessCount />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

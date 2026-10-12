@@ -1,4 +1,5 @@
 import { buildLoggedCommandFix } from "./native-logged-command-fixes";
+import { buildSafeBackgroundDebloat } from "./safe-background-debloat";
 
 const LEGACY_DRIVER_KEYS = new Set([
   "NvidiaTripleBufferOff", "NvidiaForceVSyncOff", "FiveMDisablePhysX",
@@ -34,13 +35,14 @@ foreach ($name in $names) {
   }
 }
 if ($changed -eq 0 -and $managed -gt 0) { Write-Output '[SKIP] Matching services are Windows-managed per-user services; nothing was changed.'; return }
-if ($changed -eq 0) { Write-Output '[SKIP] None of the requested services are installed; nothing was changed.'; return }
+if ($changed -eq 0) { Write-Output '[SKIP] Already debloated: None of the requested services are installed; nothing was changed.'; return }
 Write-Output "[OK] Verified ${mode} startup for $changed installed service(s)."
 `;
 }
 
 /** Corrections to the actions called out by the real Windows batch logs. */
 export function buildNativeBatchCommandFix(id: string, original: string): string | undefined {
+  if (id === "WinTitusServicesManual" || id === "ProcSvc_ApplyAll") return buildSafeBackgroundDebloat();
   const loggedFix = buildLoggedCommandFix(id, original);
   if (loggedFix !== undefined) return loggedFix;
   if (LEGACY_DRIVER_KEYS.has(id)) {

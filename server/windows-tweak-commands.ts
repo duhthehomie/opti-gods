@@ -1,5 +1,6 @@
 function buildDefenderExclusionCommand(): string {
   return String.raw`$ErrorActionPreference = 'Stop'
+$env:PSModulePath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
 # Use the inbox Defender module explicitly; a NoProfile host may not have
 # auto-loaded its commands. Never reinstall or enable a disabled antivirus.
 $defenderModule = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1'

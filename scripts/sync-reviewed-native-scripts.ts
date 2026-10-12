@@ -1,13 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { buildSingleTweakPowerShell } from "../server/native-script-delivery";
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
+import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-commands";
 import ts from "typescript";
 
 // Fixed reviewed scope. Use the same checked runtime as authenticated server
 // delivery; every bundled action still requires live native Pro authorization.
 const file = new URL("../src-tauri/resources/native-tweak-scripts.json", import.meta.url);
 const scripts = JSON.parse(readFileSync(file, "utf8")) as Record<string, string>;
-const additions = ["DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove"];
+const additions = ["DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove", "WinTitusServicesManual", "CodDefenderExclusion"];
 const routes = ts.createSourceFile("routes.ts", readFileSync(new URL("../server/routes.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
 const originalCommands = new Map<string, string>();
 function visit(node: ts.Node) {
@@ -24,7 +25,7 @@ visit(routes);
 for (const id of additions) {
   const command = originalCommands.get(id);
   if (!command) throw new Error(`Missing reviewed source command: ${id}`);
-  const corrected = buildNativeBatchCommandFix(id, command);
+  const corrected = buildSafeWindowsCommandOverride(id) ?? buildNativeBatchCommandFix(id, command);
   if (!corrected) throw new Error(`Missing logged command correction: ${id}`);
   scripts[id] = buildSingleTweakPowerShell(id, corrected);
 }

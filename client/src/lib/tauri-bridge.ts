@@ -420,6 +420,11 @@ export async function runNativeFix(id: string): Promise<NativeActionResult> {
   return invoke<NativeActionResult>("run_fix", { args: { id } });
 }
 
+export async function getWindowsProcessCount(): Promise<number> {
+  if (!isNative()) throw new Error("Live process counts require the Windows app.");
+  return invoke<number>("get_windows_process_count");
+}
+
 export async function runNativeRestore(categories: string[]): Promise<NativeActionResult> {
   if (!isNative()) throw new Error("System restore actions are available in the Windows app.");
   return invoke<NativeActionResult>("run_restore_categories", { args: { categories } });

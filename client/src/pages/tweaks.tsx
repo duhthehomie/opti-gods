@@ -2,6 +2,7 @@ import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+import { WindowsProcessCount } from "@/components/windows-process-count";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
@@ -563,6 +564,8 @@ export default function TweaksPage() {
   return (
     <AppLayout>
       <div className="space-y-5">
+        <WindowsProcessCount />
+        {nativeDetectionError && <div role="alert" className="rounded-lg border border-red-500/30 bg-zinc-950 p-3 text-sm text-zinc-300">Windows state could not be read. No success was assumed. <Button size="sm" variant="outline" onClick={() => window.location.reload()}>Retry Windows state</Button></div>}
         {/* Header */}
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>

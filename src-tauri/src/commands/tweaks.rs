@@ -184,6 +184,8 @@ fn detect_applied_tweaks_blocking() -> BTreeMap<String, bool> {
                 Ok(RegValue::Dword(1))
             );
         detected.insert("GameModeTweaks".to_string(), games_profile_applied);
+        detected.insert("WinTitusServicesManual".to_string(), false);
+        detected.insert("ProcSvc_ApplyAll".to_string(), false);
 
         // The registry table above is deliberately cheap and synchronous, but
         // debloat/service/file tweaks need one consolidated read-only probe.
@@ -280,6 +282,16 @@ $checks = [ordered]@{
   DebloatTeamsConsumer = -not (Get-AppxPackage -Name "*MicrosoftTeams*" -ErrorAction SilentlyContinue);
   DebloatAlarmsAndClock = -not (Get-AppxPackage -Name "*Microsoft.WindowsAlarms*" -ErrorAction SilentlyContinue)
 };
+$backgroundPolicy = (Get-ItemPropertyValue -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' -Name GlobalUserDisabled -ErrorAction Ignore) -eq 1
+$consumerPolicy = (Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name DisableWindowsConsumerFeatures -ErrorAction Ignore) -eq 1
+$servicePlan = $true
+foreach ($name in @('DiagTrack','MapsBroker','RetailDemo','Fax','WMPNetworkSvc','PhoneSvc','RemoteRegistry','WerSvc','wercplsupport','AJRouter','dmwappushservice','diagnosticshub.standardcollector.service','MessagingService','WalletService','SharedRealitySvc','AssignedAccessManagerSvc','AppVClient','PushToInstall')) {
+  $service = Get-Service -Name $name -ErrorAction Ignore
+  if ($name -in @('AJRouter','diagnosticshub.standardcollector.service','MessagingService','WalletService','SharedRealitySvc','AssignedAccessManagerSvc','AppVClient','PushToInstall') -and $service.Status -eq 'Running') { continue }
+  if ($service -and $service.StartType -notin @('Manual','Disabled')) { $servicePlan = $false }
+}
+$checks['WinTitusServicesManual'] = $backgroundPolicy -and $consumerPolicy -and $servicePlan
+$checks['ProcSvc_ApplyAll'] = $checks['WinTitusServicesManual']
 $checks | ConvertTo-Json -Compress
 "#;
         if let Ok(mut child) = Command::new(crate::commands::windows_powershell_executable())

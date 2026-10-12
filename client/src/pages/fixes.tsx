@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { WindowsRepairCard } from "@/components/windows-repair-card";
 import { apiUrl } from "@/lib/api-base";
 import { getNativeAuthHeaders } from "@/lib/queryClient";
 import { motion } from "framer-motion";
@@ -523,6 +524,16 @@ export default function Fixes() {
           </div>
         </motion.div>
 
+        <WindowsRepairCard />
+        <section className="rounded-xl border border-red-500/20 bg-zinc-950/60 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-white">Restore background debloat</p>
+            <p className="text-xs text-zinc-400">Restores the saved optional-service and background-policy settings from the new debloat pass.</p>
+          </div>
+          <Button onClick={() => void runFixInApp("windows-background-undo")} disabled={!isNative() || Boolean(nativeAction)} variant="outline">
+            {nativeAction === "windows-background-undo" ? "Restoring…" : "Restore background debloat"}
+          </Button>
+        </section>
         <section className="rounded-xl border border-green-500/30 bg-green-950/20 p-4 flex flex-wrap items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
             <MonitorPlay className="w-5 h-5 text-green-400" />

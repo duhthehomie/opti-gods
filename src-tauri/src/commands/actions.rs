@@ -267,6 +267,20 @@ fn client() -> Result<reqwest::Client, String> {
 
 #[tauri::command]
 pub async fn run_fix(args: RunFixArgs) -> Result<NativeActionResult, String> {
+    if args.id == "windows-background-undo" {
+        #[cfg(windows)]
+        crate::win32::restore::ensure_session_checkpoint("Opti Gods — Before Background Restore")
+            .map_err(|error| format!("Background restore was not run: {error:#}"))?;
+        return tokio::task::spawn_blocking(|| run_powershell(
+            "windows-background-undo", include_str!("windows-background-undo.ps1").into(), true,
+        )).await.map_err(|error| format!("Background restore worker failed: {error}"))?;
+    }
+    if args.id == "windows-corruption" {
+        // Named, bundled OS servicing only; no restore-provider prerequisite.
+        // This does not bypass the safety gate for any tweak.
+        return tokio::task::spawn_blocking(run_windows_repair)
+            .await.map_err(|error| format!("Windows repair worker failed: {error}"))?;
+    }
     let spec = fix_spec(&args.id)
         .ok_or_else(|| "That fix is not available in the Windows app yet.".to_string())?;
     let client = client()?;
@@ -277,6 +291,60 @@ pub async fn run_fix(args: RunFixArgs) -> Result<NativeActionResult, String> {
         .map_err(|error| format!("No fix was run because Windows could not create a verified restore point: {error:#}"))?;
 
     run_powershell(spec.label, script, spec.requires_reboot)
+}
+
+fn run_windows_repair() -> Result<NativeActionResult, String> {
+    static REPAIR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = REPAIR_MUTEX.try_lock().map_err(|_| "Windows repair is already running. Wait for its result.".to_string())?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
+        if !crate::win32::elevation::is_elevated().map_err(|e| e.to_string())? {
+            return Err("Opti Gods is not elevated; Windows repair was not started.".into());
+        }
+        let output = Command::new(crate::commands::windows_powershell_executable())
+            .creation_flags(0x08000000)
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"])
+            .arg(include_str!("windows-repair.ps1"))
+            .output().map_err(|e| format!("Windows repair could not start: {e}"))?;
+        Ok(NativeActionResult {
+            ok: output.status.success(),
+            id: "windows-corruption".into(),
+            message: format!("{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)),
+            requires_reboot: true,
+        })
+    }
+    #[cfg(not(windows))]
+    Err("Windows repair is available only in the Windows desktop app.".into())
+}
+
+#[tauri::command]
+pub fn get_windows_process_count() -> Result<u32, String> {
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct PerformanceInformation {
+            cb: u32,
+            commit_total: usize, commit_limit: usize, commit_peak: usize,
+            physical_total: usize, physical_available: usize, system_cache: usize,
+            kernel_total: usize, kernel_paged: usize, kernel_nonpaged: usize,
+            page_size: usize,
+            handle_count: u32, process_count: u32, thread_count: u32,
+        }
+        #[link(name = "psapi")]
+        extern "system" {
+            fn GetPerformanceInfo(info: *mut PerformanceInformation, size: u32) -> i32;
+        }
+        let mut info: PerformanceInformation = unsafe { std::mem::zeroed() };
+        info.cb = std::mem::size_of::<PerformanceInformation>() as u32;
+        if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
+            return Err(format!("Windows process snapshot failed: {}", std::io::Error::last_os_error()));
+        }
+        Ok(info.process_count)
+    }
+    #[cfg(not(windows))]
+    Err("Live process counts require the Windows app.".into())
 }
 
 #[tauri::command]

@@ -17,6 +17,7 @@ export function buildSingleTweakPowerShell(id: string, command: string | undefin
     "  & ([ScriptBlock]::Create((Convert-OptiReadProbes $__ogSource))) 6>&1 | ForEach-Object {",
     "    $line = [string]$_",
     "    if ($line -match '(?i)\\[SKIP(?:PED)?\\]') { $script:__ogSkipped = $true }",
+    "    if ($line -match '(?i)\\[SKIP(?:PED)?\\].*(not installed|not found|already absent|none of .* installed)' -and '" + id + "' -match '^(Debloat|Service|ProcSvc_|Win11Widgets|WinTitusXboxComponents)') { $line = '[SKIP] Already debloated / not installed: ' + $line }",
     "    Write-Output $line",
     "  }",
     "  if ($global:LASTEXITCODE -is [int] -and $global:LASTEXITCODE -ne 0) { throw ('Command exited with code ' + $global:LASTEXITCODE) }",

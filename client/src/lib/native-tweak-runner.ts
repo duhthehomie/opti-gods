@@ -8,6 +8,8 @@ import { getCompatibilitySkipMessage } from "@/lib/tweak-run-outcome";
 import { NVIDIA_PRESET_REQUEUE_RELEASE_KEY, NVIDIA_UI_RELEASE_KEY_PREFIX } from "@/lib/nvidia-preset-eligibility";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
 import { NVIDIA_CAPTURE_PROTECTED_IDS } from "@shared/preset-builder";
+import { boundedWindowsRead } from "@/lib/applied-tweak-state";
+import { getWindowsProcessCount } from "@/lib/tauri-bridge";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -22,7 +24,7 @@ export function isNvidiaAction(id: string): boolean {
   return id === NVIDIA_PRESET_ACTION_ID;
 }
 const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, ...NVIDIA_UI_ACTION_IDS, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
-export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro", "DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove"]);
+export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro", "DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove", "WinTitusServicesManual"]);
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
@@ -126,6 +128,8 @@ export type NativeTweakRunState = {
   startedAt: number;
   lastProgressAt?: number;
   finishedAt?: number;
+  processCountBefore?: number;
+  processCountAfter?: number;
   stopRequested?: boolean;
 };
 
@@ -354,6 +358,10 @@ function finishPersistedRun(runId: string, result?: BulkTweakResult, error?: unk
       : state.items,
   });
   void result;
+  void boundedWindowsRead(getWindowsProcessCount(), "Process snapshot", 3000).then(count => {
+    const latest = readRunStateSafely();
+    if (latest?.runId === runId) writeRunState({ ...latest, processCountAfter: count });
+  }).catch(() => {});
 }
 
 export function stopNativeTweakRun(): boolean {
@@ -598,6 +606,13 @@ async function applyTweakBatchInternal(
   }
 
   // A full optimize rerun can contain hundreds of IDs that already succeeded
+  if (persistedRunId) {
+    try {
+      const count = await boundedWindowsRead(getWindowsProcessCount(), "Process snapshot", 3000);
+      const state = readRunStateSafely();
+      if (state?.runId === persistedRunId) writeRunState({ ...state, processCountBefore: count });
+    } catch { /* unavailable is not a fabricated count */ }
+  }
   // in an earlier run. Check both live Windows detection and the successful
   // app-run ledger so those IDs are not mutated or charged a second time.
   let alreadyConfirmedIds: string[] = [];
@@ -644,7 +659,7 @@ async function applyTweakBatchInternal(
         index,
         total: batchTotal,
         status: "applied",
-          message: "Already recorded as applied; skipped.",
+          message: id.startsWith("Debloat") && detected[id] ? "Already debloated / not installed. Nothing to remove." : "Already recorded as applied; skipped.",
       });
     });
   }

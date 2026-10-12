@@ -8,7 +8,18 @@ export interface AppliedTweakSources {
   nvidiaPresetSubmittedAt: number | null;
 }
 
-export async function getAppliedTweakSources(): Promise<AppliedTweakSources> {
+export function boundedWindowsRead<T>(operation: Promise<T>, label: string, milliseconds = 15000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out. Retry the Windows state check; no success was assumed.`)), milliseconds);
+    operation.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+  });
+}
+let pendingSources: Promise<AppliedTweakSources> | null = null;
+export function getAppliedTweakSources(): Promise<AppliedTweakSources> {
+  if (!pendingSources) pendingSources = readAppliedTweakSources().finally(() => { pendingSources = null; });
+  return pendingSources;
+}
+async function readAppliedTweakSources(): Promise<AppliedTweakSources> {
   const localHistory = useOptimizationStore.getState().appliedAt;
   const recordedAt: Record<string, number> = { ...localHistory };
   let nvidiaPresetSubmittedAt: number | null = localHistory.NvidiaControlPanelSettings ?? null;
@@ -16,8 +27,8 @@ export async function getAppliedTweakSources(): Promise<AppliedTweakSources> {
   let currentWindows: Record<string, boolean> = {};
   if (isNative()) {
     const [liveResult, historyResult] = await Promise.allSettled([
-      detectAppliedTweaks(),
-      getRecordedAppliedTweaks(),
+      boundedWindowsRead(detectAppliedTweaks(), "Live Windows detection"),
+      boundedWindowsRead(getRecordedAppliedTweaks(), "Applied history"),
     ]);
     if (liveResult.status === "fulfilled") currentWindows = liveResult.value;
     else console.warn("Windows live tweak detection failed.", liveResult.reason);
@@ -34,7 +45,7 @@ export async function getAppliedTweakSources(): Promise<AppliedTweakSources> {
     } else {
       console.warn("Could not read the machine's recorded applied-tweak history.", historyResult.reason);
     }
-    if (liveResult.status === "rejected" && historyResult.status === "rejected" && Object.keys(recordedAt).length === 0) {
+    if (liveResult.status === "rejected") {
       throw liveResult.reason;
     }
   }

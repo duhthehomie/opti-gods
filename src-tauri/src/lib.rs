@@ -54,6 +54,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::splash::finish_splash,
             commands::actions::run_fix,
+            commands::actions::get_windows_process_count,
             commands::actions::run_restore_categories,
             commands::tweaks::apply_tweak,
             commands::tweaks::undo_tweak,
