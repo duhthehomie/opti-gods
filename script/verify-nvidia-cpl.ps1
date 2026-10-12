@@ -9,6 +9,9 @@ $ErrorActionPreference = 'Stop'
   if (-not $bootstrap.Contains('[Console]::OpenStandardInput()') -or -not $bootstrap.Contains('StreamReader')) {
     throw 'Bootstrap must decode the raw stdin pipe, not the Windows console text reader.'
   }
+  if (-not $bootstrap.Contains('ReadToEnd().TrimStart([char]0xFEFF)')) {
+    throw 'Bootstrap must explicitly remove leading BOM characters before parsing source.'
+  }
   $expected = 'stdin fixture ' + [char]0x2713 + [char]0x00E9
   $payload = '#' + ('x' * 40000) + "`n" + '[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Write-Output "' + $expected + '"'
   foreach ($withBom in @($false, $true)) {
@@ -40,8 +43,11 @@ $ErrorActionPreference = 'Stop'
     if (-not $process.WaitForExit(10000)) { throw 'Windows PowerShell stdin fixture exceeded its deadline.' }
     if (-not $stdout.Wait(5000) -or -not $stderr.Wait(5000)) { throw 'Windows PowerShell output did not reach EOF.' }
     if ($process.ExitCode -ne 0 -or $stdout.Result.Trim() -ne $expected) {
-      throw "Large stdin/UTF-8 bootstrap did not execute exactly once (BOM=$withBom): $($stderr.Result)"
+      $details = $stderr.Result
+      if ($details.Length -gt 1200) { $details = $details.Substring(0, 1200) + ' [diagnostic truncated]' }
+      throw "Large stdin/UTF-8 bootstrap did not execute exactly once (BOM=$withBom, exit=$($process.ExitCode)): $details"
     }
+    Write-Output "[nvidia-cpl] Large UTF-8 stdin execution passed (BOM=$withBom)."
   } finally {
     if ($process.Id -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
     $process.Dispose()

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.70",
-  "notes": "V5.2.70 — corrects Windows PowerShell stdin decoding and fixture pipe closure that blocked the previous installer build. Tests large UTF-8 scripts both with and without a BOM. Retains all V5.2.69 batch fixes, live Pro verification, and bounded preview/PhysX execution. Preserves the working 15-setting NVIDIA preset and 85% vibrance."
+  "version": "5.2.71",
+  "notes": "V5.2.71 — explicitly removes leading encoding markers before Windows PowerShell parses the NVIDIA launcher input. Retains both required large Unicode stdin test cases, with and without a BOM, and reports each result separately. Preserves the working 15-setting NVIDIA preset, 85% vibrance, all batch fixes, and live Pro authorization."
 }

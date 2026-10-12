@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-pub const BOOTSTRAP: &str = "$ErrorActionPreference='Stop'; $reader=[System.IO.StreamReader]::new([Console]::OpenStandardInput(),[System.Text.UTF8Encoding]::new($false,$true),$true); $source=$reader.ReadToEnd(); & ([ScriptBlock]::Create($source))";
+pub const BOOTSTRAP: &str = "$ErrorActionPreference='Stop'; $reader=[System.IO.StreamReader]::new([Console]::OpenStandardInput(),[System.Text.UTF8Encoding]::new($false,$true),$true); $source=$reader.ReadToEnd().TrimStart([char]0xFEFF); & ([ScriptBlock]::Create($source))";
 const MAX_CAPTURE_BYTES: usize = 1024 * 1024;
 
 enum Event {
@@ -106,6 +106,7 @@ mod tests {
         assert!(BOOTSTRAP.contains("OpenStandardInput"));
         assert!(BOOTSTRAP.contains("StreamReader"));
         assert!(!BOOTSTRAP.contains("[Console]::In."));
+        assert!(BOOTSTRAP.contains("ReadToEnd().TrimStart([char]0xFEFF)"));
         let source = "# NVIDIA – café ✓\n".repeat(6000);
         assert!(source.len() > 32767);
         let output = run(&mut python("import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"),
