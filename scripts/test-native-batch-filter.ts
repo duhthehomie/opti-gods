@@ -47,7 +47,7 @@ const compiledPredicate = transformSync(
 const predicateModule = { exports: undefined };
 runInNewContext(compiledPredicate, { module: predicateModule });
 bindings.isNvidiaAction = predicateModule.exports;
-const actions = ["NvidiaPreviewPerformance", "NvidiaPhysxGpu", "NvidiaControlPanelSettings"];
+const actions = ["NvidiaControlPanelSettings"];
 bindings.isScriptOnlyTweakId = (id: string) => id === "CodDefenderExclusion";
 bindings.getTweakMeta = (id: string) =>
   ["DisableNDU", "CodDefenderExclusion", "OpenMsiUtilityPro"].includes(id) ? { id } : null;

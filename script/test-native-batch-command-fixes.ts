@@ -12,6 +12,23 @@ assert(fix("ServiceFax").includes("Get-Service -Name $name -ErrorAction Ignore")
 assert(fix("ServiceFax").includes("None of the requested services are installed"));
 assert(fix("ServiceFax").includes("$after.StartMode -ne 'Disabled'"));
 assert(fix("ProcSvc_cbdhsvc", "Get-Service 'cbdhsvc_*' -EA SilentlyContinue").includes("'cbdhsvc_*'"));
+assert(fix("ProcSvc_cbdhsvc", "Get-Service 'cbdhsvc_*'").includes("$serviceType -band 0x40"));
+assert(fix("ProcSvc_OneSyncSvc", "Get-Service 'OneSyncSvc'").includes("Windows-managed per-user services"));
+for (const id of ["DisableCoreParking", "Win11ParkingCoreOverride"]) {
+  const command = fix(id);
+  assert(command.includes("@('ValueMax',100)"));
+  assert(command.includes("ACSettingIndex"));
+  assert(command.includes("$LASTEXITCODE -ne 0"));
+  assert(!command.includes("PROCIDLEMIN"));
+}
+assert(fix("Win11ProcessorIdleMin").includes("[SKIP]"));
+assert(!fix("Win11ProcessorIdleMin").includes("/setacvalueindex"));
+assert(fix("WinTitusEdgeRemove").includes("[SKIP]"));
+assert(fix("WinTitusAdobeBlock").includes("[SKIP]"));
+assert(fix("FiveMSteamOverlayOff").includes("Steam is not registered"));
+assert(fix("su_chrome", "Write-Output 'fixture'").includes("New-Item -Path $policy"));
+assert(fix("Win11Widgets").includes("AllowNewsAndInterests"));
+assert(!fix("Win11Widgets").includes("Remove-AppxPackage"));
 assert(fix("PrivacyDiagFeedback").includes("Get-ItemPropertyValue"));
 assert(fix("DisablePowerThrottlingAdv").includes("New-Item -Path $p"));
 assert(fix("FiveMDisableLSO").includes("-NoRestart"));

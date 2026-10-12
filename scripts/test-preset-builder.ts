@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "../client/src/lib/missing-recommendations";
+import "../script/test-native-batch-command-fixes";
 // Lightweight assertion tests for shared/preset-builder.ts.
 //
 // Why not vitest? Adding vitest would change package.json (forbidden in this
@@ -125,7 +126,7 @@ test("eligible Pro users receive the NVIDIA preset recommendation", () => {
     hardwareScanned: true,
     dedicatedNvidiaGpuCount: 1,
   });
-  assert.deepEqual(getNvidiaRecommendationIds([presetId], eligible, presetId), ["NvidiaPreviewPerformance", "NvidiaPhysxGpu", presetId]);
+  assert.deepEqual(getNvidiaRecommendationIds([presetId], eligible, presetId), [presetId]);
   assert.equal(getFullOptimizeNvidiaPresetDecision({
     native: true,
     pro: true,
@@ -133,8 +134,8 @@ test("eligible Pro users receive the NVIDIA preset recommendation", () => {
     dedicatedNvidiaGpuCount: 1,
   }).status, "queue");
 });
-test("separate NVIDIA recommendations remain unique and driver preset stays last", () => {
-  assert.deepEqual(getNvidiaRecommendationIds(["DisableNDU", "NvidiaPhysxGpu", "NvidiaControlPanelSettings", "NvidiaPreviewPerformance", "NvidiaPhysxGpu"], true), ["DisableNDU", "NvidiaPreviewPerformance", "NvidiaPhysxGpu", "NvidiaControlPanelSettings"]);
+test("one combined NVIDIA recommendation replaces separate preview and PhysX actions", () => {
+  assert.deepEqual(getNvidiaRecommendationIds(["DisableNDU", "NvidiaPhysxGpu", "NvidiaControlPanelSettings", "NvidiaPreviewPerformance", "NvidiaPhysxGpu"], true), ["DisableNDU", "NvidiaControlPanelSettings"]);
 });
 test("ineligible users receive none of the separate NVIDIA actions", () => {
   assert.deepEqual(getNvidiaRecommendationIds(["NvidiaControlPanelSettings", "NvidiaPhysxGpu", "DisableNDU", "NvidiaPreviewPerformance"], false), ["DisableNDU"]);

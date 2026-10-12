@@ -1,3 +1,5 @@
+import { buildLoggedCommandFix } from "./native-logged-command-fixes";
+
 const LEGACY_DRIVER_KEYS = new Set([
   "NvidiaTripleBufferOff", "NvidiaForceVSyncOff", "FiveMDisablePhysX",
   "NvidiaCUDAPriority", "NvidiaShaderCacheUnlimited", "NvidiaFrameBufferOpt",
@@ -7,9 +9,17 @@ function servicesCommand(names: string[], mode: "Manual" | "Disabled"): string {
   return String.raw`$ErrorActionPreference = 'Stop'
 $names = @(${names.map(name => `'${name}'`).join(",")})
 $changed = 0
+$managed = 0
 foreach ($name in $names) {
   $services = @(Get-Service -Name $name -ErrorAction Ignore)
   foreach ($service in $services) {
+    $typePath = "HKLM:\SYSTEM\CurrentControlSet\Services\$($service.Name)"
+    $serviceType = Get-ItemPropertyValue -LiteralPath $typePath -Name Type -ErrorAction Stop
+    if (($serviceType -band 0x40) -ne 0 -or ($serviceType -band 0x80) -ne 0) {
+      $managed++
+      Write-Output "[INFO] Windows-managed per-user service $($service.Name) was left unchanged."
+      continue
+    }
     $escaped = $service.Name.Replace("'", "''")
     $configuration = Get-CimInstance Win32_Service -Filter "Name='$escaped'" -ErrorAction Stop
     if (-not $configuration) { throw "Could not read service configuration: $($service.Name)" }
@@ -23,6 +33,7 @@ foreach ($name in $names) {
     $changed++
   }
 }
+if ($changed -eq 0 -and $managed -gt 0) { Write-Output '[SKIP] Matching services are Windows-managed per-user services; nothing was changed.'; return }
 if ($changed -eq 0) { Write-Output '[SKIP] None of the requested services are installed; nothing was changed.'; return }
 Write-Output "[OK] Verified ${mode} startup for $changed installed service(s)."
 `;
@@ -30,6 +41,8 @@ Write-Output "[OK] Verified ${mode} startup for $changed installed service(s)."
 
 /** Corrections to the actions called out by the real Windows batch logs. */
 export function buildNativeBatchCommandFix(id: string, original: string): string | undefined {
+  const loggedFix = buildLoggedCommandFix(id, original);
+  if (loggedFix !== undefined) return loggedFix;
   if (LEGACY_DRIVER_KEYS.has(id)) {
     return `Write-Output '[SKIP] This legacy registry action does not reliably configure the current NVIDIA driver. Use the verified Opti Gods NVIDIA Preset; PhysX remains a separate Control Panel action.'; return`;
   }

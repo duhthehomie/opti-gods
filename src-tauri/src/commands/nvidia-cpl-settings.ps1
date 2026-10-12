@@ -247,7 +247,7 @@ function Test-StaticNavigation($element) {
   $current = $element.Current
   if ($current.ClassName -ne 'Static' -or $current.ControlType -notin @([System.Windows.Automation.ControlType]::Pane, [System.Windows.Automation.ControlType]::Text)) { return $false }
   if ($current.IsOffscreen -or -not $current.IsEnabled) { return $false }
-  if ((Normalize-Name $current.Name) -notin @('Adjust image settings with preview', 'Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')) { return $false }
+  if ((Normalize-Name $current.Name) -notin @('Adjust image settings with preview', 'Manage 3D settings', 'Configure Surround, PhysX', 'Set PhysX configuration', 'Set Multi-GPU and PhysX configuration', 'Set SLI and PhysX configuration')) { return $false }
   $bounds = $current.BoundingRectangle
   if ($bounds.IsEmpty -or $bounds.Width -le 0 -or $bounds.Height -le 0) { return $false }
   Test-NavigationScope $element
@@ -483,7 +483,7 @@ function Start-NvidiaControlPanel {
 
 $launchMode = 'already-open Control Panel'
 $step = $env:OPTI_CPL_STEP
-if ($step -and $step -notin @('preview', 'physx', 'open')) { throw 'Unknown NVIDIA Control Panel step.' }
+if ($step -notin @('preview', 'open')) { throw 'Only preview Performance and opening Control Panel are supported; PhysX automation has been removed.' }
 if ($step -eq 'open') {
   # Preserve the repair action's service recovery, without applying settings.
   foreach ($name in @('NVDisplay.ContainerLocalSystem','NVDisplay.ContainerLS','NvContainerLocalSystem')) {

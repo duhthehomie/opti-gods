@@ -19,10 +19,10 @@ export const NVIDIA_PRESET_ACTION_ID = "NvidiaControlPanelSettings";
 const NVIDIA_PRESET_TICKET_ID = "ImportNvidiaPresetPro";
 export const NVIDIA_UI_ACTION_IDS = ["NvidiaPreviewPerformance", "NvidiaPhysxGpu"] as const;
 export function isNvidiaAction(id: string): boolean {
-  return id === NVIDIA_PRESET_ACTION_ID || NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id);
+  return id === NVIDIA_PRESET_ACTION_ID;
 }
 const SCRIPT_ONLY_EXCLUDED_IDS = new Set([NVIDIA_PRESET_ACTION_ID, ...NVIDIA_UI_ACTION_IDS, NVIDIA_PRESET_TICKET_ID, "OpenMsiUtilityPro"]);
-export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro"]);
+export const REVIEWED_NATIVE_SCRIPT_IDS = new Set(["CodDefenderExclusion", "FiveM1650VRAMBudget", "FiveM3500PerfPlan", "EnableNvidiaMSIPro", "DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove"]);
 const NATIVE_RUN_EVENT = "optigods:native-run-state";
 const NATIVE_REQUEST_TIMEOUT_MS = 30_000;
 const NATIVE_EXECUTION_TIMEOUT_MS = 90_000;
@@ -38,6 +38,7 @@ export function orderTweakBatch(ids: readonly string[]): string[] {
 }
 
 function isRunActionCompatible(id: string, native: boolean) {
+  if (NVIDIA_UI_ACTION_IDS.some(uiId => uiId === id)) return false;
   if (NVIDIA_CAPTURE_PROTECTED_IDS.has(id)) return false;
   if (native && isNvidiaAction(id)) return true;
   return getTweakCompatibility(id).ok;
@@ -869,8 +870,7 @@ async function applyTweakBatchInternal(
         result = isNvidiaAction(id)
         ? {
           ok: true,
-          message: await importNvidiaPreset(ticket!, credential!,
-            id === "NvidiaPreviewPerformance" ? "preview" : id === "NvidiaPhysxGpu" ? "physx" : undefined),
+          message: await importNvidiaPreset(ticket!, credential!),
           error_kind: undefined,
           undo_token: null,
         }
@@ -885,8 +885,8 @@ async function applyTweakBatchInternal(
         throw new Error(result.message || "Windows rejected the change.");
       }
       if (id === NVIDIA_PRESET_ACTION_ID &&
-          !(result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied"))) {
-        throw new Error("NVIDIA returned no complete 15/15 global-profile and Digital Vibrance verification. No preset success was recorded.");
+          !(result.message?.includes("Verified 15/15") && result.message.startsWith("Digital Vibrance applied") && result.message.includes("Preview Performance and advanced 3D mode verified."))) {
+        throw new Error("NVIDIA returned no complete Manage 3D, Digital Vibrance and preview verification. No preset success was recorded.");
       }
       if (id === "NvidiaPreviewPerformance" && !result.message?.startsWith("Preview Performance and advanced 3D mode verified.")) {
         throw new Error("Preview verification was missing. No preview success was recorded.");

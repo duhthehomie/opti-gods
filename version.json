@@ -1,4 +1,4 @@
 {
-  "version": "5.2.71",
-  "notes": "V5.2.71 — explicitly removes leading encoding markers before Windows PowerShell parses the NVIDIA launcher input. Retains both required large Unicode stdin test cases, with and without a BOM, and reports each result separately. Preserves the working 15-setting NVIDIA preset, 85% vibrance, all batch fixes, and live Pro authorization."
+  "version": "5.2.72",
+  "notes": "V5.2.72 — one NVIDIA preset combines preview Performance with the working Run & verify driver path: 15 Manage 3D settings and 85% vibrance, followed by final readback. PhysX automation is disabled and separate UI tweaks removed. Corrects guarded Manage 3D navigation. Fixes the Ryzen 2600 run's corrupted core-parking range, per-user service handling, Chrome policy creation, Steam absence, and Widgets policy. Unsupported or non-performance actions are honestly skipped. Eleven reviewed corrections are bundled behind live Pro authorization."
 }

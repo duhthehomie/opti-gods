@@ -222,6 +222,10 @@ Write-Output '[nvidia-cpl] Windows PowerShell syntax, WindowsBase Point/Rect geo
   $static.Current.IsOffscreen = $true
   if (Test-NavigationControl $static $null) { throw 'Offscreen Static navigation was accepted.' }
   $static.Current.IsOffscreen = $false
+  $static.Current.Name = 'Manage 3D settings'
+  if (-not (Test-NavigationControl $static $null)) { throw 'The reported Manage 3D Static sidebar entry is still rejected.' }
+  $heading.Current.Name = 'Manage 3D settings'
+  if (Test-NavigationControl $heading $null) { throw 'Manage 3D heading outside the sidebar was accepted.' }
   $static.Current.Name = 'Unapproved setting'
   if (Test-NavigationControl $static $null) { throw 'An unapproved Static entry was accepted.' }
   $static.Current.Name = $name

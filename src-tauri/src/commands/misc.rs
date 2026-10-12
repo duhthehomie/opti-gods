@@ -685,7 +685,7 @@ pub(crate) fn nvidia_preset_is_current() -> Option<bool> {
         let fingerprint = nvidia_driver_fingerprint(&api)?;
         use crate::win32::registry::{read_value, Hive, RegValue};
         match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
-            Ok(RegValue::Sz(saved)) if saved == format!("global-profile-v3:{fingerprint}") => {}
+            Ok(RegValue::Sz(saved)) if saved == format!("global-profile-v4:{fingerprint}") => {}
             _ => return Err("NVIDIA driver changed or has no verified receipt.".into()),
         }
         let targets = nvidia_display::runtime::active_targets(&api)?;
@@ -895,8 +895,8 @@ pub fn cancel_nvidia_preset_import() {
 
 #[tauri::command]
 pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> Result<String, String> {
-    if let Some(step) = args.control_step.clone() {
-        return apply_nvidia_control_step(app, args, step).await;
+    if args.control_step.is_some() {
+        return Err("Separate NVIDIA tweaks have been retired. Run the complete Opti Gods NVIDIA Preset; PhysX is left unchanged.".into());
     }
     #[cfg(windows)]
     {
@@ -946,9 +946,15 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
             };
             let expected = preset_with_explicit_gpu(&static_expected, &gpu_value)?;
             let settings = parse_global_nip_settings(&expected)?;
-            let original_profile = nvidia_profile::apply(&settings, &report)?;
-            // PhysX/preview are independent actions. Their accessibility is
-            // never a prerequisite for applying the driver profile or Vibrance.
+            let original_profile = nvidia_profile::snapshot()?;
+            report("Applying preview Performance before the verified Manage 3D preset");
+            let preview_result = run_nvidia_cpl_controls(&gpu_name, false, false, Some("preview"));
+            // Keep the working blue-button driver path even if preview fails.
+            // Partial completion must never be reported as full preset success.
+            if let Err(error) = nvidia_profile::apply(&settings, &report) {
+                let rollback = nvidia_profile::restore(&original_profile);
+                return Err(format!("{error} Preview result: {:?}. Original profile restore: {rollback:?}. No complete preset success was recorded.", preview_result.as_ref().err()));
+            }
             report("Applying and verifying Digital Vibrance");
             let dvc_result = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped before changing Digital Vibrance.".to_string())
@@ -964,6 +970,10 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                     return Err(format!("{error} No preset success was recorded.{profile_note}"));
                 }
             };
+            let preview_check = preview_result.and_then(|_| {
+                report("Read-only verification of preview Performance and advanced 3D mode");
+                run_nvidia_cpl_controls(&gpu_name, false, true, Some("preview"))
+            });
             report("Final readback of all 15 persisted global settings");
             let final_check = if NVIDIA_PRESET_IMPORT_CANCELLED.load(Ordering::SeqCst) {
                 Err("NVIDIA preset was stopped by the user.".to_string())
@@ -993,13 +1003,16 @@ pub async fn import_nvidia_preset(app: tauri::AppHandle, args: ProToolArgs) -> R
                 .collect::<Vec<_>>()
                 .join(", ");
             let vibrance_message = nvidia_display::vibrance_success(dvc.supported_display_count);
+            if let Err(error) = preview_check {
+                return Err(format!("{vibrance_message}. Verified {verified_setting_count}/15 global settings using the driver preset. Preview Performance was not verified: {error}. Manage 3D and Vibrance remain applied, but no complete NVIDIA preset success was recorded. PhysX was not changed."));
+            }
             let fingerprint = nvidia_driver_fingerprint(&NvApiLibrary::load()?)?;
             crate::win32::registry::write_sz(
                 crate::win32::registry::Hive::CurrentUser, r"Software\OptiGods",
-                "NvidiaPresetDriver", &format!("global-profile-v3:{fingerprint}"),
+                "NvidiaPresetDriver", &format!("global-profile-v4:{fingerprint}"),
             ).map_err(|error| format!("Could not save verified NVIDIA driver receipt: {error}"))?;
             Ok::<String, String>(format!(
-                "{vibrance_message}. Verified {verified_setting_count}/15 current global settings: Highest available refresh rate, Fixed Refresh, explicit OpenGL GPU {gpu_name}, V-Sync Off and OpenGL GDI Prefer performance, plus the remaining approved settings. PhysX and preview are separate actions and were not changed by this driver preset. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults.",
+                "{vibrance_message}. Verified {verified_setting_count}/15 current global settings: Highest available refresh rate, Fixed Refresh, explicit OpenGL GPU {gpu_name}, V-Sync Off and OpenGL GDI Prefer performance, plus the remaining approved settings. Preview Performance and advanced 3D mode verified. PhysX was left unchanged. Per-monitor readback: [{dvc_readback}].{unsupported_note} Unlisted global settings were reset to NVIDIA defaults.",
             ))
         }).await.map_err(|error| format!("NVIDIA preset worker failed: {error}")).and_then(|result| result);
         if let Ok(message) = &mut result {

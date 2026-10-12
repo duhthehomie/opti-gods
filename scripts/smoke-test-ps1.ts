@@ -10,6 +10,7 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-commands";
+import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
@@ -74,7 +75,7 @@ for (const name of readdirSync(outDir)) {
 function buildScript(label: string, ids: string[]): string {
   const header = `# Opti Gods by leaq — Reapply ${label} (SMOKE TEST FIXTURE)\r\n$ErrorActionPreference = 'Continue'\r\n\r\n`;
   const body = ids.map((id) => {
-    const cmd = buildSafeWindowsCommandOverride(id) ?? TWEAK_COMMANDS[id];
+    const cmd = buildNativeBatchCommandFix(id, TWEAK_COMMANDS[id] ?? "") ?? buildSafeWindowsCommandOverride(id) ?? TWEAK_COMMANDS[id];
     if (!cmd) throw new Error(`SMOKE TEST: missing TWEAK_COMMANDS["${id}"]`);
     return `# --- ${id} ---\r\n${cmd}`;
   }).join("\r\n\r\n");
@@ -100,6 +101,7 @@ const fixtures: Array<[string, string[]]> = [
   ["msi-safe-only", ["EnableMSIMode_Safe"]],
   ["mixed-cross-category", MIXED_SAMPLE],
   ["verified-failure-paths", ["CodDefenderExclusion", "FiveM3500PerfPlan", "IntelOldGenPowerOpt", "EnableNvidiaMSIPro", "DisableSearchIndexing"]],
+  ["ryzen-2600-failure-corrections", ["DisableCoreParking", "Win11ParkingCoreOverride", "Win11ProcessorIdleMin", "su_chrome", "FiveMSteamOverlayOff", "Win11Widgets", "ProcSvc_cbdhsvc", "ProcSvc_OneSyncSvc", "ProcSvc_ApplyAll", "WinTitusAdobeBlock", "WinTitusEdgeRemove"]],
 ];
 
 let total = 0;

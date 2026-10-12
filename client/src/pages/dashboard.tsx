@@ -627,7 +627,7 @@ export default function Dashboard() {
         const runSkippedMessages = { ...initialSkippedMessages };
         const queueNvidiaPresetReapplyNow = nvidiaPresetShouldQueue && nvidiaPresetOneTimeRequeue;
         if (nvidiaPresetShouldQueue && (!nativeState[NVIDIA_PRESET_ACTION_ID] || queueNvidiaPresetReapplyNow)) {
-          pendingIds.push("NvidiaPreviewPerformance", "NvidiaPhysxGpu", NVIDIA_PRESET_ACTION_ID);
+          pendingIds.push(NVIDIA_PRESET_ACTION_ID);
         }
         if (nvidiaPresetSkipMessage) {
           runSkippedIds.push(NVIDIA_PRESET_ACTION_ID);
@@ -1010,7 +1010,7 @@ export default function Dashboard() {
                 <div className="rounded-xl border border-green-500/20 bg-green-500/[.06] p-3 text-xs">
                   <span className="block font-bold text-green-100">Opti Gods NVIDIA Preset · separate Pro action</span>
                   <span className="mt-1 block leading-relaxed text-zinc-400">
-                    Included once through Full Optimize for eligible Pro users with one dedicated NVIDIA GPU. NVIDIA Control Panel is used to verify PhysX GPU selection and the remembered Performance slider; advanced 3D settings stay enabled.
+                    One Pro preset applies preview Performance, the 15 Manage 3D settings and 85% Digital Vibrance. Final settings are verified; PhysX is left unchanged.
                     {!nvidiaPresetEligible && " Run a hardware scan and confirm exactly one dedicated NVIDIA GPU before Full Optimize."}
                   </span>
                 </div>

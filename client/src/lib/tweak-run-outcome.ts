@@ -27,7 +27,7 @@ export function getCompatibilitySkipMessage(
   if (errorKind === "compatibility") {
     return detail || "This tweak is not compatible with this PC.";
   }
-  return /\bnot for this system\b/i.test(detail) ? detail : null;
+  return /\bnot for this system\b|legacy NVIDIA capture-disabling action is unavailable/i.test(detail) ? detail : null;
 }
 
 export function getTweakRunItemsForTab<T extends { status: string }>(

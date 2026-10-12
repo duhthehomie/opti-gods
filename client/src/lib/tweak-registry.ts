@@ -655,25 +655,13 @@ export const TWEAK_REGISTRY: TweakMeta[] = [
     id: "NvidiaControlPanelSettings",
     category: "nvidia",
     safety: "safe",
-    plainEnglish: "Applies and verifies all 15 global NVIDIA driver settings and 85% Digital Vibrance.",
+    plainEnglish: "Applies preview Performance, all 15 global NVIDIA driver settings and 85% Digital Vibrance as one verified preset.",
     verifiedOn: { win10: true, win11: true },
     title: "Opti Gods NVIDIA Preset",
-    description: "Pro-only. Verifies the 15 approved Manage 3D settings and 85% Digital Vibrance on supported active NVIDIA displays. PhysX and preview are separate actions; their failure cannot block this preset.",
+    description: "Pro-only. Applies preview Performance first, then the working 15-setting Manage 3D preset and 85% Digital Vibrance. Verifies the final state before reporting complete success. PhysX is left unchanged.",
     badge: "PRO",
     impact: "HIGH",
 },
-  ...[
-    { id: "NvidiaPreviewPerformance", category: "nvidia", safety: "safe",
-      plainEnglish: "Verifies the preview Performance slider and retains advanced 3D mode without replacing your driver settings.",
-      verifiedOn: { win10: true, win11: true }, title: "NVIDIA Preview Performance",
-      description: "Separate Pro-only Control Panel step. Verifies the remembered Performance slider and advanced 3D mode; preserves existing Manage 3D settings even if preview verification fails.",
-      badge: "PRO", impact: "MED", recommended: true },
-    { id: "NvidiaPhysxGpu", category: "nvidia", safety: "safe",
-      plainEnglish: "Sets and verifies the exact NVIDIA GPU as the PhysX processor.",
-      verifiedOn: { win10: true, win11: true }, title: "NVIDIA PhysX GPU",
-      description: "Separate Pro-only Control Panel step. Verifies the exact GPU after saving and reloading; Auto-select, CPU and ambiguous controls are not accepted as success. Driver preset and Vibrance are independent.",
-      badge: "PRO", impact: "MED", recommended: true },
-],
 ];
 
 export const TWEAK_BY_ID: Map<string, TweakMeta> = new Map(

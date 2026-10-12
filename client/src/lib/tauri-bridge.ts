@@ -212,7 +212,7 @@ export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
       .then(result => {
         if (result.NvidiaControlPanelSettings === false) {
           try {
-            localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.66");
+            localStorage.removeItem("optigods-nvidia-preset-requeue-v5.2.72");
             localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPreviewPerformance");
             localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPhysxGpu");
           } catch {}
