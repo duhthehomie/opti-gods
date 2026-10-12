@@ -1,4 +1,4 @@
 {
-  "version": "5.2.74",
-  "notes": "V5.2.74 — fixes the invalid PowerShell variable-colon reference that blocked the previous installer build. Regenerates the background-service scripts, adds a local interpolation regression check, and includes Windows repair and background recovery in the existing Windows PowerShell AST smoke test. Preserves the previous build's 18 optional-service targets, 25 optional app-removal choices, live process counts, bounded Windows state checks, COD Defender handling, Windows repair and automatic diagnostic downloads. NVIDIA implementation, input-device protections, administrator manifest and release workflow are unchanged."
+  "version": "5.2.75",
+  "notes": "V5.2.75 — aligns the build-time reviewed-script allowlist with all 16 bundled scripts, including WinTitusServicesManual, and adds an exact-scope check to script generation. Preserves the PowerShell syntax fix, 18 optional-service targets, 25 optional app-removal choices, live process counts, bounded Windows state checks, COD Defender handling, Windows repair and automatic diagnostic downloads. NVIDIA implementation, input-device protections, administrator manifest and release workflow are unchanged."
 }

@@ -29,6 +29,16 @@ for (const id of additions) {
   if (!corrected) throw new Error(`Missing logged command correction: ${id}`);
   scripts[id] = buildSingleTweakPowerShell(id, corrected);
 }
+// Keep the exact build-time allowlist aligned; never weaken or bypass it.
+const buildSource = readFileSync(new URL("../src-tauri/build.rs", import.meta.url), "utf8");
+const requiredLine = buildSource.match(/^\$required = @\(([^)\r\n]+)\)$/m);
+if (!requiredLine) throw new Error("Missing build-time reviewed script allowlist.");
+const requiredIds = [...requiredLine[1].matchAll(/'([^']+)'/g)].map(match => match[1]);
+const missing = requiredIds.filter(id => !(id in scripts));
+const unexpected = Object.keys(scripts).filter(id => !requiredIds.includes(id));
+if (new Set(requiredIds).size !== requiredIds.length || missing.length || unexpected.length) {
+  throw new Error(`Reviewed bundle scope mismatch: missing [${missing}], unexpected [${unexpected}].`);
+}
 for (const [id, script] of Object.entries(scripts)) {
   if (!script.includes("__OG_RESULT:APPLIED") || !script.includes("__OG_RESULT:SKIPPED")) {
     throw new Error(`Missing checked terminal markers for ${id}.`);
