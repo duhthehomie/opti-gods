@@ -124,5 +124,11 @@ for (const name of ["windows-repair", "windows-background-undo"]) {
   writeFileSync(join(outDir, `${name}.ps1`), "\ufeff" + script, "utf8");
   total++;
 }
+// Parse the bundled repair script in the existing Windows AST check, without
+// running DISM/SFC or changing the build runner's Windows installation.
+const repairSource = readFileSync(join(process.cwd(), "src-tauri", "src", "commands", "windows-repair.ps1"), "utf8");
+rejectBareVariableColon(repairSource, "windows-repair");
+writeFileSync(join(outDir, "windows-repair.ps1"), repairSource, "utf8");
+total++;
 console.log(`[smoke-test] OK — ${total} fixture(s) ready in ${outDir}`);
 console.log(`[smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.`);

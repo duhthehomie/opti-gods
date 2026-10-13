@@ -1,4 +1,4 @@
 {
-  "version": "5.2.76",
-  "notes": "V5.2.76 — simplifies the live count display to Apps open and removes the Task Manager explanation and last-optimization comparison. Corrects Silent Hill Townfall capitalization and spacing in Full Optimize. Preserves all v5.2.75 optimization, repair, diagnostics and build-safety behavior. NVIDIA implementation, input-device protections, administrator manifest and release workflow are unchanged."
+  "version": "5.2.77",
+  "notes": "V5.2.77 — fixes Windows repair diagnostic downloads and adds manual download, copy, and last-report retention. Records DISM/SFC exit codes, exceptions, recent servicing findings, repair-service and restart status, disk space, restore-provider diagnostics, and recent Windows System errors. Falls back to the local repair-log folder when Downloads is unavailable. Preserves v5.2.76 text fixes, NVIDIA behavior, input protections, elevation manifest, and release workflow."
 }

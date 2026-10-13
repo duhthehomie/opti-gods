@@ -1410,6 +1410,9 @@ pub struct DiagnosticLogArgs {
     pub content: String,
 }
 
+#[path = "diagnostic_filename.rs"]
+mod diagnostic_filename;
+
 /// Persist the native runner diagnostic log in the real Windows Downloads
 /// folder. Browser Blob downloads are not reliable inside WebView2, so the
 /// desktop shell owns this write and opens Explorer with the file selected.
@@ -1417,28 +1420,34 @@ pub struct DiagnosticLogArgs {
 pub fn save_diagnostic_log(app: AppHandle, args: DiagnosticLogArgs) -> Result<String, String> {
     #[cfg(windows)]
     {
-        let filename = std::path::Path::new(&args.filename)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .filter(|name| {
-                name.starts_with("OptiGods-V5-Tweak-Run-")
-                    && name.ends_with(".txt")
-                    && !name.contains("..")
-            })
-            .ok_or_else(|| "Invalid diagnostic log filename.".to_string())?;
-        let downloads = app
-            .path()
-            .download_dir()
-            .map_err(|error| format!("Windows Downloads folder is unavailable: {error}"))?;
-        std::fs::create_dir_all(&downloads)
-            .map_err(|error| format!("Could not create the Downloads folder: {error}"))?;
-        let path = downloads.join(filename);
-        std::fs::write(&path, args.content.as_bytes())
-            .map_err(|error| format!("Could not save the diagnostic log: {error}"))?;
-        std::process::Command::new("explorer.exe")
+        if !diagnostic_filename::allowed(&args.filename) {
+            return Err("Invalid diagnostic log filename.".to_string());
+        }
+        let filename = &args.filename;
+        let save_in = |directory: std::path::PathBuf| -> Result<std::path::PathBuf, String> {
+            std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+            let path = directory.join(filename);
+            std::fs::write(&path, args.content.as_bytes()).map_err(|error| error.to_string())?;
+            Ok(path)
+        };
+        let downloads_result = app.path().download_dir()
+            .map_err(|error| error.to_string()).and_then(&save_in);
+        let path = match downloads_result {
+            Ok(path) => path,
+            Err(downloads_error) => {
+                if !filename.starts_with("OptiGods-Windows-Repair-Diagnostics-") {
+                    return Err(format!("Could not save the diagnostic log to Downloads: {downloads_error}"));
+                }
+                app.path().app_local_data_dir()
+                    .map_err(|error| error.to_string())
+                    .and_then(|directory| save_in(directory.join("RepairLogs")))
+                    .map_err(|error| format!("Could not save diagnostic log. Downloads: {downloads_error}; local app logs: {error}"))?
+            }
+        };
+        // Opening Explorer is a convenience, not evidence that the file write failed.
+        let _ = std::process::Command::new("explorer.exe")
             .arg(format!("/select,{}", path.display()))
-            .spawn()
-            .map_err(|error| format!("Diagnostic log was saved, but Explorer could not open it: {error}"))?;
+            .spawn();
         Ok(path.to_string_lossy().into_owned())
     }
     #[cfg(not(windows))]
