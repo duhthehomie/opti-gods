@@ -104,6 +104,7 @@ const GAME_PACK_LABELS: Record<string, string> = {
   game_marvelrivals: "Marvel Rivals",
   game_007firstlight: "007: First Light",
   game_fortnite: "Fortnite",
+  game_silenthilltownfall: "Silent Hill Townfall",
 };
 
 // Quick Boost Presets — V5.2.34. Max FPS uses the same hardware-aware action

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.75",
-  "notes": "V5.2.75 — aligns the build-time reviewed-script allowlist with all 16 bundled scripts, including WinTitusServicesManual, and adds an exact-scope check to script generation. Preserves the PowerShell syntax fix, 18 optional-service targets, 25 optional app-removal choices, live process counts, bounded Windows state checks, COD Defender handling, Windows repair and automatic diagnostic downloads. NVIDIA implementation, input-device protections, administrator manifest and release workflow are unchanged."
+  "version": "5.2.76",
+  "notes": "V5.2.76 — simplifies the live count display to Apps open and removes the Task Manager explanation and last-optimization comparison. Corrects Silent Hill Townfall capitalization and spacing in Full Optimize. Preserves all v5.2.75 optimization, repair, diagnostics and build-safety behavior. NVIDIA implementation, input-device protections, administrator manifest and release workflow are unchanged."
 }
