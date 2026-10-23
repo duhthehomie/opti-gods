@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
 import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
+import { filterAppliedTweakIds, getAppliedTweakTimestamp, sortAppliedTweakIds } from "@/lib/applied-tweak-list";
 import { isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { apiUrl } from "@/lib/api-base";
 import { countTweakRunItemsWithStatus, getCompatibleScriptRetryIds, getVerifiedNvidiaVibranceMessage, type TweakRunTab } from "@/lib/tweak-run-outcome";
@@ -37,7 +38,7 @@ import {
   type NativeTweakRunState,
   type TweakRunProgress,
 } from "@/lib/native-tweak-runner";
-import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TOKEN_KEY = "optigods-native-undo-tokens";
@@ -253,6 +254,7 @@ export default function AppliedTweaksPage() {
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   const [ledgerView, setLedgerView] = useState<LedgerView>(initialLedgerView);
   const [batchUndoing, setBatchUndoing] = useState(false);
   const [runItems, setRunItems] = useState<TweakRunProgress[]>([]);
@@ -719,7 +721,64 @@ export default function AppliedTweaksPage() {
   // that can produce a "confirmed" label.
   const nativeIds = Object.keys(nativeState).filter(id => nativeState[id]);
   const recordedIds = Object.keys(recordedAt).filter(id => !nativeState[id]);
-  const ids = Array.from(new Set([...nativeIds, ...recordedIds]));
+   const ids = Array.from(new Set([...nativeIds, ...recordedIds]));
+   const searchMetaForId = (id: string) => {
+     if (id === "NvidiaControlPanelSettings") {
+       return {
+         title: "Opti Gods NVIDIA Preset",
+         category: "NVIDIA",
+         plainEnglish: "Profile Inspector preset verifies preview Performance, all 15 Manage 3D settings and 85% Digital Vibrance on supported active monitors. PhysX is left unchanged.",
+       };
+     }
+     const meta = getTweakMeta(id);
+     return {
+       title: meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id,
+       category: meta?.category,
+       plainEnglish: meta?.plainEnglish,
+     };
+   };
+   const titleForId = (id: string) => searchMetaForId(id).title || id;
+   const orderedAppliedIds = sortAppliedTweakIds(ids, recordedAt, appliedAt, titleForId);
+   const visibleAppliedIds = filterAppliedTweakIds(orderedAppliedIds, searchQuery, searchMetaForId);
+   const visibleRunItems = orderedRunItems.filter(item => {
+     if (runTab !== "all" && item.status !== runTab) return false;
+     const meta = searchMetaForId(item.id);
+     const searchable = [item.id, meta.title, meta.category, meta.plainEnglish, item.message]
+       .filter(Boolean)
+       .join(" ")
+       .toLocaleLowerCase();
+     const terms = searchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+     return terms.every(term => searchable.includes(term));
+   });
+   const runItemsInCurrentTab = runItems.filter(item => runTab === "all" || item.status === runTab);
+   const presetNeedsOwnRow = Boolean(nvidiaPresetSubmittedAt) && !ids.includes("NvidiaControlPanelSettings");
+   const appliedRecordCount = ids.length + (presetNeedsOwnRow ? 1 : 0);
+   const visibleAppliedCount = visibleAppliedIds.length + (presetNeedsOwnRow && filterAppliedTweakIds(
+     ["NvidiaControlPanelSettings"],
+     searchQuery,
+     searchMetaForId,
+   ).length > 0 ? 1 : 0);
+   const visibleSelectedCount = visibleAppliedIds.filter(id => selected.has(id)).length;
+   const appliedRows = [
+     ...orderedAppliedIds.map(id => ({
+       id,
+       title: titleForId(id),
+       timestamp: getAppliedTweakTimestamp(id, recordedAt, appliedAt),
+       preset: id === "NvidiaControlPanelSettings",
+     })),
+     ...(presetNeedsOwnRow ? [{
+       id: "NvidiaControlPanelSettings",
+       title: "Opti Gods NVIDIA Preset",
+       timestamp: 0,
+       preset: true,
+     }] : []),
+   ].filter(row => visibleAppliedIds.includes(row.id) || (row.preset && presetNeedsOwnRow && filterAppliedTweakIds(
+     ["NvidiaControlPanelSettings"],
+     searchQuery,
+     searchMetaForId,
+   ).length > 0))
+     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0) || a.title.localeCompare(b.title));
+   const selectedAppliedIds = ids.filter(id => selected.has(id));
   // Keep conflicting records visible for recovery, but do not count them or
   // unverified NVIDIA submissions as successfully applied.
   const appliedCount = new Set([
@@ -820,7 +879,7 @@ export default function AppliedTweaksPage() {
       <div className="flex items-center gap-2">
          {runItems.length > 0 && <button onClick={() => void downloadRunDiagnosticLog(runState, runItems, nativeState).then(name => toast({ title: "Error log saved", description: `${name} was saved to Downloads.`, variant: "success" })).catch(error => toast({ title: "Could not save error log", description: error instanceof Error ? error.message : "The diagnostic log could not be saved.", variant: "destructive" }))} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[.06] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/15"><Download className="h-3.5 w-3.5" />Download error log</button>}
         {ids.length > 0 && <button disabled={batchUndoing} onClick={() => void undoAll()} className="inline-flex items-center gap-2 rounded-lg border border-red-500/35 bg-red-600/[.10] px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600/20 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : "Undo all"}</button>}
-        {ids.length > 0 && <button disabled={!selected.size || batchUndoing} onClick={() => void undoSelected()} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selected.size})`}</button>}
+         {ids.length > 0 && <button disabled={!selectedAppliedIds.length || batchUndoing} onClick={() => void undoSelected(selectedAppliedIds)} className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[.07] px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/15 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />{batchUndoing ? "Undoing…" : `Undo selected (${selectedAppliedIds.length})`}</button>}
         <button onClick={() => void refreshState()} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-red-500/40 hover:text-white"><RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh state</button>
       </div>
     </header>
@@ -834,7 +893,28 @@ export default function AppliedTweaksPage() {
        <span className="font-bold">Free native allowance: {allowance.used} / {allowance.limit} active.</span>{" "}
        {allowance.remaining === 0 ? "The server is blocking additional instant tweaks. Undo one confirmed tweak to free a slot." : `${allowance.remaining} slot${allowance.remaining === 1 ? "" : "s"} remaining.`}
      </div>}
-      {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures || skippedRunCount > 0 ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
+       <section aria-label="Search applied tweaks and run results" className="rounded-xl border border-red-500/20 bg-black/30 p-3">
+         <label htmlFor="applied-tweak-search" className="mb-2 block text-[10px] font-bold uppercase tracking-[.18em] text-zinc-400">Find an applied tweak or run result</label>
+         <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 focus-within:border-red-500/50">
+           <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-red-400" />
+           <input
+             id="applied-tweak-search"
+             type="search"
+             value={searchQuery}
+             onChange={event => setSearchQuery(event.target.value)}
+             placeholder="Search title, ID, category, description, or latest-run message"
+             aria-describedby="applied-tweak-search-count"
+             className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+           />
+           {searchQuery && <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search" className="rounded p-1 text-zinc-500 hover:text-white"><X aria-hidden="true" className="h-4 w-4" /></button>}
+         </div>
+         <p id="applied-tweak-search-count" role="status" aria-live="polite" className="mt-2 text-[11px] text-zinc-500">
+           {searchQuery.trim()
+             ? `${visibleAppliedCount} of ${appliedRecordCount} applied records match${runItems.length ? ` · ${visibleRunItems.length} of ${runItemsInCurrentTab.length} run results in this tab match` : ""}`
+             : `${appliedRecordCount} applied records · newest first${runItems.length ? ` · ${runItemsInCurrentTab.length} run results in this tab` : ""}`}
+         </p>
+       </section>
+       {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures || skippedRunCount > 0 ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
         {runHadFailures || skippedRunCount > 0 ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
         <div>
           <p className="font-bold">{runHadFailures ? "Run finished with items needing attention" : skippedRunCount > 0 ? "Run finished; incompatible items were skipped" : "Run finished successfully"}</p>
@@ -872,7 +952,7 @@ export default function AppliedTweaksPage() {
           >{scriptBatchRunning ? `Running scripts ${scriptBatchProgress}/${scriptBatchTotal}` : `Run compatible scripts (${compatibleScriptRetryIds.length})`}</button>}
        </div>
          <div ref={runResultsRef} className="max-h-80 space-y-1 overflow-y-auto p-3">
-             {orderedRunItems.filter(item => runTab === "all" || item.status === runTab).map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
+              {visibleRunItems.map(item => { const meta = getTweakMeta(item.id); const title = meta?.title ? getHardwareAwareTweakTitle(item.id, meta.title) : item.id; const compatibility = getRunCompatibility(item); return <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/5 bg-white/[.02] px-3 py-2">
             {item.status === "running" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-400" /> : item.status === "applied" ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : item.status === "failed" ? <AlertCircle className="h-4 w-4 shrink-0 text-red-400" /> : item.status === "skipped" ? <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" /> : item.status === "stopped" ? <Square className="h-4 w-4 shrink-0 text-amber-400" /> : <Play className="h-4 w-4 shrink-0 text-zinc-600" />}
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-zinc-200">{title}</p>{item.message && <p className={cn("mt-0.5 break-words text-[10px]", item.status === "failed" ? "text-red-300" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : "text-zinc-500")}>{item.message}</p>}{(item.status === "failed" || item.status === "skipped") && <p className={cn("mt-1 text-[9px] font-black uppercase tracking-wider", compatibility.ok ? "text-amber-300" : "text-orange-300")}>{compatibility.ok ? "Hardware: compatible according to scan" : `Hardware: INCOMPATIBLE — ${compatibility.reason || "Windows rejected this configuration"}`}</p>}</div>
             <span className={cn("text-[9px] font-black uppercase tracking-wider", item.status === "applied" ? "text-emerald-400" : item.status === "failed" ? "text-red-400" : item.status === "skipped" || item.status === "stopped" ? "text-amber-300" : item.status === "running" ? "text-red-300" : "text-zinc-600")}>{item.status === "applied" && item.message?.startsWith("Already confirmed") ? "already applied" : item.status}</span>
@@ -884,6 +964,7 @@ export default function AppliedTweaksPage() {
               className="rounded-md border border-red-500/30 bg-red-600/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-red-200 hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
             >{scriptRunningId === item.id ? "Running…" : scriptRunningId ? "Waiting for active tweak" : "Run Script"}</button>}
         </div>; })}
+              {visibleRunItems.length === 0 && <p className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-xs text-zinc-500">{searchQuery.trim() ? "No run results match this search." : "No results in this run tab."}</p>}
       </div>
     </section>}
      {ledgerView === "selected" ? (
@@ -894,21 +975,40 @@ export default function AppliedTweaksPage() {
        failedIds.length === 0
          ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No failed tweaks in the latest run</p><p className="mt-1 text-xs text-zinc-600">When a Windows action fails, its exact error and retry option appear in the run results above.</p></div>
          : <div className="rounded-xl border border-red-500/20 bg-red-500/[.04] px-4 py-3 text-xs text-red-200">Showing {failedIds.length} failed item{failedIds.length === 1 ? "" : "s"} in the Windows results above. Review the error details there before retrying.</div>
-      ) : ids.length === 0 && !nvidiaPresetSubmittedAt ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></div> :
-       <div className="space-y-2">
-         {nvidiaPresetSubmittedAt && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
+       ) : appliedRows.length === 0 ? (
+         <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center">
+           {searchQuery.trim()
+             ? <><Search className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied tweaks match “{searchQuery.trim()}”</p><p className="mt-1 text-xs text-zinc-600">Try a different tweak name, ID, category, or description.</p></>
+             : <><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No applied changes detected</p><p className="mt-1 text-xs text-zinc-600">Enable a supported tweak or run a native state scan.</p></>}
+         </div>
+       ) : (
+        <div id="applied-tweak-list" className="space-y-2">
+          {visibleAppliedIds.length > 0 && <div className="flex items-center justify-between px-1">
+            <p className="text-[10px] text-zinc-600">Newest successful applies first</p>
+            <button
+              type="button"
+              onClick={() => setSelected(current => {
+                const next = new Set(current);
+                if (visibleSelectedCount === visibleAppliedIds.length) visibleAppliedIds.forEach(id => next.delete(id));
+                else visibleAppliedIds.forEach(id => next.add(id));
+                return next;
+              })}
+              className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
+            >{visibleSelectedCount === visibleAppliedIds.length ? "Clear visible selection" : `Select visible applied (${visibleAppliedIds.length})`}</button>
+          </div>}
+          {appliedRows.map(row => {
+            if (row.preset) return <div key={row.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10"><CheckCircle2 className="h-4 w-4 text-blue-300" /></div>
-           <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">Opti Gods NVIDIA Preset</p><p className="text-[11px] text-zinc-400">One preset verifies preview Performance, all 15 Manage 3D settings and 85% Digital Vibrance on every supported active NVIDIA monitor. PhysX is left unchanged. Submission history is separate from the latest verified result.</p><p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{row.title}</p><p className="text-[11px] text-zinc-400">One preset verifies preview Performance, all 15 Manage 3D settings and 85% Digital Vibrance on every supported active NVIDIA monitor. PhysX is left unchanged. Submission history is separate from the latest verified result.</p>{nvidiaPresetSubmittedAt && <p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p>}</div>
            <span className="text-[10px] font-mono text-blue-300">{isCurrentNvidiaPresetVerified() ? "VERIFIED THIS REVISION" : "OLD SUBMISSION · NOT CURRENT VERIFICATION"}</span>
            <button data-testid="button-run-verify-nvidia-preset" disabled={!isNative() || !allowance?.pro || runActive || Boolean(scriptRunningId) || scriptBatchRunning} onClick={() => void rerunIds(["NvidiaControlPanelSettings"], "NVIDIA preset verification finished", true)} className="rounded-lg border border-red-500/40 bg-red-600/15 px-3 py-2 text-xs font-bold text-red-200 disabled:opacity-40">Run &amp; verify preset</button>
-         </div>}
-         {ids.length > 0 && <div className="flex justify-end"><button onClick={() => setSelected(selected.size === ids.length ? new Set() : new Set(ids))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white">{selected.size === ids.length ? "Clear selection" : "Select all applied"}</button></div>}
-         {ids.map(id => {
+          </div>;
+            const id = row.id;
            const meta = getTweakMeta(id);
-           const title = meta?.title ? getHardwareAwareTweakTitle(id, meta.title) : id;
+            const title = row.title;
            const confirmed = nativeState[id] === true;
            const differs = nativeState[id] === false && id in recordedAt;
-           const timestamp = recordedAt[id] ?? appliedAt[id];
+            const timestamp = getAppliedTweakTimestamp(id, recordedAt, appliedAt);
            const provenance = confirmed
              ? "current Windows value confirmed"
              : differs
@@ -931,7 +1031,7 @@ export default function AppliedTweaksPage() {
              {(confirmed || id in recordedAt) && <button disabled={runActive || reapplying === id || batchUndoing} onClick={() => void reapply(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {reapplying === id ? "Reapplying" : "Reapply tweak"}</button>}
              <button disabled={undoing === id || batchUndoing || reapplying === id} onClick={() => void undo(id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[.06] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" /> {undoing === id ? "Undoing" : "Undo"}</button>
            </div>;
-         })}
-       </div>}
+          })}
+       </div>)}
   </div></AppLayout>;
 }

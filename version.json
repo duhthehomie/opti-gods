@@ -1,4 +1,4 @@
 {
-  "version": "5.2.78",
-  "notes": "V5.2.78 — adds Pro missing-only tests for DirectX & FiveM Cache Refresh, Windows Game Mode State Alignment with per-game High performance graphics preferences, and NVIDIA MSI Mode Utility Optimization. Includes staged error codes, verified registry readback and typed local backups before registry writes. Test actions remain outside automatic Full Optimize pending Windows validation. Preserves v5.2.77 repair diagnostics and existing NVIDIA/input protections. Republish the backend before testing."
+  "version": "5.2.79",
+  "notes": "V5.2.79 — adds Applied Tweaks search and newest-first history, concise Game Mode changed/already-configured results with local detailed reports, and safe cache cleanup that includes Windows DirectX cache and skips files in use without claiming they were deleted. Preserves existing NVIDIA verification, repair diagnostics and Pro protections. Republish the backend before testing the updated server-owned commands."
 }

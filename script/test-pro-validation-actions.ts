@@ -35,7 +35,20 @@ assert(!msi.includes("-Name 'DevicePriority'"));
 const cache = PRO_VALIDATION_COMMANDS.DirectXFiveMCacheRefresh;
 assert(!cache.includes("EmptyWorkingSet"));
 assert(cache.includes("ReparsePoint"));
-assert(cache.includes("Assert-GameClosed\n  Remove-Item"));
+assert(cache.includes("Assert-GameClosed\n  $errorsBeforeDelete"));
+assert(cache.includes("Remove-Item -LiteralPath $file -Force -ErrorAction Stop"));
+assert(cache.includes("($Exception.HResult -band 0xFFFF) -in @(32,33)"));
+assert(cache.includes("$Exception = $Exception.InnerException"));
+assert(cache.includes("$global:Error.Remove($record)"), "Remove only handled sharing errors from the strict wrapper's error history");
+assert(cache.includes("$errorsBeforeDelete -notcontains $record"));
+assert(cache.includes("'D3DSCache'"), "Include Windows' DirectX shader cache");
+assert(cache.includes("else { $deleteErrors +="), "Non-lock failures must remain errors");
+assert(cache.includes("if ($deleteErrors.Count)"), "Do not report success after permission/deletion errors");
+assert(cache.includes("$lockedFiles.Count -and $deleted -eq 0 -and $gone -eq 0"), "All-locked cleanup must be an honest no-op");
+assert(cache.includes("[SKIP] No files removed: all"));
+assert(cache.includes("files in use were left untouched (partial cleanup)"));
+assert(cache.includes("Removed and verified $deleted cache files"));
+assert(!cache.includes("Stop-Process"), "Never kill driver or desktop processes to clear a cache");
 assert(cache.includes("$item.Name -ne 'subprocess'"));
 assert(cache.includes("(exe|dll|asi|sys)"));
 assert(!cache.includes("Remove-Item -LiteralPath $root"));
@@ -47,6 +60,15 @@ assert(mode.includes("DoNotExpandEnvironmentNames"));
 assert(mode.includes("Flush($true)"));
 assert(mode.includes("SetAccessRuleProtection($true, $false)"));
 assert(mode.indexOf("Save-RegistrySnapshot $entries") < mode.indexOf("Set-ItemProperty -LiteralPath $entry.Path"));
+assert(mode.includes("$stage = 'BASELINE'"));
+assert(mode.includes("$entry.Before = '<absent>'"));
+assert(mode.includes("foreach ($entry in $changes)"), "Write only mismatched values");
+assert(mode.includes("[OK] Already configured."));
+assert(mode.includes("No settings changed."));
+assert(mode.includes("'CHANGED' } else { 'ALREADY ALIGNED'"));
+assert(mode.includes("Save-ValidationReport 'WindowsGameModeAlignment' $details"));
+assert(!mode.includes("Before -> verified after:"), "Do not put registry dumps in user-facing results");
+assert(mode.indexOf("Readback failed:") < mode.indexOf('$details += "[$status]'), "Report changes only after verified readback");
 
 const missing = getMissingRecommendationIds(PRO_VALIDATION_ACTION_IDS, {
   native: true, stateReady: true, appliedState: { DirectXFiveMCacheRefresh: true }, selectedState: {},

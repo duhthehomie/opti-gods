@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-commands";
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
 import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
+import { runProValidationPowerShellChecks } from "../script/test-pro-validation-powershell";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
@@ -139,3 +140,4 @@ writeFileSync(join(outDir, "windows-repair.ps1"), repairSource, "utf8");
 total++;
 console.log(`[smoke-test] OK — ${total} fixture(s) ready in ${outDir}`);
 console.log(`[smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.`);
+runProValidationPowerShellChecks();

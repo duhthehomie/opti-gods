@@ -35,6 +35,28 @@ function Get-GameExecutables {
   }
   @($files | Select-Object -ExpandProperty FullName -Unique)
 }
+function Get-ValidationDirectory {
+  $directory = Join-Path $env:ProgramData 'OptiGods-ValidationBackups'
+  if (Test-Path -LiteralPath $directory) {
+    if ((Get-Item -LiteralPath $directory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Backup directory cannot be a reparse point.' }
+  } else { New-Item -Path $directory -ItemType Directory -ErrorAction Stop | Out-Null }
+  $acl = New-Object System.Security.AccessControl.DirectorySecurity
+  $acl.SetAccessRuleProtection($true, $false)
+  $acl.SetOwner([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+  foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
+    $identity = [System.Security.Principal.SecurityIdentifier]::new($sid)
+    $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+  }
+  Set-Acl -LiteralPath $directory -AclObject $acl -ErrorAction Stop
+  return $directory
+}
+function Save-ValidationReport([string]$Action, [string[]]$Details) {
+  $file = Join-Path (Get-ValidationDirectory) ($Action + '-report-' + [guid]::NewGuid().ToString('N') + '.txt')
+  $bytes = [Text.Encoding]::UTF8.GetBytes(($Details -join [Environment]::NewLine))
+  $stream = [IO.File]::Open($file,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+  try { $stream.Write($bytes,0,$bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+  Write-Output "[DETAILS] Full verification report saved to $file"
+}
 function Save-RegistrySnapshot([object[]]$Entries, [string]$Action) {
   # Use typed, unexpanded values; an unreadable value must NOT become "absent".
   $snapshot = @()
@@ -51,18 +73,7 @@ function Save-RegistrySnapshot([object[]]$Entries, [string]$Action) {
     }
     $snapshot += @{ Path=$entry.Path; Name=$entry.Name; Exists=$exists; Kind=$kind; Value=$value }
   }
-  $directory = Join-Path $env:ProgramData 'OptiGods-ValidationBackups'
-  if (Test-Path -LiteralPath $directory) {
-    if ((Get-Item -LiteralPath $directory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Backup directory cannot be a reparse point.' }
-  } else { New-Item -Path $directory -ItemType Directory -ErrorAction Stop | Out-Null }
-  $acl = New-Object System.Security.AccessControl.DirectorySecurity
-  $acl.SetAccessRuleProtection($true, $false)
-  $acl.SetOwner([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
-  foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
-    $identity = [System.Security.Principal.SecurityIdentifier]::new($sid)
-    $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
-  }
-  Set-Acl -LiteralPath $directory -AclObject $acl -ErrorAction Stop
+  $directory = Get-ValidationDirectory
   $file = Join-Path $directory ($Action + '-' + [guid]::NewGuid().ToString('N') + '.json')
   $bytes = [Text.Encoding]::UTF8.GetBytes((@{ Action=$Action; CreatedUtc=[DateTime]::UtcNow.ToString('o'); Values=$snapshot } | ConvertTo-Json -Depth 12))
   $stream = [IO.File]::Open($file,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
@@ -74,14 +85,22 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 `;
 
 const CACHE = String.raw`
+function Test-CacheLockException([Exception]$Exception) {
+  while ($Exception) {
+    if (($Exception.HResult -band 0xFFFF) -in @(32,33)) { return $true }
+    $Exception = $Exception.InnerException
+  }
+  return $false
+}
 $stage = 'GAME_RUNNING'; Assert-GameClosed
 $stage = 'DISCOVERY'
 $roots = @(
+  (Join-Path $env:LOCALAPPDATA 'D3DSCache'),
   (Join-Path $env:LOCALAPPDATA 'NVIDIA\DXCache'),
   (Join-Path $env:LOCALAPPDATA 'FiveM\FiveM.app\data\cache')
 )
 $existing = @($roots | Where-Object { Test-Path -LiteralPath $_ -PathType Container })
-if (-not $existing.Count) { throw 'No NVIDIA DXCache or FiveM cache folder was found. Nothing was deleted.' }
+if (-not $existing.Count) { Write-Output '[SKIP] No Windows DirectX, NVIDIA or FiveM cache folder was found. Nothing was deleted.'; return }
 $stage = 'PATH_SAFETY'
 # Enumerate everything before deleting; never follow directory junctions/symlinks.
 $files = @()
@@ -105,14 +124,44 @@ foreach ($root in $existing) {
 }
 $stage = 'DELETE'
 $deleted = 0
+$gone = 0
+$lockedFiles = @()
+$deleteErrors = @()
 foreach ($file in $files) {
   Assert-GameClosed
-  Remove-Item -LiteralPath $file -Force -ErrorAction Stop
-  if (Test-Path -LiteralPath $file) { throw "Cache file remained after deletion: $file" }
-  $deleted++
+  $errorsBeforeDelete = @($global:Error)
+  try {
+    if (-not (Test-Path -LiteralPath $file -ErrorAction Stop)) { $gone++; continue }
+    Remove-Item -LiteralPath $file -Force -ErrorAction Stop
+    if (Test-Path -LiteralPath $file -ErrorAction Stop) { throw "Cache file remained or was recreated after deletion: $file" }
+    $deleted++
+  } catch {
+    # Only sharing/lock violations are safe skips. Access denied is NOT a lock.
+    if (Test-CacheLockException $_.Exception) {
+      $lockedFiles += $file
+      # Handled sharing violations must not become the delivery wrapper's
+      # "unexpected PowerShell error". Preserve all earlier/non-lock errors.
+      foreach ($record in @($global:Error)) {
+        if ($errorsBeforeDelete -notcontains $record -and (Test-CacheLockException $record.Exception)) {
+          $global:Error.Remove($record)
+        }
+      }
+    }
+    else { $deleteErrors += "$file | $($_.Exception.Message) | HRESULT=$($_.Exception.HResult)" }
+  }
 }
 $stage = 'VERIFY'; Assert-GameClosed
-Write-Output "[OK] Verified deletion of $deleted cache files from $($existing.Count) existing cache folder(s). Missing folders were left absent; game files and server-cache folders were not touched. Shader caches rebuild on the next launch."
+$summary = "Cache cleanup: $deleted deleted and verified, $($lockedFiles.Count) locked and left untouched, $gone already absent, $($deleteErrors.Count) deletion errors."
+if ($deleteErrors.Count) {
+  $stage = 'DELETE'
+  throw "$summary Other eligible files were still attempted. First errors: $($deleteErrors | Select-Object -First 3 | Out-String)"
+}
+if ($lockedFiles.Count -and $deleted -eq 0 -and $gone -eq 0) {
+  Write-Output "[SKIP] No files removed: all $($lockedFiles.Count) remaining cache files are in use. Nothing was changed. Close GPU-using apps and retry; NVIDIA services were left running."
+  return
+}
+$note = if ($lockedFiles.Count) { "$($lockedFiles.Count) files in use were left untouched (partial cleanup)." } else { "No locked files remained in the cleanup list." }
+Write-Output "[OK] Removed and verified $deleted cache files. $note Game files were not changed. Shader caches rebuild when games run."
 `;
 
 const GAME_MODE = String.raw`
@@ -141,18 +190,46 @@ foreach ($exe in $executables) {
   $value = (($tokens + @('GpuPreference=2')) -join ';') + ';'
   $entries += @{Path=$gpu;Name=$exe;Value=$value;Kind='String'}
 }
-$stage = 'BACKUP'; Save-RegistrySnapshot $entries 'WindowsGameModeAlignment'
-$stage = 'WRITE'
+$stage = 'BASELINE'
 foreach ($entry in $entries) {
+  $entry.Before = '<absent>'
+  $entry.NeedsChange = $true
+  if (Test-Path -LiteralPath $entry.Path) {
+    $key = Get-Item -LiteralPath $entry.Path -ErrorAction Stop
+    if ($key.GetValueNames() -contains $entry.Name) {
+      $kind = $key.GetValueKind($entry.Name).ToString()
+      $before = $key.GetValue($entry.Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+      $entry.Before = "$kind=$before"
+      $entry.NeedsChange = $kind -ne $entry.Kind -or [string]$before -cne [string]$entry.Value
+    }
+  }
+}
+$changes = @($entries | Where-Object { $_.NeedsChange })
+if ($changes.Count) {
+  $stage = 'BACKUP'; Save-RegistrySnapshot $entries 'WindowsGameModeAlignment'
+}
+$stage = 'WRITE'
+foreach ($entry in $changes) {
   if (-not (Test-Path -LiteralPath $entry.Path)) { New-Item -Path $entry.Path -Force -ErrorAction Stop | Out-Null }
   Set-ItemProperty -LiteralPath $entry.Path -Name $entry.Name -Value $entry.Value -Type $entry.Kind -Force -ErrorAction Stop
 }
 $stage = 'VERIFY'
+$details = @()
 foreach ($entry in $entries) {
   $key = Get-Item -LiteralPath $entry.Path -ErrorAction Stop
   if ($key.GetValueKind($entry.Name).ToString() -ne $entry.Kind -or [string]$key.GetValue($entry.Name) -cne [string]$entry.Value) { throw "Readback failed: $($entry.Path) / $($entry.Name)" }
+  $status = if ($entry.NeedsChange) { 'CHANGED' } else { 'ALREADY ALIGNED' }
+  $details += "[$status] $($entry.Name): $($entry.Before) -> $($entry.Kind)=$($entry.Value)"
 }
-Write-Output "[OK] Game Mode enabled, Windows background game capture disabled, and High performance graphics preference verified for $($executables.Count) installed FiveM/GTA executables. Windows selects the adapter; NVIDIA recording and overlays were not changed."
+$stage = 'REPORT'
+Save-ValidationReport 'WindowsGameModeAlignment' $details
+if (-not $changes.Count) {
+  Write-Output "[OK] Already configured. Game Mode was on, Windows background capture was off, and all $($executables.Count) detected FiveM/GTA apps were set to High performance. No settings changed."
+} else {
+  $systemChanges = @($changes | Where-Object { $_.Path -ne $gpu }).Count
+  $gameChanges = @($changes | Where-Object { $_.Path -eq $gpu }).Count
+  Write-Output "[OK] Applied and verified: $systemChanges Game Mode/capture settings updated; $gameChanges of $($executables.Count) FiveM/GTA apps changed to High performance. Settings already correct were left alone."
+}
 `;
 
 const MSI = String.raw`
