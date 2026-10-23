@@ -315,6 +315,7 @@ export default function Nvidia() {
   const os = useOsDetection();
   const smartRecs = computeSmartRecs(hw, os);
   const [dismissedWarning, setDismissedWarning] = useState(false);
+  const [presetRunning, setPresetRunning] = useState(false);
 
   const discreteNvidiaGpus = hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated);
   const safeMsiBlockReason = hw.loading || hw.gpuName === "Detecting..."
@@ -377,6 +378,22 @@ export default function Nvidia() {
     } catch (error) {
       toast({ title: "NVIDIA MSI was not confirmed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally { setProToolBusy(null); }
+  };
+  const runNvidiaPreset = async () => {
+    if (!canApplyNvidiaPreset || presetRunning || proToolBusy) return;
+    setPresetRunning(true);
+    try {
+      // The runner queues the authorized native action and hands the user to
+      // Applied Tweaks, where Windows verification reports its actual result.
+      await applyTweakBatch([NVIDIA_PRESET_ACTION_ID]);
+    } catch (error) {
+      setPresetRunning(false);
+      toast({
+        title: "Could not start NVIDIA preset verification",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    }
   };
   const applyBulk = async (ids: string[], label = "NVIDIA recommendations") => {
     const eligibleIds = ids.filter(id => id !== NVIDIA_PRESET_ACTION_ID || canApplyNvidiaPreset);
@@ -485,6 +502,46 @@ export default function Nvidia() {
           </p>
         </section>
 
+        <section className="rounded-xl border border-blue-500/25 bg-blue-500/[.04] p-5" data-testid="section-nvidia-preset-action">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-blue-300" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-blue-200">Opti Gods NVIDIA Preset</h2>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                Run the authorized preset and verify its supported NVIDIA Control Panel settings on this PC.
+              </p>
+            </div>
+            {isPro ? (
+              <Button
+                data-testid="button-run-verify-nvidia-preset"
+                onClick={() => void runNvidiaPreset()}
+                disabled={!canApplyNvidiaPreset || presetRunning || !!proToolBusy}
+                title={!canApplyNvidiaPreset ? "Requires the native Windows app, Pro, a completed hardware scan, and exactly one discrete NVIDIA GPU." : "Run and verify the NVIDIA preset"}
+                className="shrink-0 bg-blue-700 text-xs font-bold text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {presetRunning ? "Starting verification…" : "Run & verify preset"}
+              </Button>
+            ) : (
+              <ProUnlockButton>
+                <Button data-testid="button-pro-unlock-nvidia-preset" className="shrink-0 bg-blue-700 text-xs font-bold text-white opacity-60">
+                  Unlock Pro · NVIDIA preset
+                </Button>
+              </ProUnlockButton>
+            )}
+          </div>
+          <p className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/[.05] px-3 py-2 text-[11px] font-semibold text-amber-200">
+            Keep your mouse and keyboard untouched while Control Panel verification runs. Moving either can interrupt the check.
+          </p>
+          <p className={cn("mt-2 text-[10px] font-mono font-bold", isCurrentNvidiaPresetVerified() ? "text-emerald-300" : "text-zinc-500")}>
+            {isCurrentNvidiaPresetVerified() ? "CURRENT REVISION VERIFIED" : "CURRENT REVISION NOT VERIFIED"}
+          </p>
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Windows results and verified success or error details appear in Applied Tweaks.
+          </p>
+        </section>
+
         <section className="rounded-xl border border-red-500/20 bg-red-500/[.04] p-5" data-testid="section-nvidia-pro-tools">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-red-300" />
@@ -496,7 +553,7 @@ export default function Nvidia() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {isPro ? <>
-              <p className="text-xs text-zinc-400">Use the verified MSI · High action above. Run the NVIDIA performance preset from Full Optimize or Applied Tweaks.</p>
+              <p className="text-xs text-zinc-400">Use the verified MSI · High action above. Run the NVIDIA performance preset using the verification control above.</p>
                           </> : <ProUnlockButton><Button className="bg-red-700 text-xs opacity-70">Unlock Pro NVIDIA tools</Button></ProUnlockButton>}
           </div>
           <p className="mt-3 text-[11px] text-amber-300">

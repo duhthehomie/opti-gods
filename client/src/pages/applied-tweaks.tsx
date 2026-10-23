@@ -721,7 +721,7 @@ export default function AppliedTweaksPage() {
   // that can produce a "confirmed" label.
   const nativeIds = Object.keys(nativeState).filter(id => nativeState[id]);
   const recordedIds = Object.keys(recordedAt).filter(id => !nativeState[id]);
-   const ids = Array.from(new Set([...nativeIds, ...recordedIds]));
+   const ids = Array.from(new Set([...nativeIds, ...recordedIds])).filter(id => id !== "NvidiaControlPanelSettings");
    const searchMetaForId = (id: string) => {
      if (id === "NvidiaControlPanelSettings") {
        return {
@@ -738,8 +738,12 @@ export default function AppliedTweaksPage() {
      };
    };
    const titleForId = (id: string) => searchMetaForId(id).title || id;
-   const orderedAppliedIds = sortAppliedTweakIds(ids, recordedAt, appliedAt, titleForId);
-   const visibleAppliedIds = filterAppliedTweakIds(orderedAppliedIds, searchQuery, searchMetaForId);
+   const historyIds = [...ids, ...(nvidiaPresetSubmittedAt ? ["NvidiaControlPanelSettings"] : [])];
+   const historyRecordedAt = nvidiaPresetSubmittedAt
+     ? { ...recordedAt, NvidiaControlPanelSettings: nvidiaPresetSubmittedAt }
+     : recordedAt;
+   const orderedAppliedIds = sortAppliedTweakIds(historyIds, historyRecordedAt, appliedAt, titleForId);
+    const visibleAppliedIds = filterAppliedTweakIds(orderedAppliedIds, searchQuery, searchMetaForId);
    const visibleRunItems = orderedRunItems.filter(item => {
      if (runTab !== "all" && item.status !== runTab) return false;
      const meta = searchMetaForId(item.id);
@@ -751,34 +755,21 @@ export default function AppliedTweaksPage() {
      return terms.every(term => searchable.includes(term));
    });
    const runItemsInCurrentTab = runItems.filter(item => runTab === "all" || item.status === runTab);
-   const presetNeedsOwnRow = Boolean(nvidiaPresetSubmittedAt) && !ids.includes("NvidiaControlPanelSettings");
-   const appliedRecordCount = ids.length + (presetNeedsOwnRow ? 1 : 0);
-   const visibleAppliedCount = visibleAppliedIds.length + (presetNeedsOwnRow && filterAppliedTweakIds(
-     ["NvidiaControlPanelSettings"],
-     searchQuery,
-     searchMetaForId,
-   ).length > 0 ? 1 : 0);
-   const visibleSelectedCount = visibleAppliedIds.filter(id => selected.has(id)).length;
-   const appliedRows = [
-     ...orderedAppliedIds.map(id => ({
+    const appliedRecordCount = historyIds.length;
+    const visibleAppliedCount = visibleAppliedIds.length;
+   const selectableVisibleIds = visibleAppliedIds.filter(id => id !== "NvidiaControlPanelSettings");
+   const visibleSelectedCount = selectableVisibleIds.filter(id => selected.has(id)).length;
+    const appliedRows = orderedAppliedIds
+      .map(id => ({
        id,
        title: titleForId(id),
-       timestamp: getAppliedTweakTimestamp(id, recordedAt, appliedAt),
-       preset: id === "NvidiaControlPanelSettings",
-     })),
-     ...(presetNeedsOwnRow ? [{
-       id: "NvidiaControlPanelSettings",
-       title: "Opti Gods NVIDIA Preset",
-       timestamp: 0,
-       preset: true,
-     }] : []),
-   ].filter(row => visibleAppliedIds.includes(row.id) || (row.preset && presetNeedsOwnRow && filterAppliedTweakIds(
-     ["NvidiaControlPanelSettings"],
-     searchQuery,
-     searchMetaForId,
-   ).length > 0))
+       timestamp: id === "NvidiaControlPanelSettings"
+         ? nvidiaPresetSubmittedAt ?? 0
+         : getAppliedTweakTimestamp(id, recordedAt, appliedAt),
+      }))
+      .filter(row => visibleAppliedIds.includes(row.id))
      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0) || a.title.localeCompare(b.title));
-   const selectedAppliedIds = ids.filter(id => selected.has(id));
+   const selectedAppliedIds = ids.filter(id => id !== "NvidiaControlPanelSettings" && selected.has(id));
   // Keep conflicting records visible for recovery, but do not count them or
   // unverified NVIDIA submissions as successfully applied.
   const appliedCount = new Set([
@@ -786,7 +777,7 @@ export default function AppliedTweaksPage() {
     ...(isCurrentNvidiaPresetVerified() ? ["NvidiaControlPanelSettings"] : []),
   ]).size;
   const selectedTweakIds = Object.entries(tweaks)
-    .filter(([id, enabled]) => enabled && Boolean(getTweakMeta(id)) && !ids.includes(id))
+    .filter(([id, enabled]) => id !== "NvidiaControlPanelSettings" && enabled && Boolean(getTweakMeta(id)) && !ids.includes(id))
     .map(([id]) => id)
     .sort((a, b) => (getTweakMeta(a)?.title || a).localeCompare(getTweakMeta(b)?.title || b));
   const undo = async (id: string, quiet = false): Promise<UndoOutcome> => {
@@ -893,27 +884,6 @@ export default function AppliedTweaksPage() {
        <span className="font-bold">Free native allowance: {allowance.used} / {allowance.limit} active.</span>{" "}
        {allowance.remaining === 0 ? "The server is blocking additional instant tweaks. Undo one confirmed tweak to free a slot." : `${allowance.remaining} slot${allowance.remaining === 1 ? "" : "s"} remaining.`}
      </div>}
-       <section aria-label="Search applied tweaks and run results" className="rounded-xl border border-red-500/20 bg-black/30 p-3">
-         <label htmlFor="applied-tweak-search" className="mb-2 block text-[10px] font-bold uppercase tracking-[.18em] text-zinc-400">Find an applied tweak or run result</label>
-         <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 focus-within:border-red-500/50">
-           <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-red-400" />
-           <input
-             id="applied-tweak-search"
-             type="search"
-             value={searchQuery}
-             onChange={event => setSearchQuery(event.target.value)}
-             placeholder="Search title, ID, category, description, or latest-run message"
-             aria-describedby="applied-tweak-search-count"
-             className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
-           />
-           {searchQuery && <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search" className="rounded p-1 text-zinc-500 hover:text-white"><X aria-hidden="true" className="h-4 w-4" /></button>}
-         </div>
-         <p id="applied-tweak-search-count" role="status" aria-live="polite" className="mt-2 text-[11px] text-zinc-500">
-           {searchQuery.trim()
-             ? `${visibleAppliedCount} of ${appliedRecordCount} applied records match${runItems.length ? ` · ${visibleRunItems.length} of ${runItemsInCurrentTab.length} run results in this tab match` : ""}`
-             : `${appliedRecordCount} applied records · newest first${runItems.length ? ` · ${runItemsInCurrentTab.length} run results in this tab` : ""}`}
-         </p>
-       </section>
        {runFinished && !running && runItems.length > 0 && <div role="status" className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", runHadFailures || skippedRunCount > 0 ? "border-amber-500/30 bg-amber-500/[.07] text-amber-100" : "border-emerald-500/25 bg-emerald-500/[.06] text-emerald-100")}>
         {runHadFailures || skippedRunCount > 0 ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />}
         <div>
@@ -966,7 +936,28 @@ export default function AppliedTweaksPage() {
         </div>; })}
               {visibleRunItems.length === 0 && <p className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-xs text-zinc-500">{searchQuery.trim() ? "No run results match this search." : "No results in this run tab."}</p>}
       </div>
-    </section>}
+     </section>}
+        <section aria-label="Search applied tweaks and run results" className="rounded-xl border border-red-500/20 bg-black/30 p-3">
+          <label htmlFor="applied-tweak-search" className="mb-2 block text-[10px] font-bold uppercase tracking-[.18em] text-zinc-400">Search tweak</label>
+          <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 focus-within:border-red-500/50">
+            <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-red-400" />
+            <input
+              id="applied-tweak-search"
+              type="search"
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+              placeholder="Search tweak"
+              aria-describedby="applied-tweak-search-count"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+            />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search" className="rounded p-1 text-zinc-500 hover:text-white"><X aria-hidden="true" className="h-4 w-4" /></button>}
+          </div>
+          <p id="applied-tweak-search-count" role="status" aria-live="polite" className="mt-2 text-[11px] text-zinc-500">
+            {searchQuery.trim()
+              ? `${visibleAppliedCount} of ${appliedRecordCount} applied records match${runItems.length ? ` · ${visibleRunItems.length} of ${runItemsInCurrentTab.length} run results in this tab match` : ""}`
+              : `${appliedRecordCount} applied records · newest first${runItems.length ? ` · ${runItemsInCurrentTab.length} run results in this tab` : ""}`}
+          </p>
+        </section>
      {ledgerView === "selected" ? (
        selectedTweakIds.length === 0
          ? <div className="og-scanline rounded-2xl border border-dashed border-white/10 bg-black/20 p-14 text-center"><Radio className="mx-auto h-8 w-8 text-zinc-700" /><p className="mt-3 text-sm font-bold text-zinc-300">No pending tweaks are selected</p><p className="mt-1 text-xs text-zinc-600">Select tweaks on a category page or use Smart Recommendations. Applied changes stay in the Applied ledger; Unselect All clears saved toggles without removing that history.</p></div>
@@ -983,27 +974,34 @@ export default function AppliedTweaksPage() {
          </div>
        ) : (
         <div id="applied-tweak-list" className="space-y-2">
-          {visibleAppliedIds.length > 0 && <div className="flex items-center justify-between px-1">
+          {selectableVisibleIds.length > 0 && <div className="flex items-center justify-between px-1">
             <p className="text-[10px] text-zinc-600">Newest successful applies first</p>
             <button
               type="button"
               onClick={() => setSelected(current => {
                 const next = new Set(current);
-                if (visibleSelectedCount === visibleAppliedIds.length) visibleAppliedIds.forEach(id => next.delete(id));
-                else visibleAppliedIds.forEach(id => next.add(id));
+                if (visibleSelectedCount === selectableVisibleIds.length) selectableVisibleIds.forEach(id => next.delete(id));
+                else selectableVisibleIds.forEach(id => next.add(id));
                 return next;
               })}
               className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
-            >{visibleSelectedCount === visibleAppliedIds.length ? "Clear visible selection" : `Select visible applied (${visibleAppliedIds.length})`}</button>
+            >{visibleSelectedCount === selectableVisibleIds.length ? "Clear visible selection" : `Select visible applied (${selectableVisibleIds.length})`}</button>
           </div>}
-          {appliedRows.map(row => {
-            if (row.preset) return <div key={row.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[.04] px-4 py-3">
-           <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10"><CheckCircle2 className="h-4 w-4 text-blue-300" /></div>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-zinc-100">{row.title}</p><p className="text-[11px] text-zinc-400">One preset verifies preview Performance, all 15 Manage 3D settings and 85% Digital Vibrance on every supported active NVIDIA monitor. PhysX is left unchanged. Submission history is separate from the latest verified result.</p>{nvidiaPresetSubmittedAt && <p className="mt-0.5 text-[10px] text-zinc-500">Submitted {new Date(nvidiaPresetSubmittedAt).toLocaleString()}</p>}</div>
-           <span className="text-[10px] font-mono text-blue-300">{isCurrentNvidiaPresetVerified() ? "VERIFIED THIS REVISION" : "OLD SUBMISSION · NOT CURRENT VERIFICATION"}</span>
-           <button data-testid="button-run-verify-nvidia-preset" disabled={!isNative() || !allowance?.pro || runActive || Boolean(scriptRunningId) || scriptBatchRunning} onClick={() => void rerunIds(["NvidiaControlPanelSettings"], "NVIDIA preset verification finished", true)} className="rounded-lg border border-red-500/40 bg-red-600/15 px-3 py-2 text-xs font-bold text-red-200 disabled:opacity-40">Run &amp; verify preset</button>
-          </div>;
+           {appliedRows.map(row => {
             const id = row.id;
+            if (id === "NvidiaControlPanelSettings") {
+              const verified = isCurrentNvidiaPresetVerified();
+              return <div key={id} data-testid="applied-nvidia-preset-history" className="flex flex-wrap items-center gap-3 rounded-xl border border-white/8 bg-black/30 px-4 py-3">
+                <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border", verified ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10")}>
+                  <CheckCircle2 className={cn("h-4 w-4", verified ? "text-emerald-400" : "text-amber-400")} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-zinc-100">{row.title}</p>
+                  {row.timestamp > 0 && <p className="mt-0.5 text-[10px] text-zinc-500">Submitted on {new Date(row.timestamp).toLocaleString()}</p>}
+                </div>
+                <span className={cn("text-[10px] font-mono", verified ? "text-emerald-400" : "text-amber-300")}>{verified ? "VERIFIED" : "RECORDED · NOT VERIFIED"}</span>
+              </div>;
+            }
            const meta = getTweakMeta(id);
             const title = row.title;
            const confirmed = nativeState[id] === true;

@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { buildSingleTweakPowerShell } from "../server/native-script-delivery";
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
 import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-commands";
+import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
 import ts from "typescript";
 
 // Fixed reviewed scope. Use the same checked runtime as authenticated server
@@ -30,6 +31,12 @@ for (const id of additions) {
   scripts[id] = buildSingleTweakPowerShell(id, corrected);
 }
 // Keep the exact build-time allowlist aligned; never weaken or bypass it.
+// Cache refresh is individually reviewed and still requires live Pro authorization.
+// Bundle it so an older website cannot reintroduce the obsolete all-locked error.
+scripts.DirectXFiveMCacheRefresh = buildSingleTweakPowerShell(
+  "DirectXFiveMCacheRefresh",
+  PRO_VALIDATION_COMMANDS.DirectXFiveMCacheRefresh,
+);
 const buildSource = readFileSync(new URL("../src-tauri/build.rs", import.meta.url), "utf8");
 const requiredLine = buildSource.match(/^\$required = @\(([^)\r\n]+)\)$/m);
 if (!requiredLine) throw new Error("Missing build-time reviewed script allowlist.");

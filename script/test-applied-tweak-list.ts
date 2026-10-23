@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { filterAppliedTweakIds, getAppliedTweakTimestamp, sortAppliedTweakIds } from "../client/src/lib/applied-tweak-list";
 
 const ids = ["OldConfirmed", "WindowsGameModeAlignment", "NvidiaMsiModeValidation", "UnknownTime", "NvidiaControlPanelSettings"];
@@ -28,4 +29,16 @@ assert.deepEqual(filterAppliedTweakIds(sorted, "nvidia", id => metadata[id]), ["
 assert.deepEqual(filterAppliedTweakIds(sorted, "does not exist", id => metadata[id]), []);
 assert.deepEqual(filterAppliedTweakIds(sorted, "   ", id => metadata[id]), sorted);
 assert.deepEqual(filterAppliedTweakIds(["UnregisteredTweak"], "unregistered", () => undefined), ["UnregisteredTweak"]);
+const appliedPage = readFileSync("client/src/pages/applied-tweaks.tsx", "utf8");
+const resultsStart = appliedPage.indexOf("Windows results</p>");
+const resultsEnd = appliedPage.indexOf("</section>", resultsStart);
+const searchPosition = appliedPage.indexOf('id="applied-tweak-search"');
+assert(resultsStart >= 0 && resultsEnd > resultsStart && searchPosition > resultsEnd, "Search must follow the Windows Results panel");
+assert(appliedPage.includes('placeholder="Search tweak"'), "Keep the requested concise search text");
+assert(!appliedPage.includes('data-testid="button-run-verify-nvidia-preset"'), "The dedicated preset button belongs on NVIDIA tweaks, not history");
+const nvidiaPage = readFileSync("client/src/pages/nvidia.tsx", "utf8");
+assert(nvidiaPage.includes('data-testid="button-run-verify-nvidia-preset"'));
+assert(nvidiaPage.includes("mouse and keyboard untouched"));
+assert(appliedPage.includes('data-testid="applied-nvidia-preset-history"'), "Keep the read-only preset result in permanent history");
+assert(appliedPage.includes("selectableVisibleIds"), "Bulk selection must exclude the read-only preset result");
 console.log("Applied tweak list checks passed: newest timestamps, ties, invalid dates, search names/IDs/categories/descriptions, clear/no-match, preset ordering, immutable inputs.");

@@ -1,4 +1,4 @@
 {
-  "version": "5.2.79",
-  "notes": "V5.2.79 — adds Applied Tweaks search and newest-first history, concise Game Mode changed/already-configured results with local detailed reports, and safe cache cleanup that includes Windows DirectX cache and skips files in use without claiming they were deleted. Preserves existing NVIDIA verification, repair diagnostics and Pro protections. Republish the backend before testing the updated server-owned commands."
+  "version": "5.2.80",
+  "notes": "V5.2.80 — restores a searchable read-only NVIDIA preset history entry, moves its Run & verify control beside MSI High in NVIDIA Tweaks, and places Search tweak below Windows Results. Bundles the reviewed DirectX & FiveM cache command so an older backend cannot serve the obsolete locked-file failure. Clears eligible cache files; files in use are left untouched and reported as skipped when nothing can be removed. Preserves live Pro authorization and existing NVIDIA verification."
 }

@@ -87,7 +87,7 @@ fn validate_bundled_scripts() {
     let validation = r#"
 $ErrorActionPreference = 'Stop'
 $scripts = Get-Content -LiteralPath $env:OPTI_BUNDLE_PATH -Raw -Encoding UTF8 | ConvertFrom-Json
-$required = @('CodDefenderExclusion','FiveM1650VRAMBudget','FiveM3500PerfPlan','EnableNvidiaMSIPro','DisableCoreParking','Win11ParkingCoreOverride','Win11ProcessorIdleMin','su_chrome','FiveMSteamOverlayOff','Win11Widgets','ProcSvc_cbdhsvc','ProcSvc_OneSyncSvc','ProcSvc_ApplyAll','WinTitusAdobeBlock','WinTitusEdgeRemove','WinTitusServicesManual')
+$required = @('CodDefenderExclusion','FiveM1650VRAMBudget','FiveM3500PerfPlan','EnableNvidiaMSIPro','DisableCoreParking','Win11ParkingCoreOverride','Win11ProcessorIdleMin','su_chrome','FiveMSteamOverlayOff','Win11Widgets','ProcSvc_cbdhsvc','ProcSvc_OneSyncSvc','ProcSvc_ApplyAll','WinTitusAdobeBlock','WinTitusEdgeRemove','WinTitusServicesManual','DirectXFiveMCacheRefresh')
 if (@($scripts.PSObject.Properties).Count -ne $required.Count) { throw 'Unexpected bundled script scope' }
 foreach ($id in $required) {
   $source = $scripts.PSObject.Properties[$id].Value

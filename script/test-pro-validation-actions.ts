@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
 import { PRO_VALIDATION_ACTION_IDS, validationActionCompatible } from "../shared/pro-validation-actions";
 import { buildSafePreset, isHardwareCompatible, type PresetHardware } from "../shared/preset-builder";
 import { NATIVE_TWEAK_ID_SET } from "../shared/native-tweak-ids";
 import { getMissingRecommendationIds } from "../client/src/lib/missing-recommendations";
 import { buildSingleTweakPowerShell } from "../server/native-script-delivery";
+
+if (existsSync("src-tauri/resources/native-tweak-scripts.json")) {
+  const bundled = JSON.parse(readFileSync("src-tauri/resources/native-tweak-scripts.json", "utf8"));
+  assert.equal(bundled.DirectXFiveMCacheRefresh,
+    buildSingleTweakPowerShell("DirectXFiveMCacheRefresh", PRO_VALIDATION_COMMANDS.DirectXFiveMCacheRefresh),
+    "The installer must contain the current reviewed cache command, not depend on the deployed backend");
+  assert(readFileSync("src-tauri/build.rs", "utf8").includes("'DirectXFiveMCacheRefresh'"),
+    "The reviewed cache action must remain in the exact build-time allowlist");
+}
 
 const rig: PresetHardware = {
   gpuVendor: "nvidia", gpuName: "GTX 1650 Super", cpuBrand: "amd",
