@@ -738,6 +738,7 @@ fn trusted_ps_requires_reboot(id: &str) -> bool {
         "EnableHAGS"
             | "EnableMSIMode"
             | "EnableMSIMode_Safe"
+            | "NvidiaMsiModeValidation"
             | "DisableMemoryCompression"
             | "DisableMMAgentMemoryCompression"
             | "InputLagTCP"
@@ -804,8 +805,13 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                 ok: true,
                 id: id.to_string(),
                 message: format!(
-                    "{} via PowerShell fallback.",
-                    if undo { "Undone" } else { "Applied" }
+                    "{} via PowerShell fallback. {}",
+                    if undo { "Undone" } else { "Applied" },
+                    if matches!(id, "DirectXFiveMCacheRefresh" | "WindowsGameModeAlignment" | "NvidiaMsiModeValidation") {
+                        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+                    } else {
+                        String::new()
+                    }
                 ),
                 undo_token: None,
                 requires_reboot: trusted_ps_requires_reboot(id),
@@ -822,7 +828,9 @@ fn run_powershell(snippet: &str, id: &str, undo: bool) -> TweakResult {
                      {
                          let stderr = String::from_utf8_lossy(&out.stderr);
                          let stdout = String::from_utf8_lossy(&out.stdout);
-                         let detail = if stderr.trim().is_empty() {
+                         let detail = if matches!(id, "DirectXFiveMCacheRefresh" | "WindowsGameModeAlignment" | "NvidiaMsiModeValidation") {
+                             format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_owned()
+                         } else if stderr.trim().is_empty() {
                              stdout.trim().to_owned()
                          } else {
                              stderr.trim().to_owned()

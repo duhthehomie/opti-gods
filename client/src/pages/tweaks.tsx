@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { getProValidationActionIds } from "@/lib/pro-validation-actions";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
@@ -430,7 +431,7 @@ export default function TweaksPage() {
     [...Array.from(smartRecs.ids), NVIDIA_PRESET_ACTION_ID],
     id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
   ), ...(nvidiaPresetEligible && getTweakCompatibility("EnableNvidiaMSIPro").ok ? ["EnableNvidiaMSIPro"] : [])]));
-  const missingMatchedIds = getMissingRecommendationIds(matchedProIds, {
+  const missingMatchedIds = getMissingRecommendationIds([...matchedProIds, ...getProValidationActionIds(native, isPro)], {
     native,
     stateReady: !native || (nativeDetectionReady && !nativeDetectionError),
     appliedState: detectedTweaks,

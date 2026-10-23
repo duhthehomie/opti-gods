@@ -131,6 +131,7 @@ export type NativeTweakRunState = {
   processCountBefore?: number;
   processCountAfter?: number;
   stopRequested?: boolean;
+  error?: string;
 };
 
 export type TweakBatchOptions = {

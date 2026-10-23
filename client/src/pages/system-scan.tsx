@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { getProValidationActionIds } from "@/lib/pro-validation-actions";
 import { getPendingNvidiaPresetIds, canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -456,7 +457,7 @@ function SmartRecsBreakdown() {
     dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
   });
   const safeIds = getEligibleSmartRecommendationIds(
-    [...recs.ids, ...(presetEligible ? ["NvidiaControlPanelSettings"] : [])],
+    [...Array.from(recs.ids), ...(presetEligible ? ["NvidiaControlPanelSettings"] : [])],
     id => id === "NvidiaControlPanelSettings" ? presetEligible : getTweakCompatibility(id).ok,
   );
   const total = safeIds.length;
@@ -483,7 +484,7 @@ function SmartRecsBreakdown() {
   const latestRunSkippedIds = new Set(
     lastNativeRun?.items.filter(item => item.status === "skipped" && safeIds.includes(item.id)).map(item => item.id) ?? [],
   );
-  const missingSafeIds = getMissingRecommendationIds(safeIds, {
+  const missingSafeIds = getMissingRecommendationIds([...safeIds, ...getProValidationActionIds(native, isPro)], {
     native,
     stateReady: nativeAppliedStateUsable,
     appliedState: confirmedAppliedState,

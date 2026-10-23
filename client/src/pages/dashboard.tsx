@@ -1,4 +1,5 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
+import { getProValidationActionIds } from "@/lib/pro-validation-actions";
 import { useState, useCallback, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
@@ -840,7 +841,7 @@ export default function Dashboard() {
   const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
   // Keep the score tied to the complete run, but match AI Optimize's missing
   // count to current eligible recommendations and verified native state.
-  const missingRecommendedIds = getMissingRecommendationIds(matchedRecommendedIds, {
+  const missingRecommendedIds = getMissingRecommendationIds([...matchedRecommendedIds, ...getProValidationActionIds(native, isPro)], {
     native,
     stateReady: !native || (nativeDetectionReady && !nativeDetectionError),
     appliedState: detectedNativeTweaks,
@@ -868,7 +869,7 @@ export default function Dashboard() {
     && lastNativeRun!.items.length > 0
     && lastNativeRun!.items.every(item => item.status === "applied")
     && scoreIds.every(id => activeIdsForDisplay.has(id));
-  const recommendedApplied = fullOptimizeSucceeded;
+  const recommendedApplied = fullOptimizeSucceeded && missingRecommendedCount === 0;
   // 100% is reserved for a failure-free Pro full optimization. Detection can
   // still show the exact partial score, but a partial/Free run must stop at 99.
   const displayScore = rawScorePercent === 100 && !fullOptimizeSucceeded ? 99 : rawScorePercent;

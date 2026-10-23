@@ -22,6 +22,8 @@ import { getLatestGhRelease, bustGhCache } from "./github-release";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
 import { buildSafeWindowsCommandOverride } from "./windows-tweak-commands";
 import { buildNativeBatchCommandFix } from "./native-batch-command-fixes";
+import { PRO_VALIDATION_COMMANDS } from "./pro-validation-commands";
+import { PRO_VALIDATION_ACTION_IDS } from "@shared/pro-validation-actions";
 import { buildLocalGraphicsPack } from "./graphics-pack-local";
 
 // Single source of truth for the Process Lasso IFEO fallback executable list.
@@ -132,6 +134,7 @@ const WIN32_PRIORITY_SEPARATION_COMMAND =
   `$logicalProcessors = [Environment]::ProcessorCount; $value = if ($logicalProcessors -ge 12) { 0x26 } else { 0x1A }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value $value -Type DWord -Force; Write-Host ("[OK] Win32PrioritySeparation = 0x{0:X2} ({0} decimal), selected for {1} logical processors" -f $value, $logicalProcessors) -ForegroundColor Green`;
 
 const TWEAK_COMMANDS: Record<string, string> = {
+  ...PRO_VALIDATION_COMMANDS,
   EnableNvidiaMSIPro: `$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' }); $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' }); if ($active.Count -ne 1) { throw "NVIDIA MSI requires exactly one active display adapter; detected $($active.Count). Hybrid or multi-GPU display topology is not supported." }; if ($nvidia.Count -ne 1) { throw "NVIDIA MSI requires exactly one active NVIDIA display adapter; the active adapter is not NVIDIA or the topology is ambiguous." }; $gpu = $nvidia[0]; $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; if (!(Test-Path $msiPath)) { throw "Windows did not expose an MSI capability path for the detected NVIDIA adapter ($($gpu.FriendlyName))." }; $before = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($before -notin @(0,1)) { throw "The detected NVIDIA adapter has an unsupported MSISupported value ($before)." }; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop; $after = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the detected NVIDIA adapter." }; Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). NICs, NVMe devices, affinity, and priority were not changed." -ForegroundColor Green`,
   // These two IDs are consumed by dedicated native commands.  They deliberately
   // have no PowerShell fallback: a renderer can obtain a Pro ticket, but only
@@ -1830,7 +1833,7 @@ export async function registerRoutes(
     Object.prototype.hasOwnProperty.call(TWEAK_COMMANDS, id);
   // This command is intentionally unavailable to free/native allowance users.
   // Keep the historical multi-device command separate for legacy callers.
-  const PRO_ONLY_TWEAK_IDS = new Set(["EnableNvidiaMSIPro", "OpenMsiUtilityPro", "ImportNvidiaPresetPro"]);
+  const PRO_ONLY_TWEAK_IDS = new Set<string>(["EnableNvidiaMSIPro", "OpenMsiUtilityPro", "ImportNvidiaPresetPro", ...PRO_VALIDATION_ACTION_IDS]);
   const freeEligibleId = (id: unknown): id is string =>
     trustedTweakId(id) && !EXPERT_TWEAK_IDS.has(id) && !PRO_ONLY_TWEAK_IDS.has(id);
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
@@ -3155,7 +3158,7 @@ Write-Output $json
   // POST version for direct download with tweaks body
   app.post("/api/script/native-tweak", rateLimit(600, 60_000), createNativeScriptHandler({
     trustedId: trustedTweakId,
-    dedicatedIds: new Set([...NATIVE_EXECUTABLE_ALLOWLIST, ...PRO_ONLY_TWEAK_IDS]),
+    dedicatedIds: new Set([...Array.from(NATIVE_EXECUTABLE_ALLOWLIST), ...Array.from(PRO_ONLY_TWEAK_IDS).filter(id => !(PRO_VALIDATION_ACTION_IDS as readonly string[]).includes(id))]),
     protectedIds: NVIDIA_CAPTURE_PROTECTED_IDS,
     authorize: authorizeGeneratedScript,
     command: id => normalizeWindowsPowerShellCommand(id, TWEAK_COMMANDS[id]),

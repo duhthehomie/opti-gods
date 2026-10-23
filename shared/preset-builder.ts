@@ -9,6 +9,7 @@
 // `buildSafePreset` enforces V2.1 rules in one place.
 
 import { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
+import { validationActionCompatible } from "./pro-validation-actions";
 export { MANUAL_ONLY_TWEAK_IDS } from "./manual-only-tweak-ids";
 
 export type PresetGpuVendor = "nvidia" | "amd" | "intel" | "unknown";
@@ -159,6 +160,8 @@ export function nvidiaGtxLabel(hw: PresetHardware): string {
  * vendor — only the vendor-prefixed families are.
  */
 export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: boolean; reason?: string } {
+  const validation = validationActionCompatible(id, hw);
+  if (validation) return validation;
   const isNvidiaTweak = startsWithAny(id, NVIDIA_PREFIXES);
   const isAmdCpuTweak = id.startsWith("AmdCpu");
   const isAmdDgpuTweak = startsWithAny(id, AMD_DGPU_PREFIXES) && !startsWithAny(id, AMD_IGPU_PREFIXES) && !isAmdCpuTweak;

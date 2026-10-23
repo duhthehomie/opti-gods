@@ -1,4 +1,4 @@
 {
-  "version": "5.2.77",
-  "notes": "V5.2.77 — fixes Windows repair diagnostic downloads and adds manual download, copy, and last-report retention. Records DISM/SFC exit codes, exceptions, recent servicing findings, repair-service and restart status, disk space, restore-provider diagnostics, and recent Windows System errors. Falls back to the local repair-log folder when Downloads is unavailable. Preserves v5.2.76 text fixes, NVIDIA behavior, input protections, elevation manifest, and release workflow."
+  "version": "5.2.78",
+  "notes": "V5.2.78 — adds Pro missing-only tests for DirectX & FiveM Cache Refresh, Windows Game Mode State Alignment with per-game High performance graphics preferences, and NVIDIA MSI Mode Utility Optimization. Includes staged error codes, verified registry readback and typed local backups before registry writes. Test actions remain outside automatic Full Optimize pending Windows validation. Preserves v5.2.77 repair diagnostics and existing NVIDIA/input protections. Republish the backend before testing."
 }

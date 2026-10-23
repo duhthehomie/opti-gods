@@ -19,6 +19,9 @@ interface OptimizationState {
 }
 
 export const DEFAULT_TWEAKS: Record<string, boolean> = {
+  DirectXFiveMCacheRefresh: false,
+  WindowsGameModeAlignment: false,
+  NvidiaMsiModeValidation: false,
   EnableNvidiaMSIPro: false,
   OpenMsiUtilityPro: false,
   // Registry - CPU Scheduling

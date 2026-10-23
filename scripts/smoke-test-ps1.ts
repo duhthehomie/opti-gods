@@ -11,6 +11,7 @@ import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 
 import { join } from "node:path";
 import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-commands";
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
+import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
@@ -115,6 +116,12 @@ for (const [name, ids] of fixtures) {
   const path = join(outDir, `${name}.ps1`);
   writeFileSync(path, "\ufeff" + script, "utf8");
   console.log(`[smoke-test] wrote ${path} (${script.length} chars, ${ids.length} tweaks)`);
+  total++;
+}
+
+for (const [id, script] of Object.entries(PRO_VALIDATION_COMMANDS)) {
+  rejectBareVariableColon(script, id);
+  writeFileSync(join(outDir, `${id}.ps1`), "\ufeff" + script, "utf8");
   total++;
 }
 

@@ -62,6 +62,7 @@ export function getTweakCompatibility(id: string): { ok: boolean; reason?: strin
   const hardware = hardwareFromScan();
   if (hardware) return isHardwareCompatible(id, hardware);
   const needsScan = id === "EnableHAGS"
+    || ["DirectXFiveMCacheRefresh", "WindowsGameModeAlignment", "NvidiaMsiModeValidation"].includes(id)
     || id.startsWith("Lap_")
     || id.startsWith("Win11")
     || /^(AmdCpu|Zen5|Arrow|FiveM3500|FiveM5600|FiveMIntel14)/.test(id)
