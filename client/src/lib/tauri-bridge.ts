@@ -514,6 +514,11 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   return invoke<UpdateInfo>("check_for_update");
 }
 
+export async function getInstalledAppVersion(): Promise<string> {
+  if (!isNative()) throw new Error("Installed version is only available in the Windows app.");
+  return invoke<string>("plugin:app|version");
+}
+
 // Internal: subscribe to a Tauri event using __TAURI_INTERNALS__ directly,
 // mirroring @tauri-apps/api/event listen() without a static npm import.
 type Unlisten = () => Promise<void>;

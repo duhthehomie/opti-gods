@@ -156,7 +156,15 @@ export type VersionInfo = {
 export function useVersionInfo() {
   return useQuery<VersionInfo>({
     queryKey: ["/api/version"],
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    select: (info) => {
+      if (!info || !/^v?\d+\.\d+\.\d+$/i.test(info.latestVersion)) {
+        throw new Error("The server did not return a valid release version.");
+      }
+      return info;
+    },
   });
 }
 

@@ -2095,11 +2095,17 @@ export async function registerRoutes(
   // Admin override via updaterCmdUrl in admin_settings still takes priority.
   app.get("/api/download/latest", rateLimit(10, 60_000, 30), async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const attribution = parseMarketingAttribution(req.query);
       const recordInstallerDownload = async () => {
         if (attribution) await storage.recordMarketingEvent("installer_download", attribution.platform, attribution.campaign, attribution.content);
       };
-      // Env-var override — highest priority, set via Replit Secrets as DOWNLOAD_URL.
+      const newest = await getLatestGhRelease();
+      if (newest?.exeUrl && /^https:\/\//i.test(newest.exeUrl)) {
+        await recordInstallerDownload();
+        return res.redirect(302, newest.exeUrl);
+      }
+      // Overrides are only a fallback when GitHub cannot resolve a release.
       // Lets us update the download target without touching the DB or redeploying.
       const envUrl = process.env.DOWNLOAD_URL?.trim();
       if (envUrl && /^https:\/\//i.test(envUrl)) {
@@ -2192,6 +2198,11 @@ export async function registerRoutes(
   // the resolved installer version and source.
   app.get("/api/download/version", async (_req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
+      const newest = await getLatestGhRelease();
+      if (newest?.exeUrl && /^https:\/\//i.test(newest.exeUrl)) {
+        return res.json({ source: "github", version: newest.version, url: newest.exeUrl, pageUrl: newest.pageUrl });
+      }
       const envUrl = process.env.DOWNLOAD_URL?.trim();
       if (envUrl && /^https:\/\//i.test(envUrl)) {
         return res.json({ source: "env", version: null, url: envUrl });
@@ -7295,8 +7306,8 @@ try {
 
   // --- Announcements (public read) ---
   app.get("/api/announcements", async (req, res) => {
-    const list = await storage.getAnnouncements();
-    return res.json(list);
+    res.setHeader("Cache-Control", "no-store");
+    return res.json([]);
   });
 
   // --- Announcements (admin write) ---

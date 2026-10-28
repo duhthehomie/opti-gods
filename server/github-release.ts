@@ -1,3 +1,5 @@
+import { compareReleaseVersions } from "@shared/release-policy";
+
 export interface GhRelease {
   version: string;
   exeUrl: string;
@@ -19,7 +21,7 @@ export async function getLatestGhRelease(): Promise<GhRelease | null> {
     // Use /releases list instead of /releases/latest — the latter skips
     // pre-releases, and all optigods releases are tagged as pre-release.
     const r = await fetch(
-      `https://api.github.com/repos/${GH_REPO}/releases?per_page=5`,
+      `https://api.github.com/repos/${GH_REPO}/releases?per_page=30`,
       {
         headers: {
           Accept: "application/vnd.github+json",
@@ -32,8 +34,13 @@ export async function getLatestGhRelease(): Promise<GhRelease | null> {
     const list = (await r.json()) as Record<string, unknown>[];
     if (!Array.isArray(list) || list.length === 0) return _cache;
 
-    // Pick the first non-draft release (list is newest-first)
-    const data = list.find((rel) => !rel.draft) ?? list[0];
+    // GitHub's "latest" excludes prereleases. Pick the highest published
+    // version that actually has a Windows installer, never an unfinished tag.
+    const data = list.filter(rel => !rel.draft &&
+      /^v?\d+\.\d+\.\d+$/i.test(String(rel.tag_name ?? "")) &&
+      Array.isArray(rel.assets) && rel.assets.some((a: any) => /\.exe$/i.test(String(a.name ?? ""))))
+      .sort((a, b) => compareReleaseVersions(String(b.tag_name), String(a.tag_name)))[0];
+    if (!data) return _cache;
     const tag = String(data.tag_name ?? "");
     const version = tag.replace(/^v/, "");
     const assets = Array.isArray(data.assets) ? data.assets : [];

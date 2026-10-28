@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { storage } from "./storage";
 import { getLatestGhRelease } from "./github-release";
+import { resolveLatestVersion } from "@shared/release-policy";
 
 // ── Native bearer tokens ──────────────────────────────────────────────────────
 // After Discord OAuth completes for a native (desktop) client we cannot use
@@ -421,16 +422,17 @@ export function registerAuthRoutes(app: Express): void {
     // latestVersion: if the resolved value is older than CURRENT (e.g. GitHub
     // still has a v2.x tag and v3 isn't published yet), floor it at CURRENT so
     // the UI never shows "update to v2.3.7" while running v3.0.0.
-    const resolvedLatest = settings?.latestVersion ?? gh?.version ?? fileVersion ?? CURRENT;
-    const latestVersion = semverGte(resolvedLatest, CURRENT) ? resolvedLatest : CURRENT;
+    const latestVersion = resolveLatestVersion(gh?.version, CURRENT, settings?.latestVersion);
 
+    res.setHeader("Cache-Control", "no-store");
     res.json({
       currentVersion,
       latestVersion,
       notes: latestVersion === CURRENT
         ? fileInfo?.notes ?? `V${CURRENT} — the latest Opti Gods release is ready.`
         : null,
-      updaterCmdUrl:  settings?.updaterCmdUrl  ?? INSTALLER_URL,
+      updaterCmdUrl: gh?.exeUrl || INSTALLER_URL,
+      updateMethod: "installer",
       updatePageUrl:  settings?.updatePageUrl  ?? `${SITE.replace(/\/$/, "")}/updates`,
     });
   });

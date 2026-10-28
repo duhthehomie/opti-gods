@@ -1,24 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
-import { APP_VERSION } from "@/generated/version";
-import { checkForUpdate, isNative, performUpdate } from "@/lib/tauri-bridge";
-import { apiUrl } from "@/lib/api-base";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { CheckCircle2, Download } from "lucide-react";
 import { simpleUpdateNotes } from "@/lib/update-notes";
+import { useInstalledVersion } from "@/hooks/use-installed-version";
 
 type Phase = "prompt" | "downloading" | "installing" | "done";
 
 export function UpdateModal() {
   const { data } = useVersionInfo();
+  const { version: installedVersion } = useInstalledVersion();
   const [phase, setPhase] = useState<Phase | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const reduced = typeof window !== "undefined" && prefersReducedMotion();
-  const downloadStarted = useRef(false);
-  const updateCheckStarted = useRef(false);
   const [detectedVersion, setDetectedVersion] = useState<string | null>(null);
   const [detectedNotes, setDetectedNotes] = useState<string | null>(null);
 
@@ -26,78 +23,16 @@ export function UpdateModal() {
     if (!data || dismissed) return;
     const { latestVersion } = data;
     if (!latestVersion) return;
-    const installedVersion = APP_VERSION || data.currentVersion;
     if (!installedVersion) return;
-    if (compareVersions(latestVersion, installedVersion) <= 0) return;
+    if (compareVersions(latestVersion, installedVersion) <= 0) {
+      setPhase(null);
+      return;
+    }
 
     setDetectedVersion(latestVersion);
     setDetectedNotes(data.notes ?? null);
     setPhase("prompt");
-  }, [data, dismissed]);
-
-  useEffect(() => {
-    if (!isNative() || dismissed || updateCheckStarted.current) return;
-    updateCheckStarted.current = true;
-
-    void checkForUpdate()
-      .then((update) => {
-        if (update?.available && update.latest_version) {
-          const serverVersion = data?.latestVersion;
-          const preferredVersion = serverVersion && compareVersions(serverVersion, update.latest_version) > 0
-            ? serverVersion
-            : update.latest_version;
-          if (compareVersions(preferredVersion, APP_VERSION || data?.currentVersion || update.current_version) > 0) {
-            setDetectedVersion(preferredVersion);
-            setDetectedNotes(preferredVersion === serverVersion ? data?.notes ?? null : update.notes);
-            setPhase("prompt");
-          }
-        }
-        // If the native updater cannot resolve a release, the public
-        // /api/version check above still drives the update splash for old
-        // shells. This keeps users pointed at the Updates tab instead of
-        // silently leaving them on an outdated build.
-      })
-      .catch((error) => {
-        console.warn("[update] automatic update check failed:", error);
-      });
-  }, [dismissed]);
-
-  async function triggerUpdate() {
-    if (downloadStarted.current) return;
-    downloadStarted.current = true;
-    setPhase("downloading");
-    setProgress(5);
-
-    try {
-      await performUpdate((pct: number, installing: boolean) => {
-        if (installing) {
-          setPhase("installing");
-          setProgress(100);
-        } else {
-          setProgress(Math.max(5, pct));
-        }
-      });
-      setProgress(100);
-      setPhase("done");
-      window.setTimeout(() => setDismissed(true), 3000);
-    } catch (err) {
-      console.warn("[update] native updater failed, using download fallback:", err);
-      fallbackDownload();
-    }
-  }
-
-  function fallbackDownload() {
-    const targetUrl = apiUrl(data?.updaterCmdUrl || "/api/download/latest");
-    const a = document.createElement("a");
-    a.href = targetUrl;
-    a.download = `OptiGods-Setup-${detectedVersion ?? data?.latestVersion ?? "latest"}.exe`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setProgress(100);
-    setPhase("done");
-    window.setTimeout(() => setDismissed(true), 3000);
-  }
+  }, [data, dismissed, installedVersion]);
 
   function openUpdateCenter() {
     setFadeOut(true);
