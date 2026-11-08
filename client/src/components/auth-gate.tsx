@@ -5,6 +5,7 @@ import { GUEST_MODE_KEY } from "@/pages/welcome";
 import { useLocation } from "wouter";
 import { BRAND } from "@/components/branding/assets";
 import { isNative } from "@/lib/tauri-bridge";
+import { isWebsiteWorkspacePath } from "@/components/marketing/app-sidebar-items";
 
 // Paths that must remain reachable without a Discord session.
 // V2: landing page and marketing/payment surfaces are public — only the
@@ -64,7 +65,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [isLoading]);
 
   // Public landing/marketing/callback paths always render
-  if (publicPaths.has(location)) {
+  if (publicPaths.has(location) || (!isNative() && (
+    isWebsiteWorkspacePath(location) || /^\/game-profiles\/[a-z0-9-]+$/i.test(location)
+  ))) {
     return <>{children}</>;
   }
 

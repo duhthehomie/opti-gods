@@ -25,6 +25,7 @@ struct GameSpec {
 }
 
 const GAMES: &[GameSpec] = &[
+    GameSpec { id: "game_cs2", executables: &["cs2.exe"], names: &["counter-strike 2", "counter-strike global offensive", "counter-strike: global offensive"], known_paths: &[] },
     GameSpec { id: "game_valorant", executables: &["VALORANT-Win64-Shipping.exe"], names: &["valorant"], known_paths: &["%LOCALAPPDATA%\\VALORANT", "C:\\Riot Games\\VALORANT"] },
     GameSpec { id: "game_cod", executables: &["cod.exe", "BlackOps6.exe", "ModernWarfare.exe"], names: &["call of duty", "modern warfare", "black ops"], known_paths: &[] },
     GameSpec { id: "game_warzone", executables: &["cod.exe", "warzone.exe"], names: &["call of duty", "warzone"], known_paths: &[] },
@@ -235,6 +236,8 @@ fn candidates_from_steam() -> Vec<(String, PathBuf, String)> {
                 }
             }
             if !install_dir.is_empty() {
+                // App 730 can retain its old CS:GO install-folder/name after the CS2 upgrade.
+                let name = if file == "appmanifest_730.acf" { "Counter-Strike 2".to_string() } else { name };
                 found.push((name, steamapps.join("common").join(install_dir), "Steam".into()));
             }
         }

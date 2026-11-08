@@ -13,6 +13,7 @@ import { buildSafeWindowsCommandOverride } from "../server/windows-tweak-command
 import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes";
 import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
 import { runProValidationPowerShellChecks } from "../script/test-pro-validation-powershell";
+import { REVIEWED_PERFORMANCE_COMMANDS, REVIEWED_PERFORMANCE_UNDO } from "../server/cs2-network-commands";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
@@ -139,5 +140,11 @@ rejectBareVariableColon(repairSource, "windows-repair");
 writeFileSync(join(outDir, "windows-repair.ps1"), repairSource, "utf8");
 total++;
 console.log(`[smoke-test] OK — ${total} fixture(s) ready in ${outDir}`);
+for (const [id, command] of Object.entries(REVIEWED_PERFORMANCE_COMMANDS)) {
+  for (const [suffix, script] of [["apply", command], ["undo", REVIEWED_PERFORMANCE_UNDO[id]]]) {
+    rejectBareVariableColon(script, `${id}-${suffix}`);
+    writeFileSync(join(outDir, `${id}-${suffix}.ps1`), "\ufeff" + script, "utf8");
+  }
+}
 console.log(`[smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.`);
 runProValidationPowerShellChecks();

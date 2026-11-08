@@ -4,10 +4,16 @@ import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { CheckCircle2, Download } from "lucide-react";
 import { simpleUpdateNotes } from "@/lib/update-notes";
 import { useInstalledVersion } from "@/hooks/use-installed-version";
+import { isNative } from "@/lib/tauri-bridge";
 
 type Phase = "prompt" | "downloading" | "installing" | "done";
 
 export function UpdateModal() {
+  // A browser has no installed Windows version to update.
+  return isNative() ? <NativeUpdateModal /> : null;
+}
+
+function NativeUpdateModal() {
   const { data } = useVersionInfo();
   const { version: installedVersion } = useInstalledVersion();
   const [phase, setPhase] = useState<Phase | null>(null);

@@ -251,8 +251,8 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
  */
 const UNIVERSAL_CORE: string[] = [
   "Win32PrioritySeparation", "SetResponsiveness", "GameModeTweaks",
-  "DisableHungAppDetection", "NetworkThrottling", "DisableNagle",
-  "InputLagTCP", "SetDNSPriority", "DisableNDU", "EnableTCPAutoTuning",
+  "DisableHungAppDetection", "NetworkThrottling", "ActiveAdapterTcpLatency",
+  "SetDNSPriority", "DisableNDU", "EnableTCPAutoTuning",
   "OptimizeTCP", "DisablePowerThrottling", "DisablePowerThrottlingAdv",
   "DisableXboxGameBar", "DisableGameDVR", "DisableAnimations",
   "SysVisualBestPerf", "SysHibernateOff", "DisableFastStartup",
@@ -402,7 +402,7 @@ const ROBLOX_TWEAKS: string[] = [
 
 /** Game detection packs — auto-detect install path and apply targeted tweaks */
 export const GAME_DETECT_PACK_IDS: string[] = [
-  "game_valorant", "game_cod", "game_apex", "game_warzone",
+  "game_cs2", "game_valorant", "game_cod", "game_apex", "game_warzone",
   "game_lol", "game_overwatch", "game_siege", "game_rust",
   "game_minecraft", "game_roblox", "game_tarkov", "game_dbd",
   "game_dota2", "game_warframe", "game_forza", "game_readyornot",

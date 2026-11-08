@@ -7,8 +7,14 @@ import { useInstalledVersion } from "@/hooks/use-installed-version";
 import { apiUrl } from "@/lib/api-base";
 import { simpleUpdateNotes } from "@/lib/update-notes";
 import { cn } from "@/lib/utils";
+import { isNative } from "@/lib/tauri-bridge";
+import WebsiteDownload from "@/components/website-download";
 
 export default function Updates() {
+  return isNative() ? <NativeUpdates /> : <WebsiteDownload />;
+}
+
+function NativeUpdates() {
   const { data, isError, isFetching, refetch } = useVersionInfo();
   const { version: installedVersion, error: installedError } = useInstalledVersion();
   const [downloadOpened, setDownloadOpened] = useState(false);

@@ -145,12 +145,6 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "Help",
     highlights: ["Discord community", "Direct support", "Setup help", "Troubleshooting"],
   },
-  "/updates": {
-    title: "Updates",
-    desc: "See release notes, relevant improvements, and available Opti Gods updates.",
-    tweakCount: "Latest",
-    highlights: ["Release notes", "Version checks", "New features", "Installer updates"],
-  },
   "/task-manager": {
     title: "Task Manager",
     desc: "Kill background apps and remove them from Windows startup — more RAM and CPU dedicated to your games.",

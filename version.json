@@ -1,4 +1,4 @@
 {
-  "version": "5.2.81",
-  "notes": "V5.2.81 — fixes software update checks using the running Windows app version and the newest published GitHub installer, including prereleases. Current installs show up to date; older installs link to the latest installer without the unsigned-manifest error or a false installation-complete message. Removes the old announcement feed from Updates. Preserves existing settings, applied history, Pro authorization and all v5.2.80 desktop functionality."
+  "version": "5.2.82",
+  "notes": "V5.2.82 — adds Counter-Strike 2 detection and its reviewed game profile, plus verified active-physical-adapter TCP latency settings in Full Optimize with original-value backup and Undo. Website app tabs are freely browsable and read-only; actions offer Windows download and Pro options while FiveM Graphics Studio stays locked. Preserves the verified v5.2.81 Windows release, update handling, settings, applied history, and Pro authorization."
 }

@@ -639,6 +639,13 @@ pub fn undo_tweak(args: UndoArgs) -> TweakResult {
 /// the elevated manifest, so the only PS commands the desktop shell
 /// will ever run are the literals embedded directly in this table.
 fn trusted_ps_snippet(id: &str, undo: bool) -> Option<&'static str> {
+    match (id, undo) {
+        ("game_cs2", false) => return Some(include_str!("../../resources/reviewed/game_cs2.ps1")),
+        ("game_cs2", true) => return Some(include_str!("../../resources/reviewed/game_cs2-undo.ps1")),
+        ("ActiveAdapterTcpLatency", false) => return Some(include_str!("../../resources/reviewed/ActiveAdapterTcpLatency.ps1")),
+        ("ActiveAdapterTcpLatency", true) => return Some(include_str!("../../resources/reviewed/ActiveAdapterTcpLatency-undo.ps1")),
+        _ => {}
+    }
     const TABLE: &[(&str, &str, &str)] = &[
         (
               "ServiceTabletInput",
@@ -742,6 +749,7 @@ fn trusted_ps_requires_reboot(id: &str) -> bool {
             | "DisableMemoryCompression"
             | "DisableMMAgentMemoryCompression"
             | "InputLagTCP"
+            | "ActiveAdapterTcpLatency"
             | "ResetTcpAutotune"
             | "SysHibernateOff"
     )

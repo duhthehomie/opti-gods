@@ -33,6 +33,16 @@ async function main() {
   assert(page.includes("Installer download opened") && page.includes("You are on the latest version"));
   const modal = readFileSync("client/src/components/update-modal.tsx", "utf8");
   assert(modal.includes("useInstalledVersion") && !modal.includes("checkForUpdate"));
+  assert.match(modal, /return isNative\(\) \? <NativeUpdateModal \/> : null/);
+  assert.match(page, /return isNative\(\) \? <NativeUpdates \/> : <WebsiteDownload \/>/);
+  const website = readFileSync("client/src/components/website-download.tsx", "utf8");
+  assert(website.includes('apiUrl("/api/download/latest")') && website.includes("data.latestVersion"));
+  assert(!/useInstalledVersion|APP_VERSION|ProGate|\/pro|\/showcase/.test(website));
+  assert(website.includes("<AppLayout>"), "The website download must retain the existing header and navigation.");
+  const pin = readFileSync("client/src/components/version-pin.tsx", "utf8");
+  assert.match(pin, /return isNative\(\) \? <NativeVersionPin \/> : null/);
+  const layout = readFileSync("client/src/components/layout/app-layout.tsx", "utf8");
+  assert(!layout.includes('"/updates": {'), "Updates must not be replaced by the generic mobile sales preview.");
   const routes = readFileSync("server/routes.ts", "utf8");
   assert.match(routes, /app\.get\("\/api\/announcements"[\s\S]*?res\.json\(\[\]\)/);
   console.log("Release regressions passed: .72 → .80, .80 current, .81 future, stale override, prereleases, missing installers, retired feed, honest download status.");

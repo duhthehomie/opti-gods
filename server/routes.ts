@@ -23,6 +23,7 @@ import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks }
 import { buildSafeWindowsCommandOverride } from "./windows-tweak-commands";
 import { buildNativeBatchCommandFix } from "./native-batch-command-fixes";
 import { PRO_VALIDATION_COMMANDS } from "./pro-validation-commands";
+import { REVIEWED_PERFORMANCE_COMMANDS, REVIEWED_PERFORMANCE_UNDO } from "./cs2-network-commands";
 import { PRO_VALIDATION_ACTION_IDS } from "@shared/pro-validation-actions";
 import { buildLocalGraphicsPack } from "./graphics-pack-local";
 
@@ -134,6 +135,7 @@ const WIN32_PRIORITY_SEPARATION_COMMAND =
   `$logicalProcessors = [Environment]::ProcessorCount; $value = if ($logicalProcessors -ge 12) { 0x26 } else { 0x1A }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value $value -Type DWord -Force; Write-Host ("[OK] Win32PrioritySeparation = 0x{0:X2} ({0} decimal), selected for {1} logical processors" -f $value, $logicalProcessors) -ForegroundColor Green`;
 
 const TWEAK_COMMANDS: Record<string, string> = {
+  ...REVIEWED_PERFORMANCE_COMMANDS,
   ...PRO_VALIDATION_COMMANDS,
   EnableNvidiaMSIPro: `$active = @(Get-PnpDevice -Class Display -ErrorAction Stop | Where-Object { $_.Status -eq 'OK' }); $nvidia = @($active | Where-Object { $_.FriendlyName -match '(?i)NVIDIA' }); if ($active.Count -ne 1) { throw "NVIDIA MSI requires exactly one active display adapter; detected $($active.Count). Hybrid or multi-GPU display topology is not supported." }; if ($nvidia.Count -ne 1) { throw "NVIDIA MSI requires exactly one active NVIDIA display adapter; the active adapter is not NVIDIA or the topology is ambiguous." }; $gpu = $nvidia[0]; $msiPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\$($gpu.InstanceId)\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties"; if (!(Test-Path $msiPath)) { throw "Windows did not expose an MSI capability path for the detected NVIDIA adapter ($($gpu.FriendlyName))." }; $before = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($before -notin @(0,1)) { throw "The detected NVIDIA adapter has an unsupported MSISupported value ($before)." }; Set-ItemProperty -Path $msiPath -Name 'MSISupported' -Value 1 -Type DWord -Force -ErrorAction Stop; $after = Get-ItemPropertyValue -Path $msiPath -Name 'MSISupported' -ErrorAction Stop; if ($after -ne 1) { throw "Windows did not verify MSISupported=1 for the detected NVIDIA adapter." }; Write-Host "[NVIDIA MSI] Enabled MSISupported=1 only on $($gpu.FriendlyName). NICs, NVMe devices, affinity, and priority were not changed." -ForegroundColor Green`,
   // These two IDs are consumed by dedicated native commands.  They deliberately
@@ -1372,6 +1374,7 @@ async function fireAuditLog(
 }
 
 function buildSingleTweakUndoScript(tweakId: string): string {
+  if (REVIEWED_PERFORMANCE_UNDO[tweakId]) return REVIEWED_PERFORMANCE_UNDO[tweakId];
   // Per-tweak reversal is sourced from an explicit registry (server/tweak-undo-map.ts).
   // If the tweak ID is not in that map, we DO NOT run a category-restore block
   // (that would over-revert sibling tweaks). Instead, we direct users to
@@ -3444,7 +3447,7 @@ function Find-Game { param([string[]]$Paths, [string[]]$EpicAppNames = @())
 
 $games = @(
     @{ id = "game_valorant";      paths = @("%LocalAppData%\\VALORANT","C:\\Riot Games\\VALORANT","D:\\Riot Games\\VALORANT") },
-    @{ id = "game_cs2";           paths = @("Call of Duty\\cod.exe","Call of Duty Modern Warfare 2\\cod.exe","Call of Duty Modern Warfare III\\cod.exe","Battle.net Apps\\Call of Duty\\cod.exe") },
+    @{ id = "game_cs2";           paths = @("steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe","steamapps\\common\\Counter-Strike 2\\game\\bin\\win64\\cs2.exe") },
     @{ id = "game_apex";          paths = @("C:\\Program Files\\EA Games\\Apex Legends\\r5apex.exe","C:\\Program Files\\Origin Games\\Apex Legends\\r5apex.exe","D:\\Origin Games\\Apex Legends\\r5apex.exe") },
     @{ id = "game_warzone";       paths = @("C:\\Program Files (x86)\\Call of Duty","C:\\Program Files\\Call of Duty","D:\\Call of Duty","C:\\Program Files\\Battle.net Apps\\Call of Duty") },
     @{ id = "game_lol";           paths = @("C:\\Riot Games\\League of Legends\\Game\\League of Legends.exe","D:\\Riot Games\\League of Legends\\Game\\League of Legends.exe") },

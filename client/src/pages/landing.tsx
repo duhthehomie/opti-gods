@@ -434,6 +434,7 @@ function LandingDesktop() {
                 See real results <ArrowRight className="h-4 w-4 text-red-400" />
               </Link>
             </div>
+            <p className="mt-3 text-sm font-semibold text-zinc-300">Free Windows download · Includes 15 free tweaks</p>
             <div className="mt-8 grid max-w-xl grid-cols-2 gap-x-5 gap-y-3 border-t border-white/10 pt-6 text-[11px] text-zinc-500 sm:grid-cols-4">
               <span className="flex items-center gap-2"><Shield className="h-3.5 w-3.5 text-emerald-400" /> Reversible</span>
               <span className="flex items-center gap-2"><RotateCcw className="h-3.5 w-3.5 text-amber-300" /> Restore point</span>

@@ -57,7 +57,7 @@ const GAME_LIBRARY: GameProfile[] = [
   { id: "game_siege", title: "Rainbow Six Siege", publisher: "Ubisoft", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/359550/header.jpg", gradient: "from-blue-950 via-zinc-900 to-black", description: "Low-latency process, input, GPU, and network tuning." },
   { id: "game_overwatch", title: "Overwatch", publisher: "Blizzard Entertainment", cover: "/game-covers/overwatch.webp", gradient: "from-orange-950 via-blue-900 to-black", description: "Competitive frame pacing, process priority, input, and network tuning." },
   { id: "game_minecraft", title: "Minecraft", publisher: "Mojang Studios", cover: "/game-covers/minecraft.webp", gradient: "from-green-950 via-zinc-900 to-black", description: "Java/Bedrock process priority, memory, frame pacing, and input tuning." },
-  { id: "game_cs2", title: "Counter-Strike 2", publisher: "Valve", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg", gradient: "from-orange-950 via-zinc-900 to-black", description: "Frame pacing, input latency, CPU scheduling, and network tuning." },
+  { id: "game_cs2", title: "Counter-Strike 2", publisher: "Valve", cover: "/game-covers/counter-strike-2.webp", gradient: "from-orange-950 via-zinc-900 to-black", recommendationIds: ["game_cs2"], description: "Verified Game Mode, high-performance GPU preference, and Above Normal launch priority. Works across compatible Windows 10/11 PCs; close CS2 before applying." },
   { id: "game_arcraiders", title: "ARC Raiders", publisher: "Embark Studios", cover: "/game-covers/arc-raiders.png", gradient: "from-orange-950 via-zinc-900 to-black", description: "UE5 streaming, shader compilation, process priority, and frame pacing." },
   { id: "game_marvelrivals", title: "Marvel Rivals", publisher: "NetEase Games", cover: "/game-covers/marvel-rivals.png", gradient: "from-purple-950 via-blue-900 to-black", description: "UE5 asset streaming, process priority, input, and network tuning." },
   { id: "game_rocketleague", title: "Rocket League", publisher: "Psyonix / Epic Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/252950/header.jpg", gradient: "from-blue-950 via-zinc-900 to-black", description: "Competitive frame pacing, input latency, and network tuning." },
@@ -215,6 +215,9 @@ export default function GameProfiles() {
     }
     try {
       const result = await applyTweakBatch(selectedGames.map((profile) => profile.id));
+      if (result.failures.length || result.skippedIds.length || result.unsupportedIds.length) {
+        throw new Error(result.failures.map(failure => failure.message).join("; ") || "Some selected profiles were skipped or unsupported. Check the Windows runner results.");
+      }
       toast({ title: native ? `${result.appliedIds.length} game profiles applied` : "Game profiles selected", description: native ? "The desktop app confirmed the selected game optimizations." : "Run the generated script on Windows to apply them." });
     } catch (cause) {
       toast({ title: "Could not apply game profiles", description: cause instanceof Error ? cause.message : "The action failed.", variant: "destructive" });

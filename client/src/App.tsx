@@ -1,5 +1,7 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { Switch, Route, useLocation } from "wouter";
+import { isWebsiteWorkspacePath } from "@/components/marketing/app-sidebar-items";
+import WebsiteWorkspacePreview from "@/pages/website-workspace-preview";
 import { getNativeAuthHeaders, queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -245,6 +247,7 @@ const NATIVE_NAV_PRELOADERS: Array<() => Promise<unknown>> = [
 ];
 
 function Router() {
+  const [location] = useLocation();
   const HomeComponent = isNative() ? Dashboard : SmartHome;
   useEffect(() => {
     if (!isNative()) return;
@@ -260,6 +263,8 @@ function Router() {
     timer = window.setTimeout(next, 3500);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, []);
+  const browserWorkspace = !isNative() && isWebsiteWorkspacePath(location);
+  if (browserWorkspace) return <><RouteSeo /><WebsiteWorkspacePreview /></>;
   return (
     <>
       <RouteSeo />
