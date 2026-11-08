@@ -287,6 +287,22 @@ export interface NativeLivePerformance {
   server_target?: string | null;
   process_names_text?: string | null;
   visible_app_names_text?: string | null;
+  game_processes_text?: string | null;
+  game_pid?: number | null;
+  /** "server" | "main_menu" from current-session CitizenFX log events only. */
+  fivem_session_state?: string | null;
+  server_evidence?: string | null;
+  /** Partial telemetry failures; show them instead of zeros. */
+  telemetry_error?: string | null;
+  sampled_at_ms?: number | null;
+  os_caption?: string | null;
+  os_version?: string | null;
+  os_build?: string | null;
+  /** Presented FPS from explicit PresentMon capture; null when not measured. */
+  fps?: number | null;
+  frame_time_ms?: number | null;
+  fps_status?: string | null;
+  fps_source?: string | null;
 }
 
 export async function readLivePerformance(temperaturesOnly = false): Promise<NativeLivePerformance | null> {
@@ -297,6 +313,70 @@ export async function readLivePerformance(temperaturesOnly = false): Promise<Nat
 export async function prepareCpuMonitoring(): Promise<string> {
   if (!isNative()) throw new Error("CPU sensor setup requires the Windows app.");
   return invoke<string>("prepare_cpu_monitoring");
+}
+
+export interface NativeFpsCaptureStatus {
+  active: boolean;
+  source: string | null;
+  error: string | null;
+  started_at_ms: number | null;
+  game_pid: number | null;
+  fps: number | null;
+  frame_time_ms: number | null;
+  /** capture_off | no_game | no_recent_frames | measured | capture_stopped | windows_only */
+  fps_status: string;
+}
+
+export interface NativeRecordingStatus {
+  active: boolean;
+  phase: "before" | "after" | null;
+  started_at_ms: number | null;
+  sample_count: number;
+  error_count: number;
+  interval_ms: number;
+  latest: NativeLivePerformance | null;
+  latest_error: string | null;
+}
+
+export interface NativeRecordingResult {
+  phase: "before" | "after";
+  started_at_ms: number;
+  ended_at_ms: number;
+  interval_ms: number;
+  samples: NativeLivePerformance[];
+  errors: { at_ms: number; message: string }[];
+  truncated: boolean;
+}
+
+/** Downloads the pinned official PresentMon on first use; the UI must ask first. */
+export async function startFpsCapture(): Promise<NativeFpsCaptureStatus> {
+  if (!isNative()) throw new Error("FPS capture requires the Windows app.");
+  return invoke<NativeFpsCaptureStatus>("start_fps_capture");
+}
+
+export async function stopFpsCapture(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("stop_fps_capture");
+}
+
+export async function readFpsCapture(): Promise<NativeFpsCaptureStatus | null> {
+  if (!isNative()) return null;
+  return invoke<NativeFpsCaptureStatus>("read_fps_capture");
+}
+
+export async function startPerformanceCapture(phase: "before" | "after"): Promise<NativeRecordingStatus> {
+  if (!isNative()) throw new Error("Performance recording requires the Windows app.");
+  return invoke<NativeRecordingStatus>("start_performance_capture", { phase });
+}
+
+export async function stopPerformanceCapture(): Promise<NativeRecordingResult> {
+  if (!isNative()) throw new Error("Performance recording requires the Windows app.");
+  return invoke<NativeRecordingResult>("stop_performance_capture");
+}
+
+export async function performanceCaptureStatus(): Promise<NativeRecordingStatus | null> {
+  if (!isNative()) return null;
+  return invoke<NativeRecordingStatus>("performance_capture_status");
 }
 
 export async function savePerformanceRecording(filename: string, content: string): Promise<string> {

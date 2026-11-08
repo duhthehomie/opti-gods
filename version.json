@@ -1,4 +1,4 @@
 {
-  "version": "5.2.83",
-  "notes": "V5.2.83 — removes automatic process reprioritization on launch, protects versioned FiveM game/helper processes from background throttling, and pauses recurring telemetry, sensor collection, applied-state polling and decorative animation while Opti Gods is unfocused. Polls do not overlap and resume on focus. Preserves v5.2.82 CS2/TCP functionality, website preview safety, applied history, Undo and Pro authorization. Windows gaming-performance verification is still required."
+  "version": "5.2.84",
+  "notes": "V5.2.84 \u2014 admin Performance Recorder rebuilt: recording now runs natively and keeps sampling while a game is fullscreen; optional FPS counter using Intel's official PresentMon (downloaded once after confirmation, hash-verified, no injection); FiveM server vs main-menu detection from current-session CitizenFX logs, including newer CitizenFX_log file names; live Windows version and a read-only applied/missing tweak audit for the detected game. Fixes Live Monitor CPU/GPU showing 0% and RAM 100% when Windows telemetry was incomplete; unavailable readings now show as unavailable. Windows gaming verification is still required."
 }

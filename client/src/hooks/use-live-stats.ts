@@ -35,6 +35,12 @@ export interface LiveStats {
   gpuHistory: number[];
   isLive: boolean;
   isStale: boolean;
+  /** False when Windows did not return that reading; render "—", never 0. */
+  cpuKnown?: boolean;
+  gpuKnown?: boolean;
+  ramKnown?: boolean;
+  /** Partial native telemetry failure, shown instead of hidden behind zeros. */
+  telemetryError?: string;
 }
 
 interface HwLiveResponse {
@@ -50,6 +56,8 @@ interface HwLiveResponse {
   cpu_temp_c?: number | null;
   gpu_temp_c?: number | null;
   board_temp_c?: number | null;
+  sampled_at_ms?: number;
+  telemetry_error?: string;
 }
 
 function readImportedSensorTemps(): { cpuTemp: number | null; gpuTemp: number | null } {
@@ -126,6 +134,8 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
               board_temp_c: native.board_temp_c ?? undefined,
               cpu_sensor_status: native.cpu_sensor_status ?? undefined,
               cpu_sensor_name: native.cpu_sensor_name ?? undefined,
+              sampled_at_ms: native.sampled_at_ms ?? undefined,
+              telemetry_error: native.telemetry_error ?? undefined,
             };
           }
         } else {
@@ -142,23 +152,28 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
       if (cancelled) return;
 
       if (realData) {
+        // A missing reading stays unknown. Defaulting free RAM to 0 used to show 100%.
+        const ramKnown = realData.ram_total_gb != null && realData.ram_free_gb != null;
         const ramTotal = realData.ram_total_gb ?? totalRAM;
-        const ramFree  = realData.ram_free_gb ?? 0;
-        const ramUsed  = ramTotal - ramFree;
-        const ramPct   = realData.ram_used_pct ?? Math.round((ramUsed / ramTotal) * 100);
-        const cpu      = realData.cpu_load_pct ?? cpuRef.current;
-        const gpu      = realData.gpu_load_pct ?? gpuRef.current;
+        const ramUsed  = ramKnown ? ramTotal - (realData.ram_free_gb as number) : 0;
+        const ramPct   = ramKnown ? realData.ram_used_pct ?? Math.round((ramUsed / ramTotal) * 100) : 0;
+        const cpuKnown = realData.cpu_load_pct != null;
+        const gpuKnown = realData.gpu_load_pct != null;
+        const cpu      = realData.cpu_load_pct ?? 0;
+        const gpu      = realData.gpu_load_pct ?? 0;
 
-        cpuRef.current = cpu;
-        gpuRef.current = gpu;
-        cpuHistRef.current.shift(); cpuHistRef.current.push(cpu);
-        gpuHistRef.current.shift(); gpuHistRef.current.push(gpu);
+        if (cpuKnown) { cpuRef.current = cpu; cpuHistRef.current.shift(); cpuHistRef.current.push(cpu); }
+        if (gpuKnown) { gpuRef.current = gpu; gpuHistRef.current.shift(); gpuHistRef.current.push(gpu); }
 
         const importedTemps = isNative() ? { cpuTemp: null, gpuTemp: null } : readImportedSensorTemps();
         const cpuTemp = realData.cpu_temp_c ?? importedTemps.cpuTemp;
         const gpuTemp = realData.gpu_temp_c ?? importedTemps.gpuTemp;
         const snap: LiveStats = {
-          sampledAt: Date.now(),
+          sampledAt: realData.sampled_at_ms ?? Date.now(),
+          cpuKnown,
+          gpuKnown,
+          ramKnown,
+          telemetryError: realData.telemetry_error,
           cpuSensorStatus: realData.cpu_sensor_status,
           cpuSensorName: realData.cpu_sensor_name,
           cpuUsage:   Math.round(cpu),
@@ -214,7 +229,8 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
       });
     };
 
-    const stop = startForegroundPolling(tick, temperaturesOnly ? 2000 : 3000, {
+    // Polls are non-overlapping: the next request starts 2 s after the last one returns.
+    const stop = startForegroundPolling(tick, 2000, {
       onPause: () => setStats(previous => ({ ...previous, isLive: false, isStale: true })),
     });
     return () => { cancelled = true; stop(); };

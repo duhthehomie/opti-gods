@@ -43,6 +43,23 @@ function main() {
     `${banner}\nexport const APP_VERSION = ${JSON.stringify(version)};\nexport const APP_NOTES = ${JSON.stringify(notes ?? "")};\n`,
   );
   console.log(`sync-version: wrote ${version} → client/src/generated/version.ts`);
+
+  // 3. Keep the Rust package (and its lockfile entry) on the same version so
+  //    the binary's CARGO_PKG_VERSION never disagrees with the installer.
+  const cargoToml = resolve(ROOT, "src-tauri", "Cargo.toml");
+  const cargoLock = resolve(ROOT, "src-tauri", "Cargo.lock");
+  if (existsSync(cargoToml)) {
+    const toml = readFileSync(cargoToml, "utf8");
+    const nameMatch = toml.match(/^\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m);
+    writeFileSync(cargoToml, toml.replace(/^(\[package\][\s\S]*?^version\s*=\s*)"[^"]+"/m, `$1"${version}"`));
+    console.log(`sync-version: wrote ${version} → src-tauri/Cargo.toml`);
+    if (nameMatch && existsSync(cargoLock)) {
+      const lock = readFileSync(cargoLock, "utf8");
+      const escaped = nameMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      writeFileSync(cargoLock, lock.replace(new RegExp(`(name = "${escaped}"\nversion = )"[^"]+"`), `$1"${version}"`));
+      console.log(`sync-version: wrote ${version} → src-tauri/Cargo.lock`);
+    }
+  }
 }
 
 main();

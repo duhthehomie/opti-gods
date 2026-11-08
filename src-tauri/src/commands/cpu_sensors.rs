@@ -33,7 +33,7 @@ pub fn set_monitoring_focus(focused: bool) {
         tauri::async_runtime::spawn_blocking(|| {
             if let Some(reader) = READER.get() {
                 let mut reader = reader.lock().unwrap_or_else(|e| e.into_inner());
-                if MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) { return; }
+                if MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) || diagnostics_keep_sensors() { return; }
                 if let Some(mut child) = reader.child.take() {
                     let _ = child.kill();
                     let _ = child.wait();
@@ -50,13 +50,13 @@ fn read_bundled_sensors(app: &tauri::AppHandle) -> CpuSensorSample {
     use std::io::{BufRead, BufReader};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) {
+    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) && !diagnostics_keep_sensors() {
         return CpuSensorSample { status: "paused_while_unfocused".into(), ..Default::default() };
     }
     let mut reader = READER.get_or_init(|| Mutex::new(BundledSensorReader {
         child: None, latest: Arc::new(Mutex::new(None)), attempted: None,
     })).lock().unwrap_or_else(|e| e.into_inner());
-    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) {
+    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) && !diagnostics_keep_sensors() {
         return CpuSensorSample { status: "paused_while_unfocused".into(), ..Default::default() };
     }
     if SENSOR_RESTART_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {

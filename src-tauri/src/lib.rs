@@ -51,7 +51,10 @@ pub fn run() {
             if window.label() == "main" {
                 match event {
                     WindowEvent::Focused(focused) => commands::performance::set_monitoring_focus(*focused),
-                    WindowEvent::Destroyed => commands::performance::set_monitoring_focus(false),
+                    WindowEvent::Destroyed => {
+                        commands::performance::shutdown_diagnostics();
+                        commands::performance::set_monitoring_focus(false);
+                    }
                     _ => {}
                 }
             }
@@ -75,6 +78,12 @@ pub fn run() {
             commands::performance::read_live_performance,
             commands::performance::prepare_cpu_monitoring,
             commands::performance::save_performance_recording,
+            commands::performance::start_fps_capture,
+            commands::performance::stop_fps_capture,
+            commands::performance::read_fps_capture,
+            commands::performance::start_performance_capture,
+            commands::performance::stop_performance_capture,
+            commands::performance::performance_capture_status,
             commands::restore::create_restore_point,
             commands::restore::restore_to_point,
             commands::restore::list_restore_points,

@@ -139,6 +139,12 @@ const repairSource = readFileSync(join(process.cwd(), "src-tauri", "src", "comma
 rejectBareVariableColon(repairSource, "windows-repair");
 writeFileSync(join(outDir, "windows-repair.ps1"), repairSource, "utf8");
 total++;
+// The admin recorder's read-only telemetry sampler runs on every Live Monitor
+// poll; a parse error would silently drop CPU/GPU/RAM and game detection.
+const samplerSource = readFileSync(join(process.cwd(), "src-tauri", "src", "commands", "performance_sample.ps1"), "utf8");
+rejectBareVariableColon(samplerSource, "performance-sample");
+writeFileSync(join(outDir, "performance-sample.ps1"), "\ufeff" + samplerSource, "utf8");
+total++;
 console.log(`[smoke-test] OK — ${total} fixture(s) ready in ${outDir}`);
 for (const [id, command] of Object.entries(REVIEWED_PERFORMANCE_COMMANDS)) {
   for (const [suffix, script] of [["apply", command], ["undo", REVIEWED_PERFORMANCE_UNDO[id]]]) {

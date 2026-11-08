@@ -47,6 +47,8 @@
     "allow-read-live-performance",
     "allow-prepare-cpu-monitoring",
     "allow-save-performance-recording",
+    "allow-fps-capture",
+    "allow-performance-capture",
     "allow-install-fivem-pack",
     "allow-save-fivem-pack-zip",
     "allow-uninstall-fivem-pack",

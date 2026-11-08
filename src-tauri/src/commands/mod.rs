@@ -3,6 +3,7 @@
 
 pub mod discord;
 pub mod env;
+pub mod frame_metrics;
 pub mod game_detection;
 pub mod hardware;
 pub mod performance;

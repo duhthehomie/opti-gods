@@ -1343,7 +1343,7 @@ export function LiveMonitorPanel() {
         <div className="p-2 grid grid-cols-2 lg:grid-cols-4 gap-px auto-rows-fr">
           <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</p>
-            <p className="font-mono text-base font-black text-white">{stats.cpuUsage}%</p>
+            <p className={cn("font-mono text-base font-black", stats.cpuKnown === false ? "text-zinc-600" : "text-white")} data-testid="live-monitor-cpu">{stats.cpuKnown === false ? "—" : `${stats.cpuUsage}%`}</p>
             {stats.cpuTemp != null && (
               <p title={stats.cpuSensorName || "CPU temperature sensor"} className={cn("text-[10px]", tempColor(stats.cpuTemp))}>{stats.cpuTemp}°C · CPU sensor</p>
             )}
@@ -1351,7 +1351,7 @@ export function LiveMonitorPanel() {
           </div>
           <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3" /> GPU</p>
-            <p className="font-mono text-base font-black text-white">{stats.gpuUsage}%</p>
+            <p className={cn("font-mono text-base font-black", stats.gpuKnown === false ? "text-zinc-600" : "text-white")} data-testid="live-monitor-gpu">{stats.gpuKnown === false ? "—" : `${stats.gpuUsage}%`}</p>
             {stats.gpuTemp != null && (
               <p className={cn("text-[10px]", tempColor(stats.gpuTemp))}>{stats.gpuTemp}°C</p>
             )}
@@ -1359,8 +1359,8 @@ export function LiveMonitorPanel() {
           </div>
           <div className="min-w-0 p-2.5 rounded-lg border border-white/5 bg-zinc-950/40">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 flex items-center gap-1"><MemoryStick className="w-3 h-3" /> RAM</p>
-            <p className="font-mono text-base font-black text-white">{stats.ramPct}%</p>
-            <p className="text-zinc-500 text-[10px]">{stats.ramUsedGB} / {stats.ramTotalGB} GB</p>
+            <p className={cn("font-mono text-base font-black", stats.ramKnown === false ? "text-zinc-600" : "text-white")} data-testid="live-monitor-ram">{stats.ramKnown === false ? "—" : `${stats.ramPct}%`}</p>
+            <p className="text-zinc-500 text-[10px]">{stats.ramKnown === false ? "Not read" : `${stats.ramUsedGB} / ${stats.ramTotalGB} GB`}</p>
           </div>
           <div className={cn("min-w-0 p-2.5 rounded-lg border", stats.isStale ? "border-amber-500/10 bg-amber-500/[0.03]" : "border-emerald-500/10 bg-emerald-500/[0.03]")}>
             <p className={cn("text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1", stats.isStale ? "text-amber-500/70" : "text-emerald-500/70")}><Activity className="w-3 h-3" /> Status</p>
@@ -1372,12 +1372,20 @@ export function LiveMonitorPanel() {
             ) : (
               <>
                 <p className="text-emerald-400 font-mono text-xs font-bold">Streaming</p>
-                <p className="text-zinc-600 text-[10px]">Refresh requested every 2s</p>
+                <p className="text-zinc-600 text-[10px]">
+                  {stats.sampledAt ? `Read ${Math.max(0, Math.round((Date.now() - stats.sampledAt) / 1000))}s ago · every 2s` : "Every 2s"}
+                </p>
               </>
             )}
           </div>
         </div>
-      ) : (
+      ) : null}
+      {stats.isLive && stats.telemetryError && (
+        <p className="border-t border-white/5 px-3 py-1.5 text-[10px] text-amber-400" data-testid="live-monitor-telemetry-error">
+          Some readings were unavailable: {stats.telemetryError}
+        </p>
+      )}
+      {!stats.isLive && (
         <div className="p-3 flex items-start gap-2">
           <div className="p-1.5 rounded-lg bg-zinc-800/60 border border-white/5 shrink-0">
             <Download className="w-4 h-4 text-zinc-500" />

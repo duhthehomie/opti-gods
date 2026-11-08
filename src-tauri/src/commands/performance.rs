@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 include!("nvidia_temperature.rs");
 include!("cpu_sensors.rs");
+include!("diagnostic_capture.rs");
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -13,6 +14,7 @@ pub struct RunningProcess {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct LivePerformance {
     pub live: bool,
     pub cpu_load_pct: Option<f32>,
@@ -51,6 +53,23 @@ pub struct LivePerformance {
     pub process_names_text: Option<String>,
     /// Newline-separated visible application image names observed in this sample.
     pub visible_app_names_text: Option<String>,
+    /// Newline-separated game image names (PowerShell 5.1-safe form of game_processes).
+    pub game_processes_text: Option<String>,
+    pub game_pid: Option<u32>,
+    /// "server" or "main_menu", derived only from current-session CitizenFX log events.
+    pub fivem_session_state: Option<String>,
+    pub server_evidence: Option<String>,
+    /// Partial failures inside the sampler; never hidden behind a zero value.
+    pub telemetry_error: Option<String>,
+    pub sampled_at_ms: Option<u64>,
+    pub os_caption: Option<String>,
+    pub os_version: Option<String>,
+    pub os_build: Option<String>,
+    /// Presented FPS from explicit PresentMon capture; None when not measured.
+    pub fps: Option<f64>,
+    pub frame_time_ms: Option<f64>,
+    pub fps_status: Option<String>,
+    pub fps_source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -72,6 +91,7 @@ pub async fn read_live_performance(app: AppHandle, temperatures_only: Option<boo
                 gpu_temp_c: gpu,
                 cpu_sensor_status: Some(sensors.status),
                 cpu_sensor_name: sensors.cpu_sensor_name,
+                sampled_at_ms: Some(now_ms()),
                 ..LivePerformance::default()
             });
         }
@@ -86,211 +106,33 @@ pub async fn read_live_performance(app: AppHandle, temperatures_only: Option<boo
 fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, String> {
     #[cfg(windows)]
     {
-        let script = r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$out = [ordered]@{ live = $false }
-$cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue).CounterSamples[0].CookedValue
-if ($null -ne $cpu) { $out.cpu_load_pct = [math]::Round([double]$cpu, 1) }
-$os = Get-CimInstance Win32_OperatingSystem
-if ($os) {
-  $total = [double]$os.TotalVisibleMemorySize / 1MB
-  $free = [double]$os.FreePhysicalMemory / 1MB
-  $out.ram_total_gb = [math]::Round($total, 1)
-  $out.ram_free_gb = [math]::Round($free, 1)
-  $out.ram_used_pct = [math]::Round((1 - ($free / $total)) * 100, 1)
-}
-
-$gpu = $null
-$nvidiaPath = $null
-$nvidia = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
-if ($nvidia) { $nvidiaPath = $nvidia.Source }
-if (-not $nvidiaPath) {
-  $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
-  $candidates = @(
-    "$env:ProgramFiles\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
-    "$env:SystemRoot\System32\nvidia-smi.exe",
-    "$programFilesX86\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
-  )
-  foreach ($candidate in $candidates) {
-    if ($candidate -and (Test-Path -LiteralPath $candidate)) { $nvidiaPath = $candidate; break }
-  }
-}
-if ($nvidiaPath) {
-  $line = (& $nvidiaPath --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1)
-  if ($line -match '^\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?|N/A|Not Supported)\s*$') {
-    $loadText = $matches[1]
-    $temperatureText = $matches[2]
-    $out.gpu_load_pct = [double]$loadText
-    if ($temperatureText -match '^\d+(?:\.\d+)?$') {
-      $temperature = [double]$temperatureText
-      if ($temperature -gt 5 -and $temperature -lt 130) { $out.gpu_temp_c = $temperature }
-    }
-  }
-}
-if ($null -eq $out.gpu_temp_c) {
-  $videoControllers = @(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue)
-  $hasDedicatedGpu = @($videoControllers | Where-Object { $_.Name -match '(?i)NVIDIA|AMD|Radeon' -and $_.Name -notmatch '(?i)Intel' }).Count -gt 0
-  $hasIntelGpu = @($videoControllers | Where-Object { $_.Name -match '(?i)Intel' }).Count -gt 0
-  foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
-    $allGpuSensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
-      Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU Core|GPU Hot Spot|GPU Temperature|GPU' -and $_.Name -notmatch 'CPU' })
-    if (-not $allGpuSensors.Count) { continue }
-    $dedicatedSensors = @($allGpuSensors | Where-Object {
-      $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
-      $identity -match '(?i)NVIDIA|AMD|Radeon|GPU-(NVIDIA|AMD)' -and $identity -notmatch '(?i)Intel|GPU-Intel'
-    })
-    if (-not $dedicatedSensors.Count -and $hasDedicatedGpu) {
-      # Prefer generic GPU sensors to Intel iGPU data when a discrete adapter is present.
-      $dedicatedSensors = @($allGpuSensors | Where-Object {
-        $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
-        $identity -notmatch '(?i)NVIDIA|AMD|Radeon|Intel|GPU-(NVIDIA|AMD|Intel)'
-      })
-    }
-    $intelSensors = @($allGpuSensors | Where-Object {
-      $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
-      $identity -match '(?i)Intel|GPU-Intel'
-    })
-    if (-not $intelSensors.Count -and $hasIntelGpu -and -not $hasDedicatedGpu) {
-      $intelSensors = @($allGpuSensors | Where-Object {
-        $identity = "$($_.Identifier) $($_.Parent) $($_.Name)"
-        $identity -notmatch '(?i)NVIDIA|AMD|Radeon'
-      })
-    }
-    $sensors = if ($dedicatedSensors.Count) { $dedicatedSensors } else { $intelSensors }
-    if ($sensors.Count) {
-      $value = ($sensors | Measure-Object -Property Value -Maximum).Maximum
-      if ($value -gt 5 -and $value -lt 130) { $out.gpu_temp_c = [double][math]::Round($value, 1); break }
-    }
-  }
-}
-if ($null -eq $out.gpu_load_pct) {
-  $samples = (Get-Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 1 -MaxSamples 1).CounterSamples
-  if ($samples) {
-    $sum = ($samples | Measure-Object -Property CookedValue -Sum).Sum
-    if ($null -ne $sum) { $out.gpu_load_pct = [math]::Min(100, [math]::Round([double]$sum, 1)) }
-  }
-}
-
-# CPU package temperature. ACPI is available on some systems; Ryzen boards
-# commonly expose the real package sensor through OpenHardwareMonitor or
-# LibreHardwareMonitor instead.
-$cpuTemp = $null
-$zones = @(Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue)
-if ($zones) {
-  $values = @($zones | ForEach-Object { [math]::Round(([double]$_.CurrentTemperature / 10) - 273.15, 1) } | Where-Object { $_ -gt 5 -and $_ -lt 120 })
-  if ($values) { $out.board_temp_c = ($values | Measure-Object -Maximum).Maximum }
-}
-if ($null -eq $cpuTemp) {
-  foreach ($namespace in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
-    $sensors = @(Get-CimInstance -Namespace $namespace -ClassName Sensor -ErrorAction SilentlyContinue |
-      Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'CPU Package|CPU Core|Tctl|Tdie|CPU CCD' })
-    if ($sensors) {
-      $value = ($sensors | Measure-Object -Property Value -Maximum).Maximum
-      if ($value -gt 5 -and $value -lt 120) { $cpuTemp = [math]::Round([double]$value, 1); break }
-    }
-  }
-}
-if ($null -ne $cpuTemp) { $out.cpu_temp_c = [double]$cpuTemp }
-
-# Match Task Manager's total-process view without exporting every process name.
-$processes = @(Get-Process -ErrorAction SilentlyContinue)
-$taskRows = @(tasklist.exe /FO CSV /NH 2>$null | Where-Object { $_ -match '^"' })
-if ($taskRows.Count -gt 0) {
-  $out.running_processes_count = [int]$taskRows.Count
-} else {
-  $out.running_processes_count = [int]$processes.Count
-}
-$out.visible_apps_count = [int]@($processes | Where-Object {
-  $_.MainWindowHandle -ne 0 -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle)
-}).Count
-$out.process_names_text = (@($processes | ForEach-Object {
-  "$($_.ProcessName).exe"
-} | Sort-Object -Unique) -join "`n"
-$out.visible_app_names_text = (@($processes | Where-Object {
-  $_.MainWindowHandle -ne 0 -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle)
-} | ForEach-Object {
-  "$($_.ProcessName).exe"
-} | Sort-Object -Unique) -join "`n"
-
-$fivemProcesses = @($processes | Where-Object {
-  $_.ProcessName -match '^FiveM($|_)'
-})
-$gameProcesses = @($processes | Where-Object {
-  $_.ProcessName -match '^(FiveM(_b\d+)?_GTAProcess|FiveM_GTAProcess|GTA5)$'
-})
-$out.fivem_running = $fivemProcesses.Count -gt 0
-$out.game_processes = @($gameProcesses | ForEach-Object { "$($_.ProcessName).exe" } | Sort-Object -Unique)
-
-# Prefer FiveM when it is present, then identify other supported games by
-# process image. This is a process-level signal, not a claim that a window is
-# focused.
-$knownGames = @(
-  [pscustomobject]@{ id = 'fivem'; label = 'FiveM'; pattern = '^FiveM(_b\d+)?_GTAProcess$' },
-  [pscustomobject]@{ id = 'gta5'; label = 'Grand Theft Auto V'; pattern = '^GTA5$' },
-  [pscustomobject]@{ id = 'fortnite'; label = 'Fortnite'; pattern = '^FortniteClient' },
-  [pscustomobject]@{ id = 'valorant'; label = 'VALORANT'; pattern = '^(VALORANT|VALORANT-Win64-Shipping)$' },
-  [pscustomobject]@{ id = 'cs2'; label = 'Counter-Strike 2'; pattern = '^(cs2|csgo)$' },
-  [pscustomobject]@{ id = 'roblox'; label = 'Roblox'; pattern = '^RobloxPlayerBeta$' },
-  [pscustomobject]@{ id = 'apex'; label = 'Apex Legends'; pattern = '^r5apex$' },
-  [pscustomobject]@{ id = 'overwatch'; label = 'Overwatch'; pattern = '^Overwatch$' },
-  [pscustomobject]@{ id = 'rust'; label = 'Rust'; pattern = '^RustClient$' },
-  [pscustomobject]@{ id = 'tarkov'; label = 'Escape from Tarkov'; pattern = '^EscapeFromTarkov$' },
-  [pscustomobject]@{ id = 'league'; label = 'League of Legends'; pattern = '^(LeagueClient|League of Legends)$' },
-  [pscustomobject]@{ id = 'minecraft'; label = 'Minecraft'; pattern = '^(java|MinecraftLauncher)$' },
-  [pscustomobject]@{ id = 'game_silenthilltownfall'; label = 'Silent Hill: Townfall'; pattern = '^(SilentHillTownfall-Win64-Shipping|Townfall-Win64-Shipping|SHTownfall|Silent Hill Townfall)$' }
-)
-$activeGame = $null
-foreach ($rule in $knownGames) {
-  $match = @($processes | Where-Object { $_.ProcessName -match $rule.pattern } | Select-Object -First 1)
-  if ($match.Count -gt 0) {
-    $activeGame = [pscustomobject]@{
-      id = $rule.id
-      label = $rule.label
-      process = "$($match[0].ProcessName).exe"
-    }
-    break
-  }
-}
-$out.game_running = $null -ne $activeGame
-if ($activeGame) {
-  $out.game_id = $activeGame.id
-  $out.game_label = $activeGame.label
-  $out.game_process = $activeGame.process
-}
-
-# FiveM's local log exposes the last connection target. Only report it while
-# the actual game process is present so a stale previous session is not called
-# the current RP server.
-if ($out.fivem_running -and $out.game_running) {
-  $logPath = Join-Path $env:LOCALAPPDATA 'FiveM\FiveM.app\logs\CitizenFX.log'
-  if (Test-Path -LiteralPath $logPath) {
-    $line = Get-Content -LiteralPath $logPath -Tail 400 -ErrorAction SilentlyContinue |
-      Select-String -Pattern 'Connecting to\s+(?:cfx\.re/join/)?([^\s,;]+)' |
-      Select-Object -Last 1
-    if ($line -and $line.Matches.Count -gt 0) {
-      $out.server_target = $line.Matches[0].Groups[1].Value
-    }
-  }
-}
-$out.live = $true
-$out | ConvertTo-Json -Compress
-"#;
+        let script = include_str!("performance_sample.ps1");
 
         // Start the continuous reader before slow WMI calls. Never reopen the
         // hardware library for every UI poll.
         let _ = read_bundled_sensors(&app);
         // Query NVAPI independently so a Windows counter/WMI failure cannot hide a valid GPU sensor.
-        let temperature_sample = || {
+        let temperature_sample = |reason: String| {
             let sensors = read_bundled_sensors(&app);
             let gpu = sensors.gpu_temp_c.or_else(read_nvidia_temperature);
-            LivePerformance {
+            let mut sample = LivePerformance {
                 live: gpu.is_some() || sensors.cpu_temp_c.is_some(),
                 gpu_temp_c: gpu,
                 cpu_temp_c: sensors.cpu_temp_c,
                 cpu_sensor_status: Some(sensors.status),
                 cpu_sensor_name: sensors.cpu_sensor_name,
+                // Explicit: CPU/GPU load, RAM and game detection were NOT read.
+                telemetry_error: Some(reason),
                 ..LivePerformance::default()
-            }
+            };
+            finish_sample(&mut sample);
+            sample
+        };
+        // -EncodedCommand avoids command-line quote mangling of the script.
+        let encoded = {
+            use base64::Engine;
+            let utf16: Vec<u8> = script.encode_utf16().flat_map(|unit| unit.to_le_bytes()).collect();
+            base64::engine::general_purpose::STANDARD.encode(utf16)
         };
         let output = match Command::new(crate::commands::windows_powershell_executable())
             .args([
@@ -298,28 +140,32 @@ $out | ConvertTo-Json -Compress
                 "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                script,
+                "-EncodedCommand",
+                encoded.as_str(),
             ])
             .creation_flags(0x0800_0000)
             .output() {
                 Ok(output) => output,
-                Err(_) => return Ok(temperature_sample()),
+                Err(error) => return Ok(temperature_sample(format!("Windows telemetry could not start: {error}"))),
             };
-        if !output.status.success() {
-            return Ok(temperature_sample());
-        }
         let text = String::from_utf8_lossy(&output.stdout);
+        let stderr_summary = || {
+            let err = String::from_utf8_lossy(&output.stderr);
+            let line = err.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(300).collect::<String>();
+            if line.is_empty() { String::new() } else { format!(": {line}") }
+        };
         let json = match text
             .lines()
             .rev()
             .find(|line| line.trim_start().starts_with('{')) {
                 Some(json) => json,
-                None => return Ok(temperature_sample()),
+                None => return Ok(temperature_sample(format!(
+                    "Windows telemetry returned no data (exit {}){}", output.status, stderr_summary()
+                ))),
             };
         let mut performance: LivePerformance = match serde_json::from_str(json) {
             Ok(performance) => performance,
-            Err(_) => return Ok(temperature_sample()),
+            Err(error) => return Ok(temperature_sample(format!("Windows telemetry could not be parsed: {error}"))),
         };
         // Sample again after WMI/counters: do not present a pre-query sample as
         // current after a slow Windows provider. Prefer the continuously updated
@@ -336,6 +182,7 @@ $out | ConvertTo-Json -Compress
             performance.gpu_temp_c = None;
         }
         performance.live |= performance.cpu_temp_c.is_some() || performance.gpu_temp_c.is_some();
+        finish_sample(&mut performance);
         Ok(performance)
     }
     #[cfg(not(windows))]
