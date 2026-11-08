@@ -22,6 +22,10 @@ pub struct FpsCaptureStatus {
     pub fps: Option<f64>,
     pub frame_time_ms: Option<f64>,
     pub fps_status: String,
+    /// Frames PresentMon reported for any app since capture started; separates
+    /// "PresentMon sees nothing" from "the game is not presenting".
+    pub frames_seen: u64,
+    pub frame_column_missing: bool,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -203,7 +207,13 @@ fn fps_snapshot(game_pid: Option<u32>) -> FpsCaptureStatus {
             *guard = None;
             return FpsCaptureStatus { error: Some(message), fps_status: "capture_stopped".into(), game_pid, ..Default::default() };
         }
+        let (frames_seen, frame_column_missing) = {
+            let window = capture.window.lock();
+            (window.frames_seen(), window.frame_column_missing())
+        };
         let mut status = FpsCaptureStatus {
+            frames_seen,
+            frame_column_missing,
             active: true,
             source: Some(FPS_SOURCE.into()),
             started_at_ms: Some(capture.started_at_ms),
@@ -365,6 +375,8 @@ pub fn start_performance_capture(app: AppHandle, phase: String) -> Result<Record
                     match collect_live_performance_blocking(app.clone()) {
                         Ok(sample) => {
                             let mut rows = samples.lock();
+                            // Keep only the newest icon in memory; it is identical per game.
+                            if let Some(previous) = rows.last_mut() { previous.game_icon_png_base64 = None; }
                             if rows.len() < RECORDING_MAX_SAMPLES { rows.push(sample); } else { truncated.store(true, Ordering::SeqCst); }
                         }
                         Err(message) => {

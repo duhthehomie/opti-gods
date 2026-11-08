@@ -205,6 +205,15 @@ export async function undoTweak(
 }
 
 let appliedDetectionRequest: Promise<Record<string, boolean>> | null = null;
+export type RegistryReadQuery = { hive: "HKLM" | "HKCU"; path: string; name: string };
+export type RegistryReadResult = { kind: "dword" | "qword" | "sz" | "other" | "missing" | "error"; value: number | string | null };
+
+/** Read-only registry readback for the admin recorder's tweak audit. */
+export async function readRegistryValues(queries: RegistryReadQuery[]): Promise<RegistryReadResult[]> {
+  if (!isNative()) throw new Error("Registry reads need the Windows app.");
+  return invoke<RegistryReadResult[]>("read_registry_values", { queries });
+}
+
 export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
   if (!isNative()) return {};
   if (!appliedDetectionRequest) {
@@ -303,6 +312,11 @@ export interface NativeLivePerformance {
   frame_time_ms?: number | null;
   fps_status?: string | null;
   fps_source?: string | null;
+  /** known_game | library_path | gpu_usage */
+  game_detection?: string | null;
+  game_window_title?: string | null;
+  server_title?: string | null;
+  game_icon_png_base64?: string | null;
 }
 
 export async function readLivePerformance(temperaturesOnly = false): Promise<NativeLivePerformance | null> {
@@ -325,6 +339,9 @@ export interface NativeFpsCaptureStatus {
   frame_time_ms: number | null;
   /** capture_off | no_game | no_recent_frames | measured | capture_stopped | windows_only */
   fps_status: string;
+  /** Frames PresentMon has seen from any app since capture started. */
+  frames_seen?: number;
+  frame_column_missing?: boolean;
 }
 
 export interface NativeRecordingStatus {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Activity, AlertTriangle, Cpu, Download, Gamepad2, Gauge, MemoryStick, Monitor, PlayCircle, RefreshCw, Thermometer, XCircle,
+  Activity, AlertTriangle, Check, Cpu, Download, Gamepad2, Gauge, MemoryStick, Monitor, Pencil, PlayCircle, RefreshCw, Thermometer, X, XCircle,
 } from "lucide-react";
+import { GAMES, KNOWN_SERVER_NAMES, type GameEntry } from "@/lib/game-library";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -87,20 +88,57 @@ function stats(values: Array<number | null | undefined>) {
   };
 }
 
-function fivemStatus(live: NativeLivePerformance | null, identity: RecorderServerIdentity | null): string {
+// Native game ids that differ from the shared library's ids.
+const LIBRARY_ALIASES: Record<string, string> = { league: "game_lol", game_silenthilltownfall: "" };
+const EXTRA_COVERS: Record<string, string> = {
+  cs2: "/game-covers/counter-strike-2.webp",
+  game_silenthilltownfall: "/game-covers/silent-hill-townfall.png",
+};
+
+/** Match the detected game to the shared game library (cover, name, per-game tweaks). */
+export function findLibraryGame(live: NativeLivePerformance | null): GameEntry | null {
+  if (!live?.game_running) return null;
+  const id = live.game_id ? LIBRARY_ALIASES[live.game_id] ?? `game_${live.game_id}` : "";
+  const byId = id ? GAMES.find(game => game.id === id) : undefined;
+  if (byId) return byId;
+  const process = live.game_process?.toLowerCase();
+  // FiveM.exe is the launcher; the game is FiveM_*_GTAProcess and is handled by id above.
+  return process ? GAMES.find(game => game.processName.toLowerCase() === process && game.id !== "game_fivem") ?? null : null;
+}
+
+const SERVER_NAMES_KEY = "og-recorder-server-names";
+function readServerNames(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(SERVER_NAMES_KEY) || "{}") as Record<string, string>; } catch { return {}; }
+}
+
+/** Stable key for naming the current server: log target first, else the window-title hostname. */
+function serverKey(live: NativeLivePerformance | null): string | null {
+  if (!live?.game_running || live.game_id !== "fivem" || live.fivem_session_state === "main_menu") return null;
+  const target = normalizeRecorderServerTarget(live.server_target);
+  if (target) return target.toLowerCase();
+  return live.server_title ? `title:${live.server_title.toLowerCase()}` : null;
+}
+
+function fivemStatus(
+  live: NativeLivePerformance | null,
+  identity: RecorderServerIdentity | null,
+  customName: string | null,
+): string {
   if (!live?.game_running || live.game_id !== "fivem") {
     return live?.fivem_running ? "FiveM launcher open (game not started)" : "Only shown for FiveM";
   }
   if (live.fivem_session_state === "main_menu") return "FiveM main menu (not on a server)";
-  if (live.server_target) return identity?.name ?? identity?.target ?? live.server_target;
-  return "Server not identified yet";
+  if (customName) return customName;
+  const target = normalizeRecorderServerTarget(live.server_target);
+  const known = target ? KNOWN_SERVER_NAMES[target.replace(/:\d+$/, "").toLowerCase()] : undefined;
+  return known ?? identity?.name ?? live.server_title ?? identity?.target ?? live.server_target ?? "Server not identified yet";
 }
 
 export function PerformanceRecorder() {
   const { toast } = useToast();
   const native = isNative();
   const [phase, setPhase] = useState<RecorderPhase>("before");
-  const [label, setLabel] = useState("tmfrz-test");
+  const [label, setLabel] = useState("perf-test");
   const [samples, setSamples] = useState<RecorderSample[]>([]);
   const [hardware, setHardware] = useState<NativeHardwareScan | null>(null);
   const [error, setError] = useState("");
@@ -118,6 +156,11 @@ export function PerformanceRecorder() {
   const [fpsError, setFpsError] = useState("");
   const [fpsConsentOpen, setFpsConsentOpen] = useState(false);
   const [tweakAudit, setTweakAudit] = useState<RecorderTweakAuditSnapshot | null>(null);
+  const [serverNames, setServerNames] = useState<Record<string, string>>(() => readServerNames());
+  const [editingServer, setEditingServer] = useState(false);
+  const [serverDraft, setServerDraft] = useState("");
+  const [failedCover, setFailedCover] = useState<string | null>(null);
+  const iconCacheRef = useRef(new Map<string, string>());
   const [now, setNow] = useState(() => Date.now());
   const sessionIdRef = useRef(0);
   const mountedRef = useRef(true);
@@ -218,9 +261,17 @@ export function PerformanceRecorder() {
     setFpsStarting(true);
     setFpsError("");
     try {
-      setFps(await startFpsCapture());
+      const status = await startFpsCapture();
+      setFps(status);
+      toast({
+        title: "FPS counter running",
+        description: status.game_pid
+          ? "PresentMon is ready. The FPS tile updates every second while a game is presenting frames."
+          : "PresentMon is ready. Open a game and the FPS tile will start reading.",
+      });
     } catch (startError) {
       setFpsError(String(startError));
+      toast({ title: "FPS counter did not start", description: String(startError), variant: "destructive" });
     } finally {
       setFpsStarting(false);
     }
@@ -272,7 +323,12 @@ export function PerformanceRecorder() {
           elapsed_seconds: Math.round((sampledAt - result.started_at_ms) / 100) / 10,
           phase: result.phase,
           session_id: sessionId,
-          server_name: target ? serverCacheRef.current.get(target)?.name ?? null : null,
+          server_name: (() => {
+            const key = serverKey(sample);
+            return (key ? serverNames[key] : null)
+              ?? (target ? KNOWN_SERVER_NAMES[target.replace(/:\d+$/, "").toLowerCase()] ?? serverCacheRef.current.get(target)?.name : null)
+              ?? sample.server_title ?? null;
+          })(),
           process_names: (sample.process_names_text ?? "").split(/\r?\n/).filter(Boolean),
           visible_app_names: (sample.visible_app_names_text ?? "").split(/\r?\n/).filter(Boolean),
         };
@@ -326,7 +382,7 @@ export function PerformanceRecorder() {
       const content = JSON.stringify({
         schema_version: 3,
         recorder: "Opti Gods admin performance recorder",
-        label: label.trim() || "tmfrz-test",
+        label: label.trim() || "perf-test",
         created_at: new Date().toISOString(),
         app_mode: "native-admin-only",
         note: "Native sampling every 2 seconds, continuing while the game has focus. FPS is presented frames measured by PresentMon over a 2-second window when FPS capture was enabled; otherwise it is null, never estimated. FiveM server state comes from current-session CitizenFX log events; in-server script menus are not observable.",
@@ -357,8 +413,28 @@ export function PerformanceRecorder() {
 
   const ageMs = liveGame?.sampled_at_ms ? Math.max(0, now - liveGame.sampled_at_ms) : null;
   const stale = ageMs == null || ageMs > STALE_AFTER_MS;
-  const gameStatus = liveGame?.game_running && liveGame.game_label ? liveGame.game_label : "Game not detected";
-  const serverStatus = fivemStatus(liveGame, serverIdentity);
+  const libraryGame = findLibraryGame(liveGame);
+  const gameStatus = liveGame?.game_running
+    ? (liveGame.game_id === "unlisted" && libraryGame ? libraryGame.name : liveGame.game_label) || "Game detected"
+    : "Game not detected";
+  const currentServerKey = serverKey(liveGame);
+  const customServerName = currentServerKey ? serverNames[currentServerKey] ?? null : null;
+  const serverStatus = fivemStatus(liveGame, serverIdentity, customServerName);
+  const saveServerName = () => {
+    if (!currentServerKey) return;
+    const name = serverDraft.trim().slice(0, 60);
+    const next = { ...serverNames };
+    if (name) next[currentServerKey] = name; else delete next[currentServerKey];
+    setServerNames(next);
+    try { localStorage.setItem(SERVER_NAMES_KEY, JSON.stringify(next)); } catch { /* storage full or blocked: name lasts this session */ }
+    setEditingServer(false);
+  };
+  const fpsHint = !fps?.active ? "Enable below"
+    : fps.fps_status === "measured" && fps.frame_time_ms != null ? `${fps.frame_time_ms.toFixed(1)} ms frame time`
+      : fps.frame_column_missing ? "PresentMon format not recognised"
+        : fps.fps_status === "no_recent_frames"
+          ? (fps.frames_seen ? `No frames from this game · ${fps.frames_seen} from other apps` : "PresentMon has not seen any frames yet")
+          : "Presented frames";
   const fpsValue = fps?.active ? fps.fps : liveGame?.fps ?? null;
   const fpsText = fps?.active
     ? fps.fps_status === "measured" && fpsValue != null ? `${Math.round(fpsValue)}`
@@ -367,16 +443,16 @@ export function PerformanceRecorder() {
     : "Off";
   const beforeCount = samples.filter(s => s.phase === "before").length;
   const afterCount = samples.filter(s => s.phase === "after").length;
-  const gameCover: Record<string, string> = {
-    fivem: "/game-covers/fivem.png",
-    fortnite: "/game-covers/fortnite.png",
-    valorant: "/game-covers/valorant.png",
-    roblox: "/game-covers/roblox.png",
-    rust: "/game-covers/rust.png",
-    tarkov: "/game-covers/tarkov.png",
-    overwatch: "/game-covers/overwatch.png",
-  };
-  const gameCoverUrl = liveGame?.game_id ? gameCover[liveGame.game_id] : undefined;
+  // Unlisted games: the .exe icon arrives in the latest sample only; keep it per process.
+  if (liveGame?.game_process && liveGame.game_icon_png_base64) {
+    iconCacheRef.current.set(liveGame.game_process, `data:image/png;base64,${liveGame.game_icon_png_base64}`);
+  }
+  const gameCoverUrl = !liveGame?.game_running ? undefined
+    : libraryGame?.coverUrl
+      ?? (liveGame.game_id ? EXTRA_COVERS[liveGame.game_id] : undefined)
+      ?? (liveGame.game_process ? iconCacheRef.current.get(liveGame.game_process) : undefined);
+  const detectionNote = liveGame?.game_detection === "library_path" ? " · found in a game library folder"
+    : liveGame?.game_detection === "gpu_usage" ? " · found by GPU use" : "";
 
   return (
     <div className="space-y-4" data-testid="admin-performance-recorder">
@@ -387,9 +463,9 @@ export function PerformanceRecorder() {
               <Activity className="w-4 h-4" />
               Admin-only PC performance recorder
             </div>
-            <h2 className="mt-2 text-xl font-display font-bold text-white">TMFRZ Before / After capture</h2>
+            <h2 className="mt-2 text-xl font-display font-bold text-white">Before / After capture</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-400">
-              Record the same test before and after changes. Recording runs inside the Windows app, so it keeps sampling while the game is fullscreen.
+              Works with any game. Record the same test before and after changes. Recording runs inside the Windows app, so it keeps sampling while the game is fullscreen.
             </p>
           </div>
           <span className={cn(
@@ -410,7 +486,9 @@ export function PerformanceRecorder() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                    {gameCoverUrl ? <img src={gameCoverUrl} alt="" className="h-full w-full object-cover" /> : <Gamepad2 className="h-6 w-6 text-zinc-600" />}
+                    {gameCoverUrl && failedCover !== gameCoverUrl
+                      ? <img src={gameCoverUrl} alt="" className="h-full w-full object-cover" onError={() => setFailedCover(gameCoverUrl)} />
+                      : <Gamepad2 className="h-6 w-6 text-zinc-600" />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -430,8 +508,8 @@ export function PerformanceRecorder() {
                     </h3>
                     <p className="truncate text-[11px] text-zinc-500">
                       {liveGame?.game_process
-                        ? `Detected from ${liveGame.game_process}${liveGame.game_pid ? ` · PID ${liveGame.game_pid}` : ""}`
-                        : liveGame?.fivem_running ? "FiveM is open, but the game process is not running" : "No supported game process detected"}
+                        ? `Detected from ${liveGame.game_process}${liveGame.game_pid ? ` · PID ${liveGame.game_pid}` : ""}${detectionNote}`
+                        : liveGame?.fivem_running ? "FiveM is open, but the game process is not running" : "No game detected. Open any game and it shows here."}
                     </p>
                   </div>
                 </div>
@@ -450,7 +528,37 @@ export function PerformanceRecorder() {
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border border-white/5 bg-black/25 px-3 py-2">
                   <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">FiveM server / menu</div>
-                  <div className="mt-1 truncate text-sm font-bold text-white" data-testid="text-fivem-server">{serverStatus}</div>
+                  {editingServer ? (
+                    <form className="mt-1 flex items-center gap-1" onSubmit={event => { event.preventDefault(); saveServerName(); }}>
+                      <input
+                        autoFocus
+                        value={serverDraft}
+                        onChange={event => setServerDraft(event.target.value)}
+                        maxLength={60}
+                        placeholder="Server name"
+                        data-testid="input-server-name"
+                        className="h-7 min-w-0 flex-1 rounded border border-white/10 bg-black/60 px-2 text-sm text-white outline-none focus:border-emerald-500/50"
+                      />
+                      <button type="submit" aria-label="Save server name" data-testid="button-save-server-name" className="rounded p-1 text-emerald-400 hover:bg-emerald-500/10"><Check className="h-4 w-4" /></button>
+                      <button type="button" aria-label="Cancel" onClick={() => setEditingServer(false)} className="rounded p-1 text-zinc-500 hover:bg-white/5"><X className="h-4 w-4" /></button>
+                    </form>
+                  ) : (
+                    <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-bold text-white" data-testid="text-fivem-server">{serverStatus}</span>
+                      {currentServerKey && (
+                        <button
+                          type="button"
+                          aria-label="Rename server"
+                          title="Set your own name for this server (saved on this PC)"
+                          data-testid="button-rename-server"
+                          onClick={() => { setServerDraft(customServerName ?? serverStatus); setEditingServer(true); }}
+                          className="shrink-0 rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-white"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {liveGame?.game_id === "fivem" && liveGame.server_evidence && (
                     <div className="mt-0.5 truncate text-[10px] text-zinc-600" title={liveGame.server_evidence}>{liveGame.server_evidence}</div>
                   )}
@@ -465,7 +573,7 @@ export function PerformanceRecorder() {
 
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 {([
-                  ["FPS", fpsText, Gauge, fps?.active && fps.fps_status === "measured" && fps.frame_time_ms != null ? `${fps.frame_time_ms.toFixed(1)} ms frame time` : fps?.active ? "Presented frames" : "Enable below"],
+                  ["FPS", fpsText, Gauge, fpsHint],
                   ["CPU load", pct(liveGame?.cpu_load_pct), Cpu, ""],
                   ["GPU load", pct(liveGame?.gpu_load_pct), Monitor, ""],
                   ["RAM", pct(liveGame?.ram_used_pct), MemoryStick, num(liveGame?.ram_total_gb) != null && num(liveGame?.ram_free_gb) != null ? `${((liveGame!.ram_total_gb as number) - (liveGame!.ram_free_gb as number)).toFixed(1)} / ${(liveGame!.ram_total_gb as number).toFixed(0)} GB` : ""],
@@ -487,7 +595,7 @@ export function PerformanceRecorder() {
                   </Button>
                 ) : (
                   <Button size="sm" data-testid="button-enable-fps" disabled={fpsStarting} onClick={() => setFpsConsentOpen(true)} className="bg-emerald-600 text-white hover:bg-emerald-500">
-                    {fpsStarting ? "Starting FPS counter…" : "Enable FPS counter"}
+                    {fpsStarting ? "Downloading and starting PresentMon…" : "Enable FPS counter"}
                   </Button>
                 )}
                 <span className="text-[10px] text-zinc-600">
@@ -498,7 +606,7 @@ export function PerformanceRecorder() {
                 <div className="mt-2 rounded-lg border border-emerald-500/20 bg-black/40 p-3 text-[11px] leading-relaxed text-zinc-300" data-testid="panel-fps-consent">
                   {PRESENTMON_NOTE}
                   <div className="mt-2 flex gap-2">
-                    <Button size="sm" data-testid="button-confirm-fps" onClick={() => void enableFps()} className="bg-emerald-600 text-white hover:bg-emerald-500">Download and start</Button>
+                    <Button size="sm" data-testid="button-confirm-fps" disabled={fpsStarting} onClick={() => void enableFps()} className="bg-emerald-600 text-white hover:bg-emerald-500">Download and start</Button>
                     <Button size="sm" variant="outline" onClick={() => setFpsConsentOpen(false)} className="border-zinc-700 text-zinc-300">Cancel</Button>
                   </div>
                 </div>
@@ -520,7 +628,7 @@ export function PerformanceRecorder() {
                   onChange={event => setLabel(event.target.value)}
                   disabled={Boolean(activePhase)}
                   className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-red-500/50"
-                  placeholder="tmfrz-test"
+                  placeholder="perf-test"
                 />
               </label>
               <div className="flex items-end gap-2">
@@ -593,6 +701,8 @@ export function PerformanceRecorder() {
 
             <RecorderTweakAudit
               gameId={liveGame?.game_running ? liveGame.game_id ?? null : null}
+              libraryGameId={libraryGame?.id ?? null}
+              gameLabel={liveGame?.game_running ? gameStatus : null}
               liveOs={liveGame?.os_caption ? { caption: liveGame.os_caption, version: liveGame.os_version, build: liveGame.os_build } : null}
               onSnapshot={onAuditSnapshot}
             />

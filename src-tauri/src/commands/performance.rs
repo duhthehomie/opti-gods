@@ -70,6 +70,13 @@ pub struct LivePerformance {
     pub frame_time_ms: Option<f64>,
     pub fps_status: Option<String>,
     pub fps_source: Option<String>,
+    /// known_game | library_path | gpu_usage — how the game was identified.
+    pub game_detection: Option<String>,
+    pub game_window_title: Option<String>,
+    /// Server hostname from FiveM's window title (owner-configured, may be generic).
+    pub server_title: Option<String>,
+    /// Small PNG of the game's own .exe icon, only for games outside the library.
+    pub game_icon_png_base64: Option<String>,
 }
 
 #[derive(Deserialize)]

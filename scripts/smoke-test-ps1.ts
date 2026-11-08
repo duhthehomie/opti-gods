@@ -14,6 +14,8 @@ import { buildNativeBatchCommandFix } from "../server/native-batch-command-fixes
 import { PRO_VALIDATION_COMMANDS } from "../server/pro-validation-commands";
 import { runProValidationPowerShellChecks } from "../script/test-pro-validation-powershell";
 import { REVIEWED_PERFORMANCE_COMMANDS, REVIEWED_PERFORMANCE_UNDO } from "../server/cs2-network-commands";
+import { extractTweakCommands } from "./tweak-command-source";
+import { buildRegistryTargets, REGISTRY_TARGETS_FILE, renderRegistryTargetsFile } from "./generate-tweak-registry-targets";
 
 const NVIDIA_REAPPLY = [
   "NvTextureFilterHighPerf","NvLowLatencyUltra","NvThreadedOptOn","NvPowerMgmtMax",
@@ -23,48 +25,6 @@ const AMD_REAPPLY = [
   "AmdTextureFilterPerf","AmdSurfaceFormatOpt","AmdTessOverride16x","AmdRadeonBoostOff",
   "AmdFRTC60","AmdFRTC144","AmdFRTC240","EnableMSIMode_Safe",
 ];
-
-function extractTweakCommands(): Record<string, string> {
-  const src = readFileSync(join(process.cwd(), "server", "routes.ts"), "utf8");
-  const startIdx = src.indexOf("const TWEAK_COMMANDS");
-  if (startIdx < 0) throw new Error("TWEAK_COMMANDS block not found in server/routes.ts");
-  // Find the matching closing `};` by counting brace depth from the first `{`.
-  const braceOpen = src.indexOf("{", startIdx);
-  let depth = 0;
-  let endIdx = -1;
-  let inTemplate = false; // inside `…` — skip braces (PS scriptblocks contain `{`/`}`)
-  let inSingle = false;   // inside '…' single-quoted JS string
-  let inDouble = false;   // inside "…" double-quoted JS string
-  let inLineCmt = false;
-  for (let i = braceOpen; i < src.length; i++) {
-    const ch = src[i];
-    const prev = src[i - 1];
-    if (inLineCmt) { if (ch === "\n") inLineCmt = false; continue; }
-    if (inTemplate) { if (ch === "`" && prev !== "\\") inTemplate = false; continue; }
-    if (inSingle)   { if (ch === "'" && prev !== "\\") inSingle = false; continue; }
-    if (inDouble)   { if (ch === '"' && prev !== "\\") inDouble = false; continue; }
-    if (ch === "/" && src[i + 1] === "/") { inLineCmt = true; continue; }
-    if (ch === "`")  { inTemplate = true; continue; }
-    if (ch === "'")  { inSingle = true; continue; }
-    if (ch === '"')  { inDouble = true; continue; }
-    if (ch === "{") depth++;
-    else if (ch === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
-  }
-  if (endIdx < 0) throw new Error("could not find end of TWEAK_COMMANDS block");
-  const block = src.slice(braceOpen + 1, endIdx);
-
-  const out: Record<string, string> = {};
-  // Match `  Identifier: `...`,` — backtick-quoted, may contain escaped backticks.
-  const re = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*`([\s\S]*?)`\s*,?\s*$/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) {
-    const id = m[1];
-    // Decode TS template literal escapes: \\ -> \, \` -> `, \$ -> $
-    const cmd = m[2].replace(/\\`/g, "`").replace(/\\\$/g, "$").replace(/\\\\/g, "\\");
-    out[id] = cmd;
-  }
-  return out;
-}
 
 const TWEAK_COMMANDS = extractTweakCommands();
 console.log(`[smoke-test] extracted ${Object.keys(TWEAK_COMMANDS).length} tweak commands`);
@@ -154,3 +114,14 @@ for (const [id, command] of Object.entries(REVIEWED_PERFORMANCE_COMMANDS)) {
 }
 console.log(`[smoke-test] In CI, the build-windows workflow then parses each .ps1 with PowerShell's AST to fail on syntax errors.`);
 runProValidationPowerShellChecks();
+
+// The admin recorder's read-only tweak audit depends on this generated file;
+// fail the build if it no longer matches TWEAK_COMMANDS.
+{
+  const expected = renderRegistryTargetsFile(buildRegistryTargets(TWEAK_COMMANDS));
+  const actual = readFileSync(REGISTRY_TARGETS_FILE, "utf8");
+  if (actual !== expected) {
+    throw new Error("client/src/generated/tweak-registry-targets.ts is stale: run npx tsx scripts/generate-tweak-registry-targets.ts");
+  }
+  console.log("[smoke-test] tweak registry targets are current");
+}

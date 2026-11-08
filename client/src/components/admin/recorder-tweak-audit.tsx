@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ClipboardList, HelpCircle, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Check, ClipboardList, Copy, HelpCircle, RefreshCw, X } from "lucide-react";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { detectAppliedTweaks, getRecordedAppliedTweaks } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, getRecordedAppliedTweaks, readRegistryValues, type RegistryReadResult } from "@/lib/tauri-bridge";
+import { GAME_TWEAK_IDS } from "@/lib/game-library";
+import { TWEAK_REGISTRY_TARGETS, type TweakRegistryTarget } from "@/generated/tweak-registry-targets";
+import { useToast } from "@/hooks/use-toast";
 import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { TWEAK_BY_ID } from "@/lib/tweak-registry";
@@ -20,14 +23,19 @@ export type RecorderTweakAuditSnapshot = {
   verified_applied: string[];
   verified_missing: string[];
   unverified: string[];
+  /** Per missing tweak: each registry value that differs, with current and needed values. */
+  missing_values: Record<string, Array<{ key: string; current: string; needed: string }>>;
   recorded_history: Record<string, number>;
-  readback_errors: { detected: string | null; history: string | null };
+  readback_errors: { detected: string | null; history: string | null; registry: string | null };
 };
 
 export type RecorderLiveOs = { caption?: string | null; version?: string | null; build?: string | null } | null;
 
 type Props = {
   gameId: string | null;
+  /** Shared game-library id (e.g. game_fortnite) for per-game tweak targets. */
+  libraryGameId: string | null;
+  gameLabel: string | null;
   liveOs: RecorderLiveOs;
   onSnapshot: (snapshot: RecorderTweakAuditSnapshot) => void;
 };
@@ -41,7 +49,50 @@ const GAME_TO_CATEGORY: Record<string, TweakCategory> = {
   roblox: "roblox",
   cod: "cod",
   warzone: "cod",
+  game_fivem: "fivem",
+  game_gta5: "fivem",
+  game_fortnite: "fortnite",
+  game_rust: "rust",
+  game_roblox: "roblox",
+  game_cod: "cod",
+  game_warzone: "cod",
 };
+
+type ValueCheck = { key: string; current: string; needed: string; ok: boolean };
+
+const regKey = (t: TweakRegistryTarget) => `${t.hive}\\${t.path}\\${t.name}`.toLowerCase();
+const shownValue = (t: TweakRegistryTarget) => (t.type === "sz" ? `"${t.value}"` : `${t.value} (${t.type.toUpperCase()})`);
+
+function checkValue(target: TweakRegistryTarget, read: RegistryReadResult | undefined): ValueCheck {
+  const key = `${target.hive}\\${target.path} · ${target.name}`;
+  const needed = shownValue(target);
+  if (!read || read.kind === "missing") return { key, current: "not set", needed, ok: false };
+  if (read.kind === "error" || read.kind === "other") return { key, current: read.kind === "error" ? `unreadable (${String(read.value)})` : "other type", needed, ok: false };
+  const ok = target.type === "sz"
+    ? String(read.value).trim().toLowerCase() === String(target.value).trim().toLowerCase()
+    : (read.kind === "dword" || read.kind === "qword") && Number(read.value) === Number(target.value);
+  return { key, current: read.kind === "sz" ? `"${read.value}"` : String(read.value), needed, ok };
+}
+
+/** .reg text for the values that are not set as needed (copied, never applied here). */
+function regFile(targets: TweakRegistryTarget[]): string {
+  const byKey = new Map<string, string[]>();
+  for (const t of targets) {
+    const header = `[${t.hive === "HKLM" ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"}\\${t.path}]`;
+    const name = `"${t.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    let data: string;
+    if (t.type === "sz") data = `"${String(t.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    else if (t.type === "dword") data = `dword:${(Number(t.value) >>> 0).toString(16).padStart(8, "0")}`;
+    else {
+      let v = BigInt(t.value);
+      const bytes: string[] = [];
+      for (let i = 0; i < 8; i++) { bytes.push((v & BigInt(255)).toString(16).padStart(2, "0")); v >>= BigInt(8); }
+      data = `hex(b):${bytes.join(",")}`;
+    }
+    byKey.set(header, [...(byKey.get(header) ?? []), `${name}=${data}`]);
+  }
+  return ["Windows Registry Editor Version 5.00", ...Array.from(byKey, ([header, rows]) => `\r\n${header}\r\n${rows.join("\r\n")}`)].join("\r\n") + "\r\n";
+}
 
 type Status = "applied" | "missing" | "unverified";
 
@@ -57,24 +108,34 @@ function registryTarget(tweak: TweakMeta | undefined): string | null {
   return `${typeof hive === "string" ? hive : "HK??"}\\${path} · ${name} = ${String(value)}`;
 }
 
-export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
+export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, onSnapshot }: Props) {
   const hw = useHardwareInfo();
   const os = useOsDetection();
-  const category = gameId ? GAME_TO_CATEGORY[gameId.toLowerCase()] ?? null : null;
+  const { toast } = useToast();
+  const category = (libraryGameId ? GAME_TO_CATEGORY[libraryGameId] : null)
+    ?? (gameId ? GAME_TO_CATEGORY[gameId.toLowerCase()] ?? null : null);
   const recIdsKey = Array.from(computeSmartRecs(hw, os).ids).sort().join("|");
   const targetIds = useMemo(() => {
     const ids = recIdsKey ? recIdsKey.split("|") : [];
-    return getEligibleSmartRecommendationIds(ids, id => getTweakCompatibility(id).ok).filter(id => {
+    const system = getEligibleSmartRecommendationIds(ids, id => getTweakCompatibility(id).ok).filter(id => {
       const tweakCategory = TWEAK_BY_ID.get(id)?.category;
       // System-wide tweaks always count; game tweaks only for the game being played.
       return !tweakCategory || !GAME_TWEAK_CATEGORIES.has(tweakCategory) || tweakCategory === category;
     });
-  }, [recIdsKey, category]);
+    // The detected game's own optimisation list (same list Game Detection uses).
+    const perGame = (libraryGameId ? GAME_TWEAK_IDS[libraryGameId] ?? [] : [])
+      .filter(id => TWEAK_BY_ID.has(id) && getTweakCompatibility(id).ok);
+    return Array.from(new Set([...perGame, ...system]));
+  }, [recIdsKey, category, libraryGameId]);
+  const targetKey = targetIds.join("|");
+  const perGameIds = useMemo(() => new Set(libraryGameId ? GAME_TWEAK_IDS[libraryGameId] ?? [] : []), [libraryGameId]);
 
   const [detected, setDetected] = useState<Record<string, boolean> | null>(null);
   const [history, setHistory] = useState<Record<string, number> | null>(null);
   const [detectedError, setDetectedError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [registry, setRegistry] = useState<Map<string, RegistryReadResult> | null>(null);
+  const [registryError, setRegistryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
   const busyRef = useRef(false);
@@ -85,7 +146,23 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
     if (busyRef.current) return;
     busyRef.current = true;
     setRefreshing(true);
-    const [liveResult, historyResult] = await Promise.allSettled([detectAppliedTweaks(), getRecordedAppliedTweaks()]);
+    const queries = new Map<string, TweakRegistryTarget>();
+    for (const id of targetKey ? targetKey.split("|") : []) {
+      for (const target of TWEAK_REGISTRY_TARGETS[id] ?? []) queries.set(regKey(target), target);
+    }
+    const queryList = Array.from(queries.values());
+    const [liveResult, historyResult, registryResult] = await Promise.allSettled([
+      detectAppliedTweaks(),
+      getRecordedAppliedTweaks(),
+      queryList.length ? readRegistryValues(queryList.map(({ hive, path, name }) => ({ hive, path, name }))) : Promise.resolve([]),
+    ]);
+    if (registryResult.status === "fulfilled") {
+      setRegistry(new Map(queryList.map((target, index) => [regKey(target), registryResult.value[index]])));
+      setRegistryError(null);
+    } else {
+      setRegistry(null);
+      setRegistryError(errorMessage(registryResult.reason));
+    }
     setDetected(liveResult.status === "fulfilled" ? liveResult.value : null);
     setDetectedError(liveResult.status === "rejected" ? errorMessage(liveResult.reason) : null);
     setHistory(historyResult.status === "fulfilled" ? historyResult.value : null);
@@ -93,27 +170,37 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
     setCapturedAt(new Date().toISOString());
     setRefreshing(false);
     busyRef.current = false;
-  }, []);
+  }, [targetKey]);
 
-  // Read once on open and again when the detected game changes.
-  useEffect(() => { void refresh(); }, [refresh, category]);
+  // Read once on open and again when the detected game or target list changes.
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const rows = useMemo(() => targetIds.map(id => {
     const tweak = TWEAK_BY_ID.get(id);
     const live = detected?.[id];
-    const status: Status = live === true ? "applied" : live === false ? "missing" : "unverified";
+    const targets = TWEAK_REGISTRY_TARGETS[id] ?? [];
+    const checks = registry && targets.length ? targets.map(t => checkValue(t, registry.get(regKey(t)))) : [];
+    // Native detector first; otherwise every registry value the tweak writes must match.
+    const status: Status = live === true ? "applied"
+      : live === false ? "missing"
+      : checks.length ? (checks.every(c => c.ok) ? "applied" : "missing")
+      : "unverified";
+    const wrong = checks.filter(c => !c.ok);
     return {
       id,
       title: tweak?.title ?? id,
       category: tweak?.category ?? "system",
+      forGame: perGameIds.has(id),
       status,
-      registry: status === "missing" ? registryTarget(tweak) : null,
+      checks: status === "missing" ? wrong : [],
+      missingTargets: status === "missing" ? targets.filter(t => !checkValue(t, registry?.get(regKey(t))).ok) : [],
+      registry: status === "missing" && !wrong.length ? registryTarget(tweak) : null,
       history: history?.[id] ?? 0,
     };
   }).sort((a, b) => {
     const order: Record<Status, number> = { missing: 0, unverified: 1, applied: 2 };
     return order[a.status] - order[b.status] || a.title.localeCompare(b.title);
-  }), [targetIds, detected, history]);
+  }), [targetIds, detected, history, registry, perGameIds]);
 
   const counts = useMemo(() => ({
     applied: rows.filter(r => r.status === "applied").length,
@@ -137,14 +224,24 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
       verified_applied: rows.filter(r => r.status === "applied").map(r => r.id),
       verified_missing: rows.filter(r => r.status === "missing").map(r => r.id),
       unverified: rows.filter(r => r.status === "unverified").map(r => r.id),
+      missing_values: Object.fromEntries(rows.filter(r => r.checks.length).map(r => [r.id, r.checks.map(({ key, current, needed }) => ({ key, current, needed }))])),
       recorded_history: history ?? {},
-      readback_errors: { detected: detectedError, history: historyError },
+      readback_errors: { detected: detectedError, history: historyError, registry: registryError },
     });
     // osView is derived from the listed primitives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capturedAt, rows, gameId, category, hw.cpuLabel, hw.gpuName, hw.ramGB, hw.scanned, osView.caption, osView.build, osView.source, detectedError, historyError]);
+  }, [capturedAt, rows, gameId, category, hw.cpuLabel, hw.gpuName, hw.ramGB, hw.scanned, osView.caption, osView.build, osView.source, detectedError, historyError, registryError]);
 
   const verifiedTotal = counts.applied + counts.missing;
+  const missingTargets = rows.flatMap(r => r.missingTargets);
+  const copyMissing = async () => {
+    try {
+      await navigator.clipboard.writeText(regFile(missingTargets));
+      toast({ title: "Copied", description: `${missingTargets.length} registry values as a .reg file. Nothing was changed on this PC.` });
+    } catch (copyError) {
+      toast({ title: "Copy failed", description: errorMessage(copyError), variant: "destructive" });
+    }
+  };
 
   return (
     <section className="rounded-xl border border-red-500/20 bg-black/25 p-4" data-testid="recorder-tweak-audit">
@@ -155,11 +252,11 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
             Read-only tweak audit
           </div>
           <h3 className="mt-1 font-display text-base font-bold text-zinc-100">
-            {category ? `${gameId === "fivem" ? "FiveM" : category} + system tweaks for this PC` : "System tweaks for this PC"}
+            {gameLabel ? `${gameLabel} + system tweaks for this PC` : "System tweaks for this PC"}
           </h3>
           <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-zinc-500">
-            Targets are this PC's eligible Smart Recommendations, plus the current game's tweaks only. Expert, manual-only
-            and other games' tweaks are excluded. Reading state never changes the registry, and no FPS gain is promised.
+            Targets are this PC's eligible Smart Recommendations plus the detected game's own tweaks. Each tweak's registry
+            values are read back and compared; nothing is written. Expert, manual-only and other games' tweaks are excluded.
           </p>
         </div>
         <button
@@ -178,7 +275,7 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
         {[
           ["Windows", `${osView.caption}${osView.build ? ` · build ${osView.build}` : ""}`, osView.source === "live_sample" ? "read live from Windows" : osView.source === "hardware_scan" ? "from hardware scan" : "browser estimate"],
           ["CPU / GPU", `${hw.cpuLabel} / ${hw.gpuName}`, hw.scanned ? "hardware scan" : "not scanned yet"],
-          ["Verified applied", verifiedTotal ? `${counts.applied} of ${verifiedTotal}` : "—", "live registry/state readback"],
+          ["Verified applied", verifiedTotal ? `${counts.applied} of ${verifiedTotal}` : "—", "registry values read live"],
           ["Read at", capturedAt ? new Date(capturedAt).toLocaleTimeString() : "Not read", `${counts.unverified} without a live detector`],
         ].map(([label, value, hint]) => (
           <div key={label} className="min-w-0 rounded-lg border border-white/5 bg-zinc-950/70 px-3 py-2">
@@ -189,11 +286,12 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
         ))}
       </div>
 
-      {(detectedError || historyError) && (
+      {(detectedError || historyError || registryError) && (
         <div className="mt-3 space-y-1 rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-300">
           <div className="flex items-center gap-2 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> Readback did not complete</div>
           {detectedError && <p>Live detector: {detectedError}</p>}
           {historyError && <p>Recorded history: {historyError}</p>}
+          {registryError && <p>Registry readback: {registryError}</p>}
         </div>
       )}
 
@@ -205,8 +303,12 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
 
       <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-white/5">
         <div className="sticky top-0 grid grid-cols-[1fr_auto] gap-3 border-b border-white/5 bg-zinc-950 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-zinc-600">
-          <span>{counts.missing} missing · {counts.applied} applied · {counts.unverified} unverified</span>
-          <span>Live state</span>
+          <span>{counts.missing} missing · {counts.applied} applied · {counts.unverified} no live check</span>
+          {missingTargets.length ? (
+            <button type="button" onClick={() => void copyMissing()} data-testid="button-copy-missing-reg" className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300">
+              <Copy className="h-3 w-3" /> Copy missing as .reg
+            </button>
+          ) : <span>Live state</span>}
         </div>
         {!rows.length ? (
           <p className="px-3 py-4 text-[11px] text-zinc-600">{detected === null && !detectedError ? "Reading this PC…" : "No eligible recommendations for this hardware."}</p>
@@ -215,8 +317,13 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
             <div className="min-w-0">
               <div className="truncate text-[11px] text-zinc-200">{row.title}</div>
               <div className="truncate font-mono text-[9px] text-zinc-600">
-                {row.id} · {row.category}{row.history ? ` · applied ${row.history}× in history` : ""}
+                {row.id} · {row.forGame ? `${gameLabel ?? "game"} tweak` : row.category}{row.history ? ` · applied ${row.history}× in history` : ""}
               </div>
+              {row.checks.map(check => (
+                <div key={check.key} className="truncate font-mono text-[9px] text-amber-500/80" title={`${check.key}: now ${check.current}, needs ${check.needed}`}>
+                  {check.key}: now {check.current} → needs {check.needed}
+                </div>
+              ))}
               {row.registry && <div className="truncate font-mono text-[9px] text-amber-500/80" title={row.registry}>{row.registry}</div>}
             </div>
             <span className={cn(
@@ -230,7 +337,7 @@ export function RecorderTweakAudit({ gameId, liveOs, onSnapshot }: Props) {
         ))}
       </div>
       <p className="mt-2 text-[10px] text-zinc-600">
-        Recorded history is shown per row but never counts as currently applied. "No live check" means Windows state for that tweak cannot be read back.
+        Recorded history never counts as applied. "No live check" means the tweak changes something other than a fixed registry value (services, apps, power plans, hardware-dependent values), so it cannot be read back here.
       </p>
     </section>
   );

@@ -40,7 +40,8 @@ try {
     # Task Manager style: sum each 3D engine across processes, then take the
     # busiest engine. Never add unrelated video/copy engines together.
     $engines = @{}
-    foreach ($row in @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop)) {
+    $engineRows = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop)
+    foreach ($row in $engineRows) {
       if ($row.Name -notmatch 'engtype_3D$') { continue }
       $key = $row.Name -replace '^pid_\d+_', ''
       $engines[$key] = [double]$engines[$key] + [double]$row.UtilizationPercentage
@@ -87,6 +88,59 @@ try {
       break
     }
   }
+  if (-not $game) {
+    # Any game: a visible app installed in a game library, otherwise the
+    # visible app doing the most 3D work. Launchers, browsers and overlays are
+    # excluded. Labelled with how it was detected; never guessed silently.
+    $notGames = '^(?i)(dwm|explorer|opti.?gods|msedgewebview2|msedge|chrome|firefox|brave|opera|opera_gx|vivaldi|discord|discordptb|discordcanary|obs64|obs32|steam|steamwebhelper|epicgameslauncher|epicwebhelper|battle\.net|agent|riotclientservices|riotclientux|riotclientuxrender|eadesktop|origin|ubisoftconnect|upc|galaxyclient|xboxpcapp|gamebar|gamebarftserver|nvidia share|nvcontainer|nvidia overlay|amdrsserv|radeonsoftware|shellexperiencehost|searchhost|searchapp|startmenuexperiencehost|textinputhost|applicationframehost|systemsettings|lockapp|taskmgr|spotify|code|devenv|medal|overwolf|wallpaper32|wallpaper64|lively|vlc|mpc-hc64|powershell|pwsh|windowsterminal|cmd|conhost|fivem|fivem_chromebrowser|fivem_steamchild|fivem_rockstarlauncher|rockstarservice|launcher|socialclubhelper|playgtav|easyanticheat|beservice|vgtray|faceit|faceitclient)$'
+    $libraryPattern = '(?i)\\(steamapps\\common|epic games|riot games|battle\.net|ea games|electronic arts|ubisoft game launcher\\games|gog galaxy\\games|xboxgames|windowsapps\\[^\\]*(?:minecraft|forza|halo|callofduty|seaofthieves))\\'
+    $candidates = @($visible | Where-Object { $_.ProcessName -notmatch $notGames })
+    $byLibrary = @($candidates | Where-Object { try { $_.Path -match $libraryPattern } catch { $false } } |
+      Sort-Object WorkingSet64 -Descending | Select-Object -First 1)
+    $how = $null
+    if ($byLibrary.Count) { $game = $byLibrary[0]; $how = 'library_path' }
+    elseif ($engineRows) {
+      $usage = @{}
+      foreach ($row in $engineRows) {
+        if ($row.Name -notmatch '^pid_(\d+)_.*engtype_3D$') { continue }
+        $usage[[int]$Matches[1]] = [double]$usage[[int]$Matches[1]] + [double]$row.UtilizationPercentage
+      }
+      $top = @($candidates | Where-Object { [double]$usage[[int]$_.Id] -ge 10 } |
+        Sort-Object { [double]$usage[[int]$_.Id] } -Descending | Select-Object -First 1)
+      if ($top.Count) { $game = $top[0]; $how = 'gpu_usage' }
+    }
+    if ($game) {
+      $product = $null
+      try { $product = [string]$game.MainModule.FileVersionInfo.ProductName } catch {}
+      $title = [string]$game.MainWindowTitle
+      $name = if ($product -and $product.Trim().Length -gt 1) { $product.Trim() } elseif ($title.Trim()) { $title.Trim() } else { $game.ProcessName }
+      $out.game_running = $true
+      $out.game_id = 'unlisted'
+      $out.game_label = $name
+      $out.game_process = "$($game.ProcessName).exe"
+      $out.game_pid = [uint32]$game.Id
+      $out.game_processes_text = "$($game.ProcessName).exe"
+      $out.game_detection = $how
+      # Unlisted games have no cover art; use the game's own .exe icon (read-only).
+      try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($game.Path)
+        if ($icon) {
+          $bitmap = $icon.ToBitmap()
+          $stream = [IO.MemoryStream]::new()
+          try {
+            $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+            if ($stream.Length -le 65536) { $out.game_icon_png_base64 = [Convert]::ToBase64String($stream.ToArray()) }
+          } finally { $stream.Dispose(); $bitmap.Dispose(); $icon.Dispose() }
+        }
+      } catch {}
+    }
+  } else {
+    $out.game_detection = 'known_game'
+  }
+  if ($game) {
+    try { $out.game_window_title = [string]$game.MainWindowTitle } catch {}
+  }
   if ($out.game_id -eq 'fivem') {
     $roots = [System.Collections.Generic.List[string]]::new()
     $roots.Add((Join-Path $env:LOCALAPPDATA 'FiveM\FiveM.app'))
@@ -108,8 +162,12 @@ try {
         $reader = [IO.StreamReader]::new($stream)
         try { $tail = $reader.ReadToEnd() } finally { $reader.Dispose() }
       } finally { $stream.Dispose() }
-      $events = @([regex]::Matches($tail, '(?im)^.*(?:Connecting to(?:\s+server)?[:\s]+[''"]?(?<target>(?:https?://)?(?:cfx\.re/join/)?[a-z0-9._:\-/]+)|Disconnected from server|Disconnecting from server|Connection closed|Disconnected by server|ERR_NET_DISCONNECT).*$') |
-        Where-Object { -not $_.Groups['target'].Success -or $_.Groups['target'].Value -notmatch '^(?:server|to)\b' })
+      # Voice (Mumble) and resource/HTTP connections are not the game server.
+      $events = @([regex]::Matches($tail, '(?im)^(?!.*(?:mumble|voice|\bhttp client\b)).*(?:Connecting to(?:\s+server)?[:\s]+[''"]?(?<target>(?:https?://)?(?:cfx\.re/join/)?[a-z0-9._:\-/]+)|Disconnected from server|Disconnecting from server|Disconnected by server|ERR_NET_DISCONNECT).*$') |
+        Where-Object {
+          -not $_.Groups['target'].Success -or
+          ($_.Groups['target'].Value.TrimEnd('/', '.') -match '^(?:https?://)?(?:cfx\.re/join/[a-z0-9]{4,8}|(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?|[a-z0-9\-]+(?:\.[a-z0-9\-]+)+(?::\d{1,5})?)/?$')
+        })
       if ($events.Count) {
         $last = $events[$events.Count - 1]
         if ($last.Groups['target'].Success) {
@@ -123,9 +181,19 @@ try {
         break
       }
     }
+    # FiveM titles its window "FiveM(R) by Cfx.re - <server hostname>" while
+    # connected; the hostname is whatever the server owner configured.
+    $titleServer = $null
+    if ([string]$out.game_window_title -match '^FiveM.*?\s[-\u2013]\s(?<name>.+)$') { $titleServer = $Matches['name'].Trim() }
+    if ($titleServer) { $out.server_title = $titleServer }
     if (-not $out.server_evidence) {
-      $out.fivem_session_state = 'main_menu'
-      $out.server_evidence = 'FiveM game process is running with no server connection this session (main menu).'
+      if ($titleServer) {
+        $out.fivem_session_state = 'server'
+        $out.server_evidence = 'FiveM window title shows a connected server; no connect line found in the current log.'
+      } else {
+        $out.fivem_session_state = 'main_menu'
+        $out.server_evidence = 'FiveM game process is running with no server connection this session (main menu).'
+      }
     }
   }
 } catch { $issues.Add("Game/process detection unavailable: $($_.Exception.Message)") }

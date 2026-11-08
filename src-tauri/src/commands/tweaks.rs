@@ -119,6 +119,66 @@ pub fn list_tweaks() -> Vec<TweakDescriptor> {
         .collect()
 }
 
+#[derive(Deserialize)]
+pub struct RegistryReadQuery {
+    pub hive: String,
+    pub path: String,
+    pub name: String,
+}
+
+#[derive(Serialize, Default)]
+pub struct RegistryReadResult {
+    /// dword | qword | sz | other | missing | error
+    pub kind: String,
+    pub value: Option<serde_json::Value>,
+}
+
+/// Admin recorder audit: read (never write) the registry values that reviewed
+/// tweak scripts set, so the UI can show applied vs missing per value.
+/// HKLM/HKCU only, bounded count and length; the renderer cannot write.
+#[tauri::command]
+pub async fn read_registry_values(queries: Vec<RegistryReadQuery>) -> Result<Vec<RegistryReadResult>, String> {
+    if queries.len() > 4000 {
+        return Err("Too many registry values requested.".into());
+    }
+    tokio::task::spawn_blocking(move || read_registry_values_blocking(queries))
+        .await
+        .map_err(|error| format!("Registry read worker failed: {error}"))?
+}
+
+fn read_registry_values_blocking(queries: Vec<RegistryReadQuery>) -> Result<Vec<RegistryReadResult>, String> {
+    #[cfg(windows)]
+    {
+        use crate::win32::registry::{read_value, Hive, RegValue};
+        Ok(queries
+            .into_iter()
+            .map(|query| {
+                let hive = match query.hive.to_ascii_uppercase().as_str() {
+                    "HKLM" | "HKEY_LOCAL_MACHINE" => Hive::LocalMachine,
+                    "HKCU" | "HKEY_CURRENT_USER" => Hive::CurrentUser,
+                    _ => return RegistryReadResult { kind: "error".into(), value: Some("Unsupported hive".into()) },
+                };
+                if query.path.len() > 512 || query.name.len() > 256 {
+                    return RegistryReadResult { kind: "error".into(), value: Some("Path too long".into()) };
+                }
+                match read_value(hive, &query.path, &query.name) {
+                    Ok(RegValue::Dword(v)) => RegistryReadResult { kind: "dword".into(), value: Some(v.into()) },
+                    Ok(RegValue::Qword(v)) => RegistryReadResult { kind: "qword".into(), value: Some(v.into()) },
+                    Ok(RegValue::Sz(v)) => RegistryReadResult { kind: "sz".into(), value: Some(v.into()) },
+                    Ok(_) => RegistryReadResult { kind: "other".into(), value: None },
+                    // A missing key or value means the tweak has not set it.
+                    Err(_) => RegistryReadResult { kind: "missing".into(), value: None },
+                }
+            })
+            .collect())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = queries;
+        Err("Registry reads are available in the Windows app.".into())
+    }
+}
+
 /// Read-only detection for the registry-backed tweaks handled by the native engine.
 /// The renderer supplies no paths or commands.
 #[tauri::command]
