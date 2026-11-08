@@ -12,19 +12,53 @@ struct CpuSensorSample {
 static SENSOR_RESTART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(windows)]
+static MONITORING_FOREGROUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[cfg(windows)]
+struct BundledSensorReader {
+    child: Option<std::process::Child>,
+    latest: std::sync::Arc<std::sync::Mutex<Option<(std::time::Instant, CpuSensorSample)>>>,
+    attempted: Option<std::time::Instant>,
+}
+
+#[cfg(windows)]
+static READER: std::sync::OnceLock<std::sync::Mutex<BundledSensorReader>> = std::sync::OnceLock::new();
+
+/// Stop the hardware sensor helper when the main window loses focus. This
+/// does not touch games, third-party monitoring software, or Windows drivers.
+#[cfg(windows)]
+pub fn set_monitoring_focus(focused: bool) {
+    MONITORING_FOREGROUND.store(focused, std::sync::atomic::Ordering::SeqCst);
+    if !focused {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Some(reader) = READER.get() {
+                let mut reader = reader.lock().unwrap_or_else(|e| e.into_inner());
+                if MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) { return; }
+                if let Some(mut child) = reader.child.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+                *reader.latest.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                reader.attempted = None;
+            }
+        });
+    }
+}
+
+#[cfg(windows)]
 fn read_bundled_sensors(app: &tauri::AppHandle) -> CpuSensorSample {
     use std::io::{BufRead, BufReader};
-    use std::sync::{Arc, Mutex, OnceLock};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    struct Reader {
-        child: Option<std::process::Child>,
-        latest: Arc<Mutex<Option<(Instant, CpuSensorSample)>>>,
-        attempted: Option<Instant>,
+    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) {
+        return CpuSensorSample { status: "paused_while_unfocused".into(), ..Default::default() };
     }
-    static READER: OnceLock<Mutex<Reader>> = OnceLock::new();
-    let mut reader = READER.get_or_init(|| Mutex::new(Reader {
+    let mut reader = READER.get_or_init(|| Mutex::new(BundledSensorReader {
         child: None, latest: Arc::new(Mutex::new(None)), attempted: None,
     })).lock().unwrap_or_else(|e| e.into_inner());
+    if !MONITORING_FOREGROUND.load(std::sync::atomic::Ordering::SeqCst) {
+        return CpuSensorSample { status: "paused_while_unfocused".into(), ..Default::default() };
+    }
     if SENSOR_RESTART_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
         if let Some(mut child) = reader.child.take() {
             let _ = child.kill();

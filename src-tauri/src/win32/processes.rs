@@ -146,7 +146,9 @@ pub fn apply_pro_balance(game_exe: &str, whitelist: &[&str]) -> Result<()> {
         }
         let lower = name.to_ascii_lowercase();
         let is_active_game = lower == game_lower;
-        let is_other_game = lower_whitelist.contains(&lower) && !is_active_game;
+        let is_other_game = (lower_whitelist.contains(&lower)
+            || super::game_process_policy::is_protected_game_family(&name, whitelist))
+            && !is_active_game;
         if is_other_game {
             continue;
         }

@@ -1,3 +1,4 @@
+import { startForegroundPolling } from "@/lib/foreground-polling";
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { getProValidationActionIds } from "@/lib/pro-validation-actions";
 import { useState, useCallback, useEffect } from "react";
@@ -522,10 +523,8 @@ export default function Dashboard() {
   }, [native]);
 
   useEffect(() => {
-    void refreshDetectedState();
     if (!native) return;
-    const interval = window.setInterval(() => { void refreshDetectedState(); }, 15_000);
-    return () => window.clearInterval(interval);
+    return startForegroundPolling(refreshDetectedState, 60_000);
   }, [native, refreshDetectedState]);
 
   useEffect(() => {

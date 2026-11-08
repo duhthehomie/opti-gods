@@ -5,6 +5,7 @@
 
 pub mod elevation;
 pub mod processes;
+pub mod game_process_policy;
 pub mod registry;
 pub mod restore;
 pub mod wmi_scan;

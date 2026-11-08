@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { startForegroundPolling } from "@/lib/foreground-polling";
 import { getWindowsProcessCount, isNative } from "@/lib/tauri-bridge";
 import { boundedWindowsRead } from "@/lib/applied-tweak-state";
 import { subscribeNativeTweakRun } from "@/lib/native-tweak-runner";
@@ -20,10 +21,11 @@ export function WindowsProcessCount() {
         if (mounted) { setCount(null); setError("Live process count unavailable"); }
       } finally { busy = false; }
     };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
-    const unsubscribe = subscribeNativeTweakRun(() => { void refresh(); });
-    return () => { mounted = false; clearInterval(timer); unsubscribe(); };
+    const stop = startForegroundPolling(refresh, 15_000);
+    const unsubscribe = subscribeNativeTweakRun(state => {
+      if (!document.hidden && document.hasFocus() && state && ["completed", "failed", "stopped"].includes(state.status)) void refresh();
+    });
+    return () => { mounted = false; stop(); unsubscribe(); };
   }, []);
   if (!isNative()) return null;
   return (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { isNative, readLivePerformance } from "@/lib/tauri-bridge";
+import { startForegroundPolling } from "@/lib/foreground-polling";
 
 let nativeTelemetryRequest: ReturnType<typeof readLivePerformance> | null = null;
 let nativeTemperatureRequest: ReturnType<typeof readLivePerformance> | null = null;
@@ -213,9 +214,10 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
       });
     };
 
-    const id = setInterval(tick, temperaturesOnly ? 1000 : 2000);
-    tick();
-    return () => { cancelled = true; clearInterval(id); };
+    const stop = startForegroundPolling(tick, temperaturesOnly ? 2000 : 3000, {
+      onPause: () => setStats(previous => ({ ...previous, isLive: false, isStale: true })),
+    });
+    return () => { cancelled = true; stop(); };
   }, [totalRAM, temperaturesOnly]);
 
   return stats;

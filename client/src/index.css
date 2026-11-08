@@ -1,3 +1,11 @@
+/* Do not spend GPU time animating an unfocused native window during games. */
+html[data-native-background="true"] *,
+html[data-native-background="true"] *::before,
+html[data-native-background="true"] *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

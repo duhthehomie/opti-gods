@@ -1,3 +1,4 @@
+import { startForegroundPolling } from "@/lib/foreground-polling";
 import { ReactNode, useState, useEffect } from "react";
 import { useAppliedTweakState } from "@/hooks/use-applied-tweak-state";
 import { useIsEmbedded } from "@/lib/embedded-context";
@@ -465,13 +466,12 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
     if (!native) return;
     let mounted = true;
     const refreshAppliedHistory = () => {
-      void getAppliedTweakState()
+      return getAppliedTweakState()
         .then(state => { if (mounted) setNativeAppliedState(state); })
         .catch(error => console.warn("Could not read Windows applied-tweak history.", error));
     };
-    refreshAppliedHistory();
-    const interval = window.setInterval(refreshAppliedHistory, 15_000);
-    return () => { mounted = false; window.clearInterval(interval); };
+    const stop = startForegroundPolling(refreshAppliedHistory, 60_000);
+    return () => { mounted = false; stop(); };
   }, [native, appliedAt]);
 
   useEffect(() => {

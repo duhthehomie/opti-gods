@@ -3,7 +3,7 @@
 // Called once from App.tsx on mount. In the browser this is a no-op.
 // In the desktop binary it:
 //   1. Asks Rust for envInfo() so we can show the admin / non-admin banner.
-//   2. Starts the ProBalance background loop.
+//   2. Keeps automatic process reprioritization OFF.
 //
 // Window visibility is handled entirely in Rust (lib.rs on_page_load).
 // JS does NOT call any show/hide window commands.
@@ -13,7 +13,6 @@
 
 import {
   envInfo,
-  startProBalance,
   showMainWindow,
   scanHardware,
   startupRestoreCheckpoint,
@@ -24,6 +23,7 @@ import {
 import { getScannedInfo, saveScannedInfo } from "@/hooks/use-hardware-info";
 import { nativeScanToScannedInfo, uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
 import { NATIVE_RESTORE_CREATED_KEY, setNativeRestoreReadiness } from "@/lib/native-readiness";
+import { installNativeBackgroundState } from "@/lib/foreground-polling";
 
 export interface NativeBootResult {
   native: boolean;
@@ -51,6 +51,7 @@ export function bootstrapNative(): Promise<NativeBootResult> {
     if (!isNative()) {
       return { native: false, env: null };
     }
+    installNativeBackgroundState();
     // Step 1 — Show the window FIRST, before any other work.
     // The window starts with visible:false so WebView2 initialises hidden
     // (avoiding the Win32 "Not Responding" freeze the user would otherwise
@@ -112,16 +113,10 @@ export function bootstrapNative(): Promise<NativeBootResult> {
       console.warn("[native] envInfo failed", err);
     }
 
-    const restoreResult = await withTimeout(restoreCheck, 95_000, "startupRestoreCheckpoint");
-    if (restoreResult?.ok) {
-      try {
-        await withTimeout(startProBalance(), 5_000, "startProBalance");
-      } catch (err) {
-        console.warn("[native] startProBalance failed", err);
-      }
-    } else {
-      console.warn("[native] ProBalance held until the safety checkpoint is verified");
-    }
+    await withTimeout(restoreCheck, 95_000, "startupRestoreCheckpoint");
+    // Merely opening Opti Gods must not rewrite game/background priorities.
+    // AppState defaults to disabled; reviewed, user-selected game profiles
+    // remain the explicit way to change scheduling.
 
     // Step 3 — refresh the full hardware profile silently on every desktop
     // launch. The optimizer needs the current GPU/CPU/RAM/chassis data before

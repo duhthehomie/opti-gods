@@ -47,6 +47,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(windows)]
+            if window.label() == "main" {
+                match event {
+                    WindowEvent::Focused(focused) => commands::performance::set_monitoring_focus(*focused),
+                    WindowEvent::Destroyed => commands::performance::set_monitoring_focus(false),
+                    _ => {}
+                }
+            }
             if let WindowEvent::CloseRequested { .. } = event {
                 if window.label() == "main" {}
             }

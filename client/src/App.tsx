@@ -249,20 +249,8 @@ const NATIVE_NAV_PRELOADERS: Array<() => Promise<unknown>> = [
 function Router() {
   const [location] = useLocation();
   const HomeComponent = isNative() ? Dashboard : SmartHome;
-  useEffect(() => {
-    if (!isNative()) return;
-    let cancelled = false;
-    let index = 0;
-    let timer: number;
-    const next = () => {
-      if (cancelled || index >= NATIVE_NAV_PRELOADERS.length) return;
-      void NATIVE_NAV_PRELOADERS[index++]().catch(error => console.warn("Could not preload a desktop tab.", error)).finally(() => {
-        if (!cancelled) timer = window.setTimeout(next, 200);
-      });
-    };
-    timer = window.setTimeout(next, 3500);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, []);
+  // Keep desktop sections lazy: do not parse every screen in the background
+  // a few seconds after launching the app over a running game.
   const browserWorkspace = !isNative() && isWebsiteWorkspacePath(location);
   if (browserWorkspace) return <><RouteSeo /><WebsiteWorkspacePreview /></>;
   return (
