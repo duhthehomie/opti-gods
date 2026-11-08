@@ -185,7 +185,8 @@ export function buildRegistryTargets(commands: Record<string, string>): Record<s
   const out: Record<string, RegistryTarget[]> = {};
   for (const id of Object.keys(commands).sort()) {
     const served = buildNativeBatchCommandFix(id, commands[id] ?? "") ?? buildSafeWindowsCommandOverride(id) ?? commands[id];
-    const targets = parseRegistryWrites(normalizeSystemResponsiveness(served));
+    // Windows checkouts use CRLF; normalize so CI and Linux produce identical targets.
+    const targets = parseRegistryWrites(normalizeSystemResponsiveness(served.replace(/\r\n/g, "\n")));
     if (targets.length) out[id] = targets;
   }
   return out;

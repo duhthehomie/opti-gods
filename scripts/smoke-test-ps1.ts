@@ -118,8 +118,9 @@ runProValidationPowerShellChecks();
 // The admin recorder's read-only tweak audit depends on this generated file;
 // fail the build if it no longer matches TWEAK_COMMANDS.
 {
-  const expected = renderRegistryTargetsFile(buildRegistryTargets(TWEAK_COMMANDS));
-  const actual = readFileSync(REGISTRY_TARGETS_FILE, "utf8");
+  // Compare ignoring line endings: Windows CI checks files out with CRLF.
+  const expected = renderRegistryTargetsFile(buildRegistryTargets(TWEAK_COMMANDS)).replace(/\r\n/g, "\n");
+  const actual = readFileSync(REGISTRY_TARGETS_FILE, "utf8").replace(/\r\n/g, "\n");
   if (actual !== expected) {
     throw new Error("client/src/generated/tweak-registry-targets.ts is stale: run npx tsx scripts/generate-tweak-registry-targets.ts");
   }
