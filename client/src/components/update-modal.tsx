@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
 import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
-import { CheckCircle2, Download } from "lucide-react";
+import { CheckCircle2, Download, RefreshCw } from "lucide-react";
 import { simpleUpdateNotes } from "@/lib/update-notes";
 import { useInstalledVersion } from "@/hooks/use-installed-version";
-import { isNative } from "@/lib/tauri-bridge";
+import { checkForUpdate, isNative, performUpdate, type UpdateInfo } from "@/lib/tauri-bridge";
 
 type Phase = "prompt" | "downloading" | "installing" | "done";
 
@@ -19,7 +19,9 @@ function NativeUpdateModal() {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-  const [progress] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [nativeUpdate, setNativeUpdate] = useState<UpdateInfo | null>(null);
+  const [installError, setInstallError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const reduced = typeof window !== "undefined" && prefersReducedMotion();
   const [detectedVersion, setDetectedVersion] = useState<string | null>(null);
@@ -37,8 +39,40 @@ function NativeUpdateModal() {
 
     setDetectedVersion(latestVersion);
     setDetectedNotes(data.notes ?? null);
-    setPhase("prompt");
+    setPhase(current => current ?? "prompt");
   }, [data, dismissed, installedVersion]);
+
+  // Ask the built-in updater whether this release can install itself (signed)
+  // and use the release's own notes.
+  useEffect(() => {
+    if (phase !== "prompt" || nativeUpdate) return;
+    let cancelled = false;
+    void checkForUpdate().then(info => {
+      if (cancelled || !info) return;
+      setNativeUpdate(info);
+      if (info.available && info.notes) setDetectedNotes(info.notes);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [phase, nativeUpdate]);
+
+  const canAutoInstall = Boolean(nativeUpdate?.available && nativeUpdate.auto_install);
+
+  async function installNow() {
+    setInstallError("");
+    setProgress(0);
+    setPhase("downloading");
+    try {
+      // On success Windows closes Opti Gods, installs, and reopens the new version.
+      await performUpdate((percent, installing) => {
+        setProgress(percent);
+        if (installing) setPhase("installing");
+      });
+      setPhase("done");
+    } catch (error) {
+      setInstallError(String(error).replace(/^Error:\s*/, ""));
+      setPhase("prompt");
+    }
+  }
 
   function openUpdateCenter() {
     setFadeOut(true);
@@ -110,14 +144,35 @@ function NativeUpdateModal() {
             </ul>
           </div>
 
-          <button
-            data-testid="open-update-center"
-            onClick={openUpdateCenter}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-bold text-white transition-colors hover:bg-red-500"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Open Update Center
-          </button>
+          {installError && (
+            <p className="w-full rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] leading-snug text-red-300" data-testid="text-update-error">
+              Automatic update failed: {installError}
+            </p>
+          )}
+          {canAutoInstall && !installError ? (
+            <button
+              data-testid="button-update-now"
+              onClick={() => void installNow()}
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-bold text-white transition-colors hover:bg-red-500"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Update now
+            </button>
+          ) : (
+            <button
+              data-testid="open-update-center"
+              onClick={openUpdateCenter}
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-bold text-white transition-colors hover:bg-red-500"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Open Update Center
+            </button>
+          )}
+          {canAutoInstall && !installError && (
+            <p className="-mt-2 text-center text-[9px] text-zinc-500">
+              Downloads, installs and reopens Opti Gods by itself. Windows will ask for permission once.
+            </p>
+          )}
           <p className="text-center text-[9px] text-zinc-600">
             Your saved settings and applied tweak history are protected.
           </p>

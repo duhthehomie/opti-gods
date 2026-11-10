@@ -693,6 +693,8 @@ export interface UpdateInfo {
   latest_version: string | null;
   notes: string | null;
   error: string | null;
+  /** Signed release: the app can download and install it itself. */
+  auto_install?: boolean;
 }
 
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
