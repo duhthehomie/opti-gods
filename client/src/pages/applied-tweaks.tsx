@@ -36,6 +36,7 @@ import {
   stopNativeTweakRun,
   subscribeNativeTweakRun,
   type NativeTweakRunState,
+  type BulkTweakResult,
   type TweakRunProgress,
 } from "@/lib/native-tweak-runner";
 import { AlertCircle, CheckCircle2, Download, Loader2, Play, RefreshCw, Undo2, ShieldCheck, Radio, RotateCcw, Square, Search, X } from "lucide-react";
@@ -308,21 +309,11 @@ export default function AppliedTweaksPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { void refreshAppliedState().finally(() => setLoading(false)); }, []);
-  useEffect(() => {
-     const syncRun = (state: NativeTweakRunState | null) => {
-      // Keep every native result visible, including stale or ineligible IDs.
-      // Filtering failures here made an OG-HTTP-400 result disappear instead
-      // of showing the exact tweak and server error in the run ledger.
-      const safeState = state;
-       setRunState(safeState);
-      if (!state) return;
-       setRunItems(safeState?.items ?? []);
-      setRunning(state.status === "running" || state.status === "stopping");
-      setRunFinished(state.status === "completed" || state.status === "stopped" || state.status === "failed");
-       setRunHadFailures((safeState?.items ?? []).some(item => item.status === "failed"));
-       const terminal = state.status === "completed" || state.status === "stopped" || state.status === "failed";
-       if (terminal && state.items.length > 0 && notifiedRunRef.current !== state.runId) {
+  // Success/failure feedback for a finished run: green toast, chime and the
+  // restart reminder. Called from the run-state signal AND directly when a run
+  // started on this page resolves, so a missed signal can't swallow it.
+  const announceRun = (state: NativeTweakRunState) => {
+       if (state.items.length > 0 && notifiedRunRef.current !== state.runId) {
          notifiedRunRef.current = state.runId;
          try { sessionStorage.setItem("optigods-native-run-notified", state.runId); } catch {}
          const appliedCount = state.items.filter(item => item.status === "applied").length;
@@ -350,6 +341,46 @@ export default function AppliedTweaksPage() {
              variant: failedCount > 0 ? "destructive" : userStoppedRun ? "default" : "success",
          });
        }
+  };
+  const announceFinishedRun = (result?: BulkTweakResult) => {
+    const state = readNativeTweakRun();
+    const terminal = state && (state.status === "completed" || state.status === "stopped" || state.status === "failed");
+    if (state && terminal && state.finishedAt && Date.now() - state.finishedAt < 60_000) {
+      announceRun(state);
+      return;
+    }
+    if (!result) return;
+    const failed = new Map<string, string>(result.failures.map(item => [item.id, item.message] as [string, string]));
+    const ids = Array.from(new Set([...result.appliedIds, ...result.skippedIds, ...result.failures.map(item => item.id)]));
+    const now = Date.now();
+    announceRun({
+      runId: `local-${now}`,
+      ids,
+      startedAt: now,
+      finishedAt: now,
+      status: failed.size ? "failed" : "completed",
+      items: ids.map((id, index) => ({
+        id, index, total: ids.length,
+        status: failed.has(id) ? "failed" : result.appliedIds.includes(id) ? "applied" : "skipped",
+        message: failed.get(id),
+      })),
+    });
+  };
+  useEffect(() => { void refreshAppliedState().finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+     const syncRun = (state: NativeTweakRunState | null) => {
+      // Keep every native result visible, including stale or ineligible IDs.
+      // Filtering failures here made an OG-HTTP-400 result disappear instead
+      // of showing the exact tweak and server error in the run ledger.
+      const safeState = state;
+       setRunState(safeState);
+      if (!state) return;
+       setRunItems(safeState?.items ?? []);
+      setRunning(state.status === "running" || state.status === "stopping");
+      setRunFinished(state.status === "completed" || state.status === "stopped" || state.status === "failed");
+       setRunHadFailures((safeState?.items ?? []).some(item => item.status === "failed"));
+       const terminal = state.status === "completed" || state.status === "stopped" || state.status === "failed";
+       if (terminal) announceRun(state);
     };
     syncRun(readNativeTweakRun());
     return subscribeNativeTweakRun(syncRun);
@@ -488,7 +519,7 @@ export default function AppliedTweaksPage() {
       if (!result) return;
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
-       const failureCount = result.failures.length;
+      announceFinishedRun(result);
     }).catch(error => {
        const message = error instanceof Error ? error.message : "Windows could not start this tweak run.";
        setRunItems(items => items.map(item =>
@@ -564,6 +595,7 @@ export default function AppliedTweaksPage() {
        }, { forceReapplyIds: forceReapply ? idsToRun : [] });
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
+      announceFinishedRun(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Windows could not restart these tweaks.";
       setRunItems(items => items.map(item =>
@@ -700,6 +732,7 @@ export default function AppliedTweaksPage() {
       );
       setRunFinished(true);
       setRunHadFailures(result.failures.length > 0);
+      announceFinishedRun(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Windows could not reapply this tweak.";
       setRunItems(items => items.map(item => ({ ...item, status: "failed", message })));

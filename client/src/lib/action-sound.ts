@@ -1,6 +1,20 @@
-/** Short PlayStation-style confirmation chime for major optimization actions. */
+import { isNative, playNativeSuccessSound } from "@/lib/tauri-bridge";
+
+/**
+ * Short PlayStation-style confirmation chime for major optimization actions.
+ * In the Windows app, Windows plays it: the WebView mutes Web Audio until the
+ * page is clicked, and tweak runs usually finish on a freshly loaded page.
+ */
 export function playOptimizationActionSound(): void {
   if (typeof window === "undefined") return;
+  if (isNative()) {
+    void playNativeSuccessSound().catch(() => playWebChime());
+    return;
+  }
+  playWebChime();
+}
+
+function playWebChime(): void {
   const AudioContextCtor = window.AudioContext
     ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextCtor) return;

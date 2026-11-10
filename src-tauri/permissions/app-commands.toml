@@ -298,3 +298,8 @@ permissions = [
 identifier = "allow-gaming-mode"
 description = "Admin Gaming Mode: turn the background game-priority agent on or off and read its status."
 commands.allow = ["gaming_mode_status", "enable_gaming_mode", "disable_gaming_mode"]
+
+[[permission]]
+identifier = "allow-success-sound"
+description = "Play the built-in success chime after a confirmed Windows action."
+commands.allow = ["play_success_sound"]

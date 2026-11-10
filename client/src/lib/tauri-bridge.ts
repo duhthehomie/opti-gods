@@ -404,6 +404,13 @@ export interface NativeGamingModeStatus {
   games: NativeGamingModeGame[];
   lowered: string[];
   errors: Array<{ at_ms: number; message: string }>;
+  music?: Array<{ app: string; state: "playing" | "paused" | "unknown"; processes: number }>;
+  efficiency_mode?: number;
+}
+
+export async function playNativeSuccessSound(): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("play_success_sound");
 }
 
 export async function gamingModeStatus(): Promise<NativeGamingModeStatus | null> {

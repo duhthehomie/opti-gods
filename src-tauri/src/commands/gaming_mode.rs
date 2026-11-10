@@ -13,6 +13,12 @@
 //   * Realtime is never used: it starves input, audio and driver threads and
 //     causes exactly the freezes Gaming Mode exists to prevent.
 //   * Discord and OBS are never lowered so calls and streams stay clean.
+//   * Music: Spotify, SoundCloud and Chromium browsers are checked for audio
+//     that is actually playing (CPU use of their audio process). A playing
+//     app's audio process keeps Normal priority and full speed; everything
+//     else in the background gets Below Normal, Windows efficiency mode
+//     (EcoQoS) and low memory priority, so Windows trims their memory before
+//     the game's.
 //   * When Gaming Mode is turned off (the `enabled` flag file disappears) the
 //     agent restores everything it changed, writes a final status and exits.
 //
@@ -64,7 +70,21 @@ pub struct GamingModeStatus {
     pub processes_scanned: u32,
     pub games: Vec<GamingModeGame>,
     pub lowered: Vec<String>,
+    /// Music/audio sources seen while a game runs (Spotify, SoundCloud, browsers).
+    #[serde(default)]
+    pub music: Vec<GamingModeMusic>,
+    /// Background processes currently in Windows efficiency mode (EcoQoS).
+    #[serde(default)]
+    pub efficiency_mode: u32,
     pub errors: Vec<GamingModeError>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GamingModeMusic {
+    pub app: String,
+    /// "playing", "paused" or "unknown" (Windows would not show its processes).
+    pub state: String,
+    pub processes: u32,
 }
 
 /// True when this process was started by the scheduled task.
@@ -108,8 +128,40 @@ const BACKGROUND_EXES: &[&str] = &[
     "spotify.exe", "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe",
     "epicwebhelper.exe", "battle.net.exe", "eadesktop.exe", "origin.exe", "ubisoftconnect.exe",
     "upc.exe", "galaxyclient.exe", "onedrive.exe", "teams.exe", "ms-teams.exe", "slack.exe",
-    "rockstarservice.exe",
+    "rockstarservice.exe", "soundcloud.exe",
 ];
+
+/// Chromium browsers: their audio plays through one utility process whose
+/// command line names the audio service, so playback can be detected.
+#[cfg(windows)]
+const CHROMIUM_BROWSERS: &[&str] = &["chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe"];
+
+/// Desktop music apps.
+#[cfg(windows)]
+const MUSIC_APPS: &[&str] = &["spotify.exe", "soundcloud.exe"];
+
+/// Background apps put in Windows efficiency mode while a game runs and they
+/// are not playing audio. Launchers are excluded: they host game overlays.
+#[cfg(windows)]
+const EFFICIENCY_EXES: &[&str] = &[
+    "chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe", "spotify.exe", "soundcloud.exe",
+    "onedrive.exe", "teams.exe", "ms-teams.exe", "slack.exe",
+];
+
+#[cfg(windows)]
+fn app_label(exe: &str) -> &'static str {
+    match exe {
+        "spotify.exe" => "Spotify app",
+        "soundcloud.exe" => "SoundCloud app",
+        "chrome.exe" => "Chrome",
+        "msedge.exe" => "Edge",
+        "brave.exe" => "Brave",
+        "opera.exe" => "Opera",
+        "vivaldi.exe" => "Vivaldi",
+        "firefox.exe" => "Firefox",
+        _ => "App",
+    }
+}
 
 /// Install folders that only contain games (lowercase, backslashes).
 #[cfg(windows)]
@@ -155,12 +207,14 @@ fn data_dir() -> std::path::PathBuf {
 #[cfg(windows)]
 mod native {
     use windows::core::PWSTR;
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessCommandLineInformation};
+    use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, UNICODE_STRING};
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
     use windows::Win32::System::Threading::{
-        GetPriorityClass, OpenProcess, QueryFullProcessImageNameW, SetPriorityClass, SetProcessInformation,
+        GetPriorityClass, GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, SetPriorityClass, SetProcessInformation,
+        ProcessMemoryPriority, MEMORY_PRIORITY_INFORMATION, MEMORY_PRIORITY_LOW, MEMORY_PRIORITY_NORMAL,
         TerminateProcess, ProcessPowerThrottling, PROCESS_CREATION_FLAGS, PROCESS_NAME_WIN32,
         PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
         PROCESS_POWER_THROTTLING_STATE, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION,
@@ -245,13 +299,27 @@ mod native {
         Ok(())
     }
 
-    /// Opts the process out of EcoQoS / power throttling (full CPU speed).
-    pub fn disable_power_throttling(pid: u32) -> Result<(), String> {
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum Throttle {
+        /// Full CPU speed: Windows may not put it in efficiency mode.
+        Off,
+        /// Efficiency mode (EcoQoS): lower clocks / efficient scheduling.
+        On,
+        /// Hand the decision back to Windows.
+        Default,
+    }
+
+    pub fn set_power_throttling(pid: u32, mode: Throttle) -> Result<(), String> {
         let handle = open(pid, true)?;
+        let (control, state) = match mode {
+            Throttle::Off => (PROCESS_POWER_THROTTLING_EXECUTION_SPEED, 0),
+            Throttle::On => (PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_EXECUTION_SPEED),
+            Throttle::Default => (0, 0),
+        };
         let state = PROCESS_POWER_THROTTLING_STATE {
             Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
-            ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
-            StateMask: 0,
+            ControlMask: control,
+            StateMask: state,
         };
         unsafe {
             SetProcessInformation(
@@ -261,6 +329,58 @@ mod native {
                 std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
             ).map_err(|e| e.message().to_string())
         }
+    }
+
+    /// Opts the process out of EcoQoS / power throttling (full CPU speed).
+    pub fn disable_power_throttling(pid: u32) -> Result<(), String> {
+        set_power_throttling(pid, Throttle::Off)
+    }
+
+    /// Low memory priority: Windows trims these pages before the game's.
+    pub fn set_memory_priority(pid: u32, low: bool) -> Result<(), String> {
+        let handle = open(pid, true)?;
+        let info = MEMORY_PRIORITY_INFORMATION { MemoryPriority: if low { MEMORY_PRIORITY_LOW } else { MEMORY_PRIORITY_NORMAL } };
+        unsafe {
+            SetProcessInformation(
+                handle.0,
+                ProcessMemoryPriority,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<MEMORY_PRIORITY_INFORMATION>() as u32,
+            ).map_err(|e| e.message().to_string())
+        }
+    }
+
+    /// Total CPU time (kernel + user) in 100 ns units.
+    pub fn cpu_time(pid: u32) -> Option<u64> {
+        let handle = open(pid, false).ok()?;
+        let (mut created, mut exited, mut kernel, mut user) = (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+        unsafe { GetProcessTimes(handle.0, &mut created, &mut exited, &mut kernel, &mut user).ok()?; }
+        let value = |t: FILETIME| ((t.dwHighDateTime as u64) << 32) | t.dwLowDateTime as u64;
+        Some(value(kernel) + value(user))
+    }
+
+    pub fn command_line(pid: u32) -> Option<String> {
+        let handle = open(pid, false).ok()?;
+        let mut needed = 0u32;
+        unsafe {
+            let _ = NtQueryInformationProcess(handle.0, ProcessCommandLineInformation, std::ptr::null_mut(), 0, &mut needed);
+        }
+        if needed == 0 || needed > 131_072 { return None; }
+        let mut buffer = vec![0u64; (needed as usize + 7) / 8];
+        let status = unsafe {
+            NtQueryInformationProcess(
+                handle.0,
+                ProcessCommandLineInformation,
+                buffer.as_mut_ptr() as *mut core::ffi::c_void,
+                (buffer.len() * 8) as u32,
+                &mut needed,
+            )
+        };
+        if status.0 < 0 { return None; }
+        let text = unsafe { &*(buffer.as_ptr() as *const UNICODE_STRING) };
+        if text.Buffer.is_null() { return None; }
+        let units = unsafe { std::slice::from_raw_parts(text.Buffer.0, (text.Length / 2) as usize) };
+        Some(String::from_utf16_lossy(units))
     }
 
     pub fn terminate(pid: u32) -> Result<(), String> {
@@ -279,17 +399,35 @@ mod agent {
     use super::*;
     use std::collections::{HashMap, HashSet};
     use std::os::windows::fs::OpenOptionsExt;
+    use std::time::Instant;
 
     const TICK: std::time::Duration = std::time::Duration::from_secs(2);
     const MAX_ERRORS: usize = 12;
+    /// Share of one CPU core the browser audio service uses while sound plays.
+    const AUDIO_SERVICE_ACTIVE: f64 = 0.0015;
+    /// Share of one core a music app without a separate audio process uses while playing.
+    const MUSIC_APP_ACTIVE: f64 = 0.004;
+    /// Ticks music stays protected after it goes quiet (track changes, buffering).
+    const MUSIC_HOLD_TICKS: u8 = 3;
 
     struct Boosted { name: String, original: u32, game: GamingModeGame }
+
+    /// What Gaming Mode changed on one background process, so it can undo exactly that.
+    struct Background {
+        name: String,
+        lowered: bool,
+        throttle: Option<native::Throttle>,
+        memory_low: bool,
+    }
 
     struct Agent {
         status: GamingModeStatus,
         paths: HashMap<u32, Option<String>>,
+        command_lines: HashMap<u32, Option<String>>,
+        cpu: HashMap<u32, (u64, Instant)>,
         boosted: HashMap<u32, Boosted>,
-        lowered: HashMap<u32, String>,
+        background: HashMap<u32, Background>,
+        music_hold: HashMap<String, u8>,
         reported: HashSet<String>,
     }
 
@@ -303,6 +441,15 @@ mod agent {
             self.status.errors.drain(..excess);
         }
 
+        /// CPU use since the previous tick as a share of one core.
+        fn cpu_rate(&mut self, pid: u32, now: Instant) -> Option<f64> {
+            let total = native::cpu_time(pid)?;
+            let (previous, at) = self.cpu.insert(pid, (total, now))?;
+            let seconds = now.duration_since(at).as_secs_f64();
+            if seconds <= 0.0 { return None; }
+            Some(total.saturating_sub(previous) as f64 / 10_000_000.0 / seconds)
+        }
+
         fn tick(&mut self) {
             let processes = match native::list() {
                 Ok(list) => list,
@@ -310,8 +457,10 @@ mod agent {
             };
             let alive: HashSet<u32> = processes.iter().map(|p| p.pid).collect();
             self.paths.retain(|pid, _| alive.contains(pid));
+            self.command_lines.retain(|pid, _| alive.contains(pid));
+            self.cpu.retain(|pid, _| alive.contains(pid));
             self.boosted.retain(|pid, _| alive.contains(pid));
-            self.lowered.retain(|pid, _| alive.contains(pid));
+            self.background.retain(|pid, _| alive.contains(pid));
             self.reported.retain(|key| key.split(':').nth(1).and_then(|p| p.parse().ok()).map_or(true, |pid: u32| alive.contains(&pid)));
 
             let own = std::process::id();
@@ -334,22 +483,20 @@ mod agent {
             }
             if games.is_empty() {
                 self.restore_background();
+                self.music_hold.clear();
+                self.status.music.clear();
             } else {
-                for process in &processes {
-                    let lower = process.name.to_ascii_lowercase();
-                    if BACKGROUND_EXES.contains(&lower.as_str()) && !self.lowered.contains_key(&process.pid) {
-                        self.lower(process.pid, &process.name);
-                    }
-                }
+                self.optimize_background(&processes);
             }
 
             self.status.scans += 1;
             self.status.processes_scanned = processes.len() as u32;
             self.status.state = if games.is_empty() { "scanning".into() } else { "boosting".into() };
             self.status.games = self.boosted.values().map(|b| b.game.clone()).collect();
-            let mut lowered: Vec<String> = self.lowered.values().cloned().collect();
+            let mut lowered: Vec<String> = self.background.values().filter(|b| b.lowered).map(|b| b.name.clone()).collect();
             lowered.sort();
             self.status.lowered = lowered;
+            self.status.efficiency_mode = self.background.values().filter(|b| b.throttle == Some(native::Throttle::On)).count() as u32;
         }
 
         fn boost(&mut self, pid: u32, name: &str, how: &str) {
@@ -391,23 +538,147 @@ mod agent {
             }
         }
 
-        fn lower(&mut self, pid: u32, name: &str) {
-            // Only lower apps still at Normal; never touch something the user set.
-            match native::get_priority(pid) {
-                Ok(native::NORMAL) => match native::set_priority(pid, native::BELOW_NORMAL) {
-                    Ok(()) => { self.lowered.insert(pid, name.to_string()); }
-                    Err(message) => self.error(format!("lower:{pid}"), format!("Could not lower {name}: {message}")),
-                },
-                _ => {}
+        /// While a game runs: find music that is actually playing and keep its
+        /// audio path at full speed; lower and slow everything else.
+        fn optimize_background(&mut self, processes: &[native::Process]) {
+            let now = Instant::now();
+            let mut audio_pids: HashSet<u32> = HashSet::new();
+            let mut audio_rate: HashMap<String, f64> = HashMap::new();
+            let mut total_rate: HashMap<String, f64> = HashMap::new();
+            let mut readable: HashSet<String> = HashSet::new();
+            let mut counts: HashMap<String, u32> = HashMap::new();
+            let mut targets: Vec<(u32, String, String)> = Vec::new();
+
+            for process in processes {
+                let exe = process.name.to_ascii_lowercase();
+                if !BACKGROUND_EXES.contains(&exe.as_str()) { continue; }
+                targets.push((process.pid, process.name.clone(), exe.clone()));
+                let audio_capable = CHROMIUM_BROWSERS.contains(&exe.as_str()) || MUSIC_APPS.contains(&exe.as_str());
+                if !audio_capable { continue; }
+                *counts.entry(exe.clone()).or_default() += 1;
+                let rate = self.cpu_rate(process.pid, now).unwrap_or(0.0);
+                *total_rate.entry(exe.clone()).or_default() += rate;
+                let command = self.command_lines.entry(process.pid).or_insert_with(|| native::command_line(process.pid)).clone();
+                if let Some(command) = command {
+                    readable.insert(exe.clone());
+                    if command.contains("audio.mojom.AudioService") {
+                        audio_pids.insert(process.pid);
+                        *audio_rate.entry(exe.clone()).or_default() += rate;
+                    }
+                }
+            }
+
+            // Decide which apps are playing. Protection starts on the first
+            // active tick and is held briefly so track changes don't flap it.
+            let mut playing: HashSet<String> = HashSet::new();
+            let mut unknown: HashSet<String> = HashSet::new();
+            let mut music = Vec::new();
+            for (exe, count) in &counts {
+                let active = if let Some(rate) = audio_rate.get(exe) {
+                    *rate >= AUDIO_SERVICE_ACTIVE
+                } else if MUSIC_APPS.contains(&exe.as_str()) {
+                    total_rate.get(exe).copied().unwrap_or(0.0) >= MUSIC_APP_ACTIVE
+                } else {
+                    false
+                };
+                let hold = self.music_hold.entry(exe.clone()).or_insert(0);
+                *hold = if active { MUSIC_HOLD_TICKS } else { hold.saturating_sub(1) };
+                let state = if !readable.contains(exe) && CHROMIUM_BROWSERS.contains(&exe.as_str()) {
+                    // Can't see the audio process: never slow it down.
+                    unknown.insert(exe.clone());
+                    "unknown"
+                } else if *hold > 0 {
+                    playing.insert(exe.clone());
+                    "playing"
+                } else {
+                    "paused"
+                };
+                music.push(GamingModeMusic { app: app_label(exe).into(), state: state.into(), processes: *count });
+            }
+            music.sort_by(|a, b| a.app.cmp(&b.app));
+            self.status.music = music;
+
+            for (pid, name, exe) in targets {
+                let protected = playing.contains(&exe) || unknown.contains(&exe) || exe == "firefox.exe";
+                let audio_process = audio_pids.contains(&pid);
+                // The audio process of a playing app keeps Normal priority. Other
+                // processes can drop: Chromium audio threads run time-critical,
+                // which a lower process class does not change.
+                let want_lower = !(playing.contains(&exe) && audio_process);
+                let want_throttle = if protected {
+                    Some(native::Throttle::Off)
+                } else if EFFICIENCY_EXES.contains(&exe.as_str()) {
+                    Some(native::Throttle::On)
+                } else {
+                    None
+                };
+                let want_memory_low = !protected;
+                self.apply_background(pid, &name, want_lower, want_throttle, want_memory_low, audio_process && protected);
             }
         }
 
-        fn restore_background(&mut self) {
-            for (pid, name) in std::mem::take(&mut self.lowered) {
+        fn apply_background(&mut self, pid: u32, name: &str, want_lower: bool, want_throttle: Option<native::Throttle>, want_memory_low: bool, refresh_throttle: bool) {
+            let entry = self.background.entry(pid).or_insert_with(|| Background { name: name.to_string(), lowered: false, throttle: None, memory_low: false });
+            let (lowered, throttle, memory_low) = (entry.lowered, entry.throttle, entry.memory_low);
+            let mut errors = Vec::new();
+
+            let mut new_lowered = lowered;
+            if want_lower && !lowered {
+                // Only lower apps still at Normal; never touch something the user set.
+                if native::get_priority(pid) == Ok(native::NORMAL) {
+                    match native::set_priority(pid, native::BELOW_NORMAL) {
+                        Ok(()) => new_lowered = true,
+                        Err(message) => errors.push((format!("lower:{pid}"), format!("Could not lower {name}: {message}"))),
+                    }
+                }
+            } else if !want_lower && lowered {
                 if native::get_priority(pid) == Ok(native::BELOW_NORMAL) {
                     if let Err(message) = native::set_priority(pid, native::NORMAL) {
-                        self.error(format!("restore:{pid}"), format!("Could not restore {name}: {message}"));
+                        errors.push((format!("restore:{pid}"), format!("Could not restore {name} for music: {message}")));
                     }
+                }
+                new_lowered = false;
+            }
+
+            let mut new_throttle = throttle;
+            // Browsers switch their own processes into efficiency mode, so the
+            // playing audio process is re-asserted every tick.
+            if want_throttle != throttle || refresh_throttle {
+                let mode = want_throttle.unwrap_or(native::Throttle::Default);
+                match native::set_power_throttling(pid, mode) {
+                    Ok(()) => new_throttle = want_throttle,
+                    Err(message) => errors.push((format!("eco:{pid}"), format!("Could not change efficiency mode for {name}: {message}"))),
+                }
+            }
+
+            let mut new_memory_low = memory_low;
+            if want_memory_low != memory_low {
+                match native::set_memory_priority(pid, want_memory_low) {
+                    Ok(()) => new_memory_low = want_memory_low,
+                    Err(message) => errors.push((format!("memory:{pid}"), format!("Could not change memory priority for {name}: {message}"))),
+                }
+            }
+
+            if let Some(entry) = self.background.get_mut(&pid) {
+                entry.lowered = new_lowered;
+                entry.throttle = new_throttle;
+                entry.memory_low = new_memory_low;
+            }
+            for (key, message) in errors { self.error(key, message); }
+        }
+
+        fn restore_background(&mut self) {
+            for (pid, background) in std::mem::take(&mut self.background) {
+                if background.lowered && native::get_priority(pid) == Ok(native::BELOW_NORMAL) {
+                    if let Err(message) = native::set_priority(pid, native::NORMAL) {
+                        self.error(format!("restore:{pid}"), format!("Could not restore {}: {message}", background.name));
+                    }
+                }
+                if background.throttle.is_some() {
+                    let _ = native::set_power_throttling(pid, native::Throttle::Default);
+                }
+                if background.memory_low {
+                    let _ = native::set_memory_priority(pid, false);
                 }
             }
         }
@@ -453,8 +724,11 @@ mod agent {
                 ..Default::default()
             },
             paths: HashMap::new(),
+            command_lines: HashMap::new(),
+            cpu: HashMap::new(),
             boosted: HashMap::new(),
-            lowered: HashMap::new(),
+            background: HashMap::new(),
+            music_hold: HashMap::new(),
             reported: HashSet::new(),
         };
         loop {
@@ -463,6 +737,8 @@ mod agent {
                 agent.status.state = "stopped".into();
                 agent.status.games.clear();
                 agent.status.lowered.clear();
+                agent.status.music.clear();
+                agent.status.efficiency_mode = 0;
                 agent.write_status();
                 return;
             }
@@ -528,8 +804,12 @@ fn fallback_restore() {
     for process in list {
         let lower = process.name.to_ascii_lowercase();
         let current = native::get_priority(process.pid);
-        if BACKGROUND_EXES.contains(&lower.as_str()) && current == Ok(native::BELOW_NORMAL) {
-            let _ = native::set_priority(process.pid, native::NORMAL);
+        if BACKGROUND_EXES.contains(&lower.as_str()) {
+            if current == Ok(native::BELOW_NORMAL) {
+                let _ = native::set_priority(process.pid, native::NORMAL);
+            }
+            let _ = native::set_power_throttling(process.pid, native::Throttle::Default);
+            let _ = native::set_memory_priority(process.pid, false);
         } else if classify_game(&lower, None).is_some() && current == Ok(native::HIGH) {
             let _ = native::set_priority(process.pid, native::NORMAL);
         }

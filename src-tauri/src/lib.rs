@@ -126,6 +126,7 @@ pub fn run() {
             commands::gaming_mode::gaming_mode_status,
             commands::gaming_mode::enable_gaming_mode,
             commands::gaming_mode::disable_gaming_mode,
+            commands::sound::play_success_sound,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Opti Gods");

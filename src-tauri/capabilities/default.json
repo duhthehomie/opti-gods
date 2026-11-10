@@ -67,6 +67,7 @@
     "allow-cancel-nvidia-preset-import",
     "allow-reset-nvidia-preset-import-cancel",
     "allow-run-script-tweak",
-    "allow-gaming-mode"
+    "allow-gaming-mode",
+    "allow-success-sound"
   ]
 }

@@ -187,7 +187,30 @@ export function GamingModePanel() {
                 ? Array.from(new Set(status.lowered)).map(name => `${name} ×${status.lowered.filter(item => item === name).length}`).join(" · ")
                 : games.length ? "None open" : "Only while a game is running"}
             </div>
-            <div className="mt-1 text-[10px] text-zinc-600">Discord and OBS are never lowered, so calls and streams stay clean.</div>
+            <div className="mt-1 text-[10px] text-zinc-600">
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never lowered, so calls and streams stay clean.
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">Music</div>
+            {status?.music?.length ? (
+              <div className="mt-1 flex flex-wrap gap-2">
+                {status.music.map(item => (
+                  <span
+                    key={item.app}
+                    className={cn(
+                      "rounded border px-2 py-0.5 text-xs",
+                      item.state === "playing" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : item.state === "unknown" ? "border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-400",
+                    )}
+                  >
+                    {item.app}: {item.state === "playing" ? "playing · audio kept at full speed" : item.state === "unknown" ? "can't check · not slowed down" : "paused · efficiency mode"}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Checked only while a game is running"}</div>
+            )}
+            <div className="mt-1 text-[10px] text-zinc-600">Spotify, SoundCloud and Chrome/Edge/Brave/Opera/Vivaldi tabs are detected by their audio activity. Firefox is never slowed down.</div>
           </div>
         </div>
       )}

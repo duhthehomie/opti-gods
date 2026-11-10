@@ -171,9 +171,11 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       if (result.message.includes("ALLOWANCE_SYNC_PENDING")) {
         toast({ title: "Tweak applied; allowance sync pending", description: "Your Windows change succeeded, but the server did not confirm the allowance. Undo remains available.", variant: "destructive" });
       }
+      playOptimizationActionSound();
       toast({
-        title: "Tweak enabled",
-        description: `${result.message}${result.requires_reboot ? " Restart Windows to finish applying it." : ""}`,
+        title: result.requires_reboot ? "Tweak applied · restart required" : "Tweak applied",
+        description: `${result.message}${result.requires_reboot ? " Restart your PC to finish applying it." : ""}`,
+        variant: "success",
       });
     } catch (error) {
       if (nativeTicket && !osApplied) {
