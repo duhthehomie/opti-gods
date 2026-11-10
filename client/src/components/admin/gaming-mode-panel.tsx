@@ -71,7 +71,7 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
 
   useEffect(() => {
     if (!native) return;
-    return startVisiblePolling(refresh, 1000);
+    return startVisiblePolling(refresh, 500);
   }, [native, refresh]);
 
   const turnOn = async () => {

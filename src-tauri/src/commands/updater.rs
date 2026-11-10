@@ -188,3 +188,92 @@ pub async fn perform_update(app: AppHandle) -> Result<(), String> {
 
     Ok(())
 }
+
+// ─── installer download (works for unsigned releases) ─────────────────────────
+
+#[derive(Serialize, Clone)]
+struct InstallerProgress {
+    downloaded: u64,
+    total: u64,
+    percent: u8,
+}
+
+#[derive(Serialize, Clone)]
+pub struct InstallerDownload {
+    pub version: String,
+    pub path: String,
+}
+
+/// Downloads the newest release's installer into Downloads, checks its size and
+/// SHA-256 against that release's latest.json, then opens the installer.
+/// Opti Gods closes a moment later so the installer can replace its files.
+#[tauri::command]
+pub async fn download_and_run_installer(app: AppHandle) -> Result<InstallerDownload, String> {
+    use sha2::{Digest, Sha256};
+    use tauri::Manager;
+    use tokio::io::AsyncWriteExt;
+
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("OptiGods-Updater/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let manifest_url = newest_manifest_url().await?;
+    let manifest_text = client.get(&manifest_url).send().await
+        .and_then(|r| r.error_for_status()).map_err(|e| format!("Update manifest could not be downloaded: {e}"))?
+        .text().await.map_err(|e| format!("Update manifest could not be read: {e}"))?;
+    let manifest: serde_json::Value = serde_json::from_str(manifest_text.trim_start_matches('\u{feff}'))
+        .map_err(|e| format!("Update manifest is not valid: {e}"))?;
+    let version = manifest["version"].as_str().ok_or("Update manifest has no version.")?.to_string();
+    let current = app.package_info().version.to_string();
+    if parse_version(&version) <= parse_version(&current) {
+        return Err(format!("You already have the newest version (v{current})."));
+    }
+    let url = manifest["platforms"]["windows-x86_64"]["url"].as_str().ok_or("Update manifest has no installer link.")?.to_string();
+    let expected_sha = manifest["sha256"].as_str().ok_or("Update manifest has no installer checksum.")?.to_ascii_lowercase();
+    let expected_size = manifest["size"].as_u64().ok_or("Update manifest has no installer size.")?;
+
+    let downloads = app.path().download_dir().map_err(|e| format!("Downloads folder not found: {e}"))?;
+    let final_path = downloads.join(format!("OptiGods-Setup-{version}.exe"));
+    let part_path = downloads.join(format!("OptiGods-Setup-{version}.exe.part"));
+
+    let mut response = client.get(&url).send().await
+        .and_then(|r| r.error_for_status()).map_err(|e| format!("Installer download failed: {e}"))?;
+    let mut file = tokio::fs::File::create(&part_path).await.map_err(|e| format!("Could not save the installer: {e}"))?;
+    let mut hasher = Sha256::new();
+    let mut downloaded = 0u64;
+    let mut last_percent = u8::MAX;
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Installer download was interrupted: {e}"))? {
+        hasher.update(&chunk);
+        file.write_all(&chunk).await.map_err(|e| format!("Could not save the installer: {e}"))?;
+        downloaded += chunk.len() as u64;
+        let percent = ((downloaded as f64 / expected_size.max(1) as f64) * 100.0).min(100.0) as u8;
+        if percent != last_percent {
+            last_percent = percent;
+            let _ = app.emit("installer-download-progress", InstallerProgress { downloaded, total: expected_size, percent });
+        }
+    }
+    file.flush().await.map_err(|e| format!("Could not save the installer: {e}"))?;
+    drop(file);
+    let actual_sha = format!("{:x}", hasher.finalize());
+    if downloaded != expected_size || actual_sha != expected_sha {
+        let _ = tokio::fs::remove_file(&part_path).await;
+        return Err(format!("The downloaded installer did not match the release (size {downloaded} of {expected_size}). Nothing was installed; try again."));
+    }
+    let _ = tokio::fs::remove_file(&final_path).await;
+    tokio::fs::rename(&part_path, &final_path).await.map_err(|e| format!("Could not save the installer: {e}"))?;
+
+    std::process::Command::new(&final_path)
+        .spawn()
+        .map_err(|e| format!("The installer was downloaded to {} but could not be opened: {e}", final_path.display()))?;
+
+    // Give the window time to show the success message, then close so the
+    // installer can replace Opti Gods' files without asking to kill it.
+    let app_exit = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(3500)).await;
+        app_exit.exit(0);
+    });
+
+    Ok(InstallerDownload { version, path: final_path.display().to_string() })
+}

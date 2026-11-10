@@ -4,7 +4,8 @@ import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
 import { CheckCircle2, Download, RefreshCw } from "lucide-react";
 import { simpleUpdateNotes } from "@/lib/update-notes";
 import { useInstalledVersion } from "@/hooks/use-installed-version";
-import { checkForUpdate, isNative, performUpdate, type UpdateInfo } from "@/lib/tauri-bridge";
+import { checkForUpdate, downloadAndRunInstaller, isNative, performUpdate, type UpdateInfo } from "@/lib/tauri-bridge";
+import { playOptimizationActionSound } from "@/lib/action-sound";
 
 type Phase = "prompt" | "downloading" | "installing" | "done";
 
@@ -67,6 +68,22 @@ function NativeUpdateModal() {
         setProgress(percent);
         if (installing) setPhase("installing");
       });
+      setPhase("done");
+    } catch (error) {
+      setInstallError(String(error).replace(/^Error:\s*/, ""));
+      setPhase("prompt");
+    }
+  }
+
+  // Releases that are not signed for automatic install: download the
+  // checksum-verified installer and open it for the user.
+  async function downloadAndInstall() {
+    setInstallError("");
+    setProgress(0);
+    setPhase("downloading");
+    try {
+      await downloadAndRunInstaller(setProgress);
+      playOptimizationActionSound();
       setPhase("done");
     } catch (error) {
       setInstallError(String(error).replace(/^Error:\s*/, ""));
@@ -149,14 +166,14 @@ function NativeUpdateModal() {
               Automatic update failed: {installError}
             </p>
           )}
-          {canAutoInstall && !installError ? (
+          {!installError ? (
             <button
               data-testid="button-update-now"
-              onClick={() => void installNow()}
+              onClick={() => void (canAutoInstall ? installNow() : downloadAndInstall())}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-bold text-white transition-colors hover:bg-red-500"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Update now
+              {canAutoInstall ? "Update now" : "Download and install"}
             </button>
           ) : (
             <button
@@ -168,9 +185,11 @@ function NativeUpdateModal() {
               Open Update Center
             </button>
           )}
-          {canAutoInstall && !installError && (
+          {!installError && (
             <p className="-mt-2 text-center text-[9px] text-zinc-500">
-              Downloads, installs and reopens Opti Gods by itself. Windows will ask for permission once.
+              {canAutoInstall
+                ? "Downloads, installs and reopens Opti Gods by itself. Windows will ask for permission once."
+                : "Downloads the installer and opens it for you. Opti Gods closes so setup can finish."}
             </p>
           )}
           <p className="text-center text-[9px] text-zinc-600">
@@ -183,19 +202,19 @@ function NativeUpdateModal() {
 
   // ── Progress / Done (full-screen, only after user consents) ─────────────────
   const headingText =
-    phase === "done"       ? "Update Downloaded" :
+    phase === "done"       ? "Update downloaded" :
     phase === "installing" ? "Installing Update…" :
                              "Updating Opti Gods";
 
   const subText =
     phase === "downloading" ? "Downloading update…" :
     phase === "installing"  ? "Installing — please wait…" :
-                              "Restart the app to apply the update";
+                              "The installer is open — click Install to finish";
 
   const versionLine =
     phase === "downloading" ? "This will only take a moment" :
     phase === "installing"  ? "Almost done — do not close the app" :
-                              "The app will restart automatically";
+                              "Opti Gods closes in a few seconds so setup can replace it";
 
   const barWidth = phase === "done" ? 100 : progress;
 

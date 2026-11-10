@@ -38,6 +38,7 @@
     "allow-discord-cached-token",
     "allow-check-for-update",
     "allow-perform-update",
+    "allow-download-and-run-installer",
     "allow-env-info",
     "allow-read-text-file",
     "allow-read-fivem-log",

@@ -780,6 +780,23 @@ export async function performUpdate(
   }
 }
 
+/**
+ * Download the newest installer (checked against the release checksum) into
+ * Downloads and open it. Opti Gods closes itself a few seconds later so the
+ * installer can replace its files.
+ */
+export async function downloadAndRunInstaller(
+  onProgress: (percent: number) => void,
+): Promise<{ version: string; path: string }> {
+  if (!isNative()) throw new Error("The installer can only be run from the Windows app.");
+  const unlisten = await tauriListen<{ percent: number }>("installer-download-progress", payload => onProgress(payload.percent ?? 0));
+  try {
+    return await invoke<{ version: string; path: string }>("download_and_run_installer");
+  } finally {
+    await unlisten();
+  }
+}
+
 // ─── External URL opener ─────────────────────────────────────────────────────
 
 /**

@@ -99,6 +99,11 @@ description = "Download and install a verified Opti Gods update."
 commands.allow = ["perform_update"]
 
 [[permission]]
+identifier = "allow-download-and-run-installer"
+description = "Download the newest checksum-verified Opti Gods installer and open it."
+commands.allow = ["download_and_run_installer"]
+
+[[permission]]
 identifier = "allow-env-info"
 description = "Read runtime environment info."
 commands.allow = ["env_info"]
@@ -267,6 +272,7 @@ permissions = [
   "allow-discord-cached-token",
   "allow-check-for-update",
   "allow-perform-update",
+  "allow-download-and-run-installer",
   "allow-env-info",
   "allow-open-downloads",
   "allow-run-fix",

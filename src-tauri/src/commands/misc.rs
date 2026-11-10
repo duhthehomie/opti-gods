@@ -676,38 +676,81 @@ fn nvidia_driver_fingerprint(api: &NvApiLibrary) -> Result<String, String> {
     Ok(format!("{version}:{}", String::from_utf8_lossy(&branch)))
 }
 
+/// Why the saved NVIDIA preset no longer counts, or why it could not be checked.
+#[cfg(windows)]
+enum NvidiaPresetCheck {
+    Current,
+    /// Proven different: driver changed, a setting differs, or vibrance is not 85%.
+    Changed(String),
+    /// NVIDIA could not be read right now (driver starting, session busy).
+    /// Never shown as Missing; the saved result stays until a real readback.
+    Unknown(String),
+}
+
+#[cfg(windows)]
+fn check_nvidia_preset_once() -> NvidiaPresetCheck {
+    use NvidiaPresetCheck::*;
+    let api = match NvApiLibrary::load() { Ok(api) => api, Err(e) => return Unknown(e) };
+    let fingerprint = match nvidia_driver_fingerprint(&api) { Ok(f) => f, Err(e) => return Unknown(e) };
+    use crate::win32::registry::{read_value, Hive, RegValue};
+    match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
+        Ok(RegValue::Sz(saved)) if saved == format!("global-profile-v4:{fingerprint}") => {}
+        _ => return Changed("NVIDIA driver changed or has no verified receipt.".into()),
+    }
+    let targets = match nvidia_display::runtime::active_targets(&api) { Ok(t) => t, Err(e) => return Unknown(e) };
+    if targets.is_empty() { return Unknown("No active NVIDIA display yet.".into()); }
+    let gpu_value = match nvidia_display::runtime::explicit_gpu_value(&api, &targets) { Ok((_, v)) => v, Err(e) => return Unknown(e) };
+    let expected = match preset_with_explicit_gpu(include_str!("../../resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"), &gpu_value)
+        .and_then(|text| parse_global_nip_settings(&text)) { Ok(e) => e, Err(e) => return Unknown(e) };
+    // Session::open acquires NVAPI_SESSION_LOCK. Do not retain an API
+    // guard while entering a separate DRS session (non-reentrant mutex).
+    drop(api);
+    if let Err(error) = nvidia_profile::verify(&expected) {
+        // Only a successful readback that differs proves the preset changed.
+        return if error.contains("did not match") || error.contains("unexpected customized") { Changed(error) } else { Unknown(error) };
+    }
+    let api = match NvApiLibrary::load() { Ok(api) => api, Err(e) => return Unknown(e) };
+    let get: NvApiGetDvcInfoFn = match api.resolve(0x0E45_002D, "Digital Vibrance readback") {
+        Ok(pointer) => unsafe { std::mem::transmute(pointer) },
+        Err(e) => return Unknown(e),
+    };
+    for target in targets {
+        let mut info = dvc_info(0);
+        let status = unsafe { get(target.handle as *mut std::ffi::c_void, target.output_id, &mut info) };
+        if status != 0 { return Unknown(format!("Digital Vibrance readback failed (NVAPI status {status}).")); }
+        match dvc_level_for_percent(info.min_level, info.default_level, info.max_level, 85) {
+            Ok(level) if level == info.current_level => {}
+            Ok(_) => return Changed(format!("NVIDIA monitor {} is no longer at 85% vibrance.", target.display_id)),
+            Err(e) => return Unknown(e),
+        }
+    }
+    Current
+}
+
 /// Read-only: driver changes or clean-install resets invalidate old receipts.
+/// Returns None when NVIDIA could not be read, so a slow driver start (for
+/// example the first launch after installing an update) never flips the
+/// preset to Missing. The last reason is kept for support diagnosis.
 #[cfg(windows)]
 pub(crate) fn nvidia_preset_is_current() -> Option<bool> {
     if NVIDIA_PRESET_IMPORT_BUSY.load(std::sync::atomic::Ordering::SeqCst) { return None; }
-    let check = (|| -> Result<(), String> {
-        let api = NvApiLibrary::load()?;
-        let fingerprint = nvidia_driver_fingerprint(&api)?;
-        use crate::win32::registry::{read_value, Hive, RegValue};
-        match read_value(Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetDriver") {
-            Ok(RegValue::Sz(saved)) if saved == format!("global-profile-v4:{fingerprint}") => {}
-            _ => return Err("NVIDIA driver changed or has no verified receipt.".into()),
-        }
-        let targets = nvidia_display::runtime::active_targets(&api)?;
-        if targets.is_empty() { return Err("No active NVIDIA display.".into()); }
-        let (_, gpu_value) = nvidia_display::runtime::explicit_gpu_value(&api, &targets)?;
-        let expected = preset_with_explicit_gpu(include_str!("../../resources/nvidia-profile-inspector/OptiGods-Global-utf8.nip"), &gpu_value)?;
-        // Session::open acquires NVAPI_SESSION_LOCK. Do not retain an API
-        // guard while entering a separate DRS session (non-reentrant mutex).
-        drop(api);
-        nvidia_profile::verify(&parse_global_nip_settings(&expected)?)?;
-        let api = NvApiLibrary::load()?;
-        let get: NvApiGetDvcInfoFn = unsafe { std::mem::transmute(api.resolve(0x0E45_002D, "Digital Vibrance readback")?) };
-        for target in targets {
-            let mut info = dvc_info(0);
-            let status = unsafe { get(target.handle as *mut std::ffi::c_void, target.output_id, &mut info) };
-            if status != 0 || info.current_level != dvc_level_for_percent(info.min_level, info.default_level, info.max_level, 85)? {
-                return Err("An NVIDIA monitor no longer has verified 85% vibrance.".into());
-            }
-        }
-        Ok(())
-    })();
-    Some(check.is_ok())
+    let mut result = check_nvidia_preset_once();
+    if !matches!(result, NvidiaPresetCheck::Current) {
+        // One confirmation pass: displays and the driver can settle late.
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        if NVIDIA_PRESET_IMPORT_BUSY.load(std::sync::atomic::Ordering::SeqCst) { return None; }
+        result = check_nvidia_preset_once();
+    }
+    let (answer, note) = match &result {
+        NvidiaPresetCheck::Current => (Some(true), "current".to_string()),
+        NvidiaPresetCheck::Changed(reason) => (Some(false), format!("changed: {reason}")),
+        NvidiaPresetCheck::Unknown(reason) => (None, format!("not checked: {reason}")),
+    };
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let _ = crate::win32::registry::write_sz(
+        crate::win32::registry::Hive::CurrentUser, r"Software\OptiGods", "NvidiaPresetLastCheck", &format!("{stamp} {note}"),
+    );
+    answer
 }
 
 #[cfg(windows)]
