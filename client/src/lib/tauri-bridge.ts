@@ -424,7 +424,7 @@ export interface NativeGamingModeStatus {
   music?: Array<{ app: string; state: "playing" | "paused" | "unknown"; processes: number; source?: "media_controls" | "audio_activity" | "" }>;
   efficiency_mode?: number;
   /** Every background app seen while a game runs and what was done to it. */
-  apps?: Array<{ app: string; processes: number; lowered: number; efficiency: number; already_low: number; note: string }>;
+  apps?: Array<{ app: string; processes: number; lowered: number; efficiency: number; already_low: number; note: string; tabs?: number }>;
 }
 
 export interface NativeNowPlayingSession {

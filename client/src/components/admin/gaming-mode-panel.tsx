@@ -18,7 +18,14 @@ const ago = (ms: number, now: number) => {
  * (scheduled task) that keeps running after Opti Gods is closed; this panel
  * only turns it on/off and shows what the agent reports.
  */
-export function GamingModePanel() {
+export interface GamingModeFivemInfo {
+  /** "server" | "main_menu" | null (not known yet) */
+  state: string | null;
+  /** Server name or menu text from the live recorder. */
+  label: string;
+}
+
+export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo | null }) {
   const { toast } = useToast();
   const native = isNative();
   const [status, setStatus] = useState<NativeGamingModeStatus | null>(null);
@@ -171,12 +178,21 @@ export function GamingModePanel() {
             <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-emerald-500"><Radar className="h-3 w-3" />Active game</div>
             {games.length ? games.map(game => (
               <div key={game.pid} className="mt-1 text-sm" data-testid={`gaming-mode-game-${game.pid}`}>
-                <span className="font-bold text-white">{game.name}</span>
+                <span className="font-bold text-white">{/^fivem_/i.test(game.name) ? "FiveM" : game.name.replace(/\.exe$/i, "")}</span>
                 <span className={cn("ml-2 font-mono text-xs", game.priority_verified ? "text-emerald-400" : "text-red-400")}>
                   {game.priority_verified ? "High priority ✓" : `${game.priority} (not raised)`}
                 </span>
+                {/^fivem_/i.test(game.name) && (
+                  <div className="text-xs" data-testid="text-gaming-mode-fivem-state">
+                    {fivem?.state === "server"
+                      ? <span className="text-emerald-300">On server · <span className="font-bold text-white">{fivem.label}</span></span>
+                      : fivem?.state === "main_menu"
+                        ? <span className="text-zinc-300">In the main menu (not on a server)</span>
+                        : <span className="text-zinc-500">Checking server or menu…</span>}
+                  </div>
+                )}
                 <div className="text-[10px] text-zinc-500">
-                  PID {game.pid} · found by {game.detected_by} · power saving {game.power_throttling_off ? "off" : "not changed"}
+                  {game.name} · PID {game.pid} · found by {game.detected_by} · power saving {game.power_throttling_off ? "off" : "not changed"}
                 </div>
               </div>
             )) : <div className="mt-1 text-sm text-zinc-400">No game running yet. Open any game and it is boosted within 2 s.</div>}
@@ -187,17 +203,25 @@ export function GamingModePanel() {
               {!games.length ? (
                 <div className="text-zinc-400">Only while a game is running</div>
               ) : status?.apps?.length ? status.apps.map(app => {
-                const done = [
-                  app.lowered ? `${app.lowered} lowered` : "",
-                  app.efficiency ? `${app.efficiency} efficiency mode` : "",
-                  app.already_low ? `${app.already_low} already low` : "",
-                ].filter(Boolean).join(" · ");
+                const optimized = app.lowered + app.efficiency > 0;
+                const counts = app.tabs
+                  ? `${app.tabs} tab${app.tabs === 1 ? "" : "s"} open`
+                  : `${app.processes} process${app.processes === 1 ? "" : "es"}`;
                 return (
                   <div key={app.app} data-testid={`gaming-mode-app-${app.app.toLowerCase().replace(/\s+/g, "-")}`}>
                     <span className="font-bold text-white">{app.app}</span>
-                    <span className="text-zinc-500"> ×{app.processes}</span>
-                    {done && <span className="text-red-300"> · {done}</span>}
+                    <span className="text-zinc-400"> · {counts}</span>
+                    {optimized && <span className="text-red-300"> · being optimized</span>}
                     {app.note && <span className={app.note.startsWith("music") ? "text-emerald-400" : "text-zinc-500"}> · {app.note}</span>}
+                    {optimized && (
+                      <div className="text-[10px] text-zinc-600">
+                        {[
+                          app.lowered ? `${app.lowered} lowered priority` : "",
+                          app.efficiency ? `${app.efficiency} in efficiency mode` : "",
+                          app.already_low ? `${app.already_low} already low` : "",
+                        ].filter(Boolean).join(" · ")} of {app.processes} processes
+                      </div>
+                    )}
                   </div>
                 );
               }) : status?.lowered.length

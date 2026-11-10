@@ -522,7 +522,7 @@ export function PerformanceRecorder() {
           </div>
         ) : (
           <>
-            <GamingModePanel />
+            <GamingModePanel fivem={liveGame?.game_running && liveGame.game_id === "fivem" ? { state: liveGame.fivem_session_state === "main_menu" ? "main_menu" : (liveGame.fivem_session_state === "server" || liveGame.server_target || liveGame.server_title) ? "server" : null, label: serverStatus } : null} />
 
             <div data-testid="live-game-menu" className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">

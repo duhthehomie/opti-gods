@@ -2852,7 +2852,7 @@ dependencies = [
 
 [[package]]
 name = "opti-gods"
-version = "5.2.92"
+version = "5.2.93"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

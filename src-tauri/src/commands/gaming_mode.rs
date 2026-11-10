@@ -92,6 +92,9 @@ pub struct GamingModeBackgroundApp {
     pub efficiency: u32,
     /// Already below Normal (set by the app itself), left alone.
     pub already_low: u32,
+    /// Browsers: open tabs, counted from their tab (renderer) processes.
+    #[serde(default)]
+    pub tabs: u32,
     /// Why the app is not slowed, when it is protected.
     pub note: String,
 }
@@ -716,6 +719,12 @@ mod agent {
                 let entry = apps.entry(label).or_insert_with(|| GamingModeBackgroundApp { app: label.into(), ..Default::default() });
                 entry.processes += 1;
                 if let Some(note) = protected_note { entry.note = note.into(); continue; }
+                if CHROMIUM_BROWSERS.contains(&exe.as_str()) {
+                    let command = self.command_lines.entry(process.pid).or_insert_with(|| native::command_line(process.pid)).clone();
+                    if command.is_some_and(|c| c.contains("--type=renderer") && !c.contains("--extension-process")) {
+                        entry.tabs += 1;
+                    }
+                }
                 if let Some(background) = self.background.get(&process.pid) {
                     if background.lowered { entry.lowered += 1; }
                     if background.throttle == Some(native::Throttle::On) { entry.efficiency += 1; }
