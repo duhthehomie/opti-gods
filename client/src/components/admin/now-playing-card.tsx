@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
-import { Music2, Pause, Play } from "lucide-react";
+import { Loader2, Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { startVisiblePolling } from "@/lib/foreground-polling";
-import { isNative, readNowPlaying, type NativeNowPlaying } from "@/lib/tauri-bridge";
+import { isNative, mediaControl, readNowPlaying, type NativeNowPlaying } from "@/lib/tauri-bridge";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * What's playing right now, from Windows media controls (Spotify, SoundCloud,
  * YouTube and other browser players). Updates within half a second of
- * play/pause. Read-only.
+ * play/pause. Play/pause and skip buttons control the player directly.
  */
 export function NowPlayingCard({ className }: { className?: string }) {
   const native = isNative();
   const [state, setState] = useState<NativeNowPlaying | null>(null);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState<"toggle" | "next" | "previous" | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!native) return;
@@ -30,6 +33,20 @@ export function NowPlayingCard({ className }: { className?: string }) {
   if (!native) return null;
   const session = state?.sessions.find(item => item.title || item.artist) ?? state?.sessions[0];
   const playing = session?.status === "playing";
+
+  const control = async (action: "toggle" | "next" | "previous") => {
+    if (!session?.source_id || sending) return;
+    setSending(action);
+    try {
+      await mediaControl(session.source_id, action);
+      const next = await readNowPlaying();
+      setState(next);
+    } catch (controlError) {
+      toast({ title: `${session.app} did not respond`, description: String(controlError), variant: "destructive" });
+    } finally {
+      setSending(null);
+    }
+  };
 
   return (
     <div
@@ -83,6 +100,22 @@ export function NowPlayingCard({ className }: { className?: string }) {
         )}
         {session && error && <div className="truncate text-[10px] text-amber-400">{error}</div>}
       </div>
+      {session?.source_id && (
+        <div className="relative flex items-center gap-1">
+          <button type="button" onClick={() => control("previous")} disabled={!!sending} title="Previous track" data-testid="button-media-previous"
+            className="rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50">
+            {sending === "previous" ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipBack className="h-4 w-4" />}
+          </button>
+          <button type="button" onClick={() => control("toggle")} disabled={!!sending} title={playing ? "Pause" : "Play"} data-testid="button-media-toggle"
+            className="rounded-full bg-red-600 p-2 text-white transition-colors hover:bg-red-500 disabled:opacity-50">
+            {sending === "toggle" ? <Loader2 className="h-4 w-4 animate-spin" /> : playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
+          </button>
+          <button type="button" onClick={() => control("next")} disabled={!!sending} title="Next track" data-testid="button-media-next"
+            className="rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50">
+            {sending === "next" ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipForward className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
       {playing && (
         <div className="relative flex h-6 items-end gap-0.5" aria-hidden="true">
           {[0, 1, 2, 3].map(bar => (

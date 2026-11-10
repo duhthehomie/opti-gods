@@ -133,6 +133,7 @@ pub fn run() {
             commands::game_detection::detect_installed_games,
             commands::gaming_mode::gaming_mode_status,
             commands::now_playing::read_now_playing,
+            commands::now_playing::media_control,
             commands::gaming_mode::enable_gaming_mode,
             commands::gaming_mode::disable_gaming_mode,
             commands::sound::play_success_sound,

@@ -409,6 +409,8 @@ export interface NativeGamingModeGame {
 }
 
 export interface NativeGamingModeStatus {
+  /** Discord in a voice call while a game runs. null: unknown or Discord closed. */
+  discord_call?: boolean | null;
   enabled: boolean;
   agent_running: boolean;
   agent_pid: number;
@@ -434,14 +436,24 @@ export interface NativeNowPlayingSession {
   artist: string;
   album: string;
   status: "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
-  /** data: URL of the cover art. */
+  /** data: URL of the cover art, or an https catalog cover when the player has none. */
   cover: string | null;
+  /** Windows media session id, used for play/pause and skip. */
+  source_id: string;
 }
 
 export interface NativeNowPlaying {
   sessions: NativeNowPlayingSession[];
   updated_ms: number;
   error: string | null;
+  /** Discord is using the microphone (in a voice call). null: unknown. */
+  discord_call: boolean | null;
+}
+
+/** Play/pause, next or previous on one player. Throws the real Windows error. */
+export async function mediaControl(sourceId: string, action: "toggle" | "next" | "previous"): Promise<void> {
+  if (!isNative()) return;
+  await invoke<void>("media_control", { sourceId, action });
 }
 
 /** What Windows media controls report (Spotify, SoundCloud, browser players). Cheap to poll. */

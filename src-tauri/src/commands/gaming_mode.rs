@@ -79,6 +79,10 @@ pub struct GamingModeStatus {
     /// Every background app seen while a game runs and what was done to it.
     #[serde(default)]
     pub apps: Vec<GamingModeBackgroundApp>,
+    /// Discord is in a voice call (from the app's microphone check). None: unknown
+    /// (Opti Gods closed or Discord not running).
+    #[serde(default)]
+    pub discord_call: Option<bool>,
     pub errors: Vec<GamingModeError>,
 }
 
@@ -106,6 +110,9 @@ pub struct MediaHint {
     pub written_ms: u64,
     /// Lowercase exe → playing.
     pub apps: std::collections::BTreeMap<String, bool>,
+    /// Discord is using the microphone (voice call).
+    #[serde(default)]
+    pub discord_call: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -180,6 +187,18 @@ const EFFICIENCY_EXES: &[&str] = &[
     "onedrive.exe", "teams.exe", "ms-teams.exe", "slack.exe",
 ];
 
+/// Discord builds. Never slowed; raised to Above Normal during voice calls.
+#[cfg(windows)]
+const DISCORD_EXES: &[&str] = &["discord.exe", "discordptb.exe", "discordcanary.exe"];
+
+/// Lowercase exe name, with Microsoft Store builds mapped to the known name
+/// (the Store SoundCloud app does not run as plain SoundCloud.exe).
+#[cfg(windows)]
+fn canonical_exe(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("soundcloud") { "soundcloud.exe".into() } else { lower }
+}
+
 #[cfg(windows)]
 fn app_label(exe: &str) -> &'static str {
     match exe {
@@ -191,7 +210,7 @@ fn app_label(exe: &str) -> &'static str {
         "opera.exe" => "Opera",
         "vivaldi.exe" => "Vivaldi",
         "firefox.exe" => "Firefox",
-        "discord.exe" => "Discord",
+        "discord.exe" | "discordptb.exe" | "discordcanary.exe" => "Discord",
         "obs64.exe" | "obs32.exe" => "OBS",
         "steam.exe" | "steamwebhelper.exe" => "Steam",
         "epicgameslauncher.exe" | "epicwebhelper.exe" => "Epic Games",
@@ -268,6 +287,7 @@ pub(crate) mod native {
     pub const NORMAL: u32 = 0x20;
     pub const BELOW_NORMAL: u32 = 0x4000;
     pub const HIGH: u32 = 0x80;
+    pub const ABOVE_NORMAL: u32 = 0x8000;
 
     pub fn priority_name(class: u32) -> &'static str {
         match class {
@@ -506,6 +526,8 @@ mod agent {
         background: HashMap<u32, Background>,
         music_hold: HashMap<String, u8>,
         reported: HashSet<String>,
+        /// Discord processes raised to Above Normal for a voice call.
+        discord_raised: HashSet<u32>,
     }
 
     impl Agent {
@@ -538,6 +560,7 @@ mod agent {
             self.cpu.retain(|pid, _| alive.contains(pid));
             self.boosted.retain(|pid, _| alive.contains(pid));
             self.background.retain(|pid, _| alive.contains(pid));
+            self.discord_raised.retain(|pid| alive.contains(pid));
             self.reported.retain(|key| key.split(':').nth(1).and_then(|p| p.parse().ok()).map_or(true, |pid: u32| alive.contains(&pid)));
 
             let own = std::process::id();
@@ -628,7 +651,7 @@ mod agent {
             let mut targets: Vec<(u32, String, String)> = Vec::new();
 
             for process in processes {
-                let exe = process.name.to_ascii_lowercase();
+                let exe = canonical_exe(&process.name);
                 if !BACKGROUND_EXES.contains(&exe.as_str()) { continue; }
                 targets.push((process.pid, process.name.clone(), exe.clone()));
                 let audio_capable = CHROMIUM_BROWSERS.contains(&exe.as_str()) || MUSIC_APPS.contains(&exe.as_str());
@@ -707,11 +730,19 @@ mod agent {
 
             // What the panel shows: every background app seen and what was done.
             let mut apps: std::collections::BTreeMap<&'static str, GamingModeBackgroundApp> = std::collections::BTreeMap::new();
+            let discord_call = hint.as_ref().and_then(|h| h.discord_call);
+            let discord_running = processes.iter().any(|p| DISCORD_EXES.contains(&p.name.to_ascii_lowercase().as_str()));
+            self.status.discord_call = if discord_running { discord_call } else { None };
+            self.adjust_discord(processes, discord_running && discord_call == Some(true));
             for process in processes {
-                let exe = process.name.to_ascii_lowercase();
+                let exe = canonical_exe(&process.name);
                 let label = app_label(&exe);
                 let protected_note = match exe.as_str() {
-                    "discord.exe" => Some("never slowed · voice calls stay clean"),
+                    "discord.exe" | "discordptb.exe" | "discordcanary.exe" => Some(match discord_call {
+                        Some(true) => "in a voice call · raised to Above Normal so voice stays clear",
+                        Some(false) => "not in a call · never slowed",
+                        None => "never slowed · voice calls stay clean",
+                    }),
                     "obs64.exe" | "obs32.exe" => Some("never slowed · streams stay clean"),
                     _ => None,
                 };
@@ -739,6 +770,40 @@ mod agent {
                 }
             }
             self.status.apps = apps.into_values().collect();
+        }
+
+        /// During a voice call Discord gets Above Normal and no power saving,
+        /// so voice never stutters while the game runs at High. Undone when the
+        /// call ends. Only changes Discord processes that are at Normal.
+        fn adjust_discord(&mut self, processes: &[native::Process], in_call: bool) {
+            if !in_call {
+                self.restore_discord();
+                return;
+            }
+            for process in processes {
+                if !DISCORD_EXES.contains(&process.name.to_ascii_lowercase().as_str()) || self.discord_raised.contains(&process.pid) { continue; }
+                match native::get_priority(process.pid) {
+                    Ok(native::NORMAL) => match native::set_priority(process.pid, native::ABOVE_NORMAL) {
+                        Ok(()) => {
+                            let _ = native::set_power_throttling(process.pid, native::Throttle::Off);
+                            self.discord_raised.insert(process.pid);
+                        }
+                        Err(message) => self.error(format!("discord:{}", process.pid), format!("Could not raise Discord for your call: {message}")),
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        fn restore_discord(&mut self) {
+            for pid in std::mem::take(&mut self.discord_raised) {
+                if native::get_priority(pid) == Ok(native::ABOVE_NORMAL) {
+                    if let Err(message) = native::set_priority(pid, native::NORMAL) {
+                        self.error(format!("discord-restore:{pid}"), format!("Could not return Discord to Normal: {message}"));
+                    }
+                }
+                let _ = native::set_power_throttling(pid, native::Throttle::Default);
+            }
         }
 
         fn apply_background(&mut self, pid: u32, name: &str, want_lower: bool, want_throttle: Option<native::Throttle>, want_memory_low: bool, refresh_throttle: bool) {
@@ -796,6 +861,8 @@ mod agent {
         }
 
         fn restore_background(&mut self) {
+            self.restore_discord();
+            self.status.discord_call = None;
             for (pid, background) in std::mem::take(&mut self.background) {
                 if background.lowered && native::get_priority(pid) == Ok(native::BELOW_NORMAL) {
                     if let Err(message) = native::set_priority(pid, native::NORMAL) {
@@ -859,11 +926,12 @@ mod agent {
             background: HashMap::new(),
             music_hold: HashMap::new(),
             reported: HashSet::new(),
+            discord_raised: HashSet::new(),
         };
         if let Err(message) = privilege {
             agent.error("privilege".into(), format!("Some browser processes may not be adjustable: {message}"));
         }
-        let mut last_hint_apps = read_media_hint().map(|h| h.apps);
+        let mut last_hint_apps = read_media_hint().map(|h| (h.apps, h.discord_call));
         loop {
             if !dir.join("enabled").exists() {
                 agent.restore_all();
@@ -883,7 +951,7 @@ mod agent {
             let slept = Instant::now();
             while slept.elapsed() < TICK {
                 std::thread::sleep(std::time::Duration::from_millis(250));
-                let apps = read_media_hint().map(|h| h.apps);
+                let apps = read_media_hint().map(|h| (h.apps, h.discord_call));
                 if apps != last_hint_apps {
                     last_hint_apps = apps;
                     break;
@@ -903,10 +971,10 @@ fn read_media_hint() -> Option<MediaHint> {
 
 /// Called by the app's media watcher. Only writes while Gaming Mode's folder exists.
 #[cfg(windows)]
-pub(crate) fn write_media_hint(apps: std::collections::BTreeMap<String, bool>) {
+pub(crate) fn write_media_hint(apps: std::collections::BTreeMap<String, bool>, discord_call: Option<bool>) {
     let dir = data_dir();
     if !dir.join("enabled").exists() { return; }
-    let hint = MediaHint { written_ms: now_ms(), apps };
+    let hint = MediaHint { written_ms: now_ms(), apps, discord_call };
     if let Ok(json) = serde_json::to_vec(&hint) {
         let tmp = dir.join("media.json.tmp");
         if std::fs::write(&tmp, json).is_ok() {
@@ -976,6 +1044,9 @@ fn fallback_restore() {
             }
             let _ = native::set_power_throttling(process.pid, native::Throttle::Default);
             let _ = native::set_memory_priority(process.pid, false);
+        } else if DISCORD_EXES.contains(&lower.as_str()) && current == Ok(native::ABOVE_NORMAL) {
+            let _ = native::set_priority(process.pid, native::NORMAL);
+            let _ = native::set_power_throttling(process.pid, native::Throttle::Default);
         } else if classify_game(&lower, None).is_some() && current == Ok(native::HIGH) {
             let _ = native::set_priority(process.pid, native::NORMAL);
         }
@@ -1011,12 +1082,36 @@ fn task_xml(agent: &std::path::Path) -> String {
 "#)
 }
 
+/// Set once per app session after trying to replace an agent left by an older version.
+#[cfg(windows)]
+static AGENT_REFRESHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(windows)]
+static AGENT_REFRESH_ERROR: parking_lot::Mutex<Option<String>> = parking_lot::const_mutex(None);
+
 #[tauri::command]
 pub async fn gaming_mode_status() -> GamingModeStatus {
     // Instant music state for the agent while the app is open.
     crate::commands::now_playing::ensure_started();
     #[cfg(windows)]
-    { tokio::task::spawn_blocking(read_status).await.unwrap_or_default() }
+    {
+        tokio::task::spawn_blocking(|| {
+            let mut status = read_status();
+            // The agent is a copy of the app made when Gaming Mode was turned
+            // on. After an app update, replace it so new Gaming Mode features
+            // actually run.
+            let outdated = status.enabled && !status.agent_version.is_empty() && status.agent_version != env!("CARGO_PKG_VERSION");
+            if outdated && !AGENT_REFRESHED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                match install_and_start_agent() {
+                    Ok(fresh) => status = fresh,
+                    Err(message) => *AGENT_REFRESH_ERROR.lock() = Some(format!("Could not update the Gaming Mode background service to v{}: {message}", env!("CARGO_PKG_VERSION"))),
+                }
+            }
+            if let Some(message) = AGENT_REFRESH_ERROR.lock().clone() {
+                status.errors.push(GamingModeError { at_ms: now_ms(), message });
+            }
+            status
+        }).await.unwrap_or_default()
+    }
     #[cfg(not(windows))]
     { GamingModeStatus::default() }
 }
@@ -1025,7 +1120,17 @@ pub async fn gaming_mode_status() -> GamingModeStatus {
 pub async fn enable_gaming_mode() -> Result<GamingModeStatus, String> {
     #[cfg(windows)]
     {
-        tokio::task::spawn_blocking(|| -> Result<GamingModeStatus, String> {
+        tokio::task::spawn_blocking(install_and_start_agent).await.map_err(|e| e.to_string())?
+    }
+    #[cfg(not(windows))]
+    { Err("Gaming Mode requires the Windows app.".into()) }
+}
+
+/// Copies this .exe as the agent, registers the SYSTEM startup task and starts it.
+#[cfg(windows)]
+fn install_and_start_agent() -> Result<GamingModeStatus, String> {
+    {
+        {
             if !crate::win32::elevation::is_elevated().unwrap_or(false) {
                 return Err("Opti Gods is not running as administrator, so Windows will not let it create the Gaming Mode task.".into());
             }
@@ -1075,10 +1180,8 @@ pub async fn enable_gaming_mode() -> Result<GamingModeStatus, String> {
                 agent.display(),
                 agent_pids().len()
             ))
-        }).await.map_err(|e| e.to_string())?
+        }
     }
-    #[cfg(not(windows))]
-    { Err("Gaming Mode requires the Windows app.".into()) }
 }
 
 #[tauri::command]

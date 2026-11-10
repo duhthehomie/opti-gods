@@ -151,9 +151,9 @@ function NativeUpdateModal() {
           </div>
 
           <div className="w-full rounded-lg border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5">
-            <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-red-400">What changed</p>
+            <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-red-400">What's included</p>
             <ul className="space-y-1">
-              {simpleUpdateNotes(detectedNotes ?? data?.notes).slice(0, 3).map(note => (
+              {simpleUpdateNotes(detectedNotes ?? data?.notes).slice(0, 6).map(note => (
                 <li key={note} className="flex gap-1.5 text-[10px] leading-snug text-zinc-400">
                   <span className="text-red-400">•</span>{note}
                 </li>

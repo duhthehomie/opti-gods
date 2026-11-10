@@ -5,8 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { startVisiblePolling } from "@/lib/foreground-polling";
 import { NowPlayingCard } from "./now-playing-card";
 import {
-  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, type NativeGamingModeStatus,
+  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readNowPlaying, type NativeGamingModeStatus,
 } from "@/lib/tauri-bridge";
+import { useAuth } from "@/hooks/use-auth";
 
 const ago = (ms: number, now: number) => {
   const seconds = Math.max(0, Math.round((now - ms) / 1000));
@@ -33,6 +34,20 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
   const [now, setNow] = useState(() => Date.now());
   const seenErrorsRef = useRef<Set<string> | null>(null);
   const deadAgentReportedRef = useRef(false);
+  const { user } = useAuth();
+  // Live voice-call state straight from the app (works even with no game running).
+  const [discordCall, setDiscordCall] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!native) return;
+    return startVisiblePolling(async () => {
+      try {
+        const next = await readNowPlaying();
+        setDiscordCall(next?.discord_call ?? null);
+      } catch {
+        setDiscordCall(null);
+      }
+    }, 1000);
+  }, [native]);
 
   const refresh = useCallback(async () => {
     try {
@@ -199,10 +214,31 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
           </div>
           <div className="rounded-lg border border-red-500/20 bg-black/40 px-3 py-2">
             <div className="text-[9px] font-bold uppercase tracking-widest text-red-400">Background apps</div>
+            {discordCall && (
+              <div className="mt-1 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1" data-testid="gaming-mode-discord-call">
+                <div className="relative h-6 w-6 shrink-0">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-2 ring-emerald-500" data-testid="img-discord-call-avatar" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#5865F2] text-[10px] font-bold text-white ring-2 ring-emerald-500">
+                      {(user?.globalName || user?.username || "D").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 animate-pulse rounded-full border border-black bg-emerald-400" />
+                </div>
+                <div className="min-w-0 text-xs">
+                  <span className="font-bold text-white">Discord</span>
+                  <span className="text-emerald-300"> · in a voice call</span>
+                  <div className="text-[10px] text-zinc-400">
+                    {games.length ? "Voice raised to Above Normal so it stays clear while you play" : "Voice gets priority as soon as a game starts"}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="mt-1 space-y-0.5 text-xs text-zinc-300" data-testid="text-gaming-mode-lowered">
               {!games.length ? (
                 <div className="text-zinc-400">Only while a game is running</div>
-              ) : status?.apps?.length ? status.apps.map(app => {
+              ) : status?.apps?.length ? status.apps.filter(app => !(discordCall && app.app === "Discord")).map(app => {
                 const optimized = app.lowered + app.efficiency > 0;
                 const counts = app.tabs
                   ? `${app.tabs} tab${app.tabs === 1 ? "" : "s"} open`
@@ -229,7 +265,7 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 : "No browsers, launchers or chat apps open"}
             </div>
             <div className="mt-1 text-[10px] text-zinc-600">
-              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never slowed, so calls and streams stay clean.
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never slowed. In a Discord call, Discord gets extra priority so voice stays clear.
             </div>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">
