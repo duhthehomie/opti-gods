@@ -212,9 +212,12 @@ pub fn save_performance_recording(
             .file_name()
             .and_then(|name| name.to_str())
             .filter(|name| {
-                name.starts_with("OptiGods-Performance-Recording-")
+                (name.starts_with("OptiGods-Performance-Recording-")
                     && name.ends_with(".json")
-                    && !name.contains("..")
+                    && !name.contains(".."))
+                    // Monitor scripts: WebView downloads do not save inside the app.
+                    || *name == "OptiGods-Live-Monitor.bat"
+                    || *name == "OptiGods-HW-Monitor.bat"
             })
             .ok_or_else(|| "Invalid performance recording filename.".to_string())?;
         let downloads = app

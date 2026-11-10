@@ -10,6 +10,12 @@ use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Gaming Mode agent: started by its scheduled task, never opens a window.
+    if commands::gaming_mode::agent_requested() {
+        commands::gaming_mode::run_agent();
+        return;
+    }
+
     let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info,tauri=warn"),
     )
@@ -117,6 +123,9 @@ pub fn run() {
             commands::task_manager::disable_startup_app,
             commands::task_manager::get_startup_value,
             commands::game_detection::detect_installed_games,
+            commands::gaming_mode::gaming_mode_status,
+            commands::gaming_mode::enable_gaming_mode,
+            commands::gaming_mode::disable_gaming_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Opti Gods");

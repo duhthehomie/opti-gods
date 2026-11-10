@@ -24,6 +24,7 @@ import type {
   NativeFpsCaptureStatus, NativeHardwareScan, NativeLivePerformance, NativeRecordingStatus,
 } from "@/lib/tauri-bridge";
 import { RecorderTweakAudit, type RecorderTweakAuditSnapshot } from "@/components/admin/recorder-tweak-audit";
+import { GamingModePanel } from "@/components/admin/gaming-mode-panel";
 
 type RecorderPhase = "before" | "after";
 
@@ -116,7 +117,8 @@ function serverKey(live: NativeLivePerformance | null): string | null {
   if (!live?.game_running || live.game_id !== "fivem" || live.fivem_session_state === "main_menu") return null;
   const target = normalizeRecorderServerTarget(live.server_target);
   if (target) return target.toLowerCase();
-  return live.server_title ? `title:${live.server_title.toLowerCase()}` : null;
+  // Unidentified server: still allow naming it so a wrong/empty label can be fixed.
+  return live.server_title ? `title:${live.server_title.toLowerCase()}` : "fivem:unidentified";
 }
 
 function fivemStatus(
@@ -336,15 +338,24 @@ export function PerformanceRecorder() {
       const telemetryIssues = result.samples
         .filter(sample => sample.telemetry_error)
         .map(sample => ({ at: new Date(sample.sampled_at_ms ?? Date.now()).toISOString(), phase: result.phase, message: sample.telemetry_error as string }));
-      setSamples(previous => [...previous, ...rows]);
-      setRecorderErrors(previous => [
-        ...previous,
+      const nextSamples = [...samples, ...rows];
+      const nextErrors = [
+        ...recorderErrors,
         ...result.errors.map(item => ({ at: new Date(item.at_ms).toISOString(), phase: result.phase, message: item.message })),
         ...telemetryIssues,
-      ]);
-      setTruncated(previous => previous || result.truncated);
+      ];
+      const nextTruncated = truncated || result.truncated;
+      setSamples(nextSamples);
+      setRecorderErrors(nextErrors);
+      setTruncated(nextTruncated);
       setRecording(null);
-      toast({ title: `${result.phase === "before" ? "Before" : "After"} recording stopped`, description: `${rows.length} samples captured.` });
+      // Save automatically to Downloads so every before/after run is on disk.
+      const path = await saveRecording(nextSamples, nextErrors, nextTruncated, result.phase);
+      toast({
+        title: `${result.phase === "before" ? "Before" : "After"} recording saved`,
+        description: path ? `${rows.length} samples · saved to ${path}` : `${rows.length} samples captured, but the file could not be saved.`,
+        variant: path ? undefined : "destructive",
+      });
     } catch (stopError) {
       setError(String(stopError));
     } finally {
@@ -374,10 +385,15 @@ export function PerformanceRecorder() {
     process_name_union: Array.from(new Set(rows.flatMap(r => r.process_names))),
   });
 
-  const download = async () => {
-    if (!samples.length || saving) return;
+  /** Writes the combined before/after file to Downloads; returns the path or null after a failure toast. */
+  const saveRecording = async (
+    allSamples: RecorderSample[], allErrors: RecorderError[], wasTruncated: boolean, phaseTag: RecorderPhase | "combined",
+  ): Promise<string | null> => {
     setSaving(true);
     try {
+      const samples = allSamples;
+      const recorderErrors = allErrors;
+      const truncated = wasTruncated;
       const latest = samples.at(-1) ?? null;
       const content = JSON.stringify({
         schema_version: 3,
@@ -399,14 +415,21 @@ export function PerformanceRecorder() {
         },
         samples,
       }, null, 2);
-      const filename = `OptiGods-Performance-Recording-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-      const path = await savePerformanceRecording(filename, content);
-      toast({ title: "Recording saved", description: `Saved to ${path}` });
+      const safeLabel = (label.trim() || "perf-test").replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, 40);
+      const filename = `OptiGods-Performance-Recording-${safeLabel}-${phaseTag}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      return await savePerformanceRecording(filename, content);
     } catch (saveError) {
-      toast({ title: "Recording export failed", description: String(saveError), variant: "destructive" });
+      toast({ title: "Recording could not be saved to Downloads", description: String(saveError), variant: "destructive" });
+      return null;
     } finally {
       setSaving(false);
     }
+  };
+
+  const download = async () => {
+    if (!samples.length || saving) return;
+    const path = await saveRecording(samples, recorderErrors, truncated, "combined");
+    if (path) toast({ title: "Recording saved", description: `Saved to ${path}` });
   };
 
   const onAuditSnapshot = useCallback((snapshot: RecorderTweakAuditSnapshot) => setTweakAudit(snapshot), []);
@@ -482,6 +505,8 @@ export function PerformanceRecorder() {
           </div>
         ) : (
           <>
+            <GamingModePanel />
+
             <div data-testid="live-game-menu" className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -675,7 +700,7 @@ export function PerformanceRecorder() {
               <span className="text-[11px] text-zinc-500">
                 {activePhase
                   ? `Recording ${activePhase}: ${recording?.sample_count ?? 0} samples (every 2 s)${recording?.error_count ? ` · ${recording.error_count} errors` : ""}`
-                  : "Stop before downloading the combined file."}
+                  : "Each recording saves to your Downloads folder when you stop it."}
               </span>
             </div>
 

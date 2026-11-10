@@ -152,7 +152,8 @@ pub async fn prepare_cpu_monitoring(app: tauri::AppHandle) -> Result<String, Str
             verify_sensor_file(&path, "1f519a22e47187f70a1379a48ca604981c4fcf694f4e65b734aaa74a9fba3032")?;
             // Use the pinned installer's documented -install -silent flags,
             // after Windows trust verification. Never use -unrestricted.
-            let command = r#"$s=Get-AuthenticodeSignature -LiteralPath $env:OPTI_SENSOR_SETUP; if($s.Status -ne 'Valid'){throw 'The official sensor-driver installer signature is not trusted by Windows.'}; $p=Start-Process -FilePath $env:OPTI_SENSOR_SETUP -ArgumentList @('-install','-silent') -PassThru -Wait; if($p.ExitCode -notin @(0,3010)){throw "CPU sensor activation failed (exit $($p.ExitCode))."}"#;
+            // Exit 183 (ERROR_ALREADY_EXISTS) means PawnIO is already installed.
+            let command = r#"$s=Get-AuthenticodeSignature -LiteralPath $env:OPTI_SENSOR_SETUP; if($s.Status -ne 'Valid'){throw 'The official sensor-driver installer signature is not trusted by Windows.'}; $p=Start-Process -FilePath $env:OPTI_SENSOR_SETUP -ArgumentList @('-install','-silent') -PassThru -Wait; if($p.ExitCode -notin @(0,183,3010)){throw "CPU sensor activation failed (exit $($p.ExitCode))."}"#;
             let output = Command::new(crate::commands::windows_powershell_executable())
                 .args(["-NoProfile", "-NonInteractive", "-Command", command])
                 .env("OPTI_SENSOR_SETUP", &path)

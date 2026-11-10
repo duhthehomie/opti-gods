@@ -66,6 +66,7 @@
     "allow-read-v5-diagnostic-log",
     "allow-cancel-nvidia-preset-import",
     "allow-reset-nvidia-preset-import-cancel",
-    "allow-run-script-tweak"
+    "allow-run-script-tweak",
+    "allow-gaming-mode"
   ]
 }

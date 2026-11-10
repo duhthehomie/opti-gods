@@ -11,7 +11,7 @@ import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
 import { useLiveStats } from "@/hooks/use-live-stats";
-import { scanHardware, isNative, onFileDrop, readTauriTextFile, prepareCpuMonitoring } from "@/lib/tauri-bridge";
+import { scanHardware, isNative, onFileDrop, readTauriTextFile, prepareCpuMonitoring, savePerformanceRecording } from "@/lib/tauri-bridge";
 import type { NativeHardwareScan } from "@/lib/tauri-bridge";
 import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
@@ -673,6 +673,36 @@ function SmartRecsBreakdown() {
 }
 
 // ── HW Monitor Panel ─────────────────────────────────────────────────────────
+/**
+ * Saves a monitor .bat. Inside the Windows app, WebView downloads do not reach
+ * disk, so the native side writes it to Downloads and returns the path.
+ * Returns "" for a browser download, or null after a failure toast.
+ */
+async function saveMonitorScript(
+  filename: "OptiGods-Live-Monitor.bat" | "OptiGods-HW-Monitor.bat",
+  content: string,
+  onError: (message: string) => void,
+): Promise<string | null> {
+  if (isNative()) {
+    try {
+      return await savePerformanceRecording(filename, content);
+    } catch (error) {
+      onError(String(error));
+      return null;
+    }
+  }
+  const blob = new Blob([content], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return "";
+}
+
 export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void }) {
   const [hw, setHw] = useState<HwMonitorData | null>(() => loadHwMonitor());
   const [dragging, setDragging] = useState(false);
@@ -741,7 +771,7 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
 
   // Generated entirely client-side — no server fetch, works in the .exe
   // (apiUrl resolves to optigods.com in Tauri which would return HTML).
-  const downloadBat = () => {
+  const downloadBat = async () => {
     // PS1 embedded in the BAT via self-extraction. No admin rights needed.
     // NOTE: avoid ${...} in the PS1 string — JS template literal would eat it.
     // PS1 uses ($var + '...') concatenation wherever ${} would normally appear.
@@ -972,18 +1002,11 @@ export function HwMonitorPanel({ onData }: { onData?: (d: HwMonitorData) => void
     ];
 
     const content = batLines.join('\r\n');
-    const blob = new Blob([content], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "OptiGods-HW-Monitor.bat";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const savedPath = await saveMonitorScript("OptiGods-HW-Monitor.bat", content, message => toast({ title: "Script could not be saved", description: message, variant: "destructive" }));
+    if (savedPath === null) return;
     toast({
-      title: "Hardware scan script downloaded",
-      description: "Run OptiGods-HW-Monitor.bat, then drag the JSON it drops on your Desktop back here.",
+      title: "Hardware scan script saved",
+      description: `${savedPath ? `Saved to ${savedPath}. ` : ""}Run OptiGods-HW-Monitor.bat, then drag the JSON it drops on your Desktop back here.`,
     });
   };
 
@@ -1174,7 +1197,7 @@ export function LiveMonitorPanel() {
     } finally { setSensorSetupBusy(false); }
   };
 
-  const downloadLiveBat = () => {
+  const downloadLiveBat = async () => {
     const postUrl = apiUrl('/api/hw-live');
     const markerKey = '##LIVE_MONITOR_PS1##';
     const markerSearchPs = `'##LIVE_MON'+'ITOR_PS1##'`;
@@ -1283,16 +1306,12 @@ export function LiveMonitorPanel() {
       ps1Lines,
     ].join('\r\n');
 
-    const blob = new Blob([batLines], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "OptiGods-Live-Monitor.bat";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast({ title: "Live Monitor downloaded", description: "Press Q or Esc to stop; a time-series JSON log will be saved to your Desktop." });
+    const savedPath = await saveMonitorScript("OptiGods-Live-Monitor.bat", batLines, message => toast({ title: "Live Monitor script could not be saved", description: message, variant: "destructive" }));
+    if (savedPath === null) return;
+    toast({
+      title: "Live Monitor script saved",
+      description: `${savedPath ? `Saved to ${savedPath}. ` : ""}Nothing is recorded yet: run OptiGods-Live-Monitor.bat, then press Q or Esc to stop. That writes OptiGods-Live-Monitor-<time>.json to your Desktop.`,
+    });
   };
 
   const tempColor = (c: number) => c < 60 ? "text-emerald-400" : c < 80 ? "text-amber-400" : "text-red-400";

@@ -6251,12 +6251,13 @@ Start-Sleep 2
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
-    const [codes, friends, visitStats, emailReqs, manualTotal] = await Promise.all([
+    const [codes, friends, visitStats, emailReqs, manualTotal, settings] = await Promise.all([
       storage.getAllCodes(),
       storage.getAllFriendTokens(),
       storage.getVisitStats(),
       storage.getEmailRequests(),
       storage.getManualPaymentTotal(),
+      storage.getAdminSettings(),
     ]);
     // Codes reserved for email requests (sentCodeId set on a sent/auto-sent request)
     const reservedCodeIds = new Set(
@@ -6275,7 +6276,9 @@ Start-Sleep 2
     // Directly redeemed codes (customer entered code manually, not via email path) — default $15 per code
     const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
     const codeRevenue = emailRevenue + directRevenue;
-    const revenueEstimate = codeRevenue + manualTotal;
+    const computedRevenue = codeRevenue + manualTotal;
+    const revenueOverride = settings?.revenueOverride ?? null;
+    const revenueEstimate = revenueOverride ?? computedRevenue;
     // usedCodes includes partial-state (usedByIp only) so the dashboard doesn't double-count
     const usedCodes = codes.filter(c => c.usedAt || c.usedByIp).length;
     const usedFriends = friends.filter(f => f.usedAt).length;
@@ -6288,12 +6291,25 @@ Start-Sleep 2
       usedFriends,
       availableFriends,
       revenueEstimate,
+      computedRevenue,
+      revenueOverride,
       codeRevenue,
       manualRevenue: manualTotal,
       emailRevenue,
       directRevenue,
       visits: visitStats,
     });
+  });
+
+  // Admin — set (or clear with null) the revenue total shown on the dashboard
+  app.put('/api/admin/revenue-override', async (req, res) => {
+    if (!checkAdminKey(req, res)) return;
+    const raw = req.body?.amount;
+    if (raw !== null && (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > 100_000_000)) {
+      return res.status(400).json({ error: "Amount must be a whole number of dollars, or null to use the calculated total." });
+    }
+    const row = await storage.upsertAdminSettings({ revenueOverride: raw });
+    res.json({ revenueOverride: row.revenueOverride ?? null });
   });
 
   // Admin — list manual payments

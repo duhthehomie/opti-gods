@@ -199,6 +199,9 @@ export const adminSettings = pgTable("admin_settings", {
   auditWebhookUrl: text("audit_webhook_url"),
   // HUD settings — JSON blob: { coverWidth, iconSize, iconLeft, iconTop, showServerName }
   hudSettings: text("hud_settings"),
+  // Admin-entered revenue total (whole dollars). When set, the dashboard shows
+  // it instead of the computed code + manual-payment estimate.
+  revenueOverride: integer("revenue_override"),
 });
 export type AdminSettings = typeof adminSettings.$inferSelect;
 

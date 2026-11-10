@@ -381,6 +381,46 @@ export async function readFpsCapture(): Promise<NativeFpsCaptureStatus | null> {
   return invoke<NativeFpsCaptureStatus>("read_fps_capture");
 }
 
+export interface NativeGamingModeGame {
+  name: string;
+  pid: number;
+  priority: string;
+  priority_verified: boolean;
+  power_throttling_off: boolean;
+  detected_by: string;
+  boosted_at_ms: number;
+}
+
+export interface NativeGamingModeStatus {
+  enabled: boolean;
+  agent_running: boolean;
+  agent_pid: number;
+  agent_version: string;
+  started_at_ms: number;
+  heartbeat_ms: number;
+  state: "scanning" | "boosting" | "stopped" | "";
+  scans: number;
+  processes_scanned: number;
+  games: NativeGamingModeGame[];
+  lowered: string[];
+  errors: Array<{ at_ms: number; message: string }>;
+}
+
+export async function gamingModeStatus(): Promise<NativeGamingModeStatus | null> {
+  if (!isNative()) return null;
+  return invoke<NativeGamingModeStatus>("gaming_mode_status");
+}
+
+export async function enableGamingMode(): Promise<NativeGamingModeStatus> {
+  if (!isNative()) throw new Error("Gaming Mode requires the Windows app.");
+  return invoke<NativeGamingModeStatus>("enable_gaming_mode");
+}
+
+export async function disableGamingMode(): Promise<NativeGamingModeStatus> {
+  if (!isNative()) throw new Error("Gaming Mode requires the Windows app.");
+  return invoke<NativeGamingModeStatus>("disable_gaming_mode");
+}
+
 export async function startPerformanceCapture(phase: "before" | "after"): Promise<NativeRecordingStatus> {
   if (!isNative()) throw new Error("Performance recording requires the Windows app.");
   return invoke<NativeRecordingStatus>("start_performance_capture", { phase });

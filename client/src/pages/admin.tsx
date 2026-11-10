@@ -3398,6 +3398,7 @@ export default function Admin() {
     totalFriends: number; usedFriends: number; availableFriends: number;
     revenueEstimate: number; codeRevenue: number; manualRevenue: number;
     emailRevenue: number; directRevenue: number;
+    computedRevenue?: number; revenueOverride?: number | null;
     visits: { total: number; today: number; thisWeek: number };
   }>({
     queryKey: ["/api/admin/stats", key],
@@ -3473,6 +3474,33 @@ export default function Admin() {
     retry: false,
     refetchInterval: 30000,
   });
+
+  const [editingRevenue, setEditingRevenue] = useState(false);
+  const [revenueDraft, setRevenueDraft] = useState("");
+  const saveRevenue = useMutation({
+    mutationFn: async (amount: number | null) => {
+      const r = await fetch(apiUrl("/api/admin/revenue-override"), { method: "PUT", headers, body: JSON.stringify({ amount }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `Server returned ${r.status}`);
+      return body as { revenueOverride: number | null };
+    },
+    onSuccess: (body) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats", key] });
+      setEditingRevenue(false);
+      toast({ title: "Revenue updated", description: body.revenueOverride == null ? "Back to the calculated total." : `Showing $${body.revenueOverride}.` });
+    },
+    onError: (error: Error) => toast({ title: "Revenue not saved", description: error.message, variant: "destructive" }),
+  });
+  const submitRevenue = () => {
+    const text = revenueDraft.replace(/[$,\s]/g, "");
+    if (text === "") { saveRevenue.mutate(null); return; }
+    const amount = Number(text);
+    if (!Number.isInteger(amount) || amount < 0) {
+      toast({ title: "Revenue not saved", description: "Enter a whole dollar amount, or leave it empty to use the calculated total.", variant: "destructive" });
+      return;
+    }
+    saveRevenue.mutate(amount);
+  };
 
   const genCode = useMutation({
     mutationFn: () => fetch(apiUrl("/api/admin/codes"), {
@@ -4339,7 +4367,39 @@ export default function Admin() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">Confirmed Revenue</p>
-                <p className="text-4xl font-black text-emerald-400 font-mono">${stats?.revenueEstimate ?? 0}</p>
+                {editingRevenue ? (
+                  <form className="flex items-center gap-2" onSubmit={e => { e.preventDefault(); submitRevenue(); }}>
+                    <span className="text-3xl font-black text-emerald-400 font-mono">$</span>
+                    <input
+                      autoFocus
+                      inputMode="numeric"
+                      value={revenueDraft}
+                      onChange={e => setRevenueDraft(e.target.value)}
+                      placeholder={String(stats?.computedRevenue ?? 0)}
+                      data-testid="input-revenue-override"
+                      className="w-40 rounded-lg border border-emerald-500/30 bg-black/60 px-2 py-1 text-3xl font-black text-emerald-300 font-mono outline-none focus:border-emerald-400"
+                    />
+                    <button type="submit" disabled={saveRevenue.isPending} data-testid="button-save-revenue" className="rounded-lg p-2 text-emerald-400 hover:bg-emerald-500/10" aria-label="Save revenue"><Check className="w-5 h-5" /></button>
+                    <button type="button" onClick={() => setEditingRevenue(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-white/5" aria-label="Cancel"><X className="w-5 h-5" /></button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-4xl font-black text-emerald-400 font-mono" data-testid="text-revenue">${stats?.revenueEstimate ?? 0}</p>
+                    <button
+                      type="button"
+                      data-testid="button-edit-revenue"
+                      title="Set your own revenue number (leave empty to go back to the calculated total)"
+                      onClick={() => { setRevenueDraft(stats?.revenueOverride != null ? String(stats.revenueOverride) : ""); setEditingRevenue(true); }}
+                      className="rounded-lg p-1.5 text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-300"
+                      aria-label="Edit revenue"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {stats?.revenueOverride != null && !editingRevenue && (
+                  <p className="text-[10px] text-emerald-800 mt-1">Set by you · calculated total ${stats.computedRevenue ?? 0}</p>
+                )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
                     ${stats?.codeRevenue ?? 0} from codes

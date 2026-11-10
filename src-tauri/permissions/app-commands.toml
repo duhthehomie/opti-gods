@@ -293,3 +293,8 @@ permissions = [
   "allow-reset-nvidia-preset-import-cancel",
   "allow-run-script-tweak",
 ]
+
+[[permission]]
+identifier = "allow-gaming-mode"
+description = "Admin Gaming Mode: turn the background game-priority agent on or off and read its status."
+commands.allow = ["gaming_mode_status", "enable_gaming_mode", "disable_gaming_mode"]
