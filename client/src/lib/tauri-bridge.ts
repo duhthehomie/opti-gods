@@ -225,6 +225,11 @@ export async function detectAppliedTweaks(): Promise<Record<string, boolean>> {
             localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPreviewPerformance");
             localStorage.removeItem("optigods-nvidia-ui-v5.2.66-NvidiaPhysxGpu");
           } catch {}
+        } else if (result.NvidiaControlPanelSettings === true) {
+          // The native check proved the receipt, all global settings and 85%
+          // vibrance on every NVIDIA monitor. Restore the saved "verified" flag
+          // that an older false Missing (or an update) cleared.
+          try { localStorage.setItem("optigods-nvidia-preset-requeue-v5.2.72", "verified"); } catch {}
         }
         if (typeof result.__DefenderAvailable === "boolean") {
           try { localStorage.setItem("optigods-defender-capability", result.__DefenderAvailable ? "available" : "unavailable"); } catch {}
