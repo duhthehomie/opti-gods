@@ -35,6 +35,10 @@ pub struct NowPlaying {
     pub error: Option<String>,
     /// Discord is using the microphone (in a voice call). None: could not be read.
     pub discord_call: Option<bool>,
+    /// Twitch, Kick or YouTube open in a visible browser window (any monitor).
+    pub videos: Vec<crate::commands::stream_watch::VideoWatch>,
+    /// OBS Studio or Streamlabs is live (from its own log). None: not live.
+    pub live: Option<crate::commands::stream_watch::LiveStream>,
 }
 
 /// Catalog covers by "artist\u{1}title": None while looking up or not found.
@@ -301,13 +305,20 @@ mod watcher {
             }
         };
         let mut covers: HashMap<String, Option<String>> = HashMap::new();
-        let mut last_hint: Option<(BTreeMap<String, bool>, Option<bool>)> = None;
+        type Hint = (BTreeMap<String, bool>, Option<bool>, Vec<crate::commands::stream_watch::VideoWatch>, Option<crate::commands::stream_watch::LiveStream>);
+        let mut last_hint: Option<Hint> = None;
         let mut last_hint_at = std::time::Instant::now();
         let mut discord_call = None;
+        let mut videos = Vec::new();
+        let mut live = None;
+        let mut live_detector = crate::commands::stream_watch::LiveDetector::default();
         let mut loops: u32 = 0;
         loop {
             // The microphone record is cheap but not needed every 400 ms.
             if loops % 2 == 0 { discord_call = discord_in_call(); }
+            // Browser windows every 1.2 s; the OBS/Streamlabs log every 2 s.
+            if loops % 3 == 0 { videos = crate::commands::stream_watch::browser_videos(); }
+            if loops % 5 == 0 { live = live_detector.poll(); }
             loops = loops.wrapping_add(1);
             let (sessions, error) = match read(&manager, &mut covers) {
                 Ok(sessions) => (sessions, None),
@@ -320,13 +331,13 @@ mod watcher {
                 }
             }
             // Pass on changes at once; refresh every 2 s so the agent knows the app is still open.
-            let next = (hint, discord_call);
+            let next: Hint = (hint, discord_call, videos.clone(), live.clone());
             if error.is_none() && (last_hint.as_ref() != Some(&next) || last_hint_at.elapsed() >= std::time::Duration::from_secs(2)) {
-                crate::commands::gaming_mode::write_media_hint(next.0.clone(), next.1);
+                crate::commands::gaming_mode::write_media_hint(next.0.clone(), next.1, next.2.clone(), next.3.clone());
                 last_hint = Some(next);
                 last_hint_at = std::time::Instant::now();
             }
-            *STATE.lock() = Some(NowPlaying { sessions, updated_ms: now_ms(), error, discord_call });
+            *STATE.lock() = Some(NowPlaying { sessions, updated_ms: now_ms(), error, discord_call, videos: videos.clone(), live: live.clone() });
             std::thread::sleep(POLL);
         }
     }

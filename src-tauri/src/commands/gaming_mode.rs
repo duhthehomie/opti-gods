@@ -113,6 +113,12 @@ pub struct MediaHint {
     /// Discord is using the microphone (voice call).
     #[serde(default)]
     pub discord_call: Option<bool>,
+    /// Twitch/Kick/YouTube open in a visible browser window.
+    #[serde(default)]
+    pub videos: Vec<crate::commands::stream_watch::VideoWatch>,
+    /// OBS Studio or Streamlabs is live. Shown only; OBS is never changed.
+    #[serde(default)]
+    pub live: Option<crate::commands::stream_watch::LiveStream>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -212,6 +218,7 @@ fn app_label(exe: &str) -> &'static str {
         "firefox.exe" => "Firefox",
         "discord.exe" | "discordptb.exe" | "discordcanary.exe" => "Discord",
         "obs64.exe" | "obs32.exe" => "OBS",
+        "streamlabs obs.exe" | "streamlabs desktop.exe" => "Streamlabs",
         "steam.exe" | "steamwebhelper.exe" => "Steam",
         "epicgameslauncher.exe" | "epicwebhelper.exe" => "Epic Games",
         "battle.net.exe" => "Battle.net",
@@ -710,13 +717,25 @@ mod agent {
             music.sort_by(|a, b| a.app.cmp(&b.app));
             self.status.music = music;
 
+            // Browsers showing Twitch, Kick or YouTube in a visible window (any
+            // monitor) are not slowed at all: the video decoder, GPU process and
+            // tab renderer all keep full speed so the stream does not stutter or
+            // drop quality, while the game stays at High.
+            let mut watching: HashMap<String, String> = HashMap::new();
+            for video in hint.as_ref().map(|h| h.videos.as_slice()).unwrap_or(&[]) {
+                let label = if video.channel.is_empty() || video.site == "YouTube" { video.site.clone() } else { format!("{} ({})", video.site, video.channel) };
+                watching.entry(video.exe.clone())
+                    .and_modify(|current| if !current.contains(&label) { current.push_str(", "); current.push_str(&label); })
+                    .or_insert(label);
+            }
             for (pid, name, exe) in targets {
-                let protected = playing.contains(&exe) || unknown.contains(&exe) || exe == "firefox.exe";
+                let is_watching = watching.contains_key(&exe);
+                let protected = is_watching || playing.contains(&exe) || unknown.contains(&exe) || exe == "firefox.exe";
                 let audio_process = audio_pids.contains(&pid);
                 // The audio process of a playing app keeps Normal priority. Other
                 // processes can drop: Chromium audio threads run time-critical,
                 // which a lower process class does not change.
-                let want_lower = !(playing.contains(&exe) && audio_process);
+                let want_lower = !(is_watching || (playing.contains(&exe) && audio_process));
                 let want_throttle = if protected {
                     Some(native::Throttle::Off)
                 } else if EFFICIENCY_EXES.contains(&exe.as_str()) {
@@ -734,6 +753,11 @@ mod agent {
             let discord_running = processes.iter().any(|p| DISCORD_EXES.contains(&p.name.to_ascii_lowercase().as_str()));
             self.status.discord_call = if discord_running { discord_call } else { None };
             self.adjust_discord(processes, discord_running && discord_call == Some(true));
+            let live_note = match hint.as_ref().and_then(|h| h.live.as_ref()) {
+                Some(live) if !live.platform.is_empty() => format!("LIVE on {} · never changed · stream left exactly as you set it", live.platform),
+                Some(_) => "LIVE · never changed · stream left exactly as you set it".to_string(),
+                None => "never slowed · streams stay clean".to_string(),
+            };
             for process in processes {
                 let exe = canonical_exe(&process.name);
                 let label = app_label(&exe);
@@ -743,7 +767,7 @@ mod agent {
                         Some(false) => "not in a call · never slowed",
                         None => "never slowed · voice calls stay clean",
                     }),
-                    "obs64.exe" | "obs32.exe" => Some("never slowed · streams stay clean"),
+                    "obs64.exe" | "obs32.exe" | "streamlabs obs.exe" | "streamlabs desktop.exe" => Some(live_note.as_str()),
                     _ => None,
                 };
                 if protected_note.is_none() && !BACKGROUND_EXES.contains(&exe.as_str()) { continue; }
@@ -761,7 +785,9 @@ mod agent {
                     if background.throttle == Some(native::Throttle::On) { entry.efficiency += 1; }
                     if background.already_low { entry.already_low += 1; }
                 }
-                if exe == "firefox.exe" {
+                if let Some(sites) = watching.get(&exe) {
+                    entry.note = format!("watching {sites} · video kept at full speed");
+                } else if exe == "firefox.exe" {
                     entry.note = "not slowed · its audio can't be checked".into();
                 } else if playing.contains(&exe) {
                     entry.note = "music playing · audio kept at full speed".into();
@@ -971,10 +997,15 @@ fn read_media_hint() -> Option<MediaHint> {
 
 /// Called by the app's media watcher. Only writes while Gaming Mode's folder exists.
 #[cfg(windows)]
-pub(crate) fn write_media_hint(apps: std::collections::BTreeMap<String, bool>, discord_call: Option<bool>) {
+pub(crate) fn write_media_hint(
+    apps: std::collections::BTreeMap<String, bool>,
+    discord_call: Option<bool>,
+    videos: Vec<crate::commands::stream_watch::VideoWatch>,
+    live: Option<crate::commands::stream_watch::LiveStream>,
+) {
     let dir = data_dir();
     if !dir.join("enabled").exists() { return; }
-    let hint = MediaHint { written_ms: now_ms(), apps, discord_call };
+    let hint = MediaHint { written_ms: now_ms(), apps, discord_call, videos, live };
     if let Ok(json) = serde_json::to_vec(&hint) {
         let tmp = dir.join("media.json.tmp");
         if std::fs::write(&tmp, json).is_ok() {

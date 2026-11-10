@@ -698,7 +698,11 @@ export default function Dashboard() {
     }
     if (native) {
       const missingIds = missingRecommendedIds;
-      if (!missingIds.length) return;
+      if (!missingIds.length) {
+        // "Review recommended tweaks": open the full list instead of doing nothing.
+        window.location.assign("/ai-optimize");
+        return;
+      }
       playOptimizationActionSound();
       const failedIds = latestRunIsTerminal && lastNativeRun
         ? lastNativeRun.items.filter(item => item.status === "failed" && missingIds.includes(item.id)).map(item => item.id)
@@ -872,10 +876,20 @@ export default function Dashboard() {
     && lastNativeRun!.items.length > 0
     && lastNativeRun!.items.every(item => item.status === "applied")
     && scoreIds.every(id => activeIdsForDisplay.has(id));
-  const recommendedApplied = fullOptimizeSucceeded && missingRecommendedCount === 0;
+  // Every scored tweak is confirmed (Windows readback or recorded success) and
+  // nothing is pending. A later small run that failed (e.g. a game profile for a
+  // game that is not installed) must not take "Optimized" away.
+  const allRecommendedConfirmed = native
+    && isPro
+    && nativeDetectionReady
+    && !nativeDetectionError
+    && scoreIds.length > 0
+    && missingRecommendedCount === 0
+    && scoreIds.every(id => activeIdsForDisplay.has(id));
+  const recommendedApplied = (fullOptimizeSucceeded || allRecommendedConfirmed) && missingRecommendedCount === 0;
   // 100% is reserved for a failure-free Pro full optimization. Detection can
   // still show the exact partial score, but a partial/Free run must stop at 99.
-  const displayScore = rawScorePercent === 100 && !fullOptimizeSucceeded ? 99 : rawScorePercent;
+  const displayScore = rawScorePercent === 100 && !(fullOptimizeSucceeded || allRecommendedConfirmed) ? 99 : rawScorePercent;
   const tierLabel = native
     ? (displayScore === 100 ? "100% CONFIRMED" : displayScore >= 90 ? "GOD TIER" : displayScore >= 70 ? "ELITE" : displayScore >= 46 ? "DECENT" : displayScore > 0 ? "PARTIALLY OPTIMIZED" : "UNOPTIMIZED")
     : (displayScore === 100 ? "100% SELECTED" : displayScore >= 90 ? "PREVIEW — NOT APPLIED" : displayScore >= 70 ? "PREVIEW — NOT APPLIED" : displayScore >= 46 ? "DECENT PREVIEW" : displayScore > 0 ? "PARTIALLY OPTIMIZED" : "UNOPTIMIZED");

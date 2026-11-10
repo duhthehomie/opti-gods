@@ -6,9 +6,11 @@ import { startVisiblePolling } from "@/lib/foreground-polling";
 import { NowPlayingCard } from "./now-playing-card";
 import {
   disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readForegroundApp, readNowPlaying,
-  type NativeForegroundApp, type NativeGamingModeStatus,
+  type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch,
 } from "@/lib/tauri-bridge";
 import { useAuth } from "@/hooks/use-auth";
+
+const PLATFORM_COLORS: Record<string, string> = { Twitch: "#9146FF", Kick: "#53FC18", YouTube: "#FF0000" };
 
 const ago = (ms: number, now: number) => {
   const seconds = Math.max(0, Math.round((now - ms) / 1000));
@@ -38,14 +40,21 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
   const { user } = useAuth();
   // Live voice-call state straight from the app (works even with no game running).
   const [discordCall, setDiscordCall] = useState<boolean | null>(null);
+  // Live stream (OBS/Streamlabs log) and Twitch/Kick/YouTube windows, from the app.
+  const [live, setLive] = useState<NativeLiveStream | null>(null);
+  const [videos, setVideos] = useState<NativeVideoWatch[]>([]);
   useEffect(() => {
     if (!native) return;
     return startVisiblePolling(async () => {
       try {
         const next = await readNowPlaying();
         setDiscordCall(next?.discord_call ?? null);
+        setLive(next?.live ?? null);
+        setVideos(next?.videos ?? []);
       } catch {
         setDiscordCall(null);
+        setLive(null);
+        setVideos([]);
       }
     }, 1000);
   }, [native]);
@@ -279,6 +288,42 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 </div>
               </div>
             )}
+            {live && (
+              <div className="mt-1 flex items-center gap-2 rounded-md border px-2 py-1" style={{ borderColor: `${PLATFORM_COLORS[live.platform] ?? "#ef4444"}66`, background: `${PLATFORM_COLORS[live.platform] ?? "#ef4444"}1a` }} data-testid="gaming-mode-live">
+                <div className="relative h-6 w-6 shrink-0">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-2" style={{ ["--tw-ring-color" as string]: PLATFORM_COLORS[live.platform] ?? "#ef4444" }} data-testid="img-live-avatar" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: PLATFORM_COLORS[live.platform] ?? "#ef4444" }}>
+                      {(user?.globalName || user?.username || "L").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 animate-pulse rounded-full border border-black bg-red-500" />
+                </div>
+                <div className="min-w-0 text-xs">
+                  <span className="rounded bg-red-600 px-1 py-px text-[9px] font-black uppercase tracking-wider text-white">Live</span>
+                  <span className="ml-1.5 font-bold text-white">{live.platform ? `on ${live.platform}` : "streaming"}</span>
+                  <span className="text-zinc-300"> · {games.length ? "being optimized" : "optimized as soon as a game starts"}</span>
+                  <div className="text-[10px] text-zinc-400">
+                    Game at High, background apps slowed. {live.app} is never changed — your stream settings stay exactly as you set them.
+                  </div>
+                </div>
+              </div>
+            )}
+            {videos.length > 0 && (
+              <div className="mt-1 space-y-0.5" data-testid="gaming-mode-watching">
+                {videos.map(video => (
+                  <div key={`${video.exe}-${video.site}-${video.channel}`} className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs" style={{ borderColor: `${PLATFORM_COLORS[video.site] ?? "#71717a"}55` }}>
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PLATFORM_COLORS[video.site] ?? "#71717a" }} />
+                    <span className="min-w-0 truncate">
+                      <span className="font-bold text-white">Watching {video.site}</span>
+                      <span className="text-zinc-400"> · {video.channel}</span>
+                      <span className="text-emerald-400"> · {games.length ? "video kept at full speed" : "kept at full speed while you play"}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="mt-1 space-y-0.5 text-xs text-zinc-300" data-testid="text-gaming-mode-lowered">
               {!games.length ? (
                 <div className="text-zinc-400">Only while a game is running</div>
@@ -309,7 +354,7 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 : "No browsers, launchers or chat apps open"}
             </div>
             <div className="mt-1 text-[10px] text-zinc-600">
-              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never slowed. In a Discord call, Discord gets extra priority so voice stays clear.
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call, Discord gets extra priority so voice stays clear. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
             </div>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">

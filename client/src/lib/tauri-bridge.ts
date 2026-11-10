@@ -455,6 +455,24 @@ export interface NativeNowPlaying {
   error: string | null;
   /** Discord is using the microphone (in a voice call). null: unknown. */
   discord_call: boolean | null;
+  /** Twitch, Kick or YouTube open in a visible browser window (any monitor). */
+  videos?: NativeVideoWatch[];
+  /** OBS Studio or Streamlabs is live (read from its own log). null: not live. */
+  live?: NativeLiveStream | null;
+}
+
+export interface NativeVideoWatch {
+  site: "Twitch" | "Kick" | "YouTube" | string;
+  /** Lowercase browser exe, e.g. brave.exe. */
+  exe: string;
+  /** Channel (Twitch/Kick) or video title (YouTube). */
+  channel: string;
+}
+
+export interface NativeLiveStream {
+  app: "OBS Studio" | "Streamlabs" | string;
+  /** "Twitch" | "Kick" | "YouTube" | "" when the stream URL is not recognised. */
+  platform: string;
 }
 
 /** Play/pause, next or previous on one player. Throws the real Windows error. */
