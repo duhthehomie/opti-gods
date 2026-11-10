@@ -6,7 +6,7 @@ import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
 import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
-import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds, readBest15Ids } from "@/lib/recommendation-scope";
+import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds, readBest15Ids, loadInstalledProfileGameIds, useInstalledProfileGameIds, PROFILE_GAME_IDS } from "@/lib/recommendation-scope";
 import { WindowsProcessCount } from "@/components/windows-process-count";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -71,6 +71,7 @@ const FEATURES = [
 ];
 
 const GAME_PACK_LABELS: Record<string, string> = {
+  game_cs2: "Counter-Strike 2",
   game_valorant: "VALORANT",
   game_cod: "Call of Duty",
   game_apex: "Apex Legends",
@@ -397,6 +398,15 @@ export default function Dashboard() {
   const proPrice = pricingData?.price ?? 25;
   const isWeekendDeal = pricingData?.isWeekendDeal ?? false;
   const { toast } = useToast();
+  const installedProfileGames = useInstalledProfileGameIds();
+  useEffect(() => {
+    if (!installedProfileGames.error) return;
+    toast({
+      title: "Installed game check failed",
+      description: `Game profiles such as Counter-Strike 2 are not in the missing list until the game scan works: ${installedProfileGames.error}`,
+      variant: "destructive",
+    });
+  }, [installedProfileGames.error, toast]);
 
   const handleScanned = useCallback((_info: ScannedSysInfo) => {
     window.location.reload();
@@ -622,6 +632,21 @@ export default function Dashboard() {
         if (nvidiaPresetShouldQueue && (!nativeState[NVIDIA_PRESET_ACTION_ID] || queueNvidiaPresetReapplyNow)) {
           pendingIds.push(NVIDIA_PRESET_ACTION_ID);
         }
+        // Game profiles only run when the game is really installed; otherwise
+        // record an honest skip instead of a failed script.
+        const profileIdsInRun = pendingIds.filter(id => PROFILE_GAME_IDS.includes(id));
+        if (profileIdsInRun.length) {
+          let installed: string[] | null = null;
+          try { installed = await loadInstalledProfileGameIds(); } catch { installed = null; }
+          if (installed) {
+            for (const id of profileIdsInRun) {
+              if (installed.includes(id)) continue;
+              pendingIds.splice(pendingIds.indexOf(id), 1);
+              runSkippedIds.push(id);
+              runSkippedMessages[id] = `${GAME_PACK_LABELS[id] ?? id} is not installed on this PC, so its profile was skipped. Nothing was changed.`;
+            }
+          }
+        }
         if (nvidiaPresetSkipMessage) {
           runSkippedIds.push(NVIDIA_PRESET_ACTION_ID);
           runSkippedMessages[NVIDIA_PRESET_ACTION_ID] = nvidiaPresetSkipMessage;
@@ -777,7 +802,7 @@ export default function Dashboard() {
   // plus the runner's confirmed-success ledger. The detector covers only a
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
-  const matchedRecommendedIds = getScoredRecommendationIds(smartRecs.ids, nvidiaPresetEligible);
+  const matchedRecommendedIds = getScoredRecommendationIds(smartRecs.ids, nvidiaPresetEligible, installedProfileGames.ids);
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
   const totalTweaks = matchedRecommendedTweaks.length;

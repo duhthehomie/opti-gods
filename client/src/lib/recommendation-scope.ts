@@ -2,22 +2,56 @@ import { getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
+import { detectInstalledGames, isNative } from "@/lib/tauri-bridge";
+import { useEffect, useState } from "react";
 
 const NVIDIA_PRESET_ID = "NvidiaControlPanelSettings";
 const NVIDIA_MSI_PRO_ID = "EnableNvidiaMSIPro";
 const REGISTRY_IDS = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
 
 /**
+ * Game profiles that join the recommended (missing-tweaks) list, but only when
+ * the native scan finds the game's executable on this PC.
+ */
+export const PROFILE_GAME_IDS: readonly string[] = ["game_cs2"];
+
+let installedGamesRequest: Promise<string[]> | null = null;
+
+/** Installed game profile IDs from the native scan (cached for this session). */
+export function loadInstalledProfileGameIds(): Promise<string[]> {
+  if (!isNative()) return Promise.resolve([]);
+  installedGamesRequest ??= detectInstalledGames()
+    .then(games => games.map(game => game.id).filter(id => PROFILE_GAME_IDS.includes(id)))
+    .catch(error => { installedGamesRequest = null; throw error; });
+  return installedGamesRequest;
+}
+
+export function useInstalledProfileGameIds(): { ids: string[]; error: string | null } {
+  const [ids, setIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadInstalledProfileGameIds()
+      .then(found => { if (alive) { setIds(found); setError(null); } })
+      .catch(err => { if (alive) setError(err instanceof Error ? err.message : String(err)); });
+    return () => { alive = false; };
+  }, []);
+  return { ids, error };
+}
+
+/**
  * The recommended tweaks a PC is scored against. Dashboard and AI Optimize
  * must both use this so their "X of Y" counts always match.
  */
-export function getScoredRecommendationIds(recIds: Iterable<string>, nvidiaPresetEligible: boolean): string[] {
+export function getScoredRecommendationIds(recIds: Iterable<string>, nvidiaPresetEligible: boolean, installedProfileGameIds: readonly string[] = []): string[] {
   return Array.from(new Set([
     ...getEligibleSmartRecommendationIds(
       [...Array.from(recIds).filter(id => id !== NVIDIA_PRESET_ID), ...(nvidiaPresetEligible ? [NVIDIA_PRESET_ID] : [])],
       id => id === NVIDIA_PRESET_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
     ),
     ...(nvidiaPresetEligible && getTweakCompatibility(NVIDIA_MSI_PRO_ID).ok ? [NVIDIA_MSI_PRO_ID] : []),
+    // Last, so installed game profiles never shift the free 15-tweak allowance.
+    ...installedProfileGameIds.filter(id => PROFILE_GAME_IDS.includes(id) && REGISTRY_IDS.has(id) && getTweakCompatibility(id).ok),
   ]));
 }
 

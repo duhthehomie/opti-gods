@@ -1,7 +1,7 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { getProValidationActionIds } from "@/lib/pro-validation-actions";
 import { getPendingNvidiaPresetIds, canRunNvidiaPreset, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
-import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds } from "@/lib/recommendation-scope";
+import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds, useInstalledProfileGameIds } from "@/lib/recommendation-scope";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo, normalizeSystemModel } from "@/hooks/use-hardware-info";
@@ -442,6 +442,7 @@ function SmartRecsBreakdown() {
   const { tweaks } = useOptimizationStore();
   const { toast } = useToast();
   const isPro = useProStatus();
+  const installedProfileGames = useInstalledProfileGameIds();
   const native = isNative();
   const [applied, setApplied] = useState(false);
   const [tweakSearch, setTweakSearch] = useState("");
@@ -459,7 +460,7 @@ function SmartRecsBreakdown() {
     dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
   });
   // Same scope and confirmation rules as the dashboard score, so both counts match.
-  const safeIds = getScoredRecommendationIds(recs.ids, presetEligible);
+  const safeIds = getScoredRecommendationIds(recs.ids, presetEligible, installedProfileGames.ids);
   const total = safeIds.length;
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
   const latestRunIsTerminal = native

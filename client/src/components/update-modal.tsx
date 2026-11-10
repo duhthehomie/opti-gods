@@ -259,8 +259,8 @@ function NativeUpdateModal() {
       <div
         className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-1.5 pb-[7vh] pt-16"
       >
-        {/* The splash video is white behind the text, so the text is black. */}
-        <h1 className={`text-[20px] font-black tracking-tight ${videoFailed ? "text-white" : "text-black"}`}>
+        {/* Brand red text on the update splash (white video or black fallback). */}
+        <h1 className="text-[20px] font-black tracking-tight text-red-600">
           {phase === "done" ? (
             <span className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -268,8 +268,8 @@ function NativeUpdateModal() {
             </span>
           ) : headingText}
         </h1>
-        <p className={`text-sm font-semibold ${videoFailed ? "text-zinc-300" : "text-zinc-900"}`}>{subText}</p>
-        <p className={`text-xs font-medium ${videoFailed ? "text-zinc-500" : "text-zinc-700"}`}>{versionLine}</p>
+        <p className="text-sm font-semibold text-red-600">{subText}</p>
+        <p className="text-xs font-medium text-red-500">{versionLine}</p>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-20 h-[3px] bg-zinc-900/80">

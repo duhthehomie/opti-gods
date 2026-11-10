@@ -69,39 +69,46 @@ function Restore-Originals($name) {
 `;
 
 export const CS2_DISCOVERY = String.raw`
+# Steam can list libraries on drives that no longer exist (removed disk, old D:).
+# Join-Path/Test-Path throw "Cannot find drive" for those, so this uses .NET
+# path checks and skips any library that cannot be read.
 function Find-CS2 {
   $roots = @('C:\Program Files (x86)\Steam','C:\Program Files\Steam')
   foreach ($path in @('HKCU:\Software\Valve\Steam','HKLM:\SOFTWARE\WOW6432Node\Valve\Steam','HKLM:\SOFTWARE\Valve\Steam')) {
     if (Test-Path -LiteralPath $path) {
       $key = Get-Item -LiteralPath $path -ErrorAction Stop
-      foreach ($name in @('SteamPath','InstallPath')) { if ($key.GetValueNames() -contains $name) { $roots += [string]$key.GetValue($name) } }
+      foreach ($name in @('SteamPath','InstallPath')) { if ($key.GetValueNames() -contains $name) { $roots += ([string]$key.GetValue($name)).Replace('/','\') } }
     }
   }
   foreach ($drive in [IO.DriveInfo]::GetDrives()) {
     if ($drive.IsReady -and $drive.DriveType -eq 'Fixed') {
-      foreach ($relative in @('Steam','SteamLibrary','Program Files (x86)\Steam')) { $roots += Join-Path $drive.RootDirectory.FullName $relative }
+      foreach ($relative in @('Steam','SteamLibrary','Program Files (x86)\Steam')) { $roots += [IO.Path]::Combine($drive.RootDirectory.FullName, $relative) }
     }
   }
-  foreach ($root in @($roots | Select-Object -Unique)) {
-    $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
-    if (Test-Path -LiteralPath $vdf) {
-      foreach ($line in Get-Content -LiteralPath $vdf -ErrorAction Stop) {
+  foreach ($root in @($roots | Where-Object { $_ } | Select-Object -Unique)) {
+    try {
+      $vdf = [IO.Path]::Combine($root, 'steamapps', 'libraryfolders.vdf')
+      if (-not [IO.File]::Exists($vdf)) { continue }
+      foreach ($line in [IO.File]::ReadAllLines($vdf)) {
         if ($line -match '"path"\s+"([^"]+)"') { $roots += $Matches[1].Replace('\\','\') }
       }
-    }
+    } catch { continue }
   }
-  foreach ($root in @($roots | Select-Object -Unique)) {
-    $installDir = 'Counter-Strike Global Offensive'
-    $manifest = Join-Path $root 'steamapps\appmanifest_730.acf'
-    if (Test-Path -LiteralPath $manifest) {
-      $text = Get-Content -LiteralPath $manifest -Raw -ErrorAction Stop
-      if ($text -match '"installdir"\s+"([^"]+)"') {
-        $installDir = $Matches[1]
-        if ($installDir -match '[\\/:]' -or $installDir -in @('.','..')) { throw 'Invalid CS2 install directory in Steam manifest.' }
+  foreach ($root in @($roots | Where-Object { $_ } | Select-Object -Unique)) {
+    try {
+      if (-not [IO.Directory]::Exists($root)) { continue }
+      $installDir = 'Counter-Strike Global Offensive'
+      $manifest = [IO.Path]::Combine($root, 'steamapps', 'appmanifest_730.acf')
+      if ([IO.File]::Exists($manifest)) {
+        $text = [IO.File]::ReadAllText($manifest)
+        if ($text -match '"installdir"\s+"([^"]+)"') {
+          if ($Matches[1] -match '[\\/:]' -or $Matches[1] -in @('.','..')) { continue }
+          $installDir = $Matches[1]
+        }
       }
-    }
-    $exe = Join-Path $root ("steamapps\common\" + $installDir + '\game\bin\win64\cs2.exe')
-    if (Test-Path -LiteralPath $exe -PathType Leaf) { return $exe }
+      $exe = [IO.Path]::Combine($root, 'steamapps', 'common', $installDir, 'game', 'bin', 'win64', 'cs2.exe')
+      if ([IO.File]::Exists($exe)) { return $exe }
+    } catch { continue }
   }
   return $null
 }
@@ -111,7 +118,7 @@ export const CS2_COMMAND = REGISTRY + CS2_DISCOVERY + String.raw`
 try {
   if (@(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -eq 'cs2' }).Count) { throw 'Close Counter-Strike 2 before applying its profile.' }
   $exe = Find-CS2
-  if (-not $exe) { throw 'CS2 executable not found in Steam libraries. Verify the installation and scan again.' }
+  if (-not $exe) { throw 'Counter-Strike 2 is not installed on this PC (cs2.exe was not found in any Steam library). Nothing was changed.' }
   $stage = 'BACKUP'
   $graphics = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
   $preference = ''
