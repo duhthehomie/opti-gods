@@ -362,7 +362,7 @@ pub fn start_performance_capture(app: AppHandle, phase: String) -> Result<Record
     }
     DIAGNOSTIC_ACTIVE.store(true, Ordering::SeqCst);
     let stop = std::sync::Arc::new(AtomicBool::new(false));
-    let samples = std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let samples = std::sync::Arc::new(parking_lot::Mutex::new(Vec::<LivePerformance>::new()));
     let errors = std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
     let truncated = std::sync::Arc::new(AtomicBool::new(false));
     let worker = {
