@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 include!("nvidia_temperature.rs");
 include!("cpu_sensors.rs");
 include!("diagnostic_capture.rs");
+include!("live_monitor.rs");
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;

@@ -381,6 +381,23 @@ export async function readFpsCapture(): Promise<NativeFpsCaptureStatus | null> {
   return invoke<NativeFpsCaptureStatus>("read_fps_capture");
 }
 
+/** Native 1-second live monitor; keeps sampling while a game has focus. */
+export async function startLiveMonitor(): Promise<void> {
+  if (!isNative()) return;
+  await invoke("start_live_monitor");
+}
+
+export async function stopLiveMonitor(): Promise<void> {
+  if (!isNative()) return;
+  await invoke("stop_live_monitor");
+}
+
+/** Latest live-monitor reading. Cheap: no Windows queries run on this call. */
+export async function readLiveMonitor(): Promise<NativeLivePerformance | null> {
+  if (!isNative()) return null;
+  return invoke<NativeLivePerformance | null>("read_live_monitor");
+}
+
 export interface NativeGamingModeGame {
   name: string;
   pid: number;

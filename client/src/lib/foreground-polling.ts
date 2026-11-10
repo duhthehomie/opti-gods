@@ -37,6 +37,39 @@ export function startForegroundPolling(
   };
 }
 
+/**
+ * Like startForegroundPolling, but keeps running while the window is visible
+ * and unfocused (e.g. on a second monitor while a game has focus). Only for
+ * cheap reads of state that native code already collected.
+ */
+export function startVisiblePolling(task: () => void | Promise<void>, milliseconds: number): () => void {
+  let stopped = false;
+  let busy = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const run = async () => {
+    clearTimeout(timer);
+    timer = undefined;
+    if (stopped || busy || document.hidden) return;
+    busy = true;
+    try { await task(); }
+    catch (error) { console.warn("Live refresh failed.", error); }
+    finally {
+      busy = false;
+      if (!stopped && !document.hidden) timer = setTimeout(() => void run(), milliseconds);
+    }
+  };
+  const changed = () => { if (!document.hidden) void run(); };
+  document.addEventListener("visibilitychange", changed);
+  window.addEventListener("focus", changed);
+  void run();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    document.removeEventListener("visibilitychange", changed);
+    window.removeEventListener("focus", changed);
+  };
+}
+
 let backgroundStyleInstalled = false;
 export function installNativeBackgroundState() {
   if (backgroundStyleInstalled) return;

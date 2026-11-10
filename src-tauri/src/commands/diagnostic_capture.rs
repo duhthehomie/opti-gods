@@ -77,7 +77,7 @@ fn now_ms() -> u64 {
 }
 
 fn diagnostics_keep_sensors() -> bool {
-    DIAGNOSTIC_ACTIVE.load(Ordering::SeqCst)
+    DIAGNOSTIC_ACTIVE.load(Ordering::SeqCst) || LIVE_MONITOR_ACTIVE.load(Ordering::SeqCst)
 }
 
 /// Normalise a parsed sample: split text lists, stamp time, record the PID.
@@ -459,6 +459,7 @@ pub fn shutdown_diagnostics() {
         session.stop.store(true, Ordering::SeqCst);
     }
     DIAGNOSTIC_ACTIVE.store(false, Ordering::SeqCst);
+    stop_live_monitor_inner();
     #[cfg(windows)]
     stop_fps_capture_inner();
 }

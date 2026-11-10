@@ -7,17 +7,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/api-base";
-import { startForegroundPolling } from "@/lib/foreground-polling";
+import { startVisiblePolling } from "@/lib/foreground-polling";
 import {
   isNative,
   performanceCaptureStatus,
   readFpsCapture,
+  readLiveMonitor,
   readLivePerformance,
   savePerformanceRecording,
   scanHardware,
   startFpsCapture,
+  startLiveMonitor,
   startPerformanceCapture,
   stopFpsCapture,
+  stopLiveMonitor,
   stopPerformanceCapture,
 } from "@/lib/tauri-bridge";
 import type {
@@ -215,42 +218,56 @@ export function PerformanceRecorder() {
 
   useEffect(() => { resolveServer(liveGame); }, [liveGame?.server_target, liveGame?.fivem_session_state, liveGame?.game_id, resolveServer]);
 
+  // Native 1-second live monitor: keeps FPS, temperatures and loads live while
+  // the game has focus. Stopped when this page closes.
+  useEffect(() => {
+    if (!native) return;
+    void startLiveMonitor().catch(startError => setLiveError(String(startError)));
+    return () => { void stopLiveMonitor().catch(() => undefined); };
+  }, [native]);
+
+  const readLive = useCallback(async () => {
+    if (!native) return;
+    if (recording?.active) {
+      const status = await performanceCaptureStatus();
+      if (!mountedRef.current || !status) return;
+      setRecording(status.active ? status : null);
+      if (status.latest_error) setLiveError(status.latest_error);
+    }
+    const live = await readLiveMonitor();
+    if (!mountedRef.current || !live) return;
+    setLiveGame(live);
+    setLiveError(live.telemetry_error || "");
+  }, [native, recording?.active]);
+
+  // Manual Refresh: one full Windows sample right now.
   const refreshLive = useCallback(async () => {
     if (!native) return;
     setRefreshing(true);
     try {
-      if (recording?.active) {
-        // The native recorder is already sampling; read its latest row instead of running a second scan.
-        const status = await performanceCaptureStatus();
-        if (!mountedRef.current || !status) return;
-        setRecording(status.active ? status : null);
-        if (status.latest) setLiveGame(status.latest);
-        setLiveError(status.latest?.telemetry_error || status.latest_error || "");
-      } else {
-        const live = await readLivePerformance();
-        if (!mountedRef.current) return;
-        if (!live) throw new Error("Windows telemetry was unavailable.");
-        setLiveGame(live);
-        setLiveError(live.telemetry_error || "");
-      }
+      const live = await readLivePerformance();
+      if (!mountedRef.current) return;
+      if (!live) throw new Error("Windows telemetry was unavailable.");
+      setLiveGame(live);
+      setLiveError(live.telemetry_error || "");
     } catch (refreshError) {
       if (mountedRef.current) setLiveError(String(refreshError));
     } finally {
       if (mountedRef.current) setRefreshing(false);
     }
-  }, [native, recording?.active]);
+  }, [native]);
 
-  // Foreground-only, non-overlapping. While recording, sampling happens natively
-  // even when the game has focus; this only refreshes the display.
+  // Cheap reads of native state, so they continue while the window is visible
+  // but unfocused (e.g. on a second monitor while the game has focus).
   useEffect(() => {
     if (!native) return;
-    return startForegroundPolling(refreshLive, recording?.active ? 2000 : 3000);
-  }, [native, recording?.active, refreshLive]);
+    return startVisiblePolling(readLive, 1000);
+  }, [native, readLive]);
 
-  // Cheap FPS readout (no PowerShell) while capture is on.
+  // FPS readout (no PowerShell) while capture is on.
   useEffect(() => {
     if (!native || !fps?.active) return;
-    return startForegroundPolling(async () => {
+    return startVisiblePolling(async () => {
       const status = await readFpsCapture();
       if (!mountedRef.current || !status) return;
       setFps(status);
@@ -624,7 +641,7 @@ export function PerformanceRecorder() {
                   </Button>
                 )}
                 <span className="text-[10px] text-zinc-600">
-                  {recording?.active ? "Display refreshes every 2 s from the native recorder." : "Checks Windows every 3 s while this window is focused."}
+                  Live every second, including while you're in the game. FPS reads the game process in menus and on servers.
                 </span>
               </div>
               {fpsConsentOpen && (

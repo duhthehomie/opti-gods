@@ -136,7 +136,7 @@ commands.allow = ["save_performance_recording"]
 [[permission]]
 identifier = "allow-fps-capture"
 description = "Admin recorder: start, read and stop explicit PresentMon frame capture (pinned official binary)."
-commands.allow = ["start_fps_capture", "stop_fps_capture", "read_fps_capture"]
+commands.allow = ["start_fps_capture", "stop_fps_capture", "read_fps_capture", "start_live_monitor", "stop_live_monitor", "read_live_monitor"]
 
 [[permission]]
 identifier = "allow-performance-capture"

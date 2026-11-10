@@ -205,7 +205,7 @@ fn data_dir() -> std::path::PathBuf {
 // ─── Native process helpers (shared by agent and app fallback) ────────────────
 
 #[cfg(windows)]
-mod native {
+pub(crate) mod native {
     use windows::core::PWSTR;
     use windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessCommandLineInformation};
     use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, UNICODE_STRING};

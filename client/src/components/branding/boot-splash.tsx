@@ -62,7 +62,7 @@ export function BootSplash() {
               letterSpacing: "0.3em",
               fontSize: 13,
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.7)",
+              color: "#e10600",
               textShadow: "0 0 12px rgba(255,30,30,0.5)",
             }}
           >
