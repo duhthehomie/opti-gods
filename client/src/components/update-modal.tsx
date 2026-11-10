@@ -258,18 +258,18 @@ function NativeUpdateModal() {
 
       <div
         className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-1.5 pb-[7vh] pt-16"
-        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))" }}
       >
-        <h1 className="text-[20px] font-black tracking-tight text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
+        {/* The splash video is white behind the text, so the text is black. */}
+        <h1 className={`text-[20px] font-black tracking-tight ${videoFailed ? "text-white" : "text-black"}`}>
           {phase === "done" ? (
             <span className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-green-400" />
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
               {headingText}
             </span>
           ) : headingText}
         </h1>
-        <p className="text-sm font-medium text-zinc-200">{subText}</p>
-        <p className="text-xs text-zinc-400">{versionLine}</p>
+        <p className={`text-sm font-semibold ${videoFailed ? "text-zinc-300" : "text-zinc-900"}`}>{subText}</p>
+        <p className={`text-xs font-medium ${videoFailed ? "text-zinc-500" : "text-zinc-700"}`}>{versionLine}</p>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-20 h-[3px] bg-zinc-900/80">
