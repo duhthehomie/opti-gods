@@ -6248,6 +6248,29 @@ Start-Sleep 2
     res.json(await storage.getMarketingAttributionReport());
   });
 
+  // Sum of successful live Stripe charges minus refunds, cached for 5 minutes.
+  let stripeRevenueCache: { at: number; value: { amount: number | null; payments: number; error: string | null } } | null = null;
+  async function getStripeRevenue(): Promise<{ amount: number | null; payments: number; error: string | null }> {
+    if (stripeRevenueCache && Date.now() - stripeRevenueCache.at < 5 * 60_000) return stripeRevenueCache.value;
+    try {
+      // Connected Stripe integration, not STRIPE_SECRET_KEY (that key expired).
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+      let cents = 0;
+      let payments = 0;
+      for await (const charge of stripe.charges.list({ limit: 100 })) {
+        if (charge.status !== "succeeded" || !charge.paid || charge.currency !== "usd") continue;
+        cents += charge.amount - charge.amount_refunded;
+        payments += 1;
+      }
+      const value = { amount: Math.round(cents / 100), payments, error: null };
+      stripeRevenueCache = { at: Date.now(), value };
+      return value;
+    } catch (error: any) {
+      return { amount: null, payments: 0, error: `Stripe could not be read: ${error?.message ?? String(error)}` };
+    }
+  }
+
   // Admin — aggregate stats
   app.get('/api/admin/stats', async (req, res) => {
     if (!checkAdminKey(req, res)) return;
@@ -6276,7 +6299,10 @@ Start-Sleep 2
     // Directly redeemed codes (customer entered code manually, not via email path) — default $15 per code
     const directRevenue = codes.filter(c => c.usedAt && !reservedCodeIds.has(c.id)).length * 15;
     const codeRevenue = emailRevenue + directRevenue;
-    const computedRevenue = codeRevenue + manualTotal;
+    // Real money only: Stripe card payments plus the CashApp/PayPal log.
+    // Redeemed codes are not revenue (giveaways and tests were counted as $15 each).
+    const stripe = await getStripeRevenue();
+    const computedRevenue = (stripe.amount ?? 0) + manualTotal;
     const revenueOverride = settings?.revenueOverride ?? null;
     const revenueEstimate = revenueOverride ?? computedRevenue;
     // usedCodes includes partial-state (usedByIp only) so the dashboard doesn't double-count
@@ -6297,6 +6323,9 @@ Start-Sleep 2
       manualRevenue: manualTotal,
       emailRevenue,
       directRevenue,
+      stripeRevenue: stripe.amount,
+      stripePayments: stripe.payments,
+      stripeError: stripe.error,
       visits: visitStats,
     });
   });
@@ -7805,8 +7834,10 @@ PERFORMANCE BENCHMARKS (leaq's rig: GTX 1650 Super + Ryzen 5 3500 + 32GB Win10):
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          max_tokens: 1024,
+          // llama-3.3-70b-versatile is not available to this Groq key (model_not_found).
+          model: "openai/gpt-oss-20b",
+          reasoning_effort: "low",
+          max_tokens: 2048,
           stream: true,
           messages: [
             { role: "system", content: aetherPrompt },
@@ -8041,7 +8072,8 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
       userContent = message;
     }
 
-    const model = imageBase64 ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile is not available to this Groq key (model_not_found).
+    const model = imageBase64 ? "meta-llama/llama-4-scout-17b-16e-instruct" : "openai/gpt-oss-20b";
 
     try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -8052,7 +8084,8 @@ You are THE authority. Be direct, specific, and authoritative. Gamers need real 
         },
         body: JSON.stringify({
           model,
-          max_tokens: 1024,
+          ...(imageBase64 ? {} : { reasoning_effort: "low" }),
+          max_tokens: 2048,
           stream: true,
           messages: [
             { role: "system", content: systemPrompt },

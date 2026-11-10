@@ -1,6 +1,7 @@
 import { getMissingRecommendationIds } from "@/lib/missing-recommendations";
 import { getProValidationActionIds } from "@/lib/pro-validation-actions";
-import { getPendingNvidiaPresetIds, canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
+import { getPendingNvidiaPresetIds, canRunNvidiaPreset, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
+import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds } from "@/lib/recommendation-scope";
 import { apiUrl } from "@/lib/api-base";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useHardwareInfo, saveScannedInfo, normalizeSystemModel } from "@/hooks/use-hardware-info";
@@ -17,7 +18,7 @@ import {
   Cpu, MonitorPlay, MemoryStick, HardDrive, Activity, Sparkles,
   Loader2, Wifi, Thermometer, Monitor, Wind, RefreshCw,
   AlertTriangle, CheckCircle2, Zap, ScanLine, ChevronRight,
-  Download, Upload, X, MonitorCheck, Radio,
+  Download, Upload, X, MonitorCheck, Radio, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -443,6 +444,7 @@ function SmartRecsBreakdown() {
   const isPro = useProStatus();
   const native = isNative();
   const [applied, setApplied] = useState(false);
+  const [tweakSearch, setTweakSearch] = useState("");
   const [confirmedAppliedState, setConfirmedAppliedState] = useState<Record<string, boolean>>({});
   const [nativeAppliedStateReady, setNativeAppliedStateReady] = useState(!native);
   const [nativeAppliedStateError, setNativeAppliedStateError] = useState(false);
@@ -456,10 +458,8 @@ function SmartRecsBreakdown() {
     native, pro: isPro, hardwareScanned: hw.scanned,
     dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
   });
-  const safeIds = getEligibleSmartRecommendationIds(
-    [...Array.from(recs.ids), ...(presetEligible ? ["NvidiaControlPanelSettings"] : [])],
-    id => id === "NvidiaControlPanelSettings" ? presetEligible : getTweakCompatibility(id).ok,
-  );
+  // Same scope and confirmation rules as the dashboard score, so both counts match.
+  const safeIds = getScoredRecommendationIds(recs.ids, presetEligible);
   const total = safeIds.length;
   const expertIds = Array.from(recs.ids).filter(id => _expertIdSet.has(id) && id in tweaks);
   const latestRunIsTerminal = native
@@ -478,9 +478,6 @@ function SmartRecsBreakdown() {
     ? lastNativeRun!.items.filter(item => item.status === "failed").length
     : 0;
   const nativeAppliedStateUsable = !native || (nativeAppliedStateReady && !nativeAppliedStateError);
-  const latestRunAppliedIds = new Set(
-    lastNativeRun?.items.filter(item => item.status === "applied").map(item => item.id) ?? [],
-  );
   const latestRunSkippedIds = new Set(
     lastNativeRun?.items.filter(item => item.status === "skipped" && safeIds.includes(item.id)).map(item => item.id) ?? [],
   );
@@ -493,8 +490,18 @@ function SmartRecsBreakdown() {
     runItems: lastNativeRun?.items,
     forcePendingIds: pendingNvidiaIds,
   });
+  const countedConfirmedIds = getCountedConfirmedIds(
+    getConfirmedRecommendationIds({
+      detected: confirmedAppliedState,
+      runItems: lastNativeRun?.items,
+      nvidiaPresetEligible: presetEligible,
+      nvidiaPresetVerified: isCurrentNvidiaPresetVerified(),
+    }),
+    safeIds,
+    isPro,
+  );
   const alreadyOnCount = native
-    ? safeIds.filter(id => confirmedAppliedState[id] || latestRunAppliedIds.has(id)).length
+    ? safeIds.filter(id => countedConfirmedIds.has(id)).length
     : safeIds.filter(id => tweaks[id]).length;
   const actionIds = Array.from(new Set([
     ...missingSafeIds,
@@ -652,8 +659,33 @@ function SmartRecsBreakdown() {
           <span className="text-[10px] font-bold text-zinc-500">{recs.ids.size} tweaks · {recs.profile}</span>
         </div>
         <p className="mt-1 text-[10px] text-zinc-600">Each description explains the specific Windows change for this recommendation.</p>
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 focus-within:border-red-500/50">
+          <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-red-400" />
+          <input
+            type="search"
+            value={tweakSearch}
+            onChange={event => setTweakSearch(event.target.value)}
+            placeholder="Search tweak"
+            aria-label="Search AI-selected tweaks"
+            data-testid="input-ai-tweak-search"
+            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+          />
+          {tweakSearch && <button type="button" onClick={() => setTweakSearch("")} aria-label="Clear search" className="rounded p-1 text-zinc-500 hover:text-white"><X aria-hidden="true" className="h-4 w-4" /></button>}
+        </div>
+        {(() => {
+          const query = tweakSearch.trim().toLowerCase();
+          const rows = Array.from(recs.ids)
+            .filter(id => {
+              if (!query) return true;
+              const meta = TWEAK_REGISTRY.find(tweak => tweak.id === id);
+              return [id, meta?.title, meta?.plainEnglish, meta?.description, meta?.category].some(text => text?.toLowerCase().includes(query));
+            });
+          return (
+            <>
+              {query && <p role="status" className="mt-1.5 text-[10px] text-zinc-500" data-testid="text-ai-tweak-search-count">{rows.length} of {recs.ids.size} tweaks match</p>}
+              {query && rows.length === 0 && <p className="mt-1.5 rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[11px] text-zinc-500">No AI-selected tweaks match this search.</p>}
         <div className="mt-1.5 max-h-96 space-y-1 overflow-y-auto pr-1">
-          {Array.from(recs.ids)
+          {rows
             .sort((a, b) => (TWEAK_REGISTRY.find(t => t.id === a)?.title || a).localeCompare(TWEAK_REGISTRY.find(t => t.id === b)?.title || b))
             .map(id => {
               const meta = TWEAK_REGISTRY.find(tweak => tweak.id === id);
@@ -666,6 +698,9 @@ function SmartRecsBreakdown() {
               );
             })}
         </div>
+            </>
+          );
+        })()}
       </div>
     </motion.div>
     </>

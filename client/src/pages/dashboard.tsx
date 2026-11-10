@@ -6,6 +6,7 @@ import { apiUrl } from "@/lib/api-base";
 import { createRestorePoint, isNative } from "@/lib/tauri-bridge";
 import { canRunNvidiaPreset, getFullOptimizeNvidiaPresetDecision, NVIDIA_PRESET_REQUEUE_RELEASE_KEY, shouldQueueNvidiaPresetReapplyOnce, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { getAppliedTweakState, getAppliedTweakSources } from "@/lib/applied-tweak-state";
+import { getConfirmedRecommendationIds, getCountedConfirmedIds, getScoredRecommendationIds, readBest15Ids } from "@/lib/recommendation-scope";
 import { WindowsProcessCount } from "@/components/windows-process-count";
 import { motion } from "framer-motion";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -55,16 +56,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-function readBest15Ids(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(BEST_15_IDS_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 // Feature categories
 const FEATURES = [
@@ -788,45 +779,31 @@ export default function Dashboard() {
   // plus the runner's confirmed-success ledger. The detector covers only a
   // small read-only subset, so it cannot be the sole source after a large run.
   const registryIds = new Set(TWEAK_REGISTRY.map(tweak => tweak.id));
-  const matchedRecommendedIds = Array.from(new Set([...getEligibleSmartRecommendationIds(
-    [...Array.from(smartRecs.ids).filter(id => id !== NVIDIA_PRESET_ACTION_ID), ...(nvidiaPresetEligible ? [NVIDIA_PRESET_ACTION_ID] : [])],
-    id => id === NVIDIA_PRESET_ACTION_ID ? nvidiaPresetEligible : getTweakCompatibility(id).ok,
-  ), ...(nvidiaPresetEligible && getTweakCompatibility("EnableNvidiaMSIPro").ok ? ["EnableNvidiaMSIPro"] : [])]));
+  const matchedRecommendedIds = getScoredRecommendationIds(smartRecs.ids, nvidiaPresetEligible);
   const matchedRecommendedSet = new Set(matchedRecommendedIds);
   const matchedRecommendedTweaks = TWEAK_REGISTRY.filter(tweak => matchedRecommendedSet.has(tweak.id));
   const totalTweaks = matchedRecommendedTweaks.length;
-  const confirmedIds = native
-    ? new Set(Object.keys(detectedNativeTweaks).filter(id => detectedNativeTweaks[id] && registryIds.has(id)))
-    : new Set<string>();
-  const liveRunActive = native
-    && Boolean(lastNativeRun)
-    && ["running", "stopping"].includes(lastNativeRun!.status);
-  if (liveRunActive) {
-    lastNativeRun!.items
-      .filter(item => item.status === "applied" && registryIds.has(item.id) && detectedNativeTweaks[item.id] !== false)
-      .forEach(item => confirmedIds.add(item.id));
-  }
-  if (native && lastNativeRun) {
-    lastNativeRun.items
-      .filter(item => item.status === "applied" && registryIds.has(item.id) && detectedNativeTweaks[item.id] !== false)
-      .forEach(item => confirmedIds.add(item.id));
-  }
   // Native totals combine read-only Windows detection with successful app-run
-  if (nvidiaPresetEligible && isCurrentNvidiaPresetVerified()) confirmedIds.add(NVIDIA_PRESET_ACTION_ID);
-  else confirmedIds.delete(NVIDIA_PRESET_ACTION_ID);
+  const confirmedIds = native
+    ? getConfirmedRecommendationIds({
+      detected: detectedNativeTweaks,
+      runItems: lastNativeRun?.items,
+      nvidiaPresetEligible,
+      nvidiaPresetVerified: isCurrentNvidiaPresetVerified(),
+    })
+    : new Set<string>();
   // history; browser toggle intent alone is never treated as an applied change.
   const allActiveIdsForDisplay = native
     ? confirmedIds
     : new Set(Object.entries(tweaks)
       .filter(([id, enabled]) => enabled && registryIds.has(id))
       .map(([id]) => id));
-  const savedBest15Ids = readBest15Ids();
   const freeAllowedIds = matchedRecommendedIds
-    .filter(id => savedBest15Ids.length === 0 || savedBest15Ids.includes(id))
+    .filter(id => { const saved = readBest15Ids(); return saved.length === 0 || saved.includes(id); })
     .slice(0, 15);
-  const activeIdsForDisplay = isPro
-    ? allActiveIdsForDisplay
-    : new Set(freeAllowedIds.filter(id => allActiveIdsForDisplay.has(id)));
+  const activeIdsForDisplay = native
+    ? getCountedConfirmedIds(allActiveIdsForDisplay, matchedRecommendedIds, isPro)
+    : isPro ? allActiveIdsForDisplay : new Set(freeAllowedIds.filter(id => allActiveIdsForDisplay.has(id)));
   const latestLargeRunIds = latestRunIsTerminal && lastNativeRun
     ? Array.from(new Set(lastNativeRun.items
       .map(item => item.id)

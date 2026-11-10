@@ -3399,6 +3399,7 @@ export default function Admin() {
     revenueEstimate: number; codeRevenue: number; manualRevenue: number;
     emailRevenue: number; directRevenue: number;
     computedRevenue?: number; revenueOverride?: number | null;
+    stripeRevenue?: number | null; stripePayments?: number; stripeError?: string | null;
     visits: { total: number; today: number; thisWeek: number };
   }>({
     queryKey: ["/api/admin/stats", key],
@@ -4406,14 +4407,17 @@ export default function Admin() {
                   <p className="text-[10px] text-emerald-800 mt-1">Set by you · calculated total ${stats.computedRevenue ?? 0}</p>
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {stats?.stripeError ? (
+                    <span className="text-[10px] text-red-300 bg-red-500/10 border border-red-500/30 rounded px-2 py-0.5" data-testid="text-stripe-revenue-error">
+                      {stats.stripeError}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5" data-testid="text-stripe-revenue">
+                      ${stats?.stripeRevenue ?? 0} Stripe · {stats?.stripePayments ?? 0} payments
+                    </span>
+                  )}
                   <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
-                    ${stats?.codeRevenue ?? 0} from codes
-                  </span>
-                  <span className="text-[10px] text-emerald-800 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
-                    ${stats?.manualRevenue ?? 0} CashApp/PayPal
-                  </span>
-                  <span className="text-[10px] text-emerald-900 bg-emerald-500/5 border border-emerald-500/10 rounded px-2 py-0.5">
-                    {stats?.emailRevenue ?? 0} email · {stats?.directRevenue ?? 0} direct
+                    ${stats?.manualRevenue ?? 0} CashApp/PayPal logged
                   </span>
                 </div>
               </div>

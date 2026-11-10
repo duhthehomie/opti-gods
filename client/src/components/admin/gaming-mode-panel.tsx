@@ -330,9 +330,9 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 ))}
               </div>
             ) : (
-              <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Checked only while a game is running"}</div>
+              <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Music apps are slowed or protected only while a game is running"}</div>
             )}
-            <div className="mt-1 text-[10px] text-zinc-600">Play/pause is read instantly from Windows media controls while Opti Gods is open. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
+            <div className="mt-1 text-[10px] text-zinc-600">Now Playing and its controls work any time, with or without a game. While a game runs, the song that is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
           </div>
         </div>
       )}
