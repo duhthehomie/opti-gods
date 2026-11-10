@@ -132,6 +132,7 @@ pub fn run() {
             commands::task_manager::get_startup_value,
             commands::game_detection::detect_installed_games,
             commands::gaming_mode::gaming_mode_status,
+            commands::gaming_mode::foreground_app,
             commands::now_playing::read_now_playing,
             commands::now_playing::media_control,
             commands::gaming_mode::enable_gaming_mode,

@@ -479,6 +479,14 @@ export async function gamingModeStatus(): Promise<NativeGamingModeStatus | null>
   return invoke<NativeGamingModeStatus>("gaming_mode_status");
 }
 
+/** The app in front right now (what the user is tabbed into). pid 0: none for a moment. */
+export interface NativeForegroundApp { pid: number; exe: string }
+
+export async function readForegroundApp(): Promise<NativeForegroundApp | null> {
+  if (!isNative()) return null;
+  return invoke<NativeForegroundApp>("foreground_app");
+}
+
 export async function enableGamingMode(): Promise<NativeGamingModeStatus> {
   if (!isNative()) throw new Error("Gaming Mode requires the Windows app.");
   return invoke<NativeGamingModeStatus>("enable_gaming_mode");

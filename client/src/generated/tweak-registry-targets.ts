@@ -3073,28 +3073,5 @@ export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = {
    "type": "dword",
    "value": 0
   }
- ],
- "su_edge_startup": [
-  {
-   "hive": "HKLM",
-   "path": "SOFTWARE\\Policies\\Microsoft\\Edge",
-   "name": "StartupBoostEnabled",
-   "type": "dword",
-   "value": 0
-  },
-  {
-   "hive": "HKCU",
-   "path": "SOFTWARE\\Policies\\Microsoft\\Edge",
-   "name": "StartupBoostEnabled",
-   "type": "dword",
-   "value": 0
-  },
-  {
-   "hive": "HKLM",
-   "path": "SOFTWARE\\Policies\\Microsoft\\Edge",
-   "name": "BackgroundModeEnabled",
-   "type": "dword",
-   "value": 0
-  }
  ]
 };

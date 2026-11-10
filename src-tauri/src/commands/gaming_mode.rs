@@ -1116,6 +1116,38 @@ pub async fn gaming_mode_status() -> GamingModeStatus {
     { GamingModeStatus::default() }
 }
 
+/// The app whose window is in front (what the user is tabbed into).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ForegroundApp {
+    pub pid: u32,
+    /// File name such as FiveM_b3258_GTAProcess.exe; empty when Windows hides it.
+    pub exe: String,
+}
+
+#[tauri::command]
+pub async fn foreground_app() -> Result<ForegroundApp, String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+        let window = unsafe { GetForegroundWindow() };
+        if window.0.is_null() {
+            // Happens briefly while Windows switches windows or the lock screen is up.
+            return Ok(ForegroundApp::default());
+        }
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(window, Some(&mut pid)) };
+        if pid == 0 {
+            return Err("Windows did not report which app is in front.".into());
+        }
+        let exe = native::image_path(pid)
+            .and_then(|path| path.rsplit(['\\', '/']).next().map(str::to_string))
+            .unwrap_or_default();
+        Ok(ForegroundApp { pid, exe })
+    }
+    #[cfg(not(windows))]
+    { Err("Tab detection requires the Windows app.".into()) }
+}
+
 #[tauri::command]
 pub async fn enable_gaming_mode() -> Result<GamingModeStatus, String> {
     #[cfg(windows)]

@@ -47,6 +47,26 @@ Write-Output '[OK] Steam overlay preference disabled and read back. Restart Stea
 if (-not (Test-Path -LiteralPath $policy)) { New-Item -Path $policy -Force -ErrorAction Stop | Out-Null }
 ` + original;
   }
+  if (id === "su_edge_startup") {
+    // The Edge policy folders do not exist on most PCs; Set-ItemProperty cannot create
+    // them, and the old command hid that failure behind SilentlyContinue.
+    return String.raw`$runPath = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+if (Test-Path -LiteralPath $runPath) {
+  $run = Get-ItemProperty -LiteralPath $runPath -ErrorAction Stop
+  foreach ($v in @('Microsoft Edge','MicrosoftEdge','msedge')) { if ($run.PSObject.Properties[$v]) { Remove-ItemProperty -LiteralPath $runPath -Name $v -ErrorAction Stop } }
+}
+$writes = @(
+  @('HKLM:\SOFTWARE\Policies\Microsoft\Edge','StartupBoostEnabled'),
+  @('HKLM:\SOFTWARE\Policies\Microsoft\Edge','BackgroundModeEnabled'),
+  @('HKCU:\SOFTWARE\Policies\Microsoft\Edge','StartupBoostEnabled')
+)
+foreach ($w in $writes) {
+  if (-not (Test-Path -LiteralPath $w[0])) { New-Item -Path $w[0] -Force -ErrorAction Stop | Out-Null }
+  New-ItemProperty -LiteralPath $w[0] -Name $w[1] -Value 0 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+  if ((Get-ItemPropertyValue -LiteralPath $w[0] -Name $w[1] -ErrorAction Stop) -ne 0) { throw "Edge policy $($w[1]) did not read back as 0." }
+}
+Write-Output '[OK] Edge Startup Boost and background mode turned off by policy; all values read back. Edge still opens normally.'`;
+  }
   if (id === "Win11Widgets") {
     return String.raw`$policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'
 $taskbar = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'

@@ -5,7 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { startVisiblePolling } from "@/lib/foreground-polling";
 import { NowPlayingCard } from "./now-playing-card";
 import {
-  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readNowPlaying, type NativeGamingModeStatus,
+  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readForegroundApp, readNowPlaying,
+  type NativeForegroundApp, type NativeGamingModeStatus,
 } from "@/lib/tauri-bridge";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -47,6 +48,22 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
         setDiscordCall(null);
       }
     }, 1000);
+  }, [native]);
+
+  // Which app is in front, to show whether the game is tabbed in or out.
+  const [foreground, setForeground] = useState<NativeForegroundApp | null>(null);
+  const [foregroundError, setForegroundError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!native) return;
+    return startVisiblePolling(async () => {
+      try {
+        setForeground(await readForegroundApp());
+        setForegroundError(null);
+      } catch (error) {
+        setForeground(null);
+        setForegroundError(String(error));
+      }
+    }, 500);
   }, [native]);
 
   const refresh = useCallback(async () => {
@@ -127,6 +144,12 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
   const on = Boolean(status?.enabled && status.agent_running);
   const broken = Boolean(status?.enabled && !status.agent_running);
   const games = status?.games ?? [];
+  const isFiveM = (name: string) => /^fivem/i.test(name);
+  // FiveM switches between its launcher and game processes; any FiveM window in front counts.
+  const tabbedIn = (game: { pid: number; name: string }) => Boolean(
+    foreground && foreground.pid > 0 && (foreground.pid === game.pid || (isFiveM(game.name) && isFiveM(foreground.exe))),
+  );
+  const anyTabbedIn = games.some(tabbedIn);
   const lastError = status?.errors.at(-1);
 
   return (
@@ -189,11 +212,32 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
 
       {on && (
         <div className="relative mt-3 grid gap-2 sm:grid-cols-2">
-          <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2">
-            <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-emerald-500"><Radar className="h-3 w-3" />Active game</div>
+          <div
+            data-testid="card-gaming-mode-active-game"
+            className={cn(
+              "rounded-lg border px-3 py-2 transition-all duration-300",
+              anyTabbedIn
+                ? "border-red-500 bg-red-950/50 shadow-[0_0_22px_rgba(239,68,68,0.6),inset_0_0_18px_rgba(239,68,68,0.25)] ring-1 ring-red-500/60"
+                : "border-emerald-500/20 bg-black/40",
+            )}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className={cn("flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest", anyTabbedIn ? "text-red-400" : "text-emerald-500")}><Radar className="h-3 w-3" />Active game</div>
+              {games.length > 0 && (foregroundError ? (
+                <span className="text-[9px] text-amber-400" title={foregroundError} data-testid="text-gaming-mode-tab-error">Tab state unavailable</span>
+              ) : anyTabbedIn ? (
+                <span data-testid="badge-gaming-mode-tabbed-in" className="flex items-center gap-1.5 rounded-md border border-red-400 bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_14px_rgba(239,68,68,0.9)]">
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-white" />Tabbed in
+                </span>
+              ) : (
+                <span data-testid="badge-gaming-mode-tabbed-out" className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  Tabbed out
+                </span>
+              ))}
+            </div>
             {games.length ? games.map(game => (
               <div key={game.pid} className="mt-1 text-sm" data-testid={`gaming-mode-game-${game.pid}`}>
-                <span className="font-bold text-white">{/^fivem_/i.test(game.name) ? "FiveM" : game.name.replace(/\.exe$/i, "")}</span>
+                <span className={cn("font-bold", tabbedIn(game) ? "text-red-100 drop-shadow-[0_0_6px_rgba(239,68,68,0.9)]" : "text-white")}>{/^fivem_/i.test(game.name) ? "FiveM" : game.name.replace(/\.exe$/i, "")}</span>
                 <span className={cn("ml-2 font-mono text-xs", game.priority_verified ? "text-emerald-400" : "text-red-400")}>
                   {game.priority_verified ? "High priority ✓" : `${game.priority} (not raised)`}
                 </span>

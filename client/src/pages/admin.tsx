@@ -3480,8 +3480,13 @@ export default function Admin() {
   const saveRevenue = useMutation({
     mutationFn: async (amount: number | null) => {
       const r = await fetch(apiUrl("/api/admin/revenue-override"), { method: "PUT", headers, body: JSON.stringify({ amount }) });
+      // A website without this route answers with its HTML page and status 200.
+      if (!(r.headers.get("content-type") ?? "").includes("application/json")) {
+        throw new Error("The live website does not have revenue editing yet. Publish the website, then try again.");
+      }
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || `Server returned ${r.status}`);
+      if (!("revenueOverride" in body)) throw new Error("The website did not confirm the new total.");
       return body as { revenueOverride: number | null };
     },
     onSuccess: (body) => {
