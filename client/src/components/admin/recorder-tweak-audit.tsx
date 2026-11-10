@@ -63,25 +63,51 @@ type ValueCheck = { key: string; current: string; needed: string; ok: boolean };
 const regKey = (t: TweakRegistryTarget) => `${t.hive}\\${t.path}\\${t.name}`.toLowerCase();
 const shownValue = (t: TweakRegistryTarget) => (t.type === "sz" ? `"${t.value}"` : `${t.value} (${t.type.toUpperCase()})`);
 
-function checkValue(target: TweakRegistryTarget, read: RegistryReadResult | undefined): ValueCheck {
+/** Windows names a key's default value "(Default)" in tools, but reads it by the empty name. */
+const readName = (name: string) => (name === "(Default)" ? "" : name);
+
+/** Values other target tweaks also write for the same key. Two tweaks that disagree
+ *  (e.g. TdrDelay 8 vs 10) must not make one of them look missing forever. */
+type AcceptedValues = Map<string, Array<number | string>>;
+
+function sameValue(target: TweakRegistryTarget, wanted: number | string, read: RegistryReadResult): boolean {
+  if (target.type === "sz") return String(read.value).trim().toLowerCase() === String(wanted).trim().toLowerCase();
+  if (read.kind === "dword" || read.kind === "qword") return Number(read.value) === Number(wanted);
+  // Control Panel values (mouse, desktop timeouts, font smoothing) are stored by
+  // Windows as text such as "1000"; the same number as text is the same setting.
+  if (read.kind === "sz") return /^\s*-?\d+\s*$/.test(String(read.value)) && Number(read.value) === Number(wanted);
+  return false;
+}
+
+function checkValue(target: TweakRegistryTarget, read: RegistryReadResult | undefined, accepted?: AcceptedValues): ValueCheck {
   const key = `${target.hive}\\${target.path} · ${target.name}`;
   const needed = shownValue(target);
+  // Windows treats an absent LargeSystemCache as 0 (the gaming default).
+  if ((!read || read.kind === "missing") && target.name === "LargeSystemCache" && Number(target.value) === 0) {
+    return { key, current: "not set (Windows default 0)", needed, ok: true };
+  }
   if (!read || read.kind === "missing") return { key, current: "not set", needed, ok: false };
   if (read.kind === "error" || read.kind === "other") return { key, current: read.kind === "error" ? `unreadable (${String(read.value)})` : "other type", needed, ok: false };
-  const ok = target.type === "sz"
-    ? String(read.value).trim().toLowerCase() === String(target.value).trim().toLowerCase()
-    : (read.kind === "dword" || read.kind === "qword") && Number(read.value) === Number(target.value);
+  const wanted = accepted?.get(regKey(target)) ?? [target.value];
+  let ok = wanted.some(value => sameValue(target, value, read));
+  // NTFS last-access: Windows may rewrite 1 as 0x80000001/0x80000003 (system managed).
+  // Any odd value means last-access updates are off, which is what the tweak needs.
+  if (!ok && target.name === "NtfsDisableLastAccessUpdate" && Number(target.value) === 1 && (read.kind === "dword" || read.kind === "qword")) {
+    ok = (Number(read.value) & 1) === 1;
+  }
   return { key, current: read.kind === "sz" ? `"${read.value}"` : String(read.value), needed, ok };
 }
 
 /** .reg text for the values that are not set as needed (copied, never applied here). */
 function regFile(targets: TweakRegistryTarget[]): string {
-  const byKey = new Map<string, string[]>();
+  const byKey = new Map<string, { header: string; rows: Map<string, string> }>();
   for (const t of targets) {
     const header = `[${t.hive === "HKLM" ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"}\\${t.path}]`;
-    const name = `"${t.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    const name = t.name === "(Default)" ? "@" : `"${t.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    // Control Panel values are text in Windows; writing them as DWORD breaks them.
+    const asText = t.type === "sz" || /^control panel\\/i.test(t.path);
     let data: string;
-    if (t.type === "sz") data = `"${String(t.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    if (asText) data = `"${String(t.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     else if (t.type === "dword") data = `dword:${(Number(t.value) >>> 0).toString(16).padStart(8, "0")}`;
     else {
       let v = BigInt(t.value);
@@ -89,9 +115,11 @@ function regFile(targets: TweakRegistryTarget[]): string {
       for (let i = 0; i < 8; i++) { bytes.push((v & BigInt(255)).toString(16).padStart(2, "0")); v >>= BigInt(8); }
       data = `hex(b):${bytes.join(",")}`;
     }
-    byKey.set(header, [...(byKey.get(header) ?? []), `${name}=${data}`]);
+    const group = byKey.get(header.toLowerCase()) ?? { header, rows: new Map<string, string>() };
+    group.rows.set(name.toLowerCase(), `${name}=${data}`);
+    byKey.set(header.toLowerCase(), group);
   }
-  return ["Windows Registry Editor Version 5.00", ...Array.from(byKey, ([header, rows]) => `\r\n${header}\r\n${rows.join("\r\n")}`)].join("\r\n") + "\r\n";
+  return ["Windows Registry Editor Version 5.00", ...Array.from(byKey.values(), ({ header, rows }) => `\r\n${header}\r\n${Array.from(rows.values()).join("\r\n")}`)].join("\r\n") + "\r\n";
 }
 
 type Status = "applied" | "missing" | "unverified";
@@ -154,7 +182,7 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
     const [liveResult, historyResult, registryResult] = await Promise.allSettled([
       detectAppliedTweaks(),
       getRecordedAppliedTweaks(),
-      queryList.length ? readRegistryValues(queryList.map(({ hive, path, name }) => ({ hive, path, name }))) : Promise.resolve([]),
+      queryList.length ? readRegistryValues(queryList.map(({ hive, path, name }) => ({ hive, path, name: readName(name) }))) : Promise.resolve([]),
     ]);
     if (registryResult.status === "fulfilled") {
       setRegistry(new Map(queryList.map((target, index) => [regKey(target), registryResult.value[index]])));
@@ -175,11 +203,23 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
   // Read once on open and again when the detected game or target list changes.
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const accepted = useMemo(() => {
+    const map: AcceptedValues = new Map();
+    for (const id of targetIds) {
+      for (const t of TWEAK_REGISTRY_TARGETS[id] ?? []) {
+        const list = map.get(regKey(t)) ?? [];
+        if (!list.some(v => String(v) === String(t.value))) list.push(t.value);
+        map.set(regKey(t), list);
+      }
+    }
+    return map;
+  }, [targetIds]);
+
   const rows = useMemo(() => targetIds.map(id => {
     const tweak = TWEAK_BY_ID.get(id);
     const live = detected?.[id];
     const targets = TWEAK_REGISTRY_TARGETS[id] ?? [];
-    const checks = registry && targets.length ? targets.map(t => checkValue(t, registry.get(regKey(t)))) : [];
+    const checks = registry && targets.length ? targets.map(t => checkValue(t, registry.get(regKey(t)), accepted)) : [];
     // Native detector first; otherwise every registry value the tweak writes must match.
     const status: Status = live === true ? "applied"
       : live === false ? "missing"
@@ -193,14 +233,14 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
       forGame: perGameIds.has(id),
       status,
       checks: status === "missing" ? wrong : [],
-      missingTargets: status === "missing" ? targets.filter(t => !checkValue(t, registry?.get(regKey(t))).ok) : [],
+      missingTargets: status === "missing" ? targets.filter(t => !checkValue(t, registry?.get(regKey(t)), accepted).ok) : [],
       registry: status === "missing" && !wrong.length ? registryTarget(tweak) : null,
       history: history?.[id] ?? 0,
     };
   }).sort((a, b) => {
     const order: Record<Status, number> = { missing: 0, unverified: 1, applied: 2 };
     return order[a.status] - order[b.status] || a.title.localeCompare(b.title);
-  }), [targetIds, detected, history, registry, perGameIds]);
+  }), [targetIds, detected, history, registry, perGameIds, accepted]);
 
   const counts = useMemo(() => ({
     applied: rows.filter(r => r.status === "applied").length,
