@@ -45,6 +45,8 @@ type RecorderError = { at: string; phase: RecorderPhase; message: string };
 type RecorderServerIdentity = { target: string; name: string | null };
 
 const STALE_AFTER_MS = 10_000;
+/** Set while the user wants the FPS counter on; it restarts by itself next time. */
+const FPS_ON_KEY = "optigods-fps-counter-on";
 const PRESENTMON_NOTE =
   "Downloads Intel's official PresentMon 2.3.0 console tool (about 400 KB) from GitHub once, checks its SHA-256, and keeps it in Opti Gods' app data. "
   + "It reads Windows frame-presentation events. It does not inject into the game, change settings or touch anti-cheat files. "
@@ -264,6 +266,24 @@ export function PerformanceRecorder() {
     return startVisiblePolling(readLive, 1000);
   }, [native, readLive]);
 
+  // On open: learn whether PresentMon is already downloaded, and restart the
+  // counter if it was left on last time (no download, no confirmation).
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!native) return;
+    void readFpsCapture().then(status => {
+      if (!mountedRef.current || !status) return;
+      setFps(status);
+      let wanted = false;
+      try { wanted = localStorage.getItem(FPS_ON_KEY) === "1"; } catch { /* storage unavailable */ }
+      if (wanted && status.tool_ready && !status.active && !autoStartedRef.current) {
+        autoStartedRef.current = true;
+        void enableFps(true);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [native]);
+
   // FPS readout (no PowerShell) while capture is on.
   useEffect(() => {
     if (!native || !fps?.active) return;
@@ -275,13 +295,15 @@ export function PerformanceRecorder() {
     }, 1000);
   }, [native, fps?.active]);
 
-  const enableFps = async () => {
+  const enableFps = async (quiet = false) => {
     setFpsConsentOpen(false);
     setFpsStarting(true);
     setFpsError("");
     try {
       const status = await startFpsCapture();
       setFps(status);
+      try { localStorage.setItem(FPS_ON_KEY, "1"); } catch { /* storage unavailable */ }
+      if (quiet) return;
       toast({
         title: "FPS counter running",
         description: status.game_pid
@@ -299,6 +321,7 @@ export function PerformanceRecorder() {
   const disableFps = async () => {
     try {
       await stopFpsCapture();
+      try { localStorage.removeItem(FPS_ON_KEY); } catch { /* storage unavailable */ }
       setFps(await readFpsCapture());
     } catch (stopError) {
       setFpsError(String(stopError));
@@ -636,15 +659,15 @@ export function PerformanceRecorder() {
                     Stop FPS counter
                   </Button>
                 ) : (
-                  <Button size="sm" data-testid="button-enable-fps" disabled={fpsStarting} onClick={() => setFpsConsentOpen(true)} className="bg-emerald-600 text-white hover:bg-emerald-500">
-                    {fpsStarting ? "Downloading and starting PresentMon…" : "Enable FPS counter"}
+                  <Button size="sm" data-testid="button-enable-fps" disabled={fpsStarting} onClick={() => (fps?.tool_ready ? void enableFps() : setFpsConsentOpen(true))} className="bg-emerald-600 text-white hover:bg-emerald-500">
+                    {fpsStarting ? (fps?.tool_ready ? "Starting FPS counter…" : "Downloading and starting PresentMon…") : "Enable FPS counter"}
                   </Button>
                 )}
                 <span className="text-[10px] text-zinc-600">
                   Live every second, including while you're in the game. FPS reads the game process in menus and on servers.
                 </span>
               </div>
-              {fpsConsentOpen && (
+              {fpsConsentOpen && !fps?.tool_ready && (
                 <div className="mt-2 rounded-lg border border-emerald-500/20 bg-black/40 p-3 text-[11px] leading-relaxed text-zinc-300" data-testid="panel-fps-consent">
                   {PRESENTMON_NOTE}
                   <div className="mt-2 flex gap-2">

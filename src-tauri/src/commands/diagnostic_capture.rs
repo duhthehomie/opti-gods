@@ -26,6 +26,9 @@ pub struct FpsCaptureStatus {
     /// "PresentMon sees nothing" from "the game is not presenting".
     pub frames_seen: u64,
     pub frame_column_missing: bool,
+    /// PresentMon is already downloaded and verified-size on this PC: starting
+    /// needs no download.
+    pub tool_ready: bool,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -134,6 +137,19 @@ static FPS_LAST_ERROR: parking_lot::Mutex<Option<String>> = parking_lot::const_m
 fn presentmon_hash_ok(bytes: &[u8]) -> bool {
     use sha2::{Digest, Sha256};
     bytes.len() == PRESENTMON_SIZE && format!("{:x}", Sha256::digest(bytes)) == PRESENTMON_SHA256
+}
+
+#[cfg(windows)]
+fn presentmon_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_local_data_dir().ok().map(|dir| dir.join("tools").join("PresentMon-2.3.0-x64.exe"))
+}
+
+/// Cheap check (file size only); the full SHA-256 check still runs before every launch.
+fn presentmon_downloaded(app: &AppHandle) -> bool {
+    #[cfg(windows)]
+    { presentmon_path(app).and_then(|p| std::fs::metadata(p).ok()).map_or(false, |m| m.len() as usize == PRESENTMON_SIZE) }
+    #[cfg(not(windows))]
+    { let _ = app; false }
 }
 
 #[cfg(windows)]
@@ -246,7 +262,9 @@ pub async fn start_fps_capture(app: AppHandle) -> Result<FpsCaptureStatus, Strin
     #[cfg(windows)]
     {
         if FPS_CAPTURE.lock().is_some() {
-            return Ok(fps_snapshot(current_game_pid()));
+            let mut status = fps_snapshot(current_game_pid());
+            status.tool_ready = true;
+            return Ok(status);
         }
         if FPS_STARTING.swap(true, Ordering::SeqCst) {
             return Err("FPS capture is already starting.".into());
@@ -272,21 +290,50 @@ async fn start_fps_capture_windows(app: &AppHandle) -> Result<FpsCaptureStatus, 
         if !presentmon_hash_ok(&bytes) {
             return Err("PresentMon on disk no longer matches the pinned SHA-256; it was not run.".into());
         }
-        let mut child = Command::new(&executable)
-            .args([
-                "--output_stdout",
-                "--no_console_stats",
-                "--v1_metrics",
-                "--stop_existing_session",
-                "--session_name",
-                PRESENTMON_SESSION,
-            ])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .creation_flags(0x0800_0000)
-            .spawn()
-            .map_err(|e| format!("Could not start PresentMon: {e}"))?;
+        // Windows sometimes still holds the previous frame-capture session for
+        // a moment (after a restart or a quick stop/start). If PresentMon
+        // exits right away, close the old session and try once more.
+        let mut attempt = 0;
+        let mut child = loop {
+            attempt += 1;
+            let mut child = Command::new(&executable)
+                .args([
+                    "--output_stdout",
+                    "--no_console_stats",
+                    "--v1_metrics",
+                    "--stop_existing_session",
+                    "--session_name",
+                    PRESENTMON_SESSION,
+                ])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .creation_flags(0x0800_0000)
+                .spawn()
+                .map_err(|e| format!("Could not start PresentMon: {e}"))?;
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            match child.try_wait() {
+                Ok(Some(exit)) => {
+                    let mut detail = String::new();
+                    if let Some(mut stderr) = child.stderr.take() { let _ = stderr.read_to_string(&mut detail); }
+                    let detail = detail.trim().chars().take(400).collect::<String>();
+                    if attempt >= 2 {
+                        return Err(format!(
+                            "PresentMon closed right after starting, twice ({exit}){}",
+                            if detail.is_empty() { String::new() } else { format!(": {detail}") }
+                        ));
+                    }
+                    let _ = Command::new(&executable)
+                        .args(["--terminate_existing_session", "--session_name", PRESENTMON_SESSION])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .creation_flags(0x0800_0000)
+                        .status();
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+                _ => break child,
+            }
+        };
         let window = std::sync::Arc::new(parking_lot::Mutex::new(crate::commands::frame_metrics::FrameWindow::default()));
         let stderr_tail = std::sync::Arc::new(parking_lot::Mutex::new(String::new()));
         if let Some(stdout) = child.stdout.take() {
@@ -322,7 +369,9 @@ async fn start_fps_capture_windows(app: &AppHandle) -> Result<FpsCaptureStatus, 
             started_at_ms: now_ms(),
             executable,
         });
-        Ok(fps_snapshot(current_game_pid()))
+        let mut status = fps_snapshot(current_game_pid());
+        status.tool_ready = true;
+        Ok(status)
     }
 }
 
@@ -338,8 +387,10 @@ pub fn stop_fps_capture() -> Result<(), String> {
 
 /// Cheap readout (no PowerShell) for a live FPS display between samples.
 #[tauri::command]
-pub fn read_fps_capture() -> FpsCaptureStatus {
-    fps_snapshot(current_game_pid())
+pub fn read_fps_capture(app: AppHandle) -> FpsCaptureStatus {
+    let mut status = fps_snapshot(current_game_pid());
+    status.tool_ready = presentmon_downloaded(&app);
+    status
 }
 
 fn current_game_pid() -> Option<u32> {

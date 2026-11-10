@@ -347,6 +347,8 @@ export interface NativeFpsCaptureStatus {
   /** Frames PresentMon has seen from any app since capture started. */
   frames_seen?: number;
   frame_column_missing?: boolean;
+  /** PresentMon is already on this PC, so starting needs no download. */
+  tool_ready?: boolean;
 }
 
 export interface NativeRecordingStatus {
