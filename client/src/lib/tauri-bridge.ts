@@ -666,6 +666,38 @@ export async function openFivemFolder(): Promise<void> {
   await invoke<void>("open_fivem_folder");
 }
 
+export interface NativeFivemReshadeStatus {
+  fivem_found: boolean;
+  plugins_dir: string;
+  installed: boolean;
+  version: string;
+  /** A ReShade (or other dxgi.dll) that Opti Gods did not install. It is backed up on install. */
+  other_reshade: boolean;
+  fivem_running: boolean;
+}
+
+export interface FivemReshadeOptions {
+  show_logo: boolean;
+  show_ad: boolean;
+  ad_position: "bottom-center" | "top-center" | "bottom-left" | "bottom-right";
+}
+
+/** One-click Opti Gods ReShade for FiveM. Throws the real Windows error. */
+export async function fivemReshadeStatus(): Promise<NativeFivemReshadeStatus> {
+  if (!isNative()) throw new Error("ReShade for FiveM is available in the Windows app.");
+  return invoke<NativeFivemReshadeStatus>("fivem_reshade_status");
+}
+
+export async function fivemReshadeInstall(options: FivemReshadeOptions): Promise<NativeFivemReshadeStatus> {
+  if (!isNative()) throw new Error("ReShade for FiveM is available in the Windows app.");
+  return invoke<NativeFivemReshadeStatus>("fivem_reshade_install", { options });
+}
+
+export async function fivemReshadeRemove(): Promise<NativeFivemReshadeStatus> {
+  if (!isNative()) throw new Error("ReShade for FiveM is available in the Windows app.");
+  return invoke<NativeFivemReshadeStatus>("fivem_reshade_remove");
+}
+
 export interface NativeFivemPackResult {
   ok: boolean;
   install_id: string;

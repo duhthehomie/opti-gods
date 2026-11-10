@@ -22,6 +22,7 @@ import { useProStatus, setProSession, clearProStatus } from "@/lib/pro-status";
 import { useAuth } from "@/hooks/use-auth";
 import { estimateFpsGain } from "@/lib/fps-impact-map";
 import { PerformanceRecorder } from "@/components/admin/performance-recorder";
+import { FivemReshadePanel } from "@/components/admin/fivem-reshade-panel";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import type { ProAccessCode, ProFriendToken, EmailRequest, ManualPayment, SecurityEvent, SecuritySeverity, IpBan } from "@shared/schema";
 import { AdminSilverMark } from "@/components/branding/admin-silver-mark";
@@ -4627,7 +4628,7 @@ export default function Admin() {
                    t === "rigs" ? "Hardware DB" :
                    t === "suggestions" ? "Suggestions" :
                    t === "drivers" ? "NVIDIA Drivers" :
-                   t === "fivem" ? "FiveM Servers" :
+                   t === "fivem" ? "FiveM" :
                    `Activity (${activityItems.length})`}
                 </span>
                 <span className="sm:hidden">
@@ -6443,7 +6444,12 @@ export default function Admin() {
         {tab === "rigs" && <HardwareDbTab headers={headers} />}
         {tab === "suggestions" && <SuggestionsInboxTab headers={headers} />}
         {tab === "drivers" && <NvidiaTrackerTab headers={headers} />}
-        {tab === "fivem" && <FivemServersTab headers={headers} />}
+        {tab === "fivem" && (
+          <div className="space-y-5">
+            <FivemReshadePanel />
+            <FivemServersTab headers={headers} />
+          </div>
+        )}
 
         {/* ─── MOBILE FLOATING ACTION BAR ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">

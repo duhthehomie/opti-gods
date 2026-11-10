@@ -8,6 +8,7 @@ pub mod game_detection;
 pub mod gaming_mode;
 pub mod now_playing;
 pub mod stream_watch;
+pub mod fivem_reshade;
 pub mod sound;
 pub mod hardware;
 pub mod performance;
