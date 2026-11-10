@@ -158,6 +158,22 @@ fn live_monitor_loop(app: AppHandle, stop: std::sync::Arc<AtomicBool>) {
             }
         }
 
+        // No full sample with a game yet (first seconds, or the full sample
+        // failed): show the running game from the process list so FPS can read it.
+        if !sample.game_running {
+            if let Some((pid, name)) = games.first() {
+                let lower = name.to_ascii_lowercase();
+                let fivem = lower.starts_with("fivem_");
+                sample.game_running = true;
+                sample.game_pid = Some(*pid);
+                sample.game_process = Some(name.clone());
+                sample.game_id = Some(if fivem { "fivem".into() } else { "unlisted".into() });
+                sample.game_label = Some(if fivem { "FiveM".into() } else { name.trim_end_matches(".exe").trim_end_matches(".EXE").to_string() });
+                sample.game_detection = Some("known_game".into());
+                if fivem { sample.fivem_running = true; }
+            }
+        }
+
         let current_cpu = read_cpu_times();
         if let (Some(before), Some(now)) = (previous_cpu.as_ref(), current_cpu.as_ref()) {
             let total = now.total.saturating_sub(before.total);

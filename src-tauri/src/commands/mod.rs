@@ -6,6 +6,7 @@ pub mod env;
 pub mod frame_metrics;
 pub mod game_detection;
 pub mod gaming_mode;
+pub mod now_playing;
 pub mod sound;
 pub mod hardware;
 pub mod performance;

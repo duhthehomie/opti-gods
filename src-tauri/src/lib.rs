@@ -42,6 +42,10 @@ pub fn run() {
         .setup(|app| {
             #[cfg(windows)]
             {
+                // Gaming Mode on: pass instant music play/pause state to its agent.
+                if commands::gaming_mode::data_dir().join("enabled").exists() {
+                    commands::now_playing::ensure_started();
+                }
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(err) = commands::process_lasso::run_forever(handle).await {
@@ -127,6 +131,7 @@ pub fn run() {
             commands::task_manager::get_startup_value,
             commands::game_detection::detect_installed_games,
             commands::gaming_mode::gaming_mode_status,
+            commands::now_playing::read_now_playing,
             commands::gaming_mode::enable_gaming_mode,
             commands::gaming_mode::disable_gaming_mode,
             commands::sound::play_success_sound,

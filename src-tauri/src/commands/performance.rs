@@ -136,13 +136,16 @@ fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, 
             finish_sample(&mut sample);
             sample
         };
-        // -EncodedCommand avoids command-line quote mangling of the script.
+        // The script goes through stdin: encoded on the command line it exceeds
+        // Windows' 32,767-character limit (os error 206). Only this small
+        // loader is passed with -EncodedCommand.
+        let loader = "$i=[Console]::OpenStandardInput();$m=New-Object IO.MemoryStream;$i.CopyTo($m);& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString($m.ToArray())))";
         let encoded = {
             use base64::Engine;
-            let utf16: Vec<u8> = script.encode_utf16().flat_map(|unit| unit.to_le_bytes()).collect();
+            let utf16: Vec<u8> = loader.encode_utf16().flat_map(|unit| unit.to_le_bytes()).collect();
             base64::engine::general_purpose::STANDARD.encode(utf16)
         };
-        let output = match Command::new(crate::commands::windows_powershell_executable())
+        let child = Command::new(crate::commands::windows_powershell_executable())
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -151,11 +154,27 @@ fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, 
                 "-EncodedCommand",
                 encoded.as_str(),
             ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
             .creation_flags(0x0800_0000)
-            .output() {
-                Ok(output) => output,
-                Err(error) => return Ok(temperature_sample(format!("Windows telemetry could not start: {error}"))),
-            };
+            .spawn();
+        let mut child = match child {
+            Ok(child) => child,
+            Err(error) => return Ok(temperature_sample(format!("Windows telemetry could not start: {error}"))),
+        };
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            if let Err(error) = stdin.write_all(script.as_bytes()) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(temperature_sample(format!("Windows telemetry script could not be sent: {error}")));
+            }
+        }
+        let output = match child.wait_with_output() {
+            Ok(output) => output,
+            Err(error) => return Ok(temperature_sample(format!("Windows telemetry did not finish: {error}"))),
+        };
         let text = String::from_utf8_lossy(&output.stdout);
         let stderr_summary = || {
             let err = String::from_utf8_lossy(&output.stderr);

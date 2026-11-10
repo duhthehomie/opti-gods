@@ -76,7 +76,33 @@ pub struct GamingModeStatus {
     /// Background processes currently in Windows efficiency mode (EcoQoS).
     #[serde(default)]
     pub efficiency_mode: u32,
+    /// Every background app seen while a game runs and what was done to it.
+    #[serde(default)]
+    pub apps: Vec<GamingModeBackgroundApp>,
     pub errors: Vec<GamingModeError>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GamingModeBackgroundApp {
+    pub app: String,
+    pub processes: u32,
+    /// Lowered to Below Normal by Gaming Mode.
+    pub lowered: u32,
+    /// In Windows efficiency mode (set by Gaming Mode).
+    pub efficiency: u32,
+    /// Already below Normal (set by the app itself), left alone.
+    pub already_low: u32,
+    /// Why the app is not slowed, when it is protected.
+    pub note: String,
+}
+
+/// Music state the Opti Gods app reads from Windows media controls and hands
+/// to the agent (the agent runs as SYSTEM and cannot see media sessions).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct MediaHint {
+    pub written_ms: u64,
+    /// Lowercase exe → playing.
+    pub apps: std::collections::BTreeMap<String, bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -85,6 +111,9 @@ pub struct GamingModeMusic {
     /// "playing", "paused" or "unknown" (Windows would not show its processes).
     pub state: String,
     pub processes: u32,
+    /// "media_controls" (instant, from Windows) or "audio_activity" (CPU-based).
+    #[serde(default)]
+    pub source: String,
 }
 
 /// True when this process was started by the scheduled task.
@@ -159,6 +188,18 @@ fn app_label(exe: &str) -> &'static str {
         "opera.exe" => "Opera",
         "vivaldi.exe" => "Vivaldi",
         "firefox.exe" => "Firefox",
+        "discord.exe" => "Discord",
+        "obs64.exe" | "obs32.exe" => "OBS",
+        "steam.exe" | "steamwebhelper.exe" => "Steam",
+        "epicgameslauncher.exe" | "epicwebhelper.exe" => "Epic Games",
+        "battle.net.exe" => "Battle.net",
+        "eadesktop.exe" | "origin.exe" => "EA app",
+        "ubisoftconnect.exe" | "upc.exe" => "Ubisoft Connect",
+        "galaxyclient.exe" => "GOG Galaxy",
+        "onedrive.exe" => "OneDrive",
+        "teams.exe" | "ms-teams.exe" => "Teams",
+        "slack.exe" => "Slack",
+        "rockstarservice.exe" => "Rockstar",
         _ => "App",
     }
 }
@@ -197,7 +238,7 @@ pub(crate) fn classify_game(name_lower: &str, path_lower: Option<&str>) -> Optio
 }
 
 #[cfg(windows)]
-fn data_dir() -> std::path::PathBuf {
+pub(crate) fn data_dir() -> std::path::PathBuf {
     let base = std::env::var_os("ProgramData").unwrap_or_else(|| "C:\\ProgramData".into());
     std::path::PathBuf::from(base).join("OptiGods").join("GamingMode")
 }
@@ -268,6 +309,37 @@ pub(crate) mod native {
     fn open(pid: u32, set: bool) -> Result<Handle, String> {
         let access = if set { PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION } else { PROCESS_QUERY_LIMITED_INFORMATION };
         unsafe { OpenProcess(access, false, pid).map(Handle).map_err(|e| e.message().to_string()) }
+    }
+
+    /// Lets the SYSTEM agent adjust sandboxed browser processes (Chromium
+    /// renderers deny PROCESS_SET_INFORMATION in their own access list).
+    /// SYSTEM holds this privilege; it only needs to be switched on.
+    pub fn enable_debug_privilege() -> Result<(), String> {
+        use windows::Win32::Foundation::{GetLastError, ERROR_NOT_ALL_ASSIGNED, LUID};
+        use windows::Win32::Security::{
+            AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED,
+            TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+        };
+        use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+        unsafe {
+            let mut token = HANDLE::default();
+            OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut token)
+                .map_err(|e| format!("could not open the agent's token: {}", e.message()))?;
+            let token = Handle(token);
+            let mut luid = LUID::default();
+            LookupPrivilegeValueW(None, windows::core::w!("SeDebugPrivilege"), &mut luid)
+                .map_err(|e| format!("could not look up the debug privilege: {}", e.message()))?;
+            let privileges = TOKEN_PRIVILEGES {
+                PrivilegeCount: 1,
+                Privileges: [LUID_AND_ATTRIBUTES { Luid: luid, Attributes: SE_PRIVILEGE_ENABLED }],
+            };
+            AdjustTokenPrivileges(token.0, false, Some(&privileges), 0, None, None)
+                .map_err(|e| format!("could not enable the debug privilege: {}", e.message()))?;
+            if GetLastError() == ERROR_NOT_ALL_ASSIGNED {
+                return Err("Windows did not grant the debug privilege to the Gaming Mode agent".into());
+            }
+        }
+        Ok(())
     }
 
     pub fn image_path(pid: u32) -> Option<String> {
@@ -418,6 +490,8 @@ mod agent {
         lowered: bool,
         throttle: Option<native::Throttle>,
         memory_low: bool,
+        /// The app had already set itself below Normal; left alone.
+        already_low: bool,
     }
 
     struct Agent {
@@ -485,6 +559,7 @@ mod agent {
                 self.restore_background();
                 self.music_hold.clear();
                 self.status.music.clear();
+                self.status.apps.clear();
             } else {
                 self.optimize_background(&processes);
             }
@@ -568,12 +643,23 @@ mod agent {
                 }
             }
 
-            // Decide which apps are playing. Protection starts on the first
-            // active tick and is held briefly so track changes don't flap it.
+            // Decide which apps are playing. Windows media controls (passed on
+            // by the Opti Gods app) are exact and instant; without them, audio
+            // activity is used, held briefly so track changes don't flap it.
+            let hint = read_media_hint();
             let mut playing: HashSet<String> = HashSet::new();
             let mut unknown: HashSet<String> = HashSet::new();
             let mut music = Vec::new();
             for (exe, count) in &counts {
+                if let Some(&is_playing) = hint.as_ref().and_then(|h| h.apps.get(exe)) {
+                    self.music_hold.insert(exe.clone(), if is_playing { MUSIC_HOLD_TICKS } else { 0 });
+                    if is_playing { playing.insert(exe.clone()); }
+                    music.push(GamingModeMusic {
+                        app: app_label(exe).into(), state: if is_playing { "playing" } else { "paused" }.into(),
+                        processes: *count, source: "media_controls".into(),
+                    });
+                    continue;
+                }
                 let active = if let Some(rate) = audio_rate.get(exe) {
                     *rate >= AUDIO_SERVICE_ACTIVE
                 } else if MUSIC_APPS.contains(&exe.as_str()) {
@@ -593,7 +679,7 @@ mod agent {
                 } else {
                     "paused"
                 };
-                music.push(GamingModeMusic { app: app_label(exe).into(), state: state.into(), processes: *count });
+                music.push(GamingModeMusic { app: app_label(exe).into(), state: state.into(), processes: *count, source: "audio_activity".into() });
             }
             music.sort_by(|a, b| a.app.cmp(&b.app));
             self.status.music = music;
@@ -615,21 +701,53 @@ mod agent {
                 let want_memory_low = !protected;
                 self.apply_background(pid, &name, want_lower, want_throttle, want_memory_low, audio_process && protected);
             }
+
+            // What the panel shows: every background app seen and what was done.
+            let mut apps: std::collections::BTreeMap<&'static str, GamingModeBackgroundApp> = std::collections::BTreeMap::new();
+            for process in processes {
+                let exe = process.name.to_ascii_lowercase();
+                let label = app_label(&exe);
+                let protected_note = match exe.as_str() {
+                    "discord.exe" => Some("never slowed · voice calls stay clean"),
+                    "obs64.exe" | "obs32.exe" => Some("never slowed · streams stay clean"),
+                    _ => None,
+                };
+                if protected_note.is_none() && !BACKGROUND_EXES.contains(&exe.as_str()) { continue; }
+                let entry = apps.entry(label).or_insert_with(|| GamingModeBackgroundApp { app: label.into(), ..Default::default() });
+                entry.processes += 1;
+                if let Some(note) = protected_note { entry.note = note.into(); continue; }
+                if let Some(background) = self.background.get(&process.pid) {
+                    if background.lowered { entry.lowered += 1; }
+                    if background.throttle == Some(native::Throttle::On) { entry.efficiency += 1; }
+                    if background.already_low { entry.already_low += 1; }
+                }
+                if exe == "firefox.exe" {
+                    entry.note = "not slowed · its audio can't be checked".into();
+                } else if playing.contains(&exe) {
+                    entry.note = "music playing · audio kept at full speed".into();
+                } else if unknown.contains(&exe) {
+                    entry.note = "can't check audio · not slowed".into();
+                }
+            }
+            self.status.apps = apps.into_values().collect();
         }
 
         fn apply_background(&mut self, pid: u32, name: &str, want_lower: bool, want_throttle: Option<native::Throttle>, want_memory_low: bool, refresh_throttle: bool) {
-            let entry = self.background.entry(pid).or_insert_with(|| Background { name: name.to_string(), lowered: false, throttle: None, memory_low: false });
+            let entry = self.background.entry(pid).or_insert_with(|| Background { name: name.to_string(), lowered: false, throttle: None, memory_low: false, already_low: false });
             let (lowered, throttle, memory_low) = (entry.lowered, entry.throttle, entry.memory_low);
             let mut errors = Vec::new();
 
             let mut new_lowered = lowered;
+            let mut already_low = false;
             if want_lower && !lowered {
                 // Only lower apps still at Normal; never touch something the user set.
-                if native::get_priority(pid) == Ok(native::NORMAL) {
-                    match native::set_priority(pid, native::BELOW_NORMAL) {
+                match native::get_priority(pid) {
+                    Ok(native::NORMAL) => match native::set_priority(pid, native::BELOW_NORMAL) {
                         Ok(()) => new_lowered = true,
                         Err(message) => errors.push((format!("lower:{pid}"), format!("Could not lower {name}: {message}"))),
-                    }
+                    },
+                    Ok(class) => already_low = matches!(class, native::BELOW_NORMAL | 0x40),
+                    Err(_) => {}
                 }
             } else if !want_lower && lowered {
                 if native::get_priority(pid) == Ok(native::BELOW_NORMAL) {
@@ -660,6 +778,7 @@ mod agent {
             }
 
             if let Some(entry) = self.background.get_mut(&pid) {
+                entry.already_low = already_low;
                 entry.lowered = new_lowered;
                 entry.throttle = new_throttle;
                 entry.memory_low = new_memory_low;
@@ -715,6 +834,7 @@ mod agent {
             Ok(file) => file,
             Err(_) => return,
         };
+        let privilege = native::enable_debug_privilege();
         let mut agent = Agent {
             status: GamingModeStatus {
                 agent_pid: std::process::id(),
@@ -731,6 +851,10 @@ mod agent {
             music_hold: HashMap::new(),
             reported: HashSet::new(),
         };
+        if let Err(message) = privilege {
+            agent.error("privilege".into(), format!("Some browser processes may not be adjustable: {message}"));
+        }
+        let mut last_hint_apps = read_media_hint().map(|h| h.apps);
         loop {
             if !dir.join("enabled").exists() {
                 agent.restore_all();
@@ -739,12 +863,45 @@ mod agent {
                 agent.status.lowered.clear();
                 agent.status.music.clear();
                 agent.status.efficiency_mode = 0;
+                agent.status.apps.clear();
                 agent.write_status();
                 return;
             }
             agent.tick();
             agent.write_status();
-            std::thread::sleep(TICK);
+            // Wake early when music is paused or resumed so the browser or
+            // music app is adjusted right away instead of on the next scan.
+            let slept = Instant::now();
+            while slept.elapsed() < TICK {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                let apps = read_media_hint().map(|h| h.apps);
+                if apps != last_hint_apps {
+                    last_hint_apps = apps;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/// Fresh media hint from the Opti Gods app, or None when the app is closed.
+#[cfg(windows)]
+fn read_media_hint() -> Option<MediaHint> {
+    let bytes = std::fs::read(data_dir().join("media.json")).ok()?;
+    let hint: MediaHint = serde_json::from_slice(&bytes).ok()?;
+    (now_ms().saturating_sub(hint.written_ms) <= 5_000).then_some(hint)
+}
+
+/// Called by the app's media watcher. Only writes while Gaming Mode's folder exists.
+#[cfg(windows)]
+pub(crate) fn write_media_hint(apps: std::collections::BTreeMap<String, bool>) {
+    let dir = data_dir();
+    if !dir.join("enabled").exists() { return; }
+    let hint = MediaHint { written_ms: now_ms(), apps };
+    if let Ok(json) = serde_json::to_vec(&hint) {
+        let tmp = dir.join("media.json.tmp");
+        if std::fs::write(&tmp, json).is_ok() {
+            let _ = std::fs::rename(&tmp, dir.join("media.json"));
         }
     }
 }
@@ -847,6 +1004,8 @@ fn task_xml(agent: &std::path::Path) -> String {
 
 #[tauri::command]
 pub async fn gaming_mode_status() -> GamingModeStatus {
+    // Instant music state for the agent while the app is open.
+    crate::commands::now_playing::ensure_started();
     #[cfg(windows)]
     { tokio::task::spawn_blocking(read_status).await.unwrap_or_default() }
     #[cfg(not(windows))]

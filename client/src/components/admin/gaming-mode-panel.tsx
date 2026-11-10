@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Power, Radar, ShieldAlert, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { startForegroundPolling } from "@/lib/foreground-polling";
+import { startVisiblePolling } from "@/lib/foreground-polling";
+import { NowPlayingCard } from "./now-playing-card";
 import {
   disableGamingMode, enableGamingMode, gamingModeStatus, isNative, type NativeGamingModeStatus,
 } from "@/lib/tauri-bridge";
@@ -63,7 +64,7 @@ export function GamingModePanel() {
 
   useEffect(() => {
     if (!native) return;
-    return startForegroundPolling(refresh, 2000);
+    return startVisiblePolling(refresh, 1000);
   }, [native, refresh]);
 
   const turnOn = async () => {
@@ -181,18 +182,35 @@ export function GamingModePanel() {
             )) : <div className="mt-1 text-sm text-zinc-400">No game running yet. Open any game and it is boosted within 2 s.</div>}
           </div>
           <div className="rounded-lg border border-red-500/20 bg-black/40 px-3 py-2">
-            <div className="text-[9px] font-bold uppercase tracking-widest text-red-400">Background apps lowered</div>
-            <div className="mt-1 text-xs text-zinc-300" data-testid="text-gaming-mode-lowered">
-              {status?.lowered.length
+            <div className="text-[9px] font-bold uppercase tracking-widest text-red-400">Background apps</div>
+            <div className="mt-1 space-y-0.5 text-xs text-zinc-300" data-testid="text-gaming-mode-lowered">
+              {!games.length ? (
+                <div className="text-zinc-400">Only while a game is running</div>
+              ) : status?.apps?.length ? status.apps.map(app => {
+                const done = [
+                  app.lowered ? `${app.lowered} lowered` : "",
+                  app.efficiency ? `${app.efficiency} efficiency mode` : "",
+                  app.already_low ? `${app.already_low} already low` : "",
+                ].filter(Boolean).join(" · ");
+                return (
+                  <div key={app.app} data-testid={`gaming-mode-app-${app.app.toLowerCase().replace(/\s+/g, "-")}`}>
+                    <span className="font-bold text-white">{app.app}</span>
+                    <span className="text-zinc-500"> ×{app.processes}</span>
+                    {done && <span className="text-red-300"> · {done}</span>}
+                    {app.note && <span className={app.note.startsWith("music") ? "text-emerald-400" : "text-zinc-500"}> · {app.note}</span>}
+                  </div>
+                );
+              }) : status?.lowered.length
                 ? Array.from(new Set(status.lowered)).map(name => `${name} ×${status.lowered.filter(item => item === name).length}`).join(" · ")
-                : games.length ? "None open" : "Only while a game is running"}
+                : "No browsers, launchers or chat apps open"}
             </div>
             <div className="mt-1 text-[10px] text-zinc-600">
-              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never lowered, so calls and streams stay clean.
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord and OBS are never slowed, so calls and streams stay clean.
             </div>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">
             <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">Music</div>
+            <NowPlayingCard className="mt-1.5" />
             {status?.music?.length ? (
               <div className="mt-1 flex flex-wrap gap-2">
                 {status.music.map(item => (
@@ -203,14 +221,14 @@ export function GamingModePanel() {
                       item.state === "playing" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : item.state === "unknown" ? "border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-400",
                     )}
                   >
-                    {item.app}: {item.state === "playing" ? "playing · audio kept at full speed" : item.state === "unknown" ? "can't check · not slowed down" : "paused · efficiency mode"}
+                    {item.app}: {item.state === "playing" ? "playing · audio kept at full speed" : item.state === "unknown" ? "can't check · not slowed down" : "paused · efficiency mode"}{item.source === "audio_activity" ? " (by audio activity)" : ""}
                   </span>
                 ))}
               </div>
             ) : (
               <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Checked only while a game is running"}</div>
             )}
-            <div className="mt-1 text-[10px] text-zinc-600">Spotify, SoundCloud and Chrome/Edge/Brave/Opera/Vivaldi tabs are detected by their audio activity. Firefox is never slowed down.</div>
+            <div className="mt-1 text-[10px] text-zinc-600">Play/pause is read instantly from Windows media controls while Opti Gods is open. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
           </div>
         </div>
       )}

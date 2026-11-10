@@ -421,8 +421,33 @@ export interface NativeGamingModeStatus {
   games: NativeGamingModeGame[];
   lowered: string[];
   errors: Array<{ at_ms: number; message: string }>;
-  music?: Array<{ app: string; state: "playing" | "paused" | "unknown"; processes: number }>;
+  music?: Array<{ app: string; state: "playing" | "paused" | "unknown"; processes: number; source?: "media_controls" | "audio_activity" | "" }>;
   efficiency_mode?: number;
+  /** Every background app seen while a game runs and what was done to it. */
+  apps?: Array<{ app: string; processes: number; lowered: number; efficiency: number; already_low: number; note: string }>;
+}
+
+export interface NativeNowPlayingSession {
+  app: string;
+  exe: string | null;
+  title: string;
+  artist: string;
+  album: string;
+  status: "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
+  /** data: URL of the cover art. */
+  cover: string | null;
+}
+
+export interface NativeNowPlaying {
+  sessions: NativeNowPlayingSession[];
+  updated_ms: number;
+  error: string | null;
+}
+
+/** What Windows media controls report (Spotify, SoundCloud, browser players). Cheap to poll. */
+export async function readNowPlaying(): Promise<NativeNowPlaying | null> {
+  if (!isNative()) return null;
+  return invoke<NativeNowPlaying>("read_now_playing");
 }
 
 export async function playNativeSuccessSound(): Promise<void> {
