@@ -8,7 +8,15 @@ import { scanAndUploadValidatedHardware } from "@/lib/hardware-scan-sync";
 
 type ScanStatus = "idle" | "scanning" | "success" | "error";
 
-export function ScanImport() {
+/** Dashboard totals, so this card always shows the same confirmed count as the score. */
+export interface ScanImportConfirmed {
+  applied: number;
+  total: number;
+  /** Tweaks Windows reads back as on right now (only supported readbacks). */
+  detectedNow: number;
+}
+
+export function ScanImport({ confirmed = null, onScanned }: { confirmed?: ScanImportConfirmed | null; onScanned?: () => Promise<void> | void } = {}) {
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [detectedCount, setDetectedCount] = useState(0);
   const { toast } = useToast();
@@ -39,14 +47,17 @@ export function ScanImport() {
         ...Object.keys(store.appliedAt).filter(id => id in next),
       ]);
       setDetectedCount(appliedIds.size);
+      await onScanned?.();
       setStatus("success");
 
       if (!quiet) {
         toast({
           title: "Hardware and tweak scan complete",
-          description: appliedIds.size
-            ? `${appliedIds.size} existing optimizations recognized.`
-            : "No supported Opti Gods tweaks were detected or previously recorded as applied.",
+          description: confirmed
+            ? "Windows state refreshed. The confirmed count below matches the dashboard score."
+            : appliedIds.size
+              ? `${appliedIds.size} existing optimizations recognized.`
+              : "No supported Opti Gods tweaks were detected or previously recorded as applied.",
         });
       }
     } catch (error) {
@@ -59,7 +70,7 @@ export function ScanImport() {
         });
       }
     }
-  }, [native, status, toast]);
+  }, [native, status, toast, confirmed, onScanned]);
 
   useEffect(() => {
     if (native) void runSmartScan(true);
@@ -88,6 +99,8 @@ export function ScanImport() {
               {native
                 ? status === "scanning"
                   ? "Reading your Windows optimization state…"
+                  : confirmed && status !== "error"
+                    ? `${confirmed.applied} of ${confirmed.total} compatible tweaks confirmed applied · ${confirmed.detectedNow} read directly from Windows now. No Windows settings were changed.`
                   : status === "success"
                     ? `${detectedCount} supported tweaks detected or recorded as applied. No Windows settings were changed.`
                     : "Opti Gods quietly recognizes supported tweaks already on this PC."

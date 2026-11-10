@@ -764,8 +764,6 @@ export default function Dashboard() {
   };
 
   const enabledCount = TWEAK_REGISTRY.filter(tweak => tweaks[tweak.id]).length;
-  const optLevel = enabledCount === 0 ? "None" : enabledCount < 10 ? "Low" : enabledCount < 25 ? "Medium" : "High";
-  const optColor = enabledCount === 0 ? "text-zinc-500" : enabledCount < 10 ? "text-zinc-300" : enabledCount < 25 ? "text-zinc-100" : "text-red-400";
   // Expert tweaks are intentionally excluded from auto-enable (require manual opt-in).
   // Any tweak not present as a key in the store can't be toggled either.
   // Filter both out of the score denominator so 100% is always achievable.
@@ -815,6 +813,10 @@ export default function Dashboard() {
   const compatibleAppliedCount = matchedRecommendedIds.filter(id => activeIdsForDisplay.has(id)).length;
   const compatibleSelectedCount = matchedRecommendedIds.filter(id => tweaks[id]).length;
   const dashboardTweakCount = native ? compatibleAppliedCount : compatibleSelectedCount;
+  // Optimization level follows the confirmed count in the app; selections only on the website.
+  const levelCount = native ? dashboardTweakCount : enabledCount;
+  const optLevel = levelCount === 0 ? "None" : levelCount < 10 ? "Low" : levelCount < 25 ? "Medium" : "High";
+  const optColor = levelCount === 0 ? "text-zinc-500" : levelCount < 10 ? "text-zinc-300" : levelCount < 25 ? "text-zinc-100" : "text-red-400";
   // Keep the score tied to the complete run, but match AI Optimize's missing
   // count to current eligible recommendations and verified native state.
   const missingRecommendedIds = getMissingRecommendationIds([...matchedRecommendedIds, ...getProValidationActionIds(native, isPro)], {
@@ -1738,7 +1740,9 @@ export default function Dashboard() {
               {
                 label: "Optimization Level",
                 value: optLevel,
-                sub: enabledCount === 0 ? "Enable tweaks to begin" : `${enabledCount} active`,
+                sub: native
+                  ? `${dashboardTweakCount} confirmed applied`
+                  : enabledCount === 0 ? "Enable tweaks to begin" : `${enabledCount} active`,
                 color: optColor,
               },
               {
@@ -1785,7 +1789,12 @@ export default function Dashboard() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <ScanImport />
+          <ScanImport
+            confirmed={native && nativeDetectionReady && !nativeDetectionError
+              ? { applied: recApplied, total: scoreIds.length, detectedNow: appliedEvidence.detected }
+              : null}
+            onScanned={refreshDetectedState}
+          />
         </motion.div>
 
       </div>
