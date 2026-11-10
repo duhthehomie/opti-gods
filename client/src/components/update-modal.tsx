@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useVersionInfo, compareVersions } from "@/hooks/use-auth";
-import { BRAND, prefersReducedMotion } from "@/components/branding/assets";
+import { BRAND } from "@/components/branding/assets";
 import { CheckCircle2, Download, RefreshCw } from "lucide-react";
 import { simpleUpdateNotes } from "@/lib/update-notes";
 import { useInstalledVersion } from "@/hooks/use-installed-version";
@@ -23,8 +23,7 @@ function NativeUpdateModal() {
   const [progress, setProgress] = useState(0);
   const [nativeUpdate, setNativeUpdate] = useState<UpdateInfo | null>(null);
   const [installError, setInstallError] = useState("");
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const reduced = typeof window !== "undefined" && prefersReducedMotion();
+  const [videoFailed, setVideoFailed] = useState(false);
   const [detectedVersion, setDetectedVersion] = useState<string | null>(null);
   const [detectedNotes, setDetectedNotes] = useState<string | null>(null);
 
@@ -221,35 +220,47 @@ function NativeUpdateModal() {
   return (
     <div
       data-testid="update-splash"
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center select-none"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden select-none"
       style={{
-        background: "#050505",
+        background: "#000",
         opacity: fadeOut ? 0 : 1,
         transition: "opacity 650ms ease-out",
         pointerEvents: fadeOut ? "none" : "auto",
       }}
     >
+      {/* Same full-screen red/white spinning splash as app launch. It plays even when
+          Windows animations are off, matching the launch splash. */}
+      {videoFailed ? (
+        <div className="flex flex-col items-center gap-[18px]">
+          <div
+            style={{
+              width: 200, height: 200, borderRadius: "50%",
+              border: "6px solid rgba(255,30,30,0.18)", borderTopColor: "#ff1e1e",
+              animation: "og-update-spin 1.05s linear infinite",
+              boxShadow: "0 0 60px rgba(255,30,30,0.45), inset 0 0 20px rgba(255,30,30,0.25)",
+            }}
+          />
+          <style>{`@keyframes og-update-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
+        <video
+          src={BRAND.spinRed}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+          onError={() => setVideoFailed(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+
       <div
-        className="absolute pointer-events-none"
-        style={{
-          width: 520, height: 520, borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(220,38,38,0.13) 0%, transparent 70%)",
-          top: "50%", left: "50%", transform: "translate(-50%, -62%)",
-        }}
-      />
-
-      <div className="relative z-10 mb-10 flex items-center justify-center">
-        {reduced ? (
-          <img src={BRAND.goldPng} alt="Opti Gods" className="w-40 h-40 object-contain"
-            style={{ filter: "drop-shadow(0 0 32px rgba(220,38,38,0.55))" }} />
-        ) : (
-          <video ref={videoRef} src={BRAND.spinRed} autoPlay muted loop playsInline
-            preload="metadata" className="w-56 h-56 object-contain" />
-        )}
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center gap-2 mb-12">
-        <h1 className="text-[22px] font-black tracking-tight text-white">
+        className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-1.5 pb-[7vh] pt-16"
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))" }}
+      >
+        <h1 className="text-[20px] font-black tracking-tight text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
           {phase === "done" ? (
             <span className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-green-400" />
@@ -257,11 +268,11 @@ function NativeUpdateModal() {
             </span>
           ) : headingText}
         </h1>
-        <p className="text-sm text-zinc-400 font-medium">{subText}</p>
-        <p className="text-xs text-zinc-600">{versionLine}</p>
+        <p className="text-sm font-medium text-zinc-200">{subText}</p>
+        <p className="text-xs text-zinc-400">{versionLine}</p>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-zinc-900/80">
+      <div className="absolute bottom-0 left-0 right-0 z-20 h-[3px] bg-zinc-900/80">
         <div
           className="h-full bg-red-500 transition-all duration-300 ease-out"
           style={{
