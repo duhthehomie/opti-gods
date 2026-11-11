@@ -69,6 +69,7 @@
     "allow-reset-nvidia-preset-import-cancel",
     "allow-run-script-tweak",
     "allow-gaming-mode",
-    "allow-success-sound"
+    "allow-success-sound",
+    "allow-fivem-reshade"
   ]
 }

@@ -1125,6 +1125,15 @@ export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = {
    "value": 1
   }
  ],
+ "FiveMHighPriority": [
+  {
+   "hive": "HKLM",
+   "path": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5.exe\\PerfOptions",
+   "name": "CpuPriorityClass",
+   "type": "dword",
+   "value": 3
+  }
+ ],
  "FiveMMMCSSAudio": [
   {
    "hive": "HKLM",

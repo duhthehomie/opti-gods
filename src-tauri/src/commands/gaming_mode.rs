@@ -162,7 +162,8 @@ const GAME_EXES: &[&str] = &[
     "rainbowsix_vulkan.exe", "readyornot.exe", "robloxplayerbeta.exe", "rocketleague.exe",
     "rustclient.exe", "tslgame.exe", "valorant-win64-shipping.exe", "warframe.x64.exe",
     "modernwarfare.exe", "blackops6.exe", "warzone.exe", "finalsclient-win64-shipping.exe",
-    "battlebit.exe", "minecraft.windows.exe",
+    "battlebit.exe", "minecraft.windows.exe", "blackopscoldwar.exe", "modernwarfare2.exe",
+    "modernwarfare3.exe", "mwiii.exe", "cod24-cod.exe", "cod25-cod.exe",
 ];
 
 /// Known background apps lowered to Below Normal while a game runs.
@@ -238,6 +239,8 @@ fn app_label(exe: &str) -> &'static str {
 const GAME_LIBRARY_MARKERS: &[&str] = &[
     r"\steamapps\common\", r"\epic games\", r"\riot games\", r"\ea games\", r"\origin games\",
     r"\ubisoft game launcher\games\", r"\gog galaxy\games\", r"\xboxgames\",
+    // Battle.net installs Call of Duty outside any shared library folder.
+    r"\call of duty\",
 ];
 
 /// Executables inside game folders that are not the game itself.
@@ -1298,5 +1301,7 @@ mod tests {
         assert!(classify_game("unitycrashhandler64.exe", Some(r"d:\steamlibrary\steamapps\common\game\unitycrashhandler64.exe")).is_none());
         assert!(classify_game("wallpaper64.exe", Some(r"c:\steam\steamapps\common\wallpaper_engine\wallpaper64.exe")).is_none());
         assert!(classify_game("chrome.exe", Some(r"c:\program files\google\chrome\application\chrome.exe")).is_none());
+        assert!(classify_game("cod26.exe", Some(r"c:\program files (x86)\call of duty\_retail_\cod26.exe")).is_some());
+        assert!(classify_game("codlauncher.exe", Some(r"c:\program files (x86)\call of duty\codlauncher.exe")).is_none());
     }
 }

@@ -3878,6 +3878,33 @@ export default function Admin() {
     },
   });
 
+  // Gaming Mode early-access grants (shows Gaming Mode in AI Optimize for that Discord account)
+  const gamingGrantsQuery = useQuery<GraphicsGrant[]>({
+    queryKey: ["/api/admin/gaming-mode/grants", key],
+    queryFn: async () => {
+      const r = await fetch(apiUrl("/api/admin/gaming-mode/grants"), { headers });
+      if (!r.ok) throw new Error(`Could not load Gaming Mode grants (HTTP ${r.status})`);
+      return r.json();
+    },
+    enabled: authed,
+  });
+  const gamingGrantedIds = new Set((gamingGrantsQuery.data ?? []).map(g => g.discordUserId));
+
+  const setGamingModeGrant = useMutation({
+    mutationFn: async ({ discordId, grant }: { discordId: string; name: string; grant: boolean }) => {
+      const r = await fetch(apiUrl(grant ? "/api/admin/gaming-mode/grant" : `/api/admin/gaming-mode/revoke/${encodeURIComponent(discordId)}`), grant
+        ? { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ discordId }) }
+        : { method: "DELETE", headers });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+      return r.json();
+    },
+    onSuccess: (_data, { name, grant }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/gaming-mode/grants", key] });
+      toast({ title: grant ? "Gaming Mode unlocked" : "Gaming Mode removed", description: grant ? `${name} now sees Gaming Mode in AI Optimize.` : `${name} no longer sees Gaming Mode.` });
+    },
+    onError: (error) => toast({ title: "Gaming Mode access not changed", description: String(error instanceof Error ? error.message : error), variant: "destructive" }),
+  });
+
   // System status (auto-send)
   const systemStatusQuery = useQuery<{
     autoSend: {
@@ -5056,6 +5083,29 @@ export default function Admin() {
                           </button>
                         );
                       })()}
+                      {(c as any).discordLinked && (c as any).discordUserId && (() => {
+                        const did: string = (c as any).discordUserId;
+                        const name: string = (c as any).discordUsername || did;
+                        const hasGaming = gamingGrantedIds.has(did);
+                        return (
+                          <button
+                            data-testid={`button-gaming-mode-code-${c.id}`}
+                            onClick={() => {
+                              if (confirm(hasGaming ? `Remove Gaming Mode from ${name}?` : `Unlock Gaming Mode in AI Optimize for ${name}?`))
+                                setGamingModeGrant.mutate({ discordId: did, name, grant: !hasGaming });
+                            }}
+                            disabled={setGamingModeGrant.isPending}
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                              hasGaming ? "text-red-400 hover:bg-red-500/10 hover:text-red-300" : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                            )}
+                            title={hasGaming ? "Remove Gaming Mode" : "Unlock Gaming Mode"}
+                          >
+                            <Zap className="w-3 h-3" />
+                            <span className="hidden sm:inline">{hasGaming ? "Gaming ✓" : "Gaming"}</span>
+                          </button>
+                        );
+                      })()}
                       {c.usedAt && (
                         <button
                           data-testid={`button-kill-code-${c.id}`}
@@ -5982,6 +6032,27 @@ export default function Admin() {
                                 title={graphicsGrantedIds.has(s.discordId) ? "Revoke Graphics Studio" : "Grant Graphics Studio"}
                               >
                                 <Palette className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {s.discordId && (
+                              <button
+                                data-testid={`button-gaming-mode-${s.id}`}
+                                onClick={() => {
+                                  const name = s.discordUsername ?? s.discordId!;
+                                  const hasGaming = gamingGrantedIds.has(s.discordId!);
+                                  if (confirm(hasGaming ? `Remove Gaming Mode from ${name}?` : `Unlock Gaming Mode in AI Optimize for ${name}?`))
+                                    setGamingModeGrant.mutate({ discordId: s.discordId!, name, grant: !hasGaming });
+                                }}
+                                disabled={setGamingModeGrant.isPending}
+                                className={cn(
+                                  "p-1.5 rounded transition-colors shrink-0",
+                                  gamingGrantedIds.has(s.discordId)
+                                    ? "text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                                    : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                                )}
+                                title={gamingGrantedIds.has(s.discordId) ? "Remove Gaming Mode" : "Unlock Gaming Mode"}
+                              >
+                                <Zap className="w-3.5 h-3.5" />
                               </button>
                             )}
                             {s.sessionToken && <button

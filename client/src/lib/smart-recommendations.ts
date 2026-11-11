@@ -2,6 +2,7 @@ import type { HardwareInfo } from "@/hooks/use-hardware-info";
 import type { OsInfo } from "@/hooks/use-os-detection";
 import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
 import { MANUAL_ONLY_TWEAK_IDS } from "@shared/manual-only-tweak-ids";
+import { NVIDIA_CAPTURE_PROTECTED_IDS } from "@shared/preset-builder";
 
 export interface SmartRecs {
   ids: Set<string>;
@@ -32,6 +33,9 @@ export function getEligibleSmartRecommendationIds(
     return registryIds.has(id)
       && tweak?.safety !== "expert"
       && !MANUAL_ONLY_TWEAK_IDS.has(id)
+      // Capture-protected NVIDIA actions (Ansel, overlay, NVIDIA App telemetry) are opt-in only;
+      // Full Optimize never applies them, so they must not count as recommended.
+      && !NVIDIA_CAPTURE_PROTECTED_IDS.has(id)
       && isCompatible(id);
   });
 }

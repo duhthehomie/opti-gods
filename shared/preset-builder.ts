@@ -208,6 +208,22 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
     return { ok: false, reason: "GTX 1650-specific tweak skipped — a GTX 1650 was not detected." };
   }
 
+  // Generation-specific NVIDIA tweaks. The catch-all recommendation sweep only
+  // checks vendor, so model gates must live here or a GTX card gets RTX targets.
+  const gpuName = hw.gpuName ?? "";
+  if (id.startsWith("RTX50") && !/\brtx\s*50\d{2}\b|blackwell/i.test(gpuName)) {
+    return { ok: false, reason: "RTX 50-series tweak skipped — an RTX 50-series GPU was not detected." };
+  }
+  if (id.startsWith("FiveM5060") && !/\brtx\s*50[6-9]\d\b/i.test(gpuName)) {
+    return { ok: false, reason: "RTX 5060-class tweak skipped — an RTX 5060 or higher RTX 50-series GPU was not detected." };
+  }
+  if (id === "NvidiaRTXVideoOff" && !/\brtx\b/i.test(gpuName)) {
+    return { ok: false, reason: "RTX Video tweak skipped — RTX Video Super Resolution/HDR only exist on RTX GPUs." };
+  }
+  if (id === "NvidiaVRAMMax" && hw.hasDiscreteGpu) {
+    return { ok: false, reason: "VRAM segment tweak skipped — DedicatedSegmentSize only affects integrated graphics, not a discrete GPU's own VRAM." };
+  }
+
   if (id === "EnableHAGS") {
     const gpu = hw.gpuName ?? "";
     const supportedGpu =

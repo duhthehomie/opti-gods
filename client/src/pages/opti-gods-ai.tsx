@@ -25,6 +25,8 @@ import { canRunNvidiaPreset } from "@/lib/nvidia-preset-eligibility";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { ProUnlockButton } from "@/components/pro-gate";
 import { useLiveStats } from "@/hooks/use-live-stats";
+import { useGamingModeAccess } from "@/hooks/use-gaming-mode-access";
+import { GamingModePanel } from "@/components/admin/gaming-mode-panel";
 
 type Message = {
   role: "user" | "assistant";
@@ -658,6 +660,7 @@ export default function OptiGodsAI() {
   const isPro = useProStatus();
   const hw = useHardwareInfo();
   const live = useLiveStats(hw.ramGB);
+  const gamingModeAccess = useGamingModeAccess();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -912,6 +915,12 @@ export default function OptiGodsAI() {
             </div>
           ))}
         </div>
+
+        {gamingModeAccess && (
+          <div className="mx-4 mt-2 max-h-[45vh] shrink-0 overflow-y-auto" data-testid="section-ai-gaming-mode">
+            <GamingModePanel variant="player" />
+          </div>
+        )}
 
         {/* Messages */}
         <div

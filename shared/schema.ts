@@ -474,6 +474,16 @@ export const graphicsStudioGrants = pgTable("graphics_studio_grants", {
 });
 export type GraphicsStudioGrant = typeof graphicsStudioGrants.$inferSelect;
 
+// Gaming Mode early-access grants — Discord-ID-locked, granted manually by admin
+// until Gaming Mode is released to everyone.
+export const gamingModeGrants = pgTable("gaming_mode_grants", {
+  discordUserId: text("discord_user_id").primaryKey(),
+  grantedAt: timestamp("granted_at").defaultNow(),
+  grantedBy: text("granted_by"),
+  notes: text("notes"),
+});
+export type GamingModeGrant = typeof gamingModeGrants.$inferSelect;
+
 // FiveM community servers — every user's Tauri app upserts servers they connect to;
 // leaq assigns logos via the admin "FiveM Servers" tab.
 export const fivemServers = pgTable("fivem_servers", {

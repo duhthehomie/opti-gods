@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Power, Radar, ShieldAlert, Zap } from "lucide-react";
+import { Gauge, Power, Radar, ShieldAlert, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { startVisiblePolling } from "@/lib/foreground-polling";
 import { NowPlayingCard } from "./now-playing-card";
 import {
-  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readForegroundApp, readNowPlaying,
-  type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch,
+  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readFpsCapture, readForegroundApp, readNowPlaying,
+  startFpsCapture, stopFpsCapture,
+  type NativeFpsCaptureStatus, type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch,
 } from "@/lib/tauri-bridge";
 import { useAuth } from "@/hooks/use-auth";
+import { isCodGame, useGamingModeCodTweaks, type CodTweakState } from "@/hooks/use-gaming-mode-cod";
+
+const FPS_COUNTER_KEY = "optigods_gaming_mode_fps_on";
 
 const PLATFORM_COLORS: Record<string, string> = { Twitch: "#9146FF", Kick: "#53FC18", YouTube: "#FF0000" };
 
@@ -29,7 +33,13 @@ export interface GamingModeFivemInfo {
   label: string;
 }
 
-export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo | null }) {
+/**
+ * "admin" is the Perf Recorder test panel. "player" is the AI Optimize version
+ * for invited accounts: one active game, background apps, music, an FPS
+ * counter, and automatic missing Call of Duty tweaks.
+ */
+export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: GamingModeFivemInfo | null; variant?: "admin" | "player" }) {
+  const player = variant === "player";
   const { toast } = useToast();
   const native = isNative();
   const [status, setStatus] = useState<NativeGamingModeStatus | null>(null);
@@ -115,6 +125,59 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
     return startVisiblePolling(refresh, 500);
   }, [native, refresh]);
 
+  const codTweaks = useGamingModeCodTweaks(status, player);
+
+  // FPS counter (player version). PresentMon is downloaded once, only after the user agrees.
+  const [fps, setFps] = useState<NativeFpsCaptureStatus | null>(null);
+  const [fpsBusy, setFpsBusy] = useState(false);
+  const [fpsConsent, setFpsConsent] = useState(false);
+  const fpsAutoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!native || !player) return;
+    void readFpsCapture().then(current => {
+      if (!current) return;
+      setFps(current);
+      let wanted = false;
+      try { wanted = localStorage.getItem(FPS_COUNTER_KEY) === "1"; } catch { /* storage unavailable */ }
+      if (wanted && current.tool_ready && !current.active && !fpsAutoStartedRef.current) {
+        fpsAutoStartedRef.current = true;
+        void startFps();
+      }
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [native, player]);
+  useEffect(() => {
+    if (!native || !player || !fps?.active) return;
+    return startVisiblePolling(async () => {
+      const current = await readFpsCapture();
+      if (current) setFps(current);
+    }, 1000);
+  }, [native, player, fps?.active]);
+  const startFps = async () => {
+    setFpsConsent(false);
+    setFpsBusy(true);
+    try {
+      setFps(await startFpsCapture());
+      try { localStorage.setItem(FPS_COUNTER_KEY, "1"); } catch { /* storage unavailable */ }
+    } catch (error) {
+      toast({ title: "FPS counter did not start", description: String(error), variant: "destructive" });
+    } finally {
+      setFpsBusy(false);
+    }
+  };
+  const stopFps = async () => {
+    setFpsBusy(true);
+    try {
+      await stopFpsCapture();
+      try { localStorage.removeItem(FPS_COUNTER_KEY); } catch { /* storage unavailable */ }
+      setFps(await readFpsCapture());
+    } catch (error) {
+      toast({ title: "FPS counter did not stop", description: String(error), variant: "destructive" });
+    } finally {
+      setFpsBusy(false);
+    }
+  };
+
   const turnOn = async () => {
     setBusy("on");
     try {
@@ -159,6 +222,8 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
     foreground && foreground.pid > 0 && (foreground.pid === game.pid || (isFiveM(game.name) && isFiveM(foreground.exe))),
   );
   const anyTabbedIn = games.some(tabbedIn);
+  // The player version shows one game: the one in front, otherwise the first found.
+  const shownGames = player ? [...games].sort((a, b) => Number(tabbedIn(b)) - Number(tabbedIn(a))).slice(0, 1) : games;
   const lastError = status?.errors.at(-1);
 
   return (
@@ -184,14 +249,16 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
           </div>
           <div className="min-w-0">
             <div className={cn("text-[10px] font-bold uppercase tracking-widest", on ? "text-emerald-400" : broken ? "text-red-400" : "text-zinc-600")}>
-              Gaming Mode · test
+              {player ? "Gaming Mode" : "Gaming Mode · test"}
             </div>
             <h3 className={cn("text-lg font-display font-bold", on ? "text-white" : broken ? "text-red-200" : "text-zinc-400")} data-testid="text-gaming-mode-state">
               {busy === "on" ? "Turning on…" : busy === "off" ? "Turning off…" : on ? "Gaming Mode enabled" : broken ? "Gaming Mode not responding" : "Gaming Mode off"}
             </h3>
             <p className="text-[11px] text-zinc-500">
               {on
-                ? `Scanning ${status?.processes_scanned ?? 0} processes every 2 s · last scan ${ago(status!.heartbeat_ms, now)} · keeps running when Opti Gods is closed`
+                ? player
+                  ? "Game at High priority, background apps slowed · keeps running when Opti Gods is closed"
+                  : `Scanning ${status?.processes_scanned ?? 0} processes every 2 s · last scan ${ago(status!.heartbeat_ms, now)} · keeps running when Opti Gods is closed`
                 : broken
                   ? "Switched on, but the background agent is not reporting. Turn it off and on again."
                   : "Raises the running game to High priority and lowers background apps. Stays on until you turn it off."}
@@ -244,13 +311,13 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 </span>
               ))}
             </div>
-            {games.length ? games.map(game => (
+            {shownGames.length ? shownGames.map(game => (
               <div key={game.pid} className="mt-1 text-sm" data-testid={`gaming-mode-game-${game.pid}`}>
                 <span className={cn("font-bold", tabbedIn(game) ? "text-red-100 drop-shadow-[0_0_6px_rgba(239,68,68,0.9)]" : "text-white")}>{/^fivem_/i.test(game.name) ? "FiveM" : game.name.replace(/\.exe$/i, "")}</span>
                 <span className={cn("ml-2 font-mono text-xs", game.priority_verified ? "text-emerald-400" : "text-red-400")}>
                   {game.priority_verified ? "High priority ✓" : `${game.priority} (not raised)`}
                 </span>
-                {/^fivem_/i.test(game.name) && (
+                {!player && /^fivem_/i.test(game.name) && (
                   <div className="text-xs" data-testid="text-gaming-mode-fivem-state">
                     {fivem?.state === "server"
                       ? <span className="text-emerald-300">On server · <span className="font-bold text-white">{fivem.label}</span></span>
@@ -259,11 +326,53 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                         : <span className="text-zinc-500">Checking server or menu…</span>}
                   </div>
                 )}
-                <div className="text-[10px] text-zinc-500">
-                  {game.name} · PID {game.pid} · found by {game.detected_by} · power saving {game.power_throttling_off ? "off" : "not changed"}
-                </div>
+                {!player && (
+                  <div className="text-[10px] text-zinc-500">
+                    {game.name} · PID {game.pid} · found by {game.detected_by} · power saving {game.power_throttling_off ? "off" : "not changed"}
+                  </div>
+                )}
+                {player && isCodGame(game.name) && <CodTweakLine state={codTweaks} />}
               </div>
             )) : <div className="mt-1 text-sm text-zinc-400">No game running yet. Open any game and it is boosted within 2 s.</div>}
+            {player && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2" data-testid="gaming-mode-fps">
+                <div className="flex items-center gap-2">
+                  <Gauge className={cn("h-4 w-4", fps?.active ? "text-red-400" : "text-zinc-600")} />
+                  {fps?.active ? (
+                    fps.fps_status === "measured" && fps.fps != null ? (
+                      <span className="font-mono text-lg font-black text-white" data-testid="text-gaming-mode-fps">
+                        {Math.round(fps.fps)} <span className="text-[10px] font-bold text-zinc-400">FPS</span>
+                        {fps.frame_time_ms != null && <span className="ml-1.5 text-[10px] font-normal text-zinc-500">{fps.frame_time_ms.toFixed(1)} ms</span>}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-400">{fps.error ? fps.error : games.length ? "Waiting for frames from the game…" : "Open a game to see FPS"}</span>
+                    )
+                  ) : (
+                    <span className="text-xs text-zinc-500">FPS counter off</span>
+                  )}
+                </div>
+                {fpsConsent ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-400">Downloads Intel's official PresentMon once.</span>
+                    <button type="button" data-testid="button-gaming-mode-fps-confirm" onClick={() => void startFps()} className="rounded-md border border-red-500/60 bg-red-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-red-500">Download</button>
+                    <button type="button" data-testid="button-gaming-mode-fps-cancel" onClick={() => setFpsConsent(false)} className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200">Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={fps?.active ? "button-gaming-mode-fps-off" : "button-gaming-mode-fps-on"}
+                    disabled={fpsBusy}
+                    onClick={() => void (fps?.active ? stopFps() : fps?.tool_ready ? startFps() : setFpsConsent(true))}
+                    className={cn(
+                      "rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all disabled:cursor-wait disabled:opacity-60",
+                      fps?.active ? "border-zinc-600 bg-zinc-900 text-zinc-200 hover:bg-zinc-800" : "border-red-500/60 bg-red-600 text-white hover:bg-red-500",
+                    )}
+                  >
+                    {fpsBusy ? "…" : fps?.active ? "Turn off FPS counter" : "Enable FPS counter"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="rounded-lg border border-red-500/20 bg-black/40 px-3 py-2">
             <div className="text-[9px] font-bold uppercase tracking-widest text-red-400">Background apps</div>
@@ -353,7 +462,7 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
                 ? Array.from(new Set(status.lowered)).map(name => `${name} ×${status.lowered.filter(item => item === name).length}`).join(" · ")
                 : "No browsers, launchers or chat apps open"}
             </div>
-            <div className="mt-1 text-[10px] text-zinc-600">
+            <div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>
               {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call, Discord gets extra priority so voice stays clear. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
             </div>
           </div>
@@ -377,7 +486,7 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
             ) : (
               <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Music apps are slowed or protected only while a game is running"}</div>
             )}
-            <div className="mt-1 text-[10px] text-zinc-600">Now Playing and its controls work any time, with or without a game. While a game runs, the song that is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
+            <div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>Now Playing and its controls work any time, with or without a game. While a game runs, the song that is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
           </div>
         </div>
       )}
@@ -388,4 +497,22 @@ export function GamingModePanel({ fivem = null }: { fivem?: GamingModeFivemInfo 
       )}
     </div>
   );
+}
+
+function CodTweakLine({ state }: { state: CodTweakState }) {
+  const text = state.kind === "checking"
+    ? { tone: "text-zinc-400", label: "Checking Call of Duty tweaks…" }
+    : state.kind === "applying"
+      ? { tone: "text-red-300", label: `Applying ${state.count} missing Call of Duty tweaks…` }
+      : state.kind === "up_to_date"
+        ? { tone: "text-emerald-400", label: `All ${state.total} Call of Duty and PC tweaks applied ✓` }
+        : state.kind === "needs_scan"
+          ? { tone: "text-amber-400", label: "Run System Scan once so the COD tweaks match your PC" }
+          : state.kind === "needs_pro"
+            ? { tone: "text-amber-400", label: "Pro is needed to apply the Call of Duty tweaks" }
+            : state.kind === "error"
+              ? { tone: "text-red-400", label: state.message }
+              : null;
+  if (!text) return null;
+  return <div className={cn("text-[11px]", text.tone)} data-testid="text-gaming-mode-cod-tweaks">{text.label}</div>;
 }

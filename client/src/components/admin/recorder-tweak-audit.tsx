@@ -70,7 +70,23 @@ const readName = (name: string) => (name === "(Default)" ? "" : name);
  *  (e.g. TdrDelay 8 vs 10) must not make one of them look missing forever. */
 type AcceptedValues = Map<string, Array<number | string>>;
 
+/** Windows keeps every DirectX graphics preference in one "Name=value;" string, so other
+ *  settings (windowed-game optimizations, Auto HDR) sit beside ours. Compare the pairs. */
+function settingPairs(text: string): Map<string, string> {
+  const pairs = new Map<string, string>();
+  for (const part of text.split(";")) {
+    const [name, ...rest] = part.split("=");
+    if (name.trim()) pairs.set(name.trim().toLowerCase(), rest.join("=").trim().toLowerCase());
+  }
+  return pairs;
+}
+
 function sameValue(target: TweakRegistryTarget, wanted: number | string, read: RegistryReadResult): boolean {
+  if (target.type === "sz" && target.name === "DirectXUserGlobalSettings" && read.kind === "sz") {
+    const have = settingPairs(String(read.value));
+    const need = settingPairs(String(wanted));
+    return need.size > 0 && Array.from(need).every(([name, value]) => have.get(name) === value);
+  }
   if (target.type === "sz") return String(read.value).trim().toLowerCase() === String(wanted).trim().toLowerCase();
   if (read.kind === "dword" || read.kind === "qword") return Number(read.value) === Number(wanted);
   // Control Panel values (mouse, desktop timeouts, font smoothing) are stored by
@@ -98,8 +114,20 @@ function checkValue(target: TweakRegistryTarget, read: RegistryReadResult | unde
   return { key, current: read.kind === "sz" ? `"${read.value}"` : String(read.value), needed, ok };
 }
 
-/** .reg text for the values that are not set as needed (copied, never applied here). */
-function regFile(targets: TweakRegistryTarget[]): string {
+/** Writes the FiveM Full Perf Stack makes inside a PowerShell loop, which the target
+ *  generator cannot read. Without them, its IoPriority 2 makes another FiveM tweak's
+ *  IoPriority 3 look missing (and the reverse). */
+const IFEO = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options";
+const LOOP_WRITES: Record<string, Array<{ key: string; value: number }>> = {
+  FiveMFullPerfStack: ["GTA5.exe", "FiveM.exe"].flatMap(exe => [
+    { key: `hklm\\${IFEO}\\${exe}\\PerfOptions\\CpuPriorityClass`.toLowerCase(), value: 3 },
+    { key: `hklm\\${IFEO}\\${exe}\\PerfOptions\\IoPriority`.toLowerCase(), value: 2 },
+  ]),
+};
+
+/** .reg text for the values that are not set as needed (copied, never applied here).
+ *  Each value is preceded by a comment with what this PC has now, for diagnosis. */
+function regFile(targets: TweakRegistryTarget[], currentOf?: (t: TweakRegistryTarget) => string): string {
   const byKey = new Map<string, { header: string; rows: Map<string, string> }>();
   for (const t of targets) {
     const header = `[${t.hive === "HKLM" ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"}\\${t.path}]`;
@@ -116,7 +144,8 @@ function regFile(targets: TweakRegistryTarget[]): string {
       data = `hex(b):${bytes.join(",")}`;
     }
     const group = byKey.get(header.toLowerCase()) ?? { header, rows: new Map<string, string>() };
-    group.rows.set(name.toLowerCase(), `${name}=${data}`);
+    const note = currentOf ? `; now: ${currentOf(t)}\r\n` : "";
+    group.rows.set(name.toLowerCase(), `${note}${name}=${data}`);
     byKey.set(header.toLowerCase(), group);
   }
   return ["Windows Registry Editor Version 5.00", ...Array.from(byKey.values(), ({ header, rows }) => `\r\n${header}\r\n${Array.from(rows.values()).join("\r\n")}`)].join("\r\n") + "\r\n";
@@ -211,6 +240,11 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
         if (!list.some(v => String(v) === String(t.value))) list.push(t.value);
         map.set(regKey(t), list);
       }
+      for (const w of LOOP_WRITES[id] ?? []) {
+        const list = map.get(w.key) ?? [];
+        if (!list.some(v => String(v) === String(w.value))) list.push(w.value);
+        map.set(w.key, list);
+      }
     }
     return map;
   }, [targetIds]);
@@ -276,7 +310,7 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
   const missingTargets = rows.flatMap(r => r.missingTargets);
   const copyMissing = async () => {
     try {
-      await navigator.clipboard.writeText(regFile(missingTargets));
+      await navigator.clipboard.writeText(regFile(missingTargets, t => checkValue(t, registry?.get(regKey(t)), accepted).current));
       toast({ title: "Copied", description: `${missingTargets.length} registry values as a .reg file. Nothing was changed on this PC.` });
     } catch (copyError) {
       toast({ title: "Copy failed", description: errorMessage(copyError), variant: "destructive" });

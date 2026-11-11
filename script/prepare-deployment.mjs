@@ -39,8 +39,20 @@ async function removePath(path) {
     console.log(`[deployment-cleanup] would remove ${path}`);
     return;
   }
-  await rm(path, { recursive: true, force: true });
-  console.log(`[deployment-cleanup] removed ${path}`);
+  try {
+    // Retries cover files written into the folder while it is being removed
+    // (ENOTEMPTY/EBUSY), which happened with .cache during a publish.
+    await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+    console.log(`[deployment-cleanup] removed ${path}`);
+  } catch (error) {
+    // Caches only cost space; the size check below still fails the build if
+    // leaving one behind would push the image over the limit.
+    if (path === ".cache" && ["ENOTEMPTY", "EBUSY", "EPERM"].includes(error?.code)) {
+      console.warn(`[deployment-cleanup] could not fully remove ${path} (${error.code}); it is in use, continuing`);
+      return;
+    }
+    throw error;
+  }
 }
 
 function workspaceBytes() {

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, marketingEvents, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, fivemServers, performanceTweakAllowance, nativeTweakTickets, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type FivemServer } from "@shared/schema";
+import { presets, startupApps, optimizations, proAccessCodes, proFriendTokens, siteVisits, marketingEvents, emailRequests, announcements, scriptDownloads, proSessions, manualPayments, proIpLogs, aiChatSessions, securityEvents, ipBans, customerHardware, userReports, adminSettings, discountCodes, autoResolveRuns, users, hardwareRigs, tweakSuggestions, nvidiaDrivers, proEntitlements, nativeTokensTable, graphicsStudioGrants, gamingModeGrants, fivemServers, performanceTweakAllowance, nativeTweakTickets, type InsertPreset, type Preset, type InsertStartupApp, type StartupApp, type InsertOptimization, type Optimization, type ProAccessCode, type ProFriendToken, type EmailRequest, type Announcement, type InsertAnnouncement, type ProSession, type ManualPayment, type ProIpLog, type AiChatSession, type AiChatMessage, type SecurityEvent, type SecurityEventType, type SecuritySeverity, type IpBan, type CustomerHardware, type UserReport, type ReportCategory, type ReportStatus, type AdminSettings, type DiscountCode, type AutoResolveRun, type User, type InsertUser, type HardwareRig, type HardwareScanPayload, type TweakSuggestion, type InsertTweakSuggestion, type NvidiaDriver, type InsertNvidiaDriver, type SuggestionStatus, type ProEntitlement, type GraphicsStudioGrant, type GamingModeGrant, type FivemServer } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, inArray, sql, desc } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 import { FREE_NATIVE_TWEAK_LIMIT } from "@shared/native-tweak-ids";
@@ -154,6 +154,11 @@ export interface IStorage {
   revokeGraphicsStudio(discordUserId: string): Promise<void>;
   hasGraphicsStudio(discordUserId: string): Promise<boolean>;
   listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]>;
+  // Gaming Mode early-access grants (Discord-ID-locked, admin-granted)
+  grantGamingMode(discordUserId: string, grantedBy?: string | null, notes?: string | null): Promise<void>;
+  revokeGamingMode(discordUserId: string): Promise<void>;
+  hasGamingMode(discordUserId: string): Promise<boolean>;
+  listGamingModeGrants(): Promise<GamingModeGrant[]>;
   // FiveM community servers
   getAllFivemServers(): Promise<FivemServer[]>;
   upsertFivemServer(connectCode: string, name: string, logoUrl?: string | null): Promise<FivemServer>;
@@ -1306,6 +1311,26 @@ export class DatabaseStorage implements IStorage {
 
   async listGraphicsStudioGrants(): Promise<GraphicsStudioGrant[]> {
     return db.select().from(graphicsStudioGrants).orderBy(desc(graphicsStudioGrants.grantedAt));
+  }
+
+  async grantGamingMode(discordUserId: string, grantedBy?: string | null, notes?: string | null): Promise<void> {
+    await db.insert(gamingModeGrants)
+      .values({ discordUserId, grantedBy: grantedBy ?? null, notes: notes ?? null })
+      .onConflictDoNothing();
+  }
+
+  async revokeGamingMode(discordUserId: string): Promise<void> {
+    await db.delete(gamingModeGrants).where(eq(gamingModeGrants.discordUserId, discordUserId));
+  }
+
+  async hasGamingMode(discordUserId: string): Promise<boolean> {
+    const rows = await db.select({ d: gamingModeGrants.discordUserId })
+      .from(gamingModeGrants).where(eq(gamingModeGrants.discordUserId, discordUserId));
+    return rows.length > 0;
+  }
+
+  async listGamingModeGrants(): Promise<GamingModeGrant[]> {
+    return db.select().from(gamingModeGrants).orderBy(desc(gamingModeGrants.grantedAt));
   }
 
   async getAllFivemServers(): Promise<FivemServer[]> {

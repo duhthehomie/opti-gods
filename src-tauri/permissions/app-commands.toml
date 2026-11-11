@@ -309,3 +309,8 @@ commands.allow = ["gaming_mode_status", "enable_gaming_mode", "disable_gaming_mo
 identifier = "allow-success-sound"
 description = "Play the built-in success chime after a confirmed Windows action."
 commands.allow = ["play_success_sound"]
+
+[[permission]]
+identifier = "allow-fivem-reshade"
+description = "Admin: check, install or remove the Opti Gods ReShade preset and overlay in FiveM (FiveM must be closed)."
+commands.allow = ["fivem_reshade_status", "fivem_reshade_install", "fivem_reshade_remove"]
