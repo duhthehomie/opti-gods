@@ -59,13 +59,14 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      # Saves compiled Rust dependencies between builds (the slow part).
+      # Our own app crate is always cleaned out of the cache before saving,
+      # so every build recompiles the app's real source — never a stale exe.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-v4-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml') }}
+          workspaces: "src-tauri -> target"
+          cache-on-failure: false
 
       - name: Install Tauri CLI
         # Pinned to ~2.9 to match the tauri Rust crate locked at 2.9.5.
