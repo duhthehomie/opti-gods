@@ -10,6 +10,7 @@ import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-twe
 import { NVIDIA_CAPTURE_PROTECTED_IDS } from "@shared/preset-builder";
 import { boundedWindowsRead } from "@/lib/applied-tweak-state";
 import { getWindowsProcessCount } from "@/lib/tauri-bridge";
+import { rememberNotApplicableTweaks } from "@/lib/not-applicable-tweaks";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -169,6 +170,7 @@ function readRunStateSafely(): NativeTweakRunState | null {
 
 function writeRunState(state: NativeTweakRunState) {
   try { localStorage.setItem(NATIVE_RUN_STATE_KEY, JSON.stringify({ ...state, lastProgressAt: Date.now() })); } catch { /* best effort */ }
+  rememberNotApplicableTweaks(state.items);
   dispatchRunState();
 }
 

@@ -1,6 +1,10 @@
 import { getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
-import { TWEAK_REGISTRY } from "@/lib/tweak-registry";
+import { TWEAK_REGISTRY, getTweakMeta } from "@/lib/tweak-registry";
+import { isNvidiaAction, isScriptOnlyTweakId } from "@/lib/native-tweak-runner";
+import { readNotApplicableTweakIds } from "@/lib/not-applicable-tweaks";
+import { NATIVE_TWEAK_ID_SET } from "@shared/native-tweak-ids";
+import { RETIRED_TWEAK_IDS, RUNTIME_ONLY_TWEAK_IDS } from "@shared/retired-tweak-ids";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import { detectInstalledGames, isNative } from "@/lib/tauri-bridge";
 import { useEffect, useState } from "react";
@@ -43,7 +47,25 @@ export function useInstalledProfileGameIds(): { ids: string[]; error: string | n
  * The recommended tweaks a PC is scored against. Dashboard and AI Optimize
  * must both use this so their "X of Y" counts always match.
  */
+/** Same test the run page uses before marking a tweak "no trusted batch action". */
+export function hasRunnableWindowsAction(id: string): boolean {
+  if (isNvidiaAction(id)) return true;
+  return Boolean(getTweakMeta(id)) && (NATIVE_TWEAK_ID_SET.has(id) || isScriptOnlyTweakId(id));
+}
+
+/**
+ * Tweaks that can never be applied on this PC: no Windows action exists in
+ * this app, the tweak was retired, it is a one-off action with nothing lasting
+ * to confirm, or Windows reported it cannot apply here.
+ */
+export function isNeverApplicableHere(id: string, notApplicable: ReadonlySet<string> = readNotApplicableTweakIds()): boolean {
+  if (id === NVIDIA_PRESET_ID || id === NVIDIA_MSI_PRO_ID) return false;
+  return RETIRED_TWEAK_IDS.has(id) || RUNTIME_ONLY_TWEAK_IDS.has(id)
+    || !hasRunnableWindowsAction(id) || notApplicable.has(id);
+}
+
 export function getScoredRecommendationIds(recIds: Iterable<string>, nvidiaPresetEligible: boolean, installedProfileGameIds: readonly string[] = []): string[] {
+  const notApplicable = readNotApplicableTweakIds();
   return Array.from(new Set([
     ...getEligibleSmartRecommendationIds(
       [...Array.from(recIds).filter(id => id !== NVIDIA_PRESET_ID), ...(nvidiaPresetEligible ? [NVIDIA_PRESET_ID] : [])],
@@ -52,7 +74,7 @@ export function getScoredRecommendationIds(recIds: Iterable<string>, nvidiaPrese
     ...(nvidiaPresetEligible && getTweakCompatibility(NVIDIA_MSI_PRO_ID).ok ? [NVIDIA_MSI_PRO_ID] : []),
     // Last, so installed game profiles never shift the free 15-tweak allowance.
     ...installedProfileGameIds.filter(id => PROFILE_GAME_IDS.includes(id) && REGISTRY_IDS.has(id) && getTweakCompatibility(id).ok),
-  ]));
+  ].filter(id => !isNeverApplicableHere(id, notApplicable))));
 }
 
 /**

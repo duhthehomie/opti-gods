@@ -3,6 +3,20 @@
  * suppressor. Writes still fail closed, including callers using SilentlyContinue.
  */
 export const NATIVE_SCRIPT_RUNTIME = String.raw`
+function ConvertTo-OptiRegistryComparable($Item, [string]$Kind) {
+  if ($null -eq $Item) { return '' }
+  $base = if ($Item -is [psobject]) { $Item.PSObject.BaseObject } else { $Item }
+  if ($base -is [string] -and $Kind -match '^(DWord|QWord)$' -and $base -match '^\s*0x([0-9a-fA-F]{1,16})\s*$') {
+    $base = [decimal][Convert]::ToUInt64($Matches[1], 16)
+  }
+  $isInteger = $base -is [int] -or $base -is [long] -or $base -is [uint32] -or $base -is [uint64] -or $base -is [int16] -or $base -is [uint16] -or $base -is [byte] -or $base -is [sbyte] -or $base -is [decimal]
+  if (-not $isInteger) { return [string]$base }
+  $number = [decimal]$base
+  # DWORD/QWORD are unsigned in the registry but read back as signed numbers.
+  if ($number -lt 0 -and $Kind -eq 'DWord') { $number += [decimal]4294967296 }
+  if ($number -lt 0 -and $Kind -eq 'QWord') { $number += [decimal]::Parse('18446744073709551616') }
+  return $number.ToString([Globalization.CultureInfo]::InvariantCulture)
+}
 function Set-ItemProperty {
   [CmdletBinding()]
   param(
@@ -29,10 +43,18 @@ function Set-ItemProperty {
     try { Microsoft.PowerShell.Management\Set-ItemProperty @parameters }
     catch { throw "Registry write failed: $p / $Name - $($_.Exception.Message)" }
     $actual = Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath $p -Name $Name -ErrorAction Stop
-    $expectedValues = @($Value); $actualValues = @($actual)
-    if ($expectedValues.Count -ne $actualValues.Count) { throw "Registry write did not read back: $p / $Name" }
-    for ($i = 0; $i -lt $expectedValues.Count; $i++) {
-      if ([string]$expectedValues[$i] -cne [string]$actualValues[$i]) { throw "Registry write did not read back: $p / $Name" }
+    $kind = ''
+    try { $kind = (Microsoft.PowerShell.Management\Get-Item -LiteralPath $p -ErrorAction Stop).GetValueKind($Name).ToString() } catch { $kind = '' }
+    # Compare values, not their source text: a script literal such as 0x20
+    # keeps the text "0x20" while Windows reads back the number 32.
+    $expectedValues = @($Value | ForEach-Object { ConvertTo-OptiRegistryComparable $_ $kind })
+    $actualValues = @($actual | ForEach-Object { ConvertTo-OptiRegistryComparable $_ $kind })
+    $mismatch = $expectedValues.Count -ne $actualValues.Count
+    for ($i = 0; -not $mismatch -and $i -lt $expectedValues.Count; $i++) {
+      if ($expectedValues[$i] -cne $actualValues[$i]) { $mismatch = $true }
+    }
+    if ($mismatch) {
+      throw ("Registry write did not read back: $p / $Name (wanted " + ($expectedValues -join ',') + ', Windows has ' + ($actualValues -join ',') + ' as ' + $(if ($kind) { $kind } else { 'unknown type' }) + ')')
     }
   }
 }
