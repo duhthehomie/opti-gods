@@ -10,9 +10,13 @@ name: OptiGods Release
 #   https://github.com/<owner>/<repo>/releases/latest/download/latest.json
 # so this workflow also writes a `latest.json` next to the installer.
 
+# Builds are pushed to the long-lived `release-builds` branch (no tag push).
+# GitHub only shares Actions caches within one branch, so a fresh tag per build
+# could never reuse the previous build's compiled Rust dependencies. The
+# release step below creates the fresh v<version> tag on the built commit.
 on:
   push:
-    branches: [main]
+    branches: [main, release-builds]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -238,6 +242,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          # Tag the commit that was built, not the default branch.
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.sign.outputs.signed == 'true' && format('OptiGods v{0}', steps.version.outputs.version) || format('OptiGods v{0} (unsigned-preview)', steps.version.outputs.version) }}
           prerelease: ${{ steps.sign.outputs.signed != 'true' }}
           generate_release_notes: true

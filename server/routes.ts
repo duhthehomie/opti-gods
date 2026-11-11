@@ -18,7 +18,7 @@ import { readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 import { GAME_WHITELIST } from "@shared/game-whitelist";
 import { buildSafePreset, hardwareFromRig, GAME_DETECT_PACK_IDS, EXPERT_TWEAK_IDS, FORBIDDEN_AUTO_TWEAKS, MANUAL_ONLY_TWEAK_IDS, NVIDIA_CAPTURE_PROTECTED_IDS, type PresetHardware, type PresetGoal, type PresetGpuVendor, type PresetOsVersion } from "@shared/preset-builder";
-import { getLatestGhRelease, bustGhCache } from "./github-release";
+import { getLatestGhRelease, bustGhCache, GH_CACHE_TTL } from "./github-release";
 import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET, selectBestInstantTweaks } from "@shared/native-tweak-ids";
 import { buildSafeWindowsCommandOverride } from "./windows-tweak-commands";
 import { buildNativeBatchCommandFix } from "./native-batch-command-fixes";
@@ -2305,7 +2305,7 @@ export async function registerRoutes(
       exeUrl: gh?.exeUrl ?? null,
       pageUrl: gh?.pageUrl ?? null,
       fetchedAt: gh?.fetchedAt ?? null,
-      stale: gh ? Date.now() - gh.fetchedAt > 10 * 60 * 1000 : true,
+      stale: gh ? Date.now() - gh.fetchedAt > GH_CACHE_TTL : true,
     });
   });
 

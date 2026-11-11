@@ -419,6 +419,8 @@ export interface NativeGamingModeGame {
 export interface NativeGamingModeStatus {
   /** Discord in a voice call while a game runs. null: unknown or Discord closed. */
   discord_call?: boolean | null;
+  /** Windows audio engine raised to Above Normal for a Discord call (confirmed by Windows). */
+  call_audio_raised?: boolean;
   enabled: boolean;
   agent_running: boolean;
   agent_pid: number;

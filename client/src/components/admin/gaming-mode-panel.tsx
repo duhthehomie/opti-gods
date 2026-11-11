@@ -5,11 +5,12 @@ import { useToast } from "@/hooks/use-toast";
 import { startVisiblePolling } from "@/lib/foreground-polling";
 import { NowPlayingCard } from "./now-playing-card";
 import {
-  disableGamingMode, enableGamingMode, gamingModeStatus, isNative, readFpsCapture, readForegroundApp, readNowPlaying,
+  disableGamingMode, enableGamingMode, gamingModeStatus, getWindowsProcessCount, isNative, readFpsCapture, readForegroundApp, readNowPlaying,
   startFpsCapture, stopFpsCapture,
   type NativeFpsCaptureStatus, type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch,
 } from "@/lib/tauri-bridge";
 import { useAuth } from "@/hooks/use-auth";
+import { boundedWindowsRead } from "@/lib/applied-tweak-state";
 import { isCodGame, useGamingModeCodTweaks, type CodTweakState } from "@/hooks/use-gaming-mode-cod";
 
 const FPS_COUNTER_KEY = "optigods_gaming_mode_fps_on";
@@ -70,6 +71,21 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   }, [native]);
 
   // Which app is in front, to show whether the game is tabbed in or out.
+  // Same Windows count as the dashboard's "Apps open", refreshed live.
+  const [appsOpen, setAppsOpen] = useState<number | null>(null);
+  const [appsOpenError, setAppsOpenError] = useState(false);
+  const gamingOn = Boolean(status?.enabled && status.agent_running);
+  useEffect(() => {
+    if (!native || !gamingOn) return;
+    return startVisiblePolling(async () => {
+      try {
+        setAppsOpen(await boundedWindowsRead(getWindowsProcessCount(), "Process count", 3000));
+        setAppsOpenError(false);
+      } catch {
+        setAppsOpenError(true);
+      }
+    }, 2000);
+  }, [native, gamingOn]);
   const [foreground, setForeground] = useState<NativeForegroundApp | null>(null);
   const [foregroundError, setForegroundError] = useState<string | null>(null);
   useEffect(() => {
@@ -287,6 +303,19 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
       </div>
 
       {on && (
+        <div className="relative mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-500/30 bg-black/50 px-3 py-2" data-testid="gaming-mode-apps-open">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-red-400">Apps open</span>
+          <span className="font-mono text-xl font-black text-white" data-testid="text-gaming-mode-apps-open">
+            {appsOpenError ? "Unavailable" : appsOpen ?? "Reading…"}
+          </span>
+          <span className="text-[11px] text-zinc-400" data-testid="text-gaming-mode-apps-slowed">
+            {games.length
+              ? `${status?.lowered.length ?? 0} background process${status?.lowered.length === 1 ? "" : "es"} slowed · ${status?.efficiency_mode ?? 0} in efficiency mode`
+              : "Background apps are slowed only while a game is running"}
+          </span>
+        </div>
+      )}
+      {on && (
         <div className="relative mt-3 grid gap-2 sm:grid-cols-2">
           <div
             data-testid="card-gaming-mode-active-game"
@@ -392,7 +421,11 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                   <span className="font-bold text-white">Discord</span>
                   <span className="text-emerald-300"> · in a voice call</span>
                   <div className="text-[10px] text-zinc-400">
-                    {games.length ? "Voice raised to Above Normal so it stays clear while you play" : "Voice gets priority as soon as a game starts"}
+                    {games.length
+                      ? status?.call_audio_raised
+                        ? "Discord and Windows audio raised to Above Normal so voice stays clear in any game"
+                        : "Voice raised to Above Normal so it stays clear while you play"
+                      : "Voice gets priority as soon as any game starts"}
                   </div>
                 </div>
               </div>
@@ -463,7 +496,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                 : "No browsers, launchers or chat apps open"}
             </div>
             <div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>
-              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call, Discord gets extra priority so voice stays clear. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call with any game running, Discord and the Windows audio engine get Above Normal priority so voice stays clear, and both go back to Normal when the call ends. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
             </div>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">

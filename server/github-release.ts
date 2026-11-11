@@ -8,7 +8,8 @@ export interface GhRelease {
 }
 
 const GH_REPO = "duhthehomie/opti-gods";
-const GH_CACHE_TTL = 10 * 60 * 1000;
+// 2 minutes: 30 GitHub calls an hour, inside the 60/hour unauthenticated limit.
+export const GH_CACHE_TTL = 2 * 60 * 1000;
 
 let _cache: GhRelease | null = null;
 let _fetching = false;

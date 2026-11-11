@@ -83,6 +83,9 @@ pub struct GamingModeStatus {
     /// (Opti Gods closed or Discord not running).
     #[serde(default)]
     pub discord_call: Option<bool>,
+    /// The Windows audio engine (audiodg.exe) is at Above Normal for a call.
+    #[serde(default)]
+    pub call_audio_raised: bool,
     pub errors: Vec<GamingModeError>,
 }
 
@@ -197,6 +200,9 @@ const EFFICIENCY_EXES: &[&str] = &[
 /// Discord builds. Never slowed; raised to Above Normal during voice calls.
 #[cfg(windows)]
 const DISCORD_EXES: &[&str] = &["discord.exe", "discordptb.exe", "discordcanary.exe"];
+/// Windows audio engine: mixes every app's sound, including Discord voice.
+/// Raised with Discord during a call, while a game runs, then put back.
+const AUDIO_ENGINE_EXE: &str = "audiodg.exe";
 
 /// Lowercase exe name, with Microsoft Store builds mapped to the known name
 /// (the Store SoundCloud app does not run as plain SoundCloud.exe).
@@ -810,25 +816,35 @@ mod agent {
                 return;
             }
             for process in processes {
-                if !DISCORD_EXES.contains(&process.name.to_ascii_lowercase().as_str()) || self.discord_raised.contains(&process.pid) { continue; }
+                let lower = process.name.to_ascii_lowercase();
+                let audio_engine = lower == AUDIO_ENGINE_EXE;
+                if !(DISCORD_EXES.contains(&lower.as_str()) || audio_engine) || self.discord_raised.contains(&process.pid) { continue; }
+                let label = if audio_engine { "the Windows audio engine" } else { "Discord" };
                 match native::get_priority(process.pid) {
                     Ok(native::NORMAL) => match native::set_priority(process.pid, native::ABOVE_NORMAL) {
                         Ok(()) => {
                             let _ = native::set_power_throttling(process.pid, native::Throttle::Off);
                             self.discord_raised.insert(process.pid);
                         }
-                        Err(message) => self.error(format!("discord:{}", process.pid), format!("Could not raise Discord for your call: {message}")),
+                        Err(message) => self.error(format!("discord:{}", process.pid), format!("Could not raise {label} for your call: {message}")),
                     },
                     _ => {}
                 }
             }
+            // Only report what Windows confirms right now.
+            self.status.call_audio_raised = processes.iter().any(|p| {
+                p.name.eq_ignore_ascii_case(AUDIO_ENGINE_EXE)
+                    && self.discord_raised.contains(&p.pid)
+                    && native::get_priority(p.pid) == Ok(native::ABOVE_NORMAL)
+            });
         }
 
         fn restore_discord(&mut self) {
+            self.status.call_audio_raised = false;
             for pid in std::mem::take(&mut self.discord_raised) {
                 if native::get_priority(pid) == Ok(native::ABOVE_NORMAL) {
                     if let Err(message) = native::set_priority(pid, native::NORMAL) {
-                        self.error(format!("discord-restore:{pid}"), format!("Could not return Discord to Normal: {message}"));
+                        self.error(format!("discord-restore:{pid}"), format!("Could not return Discord or the audio engine to Normal: {message}"));
                     }
                 }
                 let _ = native::set_power_throttling(pid, native::Throttle::Default);
@@ -1078,7 +1094,7 @@ fn fallback_restore() {
             }
             let _ = native::set_power_throttling(process.pid, native::Throttle::Default);
             let _ = native::set_memory_priority(process.pid, false);
-        } else if DISCORD_EXES.contains(&lower.as_str()) && current == Ok(native::ABOVE_NORMAL) {
+        } else if (DISCORD_EXES.contains(&lower.as_str()) || lower == AUDIO_ENGINE_EXE) && current == Ok(native::ABOVE_NORMAL) {
             let _ = native::set_priority(process.pid, native::NORMAL);
             let _ = native::set_power_throttling(process.pid, native::Throttle::Default);
         } else if classify_game(&lower, None).is_some() && current == Ok(native::HIGH) {
