@@ -3,7 +3,8 @@ using System.Text.Json;
 using LibreHardwareMonitor.Hardware;
 using Microsoft.Win32;
 
-// No fan/voltage/clock controls, motherboard probes, service changes or downloads.
+// Read-only: no fan/voltage/clock controls, service changes or downloads.
+// Motherboard fan headers are read (RPM only) so the scan can count spinning fans.
 // PawnIO installation is a separate, explicitly confirmed interactive action.
 if (args.Length != 2 || args[0] != "--parent-pid" || !int.TryParse(args[1], out var parentId))
     return;
@@ -16,22 +17,32 @@ bool DriverPresent()
     using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\PawnIO");
     return key is not null;
 }
-var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true };
+var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMotherboardEnabled = true };
 try
 {
     computer.Open();
     while (!parent.HasExited)
     {
         var candidates = new List<(HardwareType type, string name, float value)>();
+        int boardFanHeaders = 0, boardFansSpinning = 0;
         void Update(IHardware hardware)
         {
             try
             {
                 hardware.Update();
                 foreach (var sensor in hardware.Sensors)
+                {
                     if (sensor.SensorType == SensorType.Temperature && sensor.Value is float v &&
                         float.IsFinite(v) && v > 0 && v < 130)
                         candidates.Add((hardware.HardwareType, sensor.Name, v));
+                    if (sensor.SensorType == SensorType.Fan &&
+                        (hardware.HardwareType == HardwareType.SuperIO || hardware.HardwareType == HardwareType.Motherboard))
+                    {
+                        boardFanHeaders++;
+                        if (sensor.Value is float rpm && float.IsFinite(rpm) && rpm > 100 && rpm < 10000)
+                            boardFansSpinning++;
+                    }
+                }
                 foreach (var child in hardware.SubHardware) Update(child);
             }
             catch { /* Failed hardware is unavailable in this sample, never reused. */ }
@@ -58,6 +69,8 @@ try
             // Do not guess which of several adapters is the user's GPU.
             gpu_temp_c = gpus.Length == 1 ? (float?)Math.Round(gpus[0].value, 1) : null,
             cpu_sensor_name = cpus.Length > 0 ? cpus[0].name : null,
+            // Null when the board's fan controller could not be read (unknown, not zero).
+            fan_headers_spinning = boardFanHeaders > 0 ? (int?)boardFansSpinning : null,
             status = cpus.Length > 0 ? "live" : driverPresent ? "sensor_unavailable" : "driver_required"
         }));
         Console.Out.Flush();

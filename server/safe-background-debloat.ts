@@ -28,7 +28,9 @@ foreach ($name in $names) {
   $service = Get-Service -Name $name -ErrorAction Ignore
   if (-not $service) { Write-Output "[INFO] Already debloated: $name is not installed."; continue }
   $config = Get-CimInstance Win32_Service -Filter "Name='$name'" -ErrorAction Stop
-  if (-not $config) { throw "Could not read $name before changing it." }
+  # Per-user service templates (e.g. MessagingService) are visible to
+  # Get-Service but not to Win32_Service. Windows manages them; leave them alone.
+  if (-not $config) { Write-Output "[INFO] $name is a per-user Windows service template; left unchanged."; continue }
   if (-not @($backup.Services | Where-Object { $_.Name -eq $name }).Count) {
     $backup.Services += @{ Name=$name; Mode=$config.StartMode; Running=($service.Status -eq 'Running') }
   }
@@ -50,6 +52,7 @@ foreach ($name in $names) {
     continue
   }
   $config = Get-CimInstance Win32_Service -Filter "Name='$name'" -ErrorAction Stop
+  if (-not $config) { continue }
   # Do not re-enable a service the user/OS already disabled.
   if ($config.StartMode -ne 'Disabled') {
     Set-Service -Name $name -StartupType Manual -ErrorAction Stop

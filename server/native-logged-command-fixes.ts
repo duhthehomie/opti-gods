@@ -72,9 +72,17 @@ Write-Output '[OK] Edge Startup Boost and background mode turned off by policy; 
 $taskbar = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
 foreach ($path in @($policy,$taskbar)) { if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force -ErrorAction Stop | Out-Null } }
 New-ItemProperty -LiteralPath $policy -Name 'AllowNewsAndInterests' -Value 0 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
-Set-ItemProperty -LiteralPath $taskbar -Name 'TaskbarDa' -Value 0 -Type DWord -ErrorAction Stop
-if ((Get-ItemPropertyValue -LiteralPath $policy -Name 'AllowNewsAndInterests' -ErrorAction Stop) -ne 0 -or (Get-ItemPropertyValue -LiteralPath $taskbar -Name 'TaskbarDa' -ErrorAction Stop) -ne 0) { throw 'Widgets policy or taskbar preference failed readback.' }
-Write-Output '[OK] Widgets disabled by policy and its taskbar button hidden; both values read back. No protected Windows packages were removed. Sign out of Windows to activate the policy.'`;
+if ((Get-ItemPropertyValue -LiteralPath $policy -Name 'AllowNewsAndInterests' -ErrorAction Stop) -ne 0) { throw 'Widgets policy failed readback.' }
+# Newer Windows 11 builds protect TaskbarDa (User Choice Protection). The policy
+# above is what disables Widgets and also removes its button, so this is optional.
+try {
+  Microsoft.PowerShell.Management\Set-ItemProperty -LiteralPath $taskbar -Name 'TaskbarDa' -Value 0 -Type DWord -ErrorAction Stop
+  Write-Output '[OK] Widgets taskbar button preference set to hidden.'
+} catch {
+  $global:Error.RemoveAt(0)
+  Write-Output '[INFO] Windows protects the Widgets taskbar preference on this build; the policy hides the button instead.'
+}
+Write-Output '[OK] Widgets disabled by policy and read back. No protected Windows packages were removed. Sign out of Windows to activate the policy.'`;
   }
   return undefined;
 }

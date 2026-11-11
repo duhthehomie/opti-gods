@@ -24,7 +24,10 @@ function Set-ItemProperty {
     }
     $parameters = @{ LiteralPath = $p; Name = $Name; Value = $Value; Force = $true; ErrorAction = 'Stop' }
     if ($Type) { $parameters['Type'] = $Type }
-    Microsoft.PowerShell.Management\Set-ItemProperty @parameters
+    # Surface the real Windows error. A caller's -EA SilentlyContinue would
+    # otherwise hide it and only the readback mismatch below would be reported.
+    try { Microsoft.PowerShell.Management\Set-ItemProperty @parameters }
+    catch { throw "Registry write failed: $p / $Name - $($_.Exception.Message)" }
     $actual = Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath $p -Name $Name -ErrorAction Stop
     $expectedValues = @($Value); $actualValues = @($actual)
     if ($expectedValues.Count -ne $actualValues.Count) { throw "Registry write did not read back: $p / $Name" }

@@ -20,7 +20,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Link, useLocation } from "wouter";
 import { DISCORD_INVITE } from "@/lib/brand-links";
 import { isNative } from "@/lib/tauri-bridge";
-import { getAppliedTweakState } from "@/lib/applied-tweak-state";
+import { countAppliedTweaks, getAppliedTweakSources, withLiveRunSuccesses, type AppliedTweakSources } from "@/lib/applied-tweak-state";
+import { hasNativeTweakRunInFlight, readNativeTweakRun } from "@/lib/native-tweak-runner";
 
 const MOBILE_FEATURES = [
   { icon: Zap, title: `${TOTAL_TWEAKS_LABEL} Optimizations`, desc: "Registry, GPU, network, memory, and game-specific tweaks" },
@@ -453,7 +454,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const native = isNative();
-  const [nativeAppliedState, setNativeAppliedState] = useState<Record<string, boolean> | null>(null);
+  const [nativeAppliedSources, setNativeAppliedSources] = useState<AppliedTweakSources | null>(null);
 
   const { tweaks, appliedAt, nvidiaPreset, setAllTweaks } = useOptimizationStore();
   const osInfo = useOsDetection();
@@ -462,16 +463,44 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
     setDialogOpen(true);
   };
 
+  // The full Windows state check starts PowerShell and an NVIDIA readback.
+  // Never run it while a tweak run is in flight: it competes with the run and
+  // lags the counter. Run successes are counted live from the store instead,
+  // and the snapshot is re-read once the run finishes.
   useEffect(() => {
     if (!native) return;
     let mounted = true;
     const refreshAppliedHistory = () => {
-      return getAppliedTweakState()
-        .then(state => { if (mounted) setNativeAppliedState(state); })
+      if (hasNativeTweakRunInFlight()) return;
+      return getAppliedTweakSources()
+        .then(sources => { if (mounted) setNativeAppliedSources(sources); })
         .catch(error => console.warn("Could not read Windows applied-tweak history.", error));
     };
     const stop = startForegroundPolling(refreshAppliedHistory, 60_000);
-    return () => { mounted = false; stop(); };
+    const isTerminal = (status?: string) => Boolean(status && ["completed", "failed", "stopped"].includes(status));
+    const initialRun = readNativeTweakRun();
+    let refreshedRunId: string | null = initialRun && isTerminal(initialRun.status) ? initialRun.runId : null;
+    const onRunState = () => {
+      const run = readNativeTweakRun();
+      if (!run || !isTerminal(run.status) || run.runId === refreshedRunId) return;
+      refreshedRunId = run.runId;
+      // The finished event fires just before the run promise settles.
+      setTimeout(() => void refreshAppliedHistory(), 500);
+    };
+    window.addEventListener("optigods:native-run-state", onRunState);
+    return () => { mounted = false; stop(); window.removeEventListener("optigods:native-run-state", onRunState); };
+  }, [native]);
+
+  // Undo and single-script flows outside a run change history; re-read after them.
+  useEffect(() => {
+    if (!native || hasNativeTweakRunInFlight()) return;
+    const timer = setTimeout(() => {
+      if (hasNativeTweakRunInFlight()) return;
+      getAppliedTweakSources()
+        .then(setNativeAppliedSources)
+        .catch(error => console.warn("Could not read Windows applied-tweak history.", error));
+    }, 4000);
+    return () => clearTimeout(timer);
   }, [native, appliedAt]);
 
   useEffect(() => {
@@ -483,8 +512,9 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const osLabel = osInfo.loading ? "Detecting..." : osInfo.os;
   const enabledCount = Object.entries(tweaks).filter(([id, enabled]) => enabled && id in DEFAULT_TWEAKS && !appliedAt[id]).length;
   const hasEnabledTweaks = Object.entries(tweaks).some(([id, enabled]) => enabled && id in DEFAULT_TWEAKS);
+  const liveAppliedSources = nativeAppliedSources ? withLiveRunSuccesses(nativeAppliedSources, appliedAt) : null;
   const appliedCount = native
-    ? nativeAppliedState == null ? "—" : Object.values(nativeAppliedState).filter(Boolean).length
+    ? liveAppliedSources == null ? "—" : countAppliedTweaks(liveAppliedSources.currentWindows, liveAppliedSources.recordedAt)
     : Object.keys(appliedAt).length;
 
   const isMobileDashboard = isMobile && location === "/";

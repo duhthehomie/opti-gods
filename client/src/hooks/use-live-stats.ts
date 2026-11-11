@@ -21,6 +21,8 @@ export interface LiveStats {
   sampledAt?: number;
   cpuSensorStatus?: string;
   cpuSensorName?: string;
+  /** Motherboard fan headers with RPM; null/undefined when the board was not readable. */
+  fanHeadersSpinning?: number | null;
   cpuUsage: number;
   gpuUsage: number;
   ramUsedGB: number;
@@ -46,6 +48,7 @@ export interface LiveStats {
 interface HwLiveResponse {
   cpu_sensor_status?: string;
   cpu_sensor_name?: string;
+  fan_headers_spinning?: number;
   live: boolean;
   ts?: number;
   cpu_load_pct?: number;
@@ -134,6 +137,7 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
               board_temp_c: native.board_temp_c ?? undefined,
               cpu_sensor_status: native.cpu_sensor_status ?? undefined,
               cpu_sensor_name: native.cpu_sensor_name ?? undefined,
+              fan_headers_spinning: native.fan_headers_spinning ?? undefined,
               sampled_at_ms: native.sampled_at_ms ?? undefined,
               telemetry_error: native.telemetry_error ?? undefined,
             };
@@ -176,6 +180,7 @@ export function useLiveStats(ramGB: number, temperaturesOnly = false): LiveStats
           telemetryError: realData.telemetry_error,
           cpuSensorStatus: realData.cpu_sensor_status,
           cpuSensorName: realData.cpu_sensor_name,
+          fanHeadersSpinning: realData.fan_headers_spinning ?? null,
           cpuUsage:   Math.round(cpu),
           gpuUsage:   Math.round(gpu),
           ramUsedGB:  Math.round(ramUsed * 10) / 10,

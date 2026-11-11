@@ -28,6 +28,8 @@ pub struct LivePerformance {
     pub board_temp_c: Option<f32>,
     pub cpu_sensor_status: Option<String>,
     pub cpu_sensor_name: Option<String>,
+    /// Motherboard fan headers reporting RPM (needs the signed sensor driver).
+    pub fan_headers_spinning: Option<u32>,
     /// Task Manager-style total process count. Individual process names are
     /// intentionally not exported by the performance recorder.
     pub running_processes_count: Option<u32>,
@@ -99,6 +101,7 @@ pub async fn read_live_performance(app: AppHandle, temperatures_only: Option<boo
                 gpu_temp_c: gpu,
                 cpu_sensor_status: Some(sensors.status),
                 cpu_sensor_name: sensors.cpu_sensor_name,
+                fan_headers_spinning: sensors.fan_headers_spinning,
                 sampled_at_ms: Some(now_ms()),
                 ..LivePerformance::default()
             });
@@ -129,6 +132,7 @@ fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, 
                 cpu_temp_c: sensors.cpu_temp_c,
                 cpu_sensor_status: Some(sensors.status),
                 cpu_sensor_name: sensors.cpu_sensor_name,
+                fan_headers_spinning: sensors.fan_headers_spinning,
                 // Explicit: CPU/GPU load, RAM and game detection were NOT read.
                 telemetry_error: Some(reason),
                 ..LivePerformance::default()
@@ -201,6 +205,7 @@ fn collect_live_performance_blocking(app: AppHandle) -> Result<LivePerformance, 
         if sensors.cpu_temp_c.is_some() { performance.cpu_temp_c = sensors.cpu_temp_c; }
         performance.cpu_sensor_status = Some(sensors.status);
         performance.cpu_sensor_name = sensors.cpu_sensor_name;
+        performance.fan_headers_spinning = sensors.fan_headers_spinning;
         if let Some(current) = sensors.gpu_temp_c.or_else(read_nvidia_temperature) {
             performance.gpu_temp_c = Some(current);
         } else {

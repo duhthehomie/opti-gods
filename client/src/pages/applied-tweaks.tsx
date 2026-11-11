@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { isNative, saveDiagnosticLog, scanHardware, undoTweak, type NativeHardwareScan } from "@/lib/tauri-bridge";
-import { getAppliedTweakSources } from "@/lib/applied-tweak-state";
+import { getAppliedTweakSources, withLiveRunSuccesses } from "@/lib/applied-tweak-state";
 import { filterAppliedTweakIds, getAppliedTweakTimestamp, sortAppliedTweakIds } from "@/lib/applied-tweak-list";
 import { isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { apiUrl } from "@/lib/api-base";
@@ -249,8 +249,15 @@ type UndoOutcome = "native" | "script" | "restore-script" | "unavailable" | "fai
 export default function AppliedTweaksPage() {
   const { tweaks, appliedAt, setTweak, clearApplied } = useOptimizationStore();
   const { toast } = useToast();
-  const [nativeState, setNativeState] = useState<Record<string, boolean>>({});
-  const [recordedAt, setRecordedAt] = useState<Record<string, number>>({});
+  const [snapshotNativeState, setNativeState] = useState<Record<string, boolean>>({});
+  const [snapshotRecordedAt, setRecordedAt] = useState<Record<string, number>>({});
+  const [snapshotReadAt, setSnapshotReadAt] = useState(0);
+  // Successes confirmed during the current run count immediately; the
+  // Windows snapshot itself is only re-read after the run.
+  const { currentWindows: nativeState, recordedAt } = withLiveRunSuccesses(
+    { currentWindows: snapshotNativeState, recordedAt: snapshotRecordedAt, readAt: snapshotReadAt },
+    appliedAt,
+  );
   const [nvidiaPresetSubmittedAt, setNvidiaPresetSubmittedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState<string | null>(null);
@@ -284,6 +291,7 @@ export default function AppliedTweaksPage() {
     const sources = await getAppliedTweakSources();
     setNativeState(sources.currentWindows);
     setRecordedAt(sources.recordedAt);
+    setSnapshotReadAt(sources.readAt);
     setNvidiaPresetSubmittedAt(sources.nvidiaPresetSubmittedAt);
   };
   const refreshState = async () => {

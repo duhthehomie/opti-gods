@@ -281,6 +281,7 @@ export async function scanHardware(): Promise<NativeHardwareScan | null> {
 export interface NativeLivePerformance {
   cpu_sensor_status?: string | null;
   cpu_sensor_name?: string | null;
+  fan_headers_spinning?: number | null;
   live: boolean;
   cpu_load_pct?: number | null;
   gpu_load_pct?: number | null;

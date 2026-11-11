@@ -11,6 +11,7 @@ function servicesCommand(names: string[], mode: "Manual" | "Disabled"): string {
 $names = @(${names.map(name => `'${name}'`).join(",")})
 $changed = 0
 $managed = 0
+$protected = 0
 foreach ($name in $names) {
   $services = @(Get-Service -Name $name -ErrorAction Ignore)
   foreach ($service in $services) {
@@ -25,7 +26,15 @@ foreach ($name in $names) {
     $configuration = Get-CimInstance Win32_Service -Filter "Name='$escaped'" -ErrorAction Stop
     if (-not $configuration) { throw "Could not read service configuration: $($service.Name)" }
     if ($configuration.StartMode -ne '${mode}') {
-      Set-Service -Name $service.Name -StartupType ${mode} -ErrorAction Stop
+      try { Set-Service -Name $service.Name -StartupType ${mode} -ErrorAction Stop }
+      catch {
+        # Windows-protected services (e.g. DoSvc on newer builds) deny admins.
+        if ($_.Exception.Message -notmatch 'Access is denied|cannot be configured') { throw }
+        $global:Error.RemoveAt(0)
+        $protected++
+        Write-Output "[INFO] Windows protects $($service.Name) on this build; it was left unchanged."
+        continue
+      }
     }
     ${mode === "Disabled" ? "if ($service.Status -ne 'Stopped') { Stop-Service -Name $service.Name -Force -ErrorAction Stop }" : ""}
     $after = Get-CimInstance Win32_Service -Filter "Name='$escaped'" -ErrorAction Stop
@@ -34,6 +43,7 @@ foreach ($name in $names) {
     $changed++
   }
 }
+if ($changed -eq 0 -and $protected -gt 0) { Write-Output '[SKIP] Windows protects this service on this build, so it was left unchanged.'; return }
 if ($changed -eq 0 -and $managed -gt 0) { Write-Output '[SKIP] Matching services are Windows-managed per-user services; nothing was changed.'; return }
 if ($changed -eq 0) { Write-Output '[SKIP] Already debloated: None of the requested services are installed; nothing was changed.'; return }
 Write-Output "[OK] Verified ${mode} startup for $changed installed service(s)."

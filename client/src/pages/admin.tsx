@@ -3477,6 +3477,36 @@ export default function Admin() {
     refetchInterval: 30000,
   });
 
+  // Every Discord account that has signed in (free or Pro) — shown in Activity.
+  type AdminUser = { discordId: string; username: string; globalName: string | null; avatarUrl: string | null; createdAt: string | null; lastLoginAt: string | null; isPro: boolean };
+  const usersQuery = useQuery<AdminUser[]>({
+    queryKey: ["/api/admin/users", key],
+    queryFn: async () => {
+      const r = await fetch(apiUrl("/api/admin/users"), { headers });
+      if (!r.ok) throw new Error(`Could not load signed-in accounts (HTTP ${r.status})`);
+      return r.json();
+    },
+    enabled: authed,
+    retry: false,
+    refetchInterval: 30000,
+  });
+
+  const setUserPro = useMutation({
+    mutationFn: async ({ discordId, grant }: { discordId: string; name: string; grant: boolean }) => {
+      const r = await fetch(apiUrl(grant ? "/api/admin/pro-entitlements" : `/api/admin/pro-entitlements/${encodeURIComponent(discordId)}`), grant
+        ? { method: "POST", headers, body: JSON.stringify({ discordUserId: discordId, source: "admin", notes: "Unlocked from Activity" }) }
+        : { method: "DELETE", headers });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+      return r.json();
+    },
+    onSuccess: (_data, { name, grant }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users", key] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pro-entitlements"] });
+      toast({ title: grant ? "Pro unlocked" : "Pro removed", description: grant ? `${name} now has Pro on their Discord account.` : `${name} is back on the free plan.` });
+    },
+    onError: (error) => toast({ title: "Pro access not changed", description: String(error instanceof Error ? error.message : error), variant: "destructive" }),
+  });
+
   const [editingRevenue, setEditingRevenue] = useState(false);
   const [revenueDraft, setRevenueDraft] = useState("");
   const saveRevenue = useMutation({
@@ -4169,10 +4199,23 @@ export default function Admin() {
           country: log.country,
         };
       });
-    return [...codeEvents, ...friendEvents, ...deviceEvents]
+    const signupEvents = (usersQuery.data || [])
+      .filter(u => u.createdAt)
+      .map(u => ({
+        type: "signup" as const,
+        label: u.globalName && u.globalName !== u.username ? `${u.globalName} (@${u.username})` : `@${u.username}`,
+        detail: `Discord sign-in · ${u.discordId}${u.lastLoginAt ? ` · last seen ${timeAgo(u.lastLoginAt)}` : ""}`,
+        at: u.createdAt!,
+        city: null as string | null,
+        region: null as string | null,
+        country: null as string | null,
+        discordId: u.discordId,
+        isPro: u.isPro,
+      }));
+    return [...codeEvents, ...friendEvents, ...deviceEvents, ...signupEvents]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 100);
-  }, [codesQuery.data, friendsQuery.data, ipLogsQuery.data]);
+      .slice(0, 200);
+  }, [codesQuery.data, friendsQuery.data, ipLogsQuery.data, usersQuery.data]);
 
   function dmTemplate(code: string): string {
     return `Hey! Here's your Opti Gods Pro key: ${code}\n\nDownload + redeem at: https://optigods.com\nOpen the app → click GET PRO → enter your code. Takes 10 seconds.\n\nThanks for purchasing — enjoy the gains! 🔥`;
@@ -5482,7 +5525,7 @@ export default function Admin() {
                 : activityItems;
               return filtered.length === 0 ? (
               <div className="p-12 text-center text-xs text-zinc-600">
-                {q ? `No activity matching "${searchActivity}"` : "No redemptions yet — activity shows here once codes or links are used."}
+                {q ? `No activity matching "${searchActivity}"` : "No activity yet — sign-ins, codes and links show here."}
               </div>
             ) : (
               <div className="rounded-xl border border-white/5 overflow-hidden">
@@ -5497,13 +5540,17 @@ export default function Admin() {
                         ? "bg-red-500/10 border border-red-500/20"
                         : item.type === "friend"
                           ? "bg-amber-500/10 border border-amber-500/20"
-                          : "bg-sky-500/10 border border-sky-500/20"
+                          : item.type === "signup"
+                            ? "bg-zinc-800/60 border border-white/10"
+                            : "bg-sky-500/10 border border-sky-500/20"
                     )}>
                       {item.type === "code"
                         ? <Key className="w-3.5 h-3.5 text-red-400" />
                         : item.type === "friend"
                           ? <Link className="w-3.5 h-3.5 text-amber-400" />
-                          : <Activity className="w-3.5 h-3.5 text-sky-400" />
+                          : item.type === "signup"
+                            ? <Users className="w-3.5 h-3.5 text-zinc-300" />
+                            : <Activity className="w-3.5 h-3.5 text-sky-400" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
@@ -5516,12 +5563,51 @@ export default function Admin() {
                         </p>
                       )}
                     </div>
+                    {item.type === "signup" && (() => {
+                      const did = item.discordId;
+                      const name = item.label;
+                      const hasGaming = gamingGrantedIds.has(did);
+                      return (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            data-testid={`button-activity-pro-${did}`}
+                            onClick={() => {
+                              if (confirm(item.isPro ? `Remove Pro from ${name}?` : `Unlock Pro for ${name}?`))
+                                setUserPro.mutate({ discordId: did, name, grant: !item.isPro });
+                            }}
+                            disabled={setUserPro.isPending}
+                            className={cn(
+                              "p-1.5 rounded transition-colors",
+                              item.isPro ? "text-red-400 hover:bg-red-500/10 hover:text-red-300" : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                            )}
+                            title={item.isPro ? "Remove Pro" : "Unlock Pro"}
+                          >
+                            <Crown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            data-testid={`button-activity-gaming-${did}`}
+                            onClick={() => {
+                              if (confirm(hasGaming ? `Remove Gaming Mode from ${name}?` : `Unlock Gaming Mode in AI Optimize for ${name}?`))
+                                setGamingModeGrant.mutate({ discordId: did, name, grant: !hasGaming });
+                            }}
+                            disabled={setGamingModeGrant.isPending}
+                            className={cn(
+                              "p-1.5 rounded transition-colors",
+                              hasGaming ? "text-red-400 hover:bg-red-500/10 hover:text-red-300" : "text-zinc-600 hover:bg-zinc-700/30 hover:text-zinc-400"
+                            )}
+                            title={hasGaming ? "Remove Gaming Mode" : "Unlock Gaming Mode"}
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })()}
                     <div className="text-right shrink-0">
                       <p className={cn(
                         "text-[10px] font-bold",
-                         item.type === "code" ? "text-red-400" : item.type === "friend" ? "text-amber-400" : "text-sky-400"
+                         item.type === "code" ? "text-red-400" : item.type === "friend" ? "text-amber-400" : item.type === "signup" ? (item.isPro ? "text-red-400" : "text-zinc-300") : "text-sky-400"
                       )}>
-                         {item.type === "code" ? `+$${PRICE_PER_CODE}` : item.type === "friend" ? "Free" : item.type === "device-link" ? "Linked" : "Device"}
+                         {item.type === "code" ? `+$${PRICE_PER_CODE}` : item.type === "friend" ? "Free" : item.type === "signup" ? (item.isPro ? "Pro" : "Free") : item.type === "device-link" ? "Linked" : "Device"}
                       </p>
                       <p className="text-[10px] text-zinc-600">{timeAgo(item.at)}</p>
                     </div>

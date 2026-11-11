@@ -348,6 +348,8 @@ $servicePlan = $true
 foreach ($name in @('DiagTrack','MapsBroker','RetailDemo','Fax','WMPNetworkSvc','PhoneSvc','RemoteRegistry','WerSvc','wercplsupport','AJRouter','dmwappushservice','diagnosticshub.standardcollector.service','MessagingService','WalletService','SharedRealitySvc','AssignedAccessManagerSvc','AppVClient','PushToInstall')) {
   $service = Get-Service -Name $name -ErrorAction Ignore
   if ($name -in @('AJRouter','diagnosticshub.standardcollector.service','MessagingService','WalletService','SharedRealitySvc','AssignedAccessManagerSvc','AppVClient','PushToInstall') -and $service.Status -eq 'Running') { continue }
+  # Per-user service templates are Windows-managed and intentionally left unchanged.
+  if ($service -and (([int](Get-ItemPropertyValue -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name Type -ErrorAction Ignore)) -band 0xC0)) { continue }
   if ($service -and $service.StartType -notin @('Manual','Disabled')) { $servicePlan = $false }
 }
 $checks['WinTitusServicesManual'] = $backgroundPolicy -and $consumerPolicy -and $servicePlan

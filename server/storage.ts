@@ -98,6 +98,7 @@ export interface IStorage {
   upsertUser(data: InsertUser): Promise<User>;
   getUser(discordId: string): Promise<User | null>;
   touchUserActivity(discordId: string): Promise<void>;
+  listRecentUsers(limit: number): Promise<User[]>;
   // Stripe purchases — find by stripe session ref stored in note
   findCodeByStripeRef(stripeSessionId: string): Promise<ProAccessCode | null>;
   claimStripeCode(codeValue: string, ip?: string): Promise<void>;
@@ -980,6 +981,10 @@ export class DatabaseStorage implements IStorage {
 
   async touchUserActivity(discordId: string): Promise<void> {
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.discordId, discordId));
+  }
+
+  async listRecentUsers(limit: number): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
   }
 
   async upsertAdminSettings(settings: { discordWebhookUrl?: string | null; alertEmail?: string | null; autoResolveDays?: number | null; currentVersion?: string | null; latestVersion?: string | null; updaterCmdUrl?: string | null; updatePageUrl?: string | null; alertOnNewRig?: boolean; alertOnNewNvidiaDriver?: boolean; auditLogEnabled?: boolean; auditWebhookUrl?: string | null; revenueOverride?: number | null }): Promise<AdminSettings> {

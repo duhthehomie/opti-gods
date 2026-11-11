@@ -161,7 +161,7 @@ function fanLabel(scan: NativeHardwareScan, countOverride?: number | null): { la
     const isLaptop = chassis === "laptop" || chassis === "notebook";
     return {
       label: `${count} detected fan source${count === 1 ? "" : "s"}`,
-      sub: isLaptop ? "GPU + laptop firmware detection" : "GPU + motherboard firmware detection",
+      sub: isLaptop ? "GPU + laptop firmware detection" : "Windows firmware report · press Read CPU to read every fan header",
     };
   }
   const chassis = (scan.chassis || "").toLowerCase();
@@ -319,8 +319,12 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
   };
   const cpuTemp = liveStats.cpuTemp;
   const gpuTemp = liveStats.gpuTemp;
-  // Use HW Monitor JSON fan count when it's higher than WMI (WMI misses fans on AMD)
-  const fan = fanLabel(scan, hwMonitor?.fan_count ?? null);
+  // Prefer motherboard fan headers read by the sensor helper (needs the signed
+  // driver from "Read CPU"); Windows WMI usually reports only the CPU header.
+  const boardFans = liveStats.fanHeadersSpinning;
+  const fan = boardFans != null && boardFans > 0
+    ? { label: `${boardFans} fan header${boardFans === 1 ? "" : "s"} spinning`, sub: "Motherboard RPM sensors · fans on one hub or splitter share a header" }
+    : fanLabel(scan, hwMonitor?.fan_count ?? null);
   // Use HW Monitor ram_mhz if native scan didn't capture it
   const ramMhz = scan.ram_mhz || (hwMonitor?.ram_mhz ?? null);
   const isLaptop = (scan.chassis || "").toLowerCase() === "laptop";

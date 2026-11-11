@@ -6,6 +6,41 @@ export interface AppliedTweakSources {
   currentWindows: Record<string, boolean>;
   recordedAt: Record<string, number>;
   nvidiaPresetSubmittedAt: number | null;
+  /** When this read started; successes recorded after it are newer than the snapshot. */
+  readAt: number;
+}
+
+/**
+ * During a long run the Windows snapshot is only re-read at the end, so a
+ * success the runner confirmed after the snapshot started must count right
+ * away. A "missing" result from before that confirmation is stale for that ID.
+ */
+export function withLiveRunSuccesses<T extends Pick<AppliedTweakSources, "currentWindows" | "recordedAt" | "readAt">>(
+  sources: T,
+  appliedAt: Record<string, number>,
+): T {
+  let currentWindows = sources.currentWindows;
+  let recordedAt = sources.recordedAt;
+  for (const [id, at] of Object.entries(appliedAt)) {
+    if (id === "NvidiaControlPanelSettings" || !(at > sources.readAt)) continue;
+    if (recordedAt === sources.recordedAt) recordedAt = { ...recordedAt };
+    recordedAt[id] = Math.max(recordedAt[id] ?? 0, at);
+    if (currentWindows[id] === false) {
+      if (currentWindows === sources.currentWindows) currentWindows = { ...currentWindows };
+      delete currentWindows[id];
+    }
+  }
+  return { ...sources, currentWindows, recordedAt };
+}
+
+/** Same rule as the Applied Tweaks card: recorded or live-true, minus live conflicts. */
+export function countAppliedTweaks(currentWindows: Record<string, boolean>, recordedAt: Record<string, number>): number {
+  const ids = new Set<string>();
+  for (const [id, at] of Object.entries(recordedAt)) if (at > 0 && id !== "NvidiaControlPanelSettings") ids.add(id);
+  for (const [id, on] of Object.entries(currentWindows)) if (on && id !== "NvidiaControlPanelSettings") ids.add(id);
+  for (const id of Array.from(ids)) if (currentWindows[id] === false) ids.delete(id);
+  if (isCurrentNvidiaPresetVerified()) ids.add("NvidiaControlPanelSettings");
+  return ids.size;
 }
 
 export function boundedWindowsRead<T>(operation: Promise<T>, label: string, milliseconds = 15000): Promise<T> {
@@ -20,6 +55,7 @@ export function getAppliedTweakSources(): Promise<AppliedTweakSources> {
   return pendingSources;
 }
 async function readAppliedTweakSources(): Promise<AppliedTweakSources> {
+  const readAt = Date.now();
   const localHistory = useOptimizationStore.getState().appliedAt;
   const recordedAt: Record<string, number> = { ...localHistory };
   let nvidiaPresetSubmittedAt: number | null = localHistory.NvidiaControlPanelSettings ?? null;
@@ -50,7 +86,7 @@ async function readAppliedTweakSources(): Promise<AppliedTweakSources> {
     }
   }
 
-  return { currentWindows, recordedAt, nvidiaPresetSubmittedAt };
+  return { currentWindows, recordedAt, nvidiaPresetSubmittedAt, readAt };
 }
 
 /**

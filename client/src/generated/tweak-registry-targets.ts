@@ -2904,13 +2904,6 @@ export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = {
    "name": "AllowNewsAndInterests",
    "type": "dword",
    "value": 0
-  },
-  {
-   "hive": "HKCU",
-   "path": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-   "name": "TaskbarDa",
-   "type": "dword",
-   "value": 0
   }
  ],
  "WinTitusBgApps": [

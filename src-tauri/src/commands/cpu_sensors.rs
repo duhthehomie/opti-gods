@@ -5,6 +5,7 @@ struct CpuSensorSample {
     cpu_temp_c: Option<f32>,
     gpu_temp_c: Option<f32>,
     cpu_sensor_name: Option<String>,
+    fan_headers_spinning: Option<u32>,
     status: String,
 }
 

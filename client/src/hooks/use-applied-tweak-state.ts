@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAppliedTweakState } from "@/lib/applied-tweak-state";
 import { isNative } from "@/lib/tauri-bridge";
 import { useEffect } from "react";
-import { readNativeTweakRun } from "@/lib/native-tweak-runner";
+import { hasNativeTweakRunInFlight, readNativeTweakRun } from "@/lib/native-tweak-runner";
 import { queryClient } from "@/lib/queryClient";
 
 export const APPLIED_STATE_QUERY_KEY = ["native-applied-tweak-state"] as const;
@@ -25,7 +25,9 @@ export function useAppliedTweakState(poll = false) {
     queryFn: getAppliedTweakState,
     enabled: isNative() && poll,
     staleTime: 10_000,
-    refetchInterval: poll ? 15_000 : false,
+    // Skip the full Windows check while a run is applying tweaks; it is
+    // re-read when the run finishes (see the run-state listener above).
+    refetchInterval: poll ? () => hasNativeTweakRunInFlight() ? false : 15_000 : false,
     refetchOnWindowFocus: poll,
     retry: false,
   });
