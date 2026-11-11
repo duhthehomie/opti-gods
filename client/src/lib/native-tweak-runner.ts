@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/api-base";
+import { readRegistryAppliedState } from "@/lib/tweak-readback";
 import { applyTweak, cancelNvidiaPresetImport, createRestorePoint, detectAppliedTweaks, getNativeAuthToken, getRecordedAppliedTweaks, importNvidiaPreset, isNative, listenScriptTweakProgress, resetNvidiaPresetImportCancel, runTrustedScriptTweak } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
@@ -621,10 +622,13 @@ async function applyTweakBatchInternal(
   let alreadyConfirmedIds: string[] = [];
   let windowsDetectedIds: string[] = [];
   if (native) {
-    const [detected, machineHistory] = await Promise.all([
+    const [nativeDetected, machineHistory, registryState] = await Promise.all([
       withTimeout(detectAppliedTweaks(), 15_000, "Windows detection timed out; checking verified run receipts.").catch(() => ({} as Record<string, boolean>)),
       withTimeout(getRecordedAppliedTweaks(), 15_000, "Windows receipt lookup timed out.").catch(() => ({} as Record<string, number>)),
+      // History alone must not skip a tweak whose registry values Windows no longer holds.
+      withTimeout(readRegistryAppliedState(), 15_000, "Registry readback timed out.").catch(() => ({} as Record<string, boolean>)),
     ]);
+    const detected: Record<string, boolean> = { ...registryState, ...nativeDetected };
     const appliedAt = useOptimizationStore.getState().appliedAt;
     if (stopRequested) {
       const stoppedIds = compatibleIds;

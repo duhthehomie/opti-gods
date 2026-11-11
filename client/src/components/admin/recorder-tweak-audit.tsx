@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ClipboardList, Copy, HelpCircle, RefreshCw, X } from "lucide-react";
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
-import { detectAppliedTweaks, getRecordedAppliedTweaks, readRegistryValues, type RegistryReadResult } from "@/lib/tauri-bridge";
+import { detectAppliedTweaks, getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
+import { buildAcceptedValues, checkValue, readTweakRegistry, regKey, type RegistryReadback } from "@/lib/tweak-readback";
+import { getScoredRecommendationIds, useInstalledProfileGameIds } from "@/lib/recommendation-scope";
+import { canRunNvidiaPreset, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { GAME_TWEAK_IDS } from "@/lib/game-library";
 import { TWEAK_REGISTRY_TARGETS, type TweakRegistryTarget } from "@/generated/tweak-registry-targets";
 import { useToast } from "@/hooks/use-toast";
-import { computeSmartRecs, getEligibleSmartRecommendationIds } from "@/lib/smart-recommendations";
+import { computeSmartRecs } from "@/lib/smart-recommendations";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { TWEAK_BY_ID } from "@/lib/tweak-registry";
 import type { TweakCategory, TweakMeta } from "@/lib/tweak-registry";
@@ -40,8 +43,7 @@ type Props = {
   onSnapshot: (snapshot: RecorderTweakAuditSnapshot) => void;
 };
 
-/** Game-specific tweak categories. Other games' categories are excluded from an audit. */
-const GAME_TWEAK_CATEGORIES = new Set<TweakCategory>(["fivem", "fortnite", "rust", "roblox", "cod"]);
+/** Maps a detected game to its tweak category (shown in the snapshot). */
 const GAME_TO_CATEGORY: Record<string, TweakCategory> = {
   fivem: "fivem",
   fortnite: "fortnite",
@@ -56,73 +58,6 @@ const GAME_TO_CATEGORY: Record<string, TweakCategory> = {
   game_roblox: "roblox",
   game_cod: "cod",
   game_warzone: "cod",
-};
-
-type ValueCheck = { key: string; current: string; needed: string; ok: boolean };
-
-const regKey = (t: TweakRegistryTarget) => `${t.hive}\\${t.path}\\${t.name}`.toLowerCase();
-const shownValue = (t: TweakRegistryTarget) => (t.type === "sz" ? `"${t.value}"` : `${t.value} (${t.type.toUpperCase()})`);
-
-/** Windows names a key's default value "(Default)" in tools, but reads it by the empty name. */
-const readName = (name: string) => (name === "(Default)" ? "" : name);
-
-/** Values other target tweaks also write for the same key. Two tweaks that disagree
- *  (e.g. TdrDelay 8 vs 10) must not make one of them look missing forever. */
-type AcceptedValues = Map<string, Array<number | string>>;
-
-/** Windows keeps every DirectX graphics preference in one "Name=value;" string, so other
- *  settings (windowed-game optimizations, Auto HDR) sit beside ours. Compare the pairs. */
-function settingPairs(text: string): Map<string, string> {
-  const pairs = new Map<string, string>();
-  for (const part of text.split(";")) {
-    const [name, ...rest] = part.split("=");
-    if (name.trim()) pairs.set(name.trim().toLowerCase(), rest.join("=").trim().toLowerCase());
-  }
-  return pairs;
-}
-
-function sameValue(target: TweakRegistryTarget, wanted: number | string, read: RegistryReadResult): boolean {
-  if (target.type === "sz" && target.name === "DirectXUserGlobalSettings" && read.kind === "sz") {
-    const have = settingPairs(String(read.value));
-    const need = settingPairs(String(wanted));
-    return need.size > 0 && Array.from(need).every(([name, value]) => have.get(name) === value);
-  }
-  if (target.type === "sz") return String(read.value).trim().toLowerCase() === String(wanted).trim().toLowerCase();
-  if (read.kind === "dword" || read.kind === "qword") return Number(read.value) === Number(wanted);
-  // Control Panel values (mouse, desktop timeouts, font smoothing) are stored by
-  // Windows as text such as "1000"; the same number as text is the same setting.
-  if (read.kind === "sz") return /^\s*-?\d+\s*$/.test(String(read.value)) && Number(read.value) === Number(wanted);
-  return false;
-}
-
-function checkValue(target: TweakRegistryTarget, read: RegistryReadResult | undefined, accepted?: AcceptedValues): ValueCheck {
-  const key = `${target.hive}\\${target.path} · ${target.name}`;
-  const needed = shownValue(target);
-  // Windows treats an absent LargeSystemCache as 0 (the gaming default).
-  if ((!read || read.kind === "missing") && target.name === "LargeSystemCache" && Number(target.value) === 0) {
-    return { key, current: "not set (Windows default 0)", needed, ok: true };
-  }
-  if (!read || read.kind === "missing") return { key, current: "not set", needed, ok: false };
-  if (read.kind === "error" || read.kind === "other") return { key, current: read.kind === "error" ? `unreadable (${String(read.value)})` : "other type", needed, ok: false };
-  const wanted = accepted?.get(regKey(target)) ?? [target.value];
-  let ok = wanted.some(value => sameValue(target, value, read));
-  // NTFS last-access: Windows may rewrite 1 as 0x80000001/0x80000003 (system managed).
-  // Any odd value means last-access updates are off, which is what the tweak needs.
-  if (!ok && target.name === "NtfsDisableLastAccessUpdate" && Number(target.value) === 1 && (read.kind === "dword" || read.kind === "qword")) {
-    ok = (Number(read.value) & 1) === 1;
-  }
-  return { key, current: read.kind === "sz" ? `"${read.value}"` : String(read.value), needed, ok };
-}
-
-/** Writes the FiveM Full Perf Stack makes inside a PowerShell loop, which the target
- *  generator cannot read. Without them, its IoPriority 2 makes another FiveM tweak's
- *  IoPriority 3 look missing (and the reverse). */
-const IFEO = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options";
-const LOOP_WRITES: Record<string, Array<{ key: string; value: number }>> = {
-  FiveMFullPerfStack: ["GTA5.exe", "FiveM.exe"].flatMap(exe => [
-    { key: `hklm\\${IFEO}\\${exe}\\PerfOptions\\CpuPriorityClass`.toLowerCase(), value: 3 },
-    { key: `hklm\\${IFEO}\\${exe}\\PerfOptions\\IoPriority`.toLowerCase(), value: 2 },
-  ]),
 };
 
 /** .reg text for the values that are not set as needed (copied, never applied here).
@@ -172,18 +107,24 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
   const category = (libraryGameId ? GAME_TO_CATEGORY[libraryGameId] : null)
     ?? (gameId ? GAME_TO_CATEGORY[gameId.toLowerCase()] ?? null : null);
   const recIdsKey = Array.from(computeSmartRecs(hw, os).ids).sort().join("|");
+  const installedProfileGames = useInstalledProfileGameIds();
+  // The recorder is admin-only, and admins are Pro: same preset rule as the dashboard.
+  const nvidiaPresetEligible = canRunNvidiaPreset({
+    native: isNative(),
+    pro: true,
+    hardwareScanned: hw.scanned,
+    dedicatedNvidiaGpuCount: hw.gpus.filter(gpu => gpu.vendor === "nvidia" && !gpu.isIntegrated).length,
+  });
+  const profileKey = installedProfileGames.ids.join("|");
   const targetIds = useMemo(() => {
     const ids = recIdsKey ? recIdsKey.split("|") : [];
-    const system = getEligibleSmartRecommendationIds(ids, id => getTweakCompatibility(id).ok).filter(id => {
-      const tweakCategory = TWEAK_BY_ID.get(id)?.category;
-      // System-wide tweaks always count; game tweaks only for the game being played.
-      return !tweakCategory || !GAME_TWEAK_CATEGORIES.has(tweakCategory) || tweakCategory === category;
-    });
+    // Exactly the dashboard's scored list, so "X of Y" matches the dashboard score.
+    const scored = getScoredRecommendationIds(ids, nvidiaPresetEligible, profileKey ? profileKey.split("|") : []);
     // The detected game's own optimisation list (same list Game Detection uses).
     const perGame = (libraryGameId ? GAME_TWEAK_IDS[libraryGameId] ?? [] : [])
       .filter(id => TWEAK_BY_ID.has(id) && getTweakCompatibility(id).ok);
-    return Array.from(new Set([...perGame, ...system]));
-  }, [recIdsKey, category, libraryGameId]);
+    return Array.from(new Set([...scored, ...perGame]));
+  }, [recIdsKey, nvidiaPresetEligible, profileKey, libraryGameId]);
   const targetKey = targetIds.join("|");
   const perGameIds = useMemo(() => new Set(libraryGameId ? GAME_TWEAK_IDS[libraryGameId] ?? [] : []), [libraryGameId]);
 
@@ -191,7 +132,7 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
   const [history, setHistory] = useState<Record<string, number> | null>(null);
   const [detectedError, setDetectedError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [registry, setRegistry] = useState<Map<string, RegistryReadResult> | null>(null);
+  const [registry, setRegistry] = useState<RegistryReadback | null>(null);
   const [registryError, setRegistryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
@@ -203,18 +144,13 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
     if (busyRef.current) return;
     busyRef.current = true;
     setRefreshing(true);
-    const queries = new Map<string, TweakRegistryTarget>();
-    for (const id of targetKey ? targetKey.split("|") : []) {
-      for (const target of TWEAK_REGISTRY_TARGETS[id] ?? []) queries.set(regKey(target), target);
-    }
-    const queryList = Array.from(queries.values());
     const [liveResult, historyResult, registryResult] = await Promise.allSettled([
       detectAppliedTweaks(),
       getRecordedAppliedTweaks(),
-      queryList.length ? readRegistryValues(queryList.map(({ hive, path, name }) => ({ hive, path, name: readName(name) }))) : Promise.resolve([]),
+      readTweakRegistry(targetKey ? targetKey.split("|") : []),
     ]);
     if (registryResult.status === "fulfilled") {
-      setRegistry(new Map(queryList.map((target, index) => [regKey(target), registryResult.value[index]])));
+      setRegistry(registryResult.value);
       setRegistryError(null);
     } else {
       setRegistry(null);
@@ -232,22 +168,8 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
   // Read once on open and again when the detected game or target list changes.
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const accepted = useMemo(() => {
-    const map: AcceptedValues = new Map();
-    for (const id of targetIds) {
-      for (const t of TWEAK_REGISTRY_TARGETS[id] ?? []) {
-        const list = map.get(regKey(t)) ?? [];
-        if (!list.some(v => String(v) === String(t.value))) list.push(t.value);
-        map.set(regKey(t), list);
-      }
-      for (const w of LOOP_WRITES[id] ?? []) {
-        const list = map.get(w.key) ?? [];
-        if (!list.some(v => String(v) === String(w.value))) list.push(w.value);
-        map.set(w.key, list);
-      }
-    }
-    return map;
-  }, [targetIds]);
+  // Same accepted values as the dashboard: any value another tweak writes to the key.
+  const accepted = useMemo(() => buildAcceptedValues(Object.keys(TWEAK_REGISTRY_TARGETS)), []);
 
   const rows = useMemo(() => targetIds.map(id => {
     const tweak = TWEAK_BY_ID.get(id);
@@ -255,7 +177,10 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
     const targets = TWEAK_REGISTRY_TARGETS[id] ?? [];
     const checks = registry && targets.length ? targets.map(t => checkValue(t, registry.get(regKey(t)), accepted)) : [];
     // Native detector first; otherwise every registry value the tweak writes must match.
-    const status: Status = live === true ? "applied"
+    // The NVIDIA preset is verified by exporting the driver profile, not the registry.
+    const presetVerified = id === "NvidiaControlPanelSettings" ? isCurrentNvidiaPresetVerified() : undefined;
+    const status: Status = presetVerified !== undefined ? (presetVerified ? "applied" : "missing")
+      : live === true ? "applied"
       : live === false ? "missing"
       : checks.length ? (checks.every(c => c.ok) ? "applied" : "missing")
       : "unverified";
@@ -329,8 +254,8 @@ export function RecorderTweakAudit({ gameId, libraryGameId, gameLabel, liveOs, o
             {gameLabel ? `${gameLabel} + system tweaks for this PC` : "System tweaks for this PC"}
           </h3>
           <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-zinc-500">
-            Targets are this PC's eligible Smart Recommendations plus the detected game's own tweaks. Each tweak's registry
-            values are read back and compared; nothing is written. Expert, manual-only and other games' tweaks are excluded.
+            Targets are the same compatible tweaks the dashboard scores, plus the detected game's own tweaks. Each tweak's
+            registry values (and service startup types) are read back and compared; nothing is written.
           </p>
         </div>
         <button

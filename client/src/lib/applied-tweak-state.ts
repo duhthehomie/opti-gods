@@ -1,6 +1,7 @@
 import { detectAppliedTweaks, getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
 import { useOptimizationStore } from "@/store/use-optimization-store";
 import { isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
+import { readRegistryAppliedState } from "@/lib/tweak-readback";
 
 export interface AppliedTweakSources {
   currentWindows: Record<string, boolean>;
@@ -62,12 +63,20 @@ async function readAppliedTweakSources(): Promise<AppliedTweakSources> {
   delete recordedAt.NvidiaControlPanelSettings;
   let currentWindows: Record<string, boolean> = {};
   if (isNative()) {
-    const [liveResult, historyResult] = await Promise.allSettled([
+    const [liveResult, historyResult, registryResult] = await Promise.allSettled([
       boundedWindowsRead(detectAppliedTweaks(), "Live Windows detection"),
       boundedWindowsRead(getRecordedAppliedTweaks(), "Applied history"),
+      boundedWindowsRead(readRegistryAppliedState(), "Registry readback"),
     ]);
     if (liveResult.status === "fulfilled") currentWindows = liveResult.value;
     else console.warn("Windows live tweak detection failed.", liveResult.reason);
+    // Registry readback covers tweaks the native detector has no check for. A
+    // recorded success whose values Windows no longer holds is not applied now.
+    if (registryResult.status === "fulfilled") {
+      currentWindows = { ...registryResult.value, ...currentWindows };
+    } else {
+      console.warn("Registry readback of applied tweaks failed.", registryResult.reason);
+    }
     if (historyResult.status === "fulfilled") {
       for (const [id, timestamp] of Object.entries(historyResult.value)) {
         if (id === "NvidiaControlPanelSettings") {

@@ -23,7 +23,17 @@ export type RegistryTarget = {
   name: string;
   type: "dword" | "qword" | "sz";
   value: number | string;
+  /** Service startup type: a service that is not installed has nothing to change. */
+  absentOk?: true;
 };
+
+const SERVICE_START: Record<string, number> = { disabled: 4, manual: 3, demand: 3, automatic: 2, auto: 2 };
+
+function serviceTarget(service: string, mode: string): RegistryTarget | null {
+  const value = SERVICE_START[mode.toLowerCase()];
+  if (value == null || !/^[\w.\-]+$/.test(service)) return null;
+  return { hive: "HKLM", path: `SYSTEM\\CurrentControlSet\\Services\\${service}`, name: "Start", type: "dword", value, absentOk: true };
+}
 
 export const REGISTRY_TARGETS_FILE = join(process.cwd(), "client", "src", "generated", "tweak-registry-targets.ts");
 
@@ -83,13 +93,17 @@ function typeFor(raw: string | undefined): RegistryTarget["type"] | null {
 }
 
 /** Top-level statements only; returns each with whether it sits inside a conditional block. */
-function statements(command: string): Array<{ text: string; conditional: boolean }> {
-  const out: Array<{ text: string; conditional: boolean }> = [];
+/** `if ($svc)` style checks: the block runs only when the service exists. */
+const SERVICE_EXISTS_CHECK = /^(if|elseif)\s*\(\s*(\$\w+|Get-Service\s[^)]*)\s*\)$/i;
+
+function statements(command: string): Array<{ text: string; conditional: boolean; serviceGuardOnly: boolean }> {
+  const out: Array<{ text: string; conditional: boolean; serviceGuardOnly: boolean }> = [];
   const stack: boolean[] = []; // true when the open block is conditional
+  const guards: boolean[] = []; // true when the block is unconditional or only checks that a service exists
   let current = "";
   let quote: string | null = null;
   const flush = () => {
-    if (current.trim()) out.push({ text: current.trim(), conditional: stack.some(Boolean) });
+    if (current.trim()) out.push({ text: current.trim(), conditional: stack.some(Boolean), serviceGuardOnly: guards.every(Boolean) });
     current = "";
   };
   for (let i = 0; i < command.length; i++) {
@@ -109,11 +123,13 @@ function statements(command: string): Array<{ text: string; conditional: boolean
       const before = current.trimEnd();
       // try/catch/finally and plain script blocks run unconditionally; everything else may not.
       const unconditional = /(^|[\s;}])(try|finally)$/i.test(before) || before === "";
+      const header = before.split(/[;}]/).pop()?.trim() ?? "";
       flush();
       stack.push(!unconditional || stack.length > 0 && stack[stack.length - 1]);
+      guards.push(unconditional || SERVICE_EXISTS_CHECK.test(header));
       continue;
     }
-    if (ch === "}") { flush(); stack.pop(); continue; }
+    if (ch === "}") { flush(); stack.pop(); guards.pop(); continue; }
     if (ch === ";" || ch === "\n" || ch === "|") { flush(); continue; }
     current += ch;
   }
@@ -124,7 +140,18 @@ function statements(command: string): Array<{ text: string; conditional: boolean
 export function parseRegistryWrites(command: string): RegistryTarget[] {
   const vars = new Map<string, string>();
   const writes = new Map<string, RegistryTarget>();
-  for (const { text, conditional } of statements(command)) {
+  for (const { text, conditional, serviceGuardOnly } of statements(command)) {
+    // A missing service is accepted on readback, so "only if it exists" checks are safe.
+    if (serviceGuardOnly) {
+      const sc = text.match(/^sc(?:\.exe)?\s+config\s+("[^"]+"|'[^']+'|[\w.\-]+)\s+start=\s*(\w+)(?:\s+2>\$null)?\s*$/i);
+      const setService = text.match(/^Set-Service\s+(?:-Name\s+)?("[^"$`]+"|'[^']+'|[\w.\-]+)\s+-StartupType\s+'?(\w+)'?(?:\s+-(?:EA|ErrorAction)\s+\w+)?\s*$/i);
+      const service = sc ?? setService;
+      if (service) {
+        const target = serviceTarget(service[1].replace(/^["']|["']$/g, ""), service[2]);
+        if (target) writes.set(`${target.hive}\\${target.path}\\Start`.toLowerCase(), target);
+        continue;
+      }
+    }
     const assign = text.match(/^\$(\w+)\s*=\s*['"]([^'"$`]+)['"]$/);
     if (assign) {
       if (conditional) vars.delete(assign[1].toLowerCase());
@@ -181,12 +208,26 @@ export function parseRegistryWrites(command: string): RegistryTarget[] {
   return Array.from(writes.values());
 }
 
+/**
+ * The reviewed one-service command (servicesCommand in native-batch-command-fixes)
+ * sets one startup mode and verifies it. Multi-service lists are skipped: Windows
+ * protects some of their services, which the command leaves unchanged on purpose.
+ */
+function verifiedServiceTargets(command: string): RegistryTarget[] {
+  if (!command.includes("Service startup mode was not verified")) return [];
+  const names = Array.from(command.match(/\$names = @\(([^)]*)\)/)?.[1].matchAll(/'([^']+)'/g) ?? [], match => match[1]);
+  const mode = command.match(/-StartupType (Manual|Disabled) -ErrorAction Stop/)?.[1];
+  if (names.length !== 1 || !mode) return [];
+  const target = serviceTarget(names[0], mode);
+  return target ? [target] : [];
+}
+
 export function buildRegistryTargets(commands: Record<string, string>): Record<string, RegistryTarget[]> {
   const out: Record<string, RegistryTarget[]> = {};
   for (const id of Object.keys(commands).sort()) {
     const served = buildNativeBatchCommandFix(id, commands[id] ?? "") ?? buildSafeWindowsCommandOverride(id) ?? commands[id];
     // Windows checkouts use CRLF; normalize so CI and Linux produce identical targets.
-    const targets = parseRegistryWrites(normalizeSystemResponsiveness(served.replace(/\r\n/g, "\n")));
+    const targets = [...parseRegistryWrites(normalizeSystemResponsiveness(served.replace(/\r\n/g, "\n"))), ...verifiedServiceTargets(served)];
     if (targets.length) out[id] = targets;
   }
   return out;
@@ -195,8 +236,8 @@ export function buildRegistryTargets(commands: Record<string, string>): Record<s
 export function renderRegistryTargetsFile(targets: Record<string, RegistryTarget[]>): string {
   return [
     "// Generated by scripts/generate-tweak-registry-targets.ts from TWEAK_COMMANDS. Do not edit.",
-    "// Registry values each tweak always writes; read back (never written) by the admin recorder.",
-    "export type TweakRegistryTarget = { hive: \"HKLM\" | \"HKCU\"; path: string; name: string; type: \"dword\" | \"qword\" | \"sz\"; value: number | string };",
+    "// Registry values each tweak always writes; read back (never written) to confirm tweaks are still applied.",
+    "export type TweakRegistryTarget = { hive: \"HKLM\" | \"HKCU\"; path: string; name: string; type: \"dword\" | \"qword\" | \"sz\"; value: number | string; absentOk?: true };",
     `export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = ${JSON.stringify(targets, null, 1)};`,
     "",
   ].join("\n");
