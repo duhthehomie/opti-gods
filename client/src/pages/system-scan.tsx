@@ -35,6 +35,8 @@ import {
   type NativeTweakRunState,
 } from "@/lib/native-tweak-runner";
 import { uploadValidatedHardwareScan } from "@/lib/hardware-scan-sync";
+import { useGamingModeAccess } from "@/hooks/use-gaming-mode-access";
+import { GamingModePanel } from "@/components/admin/gaming-mode-panel";
 // ── Persistent key for HW Monitor scan data ──────────────────────────────────
 const HW_MONITOR_KEY  = "optigods-hwmonitor-data";
 const NATIVE_SCAN_KEY = "optigods-native-scan-v2";
@@ -303,6 +305,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
 }) {
   const os = useOsDetection();
   const liveStats = useLiveStats(scan.ram_gb || 16, true);
+  const gamingModeAccess = useGamingModeAccess();
   const { toast } = useToast();
   const [sensorSetupBusy, setSensorSetupBusy] = useState(false);
   const enableCpuSensors = async () => {
@@ -428,6 +431,13 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
           {rescanning ? "Scanning…" : "Re-scan hardware"}
         </button>
       </div>
+
+      {/* Gaming Mode early access — only for accounts unlocked in the admin panel */}
+      {gamingModeAccess && (
+        <div data-testid="section-ai-gaming-mode">
+          <GamingModePanel variant="player" />
+        </div>
+      )}
     </div>
   );
 }
