@@ -458,8 +458,10 @@ export interface NativeNowPlaying {
   error: string | null;
   /** Discord is using the microphone (in a voice call). null: unknown. */
   discord_call: boolean | null;
-  /** Twitch, Kick or YouTube open in a visible browser window (any monitor). */
+  /** Twitch, Kick or YouTube tabs: the showing tab, or any tab playing sound. */
   videos?: NativeVideoWatch[];
+  /** Browser tabs playing music (SoundCloud, Spotify web, …), tabbed in or out. */
+  music_tabs?: NativeMusicTab[];
   /** OBS Studio or Streamlabs is live (read from its own log). null: not live. */
   live?: NativeLiveStream | null;
 }
@@ -470,6 +472,21 @@ export interface NativeVideoWatch {
   exe: string;
   /** Channel (Twitch/Kick) or video title (YouTube). */
   channel: string;
+  /** The tab is the one showing in its browser window ("tabbed in"). Missing on older builds. */
+  active?: boolean;
+  /** The browser marks the tab as playing sound (Chromium browsers only). */
+  audible?: boolean;
+}
+
+export interface NativeMusicTab {
+  /** "SoundCloud", "Spotify", … or "" when the tab title does not name the site. */
+  site: string;
+  /** Lowercase browser exe, e.g. brave.exe. */
+  exe: string;
+  /** Track as the tab shows it, e.g. "song by artist". */
+  title: string;
+  /** The tab is the one showing in its browser window ("tabbed in"). */
+  active: boolean;
 }
 
 export interface NativeLiveStream {

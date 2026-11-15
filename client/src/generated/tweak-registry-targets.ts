@@ -30,7 +30,7 @@ export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = {
  "AmdCpuCStatePolicy": [
   {
    "hive": "HKLM",
-   "path": "SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\40fbefc7-2e9d-4d25-a185-0cfd8574bae6",
+   "path": "SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\40fbefc7-2e9d-4d25-a185-0cfd8574bac6",
    "name": "Attributes",
    "type": "dword",
    "value": 2

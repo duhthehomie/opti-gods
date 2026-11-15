@@ -35,8 +35,10 @@ pub struct NowPlaying {
     pub error: Option<String>,
     /// Discord is using the microphone (in a voice call). None: could not be read.
     pub discord_call: Option<bool>,
-    /// Twitch, Kick or YouTube open in a visible browser window (any monitor).
+    /// Twitch, Kick or YouTube tabs (showing, or playing sound in the background).
     pub videos: Vec<crate::commands::stream_watch::VideoWatch>,
+    /// Browser tabs playing music (SoundCloud, Spotify web, …), tabbed in or out.
+    pub music_tabs: Vec<crate::commands::stream_watch::MusicTab>,
     /// OBS Studio or Streamlabs is live (from its own log). None: not live.
     pub live: Option<crate::commands::stream_watch::LiveStream>,
 }
@@ -310,14 +312,19 @@ mod watcher {
         let mut last_hint_at = std::time::Instant::now();
         let mut discord_call = None;
         let mut videos = Vec::new();
+        let mut music_tabs = Vec::new();
         let mut live = None;
         let mut live_detector = crate::commands::stream_watch::LiveDetector::default();
         let mut loops: u32 = 0;
         loop {
             // The microphone record is cheap but not needed every 400 ms.
             if loops % 2 == 0 { discord_call = discord_in_call(); }
-            // Browser windows every 1.2 s; the OBS/Streamlabs log every 2 s.
-            if loops % 3 == 0 { videos = crate::commands::stream_watch::browser_videos(); }
+            // Browser tabs (scanned on their own thread) every 1.2 s; the OBS/Streamlabs log every 2 s.
+            if loops % 3 == 0 {
+                let media = crate::commands::stream_watch::browser_media();
+                videos = media.videos;
+                music_tabs = media.music;
+            }
             if loops % 5 == 0 { live = live_detector.poll(); }
             loops = loops.wrapping_add(1);
             let (sessions, error) = match read(&manager, &mut covers) {
@@ -337,7 +344,7 @@ mod watcher {
                 last_hint = Some(next);
                 last_hint_at = std::time::Instant::now();
             }
-            *STATE.lock() = Some(NowPlaying { sessions, updated_ms: now_ms(), error, discord_call, videos: videos.clone(), live: live.clone() });
+            *STATE.lock() = Some(NowPlaying { sessions, updated_ms: now_ms(), error, discord_call, videos: videos.clone(), music_tabs: music_tabs.clone(), live: live.clone() });
             std::thread::sleep(POLL);
         }
     }

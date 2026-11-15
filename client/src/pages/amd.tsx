@@ -714,8 +714,8 @@ export default function Amd() {
             />
             <TweakRow
               id="AmdCpuCStatePolicy"
-              title="CPU Performance Decrease Policy = Fastest"
-              description="Controls how quickly Windows reduces CPU clock after a burst. Default is 'Gradual' which keeps clocks elevated for up to 100ms after load. Setting 'Fastest' means clocks drop and rise more aggressively — reduces idle-state power, but more importantly eliminates the transition latency spike when Ryzen ramps back up mid-game."
+              title="CPU Performance Decrease Policy = Single Step"
+              description="Controls how quickly Windows lowers CPU clocks after a burst of load. Single Step lowers them one step at a time, so the CPU is still at speed when the game's next frame needs it instead of ramping back up from a low state. This is the same value the Opti Gods Power Plan sets, so the two never disagree."
               badge="RECOMMENDED"
               impact="MED"
               checked={tweaks["AmdCpuCStatePolicy"] || false}

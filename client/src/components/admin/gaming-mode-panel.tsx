@@ -3,11 +3,11 @@ import { Gauge, Power, Radar, ShieldAlert, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { startVisiblePolling } from "@/lib/foreground-polling";
-import { NowPlayingCard } from "./now-playing-card";
+import { NowPlayingSection, tabLabel } from "./now-playing-card";
 import {
   disableGamingMode, enableGamingMode, gamingModeStatus, getWindowsProcessCount, isNative, readFpsCapture, readForegroundApp, readNowPlaying,
   startFpsCapture, stopFpsCapture,
-  type NativeFpsCaptureStatus, type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch,
+  type NativeFpsCaptureStatus, type NativeForegroundApp, type NativeGamingModeStatus, type NativeLiveStream, type NativeVideoWatch, type NativeMusicTab,
 } from "@/lib/tauri-bridge";
 import { useAuth } from "@/hooks/use-auth";
 import { boundedWindowsRead } from "@/lib/applied-tweak-state";
@@ -54,6 +54,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   // Live stream (OBS/Streamlabs log) and Twitch/Kick/YouTube windows, from the app.
   const [live, setLive] = useState<NativeLiveStream | null>(null);
   const [videos, setVideos] = useState<NativeVideoWatch[]>([]);
+  const [musicTabs, setMusicTabs] = useState<NativeMusicTab[]>([]);
   useEffect(() => {
     if (!native) return;
     return startVisiblePolling(async () => {
@@ -62,10 +63,12 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
         setDiscordCall(next?.discord_call ?? null);
         setLive(next?.live ?? null);
         setVideos(next?.videos ?? []);
+        setMusicTabs(next?.music_tabs ?? []);
       } catch {
         setDiscordCall(null);
         setLive(null);
         setVideos([]);
+        setMusicTabs([]);
       }
     }, 1000);
   }, [native]);
@@ -452,14 +455,26 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                 </div>
               </div>
             )}
-            {videos.length > 0 && (
+            {(videos.length > 0 || musicTabs.length > 0) && (
               <div className="mt-1 space-y-0.5" data-testid="gaming-mode-watching">
+                {musicTabs.map(tab => (
+                  <div key={`music-${tab.exe}-${tab.title}`} className="flex items-center gap-2 rounded-md border border-emerald-500/30 px-2 py-1 text-xs" data-testid="gaming-mode-listening">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                    <span className="min-w-0 truncate">
+                      <span className="font-bold text-white">{tab.site ? `Listening on ${tab.site}` : "Listening to music"}</span>
+                      <span className="text-zinc-400"> · {tab.title}</span>
+                      <span className={tab.active ? "text-white" : "text-zinc-500"}> ({tabLabel(tab.active)})</span>
+                      <span className="text-emerald-400"> · {games.length ? "audio kept at full speed" : "kept at full speed while you play"}</span>
+                    </span>
+                  </div>
+                ))}
                 {videos.map(video => (
                   <div key={`${video.exe}-${video.site}-${video.channel}`} className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs" style={{ borderColor: `${PLATFORM_COLORS[video.site] ?? "#71717a"}55` }}>
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PLATFORM_COLORS[video.site] ?? "#71717a" }} />
                     <span className="min-w-0 truncate">
                       <span className="font-bold text-white">Watching {video.site}</span>
                       <span className="text-zinc-400"> · {video.channel}</span>
+                      {video.active !== undefined && <span className={video.active ? "text-white" : "text-zinc-500"}> ({tabLabel(video.active)})</span>}
                       <span className="text-emerald-400"> · {games.length ? "video kept at full speed" : "kept at full speed while you play"}</span>
                     </span>
                   </div>
@@ -499,9 +514,10 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
               {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call with any game running, Discord and the Windows audio engine get Above Normal priority so voice stays clear, and both go back to Normal when the call ends. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
             </div>
           </div>
-          <div className="rounded-lg border border-emerald-500/20 bg-black/40 px-3 py-2 sm:col-span-2" data-testid="gaming-mode-music">
-            <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">Music</div>
-            <NowPlayingCard className="mt-1.5" />
+          <NowPlayingSection
+            className="sm:col-span-2"
+            footer={<div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>Shows only while music or a stream is playing, with every browser tab marked tabbed in or out. Controls work any time, with or without a game. While a game runs, what is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>}
+          >
             {status?.music?.length ? (
               <div className="mt-1 flex flex-wrap gap-2">
                 {status.music.map(item => (
@@ -516,11 +532,8 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                   </span>
                 ))}
               </div>
-            ) : (
-              <div className="mt-1 text-xs text-zinc-400">{games.length ? "No Spotify, SoundCloud or browser open" : "Music apps are slowed or protected only while a game is running"}</div>
-            )}
-            <div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>Now Playing and its controls work any time, with or without a game. While a game runs, the song that is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>
-          </div>
+            ) : null}
+          </NowPlayingSection>
         </div>
       )}
       {lastError && (on || broken) && (
