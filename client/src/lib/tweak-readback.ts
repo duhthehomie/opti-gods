@@ -94,14 +94,31 @@ export function buildAcceptedValues(ids: Iterable<string>): AcceptedValues {
 
 export type RegistryReadback = Map<string, RegistryReadResult>;
 
+/** Placeholder in generated power plan targets; replaced by the active plan's GUID. */
+export const ACTIVE_POWER_PLAN = "{ActivePowerPlan}";
+const POWER_SCHEMES = "SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes";
+
+async function activePowerPlan(): Promise<string | null> {
+  const [active] = await readRegistryValues([{ hive: "HKLM", path: POWER_SCHEMES, name: "ActivePowerScheme" }]);
+  const text = active?.kind === "sz" ? String(active.value).trim().toLowerCase() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(text) ? text : null;
+}
+
 /** One native read of every value the given tweaks write. Never writes. */
 export async function readTweakRegistry(ids: Iterable<string>): Promise<RegistryReadback> {
   const queries = new Map<string, TweakRegistryTarget>();
   for (const id of Array.from(ids)) for (const target of TWEAK_REGISTRY_TARGETS[id] ?? []) queries.set(regKey(target), target);
   const list = Array.from(queries.values());
   if (!list.length) return new Map();
-  const results = await readRegistryValues(list.map(({ hive, path, name }) => ({ hive, path, name: readName(name) })));
-  return new Map(list.map((target, index) => [regKey(target), results[index]]));
+  const plan = list.some(t => t.path.includes(ACTIVE_POWER_PLAN)) ? await activePowerPlan() : null;
+  // Without the active plan, a power plan value cannot be read; report it as unreadable.
+  const readable = list.filter(t => !t.path.includes(ACTIVE_POWER_PLAN) || plan);
+  const results = readable.length
+    ? await readRegistryValues(readable.map(({ hive, path, name }) => ({ hive, path: path.replace(ACTIVE_POWER_PLAN, plan ?? ""), name: readName(name) })))
+    : [];
+  const read = new Map(readable.map((target, index) => [regKey(target), results[index]]));
+  const unreadable: RegistryReadResult = { kind: "error", value: "active power plan not readable" };
+  return new Map(list.map(target => [regKey(target), read.get(regKey(target)) ?? unreadable]));
 }
 
 /** true when every value the tweak writes reads back as needed; undefined when it has none. */

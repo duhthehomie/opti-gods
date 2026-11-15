@@ -3,7 +3,7 @@ import { AlertTriangle, Check, ClipboardList, Copy, HelpCircle, RefreshCw, X } f
 import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { detectAppliedTweaks, getRecordedAppliedTweaks, isNative } from "@/lib/tauri-bridge";
-import { buildAcceptedValues, checkValue, readTweakRegistry, regKey, type RegistryReadback } from "@/lib/tweak-readback";
+import { ACTIVE_POWER_PLAN, buildAcceptedValues, checkValue, readTweakRegistry, regKey, type RegistryReadback } from "@/lib/tweak-readback";
 import { getScoredRecommendationIds, useInstalledProfileGameIds } from "@/lib/recommendation-scope";
 import { canRunNvidiaPreset, isCurrentNvidiaPresetVerified } from "@/lib/nvidia-preset-eligibility";
 import { GAME_TWEAK_IDS } from "@/lib/game-library";
@@ -65,6 +65,8 @@ const GAME_TO_CATEGORY: Record<string, TweakCategory> = {
 function regFile(targets: TweakRegistryTarget[], currentOf?: (t: TweakRegistryTarget) => string): string {
   const byKey = new Map<string, { header: string; rows: Map<string, string> }>();
   for (const t of targets) {
+    // Power plan values depend on the active plan; a .reg file cannot target it.
+    if (t.path.includes(ACTIVE_POWER_PLAN)) continue;
     const header = `[${t.hive === "HKLM" ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"}\\${t.path}]`;
     const name = t.name === "(Default)" ? "@" : `"${t.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     // Control Panel values are text in Windows; writing them as DWORD breaks them.

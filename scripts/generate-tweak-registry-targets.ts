@@ -222,12 +222,25 @@ function verifiedServiceTargets(command: string): RegistryTarget[] {
   return target ? [target] : [];
 }
 
+/** Power plan settings are stored under the active plan, which differs per PC.
+ *  The readback replaces this token with the active plan before reading. */
+export const ACTIVE_POWER_PLAN = "{ActivePowerPlan}";
+const PROCESSOR_SETTINGS = `SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes\\${ACTIVE_POWER_PLAN}\\54533251-82be-4824-96c1-47b60b740d00`;
+/** Tweaks whose real change is a power plan value. Their scripts also write
+ *  Attributes (which only unhides the setting in Power Options), so that write
+ *  alone cannot prove the tweak is applied. */
+const POWER_PLAN_TARGETS: Record<string, RegistryTarget[]> = {
+  AmdCpuCStatePolicy: [
+    { hive: "HKLM", path: `${PROCESSOR_SETTINGS}\\40fbefc7-2e9d-4d25-a185-0cfd8574bac6`, name: "ACSettingIndex", type: "dword", value: 1 },
+  ],
+};
+
 export function buildRegistryTargets(commands: Record<string, string>): Record<string, RegistryTarget[]> {
   const out: Record<string, RegistryTarget[]> = {};
   for (const id of Object.keys(commands).sort()) {
     const served = buildNativeBatchCommandFix(id, commands[id] ?? "") ?? buildSafeWindowsCommandOverride(id) ?? commands[id];
     // Windows checkouts use CRLF; normalize so CI and Linux produce identical targets.
-    const targets = [...parseRegistryWrites(normalizeSystemResponsiveness(served.replace(/\r\n/g, "\n"))), ...verifiedServiceTargets(served)];
+    const targets = POWER_PLAN_TARGETS[id] ?? [...parseRegistryWrites(normalizeSystemResponsiveness(served.replace(/\r\n/g, "\n"))), ...verifiedServiceTargets(served)];
     if (targets.length) out[id] = targets;
   }
   return out;
