@@ -223,7 +223,7 @@ function MobilePageDescription({ pageInfo }: { pageInfo: { title: string; desc: 
             className="w-full py-3 rounded-xl bg-zinc-900 border border-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/10 transition-all flex items-center justify-center gap-2 mt-2"
           >
             <Zap className="w-4 h-4" />
-            Get Pro — $20
+            Get Pro — $10
           </button>
         </Link>
       </div>
@@ -295,7 +295,7 @@ function MobileShowcase() {
             className="w-full py-3 rounded-xl bg-zinc-900 border border-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/10 transition-all flex items-center justify-center gap-2 mt-3"
           >
             <Zap className="w-4 h-4" />
-            Get Pro — $20 (Pay &amp; DM leaq)
+            Get Pro — $10 (Pay &amp; DM leaq)
           </button>
         </Link>
         <a href={DISCORD_INVITE} target="_blank" rel="noopener noreferrer">

@@ -21,7 +21,7 @@ const CASHAPP_TAG = (import.meta.env.VITE_CASHAPP_TAG as string | undefined) || 
 const PAYPAL_LINK = (import.meta.env.VITE_PAYPAL_LINK as string | undefined) || "https://paypal.me/accountslg";
 const LEGACY_LINK = import.meta.env.VITE_PRO_PAYMENT_LINK as string | undefined;
 const STRIPE_PAYMENT_LINK = (import.meta.env.VITE_STRIPE_PAYMENT_LINK as string | undefined)?.trim()
-  || "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
+  || "https://buy.stripe.com/00w8wQfsYbBqc924WD14402";
 
 const CRYPTO_ADDRESS = import.meta.env.VITE_CRYPTO_ADDRESS as string | undefined;
 const COINBASE_LINK = import.meta.env.VITE_COINBASE_LINK as string | undefined;

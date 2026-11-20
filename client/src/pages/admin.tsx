@@ -4595,7 +4595,7 @@ export default function Admin() {
             <Zap className="w-3 h-3" /> paypal.me/accountslg
           </a>
           <button onClick={() => {
-            const link = "https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400";
+            const link = "https://buy.stripe.com/00w8wQfsYbBqc924WD14402";
             if (isNative()) { openExternal(link); } else { window.open(link, "_blank"); }
           }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 hover:bg-rose-600/20 transition-colors font-mono">

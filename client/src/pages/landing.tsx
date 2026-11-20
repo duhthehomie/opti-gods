@@ -82,7 +82,7 @@ const FAQS = [
   },
   {
     q: "Is this a one-time purchase?",
-    a: "Yes. $20 one-time gets you lifetime Pro access — all current and future tweaks, presets, AI assistant, and updates. No subscription, ever.",
+    a: "Yes. $10 one-time (Black Friday) gets you lifetime Pro access — all current and future tweaks, presets, AI assistant, and updates. No subscription, ever.",
   },
   {
     q: "What's the refund policy?",
@@ -459,7 +459,7 @@ function LandingDesktop() {
             { value: TOTAL_TWEAKS_LABEL, label: "hardware-aware tweaks", color: "text-red-400" },
             { value: "15+", label: "game-specific packs", color: "text-amber-300" },
             { value: "Windows 10/11", label: "desktop + laptop support", color: "text-blue-300" },
-            { value: "$20", label: "lifetime Pro access", color: "text-emerald-300" },
+            { value: "$10", label: "lifetime Pro access", color: "text-emerald-300" },
           ].map((stat) => (
             <div key={stat.label} className="flex items-center gap-3 border-white/10 sm:border-r sm:px-4 first:sm:pl-0 last:border-0">
               <span className={`font-display text-xl font-black md:text-2xl ${stat.color}`}>{stat.value}</span>
@@ -580,7 +580,7 @@ function LandingDesktop() {
               Start with the free download. Upgrade once for lifetime access to the full tweak library, AI presets, and future updates.
             </p>
             <div className="mt-6 flex items-baseline gap-2">
-              <span className="font-display text-6xl font-black text-white">$20</span>
+              <span className="font-display text-6xl font-black text-white">$10</span>
               <span className="text-sm text-zinc-500">one-time · lifetime</span>
             </div>
           </div>
@@ -606,7 +606,7 @@ function LandingDesktop() {
                 data-testid="button-unlock-pro-landing"
                 className="w-full rounded-lg bg-red-600 py-5 text-sm font-bold tracking-wide text-white hover:bg-red-500"
               >
-                <Sparkles className="w-4 h-4 mr-2" /> Unlock Pro — $20 Lifetime
+                <Sparkles className="w-4 h-4 mr-2" /> Unlock Pro — $10 Lifetime
               </Button>
             </ProUnlockButton>
 

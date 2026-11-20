@@ -167,7 +167,7 @@ export default function PaymentSuccess() {
                   <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 text-left">
                     <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-400 mb-1.5">Receipt</p>
                     <p className="text-xs text-zinc-300 leading-relaxed">
-                      Stripe just emailed your $20 receipt to <strong className="text-white break-all">{emailInfo.email}</strong>. Keep it for your session.
+                      Stripe just emailed your receipt to <strong className="text-white break-all">{emailInfo.email}</strong>. Keep it for your session.
                     </p>
                   </div>
                 )}

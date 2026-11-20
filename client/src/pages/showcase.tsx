@@ -90,7 +90,7 @@ const STATS = [
 ];
 
 const STEPS = [
-  { n: "01", title: "Pay $20 — CashApp or PayPal", desc: "One-time payment. Lifetime access. Use the buttons below." },
+  { n: "01", title: "Pay $10 — CashApp or PayPal", desc: "One-time payment. Lifetime access. Use the buttons below." },
   { n: "02", title: "DM leaq on Discord with proof", desc: "Screenshot your receipt and send it to leaq in the Discord server." },
   { n: "03", title: "Open optigods.com on your PC", desc: "You MUST be on a Windows computer or laptop — not mobile — to download." },
   { n: "04", title: "Enter your key & unlock Pro", desc: "Paste your access code in the app — all tweaks unlocked instantly." },
@@ -105,12 +105,12 @@ function ShowcaseStripeCard() {
       </div>
       <button
         data-testid="button-stripe-showcase"
-        onClick={() => window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank")}
+        onClick={() => window.open("https://buy.stripe.com/00w8wQfsYbBqc924WD14402", "_blank")}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-all"
         style={{ background: "linear-gradient(135deg, #dc2626, #991b1b)", boxShadow: "0 0 16px rgba(220,38,38,0.35)" }}
       >
         <CreditCard className="w-3.5 h-3.5" />
-        Pay with Card — $20
+        Pay with Card — $10
       </button>
     </div>
   );
@@ -348,7 +348,7 @@ export default function Showcase() {
           <div className="flex items-center justify-center gap-2 mb-1">
             <Trophy className="w-4 h-4" style={{ color: "#fbbf24" }} />
             <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#ef4444" }}>
-              Get Pro — $20 Lifetime
+              Get Pro — $10 Lifetime
             </p>
             <Trophy className="w-4 h-4" style={{ color: "#fbbf24" }} />
           </div>

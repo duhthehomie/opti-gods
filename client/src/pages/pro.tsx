@@ -59,7 +59,7 @@ export default function ProPage() {
                       className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-6 text-base shadow-[0_0_30px_-5px_rgba(239,68,68,0.6)] pointer-events-none"
                     >
                       <Lock className="w-4 h-4 mr-2" />
-                      Unlock Pro — $20
+                      Unlock Pro — $10
                     </Button>
                   </ProUnlockButton>
                   <span className="text-xs text-zinc-500">CashApp · PayPal · Card · Access Code</span>
@@ -111,7 +111,7 @@ export default function ProPage() {
             <button
               data-testid="button-pro-page-stripe"
               type="button"
-              onClick={() => window.open("https://buy.stripe.com/5kQdRacgM48Yb4Y4WD14400", "_blank")}
+              onClick={() => window.open("https://buy.stripe.com/00w8wQfsYbBqc924WD14402", "_blank")}
               className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-white/[0.03] transition-colors group"
             >
               <span className="flex items-center gap-2 text-zinc-400 font-semibold group-hover:text-white transition-colors">
@@ -119,7 +119,7 @@ export default function ProPage() {
                 Card (Stripe)
               </span>
               <span className="text-red-400 font-bold text-xs group-hover:text-red-300 transition-colors">
-                $20 — Pay with Card →
+                $10 — Pay with Card →
               </span>
             </button>
 
