@@ -2,7 +2,8 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { EmbeddedProvider } from "@/lib/embedded-context";
-import { Wrench, RotateCcw, Loader2, History, Download } from "lucide-react";
+import { Wrench, RotateCcw, Loader2, History, Download, Cpu } from "lucide-react";
+import { RestartToBiosButton } from "@/components/restart-to-bios-button";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -150,6 +151,22 @@ export default function ToolsFixesPage() {
               <><Download className="w-4 h-4 mr-2" /> Get Restore Script</>
             )}
           </Button>
+        </section>
+
+        <section
+          data-testid="banner-restart-to-bios"
+          className="rounded-xl border border-red-500/25 bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent p-4 flex flex-wrap items-center gap-4"
+        >
+          <div className="shrink-0 w-10 h-10 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+            <Cpu className="w-5 h-5 text-red-300" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm font-bold text-white">Restart into BIOS</p>
+            <p className="text-xs text-zinc-400 leading-snug mt-0.5">
+              Restarts your PC straight into BIOS setup, the same as Advanced startup → UEFI Firmware Settings. Take a photo of your BIOS settings before you change or reset anything.
+            </p>
+          </div>
+          <RestartToBiosButton className="shrink-0" />
         </section>
 
         <div className="flex gap-1 border-b border-white/5 overflow-x-auto">

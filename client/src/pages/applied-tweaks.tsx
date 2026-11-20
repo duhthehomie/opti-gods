@@ -23,7 +23,7 @@ import { getHardwareAwareTweakTitle, getTweakCompatibility } from "@/lib/tweak-c
 import { getScannedInfo } from "@/hooks/use-hardware-info";
 import { APP_VERSION } from "@/generated/version";
 import { useToast } from "@/hooks/use-toast";
-import { playOptimizationActionSound } from "@/lib/action-sound";
+import { playOptimizationActionSound, RESTART_TO_SEE_CHANGES } from "@/lib/action-sound";
 import {
   applyTweakBatch,
   isNvidiaAction,
@@ -342,10 +342,10 @@ export default function AppliedTweaksPage() {
            description: failedCount > 0
              ? "The Windows run finished. Open the Failed tab to review or retry only those items."
                : userStoppedRun
-                 ? "The run was stopped. Restart your PC before testing the changes that were applied."
+                 ? `The run was stopped. ${RESTART_TO_SEE_CHANGES}`
                  : skippedCount > 0
-                 ? `Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones.${appliedCount > 0 ? " Restart your PC before testing the changes." : ""}`
-                : `${getVerifiedNvidiaVibranceMessage(state.items) ? `${getVerifiedNvidiaVibranceMessage(state.items)}. ` : ""}Every selected tweak succeeded or was already recorded as applied. Restart your PC before testing the game.`,
+                 ? `Unsupported settings were skipped without changing Windows. Open the Skipped tab to see which ones.${appliedCount > 0 ? ` ${RESTART_TO_SEE_CHANGES}` : ""}`
+                : `${getVerifiedNvidiaVibranceMessage(state.items) ? `${getVerifiedNvidiaVibranceMessage(state.items)}. ` : ""}Every selected tweak succeeded or was already recorded as applied. ${RESTART_TO_SEE_CHANGES}`,
              variant: failedCount > 0 ? "destructive" : userStoppedRun ? "default" : "success",
          });
        }
@@ -672,7 +672,10 @@ export default function AppliedTweaksPage() {
       });
       recordScriptTweakResult(id, "applied", message);
       await refreshAppliedState();
-      if (!options.silent) toast({ title: "Script completed", description: `${message} The tweak was marked applied only after Windows confirmed success.`, variant: "success" });
+      if (!options.silent) {
+        playOptimizationActionSound();
+        toast({ title: "Tweak applied · restart required", description: `${message} ${RESTART_TO_SEE_CHANGES}`, variant: "success" });
+      }
       return true;
     } catch (error) {
       const message = getNativeErrorMessage(error, "PowerShell did not return a result. Export this log for diagnosis.");
@@ -715,9 +718,10 @@ export default function AppliedTweaksPage() {
         else notConfirmed++;
         setScriptBatchProgress(index + 1);
       }
+      if (confirmed > 0 && !notConfirmed) playOptimizationActionSound();
       toast({
         title: "Compatible script run complete",
-        description: `${confirmed} confirmed by Windows${notConfirmed ? `; ${notConfirmed} were not confirmed and remain in the results` : "."}`,
+        description: `${confirmed} confirmed by Windows${notConfirmed ? `; ${notConfirmed} were not confirmed and remain in the results.` : "."}${confirmed > 0 ? ` ${RESTART_TO_SEE_CHANGES}` : ""}`,
         variant: notConfirmed ? "destructive" : "success",
       });
     } finally {

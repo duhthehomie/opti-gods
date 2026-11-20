@@ -14,7 +14,7 @@ import { applyTweak, createRestorePoint, getNativeAuthToken, isNative, undoTweak
 import { getNativeAuthHeaders, getPersistentDeviceId, PRO_SESSION_KEY } from "@/lib/queryClient";
 import { useTweakCompatibility } from "@/lib/tweak-compatibility";
 import { NATIVE_RESTORE_CREATED_KEY } from "@/lib/native-readiness";
-import { playOptimizationActionSound } from "@/lib/action-sound";
+import { playOptimizationActionSound, RESTART_TO_SEE_CHANGES } from "@/lib/action-sound";
 import { NVIDIA_PRESET_ACTION_ID, queueTweakBatch } from "@/lib/native-tweak-runner";
 import { useAppliedTweakState } from "@/hooks/use-applied-tweak-state";
 
@@ -173,8 +173,8 @@ export function TweakRow({ id, title, description, checked, onCheckedChange, del
       }
       playOptimizationActionSound();
       toast({
-        title: result.requires_reboot ? "Tweak applied · restart required" : "Tweak applied",
-        description: `${result.message}${result.requires_reboot ? " Restart your PC to finish applying it." : ""}`,
+        title: "Tweak applied · restart required",
+        description: `${result.message} ${RESTART_TO_SEE_CHANGES}`,
         variant: "success",
       });
     } catch (error) {

@@ -436,7 +436,7 @@ function NativeScanResults({ scan, onRescan, rescanning, hwMonitor }: {
         </button>
       </div>
 
-      {/* Gaming Mode early access — only for accounts unlocked in the admin panel */}
+      {/* Gaming Mode — every Pro account, plus accounts unlocked in the admin panel */}
       {gamingModeAccess && (
         <div data-testid="section-ai-gaming-mode">
           <GamingModePanel variant="player" />

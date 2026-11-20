@@ -39,6 +39,7 @@ function hardwareFromScan(): PresetHardware | null {
     cpuCores: scan.Cores ?? scan.Threads,
     ramGB: scan.RAM_GB,
     osVersion,
+    osBuild: scan.OsBuild ?? undefined,
     isLaptop,
     hasDiscreteGpu,
   };

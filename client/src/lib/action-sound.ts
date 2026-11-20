@@ -1,5 +1,8 @@
 import { isNative, playNativeSuccessSound } from "@/lib/tauri-bridge";
 
+/** Shown on every green success popup after Windows applies tweaks. */
+export const RESTART_TO_SEE_CHANGES = "Restart Windows to see the changes right away.";
+
 /**
  * Short PlayStation-style confirmation chime for major optimization actions.
  * In the Windows app, Windows plays it: the WebView mutes Web Audio until the

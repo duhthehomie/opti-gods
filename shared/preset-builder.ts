@@ -25,6 +25,7 @@ export interface PresetHardware {
   cpuGeneration?: number;    // Intel gen / Ryzen series digit
   ramGB?: number;
   osVersion?: PresetOsVersion;
+  osBuild?: number;          // Windows build, e.g. 19045 (Win10 22H2)
   isLaptop?: boolean;
   hasDiscreteGpu?: boolean;  // when true, iGPU tweaks are excluded
 }
@@ -185,8 +186,10 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
   if (id.startsWith("FiveM5600") && (hw.cpuBrand !== "amd" || !/\bryzen\s+5\s+5600(?:x|g|u|h)?\b/i.test(cpu))) {
     return { ok: false, reason: "Ryzen 5 5600 tweak skipped — matching CPU was not detected" };
   }
-  if (id.startsWith("FiveMIntel14") && (hw.cpuBrand !== "intel" || !/\b(?:core\s+)?i[579]-?14\d{3}[a-z]{0,2}\b/i.test(cpu))) {
-    return { ok: false, reason: "Intel 14th-gen tweak skipped — matching CPU was not detected" };
+  // The P-core mask 0xFFF (threads 0-11) is only right for 6 P-core chips: every i5-14xxx.
+  // i7/i9 14th gen have 8 P-cores (threads 0-15), so they must not get this mask.
+  if (id.startsWith("FiveMIntel14") && (hw.cpuBrand !== "intel" || !/\b(?:core\s+)?i5-?14\d{3}[a-z]{0,2}\b/i.test(cpu))) {
+    return { ok: false, reason: "Intel i5 14th-gen tweak skipped — a matching i5-14xxx CPU was not detected" };
   }
 
   const gtxFamily = nvidiaGtxFamily(hw);
@@ -229,8 +232,12 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
     const supportedGpu =
       (hw.gpuVendor === "nvidia" && /rtx\s*(20|30|40|50)\d{2}/i.test(gpu))
       || (hw.gpuVendor === "amd" && /\brx\s*[6-9]\d{3}\b/i.test(gpu));
-    if (hw.osVersion !== "win11" || !supportedGpu) {
-      return { ok: false, reason: "HAGS skipped — requires Windows 11 with RTX 20-series+ or Radeon RX 6000-series+" };
+    // Microsoft supports HAGS from Windows 10 2004 (build 19041). The native
+    // script re-checks the real build, so an unknown Win10 build is allowed here.
+    const supportedOs = hw.osVersion === "win11"
+      || (hw.osVersion === "win10" && (hw.osBuild === undefined || hw.osBuild >= 19041));
+    if (!supportedOs || !supportedGpu) {
+      return { ok: false, reason: "HAGS skipped — requires Windows 10 2004+ or Windows 11 with RTX 20-series+ or Radeon RX 6000-series+" };
     }
   }
 
@@ -1005,11 +1012,20 @@ export function hardwareFromRig(rig: {
   const hasDiscreteGpu = gpuVendor === "nvidia"
     || (gpuVendor === "amd" && /\brx\s*\d{3,4}/i.test(rig.gpu));
 
+  // Intel Core generation from the model number (i5-14400F → 14, i7-9700K → 9).
+  // Needed for the Intel 12th–14th gen hybrid-CPU tweaks in buildSafePreset.
+  const intelModel = cpuBrand === "intel" ? /\bi[3579]-?(\d{4,5})[a-z]{0,2}\b/i.exec(rig.cpu) : null;
+  const cpuGeneration = intelModel
+    ? Number(intelModel[1].length === 5 ? intelModel[1].slice(0, 2) : intelModel[1].slice(0, 1))
+    : undefined;
+
   return {
     gpuVendor,
     gpuName: rig.gpu,
     cpuBrand,
     cpuLabel: rig.cpu,
+    cpuGeneration,
+    osBuild: rig.osBuild ?? undefined,
     cpuCores: rig.cpuCores ?? rig.cpuThreads ?? undefined,
     ramGB: rig.ramGb ?? undefined,
     osVersion,

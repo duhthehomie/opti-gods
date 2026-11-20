@@ -68,6 +68,9 @@
     "allow-cancel-nvidia-preset-import",
     "allow-reset-nvidia-preset-import-cancel",
     "allow-run-script-tweak",
+    "allow-firmware-restart-info",
+    "allow-restart-to-bios",
+    "allow-cancel-restart-to-bios",
     "allow-gaming-mode",
     "allow-success-sound",
     "allow-fivem-reshade"

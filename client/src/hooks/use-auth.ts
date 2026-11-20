@@ -16,6 +16,8 @@ export type AuthUser = {
 
 export type AuthState = {
   user: AuthUser | null;
+  /** Username the server confirmed through /api/me (never the cached desktop identity). */
+  confirmedUsername: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 };
@@ -89,7 +91,8 @@ export function useAuth(): AuthState {
   // briefly shows Welcome before /api/me has actually answered.
   const nativeAuthLoading = native && !user && !data?.sessionRejected
     && (!nativeAuthReady || (!isFetched && !isError));
-  return { user, isLoading: isLoading || nativeAuthLoading, isAuthenticated: !!user };
+  const confirmedUsername = data?.sessionRejected ? null : data?.user?.username ?? null;
+  return { user, confirmedUsername, isLoading: isLoading || nativeAuthLoading, isAuthenticated: !!user };
 }
 
 export function useLogout() {

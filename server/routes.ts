@@ -1839,7 +1839,7 @@ export async function registerRoutes(
   // Must mirror src-tauri's NATIVE_TWEAKS plus its tiny trusted fallback table.
   const NATIVE_EXECUTABLE_ALLOWLIST = NATIVE_TWEAK_ID_SET;
 
-  // Gaming Mode early access: the admin plus two invited Discord accounts.
+  // Gaming Mode access: every Pro account, plus Discord accounts the admin unlocks.
   // The Windows app asks this before showing the Gaming Mode switch in AI Optimize.
   app.get("/api/gaming-mode/access", async (req, res) => {
     const adminKey = process.env.ADMIN_KEY;
@@ -1852,8 +1852,10 @@ export async function registerRoutes(
     if (typeof nativeToken === "string") userId = await validateNativeToken(nativeToken);
     if (!userId && typeof req.session?.userId === "string") userId = req.session.userId;
     if (!userId) return res.status(401).json({ allowed: false, reason: "signed_out" });
+    // Every active Pro account has Gaming Mode; admin grants still unlock it for non-Pro testers.
+    if (await requirePaidPro(req)) return res.json({ allowed: true, reason: "pro" });
     const allowed = await storage.hasGamingMode(userId);
-    return res.json({ allowed, reason: allowed ? "invited" : "not_invited" });
+    return res.json({ allowed, reason: allowed ? "invited" : "not_pro" });
   });
 
   // Admin — Gaming Mode early-access grants (same model as Graphics Studio)

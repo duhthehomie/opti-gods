@@ -9,8 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 type AccessAnswer = { allowed: boolean; confirmedByServer: boolean };
 
 /**
- * Gaming Mode early access in AI Optimize. The server decides: the admin key
- * or an account unlocked in the admin panel. Fails closed on any error.
+ * Gaming Mode in AI Optimize. The server decides: the admin key, any active
+ * Pro account, or an account unlocked in the admin panel. Fails closed on any error.
  * Re-checked every few seconds so an unlock or removal shows up right away.
  * When the server confirms access was removed, Gaming Mode is switched off
  * so its background agent doesn't keep running without a visible switch.
@@ -45,7 +45,7 @@ export function useGamingModeAccess(): boolean {
         const status = await gamingModeStatus();
         if (!status?.enabled) return;
         await disableGamingMode();
-        toast({ title: "Gaming Mode turned off", description: "Gaming Mode access was removed from this account, so it was switched off and priorities were restored." });
+        toast({ title: "Gaming Mode turned off", description: "Gaming Mode is part of Pro and this account no longer has access, so it was switched off and priorities were restored." });
       } catch (error) {
         toast({ title: "Gaming Mode could not be turned off", description: String(error), variant: "destructive" });
       }

@@ -307,7 +307,13 @@ mod watcher {
             }
         };
         let mut covers: HashMap<String, Option<String>> = HashMap::new();
-        type Hint = (BTreeMap<String, bool>, Option<bool>, Vec<crate::commands::stream_watch::VideoWatch>, Option<crate::commands::stream_watch::LiveStream>);
+        type Hint = (
+            BTreeMap<String, bool>,
+            Option<bool>,
+            Vec<crate::commands::stream_watch::VideoWatch>,
+            Option<crate::commands::stream_watch::LiveStream>,
+            Option<crate::commands::gaming_mode::FullscreenApp>,
+        );
         let mut last_hint: Option<Hint> = None;
         let mut last_hint_at = std::time::Instant::now();
         let mut discord_call = None;
@@ -338,9 +344,11 @@ mod watcher {
                 }
             }
             // Pass on changes at once; refresh every 2 s so the agent knows the app is still open.
-            let next: Hint = (hint, discord_call, videos.clone(), live.clone());
+            // A fullscreen game in front, for games installed where no list looks.
+            let fullscreen = crate::commands::gaming_mode::fullscreen_foreground();
+            let next: Hint = (hint, discord_call, videos.clone(), live.clone(), fullscreen);
             if error.is_none() && (last_hint.as_ref() != Some(&next) || last_hint_at.elapsed() >= std::time::Duration::from_secs(2)) {
-                crate::commands::gaming_mode::write_media_hint(next.0.clone(), next.1, next.2.clone(), next.3.clone());
+                crate::commands::gaming_mode::write_media_hint(next.0.clone(), next.1, next.2.clone(), next.3.clone(), next.4.clone());
                 last_hint = Some(next);
                 last_hint_at = std::time::Instant::now();
             }

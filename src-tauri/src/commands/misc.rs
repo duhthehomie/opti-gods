@@ -1407,14 +1407,12 @@ pub async fn run_script_tweak(app: AppHandle, args: ScriptTweakArgs) -> Result<S
                 .find(|line| !line.contains("__OG_RESULT:") && !line.starts_with("[Opti Gods]"))
                 .map(String::as_str)
                 .unwrap_or("The trusted script completed successfully.");
-            let next_step = match args.id.as_str() {
-                "EnableNvidiaMSIPro" => "Restart Windows for the interrupt changes to take effect.",
-                "FiveM1650VRAMBudget" => "Restart the game to reload its configuration; this check does not verify in-game consumption.",
-                "FiveMDisableLSO" | "NetDisableLargeSendOffload" | "DisablePowerThrottlingAdv" =>
-                    "Restart Windows after this batch to activate the configuration.",
-                _ => "The Windows script completed. Restart Windows or the affected app if required by this tweak.",
-            };
-            return Ok(format!("{detail} {next_step}"));
+            // The app's green success popup tells the user to restart Windows once
+            // per run, so results only add a note when a game must be restarted.
+            return Ok(match args.id.as_str() {
+                "FiveM1650VRAMBudget" => format!("{detail} Restart the game to reload its configuration; this check does not verify in-game consumption."),
+                _ => detail.to_string(),
+            });
         }
         let details = script_tweak_diagnostics::failure_details(
             &stderr_lines, &stdout_lines, status.as_ref().and_then(|value| value.code()),
@@ -1969,5 +1967,82 @@ pub fn read_fivem_log() -> String {
     #[cfg(not(windows))]
     {
         String::new()
+    }
+}
+
+/// Restart straight into the motherboard's BIOS/UEFI setup (same as Windows
+/// Advanced startup → UEFI Firmware Settings). Only UEFI firmware supports this;
+/// older Legacy BIOS PCs are told to press the setup key while booting instead.
+#[derive(Serialize)]
+pub struct FirmwareRestartInfo {
+    pub supported: bool,
+    pub firmware: String,
+}
+
+#[cfg(windows)]
+fn firmware_is_uefi() -> Result<bool, String> {
+    use windows::Win32::System::SystemInformation::{GetFirmwareType, FirmwareTypeUefi, FIRMWARE_TYPE};
+    let mut kind = FIRMWARE_TYPE::default();
+    unsafe { GetFirmwareType(&mut kind) }.map_err(|error| format!("Windows could not report the firmware type: {error}"))?;
+    Ok(kind == FirmwareTypeUefi)
+}
+
+#[tauri::command]
+pub fn firmware_restart_info() -> Result<FirmwareRestartInfo, String> {
+    #[cfg(windows)]
+    {
+        let uefi = firmware_is_uefi()?;
+        Ok(FirmwareRestartInfo { supported: uefi, firmware: if uefi { "UEFI".into() } else { "Legacy BIOS".into() } })
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(FirmwareRestartInfo { supported: false, firmware: "unknown".into() })
+    }
+}
+
+#[cfg(windows)]
+fn run_shutdown(args: &[&str]) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let output = std::process::Command::new("shutdown.exe")
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|error| format!("Could not start shutdown.exe: {error}"))?;
+    if output.status.success() { return Ok(()); }
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = if detail.is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { detail };
+    Err(if detail.is_empty() { format!("shutdown.exe failed (exit code {:?}).", output.status.code()) } else { detail })
+}
+
+/// Restarts into BIOS after a 10 second countdown. Windows closes open apps
+/// when the countdown ends, so the app asks the user to save work first.
+#[tauri::command]
+pub fn restart_to_bios() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        if !firmware_is_uefi()? {
+            return Err("This PC uses Legacy BIOS, which Windows can't restart into directly. Restart and press Delete (or F2) while the logo shows.".into());
+        }
+        run_shutdown(&["/r", "/fw", "/t", "10", "/c", "Opti Gods: restarting into BIOS in 10 seconds. Save your work."])?;
+        Ok("Restarting into BIOS in 10 seconds.".into())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Restarting into BIOS is available in the Windows app.".into())
+    }
+}
+
+/// Cancels a pending restart started by restart_to_bios.
+#[tauri::command]
+pub fn cancel_restart_to_bios() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        run_shutdown(&["/a"])?;
+        Ok("Restart cancelled.".into())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Restarting into BIOS is available in the Windows app.".into())
     }
 }

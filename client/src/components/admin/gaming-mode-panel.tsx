@@ -151,9 +151,11 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   const [fpsBusy, setFpsBusy] = useState(false);
   const [fpsConsent, setFpsConsent] = useState(false);
   const fpsAutoStartedRef = useRef(false);
+  // The game Gaming Mode boosted: the FPS counter measures that process.
+  const fpsGamePidRef = useRef<number | null>(null);
   useEffect(() => {
     if (!native || !player) return;
-    void readFpsCapture().then(current => {
+    void readFpsCapture(fpsGamePidRef.current).then(current => {
       if (!current) return;
       setFps(current);
       let wanted = false;
@@ -168,7 +170,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   useEffect(() => {
     if (!native || !player || !fps?.active) return;
     return startVisiblePolling(async () => {
-      const current = await readFpsCapture();
+      const current = await readFpsCapture(fpsGamePidRef.current);
       if (current) setFps(current);
     }, 1000);
   }, [native, player, fps?.active]);
@@ -176,7 +178,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
     setFpsConsent(false);
     setFpsBusy(true);
     try {
-      setFps(await startFpsCapture());
+      setFps(await startFpsCapture(fpsGamePidRef.current));
       try { localStorage.setItem(FPS_COUNTER_KEY, "1"); } catch { /* storage unavailable */ }
     } catch (error) {
       toast({ title: "FPS counter did not start", description: String(error), variant: "destructive" });
@@ -189,7 +191,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
     try {
       await stopFpsCapture();
       try { localStorage.removeItem(FPS_COUNTER_KEY); } catch { /* storage unavailable */ }
-      setFps(await readFpsCapture());
+      setFps(await readFpsCapture(fpsGamePidRef.current));
     } catch (error) {
       toast({ title: "FPS counter did not stop", description: String(error), variant: "destructive" });
     } finally {
@@ -243,6 +245,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   const anyTabbedIn = games.some(tabbedIn);
   // The player version shows one game: the one in front, otherwise the first found.
   const shownGames = player ? [...games].sort((a, b) => Number(tabbedIn(b)) - Number(tabbedIn(a))).slice(0, 1) : games;
+  fpsGamePidRef.current = shownGames[0]?.pid ?? null;
   const lastError = status?.errors.at(-1);
 
   return (
@@ -276,7 +279,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
             <p className="text-[11px] text-zinc-500">
               {on
                 ? player
-                  ? "Game at High priority, background apps slowed · keeps running when Opti Gods is closed"
+                  ? "Game at High priority, background apps optimized · keeps running when Opti Gods is closed"
                   : `Scanning ${status?.processes_scanned ?? 0} processes every 2 s · last scan ${ago(status!.heartbeat_ms, now)} · keeps running when Opti Gods is closed`
                 : broken
                   ? "Switched on, but the background agent is not reporting. Turn it off and on again."
@@ -313,8 +316,8 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
           </span>
           <span className="text-[11px] text-zinc-400" data-testid="text-gaming-mode-apps-slowed">
             {games.length
-              ? `${status?.lowered.length ?? 0} background process${status?.lowered.length === 1 ? "" : "es"} slowed · ${status?.efficiency_mode ?? 0} in efficiency mode`
-              : "Background apps are slowed only while a game is running"}
+              ? `${status?.lowered.length ?? 0} background process${status?.lowered.length === 1 ? "" : "es"} optimized · ${status?.efficiency_mode ?? 0} in efficiency mode`
+              : "Background apps are optimized only while a game is running"}
           </span>
         </div>
       )}
@@ -377,7 +380,13 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                         {fps.frame_time_ms != null && <span className="ml-1.5 text-[10px] font-normal text-zinc-500">{fps.frame_time_ms.toFixed(1)} ms</span>}
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-400">{fps.error ? fps.error : games.length ? "Waiting for frames from the game…" : "Open a game to see FPS"}</span>
+                      <span className="text-xs text-zinc-400">{fps.error
+                        ? fps.error
+                        : !games.length
+                          ? "Open a game to see FPS"
+                          : fps.fps_status === "no_recent_frames" && (fps.frames_seen ?? 0) > 0
+                            ? "Capture is running, but no recent frames match this game."
+                            : "Waiting for frames from the game…"}</span>
                     )
                   ) : (
                     <span className="text-xs text-zinc-500">FPS counter off</span>
@@ -450,7 +459,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                   <span className="ml-1.5 font-bold text-white">{live.platform ? `on ${live.platform}` : "streaming"}</span>
                   <span className="text-zinc-300"> · {games.length ? "being optimized" : "optimized as soon as a game starts"}</span>
                   <div className="text-[10px] text-zinc-400">
-                    Game at High, background apps slowed. {live.app} is never changed — your stream settings stay exactly as you set them.
+                    Game at High, background apps optimized. {live.app} is never changed — your stream settings stay exactly as you set them.
                   </div>
                 </div>
               </div>
@@ -488,7 +497,9 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                 const optimized = app.lowered + app.efficiency > 0;
                 const counts = app.tabs
                   ? `${app.tabs} tab${app.tabs === 1 ? "" : "s"} open`
-                  : `${app.processes} process${app.processes === 1 ? "" : "es"}`;
+                  : app.app === "Discord"
+                    ? `running · ${app.processes} internal Windows process${app.processes === 1 ? "" : "es"} (not separate windows)`
+                    : `${app.processes} process${app.processes === 1 ? "" : "es"}`;
                 return (
                   <div key={app.app} data-testid={`gaming-mode-app-${app.app.toLowerCase().replace(/\s+/g, "-")}`}>
                     <span className="font-bold text-white">{app.app}</span>
@@ -511,12 +522,12 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                 : "No browsers, launchers or chat apps open"}
             </div>
             <div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>
-              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call with any game running, Discord and the Windows audio engine get Above Normal priority so voice stays clear, and both go back to Normal when the call ends. Twitch, Kick and YouTube windows on any monitor are kept at full speed (Windows can't show which quality the player picked).
+              {status?.efficiency_mode ? `${status.efficiency_mode} in Windows efficiency mode · ` : ""}Discord, OBS and Streamlabs are never slowed or changed. In a Discord call with any game running, Discord and the Windows audio engine get Above Normal priority so voice stays clear, and both go back to Normal when the call ends. The tab playing a Twitch, Kick or YouTube stream (any monitor) and the browser parts that decode and download it stay at full speed, so the stream keeps the quality you picked; idle tabs and extensions are optimized. Games installed in any folder are found when they run fullscreen while Opti Gods is open.
             </div>
           </div>
           <NowPlayingSection
             className="sm:col-span-2"
-            footer={<div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>Shows only while music or a stream is playing, with every browser tab marked tabbed in or out. Controls work any time, with or without a game. While a game runs, what is playing stays at full speed and paused players are slowed. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>}
+            footer={<div className={cn("mt-1 text-[10px] text-zinc-600", player && "hidden")}>Shows only while music or a stream is playing, with every browser tab marked tabbed in or out. Controls work any time, with or without a game. While a game runs, the tab or app playing music stays at full speed (Spotify and SoundCloud apps are never slowed while playing) and paused players are optimized. With Opti Gods closed, audio activity is used instead. Firefox is never slowed down.</div>}
           >
             {status?.music?.length ? (
               <div className="mt-1 flex flex-wrap gap-2">
@@ -528,7 +539,7 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
                       item.state === "playing" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : item.state === "unknown" ? "border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-400",
                     )}
                   >
-                    {item.app}: {item.state === "playing" ? "playing · audio kept at full speed" : item.state === "unknown" ? "can't check · not slowed down" : "paused · efficiency mode"}{item.source === "audio_activity" ? " (by audio activity)" : ""}
+                    {item.app}: {item.state === "playing" ? "playing · audio kept at full speed" : item.state === "unknown" ? "can't check · not slowed down" : "paused · optimized"}{item.source === "audio_activity" ? " (by audio activity)" : ""}
                   </span>
                 ))}
               </div>

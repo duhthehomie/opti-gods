@@ -248,6 +248,21 @@ commands.allow = ["reset_nvidia_preset_import_cancel"]
 identifier = "allow-run-script-tweak"
 description = "Run a trusted Windows tweak script after native authorization and verified checkpoint checks."
 commands.allow = ["run_script_tweak"]
+
+[[permission]]
+identifier = "allow-firmware-restart-info"
+description = "Check whether this PC's firmware supports restarting into BIOS setup."
+commands.allow = ["firmware_restart_info"]
+
+[[permission]]
+identifier = "allow-restart-to-bios"
+description = "Restart Windows into BIOS/UEFI setup after a confirmed countdown."
+commands.allow = ["restart_to_bios"]
+
+[[permission]]
+identifier = "allow-cancel-restart-to-bios"
+description = "Cancel a pending restart into BIOS."
+commands.allow = ["cancel_restart_to_bios"]
 [permission_set]
 identifier = "all-app-commands"
 description = "All app-level commands."
@@ -298,6 +313,9 @@ permissions = [
   "allow-cancel-nvidia-preset-import",
   "allow-reset-nvidia-preset-import-cancel",
   "allow-run-script-tweak",
+  "allow-firmware-restart-info",
+  "allow-restart-to-bios",
+  "allow-cancel-restart-to-bios",
 ]
 
 [[permission]]

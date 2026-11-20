@@ -43,7 +43,7 @@ import {
 } from "@/lib/native-tweak-runner";
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { authorizeHardwarePreset } from "@/lib/hardware-preset";
-import { playOptimizationActionSound } from "@/lib/action-sound";
+import { playOptimizationActionSound, RESTART_TO_SEE_CHANGES } from "@/lib/action-sound";
 import { DEBLOAT_TWEAK_IDS, GAME_DETECT_PACK_IDS } from "@shared/preset-builder";
 import { BEST_15_IDS_KEY } from "@/lib/queryClient";
 import {
@@ -756,10 +756,12 @@ export default function Dashboard() {
        }
        const result = await applyTweakBatch(pending);
       setActiveBoost(preset.id);
+      const boostSucceeded = native && result.appliedIds.length > 0 && !result.failures.length && !blocked.length;
+      if (boostSucceeded) playOptimizationActionSound();
       toast({
         title: native ? `${preset.title}: ${result.appliedIds.length} applied` : `${preset.title} selected`,
         description: native
-           ? `${result.appliedIds.length} of ${pending.length} pending Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${result.skippedIds.length ? ` · ${result.skippedIds.length} incompatible skipped` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.`
+           ? `${result.appliedIds.length} of ${pending.length} pending Windows changes confirmed${result.failures.length ? ` · ${result.failures.length} failed` : ""}${result.skippedIds.length ? ` · ${result.skippedIds.length} incompatible skipped` : ""}${blocked.length ? ` · ${blocked.length} incompatible skipped` : ""}.${result.appliedIds.length ? ` ${RESTART_TO_SEE_CHANGES}` : ""}`
           : `${result.selectedIds.length} compatible tweaks selected. Download and run the .bat to apply them.`,
         variant: native
           ? (result.failures.length || blocked.length ? "destructive" : "success")

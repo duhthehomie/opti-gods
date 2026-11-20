@@ -258,30 +258,30 @@ fn fps_snapshot(game_pid: Option<u32>) -> FpsCaptureStatus {
 
 /// Download (first use, user-confirmed in the UI) and start frame capture.
 #[tauri::command]
-pub async fn start_fps_capture(app: AppHandle) -> Result<FpsCaptureStatus, String> {
+pub async fn start_fps_capture(app: AppHandle, game_pid: Option<u32>) -> Result<FpsCaptureStatus, String> {
     #[cfg(windows)]
     {
         if FPS_CAPTURE.lock().is_some() {
-            let mut status = fps_snapshot(current_game_pid());
+            let mut status = fps_snapshot(game_pid.filter(|pid| *pid != 0).or_else(current_game_pid));
             status.tool_ready = true;
             return Ok(status);
         }
         if FPS_STARTING.swap(true, Ordering::SeqCst) {
             return Err("FPS capture is already starting.".into());
         }
-        let result = start_fps_capture_windows(&app).await;
+        let result = start_fps_capture_windows(&app, game_pid).await;
         FPS_STARTING.store(false, Ordering::SeqCst);
         result
     }
     #[cfg(not(windows))]
     {
-        let _ = app;
+        let _ = (app, game_pid);
         Err("FPS capture is available in the Windows app.".into())
     }
 }
 
 #[cfg(windows)]
-async fn start_fps_capture_windows(app: &AppHandle) -> Result<FpsCaptureStatus, String> {
+async fn start_fps_capture_windows(app: &AppHandle, game_pid: Option<u32>) -> Result<FpsCaptureStatus, String> {
     {
         use std::io::{BufRead, BufReader, Read};
         let executable = ensure_presentmon(app).await?;
@@ -369,7 +369,7 @@ async fn start_fps_capture_windows(app: &AppHandle) -> Result<FpsCaptureStatus, 
             started_at_ms: now_ms(),
             executable,
         });
-        let mut status = fps_snapshot(current_game_pid());
+        let mut status = fps_snapshot(game_pid.filter(|pid| *pid != 0).or_else(current_game_pid));
         status.tool_ready = true;
         Ok(status)
     }
@@ -386,9 +386,11 @@ pub fn stop_fps_capture() -> Result<(), String> {
 }
 
 /// Cheap readout (no PowerShell) for a live FPS display between samples.
+/// `game_pid`: the game the caller already knows (Gaming Mode's boosted game);
+/// otherwise the live monitor's game. Without either, no game is measured.
 #[tauri::command]
-pub fn read_fps_capture(app: AppHandle) -> FpsCaptureStatus {
-    let mut status = fps_snapshot(current_game_pid());
+pub fn read_fps_capture(app: AppHandle, game_pid: Option<u32>) -> FpsCaptureStatus {
+    let mut status = fps_snapshot(game_pid.filter(|pid| *pid != 0).or_else(current_game_pid));
     status.tool_ready = presentmon_downloaded(&app);
     status
 }

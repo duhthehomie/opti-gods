@@ -9,7 +9,7 @@ import { detectInstalledGames, isNative, type NativeInstalledGame } from "@/lib/
 import { getTweakCompatibility } from "@/lib/tweak-compatibility";
 import { TWEAK_REGISTRY, type TweakCategory } from "@/lib/tweak-registry";
 import { applyTweakBatch } from "@/lib/native-tweak-runner";
-import { playOptimizationActionSound } from "@/lib/action-sound";
+import { playOptimizationActionSound, RESTART_TO_SEE_CHANGES } from "@/lib/action-sound";
 
 type GameProfile = {
   id: string;
@@ -218,7 +218,8 @@ export default function GameProfiles() {
       if (result.failures.length || result.skippedIds.length || result.unsupportedIds.length) {
         throw new Error(result.failures.map(failure => failure.message).join("; ") || "Some selected profiles were skipped or unsupported. Check the Windows runner results.");
       }
-      toast({ title: native ? `${result.appliedIds.length} game profiles applied` : "Game profiles selected", description: native ? "The desktop app confirmed the selected game optimizations." : "Run the generated script on Windows to apply them." });
+      if (native) playOptimizationActionSound();
+      toast({ title: native ? `${result.appliedIds.length} game profiles applied` : "Game profiles selected", description: native ? `The desktop app confirmed the selected game optimizations. ${RESTART_TO_SEE_CHANGES}` : "Run the generated script on Windows to apply them.", variant: native ? "success" : undefined });
     } catch (cause) {
       toast({ title: "Could not apply game profiles", description: cause instanceof Error ? cause.message : "The action failed.", variant: "destructive" });
     }

@@ -17,6 +17,7 @@ import { useOptimizationStore } from "@/store/use-optimization-store";
 import { useOsDetection } from "@/hooks/use-os-detection";
 import { useProStatus } from "@/lib/pro-status";
 import { useAuth, useLogout, loginWithDiscord } from "@/hooks/use-auth";
+import { useIsOwner } from "@/lib/owner";
 import { isNative, discordLogin } from "@/lib/tauri-bridge";
 import { apiUrl } from "@/lib/api-base";
 import { NATIVE_TOKEN_KEY, NATIVE_ADMIN_KEY, queryClient } from "@/lib/queryClient";
@@ -48,6 +49,8 @@ type NavItem = {
 ];
 
 const ADMIN_NAV: NavItem = { title: "Admin", url: "/admin", icon: ShieldCheck, accent: "admin" };
+// Owner-only BIOS guide (my1ik or an unlocked admin session).
+const BIOS_NAV: NavItem = { title: "BIOS Setup", url: "/bios", icon: Cpu, accent: "admin" };
 
 function isGuestMode(): boolean {
   try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch { return false; }
@@ -78,6 +81,7 @@ export function AppSidebar() {
   const osInfo = useOsDetection();
   const hasProEntitlement = useProStatus();
   const { user } = useAuth();
+  const isOwner = useIsOwner();
   const isPro = !!user && hasProEntitlement;
   const logout = useLogout();
   const enabledCount = useMemo(() => Object.values(tweaks).filter(Boolean).length, [tweaks]);
@@ -277,7 +281,8 @@ export function AppSidebar() {
     );
   };
 
-  const navItems = adminUnlocked ? [...PRIMARY, ADMIN_NAV] : PRIMARY;
+  const showBios = isOwner || adminUnlocked;
+  const navItems = [...PRIMARY, ...(showBios ? [BIOS_NAV] : []), ...(adminUnlocked ? [ADMIN_NAV] : [])];
 
   return (
     <>

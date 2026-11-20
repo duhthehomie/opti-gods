@@ -373,10 +373,33 @@ export interface NativeRecordingResult {
   truncated: boolean;
 }
 
+export interface FirmwareRestartInfo {
+  /** UEFI firmware: Windows can restart straight into BIOS setup. */
+  supported: boolean;
+  firmware: string;
+}
+
+export async function firmwareRestartInfo(): Promise<FirmwareRestartInfo | null> {
+  if (!isNative()) return null;
+  return invoke<FirmwareRestartInfo>("firmware_restart_info");
+}
+
+/** Restarts into BIOS/UEFI setup after a 10 second Windows countdown. */
+export async function restartToBios(): Promise<string> {
+  if (!isNative()) throw new Error("Restarting into BIOS requires the Windows app.");
+  return invoke<string>("restart_to_bios");
+}
+
+export async function cancelRestartToBios(): Promise<string> {
+  if (!isNative()) throw new Error("Restarting into BIOS requires the Windows app.");
+  return invoke<string>("cancel_restart_to_bios");
+}
+
 /** Downloads the pinned official PresentMon on first use; the UI must ask first. */
-export async function startFpsCapture(): Promise<NativeFpsCaptureStatus> {
+/** `gamePid`: the game to measure when the caller knows it (Gaming Mode's game). */
+export async function startFpsCapture(gamePid?: number | null): Promise<NativeFpsCaptureStatus> {
   if (!isNative()) throw new Error("FPS capture requires the Windows app.");
-  return invoke<NativeFpsCaptureStatus>("start_fps_capture");
+  return invoke<NativeFpsCaptureStatus>("start_fps_capture", { gamePid: gamePid ?? null });
 }
 
 export async function stopFpsCapture(): Promise<void> {
@@ -384,9 +407,9 @@ export async function stopFpsCapture(): Promise<void> {
   await invoke<void>("stop_fps_capture");
 }
 
-export async function readFpsCapture(): Promise<NativeFpsCaptureStatus | null> {
+export async function readFpsCapture(gamePid?: number | null): Promise<NativeFpsCaptureStatus | null> {
   if (!isNative()) return null;
-  return invoke<NativeFpsCaptureStatus>("read_fps_capture");
+  return invoke<NativeFpsCaptureStatus>("read_fps_capture", { gamePid: gamePid ?? null });
 }
 
 /** Native 1-second live monitor; keeps sampling while a game has focus. */

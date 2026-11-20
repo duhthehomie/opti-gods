@@ -122,6 +122,92 @@ pub struct MediaHint {
     /// OBS Studio or Streamlabs is live. Shown only; OBS is never changed.
     #[serde(default)]
     pub live: Option<crate::commands::stream_watch::LiveStream>,
+    /// App filling its whole monitor in front: a game the lists don't know
+    /// (custom install folder, Minecraft Java...). The agent (SYSTEM) can't see windows.
+    #[serde(default)]
+    pub fullscreen: Option<FullscreenApp>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct FullscreenApp {
+    pub pid: u32,
+    /// Lowercase file name.
+    pub exe: String,
+}
+
+/// Fullscreen apps that are never treated as games.
+#[cfg(windows)]
+const NOT_FULLSCREEN_GAMES: &[&str] = &[
+    "explorer.exe", "applicationframehost.exe", "lockapp.exe", "searchhost.exe", "searchapp.exe",
+    "shellexperiencehost.exe", "startmenuexperiencehost.exe", "textinputhost.exe", "opti-gods.exe",
+    "optigods.exe", "vlc.exe", "mpc-hc64.exe", "mpc-hc.exe", "mpc-be64.exe", "wmplayer.exe", "mpv.exe",
+    "potplayermini64.exe", "video.ui.exe", "microsoft.media.player.exe", "powerpnt.exe", "taskmgr.exe",
+    "obs64.exe", "obs32.exe", "streamlabs obs.exe", "streamlabs desktop.exe", "firefox.exe",
+    "discord.exe", "discordptb.exe", "discordcanary.exe", "mstsc.exe", "parsecd.exe", "steam.exe",
+    "steamwebhelper.exe", "gameoverlayui.exe", "nvidia overlay.exe", "nvcontainer.exe",
+];
+
+/// True when a fullscreen app may be treated as a game.
+#[cfg(windows)]
+pub(crate) fn fullscreen_game_candidate(exe_lower: &str) -> bool {
+    !exe_lower.is_empty()
+        && !NOT_FULLSCREEN_GAMES.contains(&exe_lower)
+        && !BACKGROUND_EXES.contains(&exe_lower)
+        && !exe_lower.starts_with("fivem")
+}
+
+/// The app in front when it fills its whole monitor without a title bar
+/// (exclusive or borderless fullscreen), as games run. Read in the app,
+/// because the SYSTEM agent cannot see the user's windows.
+#[cfg(windows)]
+pub fn fullscreen_foreground() -> Option<FullscreenApp> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
+        GetWindowThreadProcessId, IsIconic, GWL_STYLE, WS_CAPTION,
+    };
+    unsafe {
+        let window = GetForegroundWindow();
+        if window.0.is_null() || window == GetShellWindow() || window == GetDesktopWindow() || IsIconic(window).as_bool() {
+            return None;
+        }
+        // Maximized normal windows keep their title bar; games don't have one.
+        let style = GetWindowLongW(window, GWL_STYLE) as u32;
+        if style & WS_CAPTION.0 == WS_CAPTION.0 { return None; }
+        let mut rect = RECT::default();
+        GetWindowRect(window, &mut rect).ok()?;
+        let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if !GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &mut info).as_bool() { return None; }
+        let screen = info.rcMonitor;
+        if rect.left > screen.left || rect.top > screen.top || rect.right < screen.right || rect.bottom < screen.bottom {
+            return None;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(window, Some(&mut pid));
+        if pid == 0 || pid == std::process::id() { return None; }
+        let exe = native::image_path(pid)?.rsplit(['\\', '/']).next()?.to_ascii_lowercase();
+        fullscreen_game_candidate(&exe).then_some(FullscreenApp { pid, exe })
+    }
+}
+
+/// What one Chromium process does, read from its command line.
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ChromiumRole { Main, Gpu, Network, Audio, Media, Tab, Other, Unknown }
+
+/// Main, graphics (video decode), network (stream download), audio and media
+/// services carry a stream or music; tabs are judged by how busy they are.
+#[cfg(windows)]
+fn chromium_role(command: Option<&str>) -> ChromiumRole {
+    let Some(c) = command else { return ChromiumRole::Unknown };
+    if !c.contains("--type=") { return ChromiumRole::Main; }
+    if c.contains("--type=gpu-process") { return ChromiumRole::Gpu; }
+    if c.contains("audio.mojom.AudioService") { return ChromiumRole::Audio; }
+    if c.contains("network.mojom.NetworkService") { return ChromiumRole::Network; }
+    if c.contains("--type=utility") && c.contains("media.mojom.") { return ChromiumRole::Media; }
+    if c.contains("--type=renderer") && !c.contains("--extension-process") { return ChromiumRole::Tab; }
+    ChromiumRole::Other
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -520,6 +606,10 @@ mod agent {
     const MUSIC_APP_ACTIVE: f64 = 0.004;
     /// Ticks music stays protected after it goes quiet (track changes, buffering).
     const MUSIC_HOLD_TICKS: u8 = 3;
+    /// Share of one core a tab uses while it plays video or music. Idle tabs stay far below.
+    const BUSY_TAB: f64 = 0.01;
+    /// Ticks a busy tab keeps full speed after it quiets down (buffering, ad breaks).
+    const TAB_HOLD_TICKS: u8 = 5;
 
     struct Boosted { name: String, original: u32, game: GamingModeGame }
 
@@ -544,6 +634,10 @@ mod agent {
         reported: HashSet<String>,
         /// Discord processes raised to Above Normal for a voice call.
         discord_raised: HashSet<u32>,
+        /// Browser tabs recently busy with a stream or music: pid → ticks left.
+        busy_tabs: HashMap<u32, u8>,
+        /// Fullscreen apps treated as games until they close: pid → name.
+        fullscreen_games: HashMap<u32, String>,
     }
 
     impl Agent {
@@ -577,6 +671,16 @@ mod agent {
             self.boosted.retain(|pid, _| alive.contains(pid));
             self.background.retain(|pid, _| alive.contains(pid));
             self.discord_raised.retain(|pid| alive.contains(pid));
+            self.busy_tabs.retain(|pid, _| alive.contains(pid));
+            self.fullscreen_games.retain(|pid, _| alive.contains(pid));
+            // A fullscreen app in front that no list knows is a game until it closes.
+            if let Some(app) = read_media_hint().and_then(|h| h.fullscreen) {
+                if fullscreen_game_candidate(&app.exe)
+                    && processes.iter().any(|p| p.pid == app.pid && p.name.eq_ignore_ascii_case(&app.exe))
+                {
+                    self.fullscreen_games.entry(app.pid).or_insert(app.exe);
+                }
+            }
             self.reported.retain(|key| key.split(':').nth(1).and_then(|p| p.parse().ok()).map_or(true, |pid: u32| alive.contains(&pid)));
 
             let own = std::process::id();
@@ -591,6 +695,8 @@ mod agent {
                 };
                 if let Some(how) = classify_game(&lower, path.as_deref()) {
                     games.push((process.pid, process.name.clone(), how));
+                } else if self.fullscreen_games.contains_key(&process.pid) {
+                    games.push((process.pid, process.name.clone(), "fullscreen app"));
                 }
             }
 
@@ -659,12 +765,12 @@ mod agent {
         /// audio path at full speed; lower and slow everything else.
         fn optimize_background(&mut self, processes: &[native::Process]) {
             let now = Instant::now();
-            let mut audio_pids: HashSet<u32> = HashSet::new();
             let mut audio_rate: HashMap<String, f64> = HashMap::new();
             let mut total_rate: HashMap<String, f64> = HashMap::new();
             let mut readable: HashSet<String> = HashSet::new();
             let mut counts: HashMap<String, u32> = HashMap::new();
             let mut targets: Vec<(u32, String, String)> = Vec::new();
+            let mut rates: HashMap<u32, f64> = HashMap::new();
 
             for process in processes {
                 let exe = canonical_exe(&process.name);
@@ -673,13 +779,14 @@ mod agent {
                 let audio_capable = CHROMIUM_BROWSERS.contains(&exe.as_str()) || MUSIC_APPS.contains(&exe.as_str());
                 if !audio_capable { continue; }
                 *counts.entry(exe.clone()).or_default() += 1;
-                let rate = self.cpu_rate(process.pid, now).unwrap_or(0.0);
+                let sample = self.cpu_rate(process.pid, now);
+                if let Some(rate) = sample { rates.insert(process.pid, rate); }
+                let rate = sample.unwrap_or(0.0);
                 *total_rate.entry(exe.clone()).or_default() += rate;
                 let command = self.command_lines.entry(process.pid).or_insert_with(|| native::command_line(process.pid)).clone();
                 if let Some(command) = command {
                     readable.insert(exe.clone());
                     if command.contains("audio.mojom.AudioService") {
-                        audio_pids.insert(process.pid);
                         *audio_rate.entry(exe.clone()).or_default() += rate;
                     }
                 }
@@ -738,22 +845,44 @@ mod agent {
                     .or_insert(label);
             }
             for (pid, name, exe) in targets {
-                let is_watching = watching.contains_key(&exe);
-                let protected = is_watching || playing.contains(&exe) || unknown.contains(&exe) || exe == "firefox.exe";
-                let audio_process = audio_pids.contains(&pid);
-                // The audio process of a playing app keeps Normal priority. Other
-                // processes can drop: Chromium audio threads run time-critical,
-                // which a lower process class does not change.
-                let want_lower = !(is_watching || (playing.contains(&exe) && audio_process));
-                let want_throttle = if protected {
+                let chromium = CHROMIUM_BROWSERS.contains(&exe.as_str());
+                let media_active = watching.contains_key(&exe) || playing.contains(&exe);
+                // Busy tabs (playing a stream or music) keep full speed for a few
+                // ticks after they quiet down, so buffering never drops quality.
+                // A tab seen for the first time counts as busy until it is measured,
+                // so a playing stream is never slowed for a moment.
+                let busy_now = rates.get(&pid).map_or(true, |rate| *rate >= BUSY_TAB);
+                let hold = self.busy_tabs.entry(pid).or_insert(0);
+                *hold = if busy_now { TAB_HOLD_TICKS } else { hold.saturating_sub(1) };
+                let busy = *hold > 0;
+                let full_speed = if exe == "firefox.exe" || unknown.contains(&exe) {
+                    // Its audio can't be checked: never slowed.
+                    true
+                } else if MUSIC_APPS.contains(&exe.as_str()) {
+                    // A playing music app is never slowed at all.
+                    playing.contains(&exe)
+                } else if chromium && media_active {
+                    // Everything that carries the stream or music stays at full
+                    // speed; idle tabs, extensions and helpers are optimized.
+                    let command = self.command_lines.entry(pid).or_insert_with(|| native::command_line(pid)).clone();
+                    match chromium_role(command.as_deref()) {
+                        ChromiumRole::Tab => busy,
+                        ChromiumRole::Other => false,
+                        _ => true,
+                    }
+                } else {
+                    false
+                };
+                let want_throttle = if full_speed {
                     Some(native::Throttle::Off)
                 } else if EFFICIENCY_EXES.contains(&exe.as_str()) {
                     Some(native::Throttle::On)
                 } else {
                     None
                 };
-                let want_memory_low = !protected;
-                self.apply_background(pid, &name, want_lower, want_throttle, want_memory_low, audio_process && protected);
+                // Browsers put their own processes into efficiency mode, so full
+                // speed is re-asserted every tick on the ones carrying media.
+                self.apply_background(pid, &name, !full_speed, want_throttle, !full_speed, full_speed && chromium);
             }
 
             // What the panel shows: every background app seen and what was done.
@@ -795,11 +924,13 @@ mod agent {
                     if background.already_low { entry.already_low += 1; }
                 }
                 if let Some(sites) = watching.get(&exe) {
-                    entry.note = format!("watching {sites} · video kept at full speed");
+                    entry.note = format!("watching {sites} · stream kept at full quality, idle tabs optimized");
                 } else if exe == "firefox.exe" {
                     entry.note = "not slowed · its audio can't be checked".into();
+                } else if playing.contains(&exe) && MUSIC_APPS.contains(&exe.as_str()) {
+                    entry.note = "music playing · never slowed".into();
                 } else if playing.contains(&exe) {
-                    entry.note = "music playing · audio kept at full speed".into();
+                    entry.note = "music playing · music kept at full speed, idle tabs optimized".into();
                 } else if unknown.contains(&exe) {
                     entry.note = "can't check audio · not slowed".into();
                 }
@@ -972,6 +1103,8 @@ mod agent {
             music_hold: HashMap::new(),
             reported: HashSet::new(),
             discord_raised: HashSet::new(),
+            busy_tabs: HashMap::new(),
+            fullscreen_games: HashMap::new(),
         };
         if let Err(message) = privilege {
             agent.error("privilege".into(), format!("Some browser processes may not be adjustable: {message}"));
@@ -1021,10 +1154,11 @@ pub(crate) fn write_media_hint(
     discord_call: Option<bool>,
     videos: Vec<crate::commands::stream_watch::VideoWatch>,
     live: Option<crate::commands::stream_watch::LiveStream>,
+    fullscreen: Option<FullscreenApp>,
 ) {
     let dir = data_dir();
     if !dir.join("enabled").exists() { return; }
-    let hint = MediaHint { written_ms: now_ms(), apps, discord_call, videos, live };
+    let hint = MediaHint { written_ms: now_ms(), apps, discord_call, videos, live, fullscreen };
     if let Ok(json) = serde_json::to_vec(&hint) {
         let tmp = dir.join("media.json.tmp");
         if std::fs::write(&tmp, json).is_ok() {
@@ -1319,5 +1453,27 @@ mod tests {
         assert!(classify_game("chrome.exe", Some(r"c:\program files\google\chrome\application\chrome.exe")).is_none());
         assert!(classify_game("cod26.exe", Some(r"c:\program files (x86)\call of duty\_retail_\cod26.exe")).is_some());
         assert!(classify_game("codlauncher.exe", Some(r"c:\program files (x86)\call of duty\codlauncher.exe")).is_none());
+    }
+
+    #[test]
+    fn keeps_stream_parts_of_chromium_at_full_speed() {
+        assert_eq!(chromium_role(Some(r#""C:\b\brave.exe" --profile-directory=Default"#)), ChromiumRole::Main);
+        assert_eq!(chromium_role(Some("brave.exe --type=gpu-process --gpu-preferences=x")), ChromiumRole::Gpu);
+        assert_eq!(chromium_role(Some("brave.exe --type=utility --utility-sub-type=network.mojom.NetworkService")), ChromiumRole::Network);
+        assert_eq!(chromium_role(Some("brave.exe --type=utility --utility-sub-type=audio.mojom.AudioService")), ChromiumRole::Audio);
+        assert_eq!(chromium_role(Some("brave.exe --type=utility --utility-sub-type=media.mojom.CdmServiceBroker")), ChromiumRole::Media);
+        assert_eq!(chromium_role(Some("brave.exe --type=renderer --renderer-client-id=7")), ChromiumRole::Tab);
+        assert_eq!(chromium_role(Some("brave.exe --type=renderer --extension-process")), ChromiumRole::Other);
+        assert_eq!(chromium_role(Some("brave.exe --type=utility --utility-sub-type=storage.mojom.StorageService")), ChromiumRole::Other);
+        assert_eq!(chromium_role(None), ChromiumRole::Unknown);
+    }
+
+    #[test]
+    fn fullscreen_games_skip_players_browsers_and_desktop() {
+        assert!(fullscreen_game_candidate("mygame-win64-shipping.exe"));
+        assert!(fullscreen_game_candidate("javaw.exe"));
+        for exe in ["explorer.exe", "vlc.exe", "brave.exe", "discord.exe", "obs64.exe", "fivem.exe", "steam.exe", ""] {
+            assert!(!fullscreen_game_candidate(exe), "{exe}");
+        }
     }
 }

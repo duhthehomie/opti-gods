@@ -141,6 +141,12 @@ const MOBILE_PAGE_INFO: Record<string, { title: string; desc: string; tweakCount
     tweakCount: "Visual",
     highlights: ["Pack builder", "Validation", "FiveM visuals", "Safe installation"],
   },
+  "/bios": {
+    title: "BIOS Setup",
+    desc: "Owner-only BIOS guide for max FPS, with a one-click restart into BIOS.",
+    tweakCount: "Owner",
+    highlights: ["Resizable BAR", "PCIe 4.0", "Dual channel RAM", "Restart into BIOS"],
+  },
   "/support": {
     title: "Support",
     desc: "Get direct help by email or through the Opti Gods Discord community.",

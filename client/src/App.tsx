@@ -148,6 +148,7 @@ const TaskManagerPage    = lazy(() => import("@/pages/task-manager"));
 const FivemGraphicsPage  = lazy(() => import("@/pages/fivem-graphics"));
 const GameProfilesPage   = lazy(() => import("@/pages/game-profiles"));
 const UpdatesPage        = lazy(() => import("@/pages/updates"));
+const BiosPage           = lazy(() => import("@/pages/bios"));
 
 import { GUEST_MODE_KEY } from "@/pages/welcome";
 
@@ -284,6 +285,7 @@ function Router() {
         <Route path="/help" component={HelpPage} />
         <Route path="/support" component={HelpPage} />
         <Route path="/updates" component={UpdatesPage} />
+        <Route path="/bios" component={BiosPage} />
         <Route path="/task-manager" component={TaskManagerPage} />
         <Route path="/fivem-graphics" component={FivemGraphicsPage} />
         <Route path="/graphics-studio" component={FivemGraphicsPage} />

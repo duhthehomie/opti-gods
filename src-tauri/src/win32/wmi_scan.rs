@@ -88,6 +88,58 @@ struct MsAcpiThermalZone {
     current_temperature: Option<u32>,
 }
 
+/// Win32_VideoController.AdapterRAM is a 32-bit number, so Windows reports
+/// 4 GB for every card with more memory (an RTX 5060 shows 4 GB). The driver
+/// stores the real size as a 64-bit value in the display class registry key,
+/// and NVIDIA's own tool reports it exactly, so read those instead.
+fn real_vram_bytes(gpu_name: &str, wmi_adapter_ram: Option<u64>) -> Option<u64> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let from_registry = (|| -> Option<u64> {
+        let class = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}")
+            .ok()?;
+        let mut best: Option<u64> = None;
+        for name in class.enum_keys().flatten() {
+            if name.len() != 4 || !name.chars().all(|c| c.is_ascii_digit()) { continue; }
+            let Ok(key) = class.open_subkey(&name) else { continue };
+            let desc: String = key.get_value("DriverDesc").unwrap_or_default();
+            if !desc.eq_ignore_ascii_case(gpu_name) { continue; }
+            let bytes = key.get_value::<u64, _>("HardwareInformation.qwMemorySize").ok().or_else(|| {
+                // Some drivers store it as 8 raw bytes instead of a QWORD.
+                let raw = key.get_raw_value("HardwareInformation.qwMemorySize").ok()?;
+                (raw.bytes.len() == 8).then(|| u64::from_le_bytes(raw.bytes.clone().try_into().unwrap()))
+            });
+            if let Some(b) = bytes.filter(|b| *b > 0) {
+                best = Some(best.map_or(b, |old| old.max(b)));
+            }
+        }
+        best
+    })();
+    if from_registry.is_some() { return from_registry; }
+
+    if gpu_name.to_ascii_lowercase().contains("nvidia") {
+        let mb = Command::new("nvidia-smi.exe")
+            .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
+            .creation_flags(0x0800_0000)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|text| {
+                let wanted = gpu_name.to_ascii_lowercase();
+                text.lines().find_map(|line| {
+                    let (name, mem) = line.rsplit_once(',')?;
+                    let name = name.trim().to_ascii_lowercase();
+                    (wanted.contains(&name) || name.contains(&wanted)).then(|| mem.trim().parse::<u64>().ok()).flatten()
+                })
+            });
+        if let Some(mb) = mb.filter(|m| *m > 0) { return Some(mb * 1024 * 1024); }
+    }
+    wmi_adapter_ram
+}
+
 pub fn scan() -> Result<HardwareScan> {
     crate::win32::restore::initialize_com_security()?;
     let com = COMLibrary::new().context("COM init")?;
@@ -165,7 +217,7 @@ pub fn scan() -> Result<HardwareScan> {
                 .map(|n| !n.contains("Virtual") && !n.contains("Remote"))
                 .unwrap_or(true)
         })
-        .max_by_key(|g| g.adapter_ram.unwrap_or(0));
+        .max_by_key(|g| g.name.as_deref().and_then(|n| real_vram_bytes(n, g.adapter_ram)).unwrap_or(0));
 
     // NVIDIA exposes one controllable cooling source through nvidia-smi even
     // when motherboard WMI only reports the CPU/chassis fan. Count that source
@@ -190,8 +242,8 @@ pub fn scan() -> Result<HardwareScan> {
         .and_then(|g| g.name.clone())
         .unwrap_or_else(|| "Unknown GPU".into());
     let vram_mb = main_gpu
-        .and_then(|g| g.adapter_ram)
-        .map(|bytes| (bytes / (1024 * 1024)) as u64);
+        .and_then(|g| real_vram_bytes(g.name.as_deref().unwrap_or(""), g.adapter_ram))
+        .map(|bytes| bytes / (1024 * 1024));
 
     let total_capacity: u64 = memory.iter().map(|m| m.capacity.unwrap_or(0)).sum();
     let ram_gb = if total_capacity > 0 {

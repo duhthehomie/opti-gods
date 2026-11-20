@@ -16,6 +16,7 @@ import {
   EXPERT_TWEAK_IDS,
   NVIDIA_CAPTURE_PROTECTED_IDS,
   hardwareFromRig,
+  isHardwareCompatible,
   type PresetHardware,
 } from "../shared/preset-builder";
 import { getOptimalSystemResponsiveness } from "../client/src/lib/hardware-optimization";
@@ -377,6 +378,29 @@ test("hardwareFromRig: detects NVIDIA RTX correctly", () => {
   assert.equal(hw.cpuBrand, "amd");
   assert.equal(hw.isLaptop, false);
   assert.equal(hw.hasDiscreteGpu, true);
+});
+
+test("hardwareFromRig: Intel i5-14400F gets generation 14 and the P-core FiveM tweak", () => {
+  const rig = (cpu: string) => hardwareFromRig({
+    cpu, cpuCores: 10, cpuThreads: 16, gpu: "NVIDIA GeForce RTX 5060", ramGb: 16,
+    chassis: "Desktop", isLaptop: false, osName: "Microsoft Windows 10 Home", osBuild: 19045, refreshHz: 165,
+  } as any);
+  const i5 = rig("13th Gen Intel(R) Core(TM) i5-14400F");
+  assert.equal(i5.cpuGeneration, 14);
+  assert.ok(buildSafePreset(i5, "balanced").core.includes("FiveMIntel14PcoreAffinity"));
+  // 0xFFF covers 6 P-cores only; 8 P-core i7/i9 chips must not get it.
+  const i7 = rig("Intel(R) Core(TM) i7-14700K");
+  assert.equal(i7.cpuGeneration, 14);
+  assert.ok(!buildSafePreset(i7, "balanced").core.includes("FiveMIntel14PcoreAffinity"));
+  assert.equal(rig("Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz").cpuGeneration, 9);
+  assert.equal(rig("AMD Ryzen 5 3500 6-Core Processor").cpuGeneration, undefined);
+});
+
+test("HAGS is allowed on Windows 10 2004+ for RTX cards, not on older Windows 10 or GTX", () => {
+  const rtx: PresetHardware = { gpuVendor: "nvidia", gpuName: "NVIDIA GeForce RTX 5060", osVersion: "win10", osBuild: 19045 };
+  assert.equal(isHardwareCompatible("EnableHAGS", rtx).ok, true);
+  assert.equal(isHardwareCompatible("EnableHAGS", { ...rtx, osBuild: 18363 }).ok, false);
+  assert.equal(isHardwareCompatible("EnableHAGS", { ...rtx, gpuName: "NVIDIA GeForce GTX 1650 SUPER" }).ok, false);
 });
 
 test("hardwareFromRig: detects laptop chassis", () => {
