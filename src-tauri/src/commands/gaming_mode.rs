@@ -145,7 +145,27 @@ const NOT_FULLSCREEN_GAMES: &[&str] = &[
     "obs64.exe", "obs32.exe", "streamlabs obs.exe", "streamlabs desktop.exe", "firefox.exe",
     "discord.exe", "discordptb.exe", "discordcanary.exe", "mstsc.exe", "parsecd.exe", "steam.exe",
     "steamwebhelper.exe", "gameoverlayui.exe", "nvidia overlay.exe", "nvcontainer.exe",
+    // Windows tools that draw over the whole screen but are not games.
+    "screenclippinghost.exe", "snippingtool.exe", "screensketch.exe", "gamebar.exe", "gamebarftserver.exe",
+    "gamebarpresencewriter.exe", "gamingservicesui.exe", "widgets.exe", "widgetservice.exe", "systemsettings.exe",
+    "logonui.exe", "consent.exe", "credentialuibroker.exe", "sihost.exe", "dwm.exe", "csrss.exe", "winlogon.exe",
+    "msedgewebview2.exe", "teams.exe", "ms-teams.exe", "zoom.exe", "slack.exe", "snagit32.exe", "snagiteditor.exe",
+    "sharex.exe", "lightshot.exe", "greenshot.exe", "obs-browser-page.exe", "nvsphelper64.exe", "radeonsoftware.exe",
+    "amddvr.exe", "cncmd.exe",
 ];
+
+/// Windows system folders: anything running from here is part of Windows, not a game.
+#[cfg(windows)]
+pub(crate) fn windows_system_path(path_lower: &str) -> bool {
+    let p = path_lower.replace('/', "\\");
+    p.contains("\\windows\\systemapps\\")
+        || p.contains("\\windows\\system32\\")
+        || p.contains("\\windows\\syswow64\\")
+        || p.contains("\\windows\\immersivecontrolpanel\\")
+        || p.contains("\\windows\\explorer.exe")
+        || p.contains("\\windowsapps\\microsoft.")
+        || p.contains("\\windowsapps\\windows.")
+}
 
 /// True when a fullscreen app may be treated as a game.
 #[cfg(windows)]
@@ -186,7 +206,9 @@ pub fn fullscreen_foreground() -> Option<FullscreenApp> {
         let mut pid = 0u32;
         GetWindowThreadProcessId(window, Some(&mut pid));
         if pid == 0 || pid == std::process::id() { return None; }
-        let exe = native::image_path(pid)?.rsplit(['\\', '/']).next()?.to_ascii_lowercase();
+        let full_path = native::image_path(pid)?.to_ascii_lowercase();
+        if windows_system_path(&full_path) { return None; }
+        let exe = full_path.rsplit(['\\', '/']).next()?.to_string();
         fullscreen_game_candidate(&exe).then_some(FullscreenApp { pid, exe })
     }
 }
@@ -1472,8 +1494,12 @@ mod tests {
     fn fullscreen_games_skip_players_browsers_and_desktop() {
         assert!(fullscreen_game_candidate("mygame-win64-shipping.exe"));
         assert!(fullscreen_game_candidate("javaw.exe"));
-        for exe in ["explorer.exe", "vlc.exe", "brave.exe", "discord.exe", "obs64.exe", "fivem.exe", "steam.exe", ""] {
+        for exe in ["explorer.exe", "vlc.exe", "brave.exe", "discord.exe", "obs64.exe", "fivem.exe", "steam.exe",
+                    "screenclippinghost.exe", "snippingtool.exe", "gamebar.exe", ""] {
             assert!(!fullscreen_game_candidate(exe), "{exe}");
         }
+        assert!(windows_system_path(r"c:\windows\systemapps\microsoftwindows.client.cbs_cw5n1h2txyewy\screenclippinghost.exe"));
+        assert!(windows_system_path(r"c:\program files\windowsapps\microsoft.screensketch_1.0\snippingtool.exe"));
+        assert!(!windows_system_path(r"d:\steamlibrary\steamapps\common\game\game.exe"));
     }
 }

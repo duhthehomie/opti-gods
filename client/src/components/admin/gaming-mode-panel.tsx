@@ -45,6 +45,13 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
   const native = isNative();
   const [status, setStatus] = useState<NativeGamingModeStatus | null>(null);
   const [busy, setBusy] = useState<"on" | "off" | null>(null);
+  // Players must press Turn off twice, so a stray click can't drop protection mid-game.
+  const [confirmOff, setConfirmOff] = useState(false);
+  useEffect(() => {
+    if (!confirmOff) return;
+    const timer = window.setTimeout(() => setConfirmOff(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [confirmOff]);
   const [now, setNow] = useState(() => Date.now());
   const seenErrorsRef = useRef<Set<string> | null>(null);
   const deadAgentReportedRef = useRef(false);
@@ -287,7 +294,29 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
             </p>
           </div>
         </div>
-        {native ? (
+        {native && player && on ? (
+          <div className="flex flex-col items-end gap-1.5" data-testid="gaming-mode-protected-badge">
+            <span className="flex items-center gap-2 rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-emerald-300">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+              </span>
+              Auto-protecting
+            </span>
+            <button
+              type="button"
+              data-testid="button-disable-gaming-mode"
+              disabled={busy != null}
+              onClick={() => (confirmOff ? (setConfirmOff(false), void turnOff()) : setConfirmOff(true))}
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-widest transition-colors disabled:cursor-wait disabled:opacity-60",
+                confirmOff ? "text-red-300 hover:text-red-200" : "text-zinc-600 hover:text-zinc-400",
+              )}
+            >
+              {confirmOff ? "Press again to turn off" : "Turn off"}
+            </button>
+          </div>
+        ) : native ? (
           <button
             type="button"
             data-testid={on || broken ? "button-disable-gaming-mode" : "button-enable-gaming-mode"}
@@ -308,6 +337,52 @@ export function GamingModePanel({ fivem = null, variant = "admin" }: { fivem?: G
         )}
       </div>
 
+      {on && player && (
+        <div className="relative mt-3 grid gap-2 sm:grid-cols-3" data-testid="gaming-mode-stability">
+          {(() => {
+            const beatSeconds = Math.max(0, Math.round((now - (status?.heartbeat_ms ?? 0)) / 1000));
+            const watching = beatSeconds <= 8;
+            const game = shownGames[0];
+            const verified = Boolean(game?.priority_verified);
+            const lowered = status?.lowered.length ?? 0;
+            const eco = status?.efficiency_mode ?? 0;
+            const tile = "rounded-lg border bg-black/40 px-3 py-2";
+            const label = "text-[9px] font-bold uppercase tracking-widest";
+            return (
+              <>
+                <div className={cn(tile, watching ? "border-emerald-500/30" : "border-amber-500/40")}>
+                  <div className={cn(label, watching ? "text-emerald-400" : "text-amber-400")}>Watching</div>
+                  <div className="mt-0.5 text-sm font-bold text-white" data-testid="text-stability-watching">
+                    {watching ? "Checking every 2 s" : `No check for ${beatSeconds}s`}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Runs in the background, even with Opti Gods closed</div>
+                </div>
+                <div className={cn(tile, game ? (verified ? "border-emerald-500/30" : "border-amber-500/40") : "border-zinc-800")}>
+                  <div className={cn(label, game ? (verified ? "text-emerald-400" : "text-amber-400") : "text-zinc-500")}>Game stability</div>
+                  <div className="mt-0.5 truncate text-sm font-bold text-white" data-testid="text-stability-game">
+                    {game ? (verified ? `${game.name} · High priority ✓` : `${game.name} · ${game.priority}`) : "Ready — no game yet"}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">
+                    {game ? "Verified from Windows, rechecked every scan" : "Starts the moment any game opens"}
+                  </div>
+                </div>
+                <div className={cn(tile, game && lowered + eco > 0 ? "border-emerald-500/30" : "border-zinc-800")}>
+                  <div className={cn(label, game && lowered + eco > 0 ? "text-emerald-400" : "text-zinc-500")}>Background apps</div>
+                  <div className="mt-0.5 text-sm font-bold text-white" data-testid="text-stability-background">
+                    {game ? `${lowered} slowed · ${eco} in efficiency mode` : "Untouched while you aren't gaming"}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Voice calls and streams stay at full speed</div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+      {on && player && (
+        <p className="relative mt-2 text-[11px] text-zinc-500" data-testid="text-gaming-mode-safe-to-leave-on">
+          Safe to leave on. It only acts while a game is running and puts everything back when you quit.
+        </p>
+      )}
       {on && (
         <div className="relative mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-500/30 bg-black/50 px-3 py-2" data-testid="gaming-mode-apps-open">
           <span className="text-[9px] font-bold uppercase tracking-widest text-red-400">Apps open</span>
