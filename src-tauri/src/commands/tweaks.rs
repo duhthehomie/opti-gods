@@ -342,6 +342,41 @@ $checks = [ordered]@{
   DebloatTeamsConsumer = -not (Get-AppxPackage -Name "*MicrosoftTeams*" -ErrorAction SilentlyContinue);
   DebloatAlarmsAndClock = -not (Get-AppxPackage -Name "*Microsoft.WindowsAlarms*" -ErrorAction SilentlyContinue)
 };
+$checks | ConvertTo-Json -Compress
+"#;
+        // Run the probe with a deadline and merge whatever it reports.
+        let run_probe = |probe: &str, seconds: u64, detected: &mut BTreeMap<String, bool>| {
+            if let Ok(mut child) = Command::new(crate::commands::windows_powershell_executable())
+                .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", probe])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+                while matches!(child.try_wait(), Ok(None)) {
+                    if std::time::Instant::now() >= deadline {
+                        let _ = child.kill();
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                }
+                if let Ok(output) = child.wait_with_output() {
+                    if output.status.success() {
+                        if let Ok(extra) = serde_json::from_slice::<BTreeMap<String, bool>>(&output.stdout) {
+                            detected.extend(extra);
+                        }
+                    }
+                }
+            }
+        };
+        run_probe(script, 8, &mut detected);
+        // The background-service check is its own small probe. It used to sit
+        // inside the app/package probe above, so a slow Get-AppxPackage scan
+        // killed it and left these two tweaks stuck as "missing" even though
+        // the policies and services were already correct.
+        let service_script = r#"
+$checks = @{}
 $backgroundPolicy = (Get-ItemPropertyValue -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' -Name GlobalUserDisabled -ErrorAction Ignore) -eq 1
 $consumerPolicy = (Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name DisableWindowsConsumerFeatures -ErrorAction Ignore) -eq 1
 $servicePlan = $true
@@ -356,29 +391,7 @@ $checks['WinTitusServicesManual'] = $backgroundPolicy -and $consumerPolicy -and 
 $checks['ProcSvc_ApplyAll'] = $checks['WinTitusServicesManual']
 $checks | ConvertTo-Json -Compress
 "#;
-        if let Ok(mut child) = Command::new(crate::commands::windows_powershell_executable())
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-        {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
-            while matches!(child.try_wait(), Ok(None)) {
-                if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(30));
-            }
-            if let Ok(output) = child.wait_with_output() {
-              if output.status.success() {
-                if let Ok(extra) = serde_json::from_slice::<BTreeMap<String, bool>>(&output.stdout) {
-                    detected.extend(extra);
-                }
-              }
-            }
-        }
+        run_probe(service_script, 12, &mut detected);
         if let Some(current) = crate::commands::misc::nvidia_preset_is_current() {
             detected.insert("NvidiaControlPanelSettings".into(), current);
         }

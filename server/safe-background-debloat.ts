@@ -72,7 +72,8 @@ foreach ($name in $names) {
   Write-Output "[OK] $($name): verified optional background service reduction."
 }
 foreach ($setting in $settings) {
-  New-Item -Path $setting.Path -Force -ErrorAction Stop | Out-Null
+  # New-Item -Force on an existing key wipes its other values (it removed DisableSoftLanding), so only create it when missing.
+  if (-not (Test-Path -LiteralPath $setting.Path)) { New-Item -Path $setting.Path -Force -ErrorAction Stop | Out-Null }
   New-ItemProperty -LiteralPath $setting.Path -Name $setting.Name -PropertyType DWord -Value $setting.Value -Force -ErrorAction Stop | Out-Null
   if ((Get-ItemPropertyValue -LiteralPath $setting.Path -Name $setting.Name -ErrorAction Stop) -ne $setting.Value) {
     throw "Background policy readback failed: $($setting.Name)"

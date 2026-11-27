@@ -742,16 +742,17 @@ Write-Host '[GTX 2060] commandline.txt values written and read back: availablevi
   FiveMIntel14PowerPlan: `$ErrorActionPreference = 'Continue'
 $ultra = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
 $high = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+function Invoke-Pcfg { $script:pcfgOut = (& cmd.exe /c ('powercfg.exe ' + ($args -join ' ') + ' 2>&1') | Out-String) }
 function Get-PlanGuid([string]$text) { $m = [regex]::Match($text, '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}'); if ($m.Success) { return $m.Value }; return $null }
 $plan = $null; $usedUltra = $false
 foreach ($candidate in @($ultra, $high)) {
-  & powercfg.exe /setactive $candidate 2>&1 | Out-Null
+  Invoke-Pcfg /setactive $candidate
   if ($LASTEXITCODE -eq 0) { $plan = $candidate; $usedUltra = ($candidate -eq $ultra); break }
-  $dup = (& powercfg.exe /duplicatescheme $candidate 2>&1 | Out-String)
+  Invoke-Pcfg /duplicatescheme $candidate; $dup = $script:pcfgOut
   if ($LASTEXITCODE -eq 0) {
     $new = Get-PlanGuid $dup
     if ($new) {
-      & powercfg.exe /setactive $new 2>&1 | Out-Null
+      Invoke-Pcfg /setactive $new
       if ($LASTEXITCODE -eq 0) { $plan = $new; $usedUltra = ($candidate -eq $ultra); break }
     }
   }
@@ -760,15 +761,15 @@ if (-not $plan) { throw 'Windows would not activate an Ultra or High Performance
 $required = @(@('PROCTHROTTLEMIN','100'),@('PROCTHROTTLEMAX','100'),@('PERFBOOSTMODE','2'),@('PERFBOOSTPOL','100'),@('CPMINCORES','100'))
 $failed = @()
 foreach ($item in $required) {
-  & powercfg.exe /setacvalueindex $plan SUB_PROCESSOR $item[0] $item[1] 2>&1 | Out-Null
+  Invoke-Pcfg /setacvalueindex $plan SUB_PROCESSOR $item[0] $item[1]
   if ($LASTEXITCODE -ne 0) { $failed += $item[0] }
 }
 if ($failed.Count -gt 0) { throw "Windows rejected these CPU power settings on the active plan: $($failed -join ', ')" }
-& powercfg.exe /setacvalueindex $plan SUB_PROCESSOR HETEROPOLICY 1 2>&1 | Out-Null
+Invoke-Pcfg /setacvalueindex $plan SUB_PROCESSOR HETEROPOLICY 1
 $heteroNote = if ($LASTEXITCODE -eq 0) { 'P-core preferred' } else { 'P-core preference not exposed by this Windows build' }
-& powercfg.exe /setactive $plan 2>&1 | Out-Null
+Invoke-Pcfg /setactive $plan
 if ($LASTEXITCODE -ne 0) { throw 'Windows could not re-activate the power plan after the CPU settings were written.' }
-$active = (& powercfg.exe /getactivescheme 2>&1 | Out-String)
+Invoke-Pcfg /getactivescheme; $active = $script:pcfgOut
 if ($active -notmatch [regex]::Escape($plan)) { throw 'Windows did not keep the requested power plan active.' }
 $name = if ($usedUltra) { 'Ultra Performance' } else { 'High Performance' }
 Write-Host "[Intel CPU] $name plan active, CPU min/max 100%, boost aggressive, $heteroNote. Verified on the active plan." -ForegroundColor Green`,
