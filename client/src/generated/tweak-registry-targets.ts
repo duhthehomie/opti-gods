@@ -3624,15 +3624,6 @@ export const TWEAK_REGISTRY_TARGETS: Record<string, TweakRegistryTarget[]> = {
    "value": 2
   }
  ],
- "WinTitusClassicMenu": [
-  {
-   "hive": "HKCU",
-   "path": "SOFTWARE\\CLASSES\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32",
-   "name": "(Default)",
-   "type": "sz",
-   "value": ""
-  }
- ],
  "WinTitusConsumerFeatures": [
   {
    "hive": "HKLM",
