@@ -11,7 +11,8 @@ import { FREE_NATIVE_TWEAK_LIMIT, NATIVE_TWEAK_ID_SET } from "@shared/native-twe
 import { NVIDIA_CAPTURE_PROTECTED_IDS } from "@shared/preset-builder";
 import { boundedWindowsRead } from "@/lib/applied-tweak-state";
 import { getWindowsProcessCount } from "@/lib/tauri-bridge";
-import { rememberNotApplicableTweaks } from "@/lib/not-applicable-tweaks";
+import { rememberNotApplicableTweaks, readNotApplicableTweakIds } from "@/lib/not-applicable-tweaks";
+import { RETIRED_TWEAK_IDS, RUNTIME_ONLY_TWEAK_IDS } from "@shared/retired-tweak-ids";
 
 const NATIVE_UNDO_KEY = "optigods-native-undo-tokens";
 export const NATIVE_RUN_QUEUE_KEY = "optigods-native-run-queue";
@@ -472,9 +473,15 @@ export async function applyTweakBatch(
   onProgress?: (progress: TweakRunProgress) => void,
   options: TweakBatchOptions = {},
 ): Promise<BulkTweakResult> {
-  const uniqueIds = orderTweakBatch(ids);
+  // Bulk runs leave out tweaks that can never apply here (retired, one-off, or
+  // already reported as not installed / not supported), so they stop showing
+  // up as skipped. A single tweak the user picks by hand always still runs.
+  const neverApplicable = ids.length > 1
+    ? new Set<string>([...Array.from(RETIRED_TWEAK_IDS), ...Array.from(RUNTIME_ONLY_TWEAK_IDS), ...Array.from(readNotApplicableTweakIds())])
+    : new Set<string>();
+  const uniqueIds = orderTweakBatch(ids.filter(id => !neverApplicable.has(id)));
   const initialSkippedIds = Array.from(new Set(options.initialSkippedIds ?? []))
-    .filter(id => !uniqueIds.includes(id));
+    .filter(id => !uniqueIds.includes(id) && !neverApplicable.has(id));
   const batchIds = orderTweakBatch([...uniqueIds, ...initialSkippedIds]);
   const native = isNative();
   if (native && window.location.pathname === "/applied-tweaks") {

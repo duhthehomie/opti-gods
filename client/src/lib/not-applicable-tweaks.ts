@@ -15,7 +15,7 @@ const PERMANENT_SKIP = new RegExp([
   "not exposed by windows", "is not present", "does not have this setting", "windows protects",
   "is not enabled on", "no connected wi-fi adapter", "no active network adapter",
   "is not registered for this windows user", "not detected", "not supported by the active",
-  "requires 16gb\\+ ram", "driver key not found", "no discord cache folders",
+  "requires 16gb\\+ ram", "windows 11 setting", "does not apply to this gpu", "driver key not found", "no discord cache folders",
 ].join("|"), "i");
 
 interface RunItemLike { id: string; status: string; message?: string }

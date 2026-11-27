@@ -396,7 +396,24 @@ if ($active -notmatch [regex]::Escape($plan)) { throw 'Windows did not verify th
   CodHighPriority: `$ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cod.exe\\PerfOptions'; If (!(Test-Path $ifeo)) { New-Item -Path $ifeo -Force | Out-Null }; Set-ItemProperty -Path $ifeo -Name 'CpuPriorityClass' -Value 3 -Type DWord -Force; Set-ItemProperty -Path $ifeo -Name 'IoPriority' -Value 2 -Type DWord -Force; Set-ItemProperty -Path $ifeo -Name 'PagePriority' -Value 5 -Type DWord -Force; Set-ItemProperty -Path $ifeo -Name 'DisableEnergyThrottling' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $ifeo -Name 'EnableBoost' -Value 1 -Type DWord -Force; Set-ItemProperty -Path $ifeo -Name 'ForceForegroundBoost' -Value 1 -Type DWord -Force; Write-Host "[COD] cod.exe priority set to Above Normal so Windows, DWM, and Alt-Tab remain responsive while the game gets a performance boost." -ForegroundColor Green`,
   CodGameMode: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\GameBar' -Name 'AutoGameModeEnabled' -Value 1 -Type DWord -Force -EA SilentlyContinue; $key = 'HKCU:\\System\\GameConfigStore'; If (!(Test-Path $key)) { New-Item $key -Force | Out-Null }; Set-ItemProperty -Path $key -Name 'GameDVR_Enabled' -Value 0 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path $key -Name 'GameDVR_FSEBehaviorMode' -Value 2 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name 'AppCaptureEnabled' -Value 0 -Type DWord -Force -EA SilentlyContinue; Write-Host "[COD] Windows Game Mode enabled, Xbox DVR disabled — frees CPU/GPU overhead while COD is running" -ForegroundColor Green`,
   CodShaderCacheClear: `Write-Host "[COD] Shader caches were preserved. Clearing them during optimization causes black menus and a long first-launch shader rebuild; use the game's repair tools only when troubleshooting corruption." -ForegroundColor Yellow`,
-  CodPagefileOptimize: `$cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop; $ramMB = [uint32][Math]::Max(1024, [int]($cs.TotalPhysicalMemory / 1MB)); $minMB = [uint32][Math]::Max(4096, [Math]::Min(16384, [int]($ramMB / 2))); $maxMB = [uint32][Math]::Max($minMB, [Math]::Min(32768, [int]$ramMB)); try { if ($cs.AutomaticManagedPagefile) { Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $false } -ErrorAction Stop | Out-Null }; $pf = Get-CimInstance -ClassName Win32_PageFileSetting -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'C:*' } | Select-Object -First 1; if ($pf) { Set-CimInstance -InputObject $pf -Property @{ InitialSize = $minMB; MaximumSize = $maxMB } -ErrorAction Stop | Out-Null } else { New-CimInstance -Namespace root/cimv2 -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys'; InitialSize = $minMB; MaximumSize = $maxMB } -ErrorAction Stop | Out-Null }; $verify = Get-CimInstance -ClassName Win32_PageFileSetting -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'C:*' } | Select-Object -First 1; if ($verify -and ([uint32]$verify.InitialSize -ne $minMB -or [uint32]$verify.MaximumSize -ne $maxMB)) { throw "Windows did not verify the requested pagefile range." }; Write-Host "[COD] Pagefile set to $([int]($minMB/1024))GB-$([int]($maxMB/1024))GB based on installed RAM." -ForegroundColor Green } catch { Write-Host "[COD] Pagefile left Windows-managed because this firmware rejected a fixed range: $($_.Exception.Message)" -ForegroundColor Yellow }`,
+  CodPagefileOptimize: `$ErrorActionPreference = 'Stop'
+$ramMB = [int]([Math]::Round((Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory / 1MB))
+$minMB = [int][Math]::Max(8192, [Math]::Min(16384, $ramMB))
+$maxMB = [int][Math]::Min(32768, [Math]::Max($minMB, $ramMB * 2))
+$free = [int]((Get-PSDrive -Name C).Free / 1MB)
+if ($free -lt ($maxMB + 10240)) { Write-Host "[SKIP] Not enough free space on C: for a $([int]($maxMB/1024))GB pagefile ($([int]($free/1024))GB free); the pagefile was left Windows-managed." -ForegroundColor Yellow; return }
+$sub = 'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management'
+$key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($sub, $true)
+if (-not $key) { throw 'Windows would not open the memory-management registry key.' }
+$entry = [string[]]@("C:\\pagefile.sys $minMB $maxMB")
+$key.SetValue('PagingFiles', $entry, [Microsoft.Win32.RegistryValueKind]::MultiString)
+$key.Close()
+$check = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($sub)
+$stored = @($check.GetValue('PagingFiles'))
+$check.Close()
+if ($stored.Count -ne 1 -or $stored[0] -ne $entry[0]) { throw "The pagefile setting did not read back (Windows has: $($stored -join '; '))." }
+try { $cs = Get-CimInstance -ClassName Win32_ComputerSystem; if ($cs.AutomaticManagedPagefile) { Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $false } -ErrorAction Stop | Out-Null } } catch { }
+Write-Host "[COD] Pagefile set to $([int]($minMB/1024))GB-$([int]($maxMB/1024))GB on C: and verified in the registry. Windows applies the new size after the next restart." -ForegroundColor Green`,
   CodDisableHAGS: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 1 -Type DWord -Force; Write-Host "[COD] HAGS disabled (HwSchMode=1). GTX 1650 Super + BO6/Warzone: HAGS causes frame-time variance and texture streaming stalls on Turing/Pascal GPUs — this is the #1 stutter fix for 4GB cards. Reboot required." -ForegroundColor Green`,
   CodNetworkBuffer: `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultReceiveWindow' -Value 524288 -Type DWord -Force -EA SilentlyContinue; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters' -Name 'DefaultSendWindow' -Value 524288 -Type DWord -Force -EA SilentlyContinue; Write-Host "[COD] Network socket buffers set to 512KB — reduces packet loss spikes in Warzone BR server model, helps with character/loot not loading during drop phase" -ForegroundColor Green`,
   CodDisableLSO: `Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Disable-NetAdapterLso -Name $_.Name -EA SilentlyContinue; Write-Host "[COD] LSO disabled on: $($_.Name)" -ForegroundColor Cyan }; Write-Host "[COD] Large Send Offload disabled on all active adapters — eliminates 5-30ms latency spikes during Warzone circle fights" -ForegroundColor Green`,
@@ -574,7 +591,20 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   WinTitusIPv4Prefer: `$p = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p 'DisabledComponents' 0x20 -Type DWord -Force; Write-Host "[OK] IPv4 preferred over IPv6 (flag 0x20 — IPv6 still available, IPv4 wins by default)" -ForegroundColor Green`,
   WinTitusEdgeRemove: `Write-Host "[Edge] Searching for Edge setup.exe..." -ForegroundColor Yellow; $edgeSetup = $null; $searchPaths = @("C:\\Program Files (x86)\\Microsoft\\Edge\\Application","C:\\Program Files\\Microsoft\\Edge\\Application","C:\\Program Files (x86)\\Microsoft\\EdgeUpdate","C:\\Program Files\\Microsoft\\EdgeUpdate"); foreach ($sp in $searchPaths) { if (!$edgeSetup -and (Test-Path $sp)) { $found = Get-ChildItem $sp -Recurse -Filter "setup.exe" -EA SilentlyContinue | Select-Object -First 1; if ($found) { $edgeSetup = $found } } }; if ($edgeSetup) { Write-Host "[Edge] Found: $($edgeSetup.FullName)" -ForegroundColor Cyan; & $edgeSetup.FullName --uninstall --system-level --verbose-logging --force-uninstall 2>$null; Write-Host "[OK] Edge uninstall triggered via setup.exe" -ForegroundColor Green } Else { Write-Host "[Edge] setup.exe not found — trying AppxPackage removal..." -ForegroundColor Yellow; Get-AppxPackage -AllUsers *MicrosoftEdge* -EA SilentlyContinue | Remove-AppxPackage -AllUsers -EA SilentlyContinue; Write-Host "[OK] Edge AppxPackage removal attempted" -ForegroundColor Green }; $updateKey = "HKLM:\\SOFTWARE\\Microsoft\\EdgeUpdate"; if (!(Test-Path $updateKey)) { New-Item $updateKey -Force | Out-Null }; Set-ItemProperty $updateKey "DoNotUpdateToEdgeWithChromium" 1 -Type DWord -Force -EA SilentlyContinue; Remove-ItemProperty "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "Microsoft Edge" -EA SilentlyContinue; Write-Host "[OK] Edge removal complete — restart to finish" -ForegroundColor Green`,
   WinTitusXboxComponents: `Write-Host "[WARNING] This removes Xbox Gaming Services — skip if you use Xbox app or Game Pass" -ForegroundColor Yellow; @('Microsoft.XboxApp','Microsoft.GamingServices','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI') | ForEach-Object { Get-AppxPackage -AllUsers $_ -EA SilentlyContinue | Remove-AppxPackage -EA SilentlyContinue }; Write-Host "[OK] Xbox and Gaming Services components removed" -ForegroundColor Green`,
-  WinTitusClassicMenu: `$p = 'HKCU:\\SOFTWARE\\CLASSES\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32'; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p '(Default)' '' -Type String -Force; Stop-Process -Name explorer -Force -EA SilentlyContinue; Start-Sleep 1; Start-Process explorer; Write-Host "[OK] Classic right-click menu restored (Win11) — Explorer restarted" -ForegroundColor Green`,
+  WinTitusClassicMenu: `$build = [int](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).BuildNumber
+if ($build -lt 22000) { Write-Host '[SKIP] The classic right-click menu is a Windows 11 setting; this PC runs Windows 10, so nothing was changed.' -ForegroundColor Yellow; return }
+$sub = 'Software\\Classes\\CLSID\\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}\\InprocServer32'
+$key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($sub)
+if (-not $key) { throw 'Windows would not create the classic-menu registry key.' }
+$key.SetValue('', '', [Microsoft.Win32.RegistryValueKind]::String)
+$key.Close()
+$check = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($sub)
+if (-not $check -or $check.GetValueNames() -notcontains '') { throw 'The classic-menu registry value did not read back.' }
+$check.Close()
+Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Start-Process explorer
+Write-Host '[OK] Classic right-click menu restored (Windows 11) and verified; Explorer restarted.' -ForegroundColor Green`,
   WinTitusDisplayPerf: `Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'UserPreferencesMask' -Value ([byte[]](0x10,0x00,0x00,0x00)) -Type Binary -Force; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 2 -Type DWord -Force -EA SilentlyContinue; Write-Host "[OK] Display set for best performance — visual effects stripped to minimum" -ForegroundColor Green`,
   WinTitusShowExtensions: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'HideFileExt' -Value 0 -Type DWord -Force; Write-Host "[OK] File extensions shown in Explorer" -ForegroundColor Green`,
   WinTitusShowHidden: `Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'Hidden' -Value 1 -Type DWord -Force; Write-Host "[OK] Hidden files and folders shown in Explorer" -ForegroundColor Green`,
@@ -687,7 +717,19 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   FiveM1650HAGSOffPack: `Write-Host "[HAGS OFF Pack] Applying DXGI + render pipeline fixes for HAGS-disabled GTX 1650 Super..." -ForegroundColor Cyan; $dxgi = 'HKCU:\\SOFTWARE\\Microsoft\\DXGI'; If (!(Test-Path $dxgi)) { New-Item $dxgi -Force | Out-Null }; Set-ItemProperty $dxgi 'MaxFrameLatency' 1 -Type DWord -Force; Set-ItemProperty $dxgi 'AllowTearing' 1 -Type DWord -Force; $dx = 'HKCU:\\SOFTWARE\\Microsoft\\Direct3D'; If (!(Test-Path $dx)) { New-Item $dx -Force | Out-Null }; Set-ItemProperty $dx 'MaxFrameLatency' 1 -Type DWord -Force; $ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; @('FiveM.exe','GTA5.exe','FiveM_b2189_GTAProcess.exe','FiveM_b2545_GTAProcess.exe','FiveM_b2612_GTAProcess.exe','FiveM_b2699_GTAProcess.exe','FiveM_b2802_GTAProcess.exe','FiveM_b2944_GTAProcess.exe','FiveM_b3095_GTAProcess.exe','FiveM_b3258_GTAProcess.exe','FiveM_b3323_GTAProcess.exe','FiveM_b3407_GTAProcess.exe','FiveM_b3441_GTAProcess.exe') | ForEach-Object { $p = "$ifeo\\$_\\PerfOptions"; If (!(Test-Path $p)) { New-Item $p -Force | Out-Null }; Set-ItemProperty $p 'RenderThrottlingOff' 1 -Type DWord -Force; Set-ItemProperty $p 'GpuIdleEnabled' 0 -Type DWord -Force; Set-ItemProperty $p 'PowerSavingVsyncOn' 0 -Type DWord -Force; Write-Host "  [OK] Render throttle off on $_" -ForegroundColor Green }; $games = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'; If (!(Test-Path $games)) { New-Item $games -Force | Out-Null }; Set-ItemProperty $games 'MaximumPreRenderedFrames' 1 -Type DWord -Force; Set-ItemProperty $games 'GPU Priority' 8 -Type DWord -Force; Write-Host "[HAGS OFF Pack] DXGI MaxFrameLatency=1, AllowTearing=1, render throttle off, pre-rendered frames=1. Eliminates the 160->60 FPS drop pattern on GTX 1650 Super with HAGS disabled." -ForegroundColor Green`,
 
   // ── FiveM: GTX 2060 specific tweaks ──────────────────────────────────────────
-  FiveM2060VRAMBudget: `$dir = "$env:USERPROFILE\\Documents\\Rockstar Games\\GTA V"; If (!(Test-Path $dir)) { New-Item $dir -ItemType Directory -Force | Out-Null }; $cmd = "$dir\\commandline.txt"; $existing = If (Test-Path $cmd) { Get-Content $cmd -Raw } Else { "" }; If ($existing -notmatch 'availablevidmem') { $existing = $existing.Trim() + " -availablevidmem 6144" }; If ($existing -notmatch 'percentvidmem') { $existing = $existing.Trim() + " -percentvidmem 100" }; Set-Content $cmd $existing.Trim(); Write-Host "[GTX 2060] commandline.txt patched: -availablevidmem 6144 -percentvidmem 100. GTA V now budgets the full 6GB GDDR6 VRAM — eliminates under-reporting that causes texture pop on high-asset FiveM servers." -ForegroundColor Green`,
+  FiveM2060VRAMBudget: `$gpu = (@(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }) -join ', ')
+if ($gpu -notmatch '(?i)\\b(RTX|GTX)\\s*2060\\b' -or $gpu -match '(?i)2060\\s*super') { Write-Host "[SKIP] This tweak does not apply to this GPU: it only fits a 6GB GeForce 2060 and this PC has $gpu. Nothing was changed." -ForegroundColor Yellow; return }
+$dir = "$env:USERPROFILE\\Documents\\Rockstar Games\\GTA V"
+New-Item -Path $dir -ItemType Directory -Force | Out-Null
+$path = Join-Path $dir 'commandline.txt'
+$before = if (Test-Path -LiteralPath $path) { [string](Get-Content -LiteralPath $path -Raw) } else { '' }
+$updated = [regex]::Replace($before, '(?i)(?<!\\S)-availablevidmem\\s+\\S+', '').Trim()
+$updated = [regex]::Replace($updated, '(?i)(?<!\\S)-percentvidmem\\s+\\S+', '').Trim()
+$updated = ($updated + ' -availablevidmem 6144 -percentvidmem 100').Trim()
+Set-Content -LiteralPath $path -Value $updated -Encoding ASCII
+$actual = Get-Content -LiteralPath $path -Raw
+if ($actual -notmatch '(?i)-availablevidmem\\s+6144' -or $actual -notmatch '(?i)-percentvidmem\\s+100') { throw 'The VRAM command-line values did not read back.' }
+Write-Host '[GTX 2060] commandline.txt values written and read back: availablevidmem=6144, percentvidmem=100.' -ForegroundColor Green`,
 
   // ── FiveM: Ryzen 5 3500 specific tweaks ──────────────────────────────────────
   FiveM3500CoreAffinity: `$mask = 0x3F; @('GTA5','FiveM') | ForEach-Object { $p = Get-Process $_ -EA SilentlyContinue; If ($p) { $p.ProcessorAffinity = $mask; Write-Host "[R5 3500] Live affinity set to 0x3F (all 6 physical cores) for $_" -ForegroundColor Green } Else { Write-Host "[R5 3500] $_ not running — IFEO applies on next launch" -ForegroundColor DarkGray } }; $ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; @('GTA5.exe','FiveM.exe') | ForEach-Object { $k = "$ifeo\\$_\\PerfOptions"; If (!(Test-Path $k)) { New-Item $k -Force | Out-Null }; Set-ItemProperty $k 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $k 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $k 'ForceForegroundBoost' 1 -Type DWord -Force; Set-ItemProperty $k 'DisableEnergyThrottling' 1 -Type DWord -Force }; Write-Host "[R5 3500] No SMT on 3500 — 0x3F uses ALL 6 physical cores (no sibling-core skipping). IFEO: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off." -ForegroundColor Cyan`,
@@ -697,8 +739,52 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   // ── FiveM: Intel i5-4XXX (Haswell 4-core, no HT) specific tweaks ─────────────
   FiveMi5CoreAffinity: `$mask = 0xF; @('GTA5','FiveM') | ForEach-Object { $p = Get-Process $_ -EA SilentlyContinue; If ($p) { $p.ProcessorAffinity = $mask; Write-Host "[i5-4XXX] Live affinity set to 0xF (all 4 physical cores) for $_" -ForegroundColor Green } Else { Write-Host "[i5-4XXX] $_ not running — IFEO applies on next launch" -ForegroundColor DarkGray } }; $ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; @('GTA5.exe','FiveM.exe') | ForEach-Object { $k = "$ifeo\\$_\\PerfOptions"; If (!(Test-Path $k)) { New-Item $k -Force | Out-Null }; Set-ItemProperty $k 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $k 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $k 'ForceForegroundBoost' 1 -Type DWord -Force; Set-ItemProperty $k 'DisableEnergyThrottling' 1 -Type DWord -Force }; Write-Host "[i5-4XXX] Haswell has 4 physical cores, no HT — 0xF is ALL cores. IFEO: CpuPriorityClass=High, IO=High, FgBoost=On, EnergyThrottle=Off. With only 4 real threads, pinning the game here prevents background tasks from stealing a core mid-gunfight." -ForegroundColor Cyan`,
   FiveMIntel14PcoreAffinity: `$mask = 0xFFF; @('GTA5','FiveM') | ForEach-Object { $p = Get-Process $_ -EA SilentlyContinue; If ($p) { $p.ProcessorAffinity = $mask; Write-Host "[i5-14XXX] Live affinity set to P-cores only (0xFFF, threads 0-11) for $_" -ForegroundColor Green } Else { Write-Host "[i5-14XXX] $_ not running — IFEO applies on next launch" -ForegroundColor DarkGray } }; $ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'; @('GTA5.exe','FiveM.exe') | ForEach-Object { $k = "$ifeo\\$_\\PerfOptions"; If (!(Test-Path $k)) { New-Item $k -Force | Out-Null }; Set-ItemProperty $k 'CpuPriorityClass' 3 -Type DWord -Force; Set-ItemProperty $k 'IoPriority' 3 -Type DWord -Force; Set-ItemProperty $k 'ForceForegroundBoost' 1 -Type DWord -Force; Set-ItemProperty $k 'DisableEnergyThrottling' 1 -Type DWord -Force }; Write-Host "[i5-14XXX] Intel 14th gen hybrid: mask 0xFFF pins GTA5 + FiveM to P-cores (threads 0-11). E-cores (threads 12-15) are excluded. GTA V render + physics threads run best on P-cores — this eliminates the frametime variance from landing on a slower E-core thread between frames. Persists via IFEO." -ForegroundColor Cyan`,
-  FiveMIntel14PowerPlan: `$ultra = 'e9a42b02-d5df-448d-aa00-03f14749eb61'; $high = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'; powercfg /setactive $ultra 2>nul; If ($LASTEXITCODE -ne 0) { powercfg /setactive $high 2>nul; Write-Host "[i5-14XXX] Ultra Performance plan not found — using High Performance" -ForegroundColor Yellow } Else { Write-Host "[i5-14XXX] Ultra Performance plan activated" -ForegroundColor Green }; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 2>nul; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 2>nul; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTMODE 2 2>nul; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTPOL 100 2>nul; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100 2>nul; powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROPOLICY 1 2>nul; powercfg /setactive SCHEME_CURRENT 2>nul; Write-Host "[i5-14XXX] CPU plan: Min=100%, Max=100%, Boost=Aggressive, HeteroPolicy=1 (P-core preferred). Intel Thread Director now aggressively routes foreground threads to P-cores. Prevents the governor from dropping P-core clocks between frames — the main cause of irregular frametimes on hybrid Intel CPUs." -ForegroundColor Cyan`,
-  FiveM5060VRAMBudget: `$dir = "$env:USERPROFILE\\Documents\\Rockstar Games\\GTA V"; If (!(Test-Path $dir)) { New-Item $dir -ItemType Directory -Force | Out-Null }; $cmd = "$dir\\commandline.txt"; $existing = If (Test-Path $cmd) { Get-Content $cmd -Raw } Else { "" }; If ($existing -notmatch 'availablevidmem') { $existing = $existing.Trim() + " -availablevidmem 8192" }; If ($existing -notmatch 'percentvidmem') { $existing = $existing.Trim() + " -percentvidmem 100" }; Set-Content $cmd $existing.Trim(); Write-Host "[RTX 5060] commandline.txt: -availablevidmem 8192 -percentvidmem 100. Forces GTA V to budget the full 8GB GDDR7 VRAM — eliminates the VRAM under-reporting that causes texture pop-in and hitching on high-asset FiveM servers. Blackwell VRAM management is more aggressive than Turing/Ampere — setting the budget upfront prevents mid-session texture unloads." -ForegroundColor Green`,
+  FiveMIntel14PowerPlan: `$ErrorActionPreference = 'Continue'
+$ultra = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+$high = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+function Get-PlanGuid([string]$text) { $m = [regex]::Match($text, '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}'); if ($m.Success) { return $m.Value }; return $null }
+$plan = $null; $usedUltra = $false
+foreach ($candidate in @($ultra, $high)) {
+  & powercfg.exe /setactive $candidate 2>&1 | Out-Null
+  if ($LASTEXITCODE -eq 0) { $plan = $candidate; $usedUltra = ($candidate -eq $ultra); break }
+  $dup = (& powercfg.exe /duplicatescheme $candidate 2>&1 | Out-String)
+  if ($LASTEXITCODE -eq 0) {
+    $new = Get-PlanGuid $dup
+    if ($new) {
+      & powercfg.exe /setactive $new 2>&1 | Out-Null
+      if ($LASTEXITCODE -eq 0) { $plan = $new; $usedUltra = ($candidate -eq $ultra); break }
+    }
+  }
+}
+if (-not $plan) { throw 'Windows would not activate an Ultra or High Performance power plan.' }
+$required = @(@('PROCTHROTTLEMIN','100'),@('PROCTHROTTLEMAX','100'),@('PERFBOOSTMODE','2'),@('PERFBOOSTPOL','100'),@('CPMINCORES','100'))
+$failed = @()
+foreach ($item in $required) {
+  & powercfg.exe /setacvalueindex $plan SUB_PROCESSOR $item[0] $item[1] 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) { $failed += $item[0] }
+}
+if ($failed.Count -gt 0) { throw "Windows rejected these CPU power settings on the active plan: $($failed -join ', ')" }
+& powercfg.exe /setacvalueindex $plan SUB_PROCESSOR HETEROPOLICY 1 2>&1 | Out-Null
+$heteroNote = if ($LASTEXITCODE -eq 0) { 'P-core preferred' } else { 'P-core preference not exposed by this Windows build' }
+& powercfg.exe /setactive $plan 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Windows could not re-activate the power plan after the CPU settings were written.' }
+$active = (& powercfg.exe /getactivescheme 2>&1 | Out-String)
+if ($active -notmatch [regex]::Escape($plan)) { throw 'Windows did not keep the requested power plan active.' }
+$name = if ($usedUltra) { 'Ultra Performance' } else { 'High Performance' }
+Write-Host "[Intel CPU] $name plan active, CPU min/max 100%, boost aggressive, $heteroNote. Verified on the active plan." -ForegroundColor Green`,
+  FiveM5060VRAMBudget: `$gpu = (@(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }) -join ', ')
+if ($gpu -notmatch '(?i)\\bRTX\\s*50[6-9]0\\b') { Write-Host "[SKIP] This tweak does not apply to this GPU: it only fits an RTX 5060 or higher and this PC has $gpu. Nothing was changed." -ForegroundColor Yellow; return }
+$dir = "$env:USERPROFILE\\Documents\\Rockstar Games\\GTA V"
+New-Item -Path $dir -ItemType Directory -Force | Out-Null
+$path = Join-Path $dir 'commandline.txt'
+$before = if (Test-Path -LiteralPath $path) { [string](Get-Content -LiteralPath $path -Raw) } else { '' }
+$updated = [regex]::Replace($before, '(?i)(?<!\\S)-availablevidmem\\s+\\S+', '').Trim()
+$updated = [regex]::Replace($updated, '(?i)(?<!\\S)-percentvidmem\\s+\\S+', '').Trim()
+$updated = ($updated + ' -availablevidmem 8192 -percentvidmem 100').Trim()
+Set-Content -LiteralPath $path -Value $updated -Encoding ASCII
+$actual = Get-Content -LiteralPath $path -Raw
+if ($actual -notmatch '(?i)-availablevidmem\\s+8192' -or $actual -notmatch '(?i)-percentvidmem\\s+100') { throw 'The VRAM command-line values did not read back.' }
+Write-Host '[RTX 5060] commandline.txt values written and read back: availablevidmem=8192, percentvidmem=100 (any older value was replaced).' -ForegroundColor Green`,
   FiveM5060EnableHAGS: `$hwsched = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers'; If (!(Test-Path $hwsched)) { New-Item $hwsched -Force | Out-Null }; Set-ItemProperty $hwsched 'HwSchMode' 2 -Type DWord -Force; Write-Host "[RTX 5060] HAGS enabled (HwSchMode=2). Blackwell architecture is fully HAGS-optimized — the GPU manages its own DMA work queue without CPU intervention, reducing render latency compared to CPU-scheduled DMA on older cards. Reboot required to take effect." -ForegroundColor Green`,
   FiveM5060LowLatency: `$nv = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'; $adapters = Get-ChildItem $nv -EA SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath 'DriverDesc' -EA SilentlyContinue).DriverDesc -match 'RTX|NVIDIA' }; $adapters | ForEach-Object { Set-ItemProperty $_.PSPath 'RmLowLatencyMode' 2 -Type DWord -Force; Set-ItemProperty $_.PSPath 'FlipQueueSize' 1 -Type DWord -Force; Set-ItemProperty $_.PSPath 'PerfLevelSrc' 0x2222 -Type DWord -Force; Write-Host "[RTX 5060] $((Get-ItemProperty $_.PSPath 'DriverDesc' -EA SilentlyContinue).DriverDesc): RmLowLatencyMode=Ultra(2), FlipQueueSize=1, PerfLevelSrc=MaxPerf" -ForegroundColor Green }; $global = 'HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NVTweak'; If (!(Test-Path $global)) { New-Item $global -Force | Out-Null }; Set-ItemProperty $global 'RmLowLatencyMode' 2 -Type DWord -Force; Set-ItemProperty $global 'FlipQueueSize' 1 -Type DWord -Force; Write-Host "[RTX 5060] Low Latency Ultra + FlipQueueSize=1 applied globally and per-adapter. Survives NVCP resets. RTX 5060 GDDR7: pairing Low Latency Ultra with HAGS ON gives the tightest frame-to-display pipeline — exactly 1 frame pre-rendered, zero queued input lag." -ForegroundColor Cyan`,
 
@@ -864,7 +950,29 @@ Write-Host "[Intel 4th-8th Gen] High Performance plan active. Min/Max=100%, Boos
   // ===== V2 NEW (Task #38) =====
   NetMTUAutotune: `$wifi = Get-NetAdapter -Physical -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' -and ($_.NdisPhysicalMedium -eq 9 -or $_.InterfaceDescription -match 'Wi-?Fi|Wireless|802\\.11') } | Select-Object -First 1; if (-not $wifi) { Write-Host '[SKIP] No connected Wi-Fi adapter was found, so the MTU was left unchanged.' } elseif (-not (Get-NetIPInterface -InterfaceIndex $wifi.ifIndex -AddressFamily IPv4 -ErrorAction Ignore)) { Write-Host "[SKIP] IPv4 is not enabled on $($wifi.Name), so the MTU was left unchanged." } else { $netshOut = netsh interface ipv4 set subinterface "$($wifi.ifIndex)" mtu=1472 store=persistent; if ($LASTEXITCODE -ne 0) { $global:LASTEXITCODE = 0; Set-NetIPInterface -InterfaceIndex $wifi.ifIndex -AddressFamily IPv4 -NlMtuBytes 1472 -ErrorAction Stop }; $mtu = (Get-NetIPInterface -InterfaceIndex $wifi.ifIndex -AddressFamily IPv4 -ErrorAction Stop).NlMtu; if ($mtu -ne 1472) { throw "Windows kept the MTU on $($wifi.Name) at $mtu. netsh said: $netshOut" }; Write-Host "[NET] MTU 1472 set on $($wifi.Name) and read back" -ForegroundColor Green }`,
   NetTCPAutotuneAggressive: `netsh int tcp set global autotuninglevel=experimental; netsh int tcp set global congestionprovider=ctcp`,
-  NetRSSTuning: `Set-NetAdapterRss -Name * -NumberOfReceiveQueues 4 -BaseProcessorNumber 0 -MaxProcessors 4 -ErrorAction SilentlyContinue`,
+  NetRSSTuning: `$ErrorActionPreference = 'Continue'
+$adapters = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' })
+if (-not $adapters.Count) { Write-Host '[SKIP] No active network adapter was found; nothing was changed.' -ForegroundColor Yellow; return }
+$tuned = @(); $unsupported = @()
+foreach ($adapter in $adapters) {
+  $rss = Get-NetAdapterRss -Name $adapter.Name -ErrorAction SilentlyContinue
+  if (-not $rss) { $unsupported += $adapter.Name; continue }
+  try { Enable-NetAdapterRss -Name $adapter.Name -ErrorAction Stop } catch { }
+  $done = $false
+  foreach ($queues in @(4, 2)) {
+    try {
+      Set-NetAdapterRss -Name $adapter.Name -NumberOfReceiveQueues $queues -BaseProcessorNumber 0 -MaxProcessors $queues -ErrorAction Stop
+      $after = Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop
+      if ($after.Enabled -and [int]$after.NumberOfReceiveQueues -eq $queues) { $tuned += "$($adapter.Name)=$queues queues"; $done = $true; break }
+    } catch { }
+  }
+  if (-not $done) {
+    $now = Get-NetAdapterRss -Name $adapter.Name -ErrorAction SilentlyContinue
+    if ($now -and $now.Enabled -and [int]$now.NumberOfReceiveQueues -ge 2) { $tuned += "$($adapter.Name)=$($now.NumberOfReceiveQueues) queues (driver limit)" } else { $unsupported += $adapter.Name }
+  }
+}
+if ($tuned.Count -gt 0) { Write-Host "[Network] Receive-side scaling verified: $($tuned -join '; ')." -ForegroundColor Green; return }
+Write-Host "[SKIP] This network adapter does not have this setting: its driver does not allow adjusting receive queues ($($unsupported -join ', ')). Windows did not change it." -ForegroundColor Yellow`,
   NetDNSQuad9: `Get-NetAdapter -Physical | ForEach-Object { Set-DnsClientServerAddress -InterfaceAlias \$_.Name -ServerAddresses ("9.9.9.9","149.112.112.112") -ErrorAction SilentlyContinue }`,
   NetDisableLargeSendOffload: `Disable-NetAdapterLso -Name * -ErrorAction SilentlyContinue`,
   SecDetectVBSStatus: `\$dg = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\Microsoft\\Windows\\DeviceGuard -ErrorAction SilentlyContinue; If (\$dg) { Write-Host "[VBS] Status: \$(\$dg.VirtualizationBasedSecurityStatus); HVCI: \$(\$dg.SecurityServicesRunning -contains 2); CredGuard: \$(\$dg.SecurityServicesRunning -contains 1)" -ForegroundColor Cyan }`,

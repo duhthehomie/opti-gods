@@ -217,6 +217,9 @@ export function isHardwareCompatible(id: string, hw: PresetHardware): { ok: bool
   if (id.startsWith("RTX50") && !/\brtx\s*50\d{2}\b|blackwell/i.test(gpuName)) {
     return { ok: false, reason: "RTX 50-series tweak skipped — an RTX 50-series GPU was not detected." };
   }
+  if (id === "FiveM2060VRAMBudget" && (!/\b(?:rtx|gtx)\s*2060\b/i.test(gpuName) || /2060\s*super/i.test(gpuName))) {
+    return { ok: false, reason: "GTX/RTX 2060 6GB VRAM tweak skipped — this PC does not have a 6GB GeForce 2060." };
+  }
   if (id.startsWith("FiveM5060") && !/\brtx\s*50[6-9]\d\b/i.test(gpuName)) {
     return { ok: false, reason: "RTX 5060-class tweak skipped — an RTX 5060 or higher RTX 50-series GPU was not detected." };
   }
